@@ -71,16 +71,16 @@ class WorkbenchViewData {
   factory WorkbenchViewData.initial() {
     return const WorkbenchViewData(
       projectName: '未打开项目',
-      projectSubtitle: '等待加载默认项目',
+      projectSubtitle: '',
       projectPath: '',
-      toolCoreStatus: 'ToolCore: 等待初始化共享运行链路',
+      toolCoreStatus: '',
       documents: [],
       resourceEntries: [],
       modelLabel: '未加载模型',
       agentLabel: '综合创作智能体',
-      contextSummary: '上下文尚未建立',
-      workflowTitle: '草稿工作台',
-      workflowDescription: '加载完成后，这里会承载共享 core 生成入口。',
+      contextSummary: '未开始会话',
+      workflowTitle: '开始会话',
+      workflowDescription: '先创建或打开项目。',
       primaryActions: [
         PrimaryActionViewData(
           id: 'refresh_project',
@@ -95,7 +95,7 @@ class WorkbenchViewData {
           commandId: 'draft_again',
         ),
       ],
-      composerHint: '输入创作要求后发送，core 会自动组装项目上下文。',
+      composerHint: '输入你的需求。',
       activeDocumentTitle: '',
       activeDocumentPath: '',
       activeDocumentBody: '',
@@ -107,7 +107,7 @@ class WorkbenchViewData {
       showSessionHistory: false,
       isDocumentsWorkspaceVisible: false,
       projectLauncher: null,
-      generationStatus: '尚未生成内容',
+      generationStatus: '',
       isGenerating: false,
     );
   }

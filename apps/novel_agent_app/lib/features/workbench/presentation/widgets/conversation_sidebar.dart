@@ -51,7 +51,7 @@ class _ConversationSidebarState extends State<ConversationSidebar> {
         widget.viewData.subAgentRuns.isNotEmpty ||
         widget.viewData.isGenerating;
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -62,7 +62,7 @@ class _ConversationSidebarState extends State<ConversationSidebar> {
             onNewSessionRequested: widget.actionHandler.onNewSessionRequested,
           ),
           if (widget.showWorkspaceShortcuts) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             ConversationSecondaryActionsRow(
               onDocumentsRequested:
                   widget.actionHandler.onDocumentsWorkspaceRequested,
@@ -70,19 +70,29 @@ class _ConversationSidebarState extends State<ConversationSidebar> {
                   widget.actionHandler.onConversationSettingsRequested,
             ),
           ],
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
           ContextStatusBadge(summary: widget.viewData.contextSummary),
-          const SizedBox(height: 16),
-          Column(
+          const SizedBox(height: 8),
+          Row(
             children: [
-              SelectorField(label: '模型', value: widget.viewData.modelLabel),
-              const SizedBox(height: 10),
-              SelectorField(label: '智能体', value: widget.viewData.agentLabel),
+              Expanded(
+                child: SelectorField(
+                  label: '模型',
+                  value: widget.viewData.modelLabel,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: SelectorField(
+                  label: '智能体',
+                  value: widget.viewData.agentLabel,
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 10),
           Expanded(child: _buildMainBody(hasConversation)),
-          const SizedBox(height: 14),
+          const SizedBox(height: 8),
           ComposerPanel(
             controller: _controller,
             hintText: widget.viewData.composerHint,
@@ -107,46 +117,47 @@ class _ConversationSidebarState extends State<ConversationSidebar> {
             widget.actionHandler.onConversationSettingsRequested,
       );
     }
-    return ListView(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (widget.viewData.showSessionHistory) ...[
           SessionHistoryPanel(
             entries: widget.viewData.sessionHistoryEntries,
             onSelected: widget.actionHandler.onSessionHistorySelected,
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 10),
         ],
-        if (hasConversation) ...[
-          ConversationTimeline(
-            entries: widget.viewData.conversationEntries,
-            isGenerating: widget.viewData.isGenerating,
-          ),
-          if (widget.viewData.pendingOptions.isNotEmpty) ...[
-            const SizedBox(height: 18),
-            UserOptionPanel(
-              options: widget.viewData.pendingOptions,
-              onSelected: _handleOptionSelected,
-            ),
-          ],
-          if (widget.viewData.subAgentRuns.isNotEmpty) ...[
-            const SizedBox(height: 18),
-            SubAgentActivityPanel(runs: widget.viewData.subAgentRuns),
-          ],
-          const SizedBox(height: 18),
-        ],
-        if (!hasConversation)
-          WorkflowGuideCard(
-            title: widget.viewData.workflowTitle,
-            description: widget.viewData.workflowDescription,
-            onSettingsRequested:
-                widget.actionHandler.onConversationSettingsRequested,
-          ),
-        if (!hasConversation) const SizedBox(height: 18),
-        if (hasConversation)
+        Expanded(
+          child: hasConversation
+              ? ConversationTimeline(
+                  entries: widget.viewData.conversationEntries,
+                  isGenerating: widget.viewData.isGenerating,
+                )
+              : WorkflowGuideCard(
+                  title: widget.viewData.workflowTitle,
+                  description: widget.viewData.workflowDescription,
+                  onSettingsRequested:
+                      widget.actionHandler.onConversationSettingsRequested,
+                ),
+        ),
+        if (!hasConversation) ...[
+          const SizedBox(height: 8),
           PrimaryActionList(
             actions: widget.viewData.primaryActions,
             actionHandler: widget.actionHandler,
           ),
+        ],
+        if (widget.viewData.pendingOptions.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          UserOptionPanel(
+            options: widget.viewData.pendingOptions,
+            onSelected: _handleOptionSelected,
+          ),
+        ],
+        if (widget.viewData.subAgentRuns.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          SubAgentActivityPanel(runs: widget.viewData.subAgentRuns),
+        ],
       ],
     );
   }

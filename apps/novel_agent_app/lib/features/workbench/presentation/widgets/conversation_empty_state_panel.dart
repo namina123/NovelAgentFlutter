@@ -32,7 +32,7 @@ class ConversationEmptyStatePanel extends StatelessWidget {
         border: Border.all(color: AppPalette.line, width: AppChrome.borderWidth),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -40,15 +40,15 @@ class ConversationEmptyStatePanel extends StatelessWidget {
               children: [
                 const Icon(
                   Icons.auto_awesome_outlined,
-                  size: 18,
+                  size: 16,
                   color: AppPalette.lineStrong,
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     title,
                     style: const TextStyle(
-                      fontSize: 24,
+                      fontSize: 18,
                       fontWeight: FontWeight.w800,
                       color: AppPalette.text,
                     ),
@@ -64,13 +64,13 @@ class ConversationEmptyStatePanel extends StatelessWidget {
             Text(
               description,
               style: const TextStyle(
-                fontSize: 14,
-                height: 1.6,
+                fontSize: 12,
+                height: 1.5,
                 fontWeight: FontWeight.w500,
                 color: AppPalette.mutedText,
               ),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 10),
             Expanded(
               child: Align(
                 alignment: Alignment.topCenter,

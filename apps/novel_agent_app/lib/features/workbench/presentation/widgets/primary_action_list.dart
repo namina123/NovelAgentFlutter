@@ -27,16 +27,17 @@ class PrimaryActionList extends StatelessWidget {
               ActionButton(
                 label: action.title,
                 expanded: true,
+                compact: true,
                 onPressed: () {
                   // 中文注释: 主动作按钮只上传动作 id，工作流编排后续仍由外层控制器决定。
                   actionHandler.onPrimaryActionRequested(action.id);
                 },
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               Text(
                 action.description,
                 style: const TextStyle(
-                  fontSize: 13,
+                  fontSize: 12,
                   fontWeight: FontWeight.w500,
                   color: Color(0xFF5E6E74),
                 ),

@@ -21,6 +21,9 @@ class ResourceUtilityStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     // 中文注释: 工作区快捷入口独立出来，避免资源面板把跨页面跳转和文件树职责缠在一起。
     return CompactActionGrid(
+      columnCount: 4,
+      spacing: 8,
+      childAspectRatio: 1.95,
       children: [
         ActionButton(
           label: '智能体',

@@ -21,6 +21,9 @@ class ProjectActionGroup extends StatelessWidget {
   Widget build(BuildContext context) {
     // 中文注释: 项目级动作单独封装，确保资源面板不会因为按钮矩阵变复杂而继续膨胀。
     return CompactActionGrid(
+      columnCount: 3,
+      spacing: 8,
+      childAspectRatio: 2.35,
       children: [
         ActionButton(
           label: '新建项目',
@@ -40,6 +43,7 @@ class ProjectActionGroup extends StatelessWidget {
           icon: Icons.badge_outlined,
           tone: ActionButtonTone.neutral,
           compact: true,
+          labelMaxLines: 2,
           onPressed: onEditProjectInfoRequested,
         ),
         ActionButton(

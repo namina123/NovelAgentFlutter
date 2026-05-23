@@ -25,11 +25,11 @@ class ComposerPanel extends StatelessWidget {
       children: [
         TextField(
           controller: controller,
-          maxLines: 5,
-          minLines: 5,
+          maxLines: 4,
+          minLines: 3,
           decoration: InputDecoration(hintText: hintText),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         Row(
           children: [
             Expanded(
@@ -37,23 +37,26 @@ class ComposerPanel extends StatelessWidget {
                 label: '优化',
                 icon: Icons.auto_fix_high_outlined,
                 tone: ActionButtonTone.warm,
+                compact: true,
                 onPressed: onOptimizeRequested,
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
             Expanded(
               child: ActionButton(
                 label: '工具',
                 icon: Icons.tune_outlined,
                 tone: ActionButtonTone.neutral,
+                compact: true,
                 onPressed: onToolOptionsRequested,
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
             Expanded(
               child: ActionButton(
                 label: '发送',
                 icon: Icons.send_rounded,
+                compact: true,
                 onPressed: () {
                   // 中文注释: 发送动作只回传文本，不让输入区直接知道会话网关细节。
                   onSendRequested(controller.text.trim());

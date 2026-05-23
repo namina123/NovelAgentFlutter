@@ -22,9 +22,7 @@ class ConversationToolbar extends StatelessWidget {
     // 中文注释: 会话头部工具条独立后，右栏顶部的快捷按钮增减不会拖着整块侧栏一起变重。
     return Row(
       children: [
-        const Expanded(
-          child: SectionHeading(title: '主智能体', subtitle: '会话与编排侧栏'),
-        ),
+        const Expanded(child: SectionHeading(title: '会话')),
         ToolbarIconButton(
           icon: Icons.light_mode_outlined,
           tooltip: '快速主题',

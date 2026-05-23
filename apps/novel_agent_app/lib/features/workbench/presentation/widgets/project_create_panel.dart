@@ -105,15 +105,6 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
             height: 1.45,
           ),
         ),
-        const SizedBox(height: 12),
-        const Text(
-          '会自动生成标准工作区目录：规格、总纲、卷纲、章纲、草稿、正文、设定、角色、摘要、知识库、任务、审稿等。',
-          style: TextStyle(
-            color: AppPalette.mutedText,
-            fontSize: 12,
-            height: 1.45,
-          ),
-        ),
         if (widget.status.trim().isNotEmpty) ...[
           const SizedBox(height: 12),
           Text(

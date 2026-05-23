@@ -111,7 +111,7 @@ class AppShellController extends ChangeNotifier
     _updateWorkbench(
       _viewModel.workbench.copyWith(
         generationStatus: '正在加载设置...',
-        toolCoreStatus: 'ToolCore: 正在接入共享运行链路',
+        toolCoreStatus: '',
       ),
     );
     try {
@@ -123,7 +123,7 @@ class AppShellController extends ChangeNotifier
         workbench: _viewModel.workbench.copyWith(
           modelLabel: _defaultModelLabel(settings),
           agentLabel: _agentLabel(settings),
-          toolCoreStatus: 'ToolCore: 设置已载入，等待默认项目',
+          toolCoreStatus: '',
         ),
       );
       _safeNotifyListeners();
@@ -132,7 +132,7 @@ class AppShellController extends ChangeNotifier
       _updateWorkbench(
         _viewModel.workbench.copyWith(
           generationStatus: '初始化失败：$error',
-          toolCoreStatus: 'ToolCore: 初始化失败',
+          toolCoreStatus: '',
         ),
       );
     }
@@ -610,11 +610,7 @@ class AppShellController extends ChangeNotifier
             : _viewModel.workbench.activeDocumentBody,
         contextSummary: _resultContextSummary(result, assistantState),
         generationStatus: _generationStatusFor(result, savedPath),
-        workflowDescription:
-            '当前交互链已开始共用同一套 Dart core，会话历史、工具执行和子智能体委派都会回流到同一运行骨架。',
-        toolCoreStatus: result.waitingForUserChoice
-            ? 'ToolCore: 等待用户确认后继续'
-            : 'ToolCore: 共享交互链运行完成',
+        toolCoreStatus: result.waitingForUserChoice ? '等待选择' : '',
         isGenerating: false,
       );
       _updateWorkbench(_withConversationState(nextWorkbench));
@@ -626,7 +622,7 @@ class AppShellController extends ChangeNotifier
         _withConversationState(
           _viewModel.workbench.copyWith(
             generationStatus: '生成失败：$error',
-            toolCoreStatus: 'ToolCore: 草稿生成失败',
+            toolCoreStatus: '',
             isGenerating: false,
           ),
         ),
@@ -937,7 +933,7 @@ class AppShellController extends ChangeNotifier
     _updateWorkbench(
       _viewModel.workbench.copyWith(
         generationStatus: '正在加载项目...',
-        toolCoreStatus: 'ToolCore: 正在读取项目工作区',
+        toolCoreStatus: '',
       ),
     );
     final snapshot = await _loadProjectWorkspaceUseCase.execute(rootPath);
@@ -947,7 +943,7 @@ class AppShellController extends ChangeNotifier
       _updateWorkbench(
         _viewModel.workbench.copyWith(
           generationStatus: '未找到默认项目目录：$rootPath',
-          toolCoreStatus: 'ToolCore: 项目读取失败',
+          toolCoreStatus: '',
         ),
       );
       return;
@@ -956,15 +952,15 @@ class AppShellController extends ChangeNotifier
     _resetConversationSessions();
     var workbench = _viewModel.workbench.copyWith(
       projectName: snapshot.project.name,
-      projectSubtitle: '默认项目已加载 · 可以直接发送创作需求',
+      projectSubtitle: _projectSubtitleFor(snapshot.project.projectType),
       projectPath: snapshot.project.rootPath,
-      toolCoreStatus: 'ToolCore: 纯 Dart core 已接管项目工作区',
+      toolCoreStatus: '',
       resourceEntries: _markResourceSelection(
         _resourceEntriesFrom(snapshot.entries),
         selectedId: '',
       ),
-      contextSummary: '资源 ${snapshot.entries.length} 项 · 等待生成',
-      generationStatus: '项目加载完成',
+      contextSummary: '资源 ${snapshot.entries.length} 项',
+      generationStatus: '',
       documents: const <DocumentTabViewData>[],
       activeDocumentTitle: '',
       activeDocumentPath: '',
@@ -1387,11 +1383,13 @@ class AppShellController extends ChangeNotifier
     return entries
         .map((entry) {
           final relativePath = _stringValue(entry['relative_path']);
+          final isDirectory = _boolValue(entry['is_dir']);
           final depth = relativePath.split('/').length - 1;
           return ResourceEntryViewData(
             id: relativePath,
-            title: _displayNameOf(relativePath),
+            title: _resourceTitleOf(relativePath, isDirectory: isDirectory),
             depth: depth < 0 ? 0 : depth,
+            isDirectory: isDirectory,
           );
         })
         .toList(growable: false);
@@ -1408,6 +1406,7 @@ class AppShellController extends ChangeNotifier
             id: entry.id,
             title: entry.title,
             depth: entry.depth,
+            isDirectory: entry.isDirectory,
             isSelected: entry.id == selectedId,
           ),
         )
@@ -1432,6 +1431,56 @@ class AppShellController extends ChangeNotifier
     // 中文注释: 展示名称统一从相对路径末段提取，保持资源树和文档标题口径一致。
     final segments = relativePath.split('/');
     return segments.isEmpty ? relativePath : segments.last;
+  }
+
+  String _projectSubtitleFor(String projectType) {
+    // 中文注释: 项目副标题只显示类型语义，不再占位置解释运行链路状态。
+    return ProjectTypeCatalogService().definitionOf(projectType).name;
+  }
+
+  String _resourceTitleOf(String relativePath, {required bool isDirectory}) {
+    // 中文注释: 资源树只显示中文映射或文件名本身，实际磁盘路径仍保持英文目录结构。
+    final cleanPath = relativePath.trim();
+    if (cleanPath.isEmpty) {
+      return '';
+    }
+    final segments = cleanPath.split('/');
+    final topLevel = segments.first;
+    if (isDirectory && segments.length == 1) {
+      return _workspaceDirectoryLabel(topLevel);
+    }
+    return segments.last;
+  }
+
+  String _workspaceDirectoryLabel(String directoryName) {
+    // 中文注释: 顶层工作区目录统一映射为中文标签，避免展示层泄露英文目录结构细节。
+    const labels = <String, String>{
+      'specs': '项目规格',
+      'styles': '风格',
+      'outline': '总纲',
+      'volume_outlines': '卷纲',
+      'chapter_outlines': '章纲',
+      'drafts': '草稿',
+      'chapters': '正文',
+      'world': '设定',
+      'characters': '角色',
+      'summaries': '摘要',
+      'knowledge': '知识库',
+      'inspiration': '灵感',
+      'assets': '素材',
+      'tasks': '任务',
+      'reviews': '审稿',
+      'agents': '智能体配置',
+      'agent_groups': '智能体组配置',
+      'skills': '技能配置',
+      'skill_groups': '技能组配置',
+      'prompts': '提示词模板',
+      'tracking': '执行追踪',
+      'runs': '生成记录',
+      'backups': '备份',
+      'exports': '导出包',
+    };
+    return labels[directoryName] ?? directoryName;
   }
 
   String _firstOpenablePath(List<JsonMap> entries) {

@@ -14,7 +14,7 @@ class ConversationEntryTile extends StatelessWidget {
     // 中文注释: 单条会话记录只负责展示一种时间线条目，不处理列表排序和会话状态切换。
     final palette = _paletteFor(entry);
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: palette.background,
         borderRadius: AppChrome.surfaceBorderRadius,
@@ -32,7 +32,7 @@ class ConversationEntryTile extends StatelessWidget {
                   entry.title,
                   style: TextStyle(
                     color: palette.foreground,
-                    fontSize: 13,
+                    fontSize: 12,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -47,8 +47,8 @@ class ConversationEntryTile extends StatelessWidget {
                 color: entry.isError
                     ? const Color(0xFF8A2E24)
                     : AppPalette.text,
-                fontSize: 13,
-                height: 1.45,
+                fontSize: 12,
+                height: 1.4,
               ),
             ),
           ],

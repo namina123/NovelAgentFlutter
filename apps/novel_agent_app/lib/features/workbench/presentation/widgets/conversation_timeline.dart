@@ -21,58 +21,59 @@ class ConversationTimeline extends StatelessWidget {
     if (entries.isEmpty && !isGenerating) {
       return const SizedBox.shrink();
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          '会话轨迹',
-          style: TextStyle(
-            color: AppPalette.text,
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
-          ),
+    final itemCount = entries.length + (isGenerating ? 1 : 0);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.64),
+        borderRadius: AppChrome.surfaceBorderRadius,
+        border: Border.all(
+          color: AppPalette.line,
+          width: AppChrome.borderWidth,
         ),
-        const SizedBox(height: 10),
-        if (entries.isNotEmpty)
-          ...entries.map(
-            (entry) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: ConversationEntryTile(entry: entry),
-            ),
-          ),
-        if (isGenerating)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF4EFD9),
-              borderRadius: AppChrome.surfaceBorderRadius,
-              border: Border.all(
-                color: const Color(0xFFD8C790),
-                width: AppChrome.borderWidth,
-              ),
-            ),
-            child: const Row(
-              children: [
-                SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+      ),
+      child: Scrollbar(
+        child: ListView.separated(
+          padding: const EdgeInsets.all(8),
+          itemCount: itemCount,
+          separatorBuilder: (_, _) => const SizedBox(height: 8),
+          itemBuilder: (context, index) {
+            if (index < entries.length) {
+              return ConversationEntryTile(entry: entries[index]);
+            }
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF4EFD9),
+                borderRadius: AppChrome.surfaceBorderRadius,
+                border: Border.all(
+                  color: const Color(0xFFD8C790),
+                  width: AppChrome.borderWidth,
                 ),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    '智能体正在继续处理当前请求...',
-                    style: TextStyle(
-                      color: AppPalette.text,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
+              ),
+              child: const Row(
+                children: [
+                  SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '智能体正在处理当前请求...',
+                      style: TextStyle(
+                        color: AppPalette.text,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
-      ],
+                ],
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 }

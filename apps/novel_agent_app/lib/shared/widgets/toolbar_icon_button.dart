@@ -27,10 +27,11 @@ class ToolbarIconButton extends StatelessWidget {
         style: IconButton.styleFrom(
           foregroundColor: _foregroundColor(),
           backgroundColor: _backgroundColor(),
-          minimumSize: const Size(42, 42),
+          minimumSize: const Size(34, 34),
+          padding: const EdgeInsets.all(6),
           shape: AppChrome.controlShape(sideColor: _borderColor()),
         ),
-        icon: Icon(icon, size: 18),
+        icon: Icon(icon, size: 16),
       ),
     );
   }

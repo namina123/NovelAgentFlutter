@@ -6,11 +6,13 @@ class CompactActionGrid extends StatelessWidget {
     required this.children,
     this.columnCount = 2,
     this.spacing = 10,
+    this.childAspectRatio = 2.55,
   });
 
   final List<Widget> children;
   final int columnCount;
   final double spacing;
+  final double childAspectRatio;
 
   @override
   Widget build(BuildContext context) {
@@ -19,7 +21,7 @@ class CompactActionGrid extends StatelessWidget {
       crossAxisCount: columnCount,
       crossAxisSpacing: spacing,
       mainAxisSpacing: spacing,
-      childAspectRatio: 2.35,
+      childAspectRatio: childAspectRatio,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       children: children,

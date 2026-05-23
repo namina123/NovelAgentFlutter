@@ -31,17 +31,17 @@ class ActionButton extends StatelessWidget {
     final button = OutlinedButton(
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
-        minimumSize: Size(0, compact ? 40 : 46),
+        minimumSize: Size(0, compact ? 34 : 42),
         padding: EdgeInsets.symmetric(
-          horizontal: compact ? 10 : 12,
-          vertical: compact ? 8 : 10,
+          horizontal: compact ? 8 : 12,
+          vertical: compact ? 6 : 9,
         ),
         foregroundColor: foreground,
         side: BorderSide(color: border, width: AppChrome.borderWidth),
         backgroundColor: _backgroundColor(),
         shape: AppChrome.controlShape(sideColor: border),
         textStyle: TextStyle(
-          fontSize: compact ? 13 : 15,
+          fontSize: compact ? 12 : 14,
           fontWeight: FontWeight.w700,
           letterSpacing: 0,
         ),
@@ -51,8 +51,8 @@ class ActionButton extends StatelessWidget {
         mainAxisSize: MainAxisSize.max,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: compact ? 16 : 18, color: foreground),
-            SizedBox(width: compact ? 6 : 8),
+            Icon(icon, size: compact ? 14 : 18, color: foreground),
+            SizedBox(width: compact ? 4 : 8),
           ],
           Flexible(
             child: Text(

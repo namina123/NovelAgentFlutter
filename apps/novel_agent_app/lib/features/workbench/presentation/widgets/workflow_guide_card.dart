@@ -26,34 +26,35 @@ class WorkflowGuideCard extends StatelessWidget {
         border: Border.all(color: AppPalette.line, width: AppChrome.borderWidth),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               title,
               style: const TextStyle(
-                fontSize: 24,
+                fontSize: 18,
                 fontWeight: FontWeight.w800,
                 color: AppPalette.text,
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             Text(
               description,
               style: const TextStyle(
-                fontSize: 14,
+                fontSize: 12,
                 fontWeight: FontWeight.w500,
                 color: AppPalette.mutedText,
-                height: 1.55,
+                height: 1.5,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             ActionButton(
               label: '工作台设置',
               expanded: true,
               tone: ActionButtonTone.neutral,
               icon: Icons.tune_outlined,
+              compact: true,
               onPressed: onSettingsRequested,
             ),
           ],

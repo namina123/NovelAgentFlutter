@@ -29,12 +29,12 @@ class ResourceTreeCard extends StatelessWidget {
         ),
         child: const Center(
           child: Padding(
-            padding: EdgeInsets.all(20),
+            padding: EdgeInsets.all(14),
             child: Text(
-              '当前项目还没有可浏览文件。\n可以先新建项目、导入材料，或直接让主智能体生成内容后保存。',
+              '当前项目还没有目录内容。',
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 12,
                 height: 1.5,
                 fontWeight: FontWeight.w600,
                 color: AppPalette.mutedText,
@@ -51,7 +51,7 @@ class ResourceTreeCard extends StatelessWidget {
         border: Border.all(color: AppPalette.line, width: AppChrome.borderWidth),
       ),
       child: ListView.separated(
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        padding: const EdgeInsets.symmetric(vertical: 6),
         itemCount: entries.length,
         separatorBuilder: (_, index) => const Divider(height: 1),
         itemBuilder: (context, index) {
@@ -60,14 +60,18 @@ class ResourceTreeCard extends StatelessWidget {
             color: Colors.transparent,
             child: ListTile(
               dense: true,
+              minTileHeight: 34,
+              minLeadingWidth: 18,
+              visualDensity: const VisualDensity(horizontal: -2, vertical: -3),
               contentPadding: EdgeInsets.only(
-                left: 14 + (entry.depth * 18),
-                right: 14,
+                left: 10 + (entry.depth * 16),
+                right: 10,
               ),
               leading: Icon(
-                entry.isSelected
-                    ? Icons.expand_more_rounded
-                    : Icons.chevron_right_rounded,
+                entry.isDirectory
+                    ? Icons.folder_outlined
+                    : Icons.description_outlined,
+                size: 16,
                 color: entry.isSelected
                     ? AppPalette.lineStrong
                     : AppPalette.mutedText,
@@ -75,7 +79,7 @@ class ResourceTreeCard extends StatelessWidget {
               title: Text(
                 entry.title,
                 style: TextStyle(
-                  fontSize: 15,
+                  fontSize: 13,
                   fontWeight: entry.isSelected
                       ? FontWeight.w800
                       : FontWeight.w600,

@@ -18,20 +18,20 @@ class ContextStatusBadge extends StatelessWidget {
         border: Border.all(color: AppPalette.line, width: AppChrome.borderWidth),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         child: Row(
           children: [
             const Icon(
               Icons.analytics_outlined,
-              size: 18,
+              size: 14,
               color: AppPalette.lineStrong,
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 6),
             Expanded(
               child: Text(
                 summary,
                 style: const TextStyle(
-                  fontSize: 13,
+                  fontSize: 12,
                   fontWeight: FontWeight.w700,
                   color: AppPalette.lineStrong,
                 ),

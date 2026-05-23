@@ -4,7 +4,6 @@ import '../contracts/resource_manager_action_handler.dart';
 import '../models/workbench_view_data.dart';
 import 'file_tool_group.dart';
 import 'project_action_group.dart';
-import 'project_status_card.dart';
 import 'resource_manager_header.dart';
 import 'resource_tree_card.dart';
 import 'resource_utility_strip.dart';
@@ -23,7 +22,7 @@ class ResourceManagerPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     // 中文注释: 资源面板只处理项目入口、文件树和工作区快捷入口，不承接文档和会话逻辑。
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -32,12 +31,7 @@ class ResourceManagerPanel extends StatelessWidget {
             subtitle: viewData.projectSubtitle,
             onSettingsPressed: actionHandler.onModelSettingsRequested,
           ),
-          const SizedBox(height: 16),
-          ProjectStatusCard(
-            projectPath: viewData.projectPath,
-            toolCoreStatus: viewData.toolCoreStatus,
-          ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 10),
           ProjectActionGroup(
             onCreateProjectRequested: actionHandler.onCreateProjectRequested,
             onOpenProjectRequested: actionHandler.onOpenProjectRequested,
@@ -45,7 +39,7 @@ class ResourceManagerPanel extends StatelessWidget {
                 actionHandler.onEditProjectInfoRequested,
             onRefreshRequested: actionHandler.onRefreshFilesRequested,
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 8),
           FileToolGroup(
             onCreateFileRequested: actionHandler.onCreateFileRequested,
             onCreateFolderRequested: actionHandler.onCreateFolderRequested,
@@ -53,14 +47,14 @@ class ResourceManagerPanel extends StatelessWidget {
             onCreateChapterRequested: actionHandler.onCreateChapterRequested,
             onSaveCurrentRequested: actionHandler.onSaveCurrentRequested,
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           Expanded(
             child: ResourceTreeCard(
               entries: viewData.resourceEntries,
               onEntrySelected: actionHandler.onResourceEntrySelected,
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 8),
           ResourceUtilityStrip(
             onAgentEcosystemRequested: actionHandler.onAgentEcosystemRequested,
             onTasksRequested: actionHandler.onTasksRequested,

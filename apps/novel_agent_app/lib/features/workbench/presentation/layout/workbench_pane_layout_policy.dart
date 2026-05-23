@@ -3,18 +3,18 @@ import '../../../../app/layout/app_layout_metrics.dart';
 class WorkbenchPaneLayoutPolicy {
   static const double dividerWidth = 14;
 
-  static const double _desktopMinLeftWidth = 260;
+  static const double _desktopMinLeftWidth = 236;
   static const double _desktopMinDocumentWidth = 520;
-  static const double _desktopMinConversationWidth = 340;
-  static const double _desktopMaxConversationWidth = 420;
-  static const double _desktopMaxConversationRatio = 0.29;
+  static const double _desktopMinConversationWidth = 380;
+  static const double _desktopMaxConversationWidth = 480;
+  static const double _desktopMaxConversationRatio = 0.34;
 
-  static const double _compactWideMinLeftWidth = 300;
-  static const double _compactWideMaxLeftWidth = 360;
+  static const double _compactWideMinLeftWidth = 272;
+  static const double _compactWideMaxLeftWidth = 336;
   static const double _compactWideMinDocumentWidth = 440;
-  static const double _compactWideMinConversationWidth = 430;
-  static const double _compactWideMaxConversationWidth = 520;
-  static const double _compactWideMaxConversationRatio = 0.32;
+  static const double _compactWideMinConversationWidth = 460;
+  static const double _compactWideMaxConversationWidth = 560;
+  static const double _compactWideMaxConversationRatio = 0.35;
 
   const WorkbenchPaneLayoutPolicy._();
 
@@ -77,7 +77,7 @@ class WorkbenchPaneLayoutPolicy {
 
   static double defaultLeftWidth(double totalWidth, AppLayoutMetrics metrics) {
     // 中文注释: 默认左栏宽度取旧项目理念里的“可扫读但不喧宾夺主”区间，用来初始化和重置布局。
-    final target = useCompactWideLayout(metrics) ? 320.0 : 292.0;
+      final target = useCompactWideLayout(metrics) ? 296.0 : 252.0;
     return _clamp(
       target,
       minLeftWidth(metrics),
@@ -90,7 +90,7 @@ class WorkbenchPaneLayoutPolicy {
     AppLayoutMetrics metrics,
   ) {
     // 中文注释: 默认右栏宽度优先保证会话与输入舒适，再由正文区吃掉剩余空间。
-    final target = useCompactWideLayout(metrics) ? 468.0 : 368.0;
+    final target = useCompactWideLayout(metrics) ? 500.0 : 420.0;
     return _clamp(
       target,
       minConversationWidth(metrics),
