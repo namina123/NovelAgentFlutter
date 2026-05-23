@@ -1,0 +1,70 @@
+import 'project_type_definition.dart';
+
+class ProjectTypeCatalogService {
+  const ProjectTypeCatalogService();
+
+  static const List<ProjectTypeDefinition> _definitions =
+      <ProjectTypeDefinition>[
+        ProjectTypeDefinition(
+          id: 'novel',
+          name: '新建小说',
+          description: '适合普通小说项目，先围绕开局、大纲、章节和续写逐步推进。',
+          defaultTitle: '未命名小说',
+        ),
+        ProjectTypeDefinition(
+          id: 'long_novel',
+          name: '长任务开局',
+          description: '适合长篇或长任务项目，强调队列、检查点和可恢复推进。',
+          defaultTitle: '未命名长篇',
+        ),
+        ProjectTypeDefinition(
+          id: 'knowledge_base',
+          name: '生成知识库',
+          description: '适合导入、整理和检索资料，把材料沉淀为稳定知识库。',
+          defaultTitle: '未命名知识库',
+        ),
+        ProjectTypeDefinition(
+          id: 'short_collection',
+          name: '创建短文集',
+          description: '适合短篇合集、专题短文和风格统一整理。',
+          defaultTitle: '未命名短文集',
+        ),
+      ];
+
+  List<ProjectTypeDefinition> definitions() {
+    // 中文注释: 项目类型目录统一从这里暴露，避免 GUI、CLI 和项目仓储各维护一份枚举。
+    return List<ProjectTypeDefinition>.unmodifiable(_definitions);
+  }
+
+  List<ProjectTypeDefinition> enabledDefinitions() {
+    // 中文注释: 创建项目时通常只展示启用项，因此单独给出过滤后的稳定列表。
+    return definitions().where((item) => item.enabled).toList(growable: false);
+  }
+
+  String normalize(String projectType) {
+    // 中文注释: 项目类型归一化只接受已登记类型，未知值统一回退到普通小说。
+    final cleanType = projectType.trim();
+    for (final definition in _definitions) {
+      if (definition.id == cleanType) {
+        return cleanType;
+      }
+    }
+    return 'novel';
+  }
+
+  ProjectTypeDefinition definitionOf(String projectType) {
+    // 中文注释: 单个类型的展示文案和默认标题都统一通过定义表读取，避免散落字符串常量。
+    final normalizedType = normalize(projectType);
+    for (final definition in _definitions) {
+      if (definition.id == normalizedType) {
+        return definition;
+      }
+    }
+    return _definitions.first;
+  }
+
+  String defaultTitle(String projectType) {
+    // 中文注释: 默认项目标题跟随项目类型，创建表单和核心用例都复用同一规则。
+    return definitionOf(projectType).defaultTitle;
+  }
+}

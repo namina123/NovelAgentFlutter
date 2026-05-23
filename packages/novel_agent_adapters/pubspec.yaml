@@ -1,0 +1,15 @@
+name: novel_agent_adapters
+description: Adapter implementations for NovelAgent.
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.9.0
+
+dependencies:
+  novel_agent_core:
+    path: ../novel_agent_core
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.8

@@ -1,0 +1,357 @@
+import '../common/json_types.dart';
+import '../common/value_readers.dart';
+import '../ports/llm_gateway.dart';
+import '../ports/tool_execution_port.dart';
+import '../project/project_descriptor.dart';
+import '../tools/tool_call_parser_service.dart';
+import '../tools/tool_event_presenter_service.dart';
+import '../tools/tool_schema_builder_service.dart';
+import '../tools/tool_strategy_service.dart';
+import 'agent_loop_contract_service.dart';
+import 'agent_tool_message_service.dart';
+import 'agent_tool_policy_service.dart';
+import 'builtin_collaborator_catalog_service.dart';
+import 'sub_agent_group_selection_service.dart';
+import 'sub_agent_result_package_service.dart';
+import 'sub_agent_run_package_service.dart';
+
+class SubAgentExecutionService {
+  SubAgentExecutionService({
+    required LlmGateway llmGateway,
+    required ToolExecutionPort toolExecutionPort,
+    SubAgentRunPackageService? runPackageService,
+    SubAgentResultPackageService? resultPackageService,
+    BuiltinCollaboratorCatalogService? collaboratorCatalogService,
+    SubAgentGroupSelectionService? groupSelectionService,
+    ToolStrategyService? toolStrategyService,
+    ToolSchemaBuilderService? toolSchemaBuilderService,
+    ToolCallParserService? toolCallParserService,
+    AgentLoopContractService? agentLoopContractService,
+    AgentToolMessageService? agentToolMessageService,
+    AgentToolPolicyService? agentToolPolicyService,
+    ToolEventPresenterService? toolEventPresenterService,
+  }) : _llmGateway = llmGateway,
+       _toolExecutionPort = toolExecutionPort,
+       _runPackageService = runPackageService ?? SubAgentRunPackageService(),
+       _resultPackageService =
+           resultPackageService ?? SubAgentResultPackageService(),
+       _collaboratorCatalogService =
+           collaboratorCatalogService ?? BuiltinCollaboratorCatalogService(),
+       _groupSelectionService =
+           groupSelectionService ?? SubAgentGroupSelectionService(),
+       _toolStrategyService = toolStrategyService ?? ToolStrategyService(),
+       _toolSchemaBuilderService =
+           toolSchemaBuilderService ?? ToolSchemaBuilderService(),
+       _toolCallParserService =
+           toolCallParserService ?? ToolCallParserService(),
+       _agentLoopContractService =
+           agentLoopContractService ?? AgentLoopContractService(),
+       _agentToolMessageService =
+           agentToolMessageService ?? AgentToolMessageService(),
+       _agentToolPolicyService =
+           agentToolPolicyService ?? AgentToolPolicyService(),
+       _toolEventPresenterService =
+           toolEventPresenterService ?? ToolEventPresenterService();
+
+  final LlmGateway _llmGateway;
+  final ToolExecutionPort _toolExecutionPort;
+  final SubAgentRunPackageService _runPackageService;
+  final SubAgentResultPackageService _resultPackageService;
+  final BuiltinCollaboratorCatalogService _collaboratorCatalogService;
+  final SubAgentGroupSelectionService _groupSelectionService;
+  final ToolStrategyService _toolStrategyService;
+  final ToolSchemaBuilderService _toolSchemaBuilderService;
+  final ToolCallParserService _toolCallParserService;
+  final AgentLoopContractService _agentLoopContractService;
+  final AgentToolMessageService _agentToolMessageService;
+  final AgentToolPolicyService _agentToolPolicyService;
+  final ToolEventPresenterService _toolEventPresenterService;
+
+  Future<JsonMap> execute({
+    required ProjectDescriptor project,
+    required JsonMap parentAgent,
+    required JsonMap toolCall,
+    required String modelId,
+    required JsonMap mainContext,
+  }) async {
+    // 中文注释: 子智能体执行服务只负责一次内部子回合的包构建、模型调用和结果回收，不直接碰宿主 UI。
+    final arguments = ValueReaders.mapValue(toolCall['arguments']);
+    final availableAgents =
+        _collaboratorCatalogService.optionalCollaboratorProfiles();
+    final availableGroups =
+        _collaboratorCatalogService.optionalCollaboratorGroups();
+    final task = ValueReaders.stringValue(
+      arguments['task'],
+      ValueReaders.stringValue(arguments['query']),
+    ).trim();
+    final group = _groupSelectionService.selectGroup(
+      parentAgent: parentAgent,
+      task: task,
+      availableGroups: availableGroups,
+    );
+    final package = _runPackageService.buildSubAgentRunPackage(
+      group,
+      availableAgents,
+      arguments,
+      mainContext: <String, Object?>{
+        ...mainContext,
+        'intent': ValueReaders.stringValue(mainContext['intent'], 'draft'),
+        'project_title': project.name,
+      },
+    );
+    if (!ValueReaders.boolValue(package['ok'])) {
+      return <String, Object?>{
+        'ok': false,
+        'error': ValueReaders.stringValue(
+          package['error'],
+          'Sub-agent package build failed.',
+        ),
+        'not_executed': true,
+        'available_agents': availableAgents,
+      };
+    }
+
+    final subSessionId = ValueReaders.stringValue(package['sub_session_id']);
+    final runId = subSessionId.isEmpty
+        ? 'sub_${DateTime.now().microsecondsSinceEpoch}'
+        : subSessionId;
+    final events = <Object?>[
+      _subAgentEvent(
+        package,
+        phase: 'started',
+        summary: '子智能体开始执行，主智能体正在等待结果。',
+        runId: runId,
+      ),
+    ];
+
+    final toolSettings = _toolStrategyService.defaultSettings();
+    final blockedTools = ValueReaders.stringList(
+      ValueReaders.mapValue(package['tool_scope'])['blocked_tools'],
+    );
+    final childToolIds = _toolStrategyService
+        .enabledToolIds(toolSettings)
+        .where((toolId) => !blockedTools.contains(toolId))
+        .toList(growable: false);
+    final toolSchemas = _toolSchemaBuilderService.buildOpenAiSchemas(
+      childToolIds,
+    );
+    final messages = ValueReaders.mapList(package['messages']);
+    final executedTools = <Object?>[];
+    var finalContent = '';
+    var waitingForUserChoice = false;
+    var stoppedByToolError = false;
+    var previousRoundHadPlanTool = false;
+    var planContinueRetryUsed = false;
+    final maxRounds = ValueReaders.intValue(
+      ValueReaders.mapValue(package['execution'])['max_tool_rounds'],
+      2,
+    ).clamp(1, 6);
+
+    for (var roundIndex = 0; roundIndex < maxRounds; roundIndex += 1) {
+      final llmResult = await _llmGateway.requestChat(
+        messages: messages,
+        modelId: modelId,
+        tools: toolSchemas,
+        options: <String, Object?>{
+          'stream_scope': 'sub_agent',
+          'sub_session_id': subSessionId,
+        },
+      );
+      final toolCalls = _toolCallParserService.parseToolCalls(
+        llmResult,
+        allowInlineFallback: ValueReaders.boolValue(
+          toolSettings['allow_inline_fallback'],
+          true,
+        ),
+      );
+      final contract = _agentLoopContractService.loopStepContract(
+        llmResult,
+        toolCalls,
+        roundIndex: roundIndex,
+        maxRounds: maxRounds,
+        waitingForUserChoice: waitingForUserChoice,
+        stoppedByToolError: stoppedByToolError,
+      );
+      final action = ValueReaders.stringValue(contract['action']);
+      if (action == 'execute_tools') {
+        previousRoundHadPlanTool = ValueReaders.objectList(contract['tool_calls'])
+            .map(ValueReaders.mapValue)
+            .any(
+              (call) => ValueReaders.stringValue(call['name']) == 'set_agent_tasks',
+            );
+        messages.add(ValueReaders.mapValue(contract['assistant_message']));
+        for (final rawCall in ValueReaders.objectList(contract['tool_calls'])) {
+          final call = ValueReaders.mapValue(rawCall);
+          final toolName = ValueReaders.stringValue(call['name']);
+          final result = blockedTools.contains(toolName)
+              ? _blockedToolResult(toolName)
+              : await _toolExecutionPort.execute(
+                  project: project,
+                  toolCall: call,
+                );
+          final executedTool = <String, Object?>{
+            'id': call['id'],
+            'name': toolName,
+            'arguments': ValueReaders.deepCopyMap(
+              ValueReaders.mapValue(call['arguments']),
+            ),
+            'result': ValueReaders.deepCopyMap(result),
+            'ok': ValueReaders.boolValue(result['ok'], true),
+          };
+          executedTools.add(executedTool);
+          events.add(
+            _subAgentEvent(
+              package,
+              phase: 'tool_event',
+              summary: _toolEventPresenterService.textForExecutedTool(
+                executedTool,
+              ),
+              runId: runId,
+              extra: <String, Object?>{
+                'tool_event': <String, Object?>{
+                  'phase': ValueReaders.boolValue(result['ok'], true)
+                      ? 'finished'
+                      : 'failed',
+                  'name': toolName,
+                  'ok': ValueReaders.boolValue(result['ok'], true),
+                  'arguments': ValueReaders.deepCopyMap(
+                    ValueReaders.mapValue(call['arguments']),
+                  ),
+                  'result': ValueReaders.deepCopyMap(result),
+                },
+              },
+            ),
+          );
+          waitingForUserChoice = waitingForUserChoice ||
+              ValueReaders.boolValue(result['waiting_for_user_choice']);
+          final isHardToolError = !ValueReaders.boolValue(result['ok'], true) &&
+              !ValueReaders.boolValue(result['not_executed']);
+          if (isHardToolError) {
+            stoppedByToolError = true;
+          }
+          messages.add(_agentToolMessageService.toolResultMessage(call, result));
+        }
+        if (waitingForUserChoice || stoppedByToolError) {
+          break;
+        }
+        continue;
+      }
+
+      final content = ValueReaders.stringValue(llmResult['content']).trim();
+      if (previousRoundHadPlanTool) {
+        final afterPlan = _agentToolPolicyService.afterToolRoundDecision(
+          llmResult,
+          roundHasPlanTool: previousRoundHadPlanTool,
+          planContinueRetryUsed: planContinueRetryUsed,
+        );
+        if (ValueReaders.boolValue(afterPlan['retry_after_plan']) &&
+            content.isEmpty) {
+          planContinueRetryUsed = true;
+          messages.add(<String, Object?>{
+            'role': 'user',
+            'content': ValueReaders.stringValue(
+              afterPlan['continue_instruction'],
+            ),
+          });
+          previousRoundHadPlanTool = false;
+          continue;
+        }
+      }
+      finalContent = content;
+      break;
+    }
+
+    final resolvedContent = _resultPackageService.subAgentFinalContent(
+      finalContent,
+      stoppedByToolError: stoppedByToolError,
+    );
+    if (waitingForUserChoice) {
+      final failure = _resultPackageService.subAgentFailureResultPackage(
+        package: package,
+        errorDetail: 'Sub-agent requested user choice, which is not allowed.',
+        executedTools: executedTools,
+        cancelled: false,
+      );
+      events.add(
+        _subAgentEvent(
+          package,
+          phase: 'failed',
+          summary: '子智能体需要直接向用户提问，已终止并返回主智能体处理。',
+          runId: runId,
+        ),
+      );
+      return <String, Object?>{
+        ...failure,
+        'sub_agent_run_id': runId,
+        'sub_agent_events': events,
+      };
+    }
+
+    final success = _resultPackageService.subAgentSuccessResultPackage(
+      package: package,
+      task: task,
+      content: resolvedContent,
+      llmResult: <String, Object?>{'reasoning_content': ''},
+      executedTools: executedTools,
+    );
+    events.add(
+      _subAgentEvent(
+        package,
+        phase: stoppedByToolError ? 'failed' : 'finished',
+        summary: stoppedByToolError
+            ? '子智能体工具执行后未完成理想输出，已返回可合并结果。'
+            : '子智能体已返回结果。',
+        runId: runId,
+        extra: <String, Object?>{
+          'content': resolvedContent,
+          'tool_count': executedTools.length,
+        },
+      ),
+    );
+    return <String, Object?>{
+      ...success,
+      'ok': !stoppedByToolError || resolvedContent.trim().isNotEmpty,
+      'sub_agent_run_id': runId,
+      'sub_agent_events': events,
+      'tool_count': executedTools.length,
+      'summary': ValueReaders.stringValue(
+        success['summary'],
+        '子智能体已返回。',
+      ),
+    };
+  }
+
+  JsonMap _blockedToolResult(String toolName) {
+    // 中文注释: 子智能体越权调用被禁止工具时，返回稳定错误结果供主智能体自行恢复。
+    return <String, Object?>{
+      'ok': false,
+      'error': 'Blocked sub-agent tool: $toolName',
+      'not_executed': false,
+    };
+  }
+
+  JsonMap _subAgentEvent(
+    JsonMap package, {
+    required String phase,
+    required String summary,
+    required String runId,
+    JsonMap extra = const <String, Object?>{},
+  }) {
+    // 中文注释: 子智能体事件统一带齐运行标识和视角信息，方便 GUI/CLI 直接回放。
+    return <String, Object?>{
+      'id': 'sub_agent_event_${DateTime.now().microsecondsSinceEpoch}',
+      'phase': phase,
+      'summary': summary,
+      'stream_scope': 'sub_agent',
+      'sub_agent_run_id': runId,
+      'sub_session_id': ValueReaders.stringValue(package['sub_session_id']),
+      'sub_agent_id': ValueReaders.stringValue(package['agent_id']),
+      'sub_agent_name': ValueReaders.stringValue(
+        package['agent_name'],
+        ValueReaders.stringValue(package['agent_id'], '子智能体'),
+      ),
+      'task': ValueReaders.stringValue(package['task']),
+      ...ValueReaders.deepCopyMap(extra),
+    };
+  }
+}

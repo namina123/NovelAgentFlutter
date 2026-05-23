@@ -1,0 +1,33 @@
+# Repository-level ignores
+.git/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.tmp
+*.temp
+.idea/
+.vscode/
+
+# Dart / Flutter
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.pub/
+**/.pub-cache/
+**/build/
+**/coverage/
+**/doc/api/
+
+# Platform-generated files
+**/ios/Flutter/.last_build_id
+
+# Local logs and temp workspace
+logs/
+temp/
+
+# Python / node misc from references or helper scripts
+**/__pycache__/
+**/*.pyc
+**/node_modules/

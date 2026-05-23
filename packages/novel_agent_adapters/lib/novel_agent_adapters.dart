@@ -1,0 +1,15 @@
+export 'src/bootstrap/adapter_bundle.dart';
+export 'src/bootstrap/desktop_app_paths.dart';
+export 'src/bootstrap/desktop_app_paths_provider.dart';
+export 'src/bootstrap/workspace_root_locator.dart';
+export 'src/config/local_settings_repository.dart';
+export 'src/host/default_host_capability_port.dart';
+export 'src/host/desktop_process_runner.dart';
+export 'src/packages/local_package_directory_loader.dart';
+export 'src/providers/openai_llm_gateway.dart';
+export 'src/storage/local_project_file_mutation_adapter.dart';
+export 'src/storage/local_project_repository.dart';
+export 'src/storage/local_project_workspace_port.dart';
+export 'src/storage/project_relative_path_resolver.dart';
+export 'src/storage/project_workspace_tool_host_adapter.dart';
+export 'src/tools/project_tool_dispatcher.dart';

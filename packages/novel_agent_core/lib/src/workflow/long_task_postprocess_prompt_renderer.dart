@@ -1,0 +1,74 @@
+import '../common/json_types.dart';
+import '../common/value_readers.dart';
+import 'long_task_transaction_contract_service.dart';
+
+class LongTaskPostprocessPromptRenderer {
+  LongTaskPostprocessPromptRenderer({
+    required LongTaskTransactionContractService contractService,
+  }) : _contractService = contractService;
+
+  final LongTaskTransactionContractService _contractService;
+
+  String renderPostprocessPrompt(JsonMap transaction) {
+    // 中文注释: 后处理提示明确“不要重写正文”，把摘要、记忆和检查报告作为本轮唯一目标。
+    final phase = ValueReaders.stringValue(transaction['phase']);
+    final revision = phase == 'revision_review';
+    final lines = <String>[
+      revision
+          ? '你正在执行 NOVEL Agent 的修复任务后处理。本轮只检查刚才的修订质量，不继续重写正文。'
+          : '你正在执行 NOVEL Agent 的章节任务后处理。请不要重写正文，优先读取已写入文件，再调用工具保存后处理结果。',
+      '',
+      '## 任务',
+      '- 标题：${ValueReaders.stringValue(transaction['task_title'], '未命名任务')}',
+      '- ID：${ValueReaders.stringValue(transaction['task_id'])}',
+      '- 章节：${ValueReaders.stringValue(transaction['chapter'])}',
+      '- 目标：${ValueReaders.stringValue(transaction['goal'])}',
+      '- 执行包：${ValueReaders.stringValue(transaction['execution_path'])}',
+    ];
+    if (revision) {
+      lines
+        ..add(
+          '- 修订目标：${_contractService.joinOrNone(ValueReaders.objectList(transaction['revision_targets']))}',
+        )
+        ..add(
+          '- 原审稿报告：${ValueReaders.stringValue(transaction['original_review_path'], '暂无')}',
+        )
+        ..add(
+          '- 修复 Diff：${ValueReaders.stringValue(transaction['revision_diff_path'], '暂无')}',
+        )
+        ..add('')
+        ..add('## 后处理要求')
+        ..add('1. 调用 read_project_file 读取每个修订目标。')
+        ..add('2. 如果有原审稿报告或修复 Diff，调用 read_project_file 读取它们。')
+        ..add(
+          '3. 调用 run_continuity_check 保存修订检查报告，source_paths 使用修订目标，related_paths 包含原审稿报告和修复 Diff。',
+        )
+        ..add('4. 最终只简短说明修订是否通过、还有哪些风险、是否建议回滚。');
+    } else {
+      lines
+        ..add(
+          '- 已写入正文/草稿路径：${_contractService.joinOrNone(ValueReaders.objectList(transaction['draft_paths']))}',
+        )
+        ..add('')
+        ..add('## 后处理要求')
+        ..add('1. 先调用 read_project_file 读取已写入正文。')
+        ..add('2. 调用 summarize_context 保存章节摘要，scope 使用 chapter。')
+        ..add(
+          '3. 如果发现明确设定事实，调用 update_world_state；如果发现角色状态变化，调用 update_character_state。',
+        )
+        ..add('4. 调用 run_continuity_check 保存连续性、剧情或文风风险报告。')
+        ..add('5. 最终用简短 Markdown 告诉用户保存了哪些后处理产物，以及哪些内容需要人工确认。');
+    }
+    final templates = ValueReaders.mapValue(transaction['project_templates']);
+    final templateText = ValueReaders.stringValue(
+      templates['review_report'],
+    ).trim();
+    if (templateText.isNotEmpty) {
+      lines
+        ..add('')
+        ..add('## 项目审稿报告模板')
+        ..add(templateText);
+    }
+    return lines.join('\n');
+  }
+}

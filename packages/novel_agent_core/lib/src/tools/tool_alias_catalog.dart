@@ -1,0 +1,25 @@
+final class ToolAliasCatalog {
+  static const Map<String, String> aliases = <String, String>{
+    'read_file_content': 'read_project_file',
+    'read_file': 'read_project_file',
+    'write_file_content': 'write_project_file',
+    'write_file': 'write_project_file',
+    'delete_file_or_folder': 'delete_project_file',
+    'delete_file': 'delete_project_file',
+    'create_options': 'present_user_options',
+    'todo_write': 'set_agent_tasks',
+    'update_chapter_status': 'mark_task_status',
+    'list_directory': 'list_project_files',
+    'get_file_info': 'get_project_file_info',
+    'search_in_files': 'search_project_files',
+    'create_file_or_folder': 'create_project_entry',
+    'move_file': 'move_project_file',
+    'move_file_to_index': 'reorder_project_file',
+    'rename_file': 'rename_project_file',
+    'manipulate_file_lines': 'manipulate_project_file_lines',
+    'fetch_url_content': 'request_gateway_tool',
+    'search_internet': 'request_gateway_tool',
+    'generate_image': 'request_gateway_tool',
+    'run_command': 'request_gateway_tool',
+  };
+}

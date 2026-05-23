@@ -1,0 +1,16 @@
+name: novel_agent_cli
+description: NovelAgent desktop CLI shell.
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.9.0
+
+dependencies:
+  novel_agent_core:
+    path: ../../packages/novel_agent_core
+  novel_agent_adapters:
+    path: ../../packages/novel_agent_adapters
+
+dev_dependencies:
+  lints: ^6.0.0

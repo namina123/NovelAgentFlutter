@@ -1,0 +1,244 @@
+# Claude Code Configuration
+
+This file provides Claude Code with comprehensive workflow instructions for both creative writing (Novel-OS) and software development (Agent-OS).
+
+## System Detection and Workflow Selection
+
+Claude Code supports two distinct workflow systems:
+
+1. **Novel-OS**: Creative writing workflows (located in `~/.novel-os/`)
+2. **Agent-OS**: Software development workflows (located in `~/.agent-os/`)
+
+### Automatic System Detection
+
+When a user types a command, Claude Code automatically detects which system to use:
+
+- **Novel-OS commands**: `/plan-novel`, `/create-outline`, `/write-scenes`, `/analyze-manuscript`
+- **Agent-OS commands**: `/plan-product`, `/analyze-product`, `/create-spec`, `/execute-tasks`
+
+## Novel-OS (Creative Writing System)
+
+### Novel-OS Structure
+```
+~/.novel-os/
+├── standards/                  # Writing standards and style guides
+│   ├── writing-style.md        # General writing style guide
+│   ├── narrative-techniques.md # Narrative technique guidelines
+│   └── genre-guides/           # Genre-specific writing guides
+│       ├── literary-fiction.md
+│       ├── mystery-thriller.md
+│       └── fantasy-sci-fi.md
+└── instructions/               # Novel-OS workflow instructions
+    └── core/                   # Core writing workflow processes
+        ├── plan-novel.md       # Novel planning and setup
+        ├── create-outline.md   # Chapter/scene outline creation
+        ├── write-scenes.md     # Scene writing workflows
+        ├── write-scene.md      # Individual scene writing
+        └── analyze-manuscript.md # Manuscript analysis
+```
+
+### Novel-OS Commands
+
+Users can invoke Novel-OS workflows directly using these commands:
+
+### Direct Command Usage
+```
+/plan-novel          → Execute novel planning workflow
+/create-outline      → Create detailed chapter/scene outlines
+/write-scenes        → Begin scene writing with guided workflows
+/analyze-manuscript  → Analyze existing manuscript content
+```
+
+### Novel-OS Command Processing
+When a user types a Novel-OS command (e.g., `/plan-novel`):
+
+1. **Read the command file** from `~/.claude/commands/[command-name].md`
+2. **Execute the corresponding workflow** from `~/.novel-os/instructions/core/[command-name].md`
+3. **Apply writing standards** from `~/.novel-os/standards/` as needed
+4. **Follow the complete workflow** as defined in the instruction files
+
+### Novel-OS Command Examples
+```
+User types: /plan-novel
+→ Read: ~/.claude/commands/plan-novel.md
+→ Execute: ~/.novel-os/instructions/core/plan-novel.md
+
+User types: /create-outline
+→ Read: ~/.claude/commands/create-outline.md  
+→ Execute: ~/.novel-os/instructions/core/create-outline.md
+
+User types: /write-scenes
+→ Read: ~/.claude/commands/write-scenes.md
+→ Execute: ~/.novel-os/instructions/core/write-scenes.md
+
+User types: /analyze-manuscript
+→ Read: ~/.claude/commands/analyze-manuscript.md
+→ Execute: ~/.novel-os/instructions/core/analyze-manuscript.md
+```
+
+## Agent-OS (Software Development System)
+
+### Agent-OS Structure
+```
+~/.agent-os/
+├── standards/                  # Development standards and style guides
+│   ├── best-practices.md       # Core development best practices
+│   ├── code-style.md          # General code style guide  
+│   ├── tech-stack.md          # Technology stack specifications
+│   └── code-style/            # Language-specific style guides
+│       ├── css-style.md
+│       ├── database-style.md
+│       ├── documentation-style.md
+│       ├── git_versioning-style.md
+│       ├── html_jsx-style.md
+│       ├── javascript-style.md
+│       ├── node-style.md
+│       ├── react-style.md
+│       ├── testing-style.md
+│       └── typescript-style.md
+├── commands/                   # Direct user commands
+│   ├── analyze-product.md      # Command: /analyze-product
+│   ├── create-spec.md          # Command: /create-spec
+│   ├── execute-tasks.md        # Command: /execute-tasks
+│   └── plan-product.md         # Command: /plan-product
+└── instructions/               # Agent OS workflow instructions
+    └── core/                   # Core workflow processes
+        ├── analyze-product.md  # Analyze existing codebase and install Agent OS
+        ├── create-spec.md      # Create feature specifications
+        ├── execute-task.md     # Execute individual tasks
+        ├── execute-tasks.md    # Execute multiple tasks for a spec
+        └── plan-product.md     # Initial product planning and setup
+```
+
+### Agent-OS Commands
+
+Users can invoke Agent-OS workflows directly using these commands:
+
+### Direct Command Usage
+```
+/plan-product        → Execute product planning workflow
+/analyze-product     → Analyze existing codebase and install Agent OS  
+/create-spec         → Create feature specifications
+/execute-tasks       → Execute multiple tasks for a spec
+```
+
+### Agent-OS Command Processing
+When a user types an Agent-OS command (e.g., `/plan-product`):
+
+1. **Read the command file** from `~/.agent-os/commands/[command-name].md`
+2. **Execute the corresponding workflow** from `~/.agent-os/instructions/core/[command-name].md`
+3. **Apply development standards** from `~/.agent-os/standards/` during implementation
+4. **Follow the complete workflow** as defined in the instruction files
+
+### Agent-OS Command Examples
+```
+User types: /plan-product
+→ Read: ~/.agent-os/commands/plan-product.md
+→ Execute: ~/.agent-os/instructions/core/plan-product.md
+
+User types: /create-spec
+→ Read: ~/.agent-os/commands/create-spec.md  
+→ Execute: ~/.agent-os/instructions/core/create-spec.md
+
+User types: /analyze-product
+→ Read: ~/.agent-os/commands/analyze-product.md
+→ Execute: ~/.agent-os/instructions/core/analyze-product.md
+
+User types: /execute-tasks
+→ Read: ~/.agent-os/commands/execute-tasks.md
+→ Execute: ~/.agent-os/instructions/core/execute-tasks.md
+```
+
+## Example Usage Scenarios
+
+### Novel-OS Direct Commands
+```
+User types: /plan-novel
+→ Execute: Novel planning workflow
+
+User types: /create-outline
+→ Execute: Chapter/scene outline creation
+
+User types: /write-scenes  
+→ Execute: Scene writing workflow
+
+User types: /analyze-manuscript
+→ Execute: Manuscript analysis workflow
+```
+
+### Agent-OS Direct Commands
+```
+User types: /plan-product
+→ Execute: Product planning workflow
+
+User types: /analyze-product  
+→ Execute: Codebase analysis workflow
+
+User types: /create-spec
+→ Execute: Feature specification workflow
+
+User types: /execute-tasks
+→ Execute: Task implementation workflow
+```
+
+### Novel-OS Natural Language Management
+```
+User says "Plan a new novel" → Execute:
+- plan-novel.md
+
+User says "Create chapter outlines" → Execute:
+- create-outline.md
+
+User says "Start writing scenes" → Execute:
+- write-scenes.md
+
+User says "Analyze my manuscript" → Execute:
+- analyze-manuscript.md
+```
+
+### Agent-OS Natural Language Management
+```
+User says "Set up Agent OS for new project" → Execute:
+- plan-product.md
+
+User says "Install Agent OS in existing codebase" → Execute:
+- analyze-product.md
+
+User says "Create spec for user authentication" → Execute:
+- create-spec.md
+
+User says "Implement the login feature" → Execute:
+- execute-tasks.md (or execute-task.md for single task)
+
+User says "What's next?" → Execute:
+- create-spec.md (which checks roadmap for next item)
+```
+
+## Notes
+
+### System-Specific Notes
+
+**Novel-OS (Creative Writing)**:
+- **Direct Commands** (`/plan-novel`, `/create-outline`, etc.) provide instant creative workflow execution
+- **Command Files** in `~/.claude/commands/` map to workflow instructions in `~/.novel-os/instructions/core/`
+- **Writing Standards** in `~/.novel-os/standards/` ensure consistent, high-quality creative writing
+- All guides emphasize **narrative coherence** and **compelling storytelling**
+- **Genre guides** provide specialized writing approaches for different fiction types
+- Novel-OS workflows focus on **creative development** and **manuscript management**
+
+**Agent-OS (Software Development)**:
+- **Direct Commands** (`/plan-product`, `/create-spec`, etc.) provide instant development workflow execution
+- **Command Files** in `~/.agent-os/commands/` map to workflow instructions in `~/.agent-os/instructions/core/`
+- **Development Standards** ensure consistent, high-quality code across all implementations
+- All guides emphasize **simplicity** and **minimum viable implementation**
+- **Performance** and **security** considerations are built into every guide
+- **Accessibility** requirements are included in frontend guides
+- Agent-OS workflows focus on **product development** and **feature implementation**
+
+### General Notes
+
+- **System Detection**: Claude Code automatically detects whether to use Novel-OS or Agent-OS based on the command used
+- **Workflow Isolation**: Novel-OS and Agent-OS are completely separate systems with different purposes
+- **Command Clarity**: Each system has distinct commands that don't overlap
+- When in doubt, choose the **simpler solution** over the complex one
+- **Commands provide the fastest way** for users to invoke specific workflows

@@ -1,0 +1,147 @@
+# -------------------------
+# Python
+# -------------------------
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+
+.venv/
+venv/
+env/
+ENV/
+
+# -------------------------
+# Node / Frontend
+# -------------------------
+node_modules/
+dist/
+dist-ssr/
+.vite/
+.turbo/
+.parcel-cache/
+.eslintcache
+coverage/
+.nyc_output/
+
+# npm/yarn/pnpm logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# -------------------------
+# Logs / temp / artifacts
+# -------------------------
+*.log
+*.log.*
+*.pid
+
+*.bak
+*.bak.*
+*.orig
+*.rej
+*~
+
+.tmp/
+.tmp*/
+
+test/.artifacts/
+test/.tmp/
+playwright-report/
+test-results/
+
+# -------------------------
+# Local DB / cache files
+# -------------------------
+*.db
+*.db.*
+*.db.bak*
+*.db-journal
+*.db-wal
+*.db-shm
+
+*.sqlite
+*.sqlite*
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+
+*.sqlite3
+*.sqlite3*
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
+
+# Chroma persist (local dev default in backend/.env.example)
+backend/.chroma/
+backend/.chroma*/
+
+# -------------------------
+# Environment / secrets (keep *.example)
+# -------------------------
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+.envrc
+
+# -------------------------
+# Repo-root drafts / intermediate docs (keep standard OSS files)
+# -------------------------
+/*.md
+!/README.md
+!/LICENSE*
+!/CONTRIBUTING.md
+!/CODE_OF_CONDUCT.md
+!/SECURITY.md
+!/CHANGELOG.md
+
+/错误信息.txt
+/完整任务要求.txt
+/tmp_*.png
+/tmp_*.jpg
+/tmp_*.jpeg
+
+# Internal workflow history (keep templates/README)
+plan/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_*.md
+issues/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_*.csv
+
+# -------------------------
+# Not for open-source (internal workflow / docs)
+# -------------------------
+/.codex/
+/docs/
+/issues/
+/plan/
+/scripts/
+/test/
+
+# -------------------------
+# OS / IDE
+# -------------------------
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+.idea/
+.vscode/
+*.sw?
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.tsbuildinfo
+
+# Windows reserved device names (PowerShell `> nul` can create this file)
+# Cleanup (repo root):
+#   Remove-Item -LiteralPath ("\\?\{0}\nul" -f (Get-Location)) -Force
+/nul

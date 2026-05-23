@@ -1,0 +1,156 @@
+# Claude Code Configuration
+
+This file provides Claude Code with comprehensive workflow instructions for creative writing using Novel-OS.
+
+## Novel-OS (Creative Writing System)
+
+Novel-OS is a structured AI-assisted novel writing system that transforms AI writing agents into productive creative partners.
+
+### Novel-OS Structure
+```
+~/.novel-os/
+├── standards/                  # Writing standards and style guides
+│   ├── writing-style.md        # General writing style guide
+│   ├── narrative-techniques.md # Narrative technique guidelines
+│   └── genre-guides/           # Genre-specific writing guides
+│       ├── literary-fiction.md
+│       ├── mystery-thriller.md
+│       └── fantasy-sci-fi.md
+└── instructions/               # Novel-OS workflow instructions
+    └── core/                   # Core writing workflow processes
+        ├── plan-novel.md       # Novel planning and setup
+        ├── create-outline.md   # Chapter/scene outline creation
+        ├── write-scenes.md     # Scene writing workflows
+        ├── write-scene.md      # Individual scene writing
+        └── analyze-manuscript.md # Manuscript analysis
+```
+
+### Novel-OS Commands
+
+Users can invoke Novel-OS workflows directly using these commands:
+
+```
+/plan-novel          → Execute novel planning workflow
+/create-outline      → Create detailed chapter/scene outlines
+/write-scenes        → Begin scene writing with guided workflows
+/analyze-manuscript  → Analyze existing manuscript content
+```
+
+### Command Processing
+When a user types a Novel-OS command (e.g., `/plan-novel`):
+
+1. **Read the command file** from `~/.claude/commands/[command-name].md`
+2. **Execute the corresponding workflow** from `~/.novel-os/instructions/core/[command-name].md`
+3. **Apply writing standards** from `~/.novel-os/standards/` as needed
+4. **Follow the complete workflow** as defined in the instruction files
+
+### Command Examples
+```
+User types: /plan-novel
+→ Read: ~/.claude/commands/plan-novel.md
+→ Execute: ~/.novel-os/instructions/core/plan-novel.md
+
+User types: /create-outline
+→ Read: ~/.claude/commands/create-outline.md  
+→ Execute: ~/.novel-os/instructions/core/create-outline.md
+
+User types: /write-scenes
+→ Read: ~/.claude/commands/write-scenes.md
+→ Execute: ~/.novel-os/instructions/core/write-scenes.md
+
+User types: /analyze-manuscript
+→ Read: ~/.claude/commands/analyze-manuscript.md
+→ Execute: ~/.novel-os/instructions/core/analyze-manuscript.md
+```
+
+## Usage Examples
+
+### Direct Commands
+```
+User types: /plan-novel
+→ Execute: Novel planning workflow
+
+User types: /create-outline
+→ Execute: Chapter/scene outline creation
+
+User types: /write-scenes  
+→ Execute: Scene writing workflow
+
+User types: /analyze-manuscript
+→ Execute: Manuscript analysis workflow
+```
+
+### Natural Language Management
+```
+User says "Plan a new novel" → Execute:
+- plan-novel.md
+
+User says "Create chapter outlines" → Execute:
+- create-outline.md
+
+User says "Start writing scenes" → Execute:
+- write-scenes.md
+
+User says "Analyze my manuscript" → Execute:
+- analyze-manuscript.md
+```
+
+### Creative Writing Process
+```
+User says "I want to write a mystery novel" → Execute:
+- /plan-novel workflow to establish premise, themes, and writing plan
+
+User says "Create a detailed story outline" → Execute:
+- /create-outline workflow to develop plot structure and characters
+
+User says "Write the opening scene" → Execute:
+- /write-scenes workflow to begin structured writing sessions
+
+User says "Review my first chapter" → Execute:
+- /analyze-manuscript workflow to assess quality and consistency
+```
+
+## Writing Standards Application
+
+When generating creative content, Novel-OS applies standards in this order:
+
+1. **Core Writing Standards** (`~/.novel-os/standards/writing-style.md`) - Always apply first
+2. **Narrative Techniques** (`~/.novel-os/standards/narrative-techniques.md`) - Apply for story structure
+3. **Genre-Specific Guides** (`~/.novel-os/standards/genre-guides/`) - Apply based on novel's genre:
+   - Literary fiction → `literary-fiction.md`
+   - Mystery/Thriller → `mystery-thriller.md` 
+   - Fantasy/Sci-Fi → `fantasy-sci-fi.md`
+4. **Novel-Specific Style** (`.novel-os/novel/writing-style.md`) - Novel-specific overrides
+
+## Key Principles
+
+### Creative Writing Focus
+- Build compelling characters and engaging plots
+- Maintain consistent narrative voice and style
+- Follow genre conventions while allowing for innovation
+- Emphasize emotional truth and reader engagement
+
+### Structured Process
+- Plan thoroughly before writing (premise, outline, character development)
+- Write systematically using scene-by-scene approach
+- Review and revise with focus on story coherence and prose quality
+- Track progress through documented milestones
+
+### AI Collaboration
+- **Novel-OS provides context**: Your writing style, story premise, and character development
+- **AI maintains consistency**: Voice, plot continuity, and character behavior
+- **Human retains control**: Creative decisions, story direction, and final approval
+- **Iterative improvement**: Continuous refinement of both story and AI assistance
+
+## Notes
+
+- **Novel-OS Commands** (`/plan-novel`, `/create-outline`, etc.) provide instant creative workflow execution
+- **Command Files** in `~/.claude/commands/` map to workflow instructions in `~/.novel-os/instructions/core/`
+- **Writing Standards** in `~/.novel-os/standards/` ensure consistent, high-quality creative writing
+- **Novel Documentation** in `.novel-os/novel/` provides story-specific context for AI assistance
+- **Manuscript Files** in `.novel-os/manuscripts/` contain detailed outlines and writing tasks
+- All guides emphasize **narrative coherence** and **compelling storytelling**
+- **Genre guides** provide specialized writing approaches for different fiction types
+- Novel-OS workflows focus on **creative development** and **manuscript management**
+- When in doubt, choose the **more emotionally engaging** solution over the safe one
+- **Commands provide the fastest way** for users to invoke creative writing workflows
