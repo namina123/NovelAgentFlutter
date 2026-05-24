@@ -48,10 +48,13 @@ void main() {
     final workflowRuntimeService = ProjectWorkflowRuntimeService(
       taskRepository: projectTaskRepository,
       promptTemplateService: promptTemplateService,
-      generateDraftUseCaseFactory: (provider) {
+      generateDraftUseCaseFactory: (provider, networkSettings) {
         return GenerateDraftUseCase(
           projectWorkspacePort: bundle.projectWorkspacePort,
-          llmGateway: bundle.createGateway(provider),
+          llmGateway: bundle.createGateway(
+            provider,
+            networkSettings: networkSettings,
+          ),
           toolExecutionPort: bundle.projectToolExecutionPort,
           contextAssemblerService: contextAssemblerService,
           projectPromptContract: ProjectPromptContract(),
@@ -116,11 +119,14 @@ void main() {
       workflowRuntimeService: workflowRuntimeService,
       reviewReportService: reviewReportService,
       promptTemplateService: promptTemplateService,
-      generateDraftUseCaseFactory: (provider) {
+      generateDraftUseCaseFactory: (provider, networkSettings) {
         // 中文注释: widget 测试沿用真实装配，确保最小可用链路至少能在界面层成功挂载。
         return GenerateDraftUseCase(
           projectWorkspacePort: bundle.projectWorkspacePort,
-          llmGateway: bundle.createGateway(provider),
+          llmGateway: bundle.createGateway(
+            provider,
+            networkSettings: networkSettings,
+          ),
           toolExecutionPort: bundle.projectToolExecutionPort,
           contextAssemblerService: contextAssemblerService,
           projectPromptContract: ProjectPromptContract(),

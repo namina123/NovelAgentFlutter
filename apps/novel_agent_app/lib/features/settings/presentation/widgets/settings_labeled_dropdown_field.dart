@@ -3,10 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../../app/theme/app_palette.dart';
 
 class SettingsDropdownOption<T> {
-  const SettingsDropdownOption({
-    required this.value,
-    required this.label,
-  });
+  const SettingsDropdownOption({required this.value, required this.label});
 
   final T value;
   final String label;
@@ -22,7 +19,7 @@ class SettingsLabeledDropdownField<T> extends StatelessWidget {
   });
 
   final String label;
-  final T value;
+  final T? value;
   final List<SettingsDropdownOption<T>> options;
   final ValueChanged<T?> onChanged;
 

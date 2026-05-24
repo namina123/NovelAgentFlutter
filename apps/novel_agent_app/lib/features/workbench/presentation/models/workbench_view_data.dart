@@ -3,6 +3,7 @@ import 'document_tab_view_data.dart';
 import 'primary_action_view_data.dart';
 import 'project_launcher_view_data.dart';
 import 'resource_entry_view_data.dart';
+import 'selector_option_view_data.dart';
 import 'session_history_entry_view_data.dart';
 import 'sub_agent_run_view_data.dart';
 import 'user_option_view_data.dart';
@@ -22,7 +23,9 @@ class WorkbenchViewData {
     required this.documents,
     required this.resourceEntries,
     required this.modelLabel,
+    required this.modelOptions,
     required this.agentLabel,
+    required this.agentOptions,
     required this.contextSummary,
     required this.workflowTitle,
     required this.workflowDescription,
@@ -32,6 +35,8 @@ class WorkbenchViewData {
     required this.activeDocumentPath,
     required this.activeDocumentBody,
     required this.activeDocumentDirty,
+    required this.activeDocumentCanRender,
+    required this.isActiveDocumentRendered,
     required this.conversationEntries,
     required this.pendingOptions,
     required this.subAgentRuns,
@@ -52,7 +57,9 @@ class WorkbenchViewData {
   final List<DocumentTabViewData> documents;
   final List<ResourceEntryViewData> resourceEntries;
   final String modelLabel;
+  final List<SelectorOptionViewData> modelOptions;
   final String agentLabel;
+  final List<SelectorOptionViewData> agentOptions;
   final String contextSummary;
   final String workflowTitle;
   final String workflowDescription;
@@ -62,6 +69,8 @@ class WorkbenchViewData {
   final String activeDocumentPath;
   final String activeDocumentBody;
   final bool activeDocumentDirty;
+  final bool activeDocumentCanRender;
+  final bool isActiveDocumentRendered;
   final List<ConversationEntryViewData> conversationEntries;
   final List<UserOptionViewData> pendingOptions;
   final List<SubAgentRunViewData> subAgentRuns;
@@ -83,7 +92,9 @@ class WorkbenchViewData {
       documents: [],
       resourceEntries: [],
       modelLabel: '未加载模型',
+      modelOptions: [],
       agentLabel: '综合创作智能体',
+      agentOptions: [],
       contextSummary: '未开始会话',
       workflowTitle: '开始会话',
       workflowDescription: '先创建或打开项目。',
@@ -106,6 +117,8 @@ class WorkbenchViewData {
       activeDocumentPath: '',
       activeDocumentBody: '',
       activeDocumentDirty: false,
+      activeDocumentCanRender: false,
+      isActiveDocumentRendered: false,
       conversationEntries: [],
       pendingOptions: [],
       subAgentRuns: [],
@@ -132,7 +145,9 @@ class WorkbenchViewData {
     List<DocumentTabViewData>? documents,
     List<ResourceEntryViewData>? resourceEntries,
     String? modelLabel,
+    List<SelectorOptionViewData>? modelOptions,
     String? agentLabel,
+    List<SelectorOptionViewData>? agentOptions,
     String? contextSummary,
     String? workflowTitle,
     String? workflowDescription,
@@ -142,6 +157,8 @@ class WorkbenchViewData {
     String? activeDocumentPath,
     String? activeDocumentBody,
     bool? activeDocumentDirty,
+    bool? activeDocumentCanRender,
+    bool? isActiveDocumentRendered,
     List<ConversationEntryViewData>? conversationEntries,
     List<UserOptionViewData>? pendingOptions,
     List<SubAgentRunViewData>? subAgentRuns,
@@ -163,7 +180,9 @@ class WorkbenchViewData {
       documents: documents ?? this.documents,
       resourceEntries: resourceEntries ?? this.resourceEntries,
       modelLabel: modelLabel ?? this.modelLabel,
+      modelOptions: modelOptions ?? this.modelOptions,
       agentLabel: agentLabel ?? this.agentLabel,
+      agentOptions: agentOptions ?? this.agentOptions,
       contextSummary: contextSummary ?? this.contextSummary,
       workflowTitle: workflowTitle ?? this.workflowTitle,
       workflowDescription: workflowDescription ?? this.workflowDescription,
@@ -173,6 +192,10 @@ class WorkbenchViewData {
       activeDocumentPath: activeDocumentPath ?? this.activeDocumentPath,
       activeDocumentBody: activeDocumentBody ?? this.activeDocumentBody,
       activeDocumentDirty: activeDocumentDirty ?? this.activeDocumentDirty,
+      activeDocumentCanRender:
+          activeDocumentCanRender ?? this.activeDocumentCanRender,
+      isActiveDocumentRendered:
+          isActiveDocumentRendered ?? this.isActiveDocumentRendered,
       conversationEntries: conversationEntries ?? this.conversationEntries,
       pendingOptions: pendingOptions ?? this.pendingOptions,
       subAgentRuns: subAgentRuns ?? this.subAgentRuns,

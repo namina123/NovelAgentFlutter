@@ -1,6 +1,7 @@
 import '../../ports/provider_capability_port.dart';
 import '../../ports/provider_catalog_port.dart';
 import 'provider_custom_parameter_service.dart';
+import 'provider_model_metadata_service.dart';
 import 'provider_profile_description_service.dart';
 import 'provider_profile_normalizer_service.dart';
 import 'provider_protocol_service.dart';
@@ -14,6 +15,10 @@ class ProviderProfileService {
   }) : protocol = ProviderProtocolService(),
        thinking = ProviderThinkingParameterService(),
        customParameters = ProviderCustomParameterService(),
+       metadata = ProviderModelMetadataService(
+         thinkingService: ProviderThinkingParameterService(),
+         customParameterService: ProviderCustomParameterService(),
+       ),
        normalizer = ProviderProfileNormalizerService(
          protocolService: ProviderProtocolService(),
          thinkingService: ProviderThinkingParameterService(),
@@ -50,6 +55,7 @@ class ProviderProfileService {
   final ProviderProtocolService protocol;
   final ProviderThinkingParameterService thinking;
   final ProviderCustomParameterService customParameters;
+  final ProviderModelMetadataService metadata;
   final ProviderProfileNormalizerService normalizer;
   final ProviderRuntimeProfileService runtimeProfiles;
   final ProviderProfileDescriptionService descriptions;

@@ -7,10 +7,7 @@ class SkillMarkdownPackageBuilderService {
 
   final AgentIdService _idService;
 
-  String buildMarkdown({
-    required String name,
-    String description = '',
-  }) {
+  String buildMarkdown({required String name, String description = ''}) {
     // 中文注释: 技能脚手架保持和解析器兼容的 frontmatter 结构，便于项目内直接手写扩展。
     final resolvedName = name.trim().isEmpty ? '新建技能' : name.trim();
     final resolvedId = directoryId(resolvedName);

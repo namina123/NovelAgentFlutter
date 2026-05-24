@@ -79,6 +79,8 @@ class _ConversationSidebarState extends State<ConversationSidebar> {
                 child: SelectorField(
                   label: '模型',
                   value: widget.viewData.modelLabel,
+                  options: widget.viewData.modelOptions,
+                  onSelected: widget.actionHandler.onModelSelected,
                 ),
               ),
               const SizedBox(width: 8),
@@ -86,6 +88,8 @@ class _ConversationSidebarState extends State<ConversationSidebar> {
                 child: SelectorField(
                   label: '智能体',
                   value: widget.viewData.agentLabel,
+                  options: widget.viewData.agentOptions,
+                  onSelected: widget.actionHandler.onAgentSelected,
                 ),
               ),
             ],

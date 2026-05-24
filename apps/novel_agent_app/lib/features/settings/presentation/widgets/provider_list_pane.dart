@@ -21,7 +21,10 @@ class ProviderListPane extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.72),
         borderRadius: AppChrome.surfaceBorderRadius,
-        border: Border.all(color: AppPalette.line, width: AppChrome.borderWidth),
+        border: Border.all(
+          color: AppPalette.line,
+          width: AppChrome.borderWidth,
+        ),
       ),
       child: ListView.separated(
         padding: const EdgeInsets.all(12),
@@ -68,7 +71,7 @@ class ProviderListPane extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${provider.modelId} · ${provider.apiKeyState}',
+                      provider.apiKeyState,
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,

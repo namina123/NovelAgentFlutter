@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../../app/theme/app_palette.dart';
 
@@ -6,21 +7,27 @@ class SettingsLabeledTextField extends StatelessWidget {
   const SettingsLabeledTextField({
     super.key,
     required this.label,
-    required this.controller,
+    this.controller,
+    this.initialValue,
     this.hintText = '',
     this.maxLines = 1,
     this.enabled = true,
     this.keyboardType,
     this.obscureText = false,
+    this.onChanged,
+    this.inputFormatters,
   });
 
   final String label;
-  final TextEditingController controller;
+  final TextEditingController? controller;
+  final String? initialValue;
   final String hintText;
   final int maxLines;
   final bool enabled;
   final TextInputType? keyboardType;
   final bool obscureText;
+  final ValueChanged<String>? onChanged;
+  final List<TextInputFormatter>? inputFormatters;
 
   @override
   Widget build(BuildContext context) {
@@ -37,14 +44,27 @@ class SettingsLabeledTextField extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 6),
-        TextField(
-          controller: controller,
-          enabled: enabled,
-          maxLines: maxLines,
-          keyboardType: keyboardType,
-          obscureText: obscureText,
-          decoration: InputDecoration(hintText: hintText),
-        ),
+        controller != null
+            ? TextField(
+                controller: controller,
+                enabled: enabled,
+                maxLines: maxLines,
+                keyboardType: keyboardType,
+                obscureText: obscureText,
+                onChanged: onChanged,
+                inputFormatters: inputFormatters,
+                decoration: InputDecoration(hintText: hintText),
+              )
+            : TextFormField(
+                initialValue: initialValue,
+                enabled: enabled,
+                maxLines: maxLines,
+                keyboardType: keyboardType,
+                obscureText: obscureText,
+                onChanged: onChanged,
+                inputFormatters: inputFormatters,
+                decoration: InputDecoration(hintText: hintText),
+              ),
       ],
     );
   }

@@ -1,7 +1,7 @@
 import '../../../../app/layout/app_layout_metrics.dart';
 
 class WorkbenchPaneLayoutPolicy {
-  static const double dividerWidth = 14;
+  static const double dividerWidth = 10;
 
   static const double _desktopMinLeftWidth = 236;
   static const double _desktopMinDocumentWidth = 520;
@@ -77,7 +77,7 @@ class WorkbenchPaneLayoutPolicy {
 
   static double defaultLeftWidth(double totalWidth, AppLayoutMetrics metrics) {
     // 中文注释: 默认左栏宽度取旧项目理念里的“可扫读但不喧宾夺主”区间，用来初始化和重置布局。
-      final target = useCompactWideLayout(metrics) ? 296.0 : 252.0;
+    final target = useCompactWideLayout(metrics) ? 296.0 : 252.0;
     return _clamp(
       target,
       minLeftWidth(metrics),

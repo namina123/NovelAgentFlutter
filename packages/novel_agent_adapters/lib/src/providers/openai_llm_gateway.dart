@@ -3,25 +3,48 @@ import 'dart:io';
 
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import 'system_proxy_resolver.dart';
+
 class OpenAiLlmGateway implements LlmGateway {
   OpenAiLlmGateway({
     required String baseUrl,
     required String apiKey,
     Duration? timeout,
+    String proxyRule = '',
+    String proxyUsername = '',
+    String proxyPassword = '',
+    SystemProxyResolver? systemProxyResolver,
   }) : _baseUrl = _normalizeBaseUrl(baseUrl),
        _apiKey = apiKey,
-       _timeout = timeout ?? const Duration(seconds: 90);
+       _timeout = timeout ?? const Duration(seconds: 90),
+       _proxyRule = proxyRule.trim(),
+       _proxyUsername = proxyUsername.trim(),
+       _proxyPassword = proxyPassword,
+       _systemProxyResolver =
+           systemProxyResolver ?? const SystemProxyResolver();
 
   factory OpenAiLlmGateway.fromProviderSettings(
-    ProviderEndpointSettings provider,
-  ) {
+    ProviderEndpointSettings provider, {
+    JsonMap networkSettings = const <String, Object?>{},
+  }) {
     // 中文注释: 通过 provider 设置创建网关可以让 composition root 保持轻量，不把 HTTP 细节带回上层。
-    return OpenAiLlmGateway(baseUrl: provider.baseUrl, apiKey: provider.apiKey);
+    return OpenAiLlmGateway(
+      baseUrl: provider.baseUrl,
+      apiKey: provider.apiKey,
+      timeout: _timeoutFromNetworkSettings(networkSettings),
+      proxyRule: _proxyRuleFromNetworkSettings(networkSettings),
+      proxyUsername: '${networkSettings['proxy_username'] ?? ''}',
+      proxyPassword: '${networkSettings['proxy_password'] ?? ''}',
+    );
   }
 
   final String _baseUrl;
   final String _apiKey;
   final Duration _timeout;
+  final String _proxyRule;
+  final String _proxyUsername;
+  final String _proxyPassword;
+  final SystemProxyResolver _systemProxyResolver;
 
   @override
   Future<JsonMap> requestChat({
@@ -31,60 +54,92 @@ class OpenAiLlmGateway implements LlmGateway {
     JsonMap options = const <String, Object?>{},
   }) async {
     // 中文注释: 这里负责 OpenAI 兼容多轮消息和工具调用协议的 HTTP 往返，不承接项目上下文规则。
+    final requestUri = Uri.parse('$_baseUrl/chat/completions');
     final client = HttpClient()..connectionTimeout = _timeout;
     try {
-      final request = await client
-          .postUrl(Uri.parse('$_baseUrl/chat/completions'))
-          .timeout(_timeout);
+      await _configureProxy(client, requestUri);
+      final request = await client.postUrl(requestUri).timeout(_timeout);
       request.headers.contentType = ContentType.json;
       if (_apiKey.trim().isNotEmpty) {
         request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $_apiKey');
       }
       request.write(
-        jsonEncode(<String, Object?>{
-          'model': modelId,
-          'messages': _requestMessages(messages, options),
-          if (tools.isNotEmpty) 'tools': tools,
-          if (options.containsKey('tool_choice'))
-            'tool_choice': options['tool_choice'],
-        }),
+        jsonEncode(_requestPayload(messages, modelId, tools, options)),
       );
       final response = await request.close().timeout(_timeout);
       final body = await response.transform(utf8.decoder).join();
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw HttpException(
           '模型请求失败(${response.statusCode}): $body',
-          uri: Uri.parse('$_baseUrl/chat/completions'),
+          uri: requestUri,
         );
       }
-      final decoded = jsonDecode(body);
-      final root = _mapValue(decoded);
-      final choices = root['choices'];
-      if (choices is! List || choices.isEmpty) {
-        throw const FormatException('响应中缺少 choices。');
+      if (_looksLikeEventStream(body)) {
+        return _eventStreamResult(body);
       }
-      final firstChoice = _mapValue(choices.first);
-      final message = _mapValue(firstChoice['message']);
-      final toolCalls = _normalizeToolCalls(message['tool_calls']);
-      final content = _messageText(message['content']);
-      return <String, Object?>{
-        'ok': true,
-        'content': content,
-        'reasoning_content': _stringValue(
-          message['reasoning_content'] ?? firstChoice['reasoning_content'],
-        ),
-        'message': <String, Object?>{
-          ...message,
-          'content': content,
-          'tool_calls': toolCalls,
-        },
-        'tool_calls': toolCalls,
-        'raw_response': root,
-      };
+      return _jsonResult(body);
     } finally {
       // 中文注释: HTTP client 生命周期由网关单次请求自行收口，避免 CLI 长时间持有空闲连接。
       client.close(force: true);
     }
+  }
+
+  Future<void> _configureProxy(HttpClient client, Uri requestUri) async {
+    // 中文注释: 默认优先尊重系统网络环境；若用户在设置里明确填写自定义代理，则以设置为准。
+    final proxyRule = _proxyRule.isNotEmpty
+        ? _proxyRule
+        : (await _systemProxyResolver.resolveFor(requestUri)).trim();
+    if (proxyRule.isEmpty || proxyRule.toUpperCase() == 'DIRECT') {
+      return;
+    }
+    client.findProxy = (_) => proxyRule;
+    if (_proxyUsername.isEmpty) {
+      return;
+    }
+    client.authenticateProxy = (host, port, scheme, realm) async {
+      client.addProxyCredentials(
+        host,
+        port,
+        realm ?? '',
+        HttpClientBasicCredentials(_proxyUsername, _proxyPassword),
+      );
+      return true;
+    };
+  }
+
+  static Duration _timeoutFromNetworkSettings(JsonMap networkSettings) {
+    // 中文注释: 网络超时优先取设置页值，未配置时退回稳定默认值。
+    final seconds = int.tryParse(
+      '${networkSettings['timeout_seconds'] ?? ''}'.trim(),
+    );
+    if (seconds == null || seconds <= 0) {
+      return const Duration(seconds: 90);
+    }
+    return Duration(seconds: seconds);
+  }
+
+  static String _proxyRuleFromNetworkSettings(JsonMap networkSettings) {
+    // 中文注释: 自定义代理只在这里转成 HttpClient 可识别规则，宿主层不需要理解底层格式。
+    final mode =
+        '${networkSettings['proxy_mode'] ?? 'system'}'.trim().toLowerCase();
+    if (mode != 'custom') {
+      return '';
+    }
+    final protocol =
+        '${networkSettings['proxy_protocol'] ?? ''}'.trim().toLowerCase();
+    final host = '${networkSettings['proxy_host'] ?? ''}'.trim();
+    final port = '${networkSettings['proxy_port'] ?? ''}'.trim();
+    if (host.isEmpty || port.isEmpty) {
+      return '';
+    }
+    if (protocol == 'socks5') {
+      return 'SOCKS $host:$port';
+    }
+    if (protocol.isEmpty) {
+      // 中文注释: UI 允许协议头留空；这里把纯 address:port 输入按通用代理地址解释给 HttpClient。
+      return 'PROXY $host:$port';
+    }
+    return 'PROXY $host:$port';
   }
 
   @override
@@ -112,6 +167,29 @@ class OpenAiLlmGateway implements LlmGateway {
       return trimmed.substring(0, trimmed.length - 1);
     }
     return trimmed;
+  }
+
+  JsonMap _requestPayload(
+    List<JsonMap> messages,
+    String modelId,
+    List<JsonMap> tools,
+    JsonMap options,
+  ) {
+    // 中文注释: 请求体组装与 HTTP 往返拆开，方便后续继续扩展不同 API 模式。
+    final payload = <String, Object?>{
+      'model': modelId,
+      'messages': _requestMessages(messages, options),
+      if (tools.isNotEmpty) 'tools': tools,
+      if (options.containsKey('tool_choice'))
+        'tool_choice': options['tool_choice'],
+    };
+    options.forEach((key, value) {
+      if (_reservedOptionKeys.contains(key)) {
+        return;
+      }
+      payload[key] = value;
+    });
+    return payload;
   }
 
   List<Object?> _requestMessages(List<JsonMap> messages, JsonMap options) {
@@ -197,5 +275,190 @@ class OpenAiLlmGateway implements LlmGateway {
   String _stringValue(Object? value) {
     // 中文注释: 文本提取在网关内部完成，避免把响应结构知识扩散到上层。
     return value == null ? '' : value.toString();
+  }
+
+  JsonMap _jsonResult(String body) {
+    // 中文注释: 常规 JSON 响应继续按原有单包结构解析，保持非流式链路兼容。
+    final decoded = jsonDecode(body);
+    final root = _mapValue(decoded);
+    final choices = root['choices'];
+    if (choices is! List || choices.isEmpty) {
+      throw const FormatException('响应中缺少 choices。');
+    }
+    final firstChoice = _mapValue(choices.first);
+    final message = _mapValue(firstChoice['message']);
+    final toolCalls = _normalizeToolCalls(message['tool_calls']);
+    final content = _messageText(message['content']);
+    return <String, Object?>{
+      'ok': true,
+      'content': content,
+      'reasoning_content': _stringValue(
+        message['reasoning_content'] ?? firstChoice['reasoning_content'],
+      ),
+      'message': <String, Object?>{
+        ...message,
+        'content': content,
+        'tool_calls': toolCalls,
+      },
+      'tool_calls': toolCalls,
+      'raw_response': root,
+    };
+  }
+
+  bool _looksLikeEventStream(String body) {
+    // 中文注释: 有些兼容服务会直接回 SSE 文本，这里按 data: 前缀做轻量识别。
+    final trimmed = body.trimLeft();
+    return trimmed.startsWith('data:');
+  }
+
+  JsonMap _eventStreamResult(String body) {
+    // 中文注释: SSE 响应在这里聚合为与普通 JSON 一致的返回结构，避免上层再分流式和非流式两套协议。
+    final contentBuffer = StringBuffer();
+    final reasoningBuffer = StringBuffer();
+    final toolCallBuilders = <String, _ToolCallBuilder>{};
+    JsonMap lastChunk = const <String, Object?>{};
+    for (final eventData in _eventDataLines(body)) {
+      if (eventData == '[DONE]') {
+        break;
+      }
+      final decoded = jsonDecode(eventData);
+      final root = _mapValue(decoded);
+      lastChunk = root;
+      final choices = root['choices'];
+      if (choices is! List || choices.isEmpty) {
+        continue;
+      }
+      final firstChoice = _mapValue(choices.first);
+      final delta = _mapValue(firstChoice['delta']);
+      final contentText = _messageText(delta['content']);
+      if (contentText.isNotEmpty) {
+        contentBuffer.write(contentText);
+      }
+      final reasoningText = _messageText(
+        delta['reasoning_content'] ?? firstChoice['reasoning_content'],
+      );
+      if (reasoningText.isNotEmpty) {
+        reasoningBuffer.write(reasoningText);
+      }
+      _mergeToolCallDeltas(toolCallBuilders, delta['tool_calls']);
+    }
+    final toolCalls = toolCallBuilders.values
+        .map((builder) => builder.build(_mapValue))
+        .toList(growable: false);
+    final content = contentBuffer.toString();
+    final reasoning = reasoningBuffer.toString();
+    return <String, Object?>{
+      'ok': true,
+      'content': content,
+      'reasoning_content': reasoning,
+      'message': <String, Object?>{
+        'role': 'assistant',
+        'content': content,
+        'tool_calls': toolCalls,
+      },
+      'tool_calls': toolCalls,
+      'raw_response': lastChunk,
+    };
+  }
+
+  Iterable<String> _eventDataLines(String body) sync* {
+    // 中文注释: SSE 只取 data 行并自动拼接同一事件的多行数据，其它字段当前忽略。
+    final buffer = StringBuffer();
+    for (final line in body.split(RegExp(r'\r?\n'))) {
+      final trimmedRight = line.trimRight();
+      if (trimmedRight.isEmpty) {
+        if (buffer.isNotEmpty) {
+          yield buffer.toString();
+          buffer.clear();
+        }
+        continue;
+      }
+      if (!trimmedRight.startsWith('data:')) {
+        continue;
+      }
+      final payload = trimmedRight.substring(5).trimLeft();
+      if (buffer.isNotEmpty) {
+        buffer.write('\n');
+      }
+      buffer.write(payload);
+    }
+    if (buffer.isNotEmpty) {
+      yield buffer.toString();
+    }
+  }
+
+  void _mergeToolCallDeltas(
+    Map<String, _ToolCallBuilder> toolCallBuilders,
+    Object? value,
+  ) {
+    // 中文注释: 流式 tool call 会分片返回参数字符串，这里按 index / id 聚合成完整调用。
+    if (value is! List) {
+      return;
+    }
+    for (final rawCall in value) {
+      final call = _mapValue(rawCall);
+      final index = call['index']?.toString() ?? '';
+      final callId = _stringValue(call['id']);
+      final key = callId.isNotEmpty ? callId : index;
+      if (key.isEmpty) {
+        continue;
+      }
+      final builder = toolCallBuilders[key] ??= _ToolCallBuilder(
+        id: callId,
+        index: index,
+      );
+      final functionData = _mapValue(call['function']);
+      if (callId.isNotEmpty) {
+        builder.id = callId;
+      }
+      final functionName = _stringValue(functionData['name']);
+      if (functionName.isNotEmpty) {
+        builder.name = functionName;
+      }
+      final argumentsChunk = _stringValue(functionData['arguments']);
+      if (argumentsChunk.isNotEmpty) {
+        builder.argumentsBuffer.write(argumentsChunk);
+      }
+    }
+  }
+
+  static const Set<String> _reservedOptionKeys = <String>{
+    'prompt',
+    'api_mode',
+    'tool_choice',
+    'stream_scope',
+    'sub_session_id',
+    'allow_inline_tools',
+    'force_tool_choice',
+    'preferred_tool',
+  };
+}
+
+class _ToolCallBuilder {
+  _ToolCallBuilder({required this.id, required this.index});
+
+  String id;
+  final String index;
+  String name = '';
+  final StringBuffer argumentsBuffer = StringBuffer();
+
+  JsonMap build(Map<String, Object?> Function(Object? value) mapValue) {
+    final rawArguments = argumentsBuffer.toString();
+    Object? parsedArguments = rawArguments;
+    if (rawArguments.trim().isNotEmpty) {
+      try {
+        parsedArguments = jsonDecode(rawArguments);
+      } catch (_) {
+        parsedArguments = <String, Object?>{};
+      }
+    }
+    return <String, Object?>{
+      'id': id,
+      'name': name,
+      'tool_name': name,
+      'arguments': mapValue(parsedArguments),
+      'raw_arguments': rawArguments,
+      'status': 'pending',
+    };
   }
 }

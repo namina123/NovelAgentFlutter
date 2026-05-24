@@ -58,10 +58,7 @@ class ReviewCenterEntryViewData {
 }
 
 class ReviewTypeOptionViewData {
-  const ReviewTypeOptionViewData({
-    required this.id,
-    required this.label,
-  });
+  const ReviewTypeOptionViewData({required this.id, required this.label});
 
   final String id;
   final String label;

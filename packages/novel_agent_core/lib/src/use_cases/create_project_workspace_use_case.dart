@@ -73,6 +73,12 @@ class CreateProjectWorkspaceUseCase {
     String projectType,
   ) async {
     // 中文注释: 工作区骨架统一从目录目录表生成，保证 GUI、CLI 和工具调度看到的是同一套项目结构。
+    for (final descriptor in ProjectWorkspaceCatalog.userWorkspaceDirs) {
+      await _projectWorkspacePort.createDirectory(rootPath, descriptor.path);
+    }
+    for (final descriptor in ProjectWorkspaceCatalog.advancedWorkspaceDirs) {
+      await _projectWorkspacePort.createDirectory(rootPath, descriptor.path);
+    }
     final manifest = _projectManifestCodecService.create(
       title: title,
       projectType: projectType,
@@ -87,20 +93,6 @@ class CreateProjectWorkspaceUseCase {
       'specs/project_brief.md',
       '# $title\n\n- 项目类型：$projectType\n- 题材：\n- 核心卖点：\n- 创作边界：\n- 当前阶段：起步\n',
     );
-    for (final descriptor in ProjectWorkspaceCatalog.userWorkspaceDirs) {
-      await _projectWorkspacePort.writeTextFile(
-        rootPath,
-        '${descriptor.path}README.md',
-        '# ${descriptor.name}\n\n${descriptor.purpose}\n',
-      );
-    }
-    for (final descriptor in ProjectWorkspaceCatalog.advancedWorkspaceDirs) {
-      await _projectWorkspacePort.writeTextFile(
-        rootPath,
-        '${descriptor.path}README.md',
-        '# ${descriptor.name}\n',
-      );
-    }
     for (final descriptor in _customizationRootCatalogService.roots()) {
       final root = descriptor['root'] ?? '';
       if (root.trim().isEmpty) {
@@ -112,11 +104,6 @@ class CreateProjectWorkspaceUseCase {
         _customizationIndexDocumentService.buildIndexDocument(root),
       );
     }
-    await _projectWorkspacePort.writeTextFile(
-      rootPath,
-      'README.md',
-      '# $title\n\nNovelAgent Flutter 项目工作区。\n\n- 项目类型：$projectType\n',
-    );
   }
 
   Future<String> _uniqueProjectRootPath(

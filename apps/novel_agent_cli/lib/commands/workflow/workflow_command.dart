@@ -6,22 +6,28 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 import '../../output/terminal_printer.dart';
 
 typedef CliGenerateDraftUseCaseFactory =
-    GenerateDraftUseCase Function(ProviderEndpointSettings provider);
+    GenerateDraftUseCase Function(
+      ProviderEndpointSettings provider,
+      JsonMap networkSettings,
+    );
 
 class WorkflowCommand {
-  const WorkflowCommand({
+  WorkflowCommand({
     required SettingsRepository settingsRepository,
     required ProjectRepository projectRepository,
     required SaveDraftUseCase saveDraftUseCase,
     required CliGenerateDraftUseCaseFactory generateDraftUseCaseFactory,
     required ProjectWorkflowRuntimeService workflowRuntimeService,
     required TerminalPrinter printer,
+    ModelExecutionProfileService? modelExecutionProfileService,
   }) : _settingsRepository = settingsRepository,
        _projectRepository = projectRepository,
        _saveDraftUseCase = saveDraftUseCase,
        _generateDraftUseCaseFactory = generateDraftUseCaseFactory,
        _workflowRuntimeService = workflowRuntimeService,
-       _printer = printer;
+       _printer = printer,
+       _modelExecutionProfileService =
+           modelExecutionProfileService ?? ModelExecutionProfileService();
 
   final SettingsRepository _settingsRepository;
   final ProjectRepository _projectRepository;
@@ -29,6 +35,7 @@ class WorkflowCommand {
   final CliGenerateDraftUseCaseFactory _generateDraftUseCaseFactory;
   final ProjectWorkflowRuntimeService _workflowRuntimeService;
   final TerminalPrinter _printer;
+  final ModelExecutionProfileService _modelExecutionProfileService;
 
   Future<int> run(List<String> args) async {
     // 中文注释: workflow 命令从这里统一分发，确保 GUI 与 CLI 共享同一套长任务运行时而不是两套逻辑。
@@ -93,7 +100,10 @@ class WorkflowCommand {
       _printer.error('未找到可用 provider。');
       return 2;
     }
-    final project = await _openProject(args, defaultProjectPath: settings.defaultProjectPath);
+    final project = await _openProject(
+      args,
+      defaultProjectPath: settings.defaultProjectPath,
+    );
     if (project == null) {
       return 2;
     }
@@ -104,23 +114,31 @@ class WorkflowCommand {
     }
     final title = _optionValue(args, '--title') ?? _titleFromPrompt(prompt);
     final noSave = args.contains('--no-save');
-    final modelId = _optionValue(args, '--model');
-    final resolvedModelId = modelId == null || modelId.trim().isEmpty
-        ? (settings.defaultModelId.trim().isEmpty
-              ? provider.modelId
-              : settings.defaultModelId)
-        : modelId;
+    final executionProfile = _modelExecutionProfileService.resolve(
+      settings: settings,
+      provider: provider,
+      overrideModelId: _optionValue(args, '--model') ?? '',
+    );
+    final resolvedModelId = ValueReaders.stringValue(
+      executionProfile['resolved_model_id'],
+    );
     if (provider.baseUrl.trim().isEmpty || resolvedModelId.trim().isEmpty) {
       _printer.error('请先在 novel_agent_settings.json 或环境变量中配置真实的模型接口地址和模型名。');
       return 2;
     }
     try {
-      final useCase = _generateDraftUseCaseFactory(provider);
+      final useCase = _generateDraftUseCaseFactory(
+        provider,
+        settings.networkSettings,
+      );
       final result = await useCase.execute(
         project: project,
         userPrompt: prompt,
         modelId: resolvedModelId,
         title: title,
+        requestOptions: ValueReaders.mapValue(
+          executionProfile['request_options'],
+        ),
       );
       var savedPath = result.writtenPaths.isEmpty
           ? ''
@@ -156,7 +174,8 @@ class WorkflowCommand {
     }
     final result = await _workflowRuntimeService.createLongTaskWorkflow(
       context.project,
-      _optionValue(args, '--mode') ?? TaskRuntimeConstants.modeHumanOutlineAiDraft,
+      _optionValue(args, '--mode') ??
+          TaskRuntimeConstants.modeHumanOutlineAiDraft,
       options: <String, Object?>{
         'outline_path': _optionValue(args, '--outline') ?? 'outline/outline.md',
         'seed_prompt': _optionValue(args, '--seed') ?? '',
@@ -173,7 +192,9 @@ class WorkflowCommand {
     if (context == null) {
       return 2;
     }
-    final tasks = await _workflowRuntimeService.listWorkflowTasks(context.project);
+    final tasks = await _workflowRuntimeService.listWorkflowTasks(
+      context.project,
+    );
     if (tasks.isEmpty) {
       _printer.info('当前项目还没有任务。');
       return 0;
@@ -197,7 +218,9 @@ class WorkflowCommand {
     if (context == null) {
       return 2;
     }
-    final nextTask = await _workflowRuntimeService.nextWorkflowTask(context.project);
+    final nextTask = await _workflowRuntimeService.nextWorkflowTask(
+      context.project,
+    );
     if (nextTask.isEmpty) {
       _printer.info('当前没有可运行任务。');
       return 0;
@@ -243,7 +266,9 @@ class WorkflowCommand {
     if (context == null) {
       return 2;
     }
-    final result = await _workflowRuntimeService.workflowChainView(context.project);
+    final result = await _workflowRuntimeService.workflowChainView(
+      context.project,
+    );
     _printer.block('任务链', _prettyJson(result));
     return 0;
   }
@@ -308,9 +333,7 @@ class WorkflowCommand {
     final result = await _workflowRuntimeService.runWorkflowTaskQueue(
       context.project,
       context.settings,
-      options: <String, Object?>{
-        'max_steps': _intOption(args, '--steps', 3),
-      },
+      options: <String, Object?>{'max_steps': _intOption(args, '--steps', 3)},
     );
     return _printWorkflowResult(result, success: '队列运行已推进。');
   }
@@ -340,11 +363,8 @@ class WorkflowCommand {
     if (context == null) {
       return 2;
     }
-    final result =
-        await _workflowRuntimeService.runNextWorkflowTaskPostprocessOnce(
-          context.project,
-          context.settings,
-        );
+    final result = await _workflowRuntimeService
+        .runNextWorkflowTaskPostprocessOnce(context.project, context.settings);
     return _printWorkflowResult(result, success: '下一条后处理已执行一轮。');
   }
 
@@ -478,7 +498,8 @@ class WorkflowCommand {
     List<String> args,
   ) async {
     // 中文注释: 任务选择支持 path 与 id 两种方式，兼容旧项目里“路径定位”和“任务 id 定位”的双习惯。
-    final taskPath = _optionValue(args, '--task') ?? _optionValue(args, '--path');
+    final taskPath =
+        _optionValue(args, '--task') ?? _optionValue(args, '--path');
     if ((taskPath ?? '').trim().isNotEmpty) {
       return <String, Object?>{'relative_path': taskPath!.trim()};
     }
@@ -507,7 +528,10 @@ class WorkflowCommand {
     if (explicit.trim().isNotEmpty) {
       return explicit.trim();
     }
-    final runs = await _workflowRuntimeService.listLongTaskRuns(project, limit: 1);
+    final runs = await _workflowRuntimeService.listLongTaskRuns(
+      project,
+      limit: 1,
+    );
     if (runs.isEmpty) {
       return '';
     }

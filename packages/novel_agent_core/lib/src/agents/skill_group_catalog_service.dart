@@ -5,10 +5,8 @@ import '../common/value_readers.dart';
 import 'skill_group_normalizer_service.dart';
 
 class SkillGroupCatalogService {
-  SkillGroupCatalogService({
-    SkillGroupNormalizerService? normalizerService,
-  }) : _normalizerService =
-           normalizerService ?? SkillGroupNormalizerService();
+  SkillGroupCatalogService({SkillGroupNormalizerService? normalizerService})
+    : _normalizerService = normalizerService ?? SkillGroupNormalizerService();
 
   final SkillGroupNormalizerService _normalizerService;
 

@@ -163,10 +163,7 @@ class _ReviewCenterPageState extends State<ReviewCenterPage> {
             const SizedBox(height: 12),
             Text(
               widget.viewData.status,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
             ),
           ],
           const SizedBox(height: 12),
@@ -260,7 +257,9 @@ class _ReviewCenterPageState extends State<ReviewCenterPage> {
         return item;
       }
     }
-    return widget.viewData.entries.isEmpty ? null : widget.viewData.entries.first;
+    return widget.viewData.entries.isEmpty
+        ? null
+        : widget.viewData.entries.first;
   }
 
   void _submitFilter() {

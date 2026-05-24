@@ -2,14 +2,19 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../packages/local_skill_group_catalog.dart';
 import '../packages/local_skill_package_catalog.dart';
+import '../storage/project_tree_order_service.dart';
+import '../host/desktop_process_runner.dart';
 import 'project_file_edit_tool_executor.dart';
 import 'project_file_read_tool_executor.dart';
 import 'project_file_write_tool_executor.dart';
 import 'project_agent_skill_tool_executor.dart';
+import 'project_gateway_process_service.dart';
+import 'project_gateway_tool_executor.dart';
 import 'project_management_tool_executor.dart';
 import 'project_structured_memory_tool_executor.dart';
 import 'project_task_tool_executor.dart';
 import 'project_tool_path_policy.dart';
+import 'project_tool_relative_path_resolver.dart';
 import 'project_tool_result_factory.dart';
 
 class ProjectToolDispatcher implements ToolExecutionPort {
@@ -20,9 +25,14 @@ class ProjectToolDispatcher implements ToolExecutionPort {
     ToolCallNormalizerService? toolCallNormalizerService,
     ProjectToolPathPolicy? pathPolicy,
     ProjectToolResultFactory? resultFactory,
+    ProjectTreeOrderService? treeOrderService,
   }) : _toolCallNormalizerService =
            toolCallNormalizerService ?? ToolCallNormalizerService(),
        _resultFactory = resultFactory ?? ProjectToolResultFactory(),
+       _relativePathResolver = ProjectToolRelativePathResolver(
+         hostPort: hostPort,
+         pathPolicy: pathPolicy,
+       ),
        _readToolExecutor = ProjectFileReadToolExecutor(
          hostPort: hostPort,
          pathPolicy: pathPolicy,
@@ -55,6 +65,15 @@ class ProjectToolDispatcher implements ToolExecutionPort {
        _managementToolExecutor = ProjectManagementToolExecutor(
          hostPort: hostPort,
          resultFactory: resultFactory,
+         treeOrderService: treeOrderService,
+         pathPolicy: pathPolicy,
+         gatewayToolExecutor: ProjectGatewayToolExecutor(
+           resultFactory: resultFactory,
+           pathPolicy: pathPolicy,
+           processService: ProjectGatewayProcessService(
+             processRunner: DesktopProcessRunner(),
+           ),
+         ),
        ),
        _agentSkillToolExecutor = ProjectAgentSkillToolExecutor(
          skillPackageCatalog: skillPackageCatalog,
@@ -64,6 +83,7 @@ class ProjectToolDispatcher implements ToolExecutionPort {
 
   final ToolCallNormalizerService _toolCallNormalizerService;
   final ProjectToolResultFactory _resultFactory;
+  final ProjectToolRelativePathResolver _relativePathResolver;
   final ProjectFileReadToolExecutor _readToolExecutor;
   final ProjectFileWriteToolExecutor _writeToolExecutor;
   final ProjectFileEditToolExecutor _editToolExecutor;
@@ -77,10 +97,14 @@ class ProjectToolDispatcher implements ToolExecutionPort {
     required ProjectDescriptor project,
     required JsonMap toolCall,
   }) async {
-    // 中文注释: 调度器只负责归一化和路由，不把具体文件编辑、任务写入和摘要格式揉在一起。
+    // 中文注释: 调度器负责把显示层/模型层传来的路径折叠为英文项目相对路径，后续执行器只吃规范参数。
     final normalized = _toolCallNormalizerService.normalizeToolCall(toolCall);
     final toolName = ValueReaders.stringValue(normalized['name']).trim();
-    final arguments = ValueReaders.mapValue(normalized['arguments']);
+    final arguments = await _normalizeArguments(
+      project: project,
+      toolName: toolName,
+      arguments: ValueReaders.mapValue(normalized['arguments']),
+    );
     switch (toolName) {
       case 'list_project_files':
         return _readToolExecutor.listProjectFiles(project, arguments);
@@ -147,11 +171,99 @@ class ProjectToolDispatcher implements ToolExecutionPort {
       case 'rename_project':
         return _managementToolExecutor.renameProject(project, arguments);
       case 'reorder_project_file':
-        return _managementToolExecutor.reorderProjectFile(arguments);
+        return _managementToolExecutor.reorderProjectFile(project, arguments);
       case 'request_gateway_tool':
-        return _managementToolExecutor.requestGatewayTool(arguments);
+        return _managementToolExecutor.requestGatewayTool(project, arguments);
       default:
         return _resultFactory.error('Unknown project tool: $toolName');
+    }
+  }
+
+  Future<JsonMap> _normalizeArguments({
+    required ProjectDescriptor project,
+    required String toolName,
+    required JsonMap arguments,
+  }) async {
+    // 中文注释: 中文目录名、显示名匹配和旧输入兼容只允许存在于这一层，避免渗透进核心与各执行器。
+    final normalized = ValueReaders.deepCopyMap(arguments);
+    switch (toolName) {
+      case 'list_project_files':
+      case 'search_project_files':
+      case 'reorder_project_file':
+        normalized['relative_path'] = await _relativePathResolver.resolveScopePath(
+          project,
+          normalized,
+        );
+        return normalized;
+      case 'read_project_file':
+      case 'get_project_file_info':
+      case 'delete_project_file':
+      case 'create_backup':
+      case 'edit_project_file':
+      case 'rename_project_file':
+        normalized['relative_path'] = await _relativePathResolver.resolveFilePath(
+          project,
+          normalized,
+        );
+        return normalized;
+      case 'write_project_file':
+      case 'create_project_entry':
+        normalized['relative_path'] = _relativePathResolver.normalizeProjectPath(
+          ValueReaders.stringValue(normalized['relative_path']),
+        );
+        return normalized;
+      case 'move_project_file':
+        normalized['relative_path'] = await _relativePathResolver.resolveFilePath(
+          project,
+          normalized,
+        );
+        normalized['target_relative_path'] =
+            _relativePathResolver.normalizeProjectPath(
+              ValueReaders.stringValue(normalized['target_relative_path']),
+            );
+        return normalized;
+      case 'manipulate_project_file_lines':
+        normalized['relative_path'] = await _relativePathResolver.resolveFilePath(
+          project,
+          normalized,
+        );
+        normalized['target_relative_path'] =
+            _relativePathResolver.normalizeProjectPath(
+              ValueReaders.stringValue(normalized['target_relative_path']),
+            );
+        return normalized;
+      case 'restore_backup':
+        normalized['backup_path'] = await _relativePathResolver.resolveFilePath(
+          project,
+          <String, Object?>{'relative_path': normalized['backup_path']},
+          allowSessions: true,
+        );
+        normalized['target_path'] = _relativePathResolver.normalizeProjectPath(
+          ValueReaders.stringValue(normalized['target_path']),
+        );
+        return normalized;
+      case 'request_gateway_tool':
+        final nestedArguments = ValueReaders.mapValue(normalized['arguments']);
+        final outputPath = ValueReaders.stringValue(
+          normalized['relative_path'],
+          ValueReaders.stringValue(
+            normalized['output_relative_path'],
+            ValueReaders.stringValue(
+              nestedArguments['relative_path'],
+              ValueReaders.stringValue(nestedArguments['output_relative_path']),
+            ),
+          ),
+        );
+        final normalizedOutputPath = _relativePathResolver.normalizeProjectPath(
+          outputPath,
+        );
+        if (normalizedOutputPath.isNotEmpty) {
+          normalized['relative_path'] = normalizedOutputPath;
+          normalized['output_relative_path'] = normalizedOutputPath;
+        }
+        return normalized;
+      default:
+        return normalized;
     }
   }
 

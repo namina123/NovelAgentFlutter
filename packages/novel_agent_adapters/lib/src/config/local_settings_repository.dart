@@ -31,19 +31,13 @@ class LocalSettingsRepository implements SettingsRepository {
     final providers = _resolveProviders(document);
     final defaultProviderId = _env('NOVEL_AGENT_PROVIDER_ID').isNotEmpty
         ? _env('NOVEL_AGENT_PROVIDER_ID')
-        : _stringValue(
-            document['default_provider_id'],
-            providers.isEmpty ? '' : providers.first.id,
-          );
+        : _stringValue(document['default_provider_id']);
     final defaultAgentId = _env('NOVEL_AGENT_AGENT_ID').isNotEmpty
         ? _env('NOVEL_AGENT_AGENT_ID')
         : _stringValue(document['default_agent_id'], 'default_generalist');
     final defaultModelId = _env('NOVEL_AGENT_MODEL_ID').isNotEmpty
         ? _env('NOVEL_AGENT_MODEL_ID')
-        : _stringValue(
-            document['default_model_id'],
-            providers.isEmpty ? '' : providers.first.modelId,
-          );
+        : _stringValue(document['default_model_id']);
     final defaultProjectPath = _resolveDefaultProjectPath(
       document,
       basePath: documentBasePath,
@@ -140,16 +134,30 @@ class LocalSettingsRepository implements SettingsRepository {
   }
 
   Map<String, Object?> _normalizedNetworkDocument(JsonMap networkSettings) {
-    // 中文注释: 临时代理 12334 不会被持久化进设置文件，其余网络偏好仍可正常保存。
+    // 中文注释: 网络设置持久化前在这里统一收敛，保证代理模式、协议和端口范围都落在稳定结构里。
     final normalized = Map<String, Object?>.from(networkSettings);
+    final mode = _stringValue(normalized['proxy_mode'], 'system')
+        .toLowerCase();
+    final protocol = _stringValue(normalized['proxy_protocol']).toLowerCase();
     final host = _stringValue(normalized['proxy_host']);
-    final port = _stringValue(normalized['proxy_port']);
-    final isTemporaryProxy =
-        (host == '127.0.0.1' || host == 'localhost') && port == '12334';
-    if (isTemporaryProxy) {
+    final port = NetworkProxyPortPolicy.normalizeText(
+      _stringValue(normalized['proxy_port']),
+    );
+    normalized['proxy_mode'] = mode == 'custom' ? 'custom' : 'system';
+    normalized['proxy_protocol'] =
+        protocol == 'http' || protocol == 'socks5' ? protocol : '';
+    normalized['proxy_port'] = port;
+    if (mode != 'custom' || host.isEmpty || port.isEmpty) {
       normalized['proxy_mode'] = 'system';
+      normalized['proxy_protocol'] = '';
       normalized['proxy_host'] = '';
       normalized['proxy_port'] = '';
+      normalized['proxy_username'] = '';
+      normalized['proxy_password'] = '';
+    } else {
+      normalized['proxy_host'] = host;
+      normalized['proxy_username'] = _stringValue(normalized['proxy_username']);
+      normalized['proxy_password'] = _stringValue(normalized['proxy_password']);
     }
     return normalized;
   }
@@ -272,9 +280,6 @@ class LocalSettingsRepository implements SettingsRepository {
         providers.add(_providerFromMap(normalized));
       }
     }
-    if (providers.isEmpty) {
-      providers.add(_defaultProvider());
-    }
     final envProviderId = _env('NOVEL_AGENT_PROVIDER_ID');
     final envBaseUrl = _env('NOVEL_AGENT_PROVIDER_BASE_URL');
     final envApiKey = _env('NOVEL_AGENT_PROVIDER_API_KEY');
@@ -323,24 +328,6 @@ class LocalSettingsRepository implements SettingsRepository {
         '请改成你的 OpenAI 兼容模型接口地址。',
       ),
       isDefault: _boolValue(document['is_default'], false),
-    );
-  }
-
-  ProviderEndpointSettings _defaultProvider() {
-    // 中文注释: 当本地还没有配置文件时，至少保留一条可编辑的默认 provider 供应用进入可用状态。
-    return ProviderEndpointSettings(
-      id: 'local-openai',
-      title: '本地 OpenAI Compatible',
-      protocol: 'openai_compatible',
-      baseUrl: _env('NOVEL_AGENT_PROVIDER_BASE_URL').isEmpty
-          ? ''
-          : _env('NOVEL_AGENT_PROVIDER_BASE_URL'),
-      apiKey: _env('NOVEL_AGENT_PROVIDER_API_KEY'),
-      modelId: _env('NOVEL_AGENT_MODEL_ID').isEmpty
-          ? ''
-          : _env('NOVEL_AGENT_MODEL_ID'),
-      description: '请配置真实的 OpenAI 兼容接口；网络代理端口不要直接填到这里。',
-      isDefault: true,
     );
   }
 

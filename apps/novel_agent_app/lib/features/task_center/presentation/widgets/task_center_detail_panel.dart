@@ -1,0 +1,54 @@
+import 'package:flutter/material.dart';
+
+import '../../../../../app/theme/app_palette.dart';
+import '../../../../../shared/widgets/panel_surface.dart';
+import '../../../../../shared/widgets/section_heading.dart';
+
+class TaskCenterDetailPanel extends StatelessWidget {
+  const TaskCenterDetailPanel({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.detailBody,
+    required this.queueSummary,
+    required this.schedulerSummary,
+  });
+
+  final String title;
+  final String subtitle;
+  final String detailBody;
+  final String queueSummary;
+  final String schedulerSummary;
+
+  @override
+  Widget build(BuildContext context) {
+    return PanelSurface(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionHeading(title: title, subtitle: subtitle),
+          const SizedBox(height: 10),
+          Expanded(
+            child: SingleChildScrollView(
+              child: SelectableText(
+                [
+                  detailBody.trim(),
+                  if (queueSummary.trim().isNotEmpty)
+                    '\n\n## 队列预检\n$queueSummary',
+                  if (schedulerSummary.trim().isNotEmpty)
+                    '\n\n## 调度摘要\n$schedulerSummary',
+                ].join(),
+                style: const TextStyle(
+                  fontSize: 13,
+                  height: 1.55,
+                  color: AppPalette.text,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

@@ -12,12 +12,22 @@ class TaskCenterViewDataService {
     required String detailBody,
     required String queueSummary,
     required String schedulerSummary,
+    required String chainMarkdown,
+    required List<JsonMap> longTaskRuns,
+    required List<JsonMap> taskQueueRuns,
+    required String selectedLongTaskRunPath,
+    required String selectedTaskQueueRunPath,
+    required String longTaskRunLog,
+    required String taskQueueRunLog,
     String nextTaskPath = '',
     String nextPostprocessPath = '',
     String status = '',
   }) {
     // 中文注释: 任务中心展示映射集中在这里，避免控制器继续堆积状态文案和枚举翻译。
-    final resolvedSelectedTaskId = _resolvedSelectedTaskId(selectedTaskId, tasks);
+    final resolvedSelectedTaskId = _resolvedSelectedTaskId(
+      selectedTaskId,
+      tasks,
+    );
     final entries = tasks
         .map(
           (task) => TaskCenterTaskItemViewData(
@@ -54,6 +64,21 @@ class TaskCenterViewDataService {
           : detailBody,
       queueSummary: queueSummary,
       schedulerSummary: schedulerSummary,
+      chainMarkdown: chainMarkdown,
+      longTaskRuns: _runItems(
+        longTaskRuns,
+        selectedPath: selectedLongTaskRunPath,
+        kindLabel: '长任务',
+      ),
+      taskQueueRuns: _runItems(
+        taskQueueRuns,
+        selectedPath: selectedTaskQueueRunPath,
+        kindLabel: '队列',
+      ),
+      selectedLongTaskRunPath: selectedLongTaskRunPath,
+      selectedTaskQueueRunPath: selectedTaskQueueRunPath,
+      longTaskRunLog: longTaskRunLog,
+      taskQueueRunLog: taskQueueRunLog,
       modeOptions: modeDefinitions
           .map(
             (item) => TaskRuntimeModeOptionViewData(
@@ -82,8 +107,12 @@ class TaskCenterViewDataService {
     final buffer = StringBuffer()
       ..writeln('# ${ValueReaders.stringValue(task['title'], '未命名任务')}')
       ..writeln()
-      ..writeln('- 状态：${_statusLabel(ValueReaders.stringValue(task['status']))}')
-      ..writeln('- 类型：${ValueReaders.stringValue(task['task_type'], 'chapter')}')
+      ..writeln(
+        '- 状态：${_statusLabel(ValueReaders.stringValue(task['status']))}',
+      )
+      ..writeln(
+        '- 类型：${ValueReaders.stringValue(task['task_type'], 'chapter')}',
+      )
       ..writeln('- 模式：${_modeLabel(ValueReaders.stringValue(task['mode']))}')
       ..writeln(
         '- 路径：${ValueReaders.stringValue(task['relative_path'], '未落盘')}',
@@ -198,7 +227,9 @@ class TaskCenterViewDataService {
     if (runPath.isNotEmpty) {
       lines.add('运行记录：$runPath');
     }
-    final stopReason = ValueReaders.stringValue(scheduler['stop_reason']).trim();
+    final stopReason = ValueReaders.stringValue(
+      scheduler['stop_reason'],
+    ).trim();
     if (stopReason.isNotEmpty) {
       lines.add('停止原因：${_blockerLabel(stopReason)}');
     }
@@ -207,6 +238,62 @@ class TaskCenterViewDataService {
       lines.add('建议步数：${ValueReaders.objectList(plan['task_paths']).length}');
     }
     return lines.join('\n');
+  }
+
+  String buildChainMarkdown(JsonMap chainView) {
+    // 中文注释: 任务链详情优先直接拼成 Markdown，页面层只负责展示，不再重写依赖摘要规则。
+    final chains = ValueReaders.mapList(chainView['chains']);
+    if (chains.isEmpty) {
+      return '当前项目还没有任务链路。';
+    }
+    final lines = <String>[
+      '# 任务链路',
+      '',
+      '- 任务数：${ValueReaders.intValue(chainView['task_count'])}',
+      '',
+    ];
+    for (final chain in chains) {
+      lines.add('## ${ValueReaders.stringValue(chain['title'])}');
+      lines.add(
+        '- 下一可运行：${ValueReaders.stringValue(chain['next_runnable_title'], '无')}',
+      );
+      final blockers = ValueReaders.stringList(chain['blocking_checkpoints']);
+      if (blockers.isNotEmpty) {
+        lines.add('- 阻塞检查点：${blockers.join('、')}');
+      }
+      for (final node in ValueReaders.mapList(chain['nodes'])) {
+        lines.add(
+          '- ${_chainMarker(node, ValueReaders.stringValue(chain['next_runnable_id']))}'
+          '｜${ValueReaders.intValue(node['sort_order']).toString().padLeft(3, '0')}'
+          '｜${_statusLabel(ValueReaders.stringValue(node['status']))}'
+          '｜${ValueReaders.stringValue(node['task_type'])}'
+          '｜${ValueReaders.stringValue(node['title'])}',
+        );
+      }
+      lines.add('');
+    }
+    return lines.join('\n').trim();
+  }
+
+  List<TaskCenterRunItemViewData> _runItems(
+    List<JsonMap> records, {
+    required String selectedPath,
+    required String kindLabel,
+  }) {
+    return records
+        .map(
+          (record) => TaskCenterRunItemViewData(
+            relativePath: ValueReaders.stringValue(record['relative_path']),
+            title:
+                '$kindLabel｜${_statusLabel(ValueReaders.stringValue(record['status']))}',
+            subtitle:
+                '${ValueReaders.stringValue(record['stop_reason'], '进行中')}｜${ValueReaders.stringValue(record['updated_at'])}',
+            isSelected:
+                ValueReaders.stringValue(record['relative_path']) ==
+                selectedPath,
+          ),
+        )
+        .toList(growable: false);
   }
 
   String _resolvedSelectedTaskId(String selectedTaskId, List<JsonMap> tasks) {
@@ -339,6 +426,30 @@ class TaskCenterViewDataService {
         return '未启用后台';
       default:
         return action.trim().isEmpty ? '空闲' : action.trim();
+    }
+  }
+
+  String _chainMarker(JsonMap node, String nextId) {
+    if (nextId.trim().isNotEmpty &&
+        ValueReaders.stringValue(node['id']) == nextId.trim()) {
+      return '下一步';
+    }
+    if (ValueReaders.boolValue(node['manual_checkpoint'])) {
+      return '检查点';
+    }
+    switch (ValueReaders.stringValue(node['status'])) {
+      case 'succeeded':
+        return '完成';
+      case 'failed':
+        return '失败';
+      case 'running':
+        return '运行中';
+      case 'paused':
+        return '暂停';
+      case 'waiting_user':
+        return '待确认';
+      default:
+        return '待办';
     }
   }
 

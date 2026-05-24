@@ -1,5 +1,6 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import '../llm/profile/provider_custom_parameter_service.dart';
 import 'agent_effort_service.dart';
 import 'agent_id_service.dart';
 import 'agent_sampling_service.dart';
@@ -11,15 +12,19 @@ class AgentProfileNormalizerService {
     AgentSamplingService? samplingService,
     AgentEffortService? effortService,
     AgentStringListService? stringListService,
+    ProviderCustomParameterService? customParameterService,
   }) : _idService = idService ?? AgentIdService(),
        _samplingService = samplingService ?? AgentSamplingService(),
        _effortService = effortService ?? AgentEffortService(),
-       _stringListService = stringListService ?? AgentStringListService();
+       _stringListService = stringListService ?? AgentStringListService(),
+       _customParameterService =
+           customParameterService ?? ProviderCustomParameterService();
 
   final AgentIdService _idService;
   final AgentSamplingService _samplingService;
   final AgentEffortService _effortService;
   final AgentStringListService _stringListService;
+  final ProviderCustomParameterService _customParameterService;
 
   JsonMap normalizeAgentProfile(JsonMap agent) {
     // 中文注释: 这里把项目标准智能体包收敛成稳定结构，确保角色、边界、能力、记忆和输出合同都能被统一消费。
@@ -119,6 +124,8 @@ class AgentProfileNormalizerService {
       'temperature': sampling['temperature'],
       'top_p': sampling['top_p'],
       'top_k': sampling['top_k'],
+      'advanced_model_overrides': _customParameterService
+          .normalizeCustomParameters(agent['advanced_model_overrides']),
     };
   }
 

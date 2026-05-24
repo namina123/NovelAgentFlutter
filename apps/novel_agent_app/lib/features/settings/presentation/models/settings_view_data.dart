@@ -1,3 +1,5 @@
+import 'model_editor_view_data.dart';
+
 class SettingsViewData {
   const SettingsViewData({
     required this.activeTabId,
@@ -5,10 +7,10 @@ class SettingsViewData {
     required this.providers,
     required this.tabSections,
     required this.defaultProviderId,
-    required this.defaultAgentId,
     required this.defaultModelId,
+    required this.modelSettings,
+    required this.modelEditor,
     required this.defaultProjectPath,
-    required this.autoSaveDrafts,
     required this.permissionSettings,
     required this.toolStrategySettings,
     required this.networkSettings,
@@ -25,10 +27,10 @@ class SettingsViewData {
   final List<ProviderEndpointViewData> providers;
   final Map<String, List<SettingsSectionViewData>> tabSections;
   final String defaultProviderId;
-  final String defaultAgentId;
   final String defaultModelId;
+  final Map<String, Object?> modelSettings;
+  final ModelEditorViewData modelEditor;
   final String defaultProjectPath;
-  final bool autoSaveDrafts;
   final Map<String, Object?> permissionSettings;
   final Map<String, Object?> toolStrategySettings;
   final Map<String, Object?> networkSettings;
@@ -55,10 +57,10 @@ class SettingsViewData {
       providers: [],
       tabSections: <String, List<SettingsSectionViewData>>{},
       defaultProviderId: '',
-      defaultAgentId: '',
       defaultModelId: '',
+      modelSettings: <String, Object?>{},
+      modelEditor: ModelEditorViewData.initial,
       defaultProjectPath: '',
-      autoSaveDrafts: true,
       permissionSettings: <String, Object?>{},
       toolStrategySettings: <String, Object?>{},
       networkSettings: <String, Object?>{},
@@ -81,10 +83,10 @@ class SettingsViewData {
     List<ProviderEndpointViewData>? providers,
     Map<String, List<SettingsSectionViewData>>? tabSections,
     String? defaultProviderId,
-    String? defaultAgentId,
     String? defaultModelId,
+    Map<String, Object?>? modelSettings,
+    ModelEditorViewData? modelEditor,
     String? defaultProjectPath,
-    bool? autoSaveDrafts,
     Map<String, Object?>? permissionSettings,
     Map<String, Object?>? toolStrategySettings,
     Map<String, Object?>? networkSettings,
@@ -102,10 +104,10 @@ class SettingsViewData {
       providers: providers ?? this.providers,
       tabSections: tabSections ?? this.tabSections,
       defaultProviderId: defaultProviderId ?? this.defaultProviderId,
-      defaultAgentId: defaultAgentId ?? this.defaultAgentId,
       defaultModelId: defaultModelId ?? this.defaultModelId,
+      modelSettings: modelSettings ?? this.modelSettings,
+      modelEditor: modelEditor ?? this.modelEditor,
       defaultProjectPath: defaultProjectPath ?? this.defaultProjectPath,
-      autoSaveDrafts: autoSaveDrafts ?? this.autoSaveDrafts,
       permissionSettings: permissionSettings ?? this.permissionSettings,
       toolStrategySettings: toolStrategySettings ?? this.toolStrategySettings,
       networkSettings: networkSettings ?? this.networkSettings,
@@ -134,11 +136,9 @@ class ProviderEndpointViewData {
     required this.title,
     required this.protocol,
     required this.baseUrl,
-    required this.modelId,
     required this.rawApiKey,
     required this.apiKeyState,
     required this.description,
-    this.isDefault = false,
     this.isSelected = false,
   });
 
@@ -146,11 +146,9 @@ class ProviderEndpointViewData {
   final String title;
   final String protocol;
   final String baseUrl;
-  final String modelId;
   final String rawApiKey;
   final String apiKeyState;
   final String description;
-  final bool isDefault;
   final bool isSelected;
 }
 
@@ -167,10 +165,7 @@ class SettingsSectionViewData {
 }
 
 class SettingsItemViewData {
-  const SettingsItemViewData({
-    required this.label,
-    required this.value,
-  });
+  const SettingsItemViewData({required this.label, required this.value});
 
   final String label;
   final String value;

@@ -4,7 +4,10 @@ import '../storage/project_prompt_template_service.dart';
 import '../storage/project_task_repository.dart';
 
 typedef WorkflowGenerateDraftUseCaseFactory =
-    GenerateDraftUseCase Function(ProviderEndpointSettings provider);
+    GenerateDraftUseCase Function(
+      ProviderEndpointSettings provider,
+      JsonMap networkSettings,
+    );
 
 class ProjectWorkflowRuntimeService {
   ProjectWorkflowRuntimeService({
@@ -34,6 +37,10 @@ class ProjectWorkflowRuntimeService {
     LongTaskRevisionApplyService? longTaskRevisionApplyService,
     RevisionDiffPreviewService? revisionDiffPreviewService,
     RevisionDiffMarkdownRenderer? revisionDiffMarkdownRenderer,
+    TaskChainViewService? taskChainViewService,
+    TaskQueueRecordRenderer? taskQueueRecordRenderer,
+    LongTaskRunMarkdownRenderer? longTaskRunMarkdownRenderer,
+    ModelExecutionProfileService? modelExecutionProfileService,
   }) : _taskRepository = taskRepository,
        _promptTemplateService = promptTemplateService,
        _generateDraftUseCaseFactory = generateDraftUseCaseFactory,
@@ -136,8 +143,7 @@ class ProjectWorkflowRuntimeService {
                  longTaskRunPathService ??
                  LongTaskRunPathService(
                    pathPolicyService:
-                       longTaskPathPolicyService ??
-                       LongTaskPathPolicyService(),
+                       longTaskPathPolicyService ?? LongTaskPathPolicyService(),
                  ),
              transitionService: TaskTransitionService(),
              taskDefinitionService:
@@ -146,7 +152,14 @@ class ProjectWorkflowRuntimeService {
        _revisionDiffPreviewService =
            revisionDiffPreviewService ?? RevisionDiffPreviewService(),
        _revisionDiffMarkdownRenderer =
-           revisionDiffMarkdownRenderer ?? RevisionDiffMarkdownRenderer();
+           revisionDiffMarkdownRenderer ?? RevisionDiffMarkdownRenderer(),
+       _taskChainViewService = taskChainViewService ?? TaskChainViewService(),
+       _taskQueueRecordRenderer =
+           taskQueueRecordRenderer ?? TaskQueueRecordRenderer(),
+       _longTaskRunMarkdownRenderer =
+           longTaskRunMarkdownRenderer ?? LongTaskRunMarkdownRenderer(),
+       _modelExecutionProfileService =
+           modelExecutionProfileService ?? ModelExecutionProfileService();
 
   final ProjectTaskRepository _taskRepository;
   final ProjectPromptTemplateService _promptTemplateService;
@@ -174,6 +187,10 @@ class ProjectWorkflowRuntimeService {
   final LongTaskRevisionApplyService _longTaskRevisionApplyService;
   final RevisionDiffPreviewService _revisionDiffPreviewService;
   final RevisionDiffMarkdownRenderer _revisionDiffMarkdownRenderer;
+  final TaskChainViewService _taskChainViewService;
+  final TaskQueueRecordRenderer _taskQueueRecordRenderer;
+  final LongTaskRunMarkdownRenderer _longTaskRunMarkdownRenderer;
+  final ModelExecutionProfileService _modelExecutionProfileService;
 
   List<JsonMap> listTaskRuntimeModes() {
     // 中文注释: 模式定义直接来自 core，确保任务中心和 CLI 的枚举完全同源。
@@ -200,8 +217,12 @@ class ProjectWorkflowRuntimeService {
       planMarkdownPath: planMarkdownPath,
     );
     final tasks = ValueReaders.mapList(built['tasks'])
-        .map((task) => ValueReaders.deepCopyMap(task)
-          ..['relative_path'] = _longTaskRunPathService.taskPathForNewTask(task))
+        .map(
+          (task) => ValueReaders.deepCopyMap(task)
+            ..['relative_path'] = _longTaskRunPathService.taskPathForNewTask(
+              task,
+            ),
+        )
         .toList(growable: false);
     await _taskRepository.saveTasks(project, tasks);
     await _taskRepository.saveRecord(
@@ -260,26 +281,11 @@ class ProjectWorkflowRuntimeService {
     ProjectDescriptor project, {
     JsonMap filters = const <String, Object?>{},
   }) async {
-    // 中文注释: 链路视图返回轻量节点与下一步摘要，供 GUI/CLI 做总览和恢复提示。
+    // 中文注释: 链路视图按 plan 分组并保留依赖/检查点信息，供 GUI/CLI 共用同一份恢复快照。
     final tasks = await listWorkflowTasks(project, filters: filters);
-    final nodes = tasks
-        .map(
-          (task) => <String, Object?>{
-            'id': ValueReaders.stringValue(task['id']),
-            'title': ValueReaders.stringValue(task['title']),
-            'status': ValueReaders.stringValue(task['status']),
-            'task_type': ValueReaders.stringValue(task['task_type']),
-            'relative_path': ValueReaders.stringValue(task['relative_path']),
-            'depends_on': ValueReaders.stringList(task['depends_on']),
-            'manual_checkpoint': ValueReaders.boolValue(
-              ValueReaders.mapValue(task['metadata'])['manual_checkpoint'],
-            ),
-          },
-        )
-        .toList(growable: false);
+    final view = _taskChainViewService.buildView(tasks);
     return <String, Object?>{
-      'ok': true,
-      'chains': nodes,
+      ...view,
       'next_task': _taskDefinitionService.taskSummary(
         _taskSelectionService.nextRunnableTaskFromTasks(tasks),
       ),
@@ -293,31 +299,54 @@ class ProjectWorkflowRuntimeService {
     ProjectDescriptor project, {
     JsonMap filters = const <String, Object?>{},
   }) async {
-    // 中文注释: 链路快照只落 Markdown，可被会话压缩恢复和人工检查共同复用。
+    // 中文注释: 链路快照同时落 JSON 与 Markdown，方便 GUI 回放、CLI 检查和手工排障复用。
     final view = await workflowChainView(project, filters: filters);
-    final relativePath =
-        'tracking/task_chains/chain_${DateTime.now().microsecondsSinceEpoch}.md';
-    final lines = <String>[
-      '# 任务链路快照',
-      '',
-      '- 时间：${DateTime.now().toIso8601String()}',
-      '- 下一任务：${ValueReaders.stringValue(ValueReaders.mapValue(view['next_task'])['title'], '无')}',
-      '- 下一后处理：${ValueReaders.stringValue(ValueReaders.mapValue(view['next_postprocess_task'])['title'], '无')}',
-      '',
-      '## 节点',
-    ];
-    for (final node in ValueReaders.mapList(view['chains'])) {
-      lines.add(
-        '- ${ValueReaders.stringValue(node['status'])}｜${ValueReaders.stringValue(node['task_type'])}｜${ValueReaders.stringValue(node['title'])}',
-      );
-    }
-    await _taskRepository.writeTextFile(project, relativePath, lines.join('\n'));
+    final snapshotId = 'task_chain_${DateTime.now().microsecondsSinceEpoch}';
+    final jsonPath = 'tracking/task_chain_views/$snapshotId.json';
+    final markdownPath = 'tracking/task_chain_views/$snapshotId.md';
+    final snapshot = ValueReaders.deepCopyMap(view)
+      ..['id'] = snapshotId
+      ..['relative_path'] = jsonPath
+      ..['markdown_path'] = markdownPath;
+    await _taskRepository.saveRecord(project, jsonPath, snapshot);
+    await _taskRepository.writeTextFile(
+      project,
+      markdownPath,
+      _taskChainViewService.renderMarkdown(snapshot),
+    );
     return <String, Object?>{
       'ok': true,
-      'relative_path': relativePath,
-      'markdown_path': relativePath,
-      'changed_paths': <Object?>[relativePath],
+      'relative_path': jsonPath,
+      'markdown_path': markdownPath,
+      'view': snapshot,
+      'changed_paths': <Object?>[jsonPath, markdownPath],
     };
+  }
+
+  Future<JsonMap> loadTaskQueueRun(
+    ProjectDescriptor project,
+    String relativePath,
+  ) {
+    // 中文注释: 队列运行详情保持走统一记录仓储，避免任务中心额外依赖底层 JSON 服务。
+    return _taskRepository.loadRecord(project, relativePath);
+  }
+
+  Future<JsonMap> loadLongTaskRun(
+    ProjectDescriptor project,
+    String relativePath,
+  ) {
+    // 中文注释: 长任务运行详情与队列运行详情共用记录读取入口，只在渲染器上分流。
+    return _taskRepository.loadRecord(project, relativePath);
+  }
+
+  String renderTaskQueueRunMarkdown(JsonMap record) {
+    // 中文注释: 队列运行 Markdown 供 GUI 日志面板和 CLI 直接复用。
+    return _taskQueueRecordRenderer.renderMarkdown(record);
+  }
+
+  String renderLongTaskRunMarkdown(JsonMap record) {
+    // 中文注释: 长任务运行 Markdown 保留步骤回放信息，方便快速排查哪一步停住。
+    return _longTaskRunMarkdownRenderer.renderMarkdown(record);
   }
 
   Future<JsonMap> saveWorkflowTaskPlan(
@@ -386,28 +415,26 @@ class ProjectWorkflowRuntimeService {
     final entries = await _taskRepository.workspacePort.listEntries(
       project.rootPath,
     );
-    final result = _prepareExecutionUseCase.execute(
-      <String, Object?>{
-        'project': projectInfo.isEmpty
-            ? <String, Object?>{
-                'id': project.id,
-                'title': project.name,
-                'path': project.rootPath,
-                'project_type': project.projectType,
-              }
-            : projectInfo,
-        'task': task,
-        'project_files': entries,
-        'session_context': '',
-        'current_file_body': '',
-        'current_file_path': '',
-        'user_prompt': prompt,
-        'agent': agent,
-        'optional_agents': const <Object?>[],
-        'context_settings': contextSettings,
-        'model_profile': modelProfile,
-      },
-    );
+    final result = _prepareExecutionUseCase.execute(<String, Object?>{
+      'project': projectInfo.isEmpty
+          ? <String, Object?>{
+              'id': project.id,
+              'title': project.name,
+              'path': project.rootPath,
+              'project_type': project.projectType,
+            }
+          : projectInfo,
+      'task': task,
+      'project_files': entries,
+      'session_context': '',
+      'current_file_body': '',
+      'current_file_path': '',
+      'user_prompt': prompt,
+      'agent': agent,
+      'optional_agents': const <Object?>[],
+      'context_settings': contextSettings,
+      'model_profile': modelProfile,
+    });
     if (!ValueReaders.boolValue(result['ok'])) {
       await _taskRepository.transitionTask(
         project,
@@ -490,7 +517,9 @@ class ProjectWorkflowRuntimeService {
         'response': <String, Object?>{},
       };
     }
-    if (ValueReaders.stringValue(task['atomic_execution_path']).trim().isEmpty) {
+    if (ValueReaders.stringValue(
+      task['atomic_execution_path'],
+    ).trim().isEmpty) {
       final prepared = await prepareWorkflowTaskExecution(
         project,
         selector,
@@ -526,16 +555,30 @@ class ProjectWorkflowRuntimeService {
       TaskRuntimeConstants.statusRunning,
       note: '章节原子任务开始单步模型执行。',
     );
-    final useCase = _generateDraftUseCaseFactory(provider);
+    final executionProfile = _modelExecutionProfileService.resolve(
+      settings: settings,
+      provider: provider,
+      agent: agent,
+    );
+    final useCase = _generateDraftUseCaseFactory(
+      provider,
+      settings.networkSettings,
+    );
     final result = await useCase.execute(
       project: project,
       userPrompt: prompt,
-      modelId: settings.defaultModelId.trim().isEmpty
-          ? provider.modelId
-          : settings.defaultModelId,
+      modelId: ValueReaders.stringValue(
+        executionProfile['resolved_model_id'],
+        settings.defaultModelId.trim().isEmpty
+            ? provider.modelId
+            : settings.defaultModelId,
+      ),
       title: ValueReaders.stringValue(task['title']),
       intent: 'workflow_task',
       agent: agent,
+      requestOptions: ValueReaders.mapValue(
+        executionProfile['request_options'],
+      ),
     );
     final outputPaths = result.writtenPaths;
     JsonMap revisionDiff = const <String, Object?>{};
@@ -546,9 +589,14 @@ class ProjectWorkflowRuntimeService {
         result.executedTools,
       );
     }
-    final executionPath = ValueReaders.stringValue(task['atomic_execution_path']);
+    final executionPath = ValueReaders.stringValue(
+      task['atomic_execution_path'],
+    );
     if (executionPath.trim().isNotEmpty) {
-      final execution = await _taskRepository.loadRecord(project, executionPath);
+      final execution = await _taskRepository.loadRecord(
+        project,
+        executionPath,
+      );
       if (execution.isNotEmpty) {
         final nextExecution = ValueReaders.deepCopyMap(execution)
           ..['output_paths'] = outputPaths
@@ -566,9 +614,7 @@ class ProjectWorkflowRuntimeService {
       project,
       selector,
       TaskRuntimeConstants.statusWaitingUser,
-      note: outputPaths.isEmpty
-          ? '模型已返回，等待用户确认后继续。'
-          : '模型已写入项目文件，等待用户确认后继续。',
+      note: outputPaths.isEmpty ? '模型已返回，等待用户确认后继续。' : '模型已写入项目文件，等待用户确认后继续。',
       extra: <String, Object?>{
         'output_paths': outputPaths,
         if (ValueReaders.boolValue(revisionDiff['ok']))
@@ -605,14 +651,9 @@ class ProjectWorkflowRuntimeService {
         'response': <String, Object?>{},
       };
     }
-    return runWorkflowTaskOnce(
-      project,
-      settings,
-      <String, Object?>{
-        'relative_path': ValueReaders.stringValue(task['relative_path']),
-      },
-      agent: agent,
-    );
+    return runWorkflowTaskOnce(project, settings, <String, Object?>{
+      'relative_path': ValueReaders.stringValue(task['relative_path']),
+    }, agent: agent);
   }
 
   Future<JsonMap> taskQueuePreflight(
@@ -835,7 +876,8 @@ class ProjectWorkflowRuntimeService {
     }
 
     if (stopReason.isEmpty) {
-      stopReason = stepsRun >= ValueReaders.intValue(cleanOptions['max_steps'], 3)
+      stopReason =
+          stepsRun >= ValueReaders.intValue(cleanOptions['max_steps'], 3)
           ? 'max_steps'
           : 'completed';
       stopNote = stopReason == 'max_steps' ? '已达到本批最大步数。' : '队列已完成。';
@@ -863,10 +905,8 @@ class ProjectWorkflowRuntimeService {
           'stop_note': stopNote,
         },
       );
-      longRunRecord = ValueReaders.stringValue(
-            disposition['record_action'],
-          ) ==
-          'pause'
+      longRunRecord =
+          ValueReaders.stringValue(disposition['record_action']) == 'pause'
           ? _lifecycleService.pauseRecord(
               longRunRecord,
               reason: ValueReaders.stringValue(disposition['reason']),
@@ -956,16 +996,30 @@ class ProjectWorkflowRuntimeService {
       TaskRuntimeConstants.statusRunning,
       note: '章节原子任务开始单步后处理。',
     );
-    final useCase = _generateDraftUseCaseFactory(provider);
+    final executionProfile = _modelExecutionProfileService.resolve(
+      settings: settings,
+      provider: provider,
+      agent: agent,
+    );
+    final useCase = _generateDraftUseCaseFactory(
+      provider,
+      settings.networkSettings,
+    );
     final result = await useCase.execute(
       project: project,
       userPrompt: prompt,
-      modelId: settings.defaultModelId.trim().isEmpty
-          ? provider.modelId
-          : settings.defaultModelId,
+      modelId: ValueReaders.stringValue(
+        executionProfile['resolved_model_id'],
+        settings.defaultModelId.trim().isEmpty
+            ? provider.modelId
+            : settings.defaultModelId,
+      ),
       title: ValueReaders.stringValue(task['title']),
       intent: 'workflow_postprocess',
       agent: agent,
+      requestOptions: ValueReaders.mapValue(
+        executionProfile['request_options'],
+      ),
     );
     final mergedOutputs = _mergePaths(
       ValueReaders.stringList(task['output_paths']),
@@ -1000,14 +1054,9 @@ class ProjectWorkflowRuntimeService {
         'response': <String, Object?>{},
       };
     }
-    return runWorkflowTaskPostprocessOnce(
-      project,
-      settings,
-      <String, Object?>{
-        'relative_path': ValueReaders.stringValue(task['relative_path']),
-      },
-      agent: agent,
-    );
+    return runWorkflowTaskPostprocessOnce(project, settings, <String, Object?>{
+      'relative_path': ValueReaders.stringValue(task['relative_path']),
+    }, agent: agent);
   }
 
   Future<JsonMap> completeWorkflowTaskAndRunNext(
@@ -1113,7 +1162,9 @@ class ProjectWorkflowRuntimeService {
         'relative_path': ValueReaders.stringValue(task['relative_path']),
       };
     }
-    final diffPath = ValueReaders.stringValue(task['revision_diff_path']).trim();
+    final diffPath = ValueReaders.stringValue(
+      task['revision_diff_path'],
+    ).trim();
     if (diffPath.isEmpty) {
       return <String, Object?>{
         'ok': false,
@@ -1272,7 +1323,9 @@ class ProjectWorkflowRuntimeService {
       'tool_calls': result.executedTools,
       'waiting_for_user_choice': result.waitingForUserChoice,
       'selected_paths': result.selectedPaths,
-      'context_pack_summary': ValueReaders.stringValue(result.contextPack['summary']),
+      'context_pack_summary': ValueReaders.stringValue(
+        result.contextPack['summary'],
+      ),
       'prompt_preview_markdown': result.prompt,
     };
   }
@@ -1300,7 +1353,9 @@ class ProjectWorkflowRuntimeService {
     next['steps'] = steps;
     next['completed_steps'] = steps.length;
     next['last_task_id'] = ValueReaders.stringValue(task['id']);
-    next['last_task_relative_path'] = ValueReaders.stringValue(task['relative_path']);
+    next['last_task_relative_path'] = ValueReaders.stringValue(
+      task['relative_path'],
+    );
     next['updated_at'] = DateTime.now().toIso8601String();
     return next;
   }
@@ -1340,7 +1395,9 @@ class ProjectWorkflowRuntimeService {
       final tool = ValueReaders.mapValue(rawTool);
       final result = ValueReaders.mapValue(tool['result']);
       final backupPath = ValueReaders.stringValue(result['backup_path']).trim();
-      final targetPath = ValueReaders.stringValue(result['relative_path']).trim();
+      final targetPath = ValueReaders.stringValue(
+        result['relative_path'],
+      ).trim();
       if (backupPath.isEmpty || targetPath.isEmpty) {
         continue;
       }
@@ -1410,7 +1467,9 @@ class ProjectWorkflowRuntimeService {
     LongTaskModeService modeService,
     LongTaskPathPolicyService pathPolicyService,
   ) {
-    final strategyService = LongTaskModeStrategyService(modeService: modeService);
+    final strategyService = LongTaskModeStrategyService(
+      modeService: modeService,
+    );
     return StartLongTaskRunUseCase(
       planIdentityService: LongTaskRunPlanIdentityService(
         modeService: modeService,
@@ -1421,7 +1480,9 @@ class ProjectWorkflowRuntimeService {
         optionService: LongTaskRunOptionService(),
         taskSummaryService: LongTaskTaskSummaryService(),
       ),
-      runPathService: LongTaskRunPathService(pathPolicyService: pathPolicyService),
+      runPathService: LongTaskRunPathService(
+        pathPolicyService: pathPolicyService,
+      ),
     );
   }
 
@@ -1434,7 +1495,9 @@ class ProjectWorkflowRuntimeService {
     final taskSelectionService = TaskSelectionService(
       taskDefinitionService: taskDefinitionService,
     );
-    final strategyService = LongTaskModeStrategyService(modeService: modeService);
+    final strategyService = LongTaskModeStrategyService(
+      modeService: modeService,
+    );
     final profileService = LongTaskControllerProfileService(
       modeService: modeService,
       strategyService: strategyService,
@@ -1473,7 +1536,9 @@ class ProjectWorkflowRuntimeService {
     LongTaskModeService modeService,
     LongTaskPathPolicyService pathPolicyService,
   ) {
-    final strategyService = LongTaskModeStrategyService(modeService: modeService);
+    final strategyService = LongTaskModeStrategyService(
+      modeService: modeService,
+    );
     final contextService = LongTaskTransactionContextService(
       modeService: modeService,
       pathPolicyService: pathPolicyService,
@@ -1524,7 +1589,9 @@ class ProjectWorkflowRuntimeService {
   static LongTaskFinishDispositionService _defaultFinishDispositionService(
     LongTaskModeService modeService,
   ) {
-    final strategyService = LongTaskModeStrategyService(modeService: modeService);
+    final strategyService = LongTaskModeStrategyService(
+      modeService: modeService,
+    );
     return LongTaskFinishDispositionService(
       profileService: LongTaskControllerProfileService(
         modeService: modeService,
@@ -1533,7 +1600,8 @@ class ProjectWorkflowRuntimeService {
     );
   }
 
-  static PrepareChapterAtomicExecutionUseCase _defaultPrepareExecutionUseCase() {
+  static PrepareChapterAtomicExecutionUseCase
+  _defaultPrepareExecutionUseCase() {
     return PrepareChapterAtomicExecutionUseCase(
       executionBuilderService: ChapterAtomicExecutionBuilderService(
         promptBuilderService: ChapterAtomicPromptBuilderService(

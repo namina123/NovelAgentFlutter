@@ -9,6 +9,13 @@ class TaskCenterViewData {
     required this.detailBody,
     required this.queueSummary,
     required this.schedulerSummary,
+    required this.chainMarkdown,
+    required this.longTaskRuns,
+    required this.taskQueueRuns,
+    required this.selectedLongTaskRunPath,
+    required this.selectedTaskQueueRunPath,
+    required this.longTaskRunLog,
+    required this.taskQueueRunLog,
     required this.modeOptions,
     required this.defaultMode,
     required this.defaultOutlinePath,
@@ -26,6 +33,13 @@ class TaskCenterViewData {
   final String detailBody;
   final String queueSummary;
   final String schedulerSummary;
+  final String chainMarkdown;
+  final List<TaskCenterRunItemViewData> longTaskRuns;
+  final List<TaskCenterRunItemViewData> taskQueueRuns;
+  final String selectedLongTaskRunPath;
+  final String selectedTaskQueueRunPath;
+  final String longTaskRunLog;
+  final String taskQueueRunLog;
   final List<TaskRuntimeModeOptionViewData> modeOptions;
   final String defaultMode;
   final String defaultOutlinePath;
@@ -44,6 +58,13 @@ class TaskCenterViewData {
       detailBody: '',
       queueSummary: '',
       schedulerSummary: '',
+      chainMarkdown: '',
+      longTaskRuns: <TaskCenterRunItemViewData>[],
+      taskQueueRuns: <TaskCenterRunItemViewData>[],
+      selectedLongTaskRunPath: '',
+      selectedTaskQueueRunPath: '',
+      longTaskRunLog: '',
+      taskQueueRunLog: '',
       modeOptions: <TaskRuntimeModeOptionViewData>[],
       defaultMode: '',
       defaultOutlinePath: '',
@@ -52,6 +73,20 @@ class TaskCenterViewData {
       defaultCheckpointInterval: 3,
     );
   }
+}
+
+class TaskCenterRunItemViewData {
+  const TaskCenterRunItemViewData({
+    required this.relativePath,
+    required this.title,
+    required this.subtitle,
+    this.isSelected = false,
+  });
+
+  final String relativePath;
+  final String title;
+  final String subtitle;
+  final bool isSelected;
 }
 
 class TaskCenterTaskItemViewData {

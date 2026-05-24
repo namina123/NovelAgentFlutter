@@ -16,6 +16,9 @@ class DraftGenerationResult {
     required this.changedPaths,
     required this.transcriptMessages,
     required this.waitingForUserChoice,
+    required this.reasoningContent,
+    required this.stoppedByToolError,
+    required this.toolErrorSummary,
   });
 
   final ProjectDescriptor project;
@@ -31,4 +34,7 @@ class DraftGenerationResult {
   final List<String> changedPaths;
   final List<JsonMap> transcriptMessages;
   final bool waitingForUserChoice;
+  final String reasoningContent;
+  final bool stoppedByToolError;
+  final String toolErrorSummary;
 }

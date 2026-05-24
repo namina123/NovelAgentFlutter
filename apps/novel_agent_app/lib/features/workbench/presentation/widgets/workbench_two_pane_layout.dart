@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../../../../app/layout/app_layout_metrics.dart';
 import '../layout/workbench_two_pane_layout_policy.dart';
+import 'pane_resize_divider.dart';
 
-class WorkbenchTwoPaneLayout extends StatelessWidget {
+class WorkbenchTwoPaneLayout extends StatefulWidget {
   const WorkbenchTwoPaneLayout({
     super.key,
     required this.metrics,
@@ -16,18 +17,42 @@ class WorkbenchTwoPaneLayout extends StatelessWidget {
   final Widget conversationPane;
 
   @override
+  State<WorkbenchTwoPaneLayout> createState() => _WorkbenchTwoPaneLayoutState();
+}
+
+class _WorkbenchTwoPaneLayoutState extends State<WorkbenchTwoPaneLayout> {
+  double? _conversationWidth;
+
+  @override
   Widget build(BuildContext context) {
-    // 中文注释: 双栏布局组件只关心正文栏和会话栏的横向装配，宽度决策交给策略层处理。
+    // 中文注释: 双栏布局也保留可拖拽分隔，避免中等宽度设备退化后失去基本的栏宽调节能力。
     return LayoutBuilder(
       builder: (context, constraints) {
-        final conversationWidth = WorkbenchTwoPaneLayoutPolicy
-            .conversationWidth(metrics, constraints.maxWidth);
+        final totalWidth = constraints.maxWidth;
+        final conversationWidth =
+            WorkbenchTwoPaneLayoutPolicy.conversationWidth(
+              widget.metrics,
+              totalWidth,
+              preferredWidth: _conversationWidth,
+            );
         return Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(child: documentPane),
-            const VerticalDivider(width: 1),
-            SizedBox(width: conversationWidth, child: conversationPane),
+            Expanded(child: widget.documentPane),
+            PaneResizeDivider(
+              cursor: SystemMouseCursors.resizeColumn,
+              onDragUpdate: (delta) {
+                setState(() {
+                  _conversationWidth =
+                      WorkbenchTwoPaneLayoutPolicy.conversationWidth(
+                        widget.metrics,
+                        totalWidth,
+                        preferredWidth: (conversationWidth - delta),
+                      );
+                });
+              },
+            ),
+            SizedBox(width: conversationWidth, child: widget.conversationPane),
           ],
         );
       },

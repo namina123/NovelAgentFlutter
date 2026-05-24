@@ -6,10 +6,7 @@ import '../../../../../shared/widgets/panel_surface.dart';
 import '../models/settings_view_data.dart';
 
 class SettingsOverviewPanel extends StatelessWidget {
-  const SettingsOverviewPanel({
-    super.key,
-    required this.sections,
-  });
+  const SettingsOverviewPanel({super.key, required this.sections});
 
   final List<SettingsSectionViewData> sections;
 
@@ -61,7 +58,10 @@ class SettingsOverviewPanel extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.76),
         borderRadius: AppChrome.surfaceBorderRadius,
-        border: Border.all(color: AppPalette.line, width: AppChrome.borderWidth),
+        border: Border.all(
+          color: AppPalette.line,
+          width: AppChrome.borderWidth,
+        ),
       ),
       padding: const EdgeInsets.all(12),
       child: Row(

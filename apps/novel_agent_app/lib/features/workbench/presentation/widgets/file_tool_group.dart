@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../shared/widgets/action_button.dart';
-import '../../../../../shared/widgets/compact_action_grid.dart';
+import '../../../../../shared/widgets/toolbar_icon_button.dart';
 
 class FileToolGroup extends StatelessWidget {
   const FileToolGroup({
@@ -21,45 +20,36 @@ class FileToolGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 中文注释: 文件级工具独立成组，后续资源树替换成真实目录结构时无需动项目动作区域。
-    return CompactActionGrid(
-      columnCount: 3,
-      spacing: 8,
-      childAspectRatio: 2.35,
+    // 中文注释: 文件级工具也改为紧凑工具条，避免左栏在窄宽度下被按钮块严重挤占。
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
       children: [
-        ActionButton(
-          label: '新文件',
+        ToolbarIconButton(
           icon: Icons.note_add_outlined,
-          tone: ActionButtonTone.neutral,
-          compact: true,
+          tooltip: '新文件',
           onPressed: onCreateFileRequested,
         ),
-        ActionButton(
-          label: '新文件夹',
+        ToolbarIconButton(
           icon: Icons.create_new_folder_outlined,
-          tone: ActionButtonTone.neutral,
-          compact: true,
-          labelMaxLines: 2,
+          tooltip: '新文件夹',
           onPressed: onCreateFolderRequested,
         ),
-        ActionButton(
-          label: '导入',
+        ToolbarIconButton(
           icon: Icons.file_upload_outlined,
-          tone: ActionButtonTone.neutral,
-          compact: true,
+          tooltip: '导入文件',
           onPressed: onImportRequested,
         ),
-        ActionButton(
-          label: '新章节',
+        ToolbarIconButton(
           icon: Icons.library_add_outlined,
-          tone: ActionButtonTone.warm,
-          compact: true,
+          tooltip: '新章节',
+          tone: ToolbarIconTone.warm,
           onPressed: onCreateChapterRequested,
         ),
-        ActionButton(
-          label: '保存',
+        ToolbarIconButton(
           icon: Icons.save_outlined,
-          compact: true,
+          tooltip: '保存当前文档',
+          tone: ToolbarIconTone.accent,
           onPressed: onSaveCurrentRequested,
         ),
       ],

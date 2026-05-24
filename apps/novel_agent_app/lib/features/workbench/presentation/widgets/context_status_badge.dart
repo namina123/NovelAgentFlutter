@@ -11,29 +11,36 @@ class ContextStatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 中文注释: 上下文状态徽标独立后，后续压缩策略、token 预算等展示可单独演化。
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: AppPalette.accentSoft,
+        color: isDark ? const Color(0xFF173844) : AppPalette.accentSoft,
         borderRadius: AppChrome.surfaceBorderRadius,
-        border: Border.all(color: AppPalette.line, width: AppChrome.borderWidth),
+        border: Border.all(
+          color: isDark ? theme.colorScheme.outline : AppPalette.line,
+          width: AppChrome.borderWidth,
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         child: Row(
           children: [
-            const Icon(
+            Icon(
               Icons.analytics_outlined,
               size: 14,
-              color: AppPalette.lineStrong,
+              color: isDark ? theme.colorScheme.primary : AppPalette.lineStrong,
             ),
             const SizedBox(width: 6),
             Expanded(
               child: Text(
                 summary,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  color: AppPalette.lineStrong,
+                  color: isDark
+                      ? theme.colorScheme.primary
+                      : AppPalette.lineStrong,
                 ),
               ),
             ),

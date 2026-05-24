@@ -17,12 +17,7 @@ class FrontmatterYamlWriterService {
     if (value is Map<Object?, Object?>) {
       lines.add('$indent$key:');
       for (final nested in value.entries) {
-        _writeValue(
-          lines,
-          nested.key.toString(),
-          nested.value,
-          depth + 1,
-        );
+        _writeValue(lines, nested.key.toString(), nested.value, depth + 1);
       }
       return;
     }
@@ -63,7 +58,8 @@ class FrontmatterYamlWriterService {
       for (final entry in value.entries) {
         if (first) {
           final nestedValue = entry.value;
-          if (nestedValue is Map<Object?, Object?> || nestedValue is List<Object?>) {
+          if (nestedValue is Map<Object?, Object?> ||
+              nestedValue is List<Object?>) {
             lines.add('$indent- ${entry.key}:');
             _writeNested(lines, nestedValue, depth + 1);
           } else {

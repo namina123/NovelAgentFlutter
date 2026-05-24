@@ -26,7 +26,10 @@ class ProjectFileReadToolExecutor {
     final scope = _pathPolicy.cleanRelativePath(
       ValueReaders.stringValue(arguments['relative_path']),
     );
-    if (!_pathPolicy.isSafeScopePath(scope)) {
+    if (!_pathPolicy.isSafeScopePath(scope) &&
+        ValueReaders.stringValue(
+          arguments['relative_path'],
+        ).trim().isNotEmpty) {
       return _resultFactory.error(
         'Unsafe relative_path scope.',
         data: <String, Object?>{
@@ -52,7 +55,11 @@ class ProjectFileReadToolExecutor {
         .toList(growable: false);
     return _resultFactory.success(
       '已读取项目目录：${visible.length} 项',
-      data: <String, Object?>{'entries': visible},
+      data: <String, Object?>{
+        'entries': visible,
+        'entry_count': visible.length,
+        'entries_preview': _entriesPreview(visible),
+      },
     );
   }
 
@@ -64,9 +71,19 @@ class ProjectFileReadToolExecutor {
     final relativePath = _pathPolicy.cleanRelativePath(
       ValueReaders.stringValue(arguments['relative_path']),
     );
+    if (relativePath.isEmpty) {
+      final visibleEntries = await _visibleEntries(project);
+      return _resultFactory.error(
+        'relative_path is required. 请先调用 list_project_files，并从返回结果里复制英文 relative_path。',
+        data: <String, Object?>{
+          'relative_path': '',
+          'entries_preview': _entriesPreview(visibleEntries),
+        },
+      );
+    }
     if (!_pathPolicy.isSafeFilePath(relativePath)) {
       return _resultFactory.error(
-        'Unsafe or empty relative_path.',
+        'Unsafe relative_path. 请使用 list_project_files 返回的英文 relative_path。',
         data: <String, Object?>{'relative_path': relativePath},
       );
     }
@@ -103,9 +120,19 @@ class ProjectFileReadToolExecutor {
     final relativePath = _pathPolicy.cleanRelativePath(
       ValueReaders.stringValue(arguments['relative_path']),
     );
+    if (relativePath.isEmpty) {
+      final visibleEntries = await _visibleEntries(project);
+      return _resultFactory.error(
+        'relative_path is required. 请先调用 list_project_files，并从返回结果里复制英文 relative_path。',
+        data: <String, Object?>{
+          'relative_path': '',
+          'entries_preview': _entriesPreview(visibleEntries),
+        },
+      );
+    }
     if (!_pathPolicy.isSafeFilePath(relativePath)) {
       return _resultFactory.error(
-        'Unsafe or empty relative_path.',
+        'Unsafe relative_path. 请使用 list_project_files 返回的英文 relative_path。',
         data: <String, Object?>{'relative_path': relativePath},
       );
     }
@@ -171,7 +198,10 @@ class ProjectFileReadToolExecutor {
     final scope = _pathPolicy.cleanRelativePath(
       ValueReaders.stringValue(arguments['relative_path']),
     );
-    if (!_pathPolicy.isSafeScopePath(scope)) {
+    if (!_pathPolicy.isSafeScopePath(scope) &&
+        ValueReaders.stringValue(
+          arguments['relative_path'],
+        ).trim().isNotEmpty) {
       return _resultFactory.error(
         'Unsafe relative_path scope.',
         data: const <String, Object?>{'matches': <Object?>[]},
@@ -392,5 +422,40 @@ class ProjectFileReadToolExecutor {
       return text;
     }
     return '${text.substring(0, maxChars - 1)}…';
+  }
+
+  Future<List<JsonMap>> _visibleEntries(ProjectDescriptor project) async {
+    // 中文注释: 失败回退时也只暴露安全可见的资源树条目，避免内部记录混进模型纠错提示。
+    final entries = await _hostPort.listEntries(project.rootPath);
+    return entries
+        .where((entry) {
+          final path = ValueReaders.stringValue(entry['relative_path']).trim();
+          final isDir = ValueReaders.boolValue(entry['is_dir']);
+          return path.isNotEmpty &&
+              !_pathPolicy.isHiddenProjectTreeEntry(path, isDir);
+        })
+        .map(ValueReaders.deepCopyMap)
+        .toList(growable: false);
+  }
+
+  String _entriesPreview(List<JsonMap> entries, {int maxLines = 80}) {
+    // 中文注释: 目录预览转成轻量纯文本，方便模型在失败后直接复制真实英文路径。
+    if (entries.isEmpty) {
+      return '项目目录为空。';
+    }
+    final lines = <String>[];
+    for (final entry in entries) {
+      final path = ValueReaders.stringValue(entry['relative_path']).trim();
+      if (path.isEmpty) {
+        continue;
+      }
+      final prefix = ValueReaders.boolValue(entry['is_dir']) ? '[DIR]' : '[FILE]';
+      lines.add('$prefix $path');
+      if (lines.length >= maxLines) {
+        lines.add('... (truncated)');
+        break;
+      }
+    }
+    return lines.join('\n');
   }
 }

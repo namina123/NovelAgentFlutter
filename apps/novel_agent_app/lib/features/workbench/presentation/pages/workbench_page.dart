@@ -91,12 +91,16 @@ class WorkbenchPage extends StatelessWidget {
         return WorkbenchTwoPaneLayout(
           metrics: metrics,
           documentPane: PanelSurface(
+            showBorder: false,
+            padding: EdgeInsets.zero,
             child: DocumentWorkspacePanel(
               viewData: viewData,
               actionHandler: documentHandler,
             ),
           ),
           conversationPane: PanelSurface(
+            showBorder: false,
+            padding: EdgeInsets.zero,
             child: ConversationSidebar(
               viewData: viewData,
               actionHandler: conversationHandler,
@@ -108,18 +112,24 @@ class WorkbenchPage extends StatelessWidget {
         return ResizableWorkbenchLayout(
           metrics: metrics,
           leftPane: PanelSurface(
+            showBorder: false,
+            padding: EdgeInsets.zero,
             child: ResourceManagerPanel(
               viewData: viewData,
               actionHandler: resourceHandler,
             ),
           ),
           documentPane: PanelSurface(
+            showBorder: false,
+            padding: EdgeInsets.zero,
             child: DocumentWorkspacePanel(
               viewData: viewData,
               actionHandler: documentHandler,
             ),
           ),
           conversationPane: PanelSurface(
+            showBorder: false,
+            padding: EdgeInsets.zero,
             child: ConversationSidebar(
               viewData: viewData,
               actionHandler: conversationHandler,

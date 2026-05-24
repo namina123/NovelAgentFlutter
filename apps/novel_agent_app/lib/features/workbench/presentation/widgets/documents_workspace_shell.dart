@@ -42,8 +42,16 @@ class DocumentsWorkspaceShell extends StatelessWidget {
         const SizedBox(height: 8),
         Expanded(
           child: ResizableDocumentsWorkspaceLayout(
-            navigationPane: PanelSurface(child: navigationPane),
-            documentPane: PanelSurface(child: documentPane),
+            navigationPane: PanelSurface(
+              showBorder: false,
+              padding: EdgeInsets.zero,
+              child: navigationPane,
+            ),
+            documentPane: PanelSurface(
+              showBorder: false,
+              padding: EdgeInsets.zero,
+              child: documentPane,
+            ),
           ),
         ),
       ],

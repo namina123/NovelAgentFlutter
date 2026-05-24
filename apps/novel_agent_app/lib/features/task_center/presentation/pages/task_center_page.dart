@@ -7,6 +7,9 @@ import '../../../../shared/widgets/panel_surface.dart';
 import '../../../../shared/widgets/section_heading.dart';
 import '../contracts/task_center_action_handler.dart';
 import '../models/task_center_view_data.dart';
+import '../widgets/task_center_detail_panel.dart';
+import '../widgets/task_center_diagnostics_panel.dart';
+import '../widgets/task_center_task_list_panel.dart';
 
 class TaskCenterPage extends StatefulWidget {
   const TaskCenterPage({
@@ -120,92 +123,46 @@ class _TaskCenterPageState extends State<TaskCenterPage> {
               children: [
                 Expanded(
                   flex: 4,
-                  child: PanelSurface(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SectionHeading(title: '任务列表'),
-                        const SizedBox(height: 8),
-                        Expanded(
-                          child: ListView.builder(
-                            itemCount: widget.viewData.tasks.length,
-                            itemBuilder: (context, index) {
-                              final item = widget.viewData.tasks[index];
-                              return ListTile(
-                                dense: true,
-                                selected: item.isSelected,
-                                contentPadding: EdgeInsets.zero,
-                                title: Text(
-                                  item.title,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                subtitle: Text(
-                                  '${item.badge}｜${item.subtitle}',
-                                  style: const TextStyle(fontSize: 11),
-                                ),
-                                onTap: () {
-                                  widget.actionHandler.onTaskCenterTaskSelected(
-                                    item.id,
-                                  );
-                                },
-                                trailing: IconButton(
-                                  onPressed: () {
-                                    widget.actionHandler.onTaskCenterTaskOpened(
-                                      item.id,
-                                    );
-                                  },
-                                  icon: const Icon(
-                                    Icons.open_in_new_rounded,
-                                    size: 18,
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
+                  child: TaskCenterTaskListPanel(
+                    tasks: widget.viewData.tasks,
+                    onTaskSelected:
+                        widget.actionHandler.onTaskCenterTaskSelected,
+                    onTaskOpened: widget.actionHandler.onTaskCenterTaskOpened,
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   flex: 5,
-                  child: PanelSurface(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SectionHeading(
+                  child: Column(
+                    children: [
+                      Expanded(
+                        flex: 5,
+                        child: TaskCenterDetailPanel(
                           title: selected?.title ?? '任务详情',
                           subtitle: selected?.relativePath ?? '未选中任务',
+                          detailBody: widget.viewData.detailBody,
+                          queueSummary: widget.viewData.queueSummary,
+                          schedulerSummary: widget.viewData.schedulerSummary,
                         ),
-                        const SizedBox(height: 10),
-                        Expanded(
-                          child: SingleChildScrollView(
-                            child: SelectableText(
-                              [
-                                widget.viewData.detailBody.trim(),
-                                if (widget.viewData.queueSummary.trim().isNotEmpty)
-                                  '\n\n## 队列预检\n${widget.viewData.queueSummary}',
-                                if (widget.viewData.schedulerSummary
-                                    .trim()
-                                    .isNotEmpty)
-                                  '\n\n## 调度摘要\n${widget.viewData.schedulerSummary}',
-                              ].join(),
-                              style: const TextStyle(
-                                fontSize: 13,
-                                height: 1.55,
-                                color: AppPalette.text,
-                              ),
-                            ),
-                          ),
+                      ),
+                      const SizedBox(height: 12),
+                      Expanded(
+                        flex: 4,
+                        child: TaskCenterDiagnosticsPanel(
+                          chainMarkdown: widget.viewData.chainMarkdown,
+                          longTaskRuns: widget.viewData.longTaskRuns,
+                          taskQueueRuns: widget.viewData.taskQueueRuns,
+                          longTaskRunLog: widget.viewData.longTaskRunLog,
+                          taskQueueRunLog: widget.viewData.taskQueueRunLog,
+                          onLongTaskRunSelected: widget
+                              .actionHandler
+                              .onTaskCenterLongTaskRunSelected,
+                          onTaskQueueRunSelected: widget
+                              .actionHandler
+                              .onTaskCenterTaskQueueRunSelected,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(width: 12),

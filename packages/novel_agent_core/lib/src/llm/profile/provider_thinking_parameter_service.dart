@@ -71,6 +71,56 @@ class ProviderThinkingParameterService {
     return 'high';
   }
 
+  bool supportsThinking(String format) {
+    // 中文注释: 深度思考支持性由参数格式决定，这里集中提供给设置页和运行时共用。
+    return normalizeThinkingParameterFormat(format) !=
+        ProviderProfileConstants.thinkingFormatNone;
+  }
+
+  bool supportsThinkingEffort(String format) {
+    // 中文注释: 并不是所有思考格式都允许强度调节，因此这里单独暴露强度支持判断。
+    switch (normalizeThinkingParameterFormat(format)) {
+      case ProviderProfileConstants.thinkingFormatDeepseekObject:
+      case ProviderProfileConstants.thinkingFormatEnableBooleanWithEffort:
+      case ProviderProfileConstants.thinkingFormatReasoningEffortOnly:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  List<String> thinkingToggleParameterKeys(String format) {
+    // 中文注释: 前端需要知道“开启深度思考”会落到哪些字段，这里统一给出稳定键名。
+    switch (normalizeThinkingParameterFormat(format)) {
+      case ProviderProfileConstants.thinkingFormatDeepseekObject:
+        return const <String>['thinking'];
+      case ProviderProfileConstants.thinkingFormatEnableBoolean:
+      case ProviderProfileConstants.thinkingFormatEnableBooleanWithEffort:
+        return const <String>['enable_thinking'];
+      case ProviderProfileConstants.thinkingFormatReasoningEffortOnly:
+        return const <String>['reasoning_effort'];
+      default:
+        return const <String>[];
+    }
+  }
+
+  JsonMap thinkingMetadata(String format) {
+    // 中文注释: 思考元信息供前端表单和智能体覆盖逻辑共享，避免每层自己猜字段语义。
+    final normalizedFormat = normalizeThinkingParameterFormat(format);
+    return <String, Object?>{
+      'thinking_supported': supportsThinking(normalizedFormat),
+      'thinking_parameter_format': normalizedFormat,
+      'thinking_parameter_label': thinkingFormatLabel(normalizedFormat),
+      'thinking_enable_parameter_keys': thinkingToggleParameterKeys(
+        normalizedFormat,
+      ),
+      'thinking_effort_supported': supportsThinkingEffort(normalizedFormat),
+      'thinking_effort_options': supportsThinkingEffort(normalizedFormat)
+          ? thinkingEffortOptions()
+          : const <Object?>[],
+    };
+  }
+
   JsonMap thinkingRequestParameters(
     bool enabled,
     String effort,

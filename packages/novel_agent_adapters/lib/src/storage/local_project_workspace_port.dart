@@ -3,12 +3,17 @@ import 'dart:io';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import 'project_relative_path_resolver.dart';
+import 'project_tree_order_service.dart';
 
 class LocalProjectWorkspacePort implements ProjectWorkspacePort {
-  LocalProjectWorkspacePort({ProjectRelativePathResolver? pathResolver})
-    : _pathResolver = pathResolver ?? ProjectRelativePathResolver();
+  LocalProjectWorkspacePort({
+    ProjectRelativePathResolver? pathResolver,
+    ProjectTreeOrderService? treeOrderService,
+  }) : _pathResolver = pathResolver ?? ProjectRelativePathResolver(),
+       _treeOrderService = treeOrderService ?? ProjectTreeOrderService();
 
   final ProjectRelativePathResolver _pathResolver;
+  final ProjectTreeOrderService _treeOrderService;
 
   @override
   Future<List<JsonMap>> listEntries(
@@ -33,6 +38,9 @@ class LocalProjectWorkspacePort implements ProjectWorkspacePort {
       if (relativePath.trim().isEmpty) {
         continue;
       }
+      if (_treeOrderService.isInternalPath(relativePath)) {
+        continue;
+      }
       final displayName = relativePath.split('/').last;
       entries.add(<String, Object?>{
         'relative_path': relativePath,
@@ -46,7 +54,7 @@ class LocalProjectWorkspacePort implements ProjectWorkspacePort {
       final rightPath = right['relative_path']?.toString() ?? '';
       return leftPath.compareTo(rightPath);
     });
-    return entries;
+    return _treeOrderService.sortEntries(root.path, entries);
   }
 
   @override
@@ -61,6 +69,16 @@ class LocalProjectWorkspacePort implements ProjectWorkspacePort {
       return null;
     }
     return file.readAsString();
+  }
+
+  @override
+  Future<void> createDirectory(String rootPath, String relativePath) async {
+    // 中文注释: 目录显式创建供项目骨架等场景使用，避免再依赖占位文件顺带把目录带出来。
+    final resolvedPath = _pathResolver.resolve(
+      rootPath: rootPath,
+      relativePath: relativePath,
+    );
+    await Directory(resolvedPath).create(recursive: true);
   }
 
   @override

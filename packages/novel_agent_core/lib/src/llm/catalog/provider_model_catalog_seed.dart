@@ -11,7 +11,7 @@ const String providerModelCatalogSeed = r'''
       "base_url_hints": ["api.deepseek.com", "deepseek"],
       "models": [
         {
-          "id": "deepseek-ai/DeepSeek-V4-Flash",
+          "id": "deepseek-v4-flash",
           "label": "DeepSeek V4 Flash",
           "aliases": ["deepseek v4 flash", "deepseek-v4-flash", "v4 flash", "reasoner"],
           "type": "text",
@@ -24,6 +24,19 @@ const String providerModelCatalogSeed = r'''
           "supported_parameters": ["stream", "tools", "thinking", "reasoning_effort", "response_format", "parallel_tool_calls", "temperature", "top_p", "max_tokens"],
           "unsupported_parameters": ["tool_choice", "top_k"],
           "notes": "实际使用时可能在服务商响应中显示为 reasoner；本项目默认不发送 tool_choice。"
+        },
+        {
+          "id": "deepseek-v4-pro",
+          "label": "DeepSeek V4 Pro",
+          "aliases": ["deepseek v4 pro", "deepseek-v4-pro", "v4 pro", "deepseek-v4"],
+          "type": "text",
+          "supports_tools": true,
+          "context_length": 131072,
+          "compression_context_length": 98304,
+          "max_output_tokens": 65536,
+          "thinking_parameter_format": "deepseek_thinking_object",
+          "supported_parameters": ["stream", "tools", "thinking", "reasoning_effort", "response_format", "parallel_tool_calls", "temperature", "top_p", "max_tokens"],
+          "unsupported_parameters": ["tool_choice", "top_k"]
         },
         {
           "id": "deepseek-chat",

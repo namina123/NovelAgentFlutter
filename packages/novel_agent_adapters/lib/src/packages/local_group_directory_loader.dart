@@ -55,7 +55,9 @@ class LocalGroupDirectoryLoader {
       }
       JsonMap parsed;
       try {
-        parsed = ValueReaders.mapValue(jsonDecode(await entryFile.readAsString()));
+        parsed = ValueReaders.mapValue(
+          jsonDecode(await entryFile.readAsString()),
+        );
       } catch (_) {
         continue;
       }

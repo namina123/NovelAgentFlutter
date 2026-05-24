@@ -22,7 +22,10 @@ class SettingsFormSection extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.76),
         borderRadius: AppChrome.surfaceBorderRadius,
-        border: Border.all(color: AppPalette.line, width: AppChrome.borderWidth),
+        border: Border.all(
+          color: AppPalette.line,
+          width: AppChrome.borderWidth,
+        ),
       ),
       padding: const EdgeInsets.all(16),
       child: Column(

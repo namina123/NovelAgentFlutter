@@ -20,8 +20,7 @@ class ToolStrategySettingsPanel extends StatefulWidget {
       _ToolStrategySettingsPanelState();
 }
 
-class _ToolStrategySettingsPanelState
-    extends State<ToolStrategySettingsPanel> {
+class _ToolStrategySettingsPanelState extends State<ToolStrategySettingsPanel> {
   late String _mode;
   late bool _allowPlanning;
   late bool _allowSubAgents;
@@ -68,7 +67,7 @@ class _ToolStrategySettingsPanelState
                     return;
                   }
                   setState(() {
-                    _mode = value;
+                    _applyMode(value);
                   });
                 },
               ),
@@ -76,44 +75,64 @@ class _ToolStrategySettingsPanelState
               SettingsSwitchRow(
                 label: '允许规划工具',
                 value: _allowPlanning,
-                onChanged: (value) => setState(() => _allowPlanning = value),
+                onChanged: (value) => setState(() {
+                  _allowPlanning = value;
+                  _mode = 'custom';
+                }),
               ),
               const SizedBox(height: 10),
               SettingsSwitchRow(
                 label: '允许子智能体委派',
                 value: _allowSubAgents,
-                onChanged: (value) => setState(() => _allowSubAgents = value),
+                onChanged: (value) => setState(() {
+                  _allowSubAgents = value;
+                  _mode = 'custom';
+                }),
               ),
               const SizedBox(height: 10),
               SettingsSwitchRow(
                 label: '允许文件修改链',
                 value: _allowFileMutation,
-                onChanged: (value) =>
-                    setState(() => _allowFileMutation = value),
+                onChanged: (value) => setState(() {
+                  _allowFileMutation = value;
+                  _mode = 'custom';
+                }),
               ),
               const SizedBox(height: 10),
               SettingsSwitchRow(
                 label: '允许读取',
                 value: _allowRead,
-                onChanged: (value) => setState(() => _allowRead = value),
+                onChanged: (value) => setState(() {
+                  _allowRead = value;
+                  _mode = 'custom';
+                }),
               ),
               const SizedBox(height: 10),
               SettingsSwitchRow(
                 label: '允许写入',
                 value: _allowWrite,
-                onChanged: (value) => setState(() => _allowWrite = value),
+                onChanged: (value) => setState(() {
+                  _allowWrite = value;
+                  _mode = 'custom';
+                }),
               ),
               const SizedBox(height: 10),
               SettingsSwitchRow(
                 label: '允许编辑',
                 value: _allowEdit,
-                onChanged: (value) => setState(() => _allowEdit = value),
+                onChanged: (value) => setState(() {
+                  _allowEdit = value;
+                  _mode = 'custom';
+                }),
               ),
               const SizedBox(height: 10),
               SettingsSwitchRow(
                 label: '允许备份',
                 value: _allowBackup,
-                onChanged: (value) => setState(() => _allowBackup = value),
+                onChanged: (value) => setState(() {
+                  _allowBackup = value;
+                  _mode = 'custom';
+                }),
               ),
             ],
           ),
@@ -149,5 +168,45 @@ class _ToolStrategySettingsPanelState
     _allowWrite = widget.settings['allow_write'] != false;
     _allowEdit = widget.settings['allow_edit'] != false;
     _allowBackup = widget.settings['allow_backup'] != false;
+    if (_mode != 'custom') {
+      _applyMode(_mode);
+    }
+  }
+
+  void _applyMode(String mode) {
+    // 中文注释: 工具策略模式切换时同步映射到开关集合，避免模式下拉与具体策略值脱节。
+    _mode = mode;
+    switch (mode) {
+      case 'minimal':
+        _allowPlanning = false;
+        _allowSubAgents = false;
+        _allowFileMutation = false;
+        _allowRead = true;
+        _allowWrite = false;
+        _allowEdit = false;
+        _allowBackup = true;
+        return;
+      case 'aggressive':
+        _allowPlanning = true;
+        _allowSubAgents = true;
+        _allowFileMutation = true;
+        _allowRead = true;
+        _allowWrite = true;
+        _allowEdit = true;
+        _allowBackup = true;
+        return;
+      case 'balanced':
+        _allowPlanning = true;
+        _allowSubAgents = true;
+        _allowFileMutation = true;
+        _allowRead = true;
+        _allowWrite = true;
+        _allowEdit = true;
+        _allowBackup = true;
+        return;
+      case 'custom':
+      default:
+        return;
+    }
   }
 }

@@ -9,7 +9,9 @@ abstract class PromptTemplatesActionHandler {
 
   void onPromptTemplatesNewRequested();
 
-  void onPromptTemplatesSaveRequested(PromptTemplateEditorRequestViewData request);
+  void onPromptTemplatesSaveRequested(
+    PromptTemplateEditorRequestViewData request,
+  );
 
   void onPromptTemplatesPreviewRequested(
     PromptTemplateEditorRequestViewData request,

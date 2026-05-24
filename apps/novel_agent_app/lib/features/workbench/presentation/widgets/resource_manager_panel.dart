@@ -21,48 +21,55 @@ class ResourceManagerPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 中文注释: 资源面板只处理项目入口、文件树和工作区快捷入口，不承接文档和会话逻辑。
-    return Padding(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ResourceManagerHeader(
-            title: viewData.projectName,
-            subtitle: viewData.projectSubtitle,
-            onSettingsPressed: actionHandler.onModelSettingsRequested,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ResourceManagerHeader(
+                title: viewData.projectName,
+                subtitle: viewData.projectSubtitle,
+                onSettingsPressed: actionHandler.onModelSettingsRequested,
+              ),
+              const SizedBox(height: 8),
+              ProjectActionGroup(
+                onCreateProjectRequested:
+                    actionHandler.onCreateProjectRequested,
+                onOpenProjectRequested: actionHandler.onOpenProjectRequested,
+                onEditProjectInfoRequested:
+                    actionHandler.onEditProjectInfoRequested,
+                onRefreshRequested: actionHandler.onRefreshFilesRequested,
+              ),
+              const SizedBox(height: 6),
+              FileToolGroup(
+                onCreateFileRequested: actionHandler.onCreateFileRequested,
+                onCreateFolderRequested: actionHandler.onCreateFolderRequested,
+                onImportRequested: actionHandler.onImportRequested,
+                onCreateChapterRequested:
+                    actionHandler.onCreateChapterRequested,
+                onSaveCurrentRequested: actionHandler.onSaveCurrentRequested,
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: ResourceTreeCard(
+                  entries: viewData.resourceEntries,
+                  onEntrySelected: actionHandler.onResourceEntrySelected,
+                ),
+              ),
+              const SizedBox(height: 6),
+              ResourceUtilityStrip(
+                onAgentEcosystemRequested:
+                    actionHandler.onAgentEcosystemRequested,
+                onTasksRequested: actionHandler.onTasksRequested,
+                onReviewsRequested: actionHandler.onReviewsRequested,
+                onTemplatesRequested: actionHandler.onTemplatesRequested,
+              ),
+            ],
           ),
-          const SizedBox(height: 10),
-          ProjectActionGroup(
-            onCreateProjectRequested: actionHandler.onCreateProjectRequested,
-            onOpenProjectRequested: actionHandler.onOpenProjectRequested,
-            onEditProjectInfoRequested:
-                actionHandler.onEditProjectInfoRequested,
-            onRefreshRequested: actionHandler.onRefreshFilesRequested,
-          ),
-          const SizedBox(height: 8),
-          FileToolGroup(
-            onCreateFileRequested: actionHandler.onCreateFileRequested,
-            onCreateFolderRequested: actionHandler.onCreateFolderRequested,
-            onImportRequested: actionHandler.onImportRequested,
-            onCreateChapterRequested: actionHandler.onCreateChapterRequested,
-            onSaveCurrentRequested: actionHandler.onSaveCurrentRequested,
-          ),
-          const SizedBox(height: 10),
-          Expanded(
-            child: ResourceTreeCard(
-              entries: viewData.resourceEntries,
-              onEntrySelected: actionHandler.onResourceEntrySelected,
-            ),
-          ),
-          const SizedBox(height: 8),
-          ResourceUtilityStrip(
-            onAgentEcosystemRequested: actionHandler.onAgentEcosystemRequested,
-            onTasksRequested: actionHandler.onTasksRequested,
-            onReviewsRequested: actionHandler.onReviewsRequested,
-            onTemplatesRequested: actionHandler.onTemplatesRequested,
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

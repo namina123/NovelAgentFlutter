@@ -16,37 +16,46 @@ class DocumentEmptyCanvas extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 中文注释: 编辑画布占位独立出来，后续换成真正编辑器时只替换这一层。
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.7),
+        color: isDark
+            ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.84)
+            : Colors.white.withValues(alpha: 0.7),
         borderRadius: AppChrome.surfaceBorderRadius,
-        border: Border.all(color: AppPalette.line, width: AppChrome.borderWidth),
+        border: Border.all(
+          color: isDark ? theme.colorScheme.outline : AppPalette.line,
+          width: AppChrome.borderWidth,
+        ),
       ),
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
+            Icon(
               Icons.edit_note_rounded,
               size: 66,
-              color: AppPalette.lineStrong,
+              color: isDark ? theme.colorScheme.primary : AppPalette.lineStrong,
             ),
             const SizedBox(height: 18),
             Text(
               headline,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 34,
                 fontWeight: FontWeight.w800,
-                color: AppPalette.text,
+                color: isDark ? theme.colorScheme.onSurface : AppPalette.text,
               ),
             ),
             const SizedBox(height: 10),
             Text(
               message,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
-                color: AppPalette.mutedText,
+                color: isDark
+                    ? theme.colorScheme.onSurface.withValues(alpha: 0.72)
+                    : AppPalette.mutedText,
               ),
             ),
           ],

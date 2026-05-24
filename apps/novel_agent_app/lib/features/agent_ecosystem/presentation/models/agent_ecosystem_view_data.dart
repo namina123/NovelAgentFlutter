@@ -1,4 +1,5 @@
 import 'ecosystem_import_command_view_data.dart';
+import 'ecosystem_editor_view_data.dart';
 
 class AgentEcosystemViewData {
   const AgentEcosystemViewData({
@@ -7,6 +8,7 @@ class AgentEcosystemViewData {
     required this.entries,
     this.statusMessage = '',
     this.importCommand,
+    this.editorViewData,
   });
 
   final String activeTabId;
@@ -14,6 +16,7 @@ class AgentEcosystemViewData {
   final List<EcosystemEntryViewData> entries;
   final String statusMessage;
   final EcosystemImportCommandViewData? importCommand;
+  final EcosystemEditorViewData? editorViewData;
 
   factory AgentEcosystemViewData.initial() {
     return const AgentEcosystemViewData(
@@ -27,6 +30,7 @@ class AgentEcosystemViewData {
       entries: [],
       statusMessage: '',
       importCommand: null,
+      editorViewData: null,
     );
   }
 
@@ -40,6 +44,7 @@ class AgentEcosystemViewData {
     List<EcosystemEntryViewData>? entries,
     String? statusMessage,
     Object? importCommand = _importCommandSentinel,
+    Object? editorViewData = _editorViewDataSentinel,
   }) {
     // 中文注释: 生态状态通过局部 copy 保持稳定边界，避免某个 tab 行为影响整个应用壳层。
     return AgentEcosystemViewData(
@@ -50,11 +55,15 @@ class AgentEcosystemViewData {
       importCommand: identical(importCommand, _importCommandSentinel)
           ? this.importCommand
           : importCommand as EcosystemImportCommandViewData?,
+      editorViewData: identical(editorViewData, _editorViewDataSentinel)
+          ? this.editorViewData
+          : editorViewData as EcosystemEditorViewData?,
     );
   }
 }
 
 const Object _importCommandSentinel = Object();
+const Object _editorViewDataSentinel = Object();
 
 class EcosystemTabViewData {
   const EcosystemTabViewData({required this.id, required this.label});

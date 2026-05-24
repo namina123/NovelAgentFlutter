@@ -229,14 +229,14 @@ class ToolEventPresenterService {
       case 'create_backup':
         return _pathTarget(
           result,
-          ValueReaders.stringValue(arguments['relative_path'], '项目文件'),
+          ValueReaders.stringValue(arguments['relative_path'], '未指定路径'),
         );
       case 'write_project_file':
         return _pathTarget(
           result,
           ValueReaders.stringValue(
             arguments['relative_path'],
-            ValueReaders.stringValue(arguments['title'], '项目文件'),
+            ValueReaders.stringValue(arguments['title'], '未指定路径'),
           ),
         );
       case 'create_project_entry':
@@ -248,13 +248,13 @@ class ToolEventPresenterService {
           result,
           ValueReaders.stringValue(
             arguments['relative_path'],
-            ValueReaders.stringValue(arguments['path'], '项目文件'),
+            ValueReaders.stringValue(arguments['path'], '未指定路径'),
           ),
         );
       case 'search_project_files':
         return ValueReaders.stringValue(
           arguments['pattern'],
-          ValueReaders.stringValue(arguments['query'], '项目文件'),
+          ValueReaders.stringValue(arguments['query'], '未指定关键词'),
         );
       case 'present_user_options':
         return ValueReaders.stringValue(

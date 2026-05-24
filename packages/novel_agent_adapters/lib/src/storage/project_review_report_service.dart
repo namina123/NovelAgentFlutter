@@ -137,7 +137,9 @@ class ProjectReviewReportService {
         };
       }
     }
-    final markdownPath = cleanPath.toLowerCase().endsWith('.md') ? cleanPath : '';
+    final markdownPath = cleanPath.toLowerCase().endsWith('.md')
+        ? cleanPath
+        : '';
     if (markdownPath.isEmpty) {
       return <String, Object?>{
         'ok': false,
@@ -240,7 +242,9 @@ class ProjectReviewReportService {
       'title': title,
       'summary': _previewText(body),
       'review_type': reviewType,
-      'review_type_label': _reviewTypeCatalogService.reviewTypeLabel(reviewType),
+      'review_type_label': _reviewTypeCatalogService.reviewTypeLabel(
+        reviewType,
+      ),
       'issue_count': _markdownIssueCount(body),
       'scope': _extractMarkdownBullet(body, '范围'),
       'markdown_path': relativePath,
@@ -288,7 +292,9 @@ class ProjectReviewReportService {
       ValueReaders.stringValue(filters['relative_path']),
     ).trim();
     if (sourcePath.isNotEmpty) {
-      final sources = ValueReaders.stringList(summary['source_paths']).join(' ');
+      final sources = ValueReaders.stringList(
+        summary['source_paths'],
+      ).join(' ');
       final markdownPath = ValueReaders.stringValue(summary['markdown_path']);
       if (!sources.contains(sourcePath) && !markdownPath.contains(sourcePath)) {
         return false;

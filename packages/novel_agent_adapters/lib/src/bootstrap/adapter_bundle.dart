@@ -12,6 +12,7 @@ import '../providers/openai_llm_gateway.dart';
 import '../storage/local_project_file_mutation_adapter.dart';
 import '../storage/local_project_repository.dart';
 import '../storage/local_project_workspace_port.dart';
+import '../storage/project_tree_order_service.dart';
 import '../storage/project_workspace_tool_host_adapter.dart';
 import '../tools/project_tool_dispatcher.dart';
 import 'desktop_app_paths_provider.dart';
@@ -57,7 +58,10 @@ class AdapterBundle {
     ).absolute.path;
     Directory(resolvedSettingsRootPath).createSync(recursive: true);
     Directory(resolvedDefaultProjectRootPath).createSync(recursive: true);
-    final projectWorkspacePort = LocalProjectWorkspacePort();
+    final treeOrderService = ProjectTreeOrderService();
+    final projectWorkspacePort = LocalProjectWorkspacePort(
+      treeOrderService: treeOrderService,
+    );
     final toolHostPort = ProjectWorkspaceToolHostAdapter(
       workspacePort: projectWorkspacePort,
       fileMutationAdapter: LocalProjectFileMutationAdapter(),
@@ -106,6 +110,7 @@ class AdapterBundle {
         hostPort: toolHostPort,
         skillGroupCatalog: skillGroupCatalog,
         skillPackageCatalog: skillPackageCatalog,
+        treeOrderService: treeOrderService,
       ),
     );
   }
@@ -123,8 +128,14 @@ class AdapterBundle {
   final LocalSkillGroupCatalog skillGroupCatalog;
   final LocalSkillPackageCatalog skillPackageCatalog;
 
-  LlmGateway createGateway(ProviderEndpointSettings provider) {
+  LlmGateway createGateway(
+    ProviderEndpointSettings provider, {
+    JsonMap networkSettings = const <String, Object?>{},
+  }) {
     // 中文注释: provider 到具体网关实现的映射由 adapter bundle 承担，宿主层只依赖核心协议。
-    return OpenAiLlmGateway.fromProviderSettings(provider);
+    return OpenAiLlmGateway.fromProviderSettings(
+      provider,
+      networkSettings: networkSettings,
+    );
   }
 }

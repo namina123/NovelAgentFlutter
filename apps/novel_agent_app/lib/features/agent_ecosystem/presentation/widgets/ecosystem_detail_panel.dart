@@ -11,6 +11,7 @@ class EcosystemDetailPanel extends StatelessWidget {
     super.key,
     required this.entry,
     this.onOpenSourceRequested,
+    this.onEditRequested,
     required this.onCreateAgentRequested,
     required this.onCreateSkillRequested,
     required this.onCreateSkillGroupRequested,
@@ -46,6 +47,7 @@ class EcosystemDetailPanel extends StatelessWidget {
 
   final EcosystemEntryViewData entry;
   final VoidCallback? onOpenSourceRequested;
+  final VoidCallback? onEditRequested;
   final VoidCallback onCreateAgentRequested;
   final VoidCallback onCreateSkillRequested;
   final VoidCallback onCreateSkillGroupRequested;
@@ -74,11 +76,20 @@ class EcosystemDetailPanel extends StatelessWidget {
             const SizedBox(height: 12),
             _buildInfoCard('源文件', entry.sourcePath),
           ],
-          if (entry.isEditable && onOpenSourceRequested != null) ...[
+          if (entry.isEditable && onEditRequested != null) ...[
             const SizedBox(height: 14),
             ActionButton(
+              label: '编辑条目',
+              icon: Icons.edit_outlined,
+              expanded: true,
+              onPressed: onEditRequested!,
+            ),
+          ],
+          if (entry.isEditable && onOpenSourceRequested != null) ...[
+            const SizedBox(height: 10),
+            ActionButton(
               label: '打开源文件',
-              icon: Icons.edit_note_outlined,
+              icon: Icons.description_outlined,
               tone: ActionButtonTone.neutral,
               expanded: true,
               onPressed: onOpenSourceRequested!,

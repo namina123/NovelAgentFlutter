@@ -53,9 +53,9 @@ class ProjectPromptTemplateService {
       result.add(normalized);
     }
     result.sort((left, right) {
-      return ValueReaders.stringValue(left['name']).compareTo(
-        ValueReaders.stringValue(right['name']),
-      );
+      return ValueReaders.stringValue(
+        left['name'],
+      ).compareTo(ValueReaders.stringValue(right['name']));
     });
     return result;
   }
@@ -72,7 +72,10 @@ class ProjectPromptTemplateService {
     );
   }
 
-  Future<JsonMap> saveTemplate(ProjectDescriptor project, JsonMap template) async {
+  Future<JsonMap> saveTemplate(
+    ProjectDescriptor project,
+    JsonMap template,
+  ) async {
     // 中文注释: 保存模板时统一走规范化和模板路径规则，避免 UI/CLI 各自拼 prompts/ 路径。
     final normalized = _normalizerService.normalizeTemplate(template);
     final templateId = ValueReaders.stringValue(normalized['id']).trim();
@@ -124,10 +127,7 @@ class ProjectPromptTemplateService {
       };
     }
     await _fileMutationAdapter.deleteEntry(project.rootPath, relativePath);
-    return <String, Object?>{
-      'ok': true,
-      'relative_path': relativePath,
-    };
+    return <String, Object?>{'ok': true, 'relative_path': relativePath};
   }
 
   Future<JsonMap> restoreDefaultTemplate(

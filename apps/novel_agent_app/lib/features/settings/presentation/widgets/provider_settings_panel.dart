@@ -22,13 +22,12 @@ class ProviderSettingsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 中文注释: 接口配置面板拆成列表与详情两块，确保设置页不是一个不断长胖的大表单页面。
-    if (providers.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    final selected = providers.firstWhere(
-      (item) => item.isSelected,
-      orElse: () => providers.first,
-    );
+    final selected = providers.isEmpty
+        ? null
+        : providers.firstWhere(
+            (item) => item.isSelected,
+            orElse: () => providers.first,
+          );
 
     return LayoutBuilder(
       builder: (context, constraints) {

@@ -45,12 +45,18 @@ void main() {
         userPrompt: '写第一章开场',
         modelId: 'test-model',
         title: '第一章 开场',
+        requestOptions: const <String, Object?>{
+          'temperature': 0.55,
+          'stream': false,
+        },
       );
 
       expect(result.draftMarkdown, contains('模型返回的草稿'));
       expect(result.selectedPaths, contains('specs/project.md'));
       expect(gateway.lastModelId, 'test-model');
       expect(gateway.lastPrompt, contains('保持冷静克制'));
+      expect(gateway.lastOptions['temperature'], 0.55);
+      expect(gateway.lastOptions['stream'], isFalse);
     });
 
     test('save draft writes into drafts directory by default', () async {
@@ -185,6 +191,11 @@ class _FakeProjectWorkspacePort implements ProjectWorkspacePort {
   }
 
   @override
+  Future<void> createDirectory(String rootPath, String relativePath) async {
+    // 中文注释: 目录创建在这个测试替身里不影响断言，因此保持空实现即可。
+  }
+
+  @override
   Future<void> writeTextFile(
     String rootPath,
     String relativePath,
@@ -201,6 +212,7 @@ class _FakeLlmGateway implements LlmGateway {
 
   String lastPrompt = '';
   String lastModelId = '';
+  JsonMap lastOptions = const <String, Object?>{};
   final List<JsonMap> _scriptedResults;
 
   @override
@@ -231,6 +243,7 @@ class _FakeLlmGateway implements LlmGateway {
     );
     lastPrompt = promptMessage['content']?.toString() ?? '';
     lastModelId = modelId;
+    lastOptions = ValueReaders.deepCopyMap(options);
     if (_scriptedResults.isNotEmpty) {
       return _scriptedResults.removeAt(0);
     }

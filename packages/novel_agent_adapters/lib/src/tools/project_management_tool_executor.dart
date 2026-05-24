@@ -1,5 +1,8 @@
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../storage/project_tree_order_service.dart';
+import 'project_gateway_tool_executor.dart';
+import 'project_tool_path_policy.dart';
 import 'project_tool_result_factory.dart';
 
 class ProjectManagementToolExecutor {
@@ -8,17 +11,27 @@ class ProjectManagementToolExecutor {
     ProjectToolResultFactory? resultFactory,
     ProjectManifestCodecService? projectManifestCodecService,
     ProjectTypeCatalogService? projectTypeCatalogService,
+    ProjectTreeOrderService? treeOrderService,
+    ProjectGatewayToolExecutor? gatewayToolExecutor,
+    ProjectToolPathPolicy? pathPolicy,
   }) : _hostPort = hostPort,
        _resultFactory = resultFactory ?? ProjectToolResultFactory(),
        _projectManifestCodecService =
            projectManifestCodecService ?? ProjectManifestCodecService(),
        _projectTypeCatalogService =
-           projectTypeCatalogService ?? const ProjectTypeCatalogService();
+           projectTypeCatalogService ?? const ProjectTypeCatalogService(),
+       _treeOrderService = treeOrderService ?? ProjectTreeOrderService(),
+       _gatewayToolExecutor =
+           gatewayToolExecutor ?? ProjectGatewayToolExecutor(),
+       _pathPolicy = pathPolicy ?? ProjectToolPathPolicy();
 
   final ProjectToolHostPort _hostPort;
   final ProjectToolResultFactory _resultFactory;
   final ProjectManifestCodecService _projectManifestCodecService;
   final ProjectTypeCatalogService _projectTypeCatalogService;
+  final ProjectTreeOrderService _treeOrderService;
+  final ProjectGatewayToolExecutor _gatewayToolExecutor;
+  final ProjectToolPathPolicy _pathPolicy;
 
   Future<JsonMap> renameProject(
     ProjectDescriptor project,
@@ -64,11 +77,6 @@ class ProjectManagementToolExecutor {
       'specs/project_brief.md',
       '# ${nextManifest.title}\n\n- 项目类型：$typeLabel\n- 题材：\n- 核心设定：\n- 备注：\n',
     );
-    await _hostPort.writeTextFile(
-      project.rootPath,
-      'README.md',
-      '# ${nextManifest.title}\n\nNovelAgent Flutter 项目工作区。\n\n- 项目类型：$typeLabel\n',
-    );
     return _resultFactory.success(
       '项目已重命名：${nextManifest.title}',
       data: <String, Object?>{
@@ -76,45 +84,67 @@ class ProjectManagementToolExecutor {
         'changed_paths': <Object?>[
           ProjectManifestCodecService.manifestRelativePath,
           'specs/project_brief.md',
-          'README.md',
         ],
       },
     );
   }
 
-  JsonMap reorderProjectFile(JsonMap arguments) {
-    // 中文注释: 当前项目树仍未引入排序元数据，因此保留旧项目同款“已识别但未执行”结果。
-    return _resultFactory.notExecuted(
-      '当前项目树尚未启用手动排序，未执行文件重排。',
-      data: <String, Object?>{
-        'relative_path': ValueReaders.stringValue(arguments['relative_path']),
-        'target_index': ValueReaders.intValue(arguments['target_index'], -1),
-      },
+  Future<JsonMap> reorderProjectFile(
+    ProjectDescriptor project,
+    JsonMap arguments,
+  ) async {
+    // 中文注释: 文件重排只持久化同级顺序元数据，不改真实目录结构，从而让资源树和 CLI 共享同一排序结果。
+    final relativePath = _pathPolicy.cleanRelativePath(
+      ValueReaders.stringValue(arguments['relative_path']),
     );
+    if (!_pathPolicy.isSafeScopePath(relativePath)) {
+      return _resultFactory.error(
+        'Unsafe relative_path.',
+        data: <String, Object?>{'relative_path': relativePath},
+      );
+    }
+    final targetIndex = ValueReaders.intValue(arguments['target_index'], -1);
+    if (targetIndex < 0) {
+      return _resultFactory.error(
+        'target_index must be >= 0.',
+        data: <String, Object?>{'relative_path': relativePath},
+      );
+    }
+    try {
+      final entries = await _hostPort.listEntries(project.rootPath);
+      final reorderResult = await _treeOrderService.reorderEntry(
+        rootPath: project.rootPath,
+        relativePath: relativePath,
+        targetIndex: targetIndex,
+        existingEntries: entries,
+      );
+      return _resultFactory.success(
+        '已重排项目条目：$relativePath',
+        data: <String, Object?>{
+          'relative_path': relativePath,
+          'target_index': reorderResult.normalizedIndex,
+          'ordered_siblings': reorderResult.orderedSiblingNames,
+          'parent_path': reorderResult.parentPath,
+          'changed_paths': <Object?>[relativePath, reorderResult.metadataPath],
+        },
+      );
+    } catch (error) {
+      return _resultFactory.error(
+        '项目条目重排失败：$error',
+        data: <String, Object?>{
+          'relative_path': relativePath,
+          'target_index': targetIndex,
+        },
+      );
+    }
   }
 
-  JsonMap requestGatewayTool(JsonMap arguments) {
-    // 中文注释: 网关工具在当前宿主仍未接通真实桌面 / 远程代理，因此继续返回 requires_gateway 合同。
-    final gatewayTool = ValueReaders.stringValue(
-      arguments['gateway_tool'],
-      ValueReaders.stringValue(
-        arguments['tool'],
-        ValueReaders.stringValue(arguments['name']),
-      ),
-    ).trim();
-    return _resultFactory.notExecuted(
-      gatewayTool.isEmpty
-          ? 'Gateway tool is not connected in this host.'
-          : '该能力需要桌面端或远程 Gateway 承接：$gatewayTool',
-      data: <String, Object?>{
-        'requires_gateway': true,
-        'gateway_tool': gatewayTool,
-        'arguments': ValueReaders.deepCopyMap(
-          ValueReaders.mapValue(arguments['arguments']),
-        ),
-        'platform_policy': 'desktop_or_gateway_only',
-      },
-    );
+  Future<JsonMap> requestGatewayTool(
+    ProjectDescriptor project,
+    JsonMap arguments,
+  ) {
+    // 中文注释: 桌面 / CLI 宿主的高级能力统一下沉到专门网关执行器，避免管理执行器掺杂联网和命令细节。
+    return _gatewayToolExecutor.execute(project, arguments);
   }
 
   String _projectTypeLabel(String projectType) {

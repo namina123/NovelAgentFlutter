@@ -4,7 +4,9 @@ import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../commands/project/project_command.dart';
+import '../commands/review/review_command.dart';
 import '../commands/session/session_command.dart';
+import '../commands/template/template_command.dart';
 import '../commands/workflow/workflow_command.dart';
 import '../output/terminal_printer.dart';
 
@@ -41,13 +43,20 @@ class CliBootstrap {
     final promptTemplateService = ProjectPromptTemplateService(
       workspacePort: bundle.projectWorkspacePort,
     );
+    final reviewReportService = ProjectReviewReportService(
+      workspacePort: bundle.projectWorkspacePort,
+      taskRepository: projectTaskRepository,
+    );
     final workflowRuntimeService = ProjectWorkflowRuntimeService(
       taskRepository: projectTaskRepository,
       promptTemplateService: promptTemplateService,
-      generateDraftUseCaseFactory: (provider) {
+      generateDraftUseCaseFactory: (provider, networkSettings) {
         return GenerateDraftUseCase(
           projectWorkspacePort: bundle.projectWorkspacePort,
-          llmGateway: bundle.createGateway(provider),
+          llmGateway: bundle.createGateway(
+            provider,
+            networkSettings: networkSettings,
+          ),
           toolExecutionPort: bundle.projectToolExecutionPort,
           contextAssemblerService: contextAssemblerService,
           projectPromptContract: ProjectPromptContract(),
@@ -61,11 +70,14 @@ class CliBootstrap {
         projectWorkspacePort: bundle.projectWorkspacePort,
       ),
       workflowRuntimeService: workflowRuntimeService,
-      generateDraftUseCaseFactory: (provider) {
+      generateDraftUseCaseFactory: (provider, networkSettings) {
         // 中文注释: CLI 与 GUI 共用同一套生成用例装配，只在输入输出壳层上保持差异。
         return GenerateDraftUseCase(
           projectWorkspacePort: bundle.projectWorkspacePort,
-          llmGateway: bundle.createGateway(provider),
+          llmGateway: bundle.createGateway(
+            provider,
+            networkSettings: networkSettings,
+          ),
           toolExecutionPort: bundle.projectToolExecutionPort,
           contextAssemblerService: contextAssemblerService,
           projectPromptContract: ProjectPromptContract(),
@@ -115,6 +127,18 @@ class CliBootstrap {
       printer: printer,
     );
     final sessionCommand = SessionCommand(printer: printer);
+    final reviewCommand = ReviewCommand(
+      settingsRepository: bundle.settingsRepository,
+      projectRepository: bundle.projectRepository,
+      reviewReportService: reviewReportService,
+      printer: printer,
+    );
+    final templateCommand = TemplateCommand(
+      settingsRepository: bundle.settingsRepository,
+      projectRepository: bundle.projectRepository,
+      promptTemplateService: promptTemplateService,
+      printer: printer,
+    );
     if (args.isEmpty) {
       _printRootHelp(printer);
       return 0;
@@ -130,6 +154,10 @@ class CliBootstrap {
         );
       case 'session':
         return sessionCommand.run(args.skip(1).toList(growable: false));
+      case 'review':
+        return reviewCommand.run(args.skip(1).toList(growable: false));
+      case 'template':
+        return templateCommand.run(args.skip(1).toList(growable: false));
       case 'help':
       case '--help':
       case '-h':
@@ -149,6 +177,8 @@ class CliBootstrap {
       [
         'workflow draft --prompt "写第一章开场"',
         'project --project D:\\YourNovel',
+        'review list --project D:\\YourNovel',
+        'template list --project D:\\YourNovel',
         'session',
       ].join('\n'),
     );

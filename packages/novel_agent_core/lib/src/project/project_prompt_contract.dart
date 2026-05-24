@@ -28,13 +28,14 @@ class ProjectPromptContract {
   }
 
   String directoryMappingLine() {
-    // 中文注释: 目录映射短句供 prompt 和上下文摘要嵌入使用，避免每次重复展开长文档。
+    // 中文注释: 目录映射只作为显示层释义，明确英文目录名才是工具协议里的唯一合法路径。
     final parts = ProjectWorkspaceCatalog.userWorkspaceDirs
         .map(
-          (item) => '${item.path.replaceAll(RegExp(r'/$'), '')}=${item.name}',
+          (item) =>
+              '${item.path.replaceAll(RegExp(r'/$'), '')}（界面显示为${item.name}）',
         )
         .join('，');
-    return '目录映射：$parts。';
+    return '英文目录名是工具协议唯一合法路径；中文仅用于界面显示。显示映射：$parts。';
   }
 
   String sessionInfo(
@@ -156,11 +157,9 @@ class ProjectPromptContract {
       }
       final displayName = ValueReaders.stringValue(item['display_name']).trim();
       final isDir = ValueReaders.boolValue(item['is_dir']);
-      final suffix = isDir && displayName.isNotEmpty && displayName != path
-          ? '（$displayName）'
-          : '';
       final prefix = isDir ? '[目录]' : '[文件]';
-      lines.add('$prefix $path$suffix');
+      final _ = displayName;
+      lines.add('$prefix $path');
       if (lines.length >= maxLines) {
         lines.add('...（目录过长，已截断；需要更多文件时先调用 list_project_files 或读取具体目录。）');
         break;

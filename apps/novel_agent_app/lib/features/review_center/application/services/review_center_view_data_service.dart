@@ -65,7 +65,9 @@ class ReviewCenterViewDataService {
 
   String fallbackDetailBody(JsonMap loaded) {
     // 中文注释: 报告详情优先展示 Markdown 正文，没有时再退回总结结构。
-    final markdownBody = ValueReaders.stringValue(loaded['markdown_body']).trim();
+    final markdownBody = ValueReaders.stringValue(
+      loaded['markdown_body'],
+    ).trim();
     if (markdownBody.isNotEmpty) {
       return markdownBody;
     }
@@ -84,12 +86,17 @@ class ReviewCenterViewDataService {
     }
     final summary = ValueReaders.stringValue(report['summary']).trim();
     if (summary.isNotEmpty) {
-      lines..add('')..add(summary);
+      lines
+        ..add('')
+        ..add(summary);
     }
     return lines.join('\n');
   }
 
-  String _resolvedSelectedEntryId(String selectedEntryId, List<JsonMap> entries) {
+  String _resolvedSelectedEntryId(
+    String selectedEntryId,
+    List<JsonMap> entries,
+  ) {
     for (final entry in entries) {
       final path = ValueReaders.stringValue(
         entry['markdown_path'],

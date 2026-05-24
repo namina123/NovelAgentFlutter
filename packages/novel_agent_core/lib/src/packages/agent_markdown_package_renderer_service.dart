@@ -58,6 +58,7 @@ class AgentMarkdownPackageRendererService {
       'temperature': normalized['temperature'],
       'top_p': normalized['top_p'],
       'top_k': normalized['top_k'],
+      'advanced_model_overrides': normalized['advanced_model_overrides'],
     };
     final markdownBody = body.isEmpty
         ? '# ${ValueReaders.stringValue(normalized["name"], ValueReaders.stringValue(normalized["id"]))}\n\n请补充这个智能体的操作手册。\n'

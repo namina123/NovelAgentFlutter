@@ -5,6 +5,7 @@ import '../agents/agent_loop_contract_service.dart';
 import '../agents/agent_tool_message_service.dart';
 import '../agents/agent_tool_policy_service.dart';
 import '../agents/sub_agent_execution_service.dart';
+import 'dart:convert';
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
 import '../context/context_assembler_service.dart';
@@ -120,6 +121,9 @@ class GenerateDraftUseCase {
     String intent = 'draft',
     JsonMap agent = const <String, Object?>{},
     String sessionContext = '',
+    JsonMap requestOptions = const <String, Object?>{},
+    JsonMap contextSettings = const <String, Object?>{},
+    JsonMap modelProfile = const <String, Object?>{},
   }) async {
     // 中文注释: 这里负责把项目文件、上下文组装和模型调用收束成一次共享草稿生成流程。
     final cleanPrompt = userPrompt.trim();
@@ -166,6 +170,8 @@ class GenerateDraftUseCase {
       'intent': intent,
       'agent': resolvedAgent,
       'optional_agents': optionalAgents,
+      'context_settings': contextSettings,
+      'model_profile': modelProfile,
     });
     final prompt = _draftPromptBuilderService.build(
       project: projectInfo,
@@ -179,6 +185,12 @@ class GenerateDraftUseCase {
     final enabledToolIds = _toolStrategyService.enabledToolIds(toolSettings);
     final toolSchemas = _toolSchemaBuilderService.buildOpenAiSchemas(
       enabledToolIds,
+    );
+    final llmRequestOptions = _llmRequestOptions(
+      requestOptions,
+      intent: intent,
+      toolSettings: toolSettings,
+      hasTools: toolSchemas.isNotEmpty,
     );
     final collaborationGroup = optionalGroups.isEmpty
         ? <String, Object?>{}
@@ -217,14 +229,25 @@ class GenerateDraftUseCase {
     var finalContent = '';
     var waitingForUserChoice = false;
     var stoppedByToolError = false;
+    var reasoningContent = '';
+    var toolErrorSummary = '';
     var previousRoundHadPlanTool = false;
     var planContinueRetryUsed = false;
+    var previousToolFingerprint = '';
+    var repeatedReadOnlyToolRounds = 0;
     for (var roundIndex = 0; roundIndex < 8; roundIndex++) {
       final llmResult = await _llmGateway.requestChat(
         messages: messages,
         modelId: modelId,
         tools: toolSchemas,
+        options: llmRequestOptions,
       );
+      final roundReasoning = ValueReaders.stringValue(
+        llmResult['reasoning_content'],
+      ).trim();
+      if (roundReasoning.isNotEmpty) {
+        reasoningContent = roundReasoning;
+      }
       final toolCalls = _toolCallParserService.parseToolCalls(
         llmResult,
         allowInlineFallback: ValueReaders.boolValue(
@@ -242,12 +265,28 @@ class GenerateDraftUseCase {
       );
       final action = ValueReaders.stringValue(contract['action']);
       if (action == 'execute_tools') {
+        final normalizedToolCalls = ValueReaders.objectList(contract['tool_calls']);
+        final toolFingerprint = _toolRoundFingerprint(normalizedToolCalls);
+        if (toolFingerprint.isNotEmpty &&
+            toolFingerprint == previousToolFingerprint &&
+            _isReadOnlyToolRound(normalizedToolCalls)) {
+          repeatedReadOnlyToolRounds += 1;
+        } else {
+          repeatedReadOnlyToolRounds = 0;
+        }
+        previousToolFingerprint = toolFingerprint;
+        if (repeatedReadOnlyToolRounds >= 2) {
+          stoppedByToolError = true;
+          toolErrorSummary =
+              '工具重复空转：同一组只读工具调用连续重复，已主动停止。';
+          break;
+        }
         final toolRound = await _toolExecutionService.executeRound(
           project: project,
           assistantMessage: ValueReaders.mapValue(
             contract['assistant_message'],
           ),
-          toolCalls: ValueReaders.objectList(contract['tool_calls']),
+          toolCalls: normalizedToolCalls,
           agent: resolvedAgent,
           modelId: modelId,
           mainContext: <String, Object?>{
@@ -275,6 +314,9 @@ class GenerateDraftUseCase {
         waitingForUserChoice =
             waitingForUserChoice || toolRound.waitingForUserChoice;
         stoppedByToolError = stoppedByToolError || toolRound.stoppedByToolError;
+        if (toolRound.stoppedByToolError && toolErrorSummary.isEmpty) {
+          toolErrorSummary = _toolErrorSummary(toolRound.executedTools);
+        }
         if (stoppedByToolError || waitingForUserChoice) {
           break;
         }
@@ -327,6 +369,9 @@ class GenerateDraftUseCase {
       changedPaths: changedPaths,
       transcriptMessages: messages,
       waitingForUserChoice: waitingForUserChoice,
+      reasoningContent: reasoningContent,
+      stoppedByToolError: stoppedByToolError,
+      toolErrorSummary: toolErrorSummary,
     );
   }
 
@@ -337,6 +382,33 @@ class GenerateDraftUseCase {
       return content;
     }
     return content.substring(0, maxChars);
+  }
+
+  JsonMap _llmRequestOptions(
+    JsonMap requestOptions, {
+    required String intent,
+    required JsonMap toolSettings,
+    required bool hasTools,
+  }) {
+    // 中文注释: 请求选项合并只负责把模型参数和工具策略拼成最终网关输入。
+    final merged = ValueReaders.deepCopyMap(requestOptions);
+    final strategyOptions = _toolStrategyService.requestOptionsForIntent(
+      toolSettings,
+      intent,
+    );
+    if (hasTools &&
+        ValueReaders.boolValue(strategyOptions['force_tool_choice']) &&
+        ValueReaders.stringValue(
+          strategyOptions['preferred_tool'],
+        ).trim().isNotEmpty) {
+      merged['tool_choice'] = <String, Object?>{
+        'type': 'function',
+        'function': <String, Object?>{
+          'name': ValueReaders.stringValue(strategyOptions['preferred_tool']),
+        },
+      };
+    }
+    return merged;
   }
 
   Future<List<JsonMap>> _loadAvailableAgentsSafe(
@@ -390,5 +462,61 @@ class GenerateDraftUseCase {
       byId[id] = entry;
     }
     return byId.values.toList(growable: false);
+  }
+
+  String _toolErrorSummary(List<Object?> executedTools) {
+    // 中文注释: 工具失败摘要统一从本轮执行记录提取，避免上层再次理解底层工具返回结构。
+    for (final rawTool in executedTools.reversed) {
+      final tool = ValueReaders.mapValue(rawTool);
+      if (ValueReaders.boolValue(tool['ok'], true)) {
+        continue;
+      }
+      final name = ValueReaders.stringValue(tool['name'], '工具');
+      final result = ValueReaders.mapValue(tool['result']);
+      final error = ValueReaders.stringValue(result['error']).trim();
+      if (error.isNotEmpty) {
+        return '$name：$error';
+      }
+      return '$name 执行失败。';
+    }
+    return '';
+  }
+
+  String _toolRoundFingerprint(List<Object?> toolCalls) {
+    // 中文注释: 工具轮指纹只用于检测完全重复的只读调用，避免模型在空转场景里无限打转。
+    if (toolCalls.isEmpty) {
+      return '';
+    }
+    final normalized = toolCalls
+        .map(ValueReaders.mapValue)
+        .where((call) => call.isNotEmpty)
+        .map((call) => <String, Object?>{
+              'name': ValueReaders.stringValue(call['name']),
+              'arguments': ValueReaders.deepCopyMap(
+                ValueReaders.mapValue(call['arguments']),
+              ),
+            })
+        .toList(growable: false);
+    return jsonEncode(normalized);
+  }
+
+  bool _isReadOnlyToolRound(List<Object?> toolCalls) {
+    // 中文注释: 只有纯读取型工具的连续重复才会被拦下，避免干扰真实的多步写入流程。
+    const readOnlyToolNames = <String>{
+      'list_project_files',
+      'read_project_file',
+      'get_project_file_info',
+      'search_project_files',
+    };
+    if (toolCalls.isEmpty) {
+      return false;
+    }
+    for (final rawCall in toolCalls) {
+      final call = ValueReaders.mapValue(rawCall);
+      if (!readOnlyToolNames.contains(ValueReaders.stringValue(call['name']))) {
+        return false;
+      }
+    }
+    return true;
   }
 }

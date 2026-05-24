@@ -15,6 +15,8 @@ class ConversationSessionStateService {
     SessionHistoryService? historyService,
     SessionContextRendererService? contextRendererService,
     ToolEventPresenterService? toolEventPresenterService,
+    SessionMessageInclusionStrategy? messageInclusionStrategy,
+    SessionCompressionStrategyService? compressionStrategyService,
   }) : _normalizerService =
            normalizerService ??
            SessionRecordNormalizerService(
@@ -51,13 +53,19 @@ class ConversationSessionStateService {
              modeService: modeService ?? SessionModeService(),
            ),
        _toolEventPresenterService =
-           toolEventPresenterService ?? ToolEventPresenterService();
+           toolEventPresenterService ?? ToolEventPresenterService(),
+       _messageInclusionStrategy =
+           messageInclusionStrategy ?? DefaultSessionMessageInclusionStrategy(),
+       _compressionStrategyService =
+           compressionStrategyService ?? SessionCompressionStrategyService();
 
   final SessionRecordNormalizerService _normalizerService;
   final SessionRecordMutationService _mutationService;
   final SessionHistoryService _historyService;
   final SessionContextRendererService _contextRendererService;
   final ToolEventPresenterService _toolEventPresenterService;
+  final SessionMessageInclusionStrategy _messageInclusionStrategy;
+  final SessionCompressionStrategyService _compressionStrategyService;
 
   ConversationSessionState createSession({
     required String sessionId,
@@ -65,6 +73,8 @@ class ConversationSessionStateService {
     String now = '',
     bool needsGoalSelection = true,
     String initialMode = SessionRecordConstants.modeSmartOpening,
+    JsonMap strategySettings = const <String, Object?>{},
+    JsonMap modelProfile = const <String, Object?>{},
   }) {
     // 中文注释: 新会话初始状态统一在这里生成，避免控制器和不同宿主各自产生不同骨架。
     final timestamp = now.trim().isEmpty
@@ -77,14 +87,19 @@ class ConversationSessionStateService {
       createdAt: timestamp,
       defaultThresholdChars: SessionRecordConstants.defaultThresholdChars,
     );
-    return ConversationSessionState(
-      sessionRecord: needsGoalSelection
+    final seededRecord = _applyCompressionStrategy(
+      needsGoalSelection
           ? record
           : _mutationService.sessionWithGoal(
               record,
               initialMode,
               now: timestamp,
             ),
+      strategySettings: strategySettings,
+      modelProfile: modelProfile,
+    );
+    return ConversationSessionState(
+      sessionRecord: seededRecord,
       entries: const <ConversationEntryViewData>[],
       pendingOptions: const <UserOptionViewData>[],
       subAgentRuns: const <SubAgentRunViewData>[],
@@ -95,11 +110,18 @@ class ConversationSessionStateService {
     ConversationSessionState state,
     String mode, {
     String now = '',
+    JsonMap strategySettings = const <String, Object?>{},
+    JsonMap modelProfile = const <String, Object?>{},
   }) {
     // 中文注释: 会话目标切换统一通过这里推进，避免控制器直接修改 sessionRecord 内部字段。
+    final prepared = _applyCompressionStrategy(
+      state.sessionRecord,
+      strategySettings: strategySettings,
+      modelProfile: modelProfile,
+    );
     return state.copyWith(
       sessionRecord: _mutationService.sessionWithGoal(
-        state.sessionRecord,
+        prepared,
         mode,
         now: now,
       ),
@@ -110,10 +132,18 @@ class ConversationSessionStateService {
     ConversationSessionState state,
     String prompt, {
     String now = '',
+    String displayContent = '',
+    JsonMap strategySettings = const <String, Object?>{},
+    JsonMap modelProfile = const <String, Object?>{},
   }) {
     // 中文注释: 用户输入会同时进入会话记录与展示时间线，并清空上一轮待选项。
-    final record = _mutationService.sessionWithMessage(
+    final prepared = _applyCompressionStrategy(
       state.sessionRecord,
+      strategySettings: strategySettings,
+      modelProfile: modelProfile,
+    );
+    final record = _mutationService.sessionWithMessage(
+      prepared,
       'user',
       prompt,
       createdAt: now,
@@ -122,7 +152,7 @@ class ConversationSessionStateService {
       id: 'user_${DateTime.now().microsecondsSinceEpoch}',
       kind: ConversationEntryKind.user,
       title: '你',
-      body: prompt.trim(),
+      body: displayContent.trim().isEmpty ? prompt.trim() : displayContent.trim(),
     );
     return state.copyWith(
       sessionRecord: record,
@@ -135,14 +165,24 @@ class ConversationSessionStateService {
     ConversationSessionState state,
     DraftGenerationResult result, {
     String now = '',
+    JsonMap strategySettings = const <String, Object?>{},
+    JsonMap modelProfile = const <String, Object?>{},
   }) {
     // 中文注释: 助手结果会投影成普通回复、工具事件、待选项和子智能体活动四种展示状态。
-    final record = _mutationService.sessionWithMessage(
-      state.sessionRecord,
-      'assistant',
-      result.draftMarkdown,
-      createdAt: now,
-    );
+    var record = state.sessionRecord;
+    if (_messageInclusionStrategy.includeInContext(role: 'assistant')) {
+      final prepared = _applyCompressionStrategy(
+        state.sessionRecord,
+        strategySettings: strategySettings,
+        modelProfile: modelProfile,
+      );
+      record = _mutationService.sessionWithMessage(
+        prepared,
+        'assistant',
+        result.draftMarkdown,
+        createdAt: now,
+      );
+    }
     final nextEntries = <ConversationEntryViewData>[
       ...state.entries,
       ..._toolEntriesFrom(result.executedTools),
@@ -163,22 +203,36 @@ class ConversationSessionStateService {
     ConversationSessionState state,
     String errorMessage, {
     String now = '',
+    JsonMap strategySettings = const <String, Object?>{},
+    JsonMap modelProfile = const <String, Object?>{},
   }) {
-    // 中文注释: 失败也按助手消息入会话，这样历史回放能保留断点与排错线索。
-    final record = _mutationService.sessionWithMessage(
-      state.sessionRecord,
-      'assistant',
-      errorMessage,
-      createdAt: now,
-    );
+    // 中文注释: 失败是否进入上下文由策略层决定；默认只保留展示条目，不污染后续模型输入。
+    var record = state.sessionRecord;
+    if (_messageInclusionStrategy.includeInContext(
+      role: 'assistant',
+      outcome: 'failure',
+      metadata: <String, Object?>{'error_message': errorMessage},
+    )) {
+      final prepared = _applyCompressionStrategy(
+        state.sessionRecord,
+        strategySettings: strategySettings,
+        modelProfile: modelProfile,
+      );
+      record = _mutationService.sessionWithMessage(
+        prepared,
+        'assistant',
+        errorMessage,
+        createdAt: now,
+      );
+    }
     return state.copyWith(
       sessionRecord: record,
       entries: <ConversationEntryViewData>[
         ...state.entries,
         ConversationEntryViewData(
           id: 'assistant_error_${DateTime.now().microsecondsSinceEpoch}',
-          kind: ConversationEntryKind.assistant,
-          title: '综合创作智能体',
+          kind: ConversationEntryKind.system,
+          title: '本轮失败',
           body: errorMessage.trim(),
           isError: true,
         ),
@@ -251,9 +305,10 @@ class ConversationSessionStateService {
   List<ConversationEntryViewData> _assistantEntriesFrom(
     DraftGenerationResult result,
   ) {
-    // 中文注释: 助手正文为空时不额外塞一个空白气泡，避免等待用户选择的回合看起来像“回了个空消息”。
+    // 中文注释: 即使正文为空，只要本轮有思考内容也保留助手条目，避免工具回合把思考信息直接吞掉。
     final content = result.draftMarkdown.trim();
-    if (content.isEmpty) {
+    final reasoning = result.reasoningContent.trim();
+    if (content.isEmpty && reasoning.isEmpty) {
       return const <ConversationEntryViewData>[];
     }
     return <ConversationEntryViewData>[
@@ -263,8 +318,28 @@ class ConversationSessionStateService {
         title: '综合创作智能体',
         body: content,
         isError: false,
+        detailTitle: reasoning.isEmpty ? '' : '思考',
+        detailSummary: _reasoningSummary(reasoning),
+        detailBody: reasoning,
+        detailExpandedByDefault: false,
       ),
     ];
+  }
+
+  String _reasoningSummary(String reasoning) {
+    // 中文注释: 思考折叠态只展示一小段预览，避免长思考把会话时间线撑得过重。
+    final singleLine = reasoning
+        .replaceAll('\r', ' ')
+        .replaceAll('\n', ' ')
+        .trim();
+    if (singleLine.isEmpty) {
+      return '';
+    }
+    const maxChars = 28;
+    if (singleLine.length <= maxChars) {
+      return singleLine;
+    }
+    return '${singleLine.substring(0, maxChars)}...';
   }
 
   List<UserOptionViewData> _pendingOptionsFrom(List<Object?> executedTools) {
@@ -341,5 +416,24 @@ class ConversationSessionStateService {
         .map((runId) => byId[runId])
         .whereType<SubAgentRunViewData>()
         .toList(growable: false);
+  }
+
+  JsonMap _applyCompressionStrategy(
+    JsonMap sessionRecord, {
+    JsonMap strategySettings = const <String, Object?>{},
+    JsonMap modelProfile = const <String, Object?>{},
+  }) {
+    // 中文注释: 会话服务只应用策略产出的阈值，不在这里固化阈值计算规则。
+    final next = ValueReaders.deepCopyMap(sessionRecord);
+    next['compression_threshold_chars'] =
+        _compressionStrategyService.thresholdChars(
+          strategySettings: strategySettings,
+          modelProfile: modelProfile,
+          fallbackThresholdChars: ValueReaders.intValue(
+            sessionRecord['compression_threshold_chars'],
+            SessionRecordConstants.defaultThresholdChars,
+          ),
+        );
+    return next;
   }
 }

@@ -33,7 +33,8 @@ class SaveCustomizationBundleUseCase {
       description: description,
     );
     final bundleTitle = (bundle['title'] ?? '').toString();
-    final relativePath = 'exports/${_safeFileStem(bundleTitle)}.customization.json';
+    final relativePath =
+        'exports/${_safeFileStem(bundleTitle)}.customization.json';
     await _writeProjectTextFileUseCase.execute(
       project: project,
       relativePath: relativePath,

@@ -41,14 +41,14 @@ class ToolSchemaBuilderService {
       case 'list_project_files':
         return _objectSchema(
           properties: <String, Object?>{
-            'relative_path': _stringSchema('可选目录范围，相对路径。'),
+            'relative_path': _stringSchema('可选目录范围。必须使用项目内英文相对路径。'),
           },
         );
       case 'read_project_file':
         return _objectSchema(
           required: const <String>['relative_path'],
           properties: <String, Object?>{
-            'relative_path': _stringSchema('要读取的项目相对路径。'),
+            'relative_path': _stringSchema('要读取的项目英文相对路径。必须直接复制 list_project_files 返回的 relative_path。'),
           },
         );
       case 'write_project_file':

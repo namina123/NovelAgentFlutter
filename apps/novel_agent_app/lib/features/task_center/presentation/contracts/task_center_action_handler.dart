@@ -9,6 +9,10 @@ abstract class TaskCenterActionHandler {
 
   void onTaskCenterTaskOpened(String taskId);
 
+  void onTaskCenterLongTaskRunSelected(String relativePath);
+
+  void onTaskCenterTaskQueueRunSelected(String relativePath);
+
   void onTaskCenterWorkflowCreateSubmitted(
     TaskWorkflowCreateRequestViewData request,
   );

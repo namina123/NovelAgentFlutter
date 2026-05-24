@@ -100,10 +100,7 @@ class _PromptTemplatesPageState extends State<PromptTemplatesPage> {
             const SizedBox(height: 12),
             Text(
               widget.viewData.status,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
             ),
           ],
           const SizedBox(height: 12),
@@ -153,7 +150,8 @@ class _PromptTemplatesPageState extends State<PromptTemplatesPage> {
                         children: [
                           SectionHeading(
                             title: '模板编辑',
-                            subtitle: widget.viewData.editor.relativePath
+                            subtitle:
+                                widget.viewData.editor.relativePath
                                     .trim()
                                     .isNotEmpty
                                 ? widget.viewData.editor.relativePath
@@ -164,7 +162,9 @@ class _PromptTemplatesPageState extends State<PromptTemplatesPage> {
                           const SizedBox(height: 10),
                           TextField(
                             controller: _idController,
-                            decoration: const InputDecoration(labelText: '模板 ID'),
+                            decoration: const InputDecoration(
+                              labelText: '模板 ID',
+                            ),
                           ),
                           const SizedBox(height: 8),
                           TextField(
@@ -200,14 +200,18 @@ class _PromptTemplatesPageState extends State<PromptTemplatesPage> {
                             controller: _contentController,
                             minLines: 10,
                             maxLines: 18,
-                            decoration: const InputDecoration(labelText: '模板正文'),
+                            decoration: const InputDecoration(
+                              labelText: '模板正文',
+                            ),
                           ),
                           const SizedBox(height: 8),
                           TextField(
                             controller: _variablesController,
                             minLines: 4,
                             maxLines: 8,
-                            decoration: const InputDecoration(labelText: '预览变量 JSON'),
+                            decoration: const InputDecoration(
+                              labelText: '预览变量 JSON',
+                            ),
                           ),
                           const SizedBox(height: 8),
                           Wrap(

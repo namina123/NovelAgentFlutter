@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../shared/widgets/action_button.dart';
-import '../../../../../shared/widgets/compact_action_grid.dart';
+import '../../../../../shared/widgets/toolbar_icon_button.dart';
 
 class ResourceUtilityStrip extends StatelessWidget {
   const ResourceUtilityStrip({
@@ -19,37 +18,30 @@ class ResourceUtilityStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 中文注释: 工作区快捷入口独立出来，避免资源面板把跨页面跳转和文件树职责缠在一起。
-    return CompactActionGrid(
-      columnCount: 4,
-      spacing: 8,
-      childAspectRatio: 1.95,
+    // 中文注释: 底部快捷入口也保持工具条形态，缩小对目录主视区的侵占。
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
       children: [
-        ActionButton(
-          label: '智能体',
+        ToolbarIconButton(
           icon: Icons.groups_2_outlined,
-          compact: true,
+          tooltip: '智能体生态',
           onPressed: onAgentEcosystemRequested,
         ),
-        ActionButton(
-          label: '任务',
+        ToolbarIconButton(
           icon: Icons.checklist_rounded,
-          tone: ActionButtonTone.neutral,
-          compact: true,
+          tooltip: '任务中心',
           onPressed: onTasksRequested,
         ),
-        ActionButton(
-          label: '审稿',
+        ToolbarIconButton(
           icon: Icons.warning_amber_rounded,
-          tone: ActionButtonTone.warm,
-          compact: true,
+          tooltip: '审稿中心',
+          tone: ToolbarIconTone.warm,
           onPressed: onReviewsRequested,
         ),
-        ActionButton(
-          label: '模板',
+        ToolbarIconButton(
           icon: Icons.copy_all_outlined,
-          tone: ActionButtonTone.neutral,
-          compact: true,
+          tooltip: '提示词模板',
           onPressed: onTemplatesRequested,
         ),
       ],

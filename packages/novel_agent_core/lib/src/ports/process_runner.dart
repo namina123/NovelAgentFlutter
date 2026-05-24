@@ -2,6 +2,8 @@ abstract class ProcessRunner {
   Future<ProcessRunResult> run({
     required String executable,
     required List<String> arguments,
+    String? workingDirectory,
+    Duration? timeout,
   });
 }
 

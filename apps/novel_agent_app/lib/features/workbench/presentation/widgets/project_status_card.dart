@@ -47,15 +47,17 @@ class ProjectStatusCard extends StatelessWidget {
               height: 1.35,
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            toolCoreStatus,
-            style: const TextStyle(
-              color: AppPalette.lineStrong,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
+          if (toolCoreStatus.trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              toolCoreStatus,
+              style: const TextStyle(
+                color: AppPalette.lineStrong,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );

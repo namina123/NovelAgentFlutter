@@ -5,9 +5,16 @@ import '../../../../../shared/widgets/toolbar_icon_button.dart';
 import '../contracts/document_workspace_action_handler.dart';
 
 class DocumentToolbarBar extends StatelessWidget {
-  const DocumentToolbarBar({super.key, required this.onActionRequested});
+  const DocumentToolbarBar({
+    super.key,
+    required this.onActionRequested,
+    required this.canRender,
+    required this.isRendered,
+  });
 
   final ValueChanged<DocumentToolbarAction> onActionRequested;
+  final bool canRender;
+  final bool isRendered;
 
   @override
   Widget build(BuildContext context) {
@@ -24,10 +31,14 @@ class DocumentToolbarBar extends StatelessWidget {
             onPressed: () => onActionRequested(DocumentToolbarAction.outline),
           ),
           ToolbarIconButton(
-            icon: Icons.visibility_outlined,
-            tooltip: '预览',
+            icon: isRendered
+                ? Icons.edit_note_outlined
+                : Icons.visibility_outlined,
+            tooltip: isRendered ? '返回编辑' : '渲染',
             tone: ToolbarIconTone.accent,
-            onPressed: () => onActionRequested(DocumentToolbarAction.preview),
+            onPressed: canRender
+                ? () => onActionRequested(DocumentToolbarAction.render)
+                : null,
           ),
           ToolbarIconButton(
             icon: Icons.save_outlined,

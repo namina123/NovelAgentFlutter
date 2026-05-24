@@ -31,7 +31,9 @@ class ProjectAgentSkillToolExecutor {
     // 中文注释: 技能读取执行器只处理技能包发现、作用域过滤和结果拼装，不触碰主循环或 UI 状态。
     final agent = _resolvedAgent(arguments);
     final allSkills = await _skillPackageCatalog.loadSkillPackages(project);
-    final projectSkillGroups = await _skillGroupCatalog.loadSkillGroups(project);
+    final projectSkillGroups = await _skillGroupCatalog.loadSkillGroups(
+      project,
+    );
     final availableSkills = _skillSummaryService.buildAvailableSkillSummaries(
       agent: agent,
       allSkills: allSkills,

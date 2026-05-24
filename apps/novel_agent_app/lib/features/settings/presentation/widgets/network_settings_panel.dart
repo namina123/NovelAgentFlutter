@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../../../../../shared/widgets/action_button.dart';
 import 'settings_form_section.dart';
@@ -21,8 +23,11 @@ class NetworkSettingsPanel extends StatefulWidget {
 
 class _NetworkSettingsPanelState extends State<NetworkSettingsPanel> {
   late String _proxyMode;
+  late String _proxyProtocol;
   late final TextEditingController _hostController;
   late final TextEditingController _portController;
+  late final TextEditingController _usernameController;
+  late final TextEditingController _passwordController;
   late final TextEditingController _timeoutController;
 
   @override
@@ -30,6 +35,8 @@ class _NetworkSettingsPanelState extends State<NetworkSettingsPanel> {
     super.initState();
     _hostController = TextEditingController();
     _portController = TextEditingController();
+    _usernameController = TextEditingController();
+    _passwordController = TextEditingController();
     _timeoutController = TextEditingController();
     _sync();
   }
@@ -46,6 +53,8 @@ class _NetworkSettingsPanelState extends State<NetworkSettingsPanel> {
   void dispose() {
     _hostController.dispose();
     _portController.dispose();
+    _usernameController.dispose();
+    _passwordController.dispose();
     _timeoutController.dispose();
     super.dispose();
   }
@@ -57,7 +66,8 @@ class _NetworkSettingsPanelState extends State<NetworkSettingsPanel> {
       children: [
         SettingsFormSection(
           title: '网络偏好',
-          description: '临时代理端口 12334 只允许当前进程生效；保存时不会把它写回设置文件。',
+          description:
+              '自定义代理会优先覆盖系统网络环境；协议头可留空，端口固定限制在 ${NetworkProxyPortPolicy.minPort}-${NetworkProxyPortPolicy.maxPort}。',
           child: Column(
             children: [
               SettingsLabeledDropdownField<String>(
@@ -77,10 +87,31 @@ class _NetworkSettingsPanelState extends State<NetworkSettingsPanel> {
                 },
               ),
               const SizedBox(height: 12),
+              SettingsLabeledDropdownField<String>(
+                label: '代理协议',
+                value: _proxyProtocol,
+                options: const [
+                  SettingsDropdownOption(value: '', label: '不指定'),
+                  SettingsDropdownOption(value: 'http', label: 'HTTP'),
+                  SettingsDropdownOption(value: 'socks5', label: 'SOCKS5'),
+                ],
+                onChanged: _proxyMode == 'custom'
+                    ? (value) {
+                        if (value == null) {
+                          return;
+                        }
+                        setState(() {
+                          _proxyProtocol = value;
+                        });
+                      }
+                    : (_) {},
+              ),
+              const SizedBox(height: 12),
               SettingsLabeledTextField(
-                label: '代理主机',
+                label: '代理 IP',
                 controller: _hostController,
                 enabled: _proxyMode == 'custom',
+                hintText: '127.0.0.1',
               ),
               const SizedBox(height: 12),
               SettingsLabeledTextField(
@@ -88,6 +119,25 @@ class _NetworkSettingsPanelState extends State<NetworkSettingsPanel> {
                 controller: _portController,
                 enabled: _proxyMode == 'custom',
                 keyboardType: TextInputType.number,
+                hintText:
+                    '${NetworkProxyPortPolicy.minPort}-${NetworkProxyPortPolicy.maxPort}',
+                inputFormatters: <TextInputFormatter>[
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(5),
+                ],
+              ),
+              const SizedBox(height: 12),
+              SettingsLabeledTextField(
+                label: '代理用户名（可选）',
+                controller: _usernameController,
+                enabled: _proxyMode == 'custom',
+              ),
+              const SizedBox(height: 12),
+              SettingsLabeledTextField(
+                label: '代理密码（可选）',
+                controller: _passwordController,
+                enabled: _proxyMode == 'custom',
+                obscureText: true,
               ),
               const SizedBox(height: 12),
               SettingsLabeledTextField(
@@ -104,10 +154,14 @@ class _NetworkSettingsPanelState extends State<NetworkSettingsPanel> {
           expanded: true,
           icon: Icons.save_outlined,
           onPressed: () {
+            final normalizedPort = _normalizedPortText(_portController.text);
             widget.onSaved(<String, Object?>{
               'proxy_mode': _proxyMode,
+              'proxy_protocol': _proxyProtocol,
               'proxy_host': _hostController.text.trim(),
-              'proxy_port': _portController.text.trim(),
+              'proxy_port': normalizedPort,
+              'proxy_username': _usernameController.text.trim(),
+              'proxy_password': _passwordController.text,
               'timeout_seconds': _timeoutController.text.trim(),
             });
           },
@@ -118,9 +172,19 @@ class _NetworkSettingsPanelState extends State<NetworkSettingsPanel> {
 
   void _sync() {
     _proxyMode = (widget.settings['proxy_mode'] ?? 'system').toString();
+    _proxyProtocol = (widget.settings['proxy_protocol'] ?? '').toString();
     _hostController.text = (widget.settings['proxy_host'] ?? '').toString();
     _portController.text = (widget.settings['proxy_port'] ?? '').toString();
-    _timeoutController.text =
-        (widget.settings['timeout_seconds'] ?? '900').toString();
+    _usernameController.text =
+        (widget.settings['proxy_username'] ?? '').toString();
+    _passwordController.text =
+        (widget.settings['proxy_password'] ?? '').toString();
+    _timeoutController.text = (widget.settings['timeout_seconds'] ?? '900')
+        .toString();
+  }
+
+  String _normalizedPortText(String rawValue) {
+    // 中文注释: 端口规范统一复用 core 里的固定范围策略，避免 GUI 与 CLI 口径漂移。
+    return NetworkProxyPortPolicy.normalizeText(rawValue);
   }
 }

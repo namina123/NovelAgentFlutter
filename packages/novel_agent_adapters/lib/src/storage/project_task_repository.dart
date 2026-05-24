@@ -15,8 +15,7 @@ class ProjectTaskRepository {
            ProjectJsonDocumentService(workspacePort: workspacePort),
        _taskDefinitionService =
            taskDefinitionService ?? TaskDefinitionService(),
-       _pathPolicyService =
-           pathPolicyService ?? LongTaskPathPolicyService(),
+       _pathPolicyService = pathPolicyService ?? LongTaskPathPolicyService(),
        _taskTransitionService =
            taskTransitionService ?? TaskTransitionService();
 
@@ -230,7 +229,11 @@ class ProjectTaskRepository {
     JsonMap record,
   ) async {
     // 中文注释: 通用运行记录保存给 task queue 和 long task run 复用，避免新增第二套 JSON 写法。
-    await _jsonDocumentService.writeJsonMap(project.rootPath, relativePath, record);
+    await _jsonDocumentService.writeJsonMap(
+      project.rootPath,
+      relativePath,
+      record,
+    );
     return ValueReaders.deepCopyMap(record)..['relative_path'] = relativePath;
   }
 
@@ -245,7 +248,11 @@ class ProjectTaskRepository {
     String content,
   ) {
     // 中文注释: Markdown 摘要类产物由仓储层统一落盘，和 JSON 记录保持同一个项目边界。
-    return _workspacePort.writeTextFile(project.rootPath, relativePath, content);
+    return _workspacePort.writeTextFile(
+      project.rootPath,
+      relativePath,
+      content,
+    );
   }
 
   bool _matchesFilters(JsonMap task, JsonMap filters) {

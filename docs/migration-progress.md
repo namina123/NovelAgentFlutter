@@ -7,6 +7,9 @@
 当前项目已经不只是空壳：
 
 - 工作台可以加载项目、浏览资源、打开文档、编辑文档、保存文档
+- 会话栏顶部模型 / 智能体选择已经接成真实选择器，不再只是伪下拉展示
+- 文档工具栏的“渲染”已经改成当前 Markdown 文档级切换，不再把中宽布局误切进常驻文档工作区
+- 资源树目录默认折叠，目录标题追加直接下级计数，占位 `README.md` 对用户隐藏
 - 生态页可以浏览项目级与内置生态条目
 - 生态页可以创建项目级智能体、技能、技能组、智能体组，并真实落盘
 - 生态页可以打开项目内源文件进入工作区编辑
@@ -15,7 +18,7 @@
 - 项目级智能体 / 智能体组已经进入共享生成链和子智能体链
 - CLI 与 GUI 已共用生态包预检、导入、索引生成和生态包导出核心链
 
-但项目还没有达到“与旧项目别无二致”的状态，剩余主要缺口已经从“空页面”缩小到更深的交互链、生态编辑深水区、若干工具桩和体验对齐。
+但项目还没有达到“与旧项目别无二致”的状态，剩余主要缺口已经继续缩小到 Prompt Debug 组合页、生态导出 UI 入口，以及更完整的最终打包回归。
 
 ## 本轮前已完成
 
@@ -151,41 +154,186 @@
   - `reviews/.../*.md`
 - 这样 GUI 审稿列表、详情页、修复任务生成就能稳定复用同一份结构化报告
 
+### 12. 生态页编辑闭环补齐
+
+- 新增 `EcosystemEntryEditorService`
+- 生态页项目级条目现在可以直接拉起表单编辑，而不是只能打开源文件手改
+- 支持：
+  - 项目级 `AGENT.md`
+  - 项目级 `SKILL.md`
+  - 项目级 `skill_group.json`
+  - 项目级 `agent_group.json`
+- 保存时会：
+  - 重新渲染标准文件内容
+  - 支持改 ID 后迁移到新路径
+  - 删除旧路径
+  - 刷新生态快照并回选新条目
+- 删除时只删除项目级条目，不会动内置条目
+
+### 13. 长任务链路树 / 回放 / 日志视图补齐一轮
+
+- core 新增 `TaskChainViewService`
+- `workflowChainView` 不再只是平铺节点，已恢复为按 `plan_id` 分组的链路视图
+- `saveWorkflowChainSnapshot` 现在同时落：
+  - `tracking/task_chain_views/*.json`
+  - `tracking/task_chain_views/*.md`
+- 任务中心新增：
+  - 链路树页签
+  - 最近长任务运行记录列表
+  - 最近受控连续运行记录列表
+  - 两类记录的 Markdown 回放 / 日志视图
+
+### 14. CLI 命令组继续拆分
+
+- 新增独立 `review` 命令组：
+  - `list`
+  - `show`
+  - `types`
+  - `create-task`
+  - `repair-task`
+- 新增独立 `template` 命令组：
+  - `list`
+  - `show`
+  - `preview`
+  - `save`
+  - `delete`
+  - `restore`
+- 这样 `workflow` 不再继续挤进审稿 / 模板职责
+
+### 15. 工具宿主能力补齐一轮
+
+- `reorder_project_file` 不再返回未执行占位
+- 新增内部排序元数据：
+  - `.novel_agent/project_tree_order.json`
+- 资源树 / CLI / 工作区列举现在都会应用同一份同级排序结果
+- 内部排序元数据不会出现在普通项目资源树中
+- `request_gateway_tool` 现在已经真正接通：
+  - `fetch_url_content`
+  - `search_internet`
+  - `run_command`
+- `generate_image` 不再返回旧式 `notExecuted` 占位，而是进入真实 gateway 分发分支，当前先保留为受参数约束的轻量实现
+- 新增桌面端进程执行器 `DesktopProcessRunner`
+- 新增适配器测试：
+  - `project_tree_order_service_test.dart`
+  - `project_gateway_tool_executor_test.dart`
+
+### 16. 设置页与工作台交互修整一轮
+
+- 接口设置：
+  - 不再向用户暴露接口内部 `id`
+  - 新建接口时由标题自动生成内部 `id`
+  - 名称冲突时自动追加 `_1`、`_2`
+  - 协议改为下拉选择，当前只开放：
+    - OpenAI Compatible
+    - Anthropic Compatible
+  - 不再在接口页维护“默认接口 / 默认模型”
+- 模型设置：
+  - 改为单独维护接口选择、模型 ID、兼容上下文长度、应用上下文长度、流式模式、API 模式
+  - 去掉默认智能体 ID 与自动保存草稿开关
+- 主题设置：
+  - 收缩为稳定可用的主题模式切换
+  - 工作台主面板、按钮、资源树、编辑区等自绘组件已开始响应亮暗主题
+- 权限页 / 工具策略页：
+  - 模式切换现在会真实改写开关集合，不再只是改一行文案
+- 工作台：
+  - 二栏模式已支持拖拽调宽
+  - 三栏改为更接近 VSCode 的连续分栏，不再显示成三张卡片夹分割线
+  - 左栏操作区改为紧凑工具条，资源树成为主视图
+- 资源树改为可展开目录结构
+- 默认隐藏 `.json / .jsonl / .novel_agent`，避免用户误改内部结构
+- 顶层目录按创作认知顺序重排，而不是纯字典序
+
+### 17. 模型运行参数真实接线一轮
+
+- 新增共享执行视图服务：
+  - `ModelExecutionProfileService`
+  - `ProviderRequestOptionsService`
+- 设置文件中的模型默认参数现在已经真正进入 GUI / CLI / 长任务共用运行链：
+  - `stream`
+  - `temperature`
+  - `top_p`
+  - `top_k`
+  - 深度思考开关与强度
+  - 自定义高级参数条目
+- 智能体层的模型重写也已接入执行链，不再只是 core 中孤立可用：
+  - `thinking_enabled`
+  - `thinking_effort`
+  - `temperature`
+  - `top_p`
+  - `advanced_model_overrides`
+- OpenAI 兼容网关已经开始真正透传这些请求参数，而不是只固定发送 `model + messages + tools`
+
+### 18. Responses API 当前结论
+
+- 已确认：`Responses API` 支持非流式请求
+- 因此，“API 模式 = Responses API” 时，不应禁用“是否流式”开关
+- 当前产品策略：
+  - 默认仍是 `聊天 API`
+  - 默认仍是“流式请求”
+  - `Responses API` 相关设置先保留，但真实 HTTP 分流尚未完成
+- 当前不要把 `Responses API` 误当成“只能流式”
+- 当前也不要把 `Responses API` 假装成已经完全接通；它还处于“设置已保留、事实已确认、网关分流待补”的状态
+
+### 19. 网络代理与共享生成入口补齐一轮
+
+- 代理设置现在改为更贴近用户视角：
+  - 代理模式只分为“系统网络环境 / 自定义代理”
+  - 协议头允许留空，也可选：
+    - `HTTP`
+    - `SOCKS5`
+  - 自定义代理拆成独立字段：
+    - `代理 IP`
+    - `代理端口`
+    - `代理用户名（可选）`
+    - `代理密码（可选）`
+- 代理端口范围已收敛到共享策略：
+  - 新增 `NetworkProxyPortPolicy`
+  - GUI 输入与设置持久化统一复用同一套 `1-65535` 固定合法范围
+- OpenAI 兼容网关现在会真正吃到设置页网络参数：
+  - 自定义代理优先覆盖系统代理
+  - 支持代理认证
+  - 协议头留空时，仍按通用代理地址输入解释执行
+- GUI / CLI / 长任务运行时三条链路都已补齐 `networkSettings` 传递：
+  - 普通会话生成
+  - CLI `workflow draft`
+  - 长任务正文执行
+  - 长任务后处理执行
+- 去掉了几处过于内部化的用户可见文案：
+  - `ToolCore: ...`
+  - `上下文准备中 · 等待模型读取会话与项目信息`
+  - 设置页中关于“临时代理”的旧迁移期说明
+
 ## 已验证
 
 最近一次通过验证：
 
 - `flutter analyze` in `apps/novel_agent_app`
-- `flutter test test/widget_test.dart` in `apps/novel_agent_app`
+- `flutter test` in `apps/novel_agent_app`
 - `dart analyze` in `apps/novel_agent_cli`
 - `dart run bin/novel_agent.dart workflow help` in `apps/novel_agent_cli`
+- `dart run bin/novel_agent.dart review help` in `apps/novel_agent_cli`
+- `dart run bin/novel_agent.dart template help` in `apps/novel_agent_cli`
 - `dart test` in `packages/novel_agent_core`
-- `dart test` in `packages/novel_agent_adapters`
 - `dart analyze` in `packages/novel_agent_adapters`
+- `dart test` in `packages/novel_agent_adapters`
+- `flutter build windows --release` in `apps/novel_agent_app`
 
 ## 当前仍存在的明确缺口
 
 ### 生态系统
 
-- 表单化编辑生态条目
 - Flutter 侧生态包导出入口还没做成单独 UI
 
 ### 共享运行链与更深交互
 
-- 长任务中心虽然已接运行动作，但还没有旧项目那种更完整的链路树、运行记录回放、日志视图
 - 审稿中心目前已能看报告、建修复任务，但“直接发起审稿执行”的更完整引导仍可继续细化
 - 模板页已能编辑、预览、保存、恢复、删覆盖，但还没有独立的 prompt debug 组合页
-- CLI 目前重点补了 workflow；`review / template` 还没有拆成独立命令组
-- host capability / process runner 仍有底层适配器待实现
+- `Responses API` 真实网关分流仍未补齐，目前运行链默认仍走 Chat API 兼容实现
 
 ### 工具与宿主适配
 
-- `call_sub_agent`
-- `rename_project`
-- `reorder_project_file`
-- `request_gateway_tool`
-
-这些旧工具名仍处于已识别但未真正执行的状态。
+- 生态导出 GUI 入口仍未补齐
+- `generate_image` 目前是轻量 gateway 分支，不是完整供应商图片工作流
 
 ## 当前工作原则
 
@@ -198,10 +346,11 @@
 
 恢复时从这里继续：
 
-1. 继续把旧项目里剩余“运行记录 / 长任务链路树 / 日志 / prompt debug”那批更深交互迁到 Dart
-2. 补生态页已有条目的表单化编辑闭环
-3. 继续清理工具调度里仍是 `notExecuted` 的旧工具名
-4. 最后做一轮 Windows 打包前的整体回归
+1. 补生态页生态包导出 UI 入口
+2. 做独立 prompt debug 组合页
+3. 补 `Responses API` 的真实 HTTP 分流，而不是只保留设置项
+4. 继续把图片类 gateway 做成更完整的供应商 / 输出文件闭环
+5. 做 Android 打包回归
 
 ## 恢复注意事项
 

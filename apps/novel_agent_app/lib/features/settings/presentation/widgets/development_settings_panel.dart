@@ -4,10 +4,7 @@ import '../models/settings_view_data.dart';
 import 'settings_overview_panel.dart';
 
 class DevelopmentSettingsPanel extends StatelessWidget {
-  const DevelopmentSettingsPanel({
-    super.key,
-    required this.viewData,
-  });
+  const DevelopmentSettingsPanel({super.key, required this.viewData});
 
   final SettingsViewData viewData;
 

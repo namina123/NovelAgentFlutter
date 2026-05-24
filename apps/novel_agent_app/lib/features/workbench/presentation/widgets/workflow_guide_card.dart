@@ -23,7 +23,10 @@ class WorkflowGuideCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.64),
         borderRadius: AppChrome.surfaceBorderRadius,
-        border: Border.all(color: AppPalette.line, width: AppChrome.borderWidth),
+        border: Border.all(
+          color: AppPalette.line,
+          width: AppChrome.borderWidth,
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.all(12),

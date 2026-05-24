@@ -4,6 +4,7 @@ import '../contracts/document_workspace_action_handler.dart';
 import '../models/workbench_view_data.dart';
 import 'document_content_canvas.dart';
 import 'document_empty_canvas.dart';
+import 'document_markdown_canvas.dart';
 import 'document_tab_strip.dart';
 import 'document_toolbar_bar.dart';
 
@@ -27,17 +28,32 @@ class DocumentWorkspacePanel extends StatelessWidget {
         children: [
           DocumentToolbarBar(
             onActionRequested: actionHandler.onDocumentActionRequested,
+            canRender: viewData.activeDocumentCanRender,
+            isRendered: viewData.isActiveDocumentRendered,
           ),
           const SizedBox(height: 18),
-          DocumentTabStrip(documents: viewData.documents),
+          DocumentTabStrip(
+            documents: viewData.documents,
+            onSelected: actionHandler.onDocumentSelected,
+            onClosed: actionHandler.onDocumentClosed,
+          ),
           const SizedBox(height: 18),
           Expanded(
-            child: viewData.activeDocumentBody.trim().isEmpty
+            child: viewData.documents.isEmpty
                 ? DocumentEmptyCanvas(
                     headline: viewData.activeDocumentTitle.trim().isEmpty
                         ? '打开或新建文档'
                         : viewData.activeDocumentTitle,
                     message: viewData.generationStatus,
+                  )
+                : viewData.isActiveDocumentRendered
+                ? DocumentMarkdownCanvas(
+                    title: viewData.activeDocumentTitle,
+                    relativePath: viewData.activeDocumentPath,
+                    content: viewData.activeDocumentBody,
+                    status: viewData.activeDocumentDirty
+                        ? '渲染中，存在未保存修改'
+                        : '渲染视图',
                   )
                 : DocumentContentCanvas(
                     title: viewData.activeDocumentTitle,

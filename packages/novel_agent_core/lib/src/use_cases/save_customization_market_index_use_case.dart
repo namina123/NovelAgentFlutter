@@ -30,7 +30,9 @@ class SaveCustomizationMarketIndexUseCase {
     );
     final bundles = <JsonMap>[];
     for (final entry in entries) {
-      final relativePath = ValueReaders.stringValue(entry['relative_path']).trim();
+      final relativePath = ValueReaders.stringValue(
+        entry['relative_path'],
+      ).trim();
       final isDirectory = ValueReaders.boolValue(entry['is_dir']);
       if (isDirectory ||
           !relativePath.startsWith('exports/') ||

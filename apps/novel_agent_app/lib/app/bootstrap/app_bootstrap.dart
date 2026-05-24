@@ -40,10 +40,13 @@ class AppBootstrap {
     final workflowRuntimeService = ProjectWorkflowRuntimeService(
       taskRepository: projectTaskRepository,
       promptTemplateService: promptTemplateService,
-      generateDraftUseCaseFactory: (provider) {
+      generateDraftUseCaseFactory: (provider, networkSettings) {
         return GenerateDraftUseCase(
           projectWorkspacePort: bundle.projectWorkspacePort,
-          llmGateway: bundle.createGateway(provider),
+          llmGateway: bundle.createGateway(
+            provider,
+            networkSettings: networkSettings,
+          ),
           toolExecutionPort: bundle.projectToolExecutionPort,
           contextAssemblerService: contextAssemblerService,
           projectPromptContract: ProjectPromptContract(),
@@ -112,11 +115,14 @@ class AppBootstrap {
       workflowRuntimeService: workflowRuntimeService,
       reviewReportService: reviewReportService,
       promptTemplateService: promptTemplateService,
-      generateDraftUseCaseFactory: (provider) {
+      generateDraftUseCaseFactory: (provider, networkSettings) {
         // 中文注释: 草稿生成用例按当前 provider 动态创建，避免控制器直接依赖具体 HTTP 实现。
         return GenerateDraftUseCase(
           projectWorkspacePort: bundle.projectWorkspacePort,
-          llmGateway: bundle.createGateway(provider),
+          llmGateway: bundle.createGateway(
+            provider,
+            networkSettings: networkSettings,
+          ),
           toolExecutionPort: bundle.projectToolExecutionPort,
           contextAssemblerService: contextAssemblerService,
           projectPromptContract: ProjectPromptContract(),

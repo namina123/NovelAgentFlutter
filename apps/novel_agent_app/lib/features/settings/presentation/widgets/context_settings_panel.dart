@@ -118,8 +118,9 @@ class _ContextSettingsPanelState extends State<ContextSettingsPanel> {
           onPressed: () {
             widget.onSaved(<String, Object?>{
               'default_project_path': _projectPathController.text.trim(),
-              'compression_threshold_percent':
-                  _compressionThresholdController.text.trim(),
+              'compression_threshold_percent': _compressionThresholdController
+                  .text
+                  .trim(),
               'context_pack_budget_percent': _budgetController.text.trim(),
               'max_context_file_chars': _maxCharsController.text.trim(),
               'max_context_files_per_kind': _maxFilesController.text.trim(),

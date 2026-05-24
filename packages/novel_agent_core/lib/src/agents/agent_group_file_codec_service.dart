@@ -4,10 +4,8 @@ import '../common/json_types.dart';
 import 'agent_group_normalizer_service.dart';
 
 class AgentGroupFileCodecService {
-  AgentGroupFileCodecService({
-    AgentGroupNormalizerService? normalizerService,
-  }) : _normalizerService =
-           normalizerService ?? AgentGroupNormalizerService();
+  AgentGroupFileCodecService({AgentGroupNormalizerService? normalizerService})
+    : _normalizerService = normalizerService ?? AgentGroupNormalizerService();
 
   final AgentGroupNormalizerService _normalizerService;
 

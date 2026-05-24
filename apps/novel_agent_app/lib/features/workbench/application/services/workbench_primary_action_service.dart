@@ -42,7 +42,7 @@ class WorkbenchPrimaryActionService {
         return WorkbenchPrimaryActionPlan(
           kind: WorkbenchPrimaryActionPlanKind.sendPrompt,
           sessionMode: mode,
-          message: '已按“${action.title}”创建引导，会马上把启动请求送进当前会话。',
+          message: '',
           prompt: _sessionGoalPromptBuilderService.build(
             mode: mode,
             project: project,
@@ -56,7 +56,7 @@ class WorkbenchPrimaryActionService {
       case 'long_task.open_detail':
         return WorkbenchPrimaryActionPlan(
           kind: WorkbenchPrimaryActionPlanKind.sendPrompt,
-          message: '已根据当前长任务入口生成启动请求，会沿共享交互链继续推进。',
+          message: '',
           prompt: _longTaskEntryPromptBuilderService.build(
             actionId: action.commandId,
             project: project,

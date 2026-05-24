@@ -65,7 +65,7 @@ class _PermissionsSettingsPanelState extends State<PermissionsSettingsPanel> {
                     return;
                   }
                   setState(() {
-                    _mode = value;
+                    _applyMode(value);
                   });
                 },
               ),
@@ -73,31 +73,46 @@ class _PermissionsSettingsPanelState extends State<PermissionsSettingsPanel> {
               SettingsSwitchRow(
                 label: '允许读取文件',
                 value: _allowRead,
-                onChanged: (value) => setState(() => _allowRead = value),
+                onChanged: (value) => setState(() {
+                  _allowRead = value;
+                  _mode = 'custom';
+                }),
               ),
               const SizedBox(height: 10),
               SettingsSwitchRow(
                 label: '允许写入文件',
                 value: _allowWrite,
-                onChanged: (value) => setState(() => _allowWrite = value),
+                onChanged: (value) => setState(() {
+                  _allowWrite = value;
+                  _mode = 'custom';
+                }),
               ),
               const SizedBox(height: 10),
               SettingsSwitchRow(
                 label: '允许删除文件',
                 value: _allowDelete,
-                onChanged: (value) => setState(() => _allowDelete = value),
+                onChanged: (value) => setState(() {
+                  _allowDelete = value;
+                  _mode = 'custom';
+                }),
               ),
               const SizedBox(height: 10),
               SettingsSwitchRow(
                 label: '允许联网调用',
                 value: _allowNetwork,
-                onChanged: (value) => setState(() => _allowNetwork = value),
+                onChanged: (value) => setState(() {
+                  _allowNetwork = value;
+                  _mode = 'custom';
+                }),
               ),
               const SizedBox(height: 10),
               SettingsSwitchRow(
                 label: '允许宿主进程调用',
                 value: _allowProcess,
-                onChanged: (value) => setState(() => _allowProcess = value),
+                onChanged: (value) => setState(() {
+                  _allowProcess = value;
+                  _mode = 'custom';
+                }),
               ),
             ],
           ),
@@ -129,5 +144,32 @@ class _PermissionsSettingsPanelState extends State<PermissionsSettingsPanel> {
     _allowDelete = widget.settings['allow_delete'] == true;
     _allowNetwork = widget.settings['allow_network'] == true;
     _allowProcess = widget.settings['allow_process'] == true;
+    if (_mode == 'safe' || _mode == 'all') {
+      _applyMode(_mode);
+    }
+  }
+
+  void _applyMode(String mode) {
+    // 中文注释: 权限模式切换时同步改写各开关，避免下拉只改文案却不影响实际设置值。
+    _mode = mode;
+    switch (mode) {
+      case 'all':
+        _allowRead = true;
+        _allowWrite = true;
+        _allowDelete = true;
+        _allowNetwork = true;
+        _allowProcess = true;
+        return;
+      case 'safe':
+        _allowRead = true;
+        _allowWrite = true;
+        _allowDelete = false;
+        _allowNetwork = false;
+        _allowProcess = false;
+        return;
+      case 'custom':
+      default:
+        return;
+    }
   }
 }

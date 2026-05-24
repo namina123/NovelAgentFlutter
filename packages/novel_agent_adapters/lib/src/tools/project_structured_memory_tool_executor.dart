@@ -144,44 +144,41 @@ class ProjectStructuredMemoryToolExecutor {
         relativePath: markdownPath,
       );
     }
-    final jsonPath = '${markdownPath.substring(0, markdownPath.length - 3)}json';
-    final report = _reviewReportNormalizerService.normalizeReport(
-      <String, Object?>{
-        'id':
-            'review_${_pathPolicy.safeFileName(title, fallback: 'report')}_${DateTime.now().microsecondsSinceEpoch}',
-        'review_type': reviewType,
-        'title': title,
-        'scope': scope,
-        'summary': ValueReaders.stringValue(arguments['summary']).trim(),
-        'issues': issues,
-        'suggestions': suggestions,
-        'source_paths': sourcePaths,
-        'related_paths': ValueReaders.stringList(arguments['related_paths']),
-        'metadata': <String, Object?>{
-          'origin': 'run_continuity_check',
-        },
-        'created_at': createdAt,
-        'json_path': jsonPath,
-        'markdown_path': markdownPath,
-      },
-      createdAt: createdAt,
-    );
+    final jsonPath =
+        '${markdownPath.substring(0, markdownPath.length - 3)}json';
+    final report = _reviewReportNormalizerService.normalizeReport(<
+      String,
+      Object?
+    >{
+      'id':
+          'review_${_pathPolicy.safeFileName(title, fallback: 'report')}_${DateTime.now().microsecondsSinceEpoch}',
+      'review_type': reviewType,
+      'title': title,
+      'scope': scope,
+      'summary': ValueReaders.stringValue(arguments['summary']).trim(),
+      'issues': issues,
+      'suggestions': suggestions,
+      'source_paths': sourcePaths,
+      'related_paths': ValueReaders.stringList(arguments['related_paths']),
+      'metadata': <String, Object?>{'origin': 'run_continuity_check'},
+      'created_at': createdAt,
+      'json_path': jsonPath,
+      'markdown_path': markdownPath,
+    }, createdAt: createdAt);
     final markdown = _reviewReportMarkdownRenderer.renderMarkdown(report);
     await _hostPort.writeTextFile(
       project.rootPath,
       jsonPath,
       const JsonEncoder.withIndent('  ').convert(report),
     );
-    final markdownResult = await _writeToolExecutor.writeProjectFile(
-      project,
-      <String, Object?>{
-        'content_type': 'summary',
-        'title': title,
-        'relative_path': markdownPath,
-        'content': markdown,
-        'overwrite': true,
-      },
-    );
+    final markdownResult = await _writeToolExecutor
+        .writeProjectFile(project, <String, Object?>{
+          'content_type': 'summary',
+          'title': title,
+          'relative_path': markdownPath,
+          'content': markdown,
+          'overwrite': true,
+        });
     if (!ValueReaders.boolValue(markdownResult['ok'])) {
       return markdownResult;
     }

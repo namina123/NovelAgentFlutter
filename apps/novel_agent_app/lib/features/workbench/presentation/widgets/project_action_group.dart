@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../shared/widgets/action_button.dart';
-import '../../../../../shared/widgets/compact_action_grid.dart';
+import '../../../../../shared/widgets/toolbar_icon_button.dart';
 
 class ProjectActionGroup extends StatelessWidget {
   const ProjectActionGroup({
@@ -19,38 +18,30 @@ class ProjectActionGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 中文注释: 项目级动作单独封装，确保资源面板不会因为按钮矩阵变复杂而继续膨胀。
-    return CompactActionGrid(
-      columnCount: 3,
-      spacing: 8,
-      childAspectRatio: 2.35,
+    // 中文注释: 项目级动作压成小型工具条，给资源树留出主视区而不是堆一大片大按钮。
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
       children: [
-        ActionButton(
-          label: '新建项目',
+        ToolbarIconButton(
           icon: Icons.add_business_outlined,
-          tone: ActionButtonTone.warm,
-          compact: true,
+          tooltip: '新建项目',
+          tone: ToolbarIconTone.warm,
           onPressed: onCreateProjectRequested,
         ),
-        ActionButton(
-          label: '打开项目',
+        ToolbarIconButton(
           icon: Icons.folder_open_outlined,
-          compact: true,
+          tooltip: '打开项目',
           onPressed: onOpenProjectRequested,
         ),
-        ActionButton(
-          label: '项目信息',
+        ToolbarIconButton(
           icon: Icons.badge_outlined,
-          tone: ActionButtonTone.neutral,
-          compact: true,
-          labelMaxLines: 2,
+          tooltip: '项目信息',
           onPressed: onEditProjectInfoRequested,
         ),
-        ActionButton(
-          label: '刷新',
+        ToolbarIconButton(
           icon: Icons.refresh_rounded,
-          tone: ActionButtonTone.neutral,
-          compact: true,
+          tooltip: '刷新项目',
           onPressed: onRefreshRequested,
         ),
       ],

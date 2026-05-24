@@ -6,6 +6,7 @@ import '../models/agent_ecosystem_view_data.dart';
 import '../widgets/agent_ecosystem_header.dart';
 import '../widgets/ecosystem_browser_panel.dart';
 import '../widgets/ecosystem_detail_panel.dart';
+import '../widgets/ecosystem_editor_overlay.dart';
 import '../widgets/ecosystem_import_overlay.dart';
 
 class AgentEcosystemPage extends StatelessWidget {
@@ -98,6 +99,11 @@ class AgentEcosystemPage extends StatelessWidget {
               viewData: viewData.importCommand!,
               actionHandler: actionHandler,
             ),
+          if (viewData.editorViewData != null)
+            EcosystemEditorOverlay(
+              viewData: viewData.editorViewData!,
+              actionHandler: actionHandler,
+            ),
         ],
       ),
     );
@@ -125,6 +131,9 @@ class AgentEcosystemPage extends StatelessWidget {
     }
     return EcosystemDetailPanel(
       entry: entry,
+      onEditRequested: () {
+        actionHandler.onEditEcosystemEntryRequested(entry.id);
+      },
       onOpenSourceRequested: () {
         actionHandler.onOpenEcosystemEntrySourceRequested(entry.id);
       },

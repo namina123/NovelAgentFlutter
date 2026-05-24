@@ -58,6 +58,7 @@ thinking_effort: medium
 temperature: 0.7
 top_p: 0.9
 top_k: 0
+advanced_model_overrides: []
 ---
 
 # $resolvedName

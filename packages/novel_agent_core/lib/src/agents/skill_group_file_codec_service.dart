@@ -4,10 +4,8 @@ import '../common/json_types.dart';
 import 'skill_group_normalizer_service.dart';
 
 class SkillGroupFileCodecService {
-  SkillGroupFileCodecService({
-    SkillGroupNormalizerService? normalizerService,
-  }) : _normalizerService =
-           normalizerService ?? SkillGroupNormalizerService();
+  SkillGroupFileCodecService({SkillGroupNormalizerService? normalizerService})
+    : _normalizerService = normalizerService ?? SkillGroupNormalizerService();
 
   final SkillGroupNormalizerService _normalizerService;
 

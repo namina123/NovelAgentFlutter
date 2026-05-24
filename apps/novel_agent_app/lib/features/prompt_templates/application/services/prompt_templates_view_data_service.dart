@@ -62,11 +62,12 @@ class PromptTemplatesViewDataService {
       scope: ValueReaders.stringValue(template['scope'], 'project'),
       description: ValueReaders.stringValue(template['description']),
       content: ValueReaders.stringValue(template['content']),
-      variablesJson: const JsonEncoder.withIndent('  ').convert(
-        _seedVariables(template),
-      ),
+      variablesJson: const JsonEncoder.withIndent(
+        '  ',
+      ).convert(_seedVariables(template)),
       relativePath: ValueReaders.stringValue(template['relative_path']),
-      isBuiltin: ValueReaders.boolValue(template['locked_core']) &&
+      isBuiltin:
+          ValueReaders.boolValue(template['locked_core']) &&
           ValueReaders.stringValue(template['relative_path']).trim().isEmpty,
     );
   }
@@ -92,7 +93,8 @@ class PromptTemplatesViewDataService {
 
   String _entrySubtitle(JsonMap template) {
     final scope = ValueReaders.stringValue(template['scope'], 'project');
-    final source = ValueReaders.stringValue(template['relative_path']).trim().isEmpty
+    final source =
+        ValueReaders.stringValue(template['relative_path']).trim().isEmpty
         ? '内置'
         : '项目';
     return '$scope｜$source';

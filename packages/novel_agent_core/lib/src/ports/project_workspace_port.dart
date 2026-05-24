@@ -5,6 +5,8 @@ abstract class ProjectWorkspacePort {
 
   Future<String?> readTextFile(String rootPath, String relativePath);
 
+  Future<void> createDirectory(String rootPath, String relativePath);
+
   Future<void> writeTextFile(
     String rootPath,
     String relativePath,

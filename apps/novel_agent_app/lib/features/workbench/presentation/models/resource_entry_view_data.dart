@@ -4,6 +4,9 @@ class ResourceEntryViewData {
     required this.title,
     required this.depth,
     required this.isDirectory,
+    this.childCount = 0,
+    this.hasChildren = false,
+    this.isExpanded = false,
     this.isSelected = false,
   });
 
@@ -11,5 +14,8 @@ class ResourceEntryViewData {
   final String title;
   final int depth;
   final bool isDirectory;
+  final int childCount;
+  final bool hasChildren;
+  final bool isExpanded;
   final bool isSelected;
 }
