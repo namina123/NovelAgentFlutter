@@ -161,6 +161,57 @@ void main() {
         );
       },
     );
+
+    test('generate draft forwards streaming progress snapshots', () async {
+      // 中文注释: 这里验证 core 用例会把网关流式增量和阶段进度继续往上冒，供 GUI/CLI 共用。
+      final workspacePort = _FakeProjectWorkspacePort(entries: [], files: {});
+      final gateway = _FakeLlmGateway(
+        scriptedResults: [
+          <String, Object?>{
+            'ok': true,
+            'content': '最终正文',
+            'reasoning_content': '最终思考',
+            'tool_calls': const <Object?>[],
+            'message': const <String, Object?>{
+              'role': 'assistant',
+              'content': '最终正文',
+            },
+          },
+        ],
+      );
+      final useCase = GenerateDraftUseCase(
+        projectWorkspacePort: workspacePort,
+        llmGateway: gateway,
+        toolExecutionPort: _FakeToolExecutionPort(),
+        contextAssemblerService: ContextAssemblerService(
+          budgetService: ContextBudgetService(),
+          staticSectionService: ContextStaticSectionService(
+            projectPromptContract: ProjectPromptContract(),
+          ),
+          projectFileSectionService: ContextProjectFileSectionService(),
+        ),
+        projectPromptContract: ProjectPromptContract(),
+      );
+      final progressEvents = <DraftGenerationProgress>[];
+
+      await useCase.execute(
+        project: const ProjectDescriptor(
+          id: 'demo',
+          name: '示例项目',
+          rootPath: 'D:/demo',
+        ),
+        userPrompt: '继续写',
+        modelId: 'test-model',
+        onProgress: progressEvents.add,
+      );
+
+      expect(progressEvents, isNotEmpty);
+      expect(progressEvents.first.draftMarkdown, isNotEmpty);
+      expect(
+        progressEvents.map((event) => event.phase),
+        contains('llm_completed'),
+      );
+    });
   });
 }
 
@@ -235,6 +286,7 @@ class _FakeLlmGateway implements LlmGateway {
     required String modelId,
     List<JsonMap> tools = const <JsonMap>[],
     JsonMap options = const <String, Object?>{},
+    void Function(LlmStreamUpdate update)? onStreamUpdate,
   }) async {
     // 中文注释: 模型网关替身记录本轮用户提示，验证用例是否把上下文正确送入模型层。
     final promptMessage = messages.lastWhere(
@@ -245,8 +297,23 @@ class _FakeLlmGateway implements LlmGateway {
     lastModelId = modelId;
     lastOptions = ValueReaders.deepCopyMap(options);
     if (_scriptedResults.isNotEmpty) {
+      if (onStreamUpdate != null) {
+        onStreamUpdate(
+          const LlmStreamUpdate(
+            content: '流式正文',
+            reasoningContent: '流式思考',
+          ),
+        );
+      }
       return _scriptedResults.removeAt(0);
     }
+    onStreamUpdate?.call(
+      const LlmStreamUpdate(
+        content: '# 模型返回的草稿\n\n这是一个测试草稿。',
+        reasoningContent: '先读取上下文，再给出结果。',
+        isCompleted: true,
+      ),
+    );
     return <String, Object?>{
       'ok': true,
       'content': '# 模型返回的草稿\n\n这是一个测试草稿。',

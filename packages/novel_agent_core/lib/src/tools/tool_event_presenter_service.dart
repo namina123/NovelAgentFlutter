@@ -9,9 +9,13 @@ class ToolEventPresenterService {
       ValueReaders.stringValue(event['status']),
     ).trim();
     final ok = ValueReaders.boolValue(event['ok'], true);
+    final notExecuted = ValueReaders.boolValue(event['not_executed']);
     var text = _cleanText(fallbackText);
     if (_isUnhelpfulText(text)) {
       text = _toolActionText(event, phase, ok);
+    }
+    if (notExecuted) {
+      return _recoverableText(event, text);
     }
     if (phase == 'started' && text.startsWith('准备')) {
       text = text.substring(2).trim();
@@ -45,6 +49,7 @@ class ToolEventPresenterService {
           ? 'finished'
           : 'failed',
       'ok': ValueReaders.boolValue(executedTool['ok'], true),
+      'not_executed': ValueReaders.boolValue(executedTool['not_executed']),
       'name': ValueReaders.stringValue(executedTool['name']),
       'arguments': ValueReaders.mapValue(executedTool['arguments']),
       'result': ValueReaders.mapValue(executedTool['result']),
@@ -298,6 +303,22 @@ class ToolEventPresenterService {
     // 中文注释: 错误原因统一从 result.error 抽取，避免把工具返回结构泄漏到展示层调用方。
     final result = ValueReaders.mapValue(event['result']);
     return ValueReaders.stringValue(result['error']).trim();
+  }
+
+  String _recoverableText(JsonMap event, String text) {
+    // 中文注释: 可自纠正结果不应显示成失败，而应提示“需要补充哪类信息”。
+    final result = ValueReaders.mapValue(event['result']);
+    final suggestedTool = ValueReaders.stringValue(result['suggested_tool']);
+    final rawError = ValueReaders.stringValue(
+      result['error'],
+      ValueReaders.stringValue(event['error']),
+    ).trim();
+    final prefix = suggestedTool.trim().isEmpty ? '需要补充信息' : '需要先$suggestedTool';
+    final clean = (rawError.isNotEmpty ? rawError : text).trim();
+    if (clean.isEmpty) {
+      return prefix;
+    }
+    return '$prefix：$clean';
   }
 
   String _pathTarget(JsonMap result, String fallbackPath) {

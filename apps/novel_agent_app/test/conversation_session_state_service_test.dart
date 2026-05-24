@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import 'package:novel_agent_app/features/workbench/application/services/conversation_session_state_service.dart';
+import 'package:novel_agent_app/features/workbench/application/services/conversation_streaming_state_service.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/conversation_entry_view_data.dart';
 
 void main() {
@@ -114,6 +115,152 @@ void main() {
       expect(next.entries.single.kind, ConversationEntryKind.assistant);
       expect(next.entries.single.detailTitle, '思考');
       expect(next.entries.single.body, isEmpty);
+    });
+
+    test('recoverable tool result does not become error entry', () {
+      // 中文注释: 工具缺少路径这类可自纠正问题不应在界面里显示成红色错误。
+      final service = ConversationSessionStateService();
+      final created = service.createSession(
+        sessionId: 's_recoverable_tool',
+        needsGoalSelection: false,
+      );
+      final result = DraftGenerationResult(
+        project: const ProjectDescriptor(
+          id: 'demo',
+          name: '示例项目',
+          rootPath: 'D:/demo',
+        ),
+        projectInfo: const <String, Object?>{},
+        userPrompt: '智能开局',
+        prompt: 'prompt',
+        modelId: 'test-model',
+        draftMarkdown: '',
+        contextPack: const <String, Object?>{},
+        selectedPaths: const <String>[],
+        executedTools: const <Object?>[
+          <String, Object?>{
+            'id': 'tool_1',
+            'name': 'read_project_file',
+            'ok': false,
+            'not_executed': true,
+            'arguments': <String, Object?>{},
+            'result': <String, Object?>{
+              'ok': false,
+              'not_executed': true,
+              'error': 'read_project_file 缺少 relative_path。',
+              'suggested_tool': 'list_project_files',
+            },
+          },
+        ],
+        writtenPaths: const <String>[],
+        changedPaths: const <String>[],
+        transcriptMessages: const <JsonMap>[],
+        waitingForUserChoice: false,
+        reasoningContent: '',
+        stoppedByToolError: false,
+        toolErrorSummary: '',
+      );
+
+      final next = service.stateWithAssistantResult(created, result);
+      expect(next.entries.single.kind, ConversationEntryKind.tool);
+      expect(next.entries.single.isError, isFalse);
+      expect(next.entries.single.body, contains('list_project_files'));
+    });
+
+    test('pending options fallback to title and prompt aliases', () {
+      // 中文注释: 这里验证 present_user_options 即使只给 title/value，也能正常长出按钮。
+      final service = ConversationSessionStateService();
+      final created = service.createSession(
+        sessionId: 's_pending_alias',
+        needsGoalSelection: false,
+      );
+      final result = DraftGenerationResult(
+        project: const ProjectDescriptor(
+          id: 'demo',
+          name: '示例项目',
+          rootPath: 'D:/demo',
+        ),
+        projectInfo: const <String, Object?>{},
+        userPrompt: '智能开局',
+        prompt: 'prompt',
+        modelId: 'test-model',
+        draftMarkdown: '请先选一个方向。',
+        contextPack: const <String, Object?>{},
+        selectedPaths: const <String>[],
+        executedTools: const <Object?>[
+          <String, Object?>{
+            'id': 'tool_1',
+            'name': 'present_user_options',
+            'ok': true,
+            'arguments': <String, Object?>{},
+            'result': <String, Object?>{
+              'ok': true,
+              'question': '先选一个方向',
+              'options': <Object?>[
+                <String, Object?>{
+                  'id': 'a',
+                  'title': '稳妥开局',
+                  'value': '我选择稳妥开局',
+                  'description': '先把基础盘稳住。',
+                },
+              ],
+              'waiting_for_user_choice': true,
+            },
+          },
+        ],
+        writtenPaths: const <String>[],
+        changedPaths: const <String>[],
+        transcriptMessages: const <JsonMap>[],
+        waitingForUserChoice: true,
+        reasoningContent: '',
+        stoppedByToolError: false,
+        toolErrorSummary: '',
+      );
+
+      final next = service.stateWithAssistantResult(created, result);
+      expect(next.pendingOptions, hasLength(1));
+      expect(next.pendingOptions.first.label, '稳妥开局');
+      expect(next.pendingOptions.first.prompt, '我选择稳妥开局');
+    });
+
+    test('streaming progress updates live assistant and pending tool entries', () {
+      // 中文注释: 这里验证流式过程会把正文、思考和待执行工具即时投影到会话栏。
+      final sessionService = ConversationSessionStateService();
+      final streamingService = ConversationStreamingStateService(
+        sessionStateService: sessionService,
+      );
+      final created = sessionService.createSession(
+        sessionId: 's_streaming',
+        needsGoalSelection: false,
+      );
+      final userState = sessionService.stateWithUserPrompt(created, '继续写');
+
+      final next = streamingService.stateWithProgress(
+        userState,
+        const DraftGenerationProgress(
+          phase: 'llm_streaming',
+          roundIndex: 0,
+          draftMarkdown: '正在出现的正文',
+          reasoningContent: '先看规格',
+          pendingToolCalls: <JsonMap>[
+            <String, Object?>{
+              'id': 'tool_1',
+              'name': 'read_project_file',
+              'arguments': <String, Object?>{
+                'relative_path': 'specs/project_brief.md',
+              },
+            },
+          ],
+        ),
+      );
+
+      expect(next.entries, hasLength(3));
+      expect(next.entries.last.kind, ConversationEntryKind.assistant);
+      expect(next.entries.last.body, contains('正在出现'));
+      expect(
+        next.entries[1].body,
+        contains('读取文件'),
+      );
     });
   });
 }

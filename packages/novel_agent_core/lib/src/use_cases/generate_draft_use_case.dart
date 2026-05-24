@@ -15,6 +15,7 @@ import '../ports/project_workspace_port.dart';
 import '../project/project_descriptor.dart';
 import '../project/project_prompt_contract.dart';
 import '../runtime/draft_generation_result.dart';
+import '../runtime/draft_generation_progress.dart';
 import '../runtime/draft_prompt_builder_service.dart';
 import '../runtime/project_context_file_selection_service.dart';
 import '../runtime/tool_execution_service.dart';
@@ -124,6 +125,9 @@ class GenerateDraftUseCase {
     JsonMap requestOptions = const <String, Object?>{},
     JsonMap contextSettings = const <String, Object?>{},
     JsonMap modelProfile = const <String, Object?>{},
+    String activeDocumentPath = '',
+    String activeDocumentBody = '',
+    void Function(DraftGenerationProgress progress)? onProgress,
   }) async {
     // 中文注释: 这里负责把项目文件、上下文组装和模型调用收束成一次共享草稿生成流程。
     final cleanPrompt = userPrompt.trim();
@@ -165,6 +169,8 @@ class GenerateDraftUseCase {
       'project': projectInfo,
       'project_files': entries,
       'project_file_contents': fileContents,
+      'current_file_path': activeDocumentPath,
+      'current_file_body': activeDocumentBody,
       'user_prompt': cleanPrompt,
       'session_context': sessionContext,
       'intent': intent,
@@ -241,6 +247,18 @@ class GenerateDraftUseCase {
         modelId: modelId,
         tools: toolSchemas,
         options: llmRequestOptions,
+        onStreamUpdate: (update) {
+          onProgress?.call(
+            DraftGenerationProgress(
+              phase: 'llm_streaming',
+              roundIndex: roundIndex,
+              draftMarkdown: update.content,
+              reasoningContent: update.reasoningContent,
+              pendingToolCalls: update.toolCalls,
+              executedTools: List<Object?>.unmodifiable(executedTools),
+            ),
+          );
+        },
       );
       final roundReasoning = ValueReaders.stringValue(
         llmResult['reasoning_content'],
@@ -266,6 +284,19 @@ class GenerateDraftUseCase {
       final action = ValueReaders.stringValue(contract['action']);
       if (action == 'execute_tools') {
         final normalizedToolCalls = ValueReaders.objectList(contract['tool_calls']);
+        onProgress?.call(
+          DraftGenerationProgress(
+            phase: 'tool_calls_ready',
+            roundIndex: roundIndex,
+            draftMarkdown: finalContent,
+            reasoningContent: reasoningContent,
+            pendingToolCalls: normalizedToolCalls
+                .map(ValueReaders.mapValue)
+                .map(ValueReaders.deepCopyMap)
+                .toList(growable: false),
+            executedTools: List<Object?>.unmodifiable(executedTools),
+          ),
+        );
         final toolFingerprint = _toolRoundFingerprint(normalizedToolCalls);
         if (toolFingerprint.isNotEmpty &&
             toolFingerprint == previousToolFingerprint &&
@@ -317,6 +348,15 @@ class GenerateDraftUseCase {
         if (toolRound.stoppedByToolError && toolErrorSummary.isEmpty) {
           toolErrorSummary = _toolErrorSummary(toolRound.executedTools);
         }
+        onProgress?.call(
+          DraftGenerationProgress(
+            phase: 'tool_round_completed',
+            roundIndex: roundIndex,
+            draftMarkdown: finalContent,
+            reasoningContent: reasoningContent,
+            executedTools: List<Object?>.unmodifiable(executedTools),
+          ),
+        );
         if (stoppedByToolError || waitingForUserChoice) {
           break;
         }
@@ -343,6 +383,15 @@ class GenerateDraftUseCase {
         }
       }
       finalContent = content;
+      onProgress?.call(
+        DraftGenerationProgress(
+          phase: 'llm_completed',
+          roundIndex: roundIndex,
+          draftMarkdown: finalContent,
+          reasoningContent: reasoningContent,
+          executedTools: List<Object?>.unmodifiable(executedTools),
+        ),
+      );
       break;
     }
     final finalContentPolicy = _agentToolPolicyService.finalContentPolicy(

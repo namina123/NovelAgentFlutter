@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
+import 'package:novel_agent_core/novel_agent_core.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -30,14 +31,19 @@ void main() {
           baseUrl: 'http://127.0.0.1:${server.port}',
           apiKey: '',
         );
+        final updates = <LlmStreamUpdate>[];
         final result = await gateway.requestChat(
           messages: const <Map<String, Object?>>[
             <String, Object?>{'role': 'user', 'content': 'hi'},
           ],
           modelId: 'demo-model',
           options: const <String, Object?>{'stream': true},
+          onStreamUpdate: updates.add,
         );
         expect(result['content'], '你好，世界');
+        expect(updates, isNotEmpty);
+        expect(updates.first.content, '你好');
+        expect(updates.last.isCompleted, isTrue);
       } finally {
         await server.close(force: true);
       }

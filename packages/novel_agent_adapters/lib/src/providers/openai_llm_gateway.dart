@@ -52,6 +52,7 @@ class OpenAiLlmGateway implements LlmGateway {
     required String modelId,
     List<JsonMap> tools = const <JsonMap>[],
     JsonMap options = const <String, Object?>{},
+    void Function(LlmStreamUpdate update)? onStreamUpdate,
   }) async {
     // 中文注释: 这里负责 OpenAI 兼容多轮消息和工具调用协议的 HTTP 往返，不承接项目上下文规则。
     final requestUri = Uri.parse('$_baseUrl/chat/completions');
@@ -67,6 +68,13 @@ class OpenAiLlmGateway implements LlmGateway {
         jsonEncode(_requestPayload(messages, modelId, tools, options)),
       );
       final response = await request.close().timeout(_timeout);
+      if (_responseMayStream(response, options)) {
+        return await _streamingResponseResult(
+          response,
+          requestUri,
+          onStreamUpdate: onStreamUpdate,
+        );
+      }
       final body = await response.transform(utf8.decoder).join();
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw HttpException(
@@ -75,7 +83,7 @@ class OpenAiLlmGateway implements LlmGateway {
         );
       }
       if (_looksLikeEventStream(body)) {
-        return _eventStreamResult(body);
+        return _eventStreamResult(body, onStreamUpdate: onStreamUpdate);
       }
       return _jsonResult(body);
     } finally {
@@ -311,7 +319,161 @@ class OpenAiLlmGateway implements LlmGateway {
     return trimmed.startsWith('data:');
   }
 
-  JsonMap _eventStreamResult(String body) {
+  bool _responseMayStream(HttpClientResponse response, JsonMap options) {
+    // 中文注释: 对显式 stream 请求和 event-stream content-type 先走增量消费，避免 UI 只能等整包返回。
+    final mimeType = response.headers.contentType?.mimeType ?? '';
+    if (mimeType == 'text/event-stream') {
+      return true;
+    }
+    return options['stream'] == true;
+  }
+
+  Future<JsonMap> _streamingResponseResult(
+    HttpClientResponse response,
+    Uri requestUri, {
+    void Function(LlmStreamUpdate update)? onStreamUpdate,
+  }) async {
+    // 中文注释: 这里按字符流实时消费 SSE，既保留最终统一结果，也把中间增量及时吐给上层 UI。
+    final rawBody = StringBuffer();
+    final contentBuffer = StringBuffer();
+    final reasoningBuffer = StringBuffer();
+    final toolCallBuilders = <String, _ToolCallBuilder>{};
+    JsonMap lastChunk = const <String, Object?>{};
+    var sawStreamEvent = false;
+    var reachedDone = false;
+    final parser = _SseEventTextParser();
+    await for (final chunk in response.transform(utf8.decoder)) {
+      rawBody.write(chunk);
+      for (final eventData in parser.addChunk(chunk)) {
+        sawStreamEvent = true;
+        if (eventData == '[DONE]') {
+          reachedDone = true;
+          continue;
+        }
+        final decoded = jsonDecode(eventData);
+        final root = _mapValue(decoded);
+        lastChunk = root;
+        final choices = root['choices'];
+        if (choices is! List || choices.isEmpty) {
+          continue;
+        }
+        final firstChoice = _mapValue(choices.first);
+        final delta = _mapValue(firstChoice['delta']);
+        final contentText = _messageText(delta['content']);
+        if (contentText.isNotEmpty) {
+          contentBuffer.write(contentText);
+        }
+        final reasoningText = _messageText(
+          delta['reasoning_content'] ?? firstChoice['reasoning_content'],
+        );
+        if (reasoningText.isNotEmpty) {
+          reasoningBuffer.write(reasoningText);
+        }
+        _mergeToolCallDeltas(toolCallBuilders, delta['tool_calls']);
+        if (onStreamUpdate != null &&
+            (contentText.isNotEmpty ||
+                reasoningText.isNotEmpty ||
+                delta['tool_calls'] is List)) {
+          onStreamUpdate(
+            LlmStreamUpdate(
+              contentDelta: contentText,
+              content: contentBuffer.toString(),
+              reasoningDelta: reasoningText,
+              reasoningContent: reasoningBuffer.toString(),
+              toolCalls: toolCallBuilders.values
+                  .map((builder) => builder.build(_mapValue))
+                  .toList(growable: false),
+            ),
+          );
+        }
+      }
+    }
+    for (final eventData in parser.close()) {
+      sawStreamEvent = true;
+      if (eventData == '[DONE]') {
+        reachedDone = true;
+        continue;
+      }
+      final decoded = jsonDecode(eventData);
+      final root = _mapValue(decoded);
+      lastChunk = root;
+      final choices = root['choices'];
+      if (choices is! List || choices.isEmpty) {
+        continue;
+      }
+      final firstChoice = _mapValue(choices.first);
+      final delta = _mapValue(firstChoice['delta']);
+      final contentText = _messageText(delta['content']);
+      if (contentText.isNotEmpty) {
+        contentBuffer.write(contentText);
+      }
+      final reasoningText = _messageText(
+        delta['reasoning_content'] ?? firstChoice['reasoning_content'],
+      );
+      if (reasoningText.isNotEmpty) {
+        reasoningBuffer.write(reasoningText);
+      }
+      _mergeToolCallDeltas(toolCallBuilders, delta['tool_calls']);
+      if (onStreamUpdate != null &&
+          (contentText.isNotEmpty ||
+              reasoningText.isNotEmpty ||
+              delta['tool_calls'] is List)) {
+        onStreamUpdate(
+          LlmStreamUpdate(
+            contentDelta: contentText,
+            content: contentBuffer.toString(),
+            reasoningDelta: reasoningText,
+            reasoningContent: reasoningBuffer.toString(),
+            toolCalls: toolCallBuilders.values
+                .map((builder) => builder.build(_mapValue))
+                .toList(growable: false),
+          ),
+        );
+      }
+    }
+    final body = rawBody.toString();
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw HttpException(
+        '模型请求失败(${response.statusCode}): $body',
+        uri: requestUri,
+      );
+    }
+    if (!sawStreamEvent && !_looksLikeEventStream(body)) {
+      return _jsonResult(body);
+    }
+    final toolCalls = toolCallBuilders.values
+        .map((builder) => builder.build(_mapValue))
+        .toList(growable: false);
+    final content = contentBuffer.toString();
+    final reasoning = reasoningBuffer.toString();
+    if (onStreamUpdate != null && (reachedDone || sawStreamEvent)) {
+      onStreamUpdate(
+        LlmStreamUpdate(
+          content: content,
+          reasoningContent: reasoning,
+          toolCalls: toolCalls,
+          isCompleted: true,
+        ),
+      );
+    }
+    return <String, Object?>{
+      'ok': true,
+      'content': content,
+      'reasoning_content': reasoning,
+      'message': <String, Object?>{
+        'role': 'assistant',
+        'content': content,
+        'tool_calls': toolCalls,
+      },
+      'tool_calls': toolCalls,
+      'raw_response': lastChunk,
+    };
+  }
+
+  JsonMap _eventStreamResult(
+    String body, {
+    void Function(LlmStreamUpdate update)? onStreamUpdate,
+  }) {
     // 中文注释: SSE 响应在这里聚合为与普通 JSON 一致的返回结构，避免上层再分流式和非流式两套协议。
     final contentBuffer = StringBuffer();
     final reasoningBuffer = StringBuffer();
@@ -341,12 +503,36 @@ class OpenAiLlmGateway implements LlmGateway {
         reasoningBuffer.write(reasoningText);
       }
       _mergeToolCallDeltas(toolCallBuilders, delta['tool_calls']);
+      if (onStreamUpdate != null &&
+          (contentText.isNotEmpty ||
+              reasoningText.isNotEmpty ||
+              delta['tool_calls'] is List)) {
+        onStreamUpdate(
+          LlmStreamUpdate(
+            contentDelta: contentText,
+            content: contentBuffer.toString(),
+            reasoningDelta: reasoningText,
+            reasoningContent: reasoningBuffer.toString(),
+            toolCalls: toolCallBuilders.values
+                .map((builder) => builder.build(_mapValue))
+                .toList(growable: false),
+          ),
+        );
+      }
     }
     final toolCalls = toolCallBuilders.values
         .map((builder) => builder.build(_mapValue))
         .toList(growable: false);
     final content = contentBuffer.toString();
     final reasoning = reasoningBuffer.toString();
+    onStreamUpdate?.call(
+      LlmStreamUpdate(
+        content: content,
+        reasoningContent: reasoning,
+        toolCalls: toolCalls,
+        isCompleted: true,
+      ),
+    );
     return <String, Object?>{
       'ok': true,
       'content': content,
@@ -460,5 +646,59 @@ class _ToolCallBuilder {
       'raw_arguments': rawArguments,
       'status': 'pending',
     };
+  }
+}
+
+class _SseEventTextParser {
+  final StringBuffer _eventBuffer = StringBuffer();
+  String _lineBuffer = '';
+
+  List<String> addChunk(String chunk) {
+    final events = <String>[];
+    _lineBuffer += chunk;
+    while (true) {
+      final lineBreakIndex = _lineBuffer.indexOf('\n');
+      if (lineBreakIndex < 0) {
+        break;
+      }
+      final rawLine = _lineBuffer.substring(0, lineBreakIndex);
+      _lineBuffer = _lineBuffer.substring(lineBreakIndex + 1);
+      _consumeLine(rawLine, events);
+    }
+    return events;
+  }
+
+  List<String> close() {
+    final events = <String>[];
+    if (_lineBuffer.isNotEmpty) {
+      _consumeLine(_lineBuffer, events);
+      _lineBuffer = '';
+    }
+    if (_eventBuffer.isNotEmpty) {
+      events.add(_eventBuffer.toString());
+      _eventBuffer.clear();
+    }
+    return events;
+  }
+
+  void _consumeLine(String line, List<String> events) {
+    final normalized = line.endsWith('\r')
+        ? line.substring(0, line.length - 1)
+        : line;
+    if (normalized.isEmpty) {
+      if (_eventBuffer.isNotEmpty) {
+        events.add(_eventBuffer.toString());
+        _eventBuffer.clear();
+      }
+      return;
+    }
+    if (!normalized.startsWith('data:')) {
+      return;
+    }
+    final payload = normalized.substring(5).trimLeft();
+    if (_eventBuffer.isNotEmpty) {
+      _eventBuffer.write('\n');
+    }
+    _eventBuffer.write(payload);
   }
 }

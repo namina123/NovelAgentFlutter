@@ -269,10 +269,16 @@ class ProjectToolDispatcher implements ToolExecutionPort {
 
   JsonMap _presentUserOptions(JsonMap arguments) {
     // 中文注释: 选项工具是纯状态结果，不需要宿主 IO，但要告诉主循环当前应该等待用户选择。
-    final options = ValueReaders.objectList(arguments['options'])
-        .map(ValueReaders.mapValue)
-        .where((entry) => entry.isNotEmpty)
-        .toList(growable: false);
+    final options = _normalizedUserOptions(arguments);
+    if (options.isEmpty) {
+      return _resultFactory.notExecuted(
+        'present_user_options 至少需要 1 个可点击选项。请提供 options/choices/items 数组，并为每项补齐 title 或 label。',
+        data: <String, Object?>{
+          'question': ValueReaders.stringValue(arguments['question']),
+          'suggested_tool': 'present_user_options',
+        },
+      );
+    }
     return _resultFactory.success(
       '已生成用户选项：${options.length} 个',
       data: <String, Object?>{
@@ -281,6 +287,59 @@ class ProjectToolDispatcher implements ToolExecutionPort {
         'waiting_for_user_choice': true,
       },
     );
+  }
+
+  List<JsonMap> _normalizedUserOptions(JsonMap arguments) {
+    // 中文注释: 这里兼容 options/choices/items 等常见别名，避免模型轻微字段漂移就把整组按钮吞掉。
+    final rawOptions = ValueReaders.objectList(
+      arguments['options'] ??
+          arguments['choices'] ??
+          arguments['items'] ??
+          arguments['buttons'],
+    );
+    final result = <JsonMap>[];
+    for (final rawEntry in rawOptions) {
+      final entry = ValueReaders.mapValue(rawEntry);
+      if (entry.isEmpty) {
+        continue;
+      }
+      final label = ValueReaders.stringValue(
+        entry['label'],
+        ValueReaders.stringValue(
+          entry['title'],
+          ValueReaders.stringValue(entry['name'], '选项'),
+        ),
+      ).trim();
+      final description = ValueReaders.stringValue(
+        entry['description'],
+        ValueReaders.stringValue(
+          entry['detail'],
+          ValueReaders.stringValue(entry['summary']),
+        ),
+      ).trim();
+      final prompt = ValueReaders.stringValue(
+        entry['prompt'],
+        ValueReaders.stringValue(
+          entry['value'],
+          ValueReaders.stringValue(entry['title'], label),
+        ),
+      ).trim();
+      final id = ValueReaders.stringValue(
+        entry['id'],
+        label.isEmpty ? 'option_${result.length + 1}' : label,
+      ).trim();
+      if (label.isEmpty && prompt.isEmpty) {
+        continue;
+      }
+      result.add(<String, Object?>{
+        'id': id.isEmpty ? 'option_${result.length + 1}' : id,
+        'label': label.isEmpty ? prompt : label,
+        'title': label.isEmpty ? prompt : label,
+        'description': description,
+        'prompt': prompt.isEmpty ? label : prompt,
+      });
+    }
+    return result;
   }
 
   JsonMap _setAgentTasks(JsonMap arguments) {

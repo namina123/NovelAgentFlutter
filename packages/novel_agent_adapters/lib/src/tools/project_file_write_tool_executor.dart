@@ -77,7 +77,9 @@ class ProjectFileWriteToolExecutor {
       ValueReaders.stringValue(arguments['relative_path']),
     );
     if (relativePath.isEmpty) {
-      return _resultFactory.error('relative_path is required.');
+      return _resultFactory.notExecuted(
+        'create_project_entry 缺少 relative_path。请先确定目标英文相对路径后重试。',
+      );
     }
     final isFolder =
         ValueReaders.boolValue(arguments['is_folder']) ||
@@ -157,8 +159,8 @@ class ProjectFileWriteToolExecutor {
     );
     if (!_pathPolicy.isSafeFilePath(source) ||
         !_pathPolicy.isSafeFilePath(target)) {
-      return _resultFactory.error(
-        'Unsafe source or target path.',
+      return _resultFactory.notExecuted(
+        'move_project_file 的源路径或目标路径无效。请使用项目内英文 relative_path。',
         data: <String, Object?>{
           'relative_path': source,
           'target_relative_path': target,
@@ -166,8 +168,8 @@ class ProjectFileWriteToolExecutor {
       );
     }
     if (!await _hostPort.entryExists(project.rootPath, source)) {
-      return _resultFactory.error(
-        'Source file not found.',
+      return _resultFactory.notExecuted(
+        'move_project_file 未找到源文件。请先调用 list_project_files 确认英文 relative_path。',
         data: <String, Object?>{'relative_path': source},
       );
     }
@@ -204,8 +206,8 @@ class ProjectFileWriteToolExecutor {
       ValueReaders.stringValue(arguments['new_name']),
     );
     if (source.isEmpty || newName.isEmpty) {
-      return _resultFactory.error(
-        'relative_path and new_name are required.',
+      return _resultFactory.notExecuted(
+        'rename_project_file 缺少 relative_path 或 new_name。',
         data: <String, Object?>{'relative_path': source},
       );
     }
@@ -229,14 +231,14 @@ class ProjectFileWriteToolExecutor {
       ValueReaders.stringValue(arguments['relative_path']),
     );
     if (!_pathPolicy.isSafeFilePath(relativePath)) {
-      return _resultFactory.error(
-        'Unsafe or empty relative_path.',
+      return _resultFactory.notExecuted(
+        'delete_project_file 的 relative_path 无效。请使用项目内英文 relative_path。',
         data: <String, Object?>{'relative_path': relativePath},
       );
     }
     if (!await _hostPort.entryExists(project.rootPath, relativePath)) {
-      return _resultFactory.error(
-        'File not found.',
+      return _resultFactory.notExecuted(
+        'delete_project_file 未找到目标文件。请先调用 list_project_files 确认英文 relative_path。',
         data: <String, Object?>{'relative_path': relativePath},
       );
     }
@@ -269,8 +271,8 @@ class ProjectFileWriteToolExecutor {
     );
     if (!_pathPolicy.isSafeFilePath(relativePath) ||
         relativePath.startsWith('backups/')) {
-      return _resultFactory.error(
-        'Unsafe or empty relative_path.',
+      return _resultFactory.notExecuted(
+        'create_backup 的 relative_path 无效。请使用项目内英文 relative_path。',
         data: <String, Object?>{'relative_path': relativePath},
       );
     }
@@ -279,8 +281,8 @@ class ProjectFileWriteToolExecutor {
       relativePath,
     );
     if (content == null) {
-      return _resultFactory.error(
-        'File not found.',
+      return _resultFactory.notExecuted(
+        'create_backup 未找到目标文件。请先调用 list_project_files 确认英文 relative_path。',
         data: <String, Object?>{'relative_path': relativePath},
       );
     }
@@ -339,8 +341,8 @@ class ProjectFileWriteToolExecutor {
     );
     if (!_pathPolicy.isSafeFilePath(backupPath) ||
         !backupPath.startsWith('backups/')) {
-      return _resultFactory.error(
-        'backup_path must be under backups/.',
+      return _resultFactory.notExecuted(
+        'restore_backup 的 backup_path 无效，必须是 backups/ 下的英文相对路径。',
         data: <String, Object?>{'backup_path': backupPath},
       );
     }
@@ -349,8 +351,8 @@ class ProjectFileWriteToolExecutor {
       backupPath,
     );
     if (backupContent == null) {
-      return _resultFactory.error(
-        'Backup file not found.',
+      return _resultFactory.notExecuted(
+        'restore_backup 未找到备份文件。请先确认 backups/ 下的英文相对路径。',
         data: <String, Object?>{'backup_path': backupPath},
       );
     }
@@ -373,8 +375,8 @@ class ProjectFileWriteToolExecutor {
     }
     if (!_pathPolicy.isSafeFilePath(targetPath) ||
         targetPath.startsWith('backups/')) {
-      return _resultFactory.error(
-        'Unsafe restore target.',
+      return _resultFactory.notExecuted(
+        'restore_backup 的恢复目标无效。请使用项目内英文相对路径。',
         data: <String, Object?>{
           'backup_path': backupPath,
           'relative_path': targetPath,

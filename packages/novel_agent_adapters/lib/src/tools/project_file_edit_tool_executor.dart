@@ -31,8 +31,8 @@ class ProjectFileEditToolExecutor {
       ValueReaders.stringValue(arguments['relative_path']),
     );
     if (!_pathPolicy.isSafeFilePath(relativePath)) {
-      return _resultFactory.error(
-        'Unsafe or empty relative_path.',
+      return _resultFactory.notExecuted(
+        'edit_project_file 的 relative_path 无效。请使用项目内英文 relative_path。',
         data: <String, Object?>{'relative_path': relativePath},
       );
     }
@@ -41,8 +41,8 @@ class ProjectFileEditToolExecutor {
       relativePath,
     );
     if (original == null) {
-      return _resultFactory.error(
-        'File not found.',
+      return _resultFactory.notExecuted(
+        'edit_project_file 未找到目标文件。请先调用 list_project_files 确认英文 relative_path。',
         data: <String, Object?>{'relative_path': relativePath},
       );
     }
@@ -85,8 +85,8 @@ class ProjectFileEditToolExecutor {
       arguments['operation'],
     ).trim().toLowerCase();
     if (!_pathPolicy.isSafeFilePath(source)) {
-      return _resultFactory.error(
-        'Unsafe or empty relative_path.',
+      return _resultFactory.notExecuted(
+        'manipulate_project_file_lines 的 relative_path 无效。请使用项目内英文 relative_path。',
         data: <String, Object?>{'relative_path': source},
       );
     }
@@ -95,8 +95,8 @@ class ProjectFileEditToolExecutor {
       source,
     );
     if (sourceContent == null) {
-      return _resultFactory.error(
-        'Source file not found.',
+      return _resultFactory.notExecuted(
+        'manipulate_project_file_lines 未找到源文件。请先调用 list_project_files 确认英文 relative_path。',
         data: <String, Object?>{'relative_path': source},
       );
     }
@@ -106,8 +106,8 @@ class ProjectFileEditToolExecutor {
     var targetContent = '';
     if ((operation == 'copy' || operation == 'cut') && target.isNotEmpty) {
       if (!_pathPolicy.isSafeFilePath(target)) {
-        return _resultFactory.error(
-          'Unsafe target_relative_path.',
+        return _resultFactory.notExecuted(
+          'manipulate_project_file_lines 的 target_relative_path 无效。请使用项目内英文 relative_path。',
           data: <String, Object?>{'target_relative_path': target},
         );
       }

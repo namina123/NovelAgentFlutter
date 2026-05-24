@@ -7,6 +7,7 @@ void main() {
     final policyService = AgentToolPolicyService();
     final responseService = AgentResponsePackageService();
     final subAgentResultService = SubAgentResultPackageService();
+    final toolMessageService = AgentToolMessageService();
 
     test('builds tool execution contract and final content policy', () {
       // 中文注释: 这里验证工具轮合同会驱动宿主继续执行，而计划型空回复会触发统一兜底提示。
@@ -70,6 +71,41 @@ void main() {
         subResult['sub_session_tag'],
         '<sub_session_id>sub_1</sub_session_id>',
       );
+    });
+
+    test('serializes assistant tool call message back to openai compatible shape', () {
+      // 中文注释: 网关返回给 core 的 tool_calls 是归一化结构，回传下一轮请求前必须重新变回 OpenAI 兼容格式。
+      final message = toolMessageService.assistantToolCallMessage(
+        <String, Object?>{
+          'reasoning_content': '先列目录',
+          'message': <String, Object?>{
+            'role': 'assistant',
+            'content': '',
+            'tool_calls': <Object?>[
+              <String, Object?>{
+                'id': 'call_1',
+                'name': 'list_project_files',
+                'arguments': <String, Object?>{'relative_path': 'outline'},
+              },
+            ],
+          },
+        },
+        <Object?>[
+          <String, Object?>{
+            'id': 'call_1',
+            'name': 'list_project_files',
+            'arguments': <String, Object?>{'relative_path': 'outline'},
+          },
+        ],
+      );
+
+      final toolCalls = ValueReaders.objectList(message['tool_calls']);
+      final firstCall = ValueReaders.mapValue(toolCalls.first);
+      final functionData = ValueReaders.mapValue(firstCall['function']);
+      expect(firstCall['type'], 'function');
+      expect(functionData['name'], 'list_project_files');
+      expect(functionData['arguments'], '{"relative_path":"outline"}');
+      expect(message['reasoning_content'], '先列目录');
     });
   });
 }

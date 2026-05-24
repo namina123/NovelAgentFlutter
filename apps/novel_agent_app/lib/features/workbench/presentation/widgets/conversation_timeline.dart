@@ -21,7 +21,8 @@ class ConversationTimeline extends StatelessWidget {
     if (entries.isEmpty && !isGenerating) {
       return const SizedBox.shrink();
     }
-    final itemCount = entries.length + (isGenerating ? 1 : 0);
+    final showGeneratingPlaceholder = isGenerating && entries.isEmpty;
+    final itemCount = entries.length + (showGeneratingPlaceholder ? 1 : 0);
     return DecoratedBox(
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.64),

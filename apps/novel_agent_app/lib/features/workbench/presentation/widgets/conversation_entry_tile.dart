@@ -203,53 +203,53 @@ class _ToolConversationEntryTile extends StatelessWidget {
   Widget build(BuildContext context) {
     // 中文注释: 工具条目刻意做轻，作为助手回合中间的执行痕迹，而不是与正文争抢视觉主位。
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 1),
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 340),
-          child: Column(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    palette.icon,
-                    size: 12,
-                    color: entry.isError
-                        ? const Color(0xFFB14A3C)
-                        : palette.foreground,
-                  ),
-                  const SizedBox(width: 6),
-                  Flexible(
-                    child: Text(
-                      entry.title,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: entry.isError
-                            ? const Color(0xFFB14A3C)
-                            : palette.foreground,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
+              Icon(
+                palette.icon,
+                size: 12,
+                color: entry.isError
+                    ? const Color(0xFFB14A3C)
+                    : palette.foreground,
               ),
-              if (entry.body.trim().isNotEmpty) ...[
-                const SizedBox(height: 3),
-                Text(
-                  entry.body,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: entry.isError
-                        ? const Color(0xFFA4483B)
-                        : AppPalette.mutedText,
-                    fontSize: 10,
-                    height: 1.35,
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: entry.title,
+                        style: TextStyle(
+                          color: entry.isError
+                              ? const Color(0xFFB14A3C)
+                              : palette.foreground,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if (entry.body.trim().isNotEmpty)
+                        TextSpan(
+                          text: ' · ${entry.body.trim()}',
+                          style: TextStyle(
+                            color: entry.isError
+                                ? const Color(0xFFA4483B)
+                                : AppPalette.mutedText,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                    ],
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
                 ),
-              ],
+              ),
             ],
           ),
         ),

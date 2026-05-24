@@ -32,6 +32,7 @@ import '../../features/workbench/application/models/conversation_session_state.d
 import '../../features/workbench/application/models/open_document_state.dart';
 import '../../features/workbench/application/models/workbench_primary_action_plan.dart';
 import '../../features/workbench/application/services/conversation_session_state_service.dart';
+import '../../features/workbench/application/services/conversation_streaming_state_service.dart';
 import '../../features/workbench/application/services/conversation_guide_view_data_service.dart';
 import '../../features/workbench/application/services/project_launcher_view_data_service.dart';
 import '../../features/workbench/application/services/workbench_primary_action_service.dart';
@@ -104,6 +105,7 @@ class AppShellController extends ChangeNotifier
     required ProjectReviewReportService reviewReportService,
     required ProjectPromptTemplateService promptTemplateService,
     ConversationSessionStateService? conversationSessionStateService,
+    ConversationStreamingStateService? conversationStreamingStateService,
     ConversationGuideViewDataService? conversationGuideViewDataService,
     ConversationUserVisibleTextService? conversationUserVisibleTextService,
     ProjectLauncherViewDataService? projectLauncherViewDataService,
@@ -154,6 +156,13 @@ class AppShellController extends ChangeNotifier
        _promptTemplateService = promptTemplateService,
        _conversationSessionStateService =
            conversationSessionStateService ?? ConversationSessionStateService(),
+       _conversationStreamingStateService =
+           conversationStreamingStateService ??
+           ConversationStreamingStateService(
+             sessionStateService:
+                 conversationSessionStateService ??
+                 ConversationSessionStateService(),
+           ),
        _conversationGuideViewDataService =
            conversationGuideViewDataService ??
            ConversationGuideViewDataService(),
@@ -227,6 +236,7 @@ class AppShellController extends ChangeNotifier
   final ProjectReviewReportService _reviewReportService;
   final ProjectPromptTemplateService _promptTemplateService;
   final ConversationSessionStateService _conversationSessionStateService;
+  final ConversationStreamingStateService _conversationStreamingStateService;
   final ConversationGuideViewDataService _conversationGuideViewDataService;
   final ConversationUserVisibleTextService _conversationUserVisibleTextService;
   final ProjectLauncherViewDataService _projectLauncherViewDataService;
@@ -977,6 +987,26 @@ class AppShellController extends ChangeNotifier
           userPromptState,
           excludeLatestUserContent: cleanText,
         );
+    void handleProgress(DraftGenerationProgress progress) {
+      final streamingState = _conversationStreamingStateService
+          .stateWithProgress(userPromptState, progress);
+      _replaceConversationSession(streamingState, activate: true);
+      _updateWorkbench(
+        _withConversationState(
+          _viewModel.workbench.copyWith(
+            isGenerating: true,
+            generationStatus: _streamingGenerationStatus(provider, progress),
+            toolCoreStatus: progress.pendingToolCalls.isNotEmpty
+                ? '正在调用工具'
+                : '',
+          ),
+          contextSummaryOverride: _conversationSummary(
+            streamingState,
+            fallback: '正在接收模型输出',
+          ),
+        ),
+      );
+    }
     try {
       final useCase = _generateDraftUseCaseFactory(
         provider,
@@ -991,6 +1021,9 @@ class AppShellController extends ChangeNotifier
         requestOptions: _mapValue(executionProfile['request_options']),
         contextSettings: contextStrategySettings,
         modelProfile: runtimeProfile,
+        activeDocumentPath: _viewModel.workbench.activeDocumentPath,
+        activeDocumentBody: _activeOpenDocument()?.content ?? '',
+        onProgress: handleProgress,
       );
       final assistantState = _conversationSessionStateService
           .stateWithAssistantResult(
@@ -4922,6 +4955,21 @@ class AppShellController extends ChangeNotifier
       return '处理完成，项目文件已更新。';
     }
     return '本轮处理完成。';
+  }
+
+  String _streamingGenerationStatus(
+    ProviderEndpointSettings provider,
+    DraftGenerationProgress progress,
+  ) {
+    // 中文注释: 流式阶段状态只描述当前进度，不提前承诺最终结果，避免把中间态说成已经完成。
+    if (progress.pendingToolCalls.isNotEmpty) {
+      return '正在通过 ${provider.title} 组织工具调用...';
+    }
+    if (progress.executedTools.isNotEmpty &&
+        progress.draftMarkdown.trim().isEmpty) {
+      return '正在通过 ${provider.title} 处理工具结果...';
+    }
+    return '正在通过 ${provider.title} 接收流式内容...';
   }
 
   Future<String> _resolvedDocumentBody({

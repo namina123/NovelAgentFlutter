@@ -1,4 +1,5 @@
 import '../common/json_types.dart';
+import 'llm_stream_update.dart';
 
 abstract class LlmGateway {
   Future<JsonMap> requestChat({
@@ -6,6 +7,7 @@ abstract class LlmGateway {
     required String modelId,
     List<JsonMap> tools = const <JsonMap>[],
     JsonMap options = const <String, Object?>{},
+    void Function(LlmStreamUpdate update)? onStreamUpdate,
   });
 
   Future<String> requestText({

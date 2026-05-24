@@ -296,7 +296,9 @@ class ConversationSessionStateService {
             kind: ConversationEntryKind.tool,
             title: ValueReaders.stringValue(entry['name'], '工具'),
             body: _toolEventPresenterService.textForExecutedTool(entry),
-            isError: !ValueReaders.boolValue(entry['ok'], true),
+            isError:
+                !ValueReaders.boolValue(entry['ok'], true) &&
+                !ValueReaders.boolValue(entry['not_executed']),
           ),
         )
         .toList(growable: false);
@@ -306,24 +308,14 @@ class ConversationSessionStateService {
     DraftGenerationResult result,
   ) {
     // 中文注释: 即使正文为空，只要本轮有思考内容也保留助手条目，避免工具回合把思考信息直接吞掉。
-    final content = result.draftMarkdown.trim();
-    final reasoning = result.reasoningContent.trim();
-    if (content.isEmpty && reasoning.isEmpty) {
+    final entry = assistantEntryFromContent(
+      content: result.draftMarkdown,
+      reasoning: result.reasoningContent,
+    );
+    if (entry == null) {
       return const <ConversationEntryViewData>[];
     }
-    return <ConversationEntryViewData>[
-      ConversationEntryViewData(
-        id: 'assistant_${DateTime.now().microsecondsSinceEpoch}',
-        kind: ConversationEntryKind.assistant,
-        title: '综合创作智能体',
-        body: content,
-        isError: false,
-        detailTitle: reasoning.isEmpty ? '' : '思考',
-        detailSummary: _reasoningSummary(reasoning),
-        detailBody: reasoning,
-        detailExpandedByDefault: false,
-      ),
-    ];
+    return <ConversationEntryViewData>[entry];
   }
 
   String _reasoningSummary(String reasoning) {
@@ -342,6 +334,40 @@ class ConversationSessionStateService {
     return '${singleLine.substring(0, maxChars)}...';
   }
 
+  List<ConversationEntryViewData> toolEntriesFromExecutedTools(
+    List<Object?> executedTools,
+  ) {
+    // 中文注释: 已执行工具的时间线投影对最终结果和流式过程复用同一规则，避免两套展示口径。
+    return _toolEntriesFrom(executedTools);
+  }
+
+  ConversationEntryViewData? assistantEntryFromContent({
+    required String content,
+    required String reasoning,
+    String entryId = '',
+    String title = '综合创作智能体',
+  }) {
+    // 中文注释: 助手正文和思考的展示骨架抽成公共入口，方便流式过程和最终结果共享。
+    final trimmedContent = content.trim();
+    final trimmedReasoning = reasoning.trim();
+    if (trimmedContent.isEmpty && trimmedReasoning.isEmpty) {
+      return null;
+    }
+    return ConversationEntryViewData(
+      id: entryId.isEmpty
+          ? 'assistant_${DateTime.now().microsecondsSinceEpoch}'
+          : entryId,
+      kind: ConversationEntryKind.assistant,
+      title: title,
+      body: trimmedContent,
+      isError: false,
+      detailTitle: trimmedReasoning.isEmpty ? '' : '思考',
+      detailSummary: _reasoningSummary(trimmedReasoning),
+      detailBody: trimmedReasoning,
+      detailExpandedByDefault: false,
+    );
+  }
+
   List<UserOptionViewData> _pendingOptionsFrom(List<Object?> executedTools) {
     // 中文注释: 待选项只从 present_user_options 工具结果提取，避免普通列表误显示成点击决策。
     for (final rawTool in executedTools.reversed) {
@@ -356,9 +382,30 @@ class ConversationSessionStateService {
           .where((entry) => entry.isNotEmpty)
           .map(
             (entry) => UserOptionViewData(
-              label: ValueReaders.stringValue(entry['label'], '选项'),
-              description: ValueReaders.stringValue(entry['description']),
-              prompt: ValueReaders.stringValue(entry['prompt']),
+              label: ValueReaders.stringValue(
+                entry['label'],
+                ValueReaders.stringValue(
+                  entry['title'],
+                  ValueReaders.stringValue(entry['name'], '选项'),
+                ),
+              ),
+              description: ValueReaders.stringValue(
+                entry['description'],
+                ValueReaders.stringValue(
+                  entry['detail'],
+                  ValueReaders.stringValue(entry['summary']),
+                ),
+              ),
+              prompt: ValueReaders.stringValue(
+                entry['prompt'],
+                ValueReaders.stringValue(
+                  entry['value'],
+                  ValueReaders.stringValue(
+                    entry['title'],
+                    ValueReaders.stringValue(entry['label']),
+                  ),
+                ),
+              ),
               sourceQuestion: question,
               allOptions: ValueReaders.objectList(
                 result['options'],

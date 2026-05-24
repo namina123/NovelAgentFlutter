@@ -44,7 +44,10 @@ class ToolExecutionService {
     var waitingForUserChoice = false;
     var stoppedByToolError = false;
     for (final rawCall in toolCalls) {
-      final call = ValueReaders.mapValue(rawCall);
+      final call = _enrichToolCallWithContext(
+        ValueReaders.mapValue(rawCall),
+        mainContext,
+      );
       final result = await _executeToolCall(
         project: project,
         call: call,
@@ -60,6 +63,7 @@ class ToolExecutionService {
         ),
         'result': ValueReaders.deepCopyMap(result),
         'ok': ValueReaders.boolValue(result['ok'], true),
+        'not_executed': ValueReaders.boolValue(result['not_executed']),
       });
       for (final rawPath in ValueReaders.stringList(result['changed_paths'])) {
         if (!changedPaths.contains(rawPath)) {
@@ -95,6 +99,35 @@ class ToolExecutionService {
       stoppedByToolError: stoppedByToolError,
       hadPlanTool: ValueReaders.boolValue(toolRoundState['has_plan_tool']),
     );
+  }
+
+  JsonMap _enrichToolCallWithContext(JsonMap call, JsonMap mainContext) {
+    // 中文注释: 某些模型会在“读取当前打开文件”时把 relative_path 丢成空对象，这里用宿主已知活动文档做最小兜底。
+    final toolName = ValueReaders.stringValue(call['name']);
+    if (!const <String>{
+      'read_project_file',
+      'get_project_file_info',
+      'edit_project_file',
+    }.contains(toolName)) {
+      return call;
+    }
+    final arguments = ValueReaders.deepCopyMap(
+      ValueReaders.mapValue(call['arguments']),
+    );
+    if (ValueReaders.stringValue(arguments['relative_path']).trim().isNotEmpty) {
+      return call;
+    }
+    final activeDocumentPath = ValueReaders.stringValue(
+      mainContext['active_document_path'],
+    ).trim();
+    if (activeDocumentPath.isEmpty) {
+      return call;
+    }
+    return ValueReaders.deepCopyMap(call)
+      ..['arguments'] = <String, Object?>{
+        ...arguments,
+        'relative_path': activeDocumentPath,
+      };
   }
 
   bool _shouldRecordWrittenPath(

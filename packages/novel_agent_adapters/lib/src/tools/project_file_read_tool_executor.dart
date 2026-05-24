@@ -72,19 +72,18 @@ class ProjectFileReadToolExecutor {
       ValueReaders.stringValue(arguments['relative_path']),
     );
     if (relativePath.isEmpty) {
-      final visibleEntries = await _visibleEntries(project);
-      return _resultFactory.error(
-        'relative_path is required. 请先调用 list_project_files，并从返回结果里复制英文 relative_path。',
-        data: <String, Object?>{
-          'relative_path': '',
-          'entries_preview': _entriesPreview(visibleEntries),
-        },
+      return _recoverablePathIssue(
+        project,
+        message:
+            'read_project_file 缺少 relative_path。请先调用 list_project_files，并从返回结果里复制英文 relative_path。',
       );
     }
     if (!_pathPolicy.isSafeFilePath(relativePath)) {
-      return _resultFactory.error(
-        'Unsafe relative_path. 请使用 list_project_files 返回的英文 relative_path。',
-        data: <String, Object?>{'relative_path': relativePath},
+      return _recoverablePathIssue(
+        project,
+        relativePath: relativePath,
+        message:
+            'read_project_file 的 relative_path 无效。请使用 list_project_files 返回的英文 relative_path。',
       );
     }
     final content = await _hostPort.readTextFile(
@@ -92,9 +91,11 @@ class ProjectFileReadToolExecutor {
       relativePath,
     );
     if (content == null) {
-      return _resultFactory.error(
-        'File not found.',
-        data: <String, Object?>{'relative_path': relativePath},
+      return _recoverablePathIssue(
+        project,
+        relativePath: relativePath,
+        message:
+            'read_project_file 未找到目标文件。请先调用 list_project_files，再直接复制返回的英文 relative_path。',
       );
     }
     const maxChars = 16000;
@@ -121,19 +122,18 @@ class ProjectFileReadToolExecutor {
       ValueReaders.stringValue(arguments['relative_path']),
     );
     if (relativePath.isEmpty) {
-      final visibleEntries = await _visibleEntries(project);
-      return _resultFactory.error(
-        'relative_path is required. 请先调用 list_project_files，并从返回结果里复制英文 relative_path。',
-        data: <String, Object?>{
-          'relative_path': '',
-          'entries_preview': _entriesPreview(visibleEntries),
-        },
+      return _recoverablePathIssue(
+        project,
+        message:
+            'get_project_file_info 缺少 relative_path。请先调用 list_project_files，并从返回结果里复制英文 relative_path。',
       );
     }
     if (!_pathPolicy.isSafeFilePath(relativePath)) {
-      return _resultFactory.error(
-        'Unsafe relative_path. 请使用 list_project_files 返回的英文 relative_path。',
-        data: <String, Object?>{'relative_path': relativePath},
+      return _recoverablePathIssue(
+        project,
+        relativePath: relativePath,
+        message:
+            'get_project_file_info 的 relative_path 无效。请使用 list_project_files 返回的英文 relative_path。',
       );
     }
     final content = await _hostPort.readTextFile(
@@ -141,9 +141,11 @@ class ProjectFileReadToolExecutor {
       relativePath,
     );
     if (content == null) {
-      return _resultFactory.error(
-        'File not found.',
-        data: <String, Object?>{'relative_path': relativePath},
+      return _recoverablePathIssue(
+        project,
+        relativePath: relativePath,
+        message:
+            'get_project_file_info 未找到目标文件。请先调用 list_project_files，再直接复制返回的英文 relative_path。',
       );
     }
     final lines = content
@@ -436,6 +438,23 @@ class ProjectFileReadToolExecutor {
         })
         .map(ValueReaders.deepCopyMap)
         .toList(growable: false);
+  }
+
+  Future<JsonMap> _recoverablePathIssue(
+    ProjectDescriptor project, {
+    required String message,
+    String relativePath = '',
+  }) async {
+    // 中文注释: 路径缺失或匹配失败属于可自纠正问题，不应把整轮工具链硬性打断。
+    final visibleEntries = await _visibleEntries(project);
+    return _resultFactory.notExecuted(
+      message,
+      data: <String, Object?>{
+        'relative_path': relativePath,
+        'entries_preview': _entriesPreview(visibleEntries),
+        'suggested_tool': 'list_project_files',
+      },
+    );
   }
 
   String _entriesPreview(List<JsonMap> entries, {int maxLines = 80}) {
