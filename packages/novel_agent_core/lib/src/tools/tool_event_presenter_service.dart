@@ -40,17 +40,15 @@ class ToolEventPresenterService {
 
   String textForExecutedTool(JsonMap executedTool) {
     // 中文注释: 已执行工具摘要统一从执行记录投影，供 GUI/CLI 历史回放复用。
-    return textForEvent(
-      <String, Object?>{
-        'phase': ValueReaders.boolValue(executedTool['ok'], true)
-            ? 'finished'
-            : 'failed',
-        'ok': ValueReaders.boolValue(executedTool['ok'], true),
-        'name': ValueReaders.stringValue(executedTool['name']),
-        'arguments': ValueReaders.mapValue(executedTool['arguments']),
-        'result': ValueReaders.mapValue(executedTool['result']),
-      },
-    );
+    return textForEvent(<String, Object?>{
+      'phase': ValueReaders.boolValue(executedTool['ok'], true)
+          ? 'finished'
+          : 'failed',
+      'ok': ValueReaders.boolValue(executedTool['ok'], true),
+      'name': ValueReaders.stringValue(executedTool['name']),
+      'arguments': ValueReaders.mapValue(executedTool['arguments']),
+      'result': ValueReaders.mapValue(executedTool['result']),
+    });
   }
 
   String _cleanText(String text) {
@@ -63,7 +61,15 @@ class ToolEventPresenterService {
     if (text.isEmpty) {
       return true;
     }
-    if (const <String>{'✓', '×', '•', '.', '-', 'ok', 'failed'}.contains(text)) {
+    if (const <String>{
+      '✓',
+      '×',
+      '•',
+      '.',
+      '-',
+      'ok',
+      'failed',
+    }.contains(text)) {
       return true;
     }
     return text.contains('_') && !text.contains(' ');
@@ -300,7 +306,9 @@ class ToolEventPresenterService {
     if (changedPaths.isNotEmpty) {
       return changedPaths.first;
     }
-    final relativePath = ValueReaders.stringValue(result['relative_path']).trim();
+    final relativePath = ValueReaders.stringValue(
+      result['relative_path'],
+    ).trim();
     if (relativePath.isNotEmpty) {
       return relativePath;
     }

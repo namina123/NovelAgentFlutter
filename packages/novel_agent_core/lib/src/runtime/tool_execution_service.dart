@@ -145,6 +145,17 @@ class ToolExecutionService {
         mainContext: mainContext,
       );
     }
+    if (toolName == 'load_agent_skill') {
+      final enrichedArguments = ValueReaders.deepCopyMap(
+        ValueReaders.mapValue(call['arguments']),
+      )..['_agent'] = ValueReaders.deepCopyMap(agent);
+      final enrichedCall = ValueReaders.deepCopyMap(call)
+        ..['arguments'] = enrichedArguments;
+      return _toolExecutionPort.execute(
+        project: project,
+        toolCall: enrichedCall,
+      );
+    }
     return _toolExecutionPort.execute(project: project, toolCall: call);
   }
 }

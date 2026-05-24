@@ -28,12 +28,39 @@ class CliBootstrap {
       ),
       projectFileSectionService: ContextProjectFileSectionService(),
     );
+    final writeProjectTextFileUseCase = WriteProjectTextFileUseCase(
+      projectWorkspacePort: bundle.projectWorkspacePort,
+    );
+    final generateCustomizationIndexesUseCase =
+        GenerateCustomizationIndexesUseCase(
+          writeProjectTextFileUseCase: writeProjectTextFileUseCase,
+        );
+    final projectTaskRepository = ProjectTaskRepository(
+      workspacePort: bundle.projectWorkspacePort,
+    );
+    final promptTemplateService = ProjectPromptTemplateService(
+      workspacePort: bundle.projectWorkspacePort,
+    );
+    final workflowRuntimeService = ProjectWorkflowRuntimeService(
+      taskRepository: projectTaskRepository,
+      promptTemplateService: promptTemplateService,
+      generateDraftUseCaseFactory: (provider) {
+        return GenerateDraftUseCase(
+          projectWorkspacePort: bundle.projectWorkspacePort,
+          llmGateway: bundle.createGateway(provider),
+          toolExecutionPort: bundle.projectToolExecutionPort,
+          contextAssemblerService: contextAssemblerService,
+          projectPromptContract: ProjectPromptContract(),
+        );
+      },
+    );
     final workflowCommand = WorkflowCommand(
       settingsRepository: bundle.settingsRepository,
       projectRepository: bundle.projectRepository,
       saveDraftUseCase: SaveDraftUseCase(
         projectWorkspacePort: bundle.projectWorkspacePort,
       ),
+      workflowRuntimeService: workflowRuntimeService,
       generateDraftUseCaseFactory: (provider) {
         // 中文注释: CLI 与 GUI 共用同一套生成用例装配，只在输入输出壳层上保持差异。
         return GenerateDraftUseCase(
@@ -51,6 +78,40 @@ class CliBootstrap {
         projectRepository: bundle.projectRepository,
         projectWorkspacePort: bundle.projectWorkspacePort,
       ),
+      createProjectEntryUseCase: CreateProjectEntryUseCase(
+        projectToolHostPort: bundle.projectToolHostPort,
+      ),
+      importProjectFilesUseCase: ImportProjectFilesUseCase(
+        projectToolHostPort: bundle.projectToolHostPort,
+      ),
+      updateProjectManifestUseCase: UpdateProjectManifestUseCase(
+        writeProjectTextFileUseCase: writeProjectTextFileUseCase,
+      ),
+      projectToolHostPort: bundle.projectToolHostPort,
+      previewCustomizationBundleImportUseCase:
+          PreviewCustomizationBundleImportUseCase(),
+      importCustomizationBundleUseCase: ImportCustomizationBundleUseCase(
+        projectToolHostPort: bundle.projectToolHostPort,
+        generateCustomizationIndexesUseCase:
+            generateCustomizationIndexesUseCase,
+      ),
+      generateCustomizationIndexesUseCase: generateCustomizationIndexesUseCase,
+      saveCustomizationMarketIndexUseCase: SaveCustomizationMarketIndexUseCase(
+        projectToolHostPort: bundle.projectToolHostPort,
+        writeProjectTextFileUseCase: writeProjectTextFileUseCase,
+      ),
+      saveCustomizationBundleUseCase: SaveCustomizationBundleUseCase(
+        writeProjectTextFileUseCase: writeProjectTextFileUseCase,
+      ),
+      loadAgentPackages: (project) =>
+          bundle.agentPackageCatalog.loadAgentPackages(project),
+      loadAgentGroups: (project) =>
+          bundle.agentGroupCatalog.loadAgentGroups(project),
+      loadSkillPackages: (project) =>
+          bundle.skillPackageCatalog.loadSkillPackages(project),
+      loadSkillGroups: (project) =>
+          bundle.skillGroupCatalog.loadSkillGroups(project),
+      projectRepository: bundle.projectRepository,
       printer: printer,
     );
     final sessionCommand = SessionCommand(printer: printer);

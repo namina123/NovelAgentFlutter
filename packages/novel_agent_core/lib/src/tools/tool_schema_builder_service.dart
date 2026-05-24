@@ -127,9 +127,9 @@ class ToolSchemaBuilderService {
         );
       case 'load_agent_skill':
         return _objectSchema(
-          required: const <String>['skill_id'],
           properties: <String, Object?>{
             'skill_id': _stringSchema('要读取的技能 ID。'),
+            'query': _stringSchema('当尚未确定 skill_id 时，用任务描述匹配最合适的技能。'),
           },
         );
       case 'call_sub_agent':

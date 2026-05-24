@@ -85,7 +85,9 @@ class LocalSettingsRepository implements SettingsRepository {
         basePath: basePath,
       ),
       'auto_save_drafts': settings.autoSaveDrafts,
-      'providers': settings.providers.map(_providerToDocument).toList(growable: false),
+      'providers': settings.providers
+          .map(_providerToDocument)
+          .toList(growable: false),
       'permissions': Map<String, Object?>.from(settings.permissionSettings),
       'tool_strategy': Map<String, Object?>.from(settings.toolStrategySettings),
       'network': _normalizedNetworkDocument(settings.networkSettings),

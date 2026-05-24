@@ -29,6 +29,10 @@ class GenerateDraftUseCase {
     required ToolExecutionPort toolExecutionPort,
     required ContextAssemblerService contextAssemblerService,
     required ProjectPromptContract projectPromptContract,
+    Future<List<JsonMap>> Function(ProjectDescriptor project)?
+    loadAvailableAgents,
+    Future<List<JsonMap>> Function(ProjectDescriptor project)?
+    loadAvailableAgentGroups,
     ProjectContextFileSelectionService? fileSelectionService,
     DraftPromptBuilderService? draftPromptBuilderService,
     AgentProfileCatalogService? agentProfileCatalogService,
@@ -45,6 +49,8 @@ class GenerateDraftUseCase {
        _llmGateway = llmGateway,
        _contextAssemblerService = contextAssemblerService,
        _projectPromptContract = projectPromptContract,
+       _loadAvailableAgents = loadAvailableAgents,
+       _loadAvailableAgentGroups = loadAvailableAgentGroups,
        _fileSelectionService =
            fileSelectionService ?? ProjectContextFileSelectionService(),
        _draftPromptBuilderService =
@@ -76,6 +82,8 @@ class GenerateDraftUseCase {
              subAgentExecutionService: SubAgentExecutionService(
                llmGateway: llmGateway,
                toolExecutionPort: toolExecutionPort,
+               loadAvailableAgents: loadAvailableAgents,
+               loadAvailableGroups: loadAvailableAgentGroups,
              ),
            ),
        _toolStrategyPromptBuilder = ToolStrategyPromptBuilder(
@@ -87,6 +95,10 @@ class GenerateDraftUseCase {
   final LlmGateway _llmGateway;
   final ContextAssemblerService _contextAssemblerService;
   final ProjectPromptContract _projectPromptContract;
+  final Future<List<JsonMap>> Function(ProjectDescriptor project)?
+  _loadAvailableAgents;
+  final Future<List<JsonMap>> Function(ProjectDescriptor project)?
+  _loadAvailableAgentGroups;
   final ProjectContextFileSelectionService _fileSelectionService;
   final DraftPromptBuilderService _draftPromptBuilderService;
   final AgentProfileCatalogService _agentProfileCatalogService;
@@ -137,10 +149,14 @@ class GenerateDraftUseCase {
     final resolvedAgent = agent.isEmpty
         ? _agentProfileCatalogService.fallbackDefaultAgent()
         : ValueReaders.deepCopyMap(agent);
-    final optionalAgents =
-        _collaboratorCatalogService.optionalCollaboratorProfiles();
-    final optionalGroups =
-        _collaboratorCatalogService.optionalCollaboratorGroups();
+    final optionalAgents = _mergeEntriesById(
+      await _loadAvailableAgentsSafe(project),
+      _collaboratorCatalogService.optionalCollaboratorProfiles(),
+    );
+    final optionalGroups = _mergeEntriesById(
+      await _loadAvailableAgentGroupsSafe(project),
+      _collaboratorCatalogService.optionalCollaboratorGroups(),
+    );
     final contextPack = _contextAssemblerService.assemble(<String, Object?>{
       'project': projectInfo,
       'project_files': entries,
@@ -321,5 +337,58 @@ class GenerateDraftUseCase {
       return content;
     }
     return content.substring(0, maxChars);
+  }
+
+  Future<List<JsonMap>> _loadAvailableAgentsSafe(
+    ProjectDescriptor project,
+  ) async {
+    // 中文注释: 项目级智能体目录是可选增强能力，读取失败时回退为空列表以保住主链路。
+    final loader = _loadAvailableAgents;
+    if (loader == null) {
+      return const <JsonMap>[];
+    }
+    try {
+      return await loader(project);
+    } catch (_) {
+      return const <JsonMap>[];
+    }
+  }
+
+  Future<List<JsonMap>> _loadAvailableAgentGroupsSafe(
+    ProjectDescriptor project,
+  ) async {
+    // 中文注释: 项目级协作组加载失败时不阻塞生成，而是继续使用内置协作组兜底。
+    final loader = _loadAvailableAgentGroups;
+    if (loader == null) {
+      return const <JsonMap>[];
+    }
+    try {
+      return await loader(project);
+    } catch (_) {
+      return const <JsonMap>[];
+    }
+  }
+
+  List<JsonMap> _mergeEntriesById(
+    List<JsonMap> primaryEntries,
+    List<JsonMap> secondaryEntries,
+  ) {
+    // 中文注释: 项目内生态定义优先覆盖内置定义，让用户可以项目级定制协作骨架而不改应用内置包。
+    final byId = <String, JsonMap>{};
+    for (final entry in secondaryEntries) {
+      final id = ValueReaders.stringValue(entry['id']).trim();
+      if (id.isEmpty) {
+        continue;
+      }
+      byId[id] = entry;
+    }
+    for (final entry in primaryEntries) {
+      final id = ValueReaders.stringValue(entry['id']).trim();
+      if (id.isEmpty) {
+        continue;
+      }
+      byId[id] = entry;
+    }
+    return byId.values.toList(growable: false);
   }
 }

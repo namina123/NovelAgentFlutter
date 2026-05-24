@@ -20,6 +20,40 @@ class AppBootstrap {
       ),
       projectFileSectionService: ContextProjectFileSectionService(),
     );
+    final writeProjectTextFileUseCase = WriteProjectTextFileUseCase(
+      projectWorkspacePort: bundle.projectWorkspacePort,
+    );
+    final generateCustomizationIndexesUseCase =
+        GenerateCustomizationIndexesUseCase(
+          writeProjectTextFileUseCase: writeProjectTextFileUseCase,
+        );
+    final projectTaskRepository = ProjectTaskRepository(
+      workspacePort: bundle.projectWorkspacePort,
+    );
+    final promptTemplateService = ProjectPromptTemplateService(
+      workspacePort: bundle.projectWorkspacePort,
+    );
+    final reviewReportService = ProjectReviewReportService(
+      workspacePort: bundle.projectWorkspacePort,
+      taskRepository: projectTaskRepository,
+    );
+    final workflowRuntimeService = ProjectWorkflowRuntimeService(
+      taskRepository: projectTaskRepository,
+      promptTemplateService: promptTemplateService,
+      generateDraftUseCaseFactory: (provider) {
+        return GenerateDraftUseCase(
+          projectWorkspacePort: bundle.projectWorkspacePort,
+          llmGateway: bundle.createGateway(provider),
+          toolExecutionPort: bundle.projectToolExecutionPort,
+          contextAssemblerService: contextAssemblerService,
+          projectPromptContract: ProjectPromptContract(),
+          loadAvailableAgents: (project) =>
+              bundle.agentPackageCatalog.loadAgentPackages(project),
+          loadAvailableAgentGroups: (project) =>
+              bundle.agentGroupCatalog.loadAgentGroups(project),
+        );
+      },
+    );
     final controller = AppShellController(
       settingsRepository: bundle.settingsRepository,
       loadProjectWorkspaceUseCase: LoadProjectWorkspaceUseCase(
@@ -40,10 +74,44 @@ class AppBootstrap {
         projectRepository: bundle.projectRepository,
         projectWorkspacePort: bundle.projectWorkspacePort,
       ),
+      createProjectEntryUseCase: CreateProjectEntryUseCase(
+        projectToolHostPort: bundle.projectToolHostPort,
+      ),
+      importProjectFilesUseCase: ImportProjectFilesUseCase(
+        projectToolHostPort: bundle.projectToolHostPort,
+      ),
+      updateProjectManifestUseCase: UpdateProjectManifestUseCase(
+        writeProjectTextFileUseCase: writeProjectTextFileUseCase,
+      ),
+      projectToolHostPort: bundle.projectToolHostPort,
+      previewCustomizationBundleImportUseCase:
+          PreviewCustomizationBundleImportUseCase(),
+      importCustomizationBundleUseCase: ImportCustomizationBundleUseCase(
+        projectToolHostPort: bundle.projectToolHostPort,
+        generateCustomizationIndexesUseCase:
+            generateCustomizationIndexesUseCase,
+      ),
+      generateCustomizationIndexesUseCase: generateCustomizationIndexesUseCase,
+      saveCustomizationMarketIndexUseCase: SaveCustomizationMarketIndexUseCase(
+        projectToolHostPort: bundle.projectToolHostPort,
+        writeProjectTextFileUseCase: writeProjectTextFileUseCase,
+      ),
       settingsRootPath: bundle.settingsRootPath,
       settingsSearchRoots: bundle.settingsSearchRoots,
       defaultProjectsRootPath: bundle.defaultProjectRootPath,
       isMobileProjectRootLocked: Platform.isAndroid || Platform.isIOS,
+      loadAgentPackages: (project) =>
+          bundle.agentPackageCatalog.loadAgentPackages(project),
+      loadAgentGroups: (project) =>
+          bundle.agentGroupCatalog.loadAgentGroups(project),
+      loadSkillPackages: (project) =>
+          bundle.skillPackageCatalog.loadSkillPackages(project),
+      loadSkillGroups: (project) =>
+          bundle.skillGroupCatalog.loadSkillGroups(project),
+      writeProjectTextFileUseCase: writeProjectTextFileUseCase,
+      workflowRuntimeService: workflowRuntimeService,
+      reviewReportService: reviewReportService,
+      promptTemplateService: promptTemplateService,
       generateDraftUseCaseFactory: (provider) {
         // 中文注释: 草稿生成用例按当前 provider 动态创建，避免控制器直接依赖具体 HTTP 实现。
         return GenerateDraftUseCase(
@@ -52,6 +120,10 @@ class AppBootstrap {
           toolExecutionPort: bundle.projectToolExecutionPort,
           contextAssemblerService: contextAssemblerService,
           projectPromptContract: ProjectPromptContract(),
+          loadAvailableAgents: (project) =>
+              bundle.agentPackageCatalog.loadAgentPackages(project),
+          loadAvailableAgentGroups: (project) =>
+              bundle.agentGroupCatalog.loadAgentGroups(project),
         );
       },
     );

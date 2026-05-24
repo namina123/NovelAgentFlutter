@@ -1,4 +1,5 @@
 import '../models/project_create_request_view_data.dart';
+import '../models/workspace_command_request_view_data.dart';
 
 abstract class ResourceManagerActionHandler {
   void onModelSettingsRequested();
@@ -38,4 +39,8 @@ abstract class ResourceManagerActionHandler {
   void onTemplatesRequested();
 
   void onResourceEntrySelected(String entryId);
+
+  void onWorkspaceCommandDismissed();
+
+  void onWorkspaceCommandSubmitted(WorkspaceCommandRequestViewData request);
 }

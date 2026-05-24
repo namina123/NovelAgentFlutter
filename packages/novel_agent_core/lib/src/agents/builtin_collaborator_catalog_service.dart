@@ -70,7 +70,8 @@ class BuiltinCollaboratorCatalogService {
       'temperature': 0.7,
       'top_p': 0.9,
       'top_k': 0,
-      'system_prompt': '你是 NOVEL Agent 内部协作中的主编视角。你优先识别目标、阶段、风险和验收标准，并把复杂任务拆成可执行步骤。',
+      'system_prompt':
+          '你是 NOVEL Agent 内部协作中的主编视角。你优先识别目标、阶段、风险和验收标准，并把复杂任务拆成可执行步骤。',
     },
     <String, Object?>{
       'id': 'writer',

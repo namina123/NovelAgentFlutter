@@ -3,19 +3,52 @@ import 'package:flutter/material.dart';
 import '../../../../../app/theme/app_chrome.dart';
 import '../../../../../app/theme/app_palette.dart';
 
-class DocumentContentCanvas extends StatelessWidget {
+class DocumentContentCanvas extends StatefulWidget {
   const DocumentContentCanvas({
     super.key,
     required this.title,
     required this.relativePath,
     required this.content,
     required this.status,
+    required this.onChanged,
   });
 
   final String title;
   final String relativePath;
   final String content;
   final String status;
+  final ValueChanged<String> onChanged;
+
+  @override
+  State<DocumentContentCanvas> createState() => _DocumentContentCanvasState();
+}
+
+class _DocumentContentCanvasState extends State<DocumentContentCanvas> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.content);
+  }
+
+  @override
+  void didUpdateWidget(covariant DocumentContentCanvas oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.content != widget.content &&
+        _controller.text != widget.content) {
+      _controller.value = TextEditingValue(
+        text: widget.content,
+        selection: TextSelection.collapsed(offset: widget.content.length),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,17 +65,17 @@ class DocumentContentCanvas extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              title.trim().isEmpty ? '未命名草稿' : title,
+              widget.title.trim().isEmpty ? '未命名草稿' : widget.title,
               style: const TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w800,
                 color: AppPalette.text,
               ),
             ),
-            if (relativePath.trim().isNotEmpty) ...[
+            if (widget.relativePath.trim().isNotEmpty) ...[
               const SizedBox(height: 4),
               Text(
-                relativePath,
+                widget.relativePath,
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -52,7 +85,7 @@ class DocumentContentCanvas extends StatelessWidget {
             ],
             const SizedBox(height: 12),
             Text(
-              status,
+              widget.status,
               style: const TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
@@ -61,15 +94,18 @@ class DocumentContentCanvas extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Expanded(
-              child: SingleChildScrollView(
-                child: SelectableText(
-                  content,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    height: 1.65,
-                    color: AppPalette.text,
-                  ),
+              child: TextField(
+                controller: _controller,
+                expands: true,
+                maxLines: null,
+                minLines: null,
+                onChanged: widget.onChanged,
+                style: const TextStyle(
+                  fontSize: 15,
+                  height: 1.65,
+                  color: AppPalette.text,
                 ),
+                decoration: const InputDecoration.collapsed(hintText: ''),
               ),
             ),
           ],

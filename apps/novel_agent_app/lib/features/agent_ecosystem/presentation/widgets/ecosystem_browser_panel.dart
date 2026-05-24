@@ -11,6 +11,7 @@ class EcosystemBrowserPanel extends StatelessWidget {
     required this.tabs,
     required this.activeTabId,
     required this.entries,
+    required this.statusMessage,
     required this.onRefreshRequested,
     required this.onImportPackageRequested,
     required this.onGenerateIndexRequested,
@@ -21,6 +22,7 @@ class EcosystemBrowserPanel extends StatelessWidget {
   final List<EcosystemTabViewData> tabs;
   final String activeTabId;
   final List<EcosystemEntryViewData> entries;
+  final String statusMessage;
   final VoidCallback onRefreshRequested;
   final VoidCallback onImportPackageRequested;
   final VoidCallback onGenerateIndexRequested;
@@ -57,6 +59,17 @@ class EcosystemBrowserPanel extends StatelessWidget {
               ),
             ],
           ),
+          if (statusMessage.trim().isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              statusMessage,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: AppPalette.mutedText,
+              ),
+            ),
+          ],
           const SizedBox(height: 14),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,

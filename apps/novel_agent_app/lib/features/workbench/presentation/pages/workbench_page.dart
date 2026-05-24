@@ -16,6 +16,7 @@ import '../widgets/document_workspace_panel.dart';
 import '../widgets/project_launcher_overlay.dart';
 import '../widgets/resizable_workbench_layout.dart';
 import '../widgets/resource_manager_panel.dart';
+import '../widgets/workspace_command_overlay.dart';
 import '../widgets/workbench_two_pane_layout.dart';
 
 class WorkbenchPage extends StatelessWidget {
@@ -53,14 +54,16 @@ class WorkbenchPage extends StatelessWidget {
             viewData: viewData.projectLauncher!,
             actionHandler: resourceHandler,
           ),
+        if (viewData.workspaceCommand != null)
+          WorkspaceCommandOverlay(
+            viewData: viewData.workspaceCommand!,
+            actionHandler: resourceHandler,
+          ),
       ],
     );
   }
 
-  Widget _buildLayout(
-    AppLayoutMetrics metrics,
-    WorkbenchSurfaceLayout layout,
-  ) {
+  Widget _buildLayout(AppLayoutMetrics metrics, WorkbenchSurfaceLayout layout) {
     switch (layout.mode) {
       case WorkbenchSurfaceMode.immersiveConversation:
       case WorkbenchSurfaceMode.singleConversation:

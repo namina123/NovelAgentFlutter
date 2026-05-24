@@ -133,7 +133,10 @@ class SessionGoalPromptBuilderService {
     final parts = <String>[
       '名称：${ValueReaders.stringValue(project['title'], '未命名项目')}',
     ];
-    final projectType = ValueReaders.stringValue(project['project_type'], 'novel');
+    final projectType = ValueReaders.stringValue(
+      project['project_type'],
+      'novel',
+    );
     if (projectType.trim().isNotEmpty) {
       parts.add('类型：$projectType');
     }
@@ -141,7 +144,10 @@ class SessionGoalPromptBuilderService {
     if (genre.trim().isNotEmpty) {
       parts.add('题材：$genre');
     }
-    final seed = _compact(ValueReaders.stringValue(project['seed_prompt']), 140);
+    final seed = _compact(
+      ValueReaders.stringValue(project['seed_prompt']),
+      140,
+    );
     if (seed.isNotEmpty) {
       parts.add('创作种子：$seed');
     }

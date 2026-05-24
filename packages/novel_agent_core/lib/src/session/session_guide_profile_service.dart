@@ -95,8 +95,7 @@ class SessionGuideProfileService {
     return SessionGuideProfile(
       profileId: 'long_novel_workflow',
       title: '长篇小说工作台',
-      description:
-          '长篇项目优先围绕任务队列、检查点和可恢复推进来组织。先生成或检查长任务队列，再决定是否手动单步或受控连续运行。',
+      description: '长篇项目优先围绕任务队列、检查点和可恢复推进来组织。先生成或检查长任务队列，再决定是否手动单步或受控连续运行。',
       composerHint: isRunning
           ? '长篇运行中：补充队列调整、检查点要求或下一步约束，会在下一轮工具调用前送达。'
           : '输入长篇创作要求、长任务类型、队列调整意见，或直接描述当前想推进的阶段。',

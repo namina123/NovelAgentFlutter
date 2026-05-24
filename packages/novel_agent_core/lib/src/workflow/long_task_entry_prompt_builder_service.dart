@@ -47,7 +47,10 @@ class LongTaskEntryPromptBuilderService {
         return '请检查当前项目的长任务队列、依赖、执行包和 tracking/ 运行记录，并给出可读详情摘要。';
       case 'long_task.create_queue':
       default:
-        final mode = ValueReaders.stringValue(payload['mode'], 'seed_to_full_novel');
+        final mode = ValueReaders.stringValue(
+          payload['mode'],
+          'seed_to_full_novel',
+        );
         return '请为当前项目启动“生成长篇队列”流程，优先判断适合的长任务模式，并围绕 $mode 给出可恢复任务链。';
     }
   }

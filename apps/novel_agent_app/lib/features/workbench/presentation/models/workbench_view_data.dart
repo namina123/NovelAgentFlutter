@@ -6,10 +6,12 @@ import 'resource_entry_view_data.dart';
 import 'session_history_entry_view_data.dart';
 import 'sub_agent_run_view_data.dart';
 import 'user_option_view_data.dart';
+import 'workspace_command_request_view_data.dart';
 
 export 'document_tab_view_data.dart';
 export 'primary_action_view_data.dart';
 export 'resource_entry_view_data.dart';
+export 'workspace_command_request_view_data.dart';
 
 class WorkbenchViewData {
   const WorkbenchViewData({
@@ -29,6 +31,7 @@ class WorkbenchViewData {
     required this.activeDocumentTitle,
     required this.activeDocumentPath,
     required this.activeDocumentBody,
+    required this.activeDocumentDirty,
     required this.conversationEntries,
     required this.pendingOptions,
     required this.subAgentRuns,
@@ -37,6 +40,7 @@ class WorkbenchViewData {
     required this.showSessionHistory,
     required this.isDocumentsWorkspaceVisible,
     required this.projectLauncher,
+    required this.workspaceCommand,
     required this.generationStatus,
     required this.isGenerating,
   });
@@ -57,6 +61,7 @@ class WorkbenchViewData {
   final String activeDocumentTitle;
   final String activeDocumentPath;
   final String activeDocumentBody;
+  final bool activeDocumentDirty;
   final List<ConversationEntryViewData> conversationEntries;
   final List<UserOptionViewData> pendingOptions;
   final List<SubAgentRunViewData> subAgentRuns;
@@ -65,6 +70,7 @@ class WorkbenchViewData {
   final bool showSessionHistory;
   final bool isDocumentsWorkspaceVisible;
   final ProjectLauncherViewData? projectLauncher;
+  final WorkspaceCommandViewData? workspaceCommand;
   final String generationStatus;
   final bool isGenerating;
 
@@ -99,6 +105,7 @@ class WorkbenchViewData {
       activeDocumentTitle: '',
       activeDocumentPath: '',
       activeDocumentBody: '',
+      activeDocumentDirty: false,
       conversationEntries: [],
       pendingOptions: [],
       subAgentRuns: [],
@@ -107,6 +114,7 @@ class WorkbenchViewData {
       showSessionHistory: false,
       isDocumentsWorkspaceVisible: false,
       projectLauncher: null,
+      workspaceCommand: null,
       generationStatus: '',
       isGenerating: false,
     );
@@ -133,6 +141,7 @@ class WorkbenchViewData {
     String? activeDocumentTitle,
     String? activeDocumentPath,
     String? activeDocumentBody,
+    bool? activeDocumentDirty,
     List<ConversationEntryViewData>? conversationEntries,
     List<UserOptionViewData>? pendingOptions,
     List<SubAgentRunViewData>? subAgentRuns,
@@ -141,6 +150,7 @@ class WorkbenchViewData {
     bool? showSessionHistory,
     bool? isDocumentsWorkspaceVisible,
     Object? projectLauncher = _projectLauncherSentinel,
+    Object? workspaceCommand = _workspaceCommandSentinel,
     String? generationStatus,
     bool? isGenerating,
   }) {
@@ -162,6 +172,7 @@ class WorkbenchViewData {
       activeDocumentTitle: activeDocumentTitle ?? this.activeDocumentTitle,
       activeDocumentPath: activeDocumentPath ?? this.activeDocumentPath,
       activeDocumentBody: activeDocumentBody ?? this.activeDocumentBody,
+      activeDocumentDirty: activeDocumentDirty ?? this.activeDocumentDirty,
       conversationEntries: conversationEntries ?? this.conversationEntries,
       pendingOptions: pendingOptions ?? this.pendingOptions,
       subAgentRuns: subAgentRuns ?? this.subAgentRuns,
@@ -174,6 +185,9 @@ class WorkbenchViewData {
       projectLauncher: identical(projectLauncher, _projectLauncherSentinel)
           ? this.projectLauncher
           : projectLauncher as ProjectLauncherViewData?,
+      workspaceCommand: identical(workspaceCommand, _workspaceCommandSentinel)
+          ? this.workspaceCommand
+          : workspaceCommand as WorkspaceCommandViewData?,
       generationStatus: generationStatus ?? this.generationStatus,
       isGenerating: isGenerating ?? this.isGenerating,
     );
@@ -181,3 +195,4 @@ class WorkbenchViewData {
 }
 
 const Object _projectLauncherSentinel = Object();
+const Object _workspaceCommandSentinel = Object();

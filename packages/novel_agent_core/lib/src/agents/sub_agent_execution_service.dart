@@ -19,6 +19,10 @@ class SubAgentExecutionService {
   SubAgentExecutionService({
     required LlmGateway llmGateway,
     required ToolExecutionPort toolExecutionPort,
+    Future<List<JsonMap>> Function(ProjectDescriptor project)?
+    loadAvailableAgents,
+    Future<List<JsonMap>> Function(ProjectDescriptor project)?
+    loadAvailableGroups,
     SubAgentRunPackageService? runPackageService,
     SubAgentResultPackageService? resultPackageService,
     BuiltinCollaboratorCatalogService? collaboratorCatalogService,
@@ -32,6 +36,8 @@ class SubAgentExecutionService {
     ToolEventPresenterService? toolEventPresenterService,
   }) : _llmGateway = llmGateway,
        _toolExecutionPort = toolExecutionPort,
+       _loadAvailableAgents = loadAvailableAgents,
+       _loadAvailableGroups = loadAvailableGroups,
        _runPackageService = runPackageService ?? SubAgentRunPackageService(),
        _resultPackageService =
            resultPackageService ?? SubAgentResultPackageService(),
@@ -55,6 +61,10 @@ class SubAgentExecutionService {
 
   final LlmGateway _llmGateway;
   final ToolExecutionPort _toolExecutionPort;
+  final Future<List<JsonMap>> Function(ProjectDescriptor project)?
+  _loadAvailableAgents;
+  final Future<List<JsonMap>> Function(ProjectDescriptor project)?
+  _loadAvailableGroups;
   final SubAgentRunPackageService _runPackageService;
   final SubAgentResultPackageService _resultPackageService;
   final BuiltinCollaboratorCatalogService _collaboratorCatalogService;
@@ -76,10 +86,14 @@ class SubAgentExecutionService {
   }) async {
     // 中文注释: 子智能体执行服务只负责一次内部子回合的包构建、模型调用和结果回收，不直接碰宿主 UI。
     final arguments = ValueReaders.mapValue(toolCall['arguments']);
-    final availableAgents =
-        _collaboratorCatalogService.optionalCollaboratorProfiles();
-    final availableGroups =
-        _collaboratorCatalogService.optionalCollaboratorGroups();
+    final availableAgents = _mergeEntriesById(
+      await _loadAvailableAgentsSafe(project),
+      _collaboratorCatalogService.optionalCollaboratorProfiles(),
+    );
+    final availableGroups = _mergeEntriesById(
+      await _loadAvailableGroupsSafe(project),
+      _collaboratorCatalogService.optionalCollaboratorGroups(),
+    );
     final task = ValueReaders.stringValue(
       arguments['task'],
       ValueReaders.stringValue(arguments['query']),
@@ -174,11 +188,14 @@ class SubAgentExecutionService {
       );
       final action = ValueReaders.stringValue(contract['action']);
       if (action == 'execute_tools') {
-        previousRoundHadPlanTool = ValueReaders.objectList(contract['tool_calls'])
-            .map(ValueReaders.mapValue)
-            .any(
-              (call) => ValueReaders.stringValue(call['name']) == 'set_agent_tasks',
-            );
+        previousRoundHadPlanTool =
+            ValueReaders.objectList(contract['tool_calls'])
+                .map(ValueReaders.mapValue)
+                .any(
+                  (call) =>
+                      ValueReaders.stringValue(call['name']) ==
+                      'set_agent_tasks',
+                );
         messages.add(ValueReaders.mapValue(contract['assistant_message']));
         for (final rawCall in ValueReaders.objectList(contract['tool_calls'])) {
           final call = ValueReaders.mapValue(rawCall);
@@ -222,14 +239,18 @@ class SubAgentExecutionService {
               },
             ),
           );
-          waitingForUserChoice = waitingForUserChoice ||
+          waitingForUserChoice =
+              waitingForUserChoice ||
               ValueReaders.boolValue(result['waiting_for_user_choice']);
-          final isHardToolError = !ValueReaders.boolValue(result['ok'], true) &&
+          final isHardToolError =
+              !ValueReaders.boolValue(result['ok'], true) &&
               !ValueReaders.boolValue(result['not_executed']);
           if (isHardToolError) {
             stoppedByToolError = true;
           }
-          messages.add(_agentToolMessageService.toolResultMessage(call, result));
+          messages.add(
+            _agentToolMessageService.toolResultMessage(call, result),
+          );
         }
         if (waitingForUserChoice || stoppedByToolError) {
           break;
@@ -314,10 +335,7 @@ class SubAgentExecutionService {
       'sub_agent_run_id': runId,
       'sub_agent_events': events,
       'tool_count': executedTools.length,
-      'summary': ValueReaders.stringValue(
-        success['summary'],
-        '子智能体已返回。',
-      ),
+      'summary': ValueReaders.stringValue(success['summary'], '子智能体已返回。'),
     };
   }
 
@@ -328,6 +346,59 @@ class SubAgentExecutionService {
       'error': 'Blocked sub-agent tool: $toolName',
       'not_executed': false,
     };
+  }
+
+  Future<List<JsonMap>> _loadAvailableAgentsSafe(
+    ProjectDescriptor project,
+  ) async {
+    // 中文注释: 项目级协作智能体加载失败时回退为空，保证运行时仍可使用内置协作素材。
+    final loader = _loadAvailableAgents;
+    if (loader == null) {
+      return const <JsonMap>[];
+    }
+    try {
+      return await loader(project);
+    } catch (_) {
+      return const <JsonMap>[];
+    }
+  }
+
+  Future<List<JsonMap>> _loadAvailableGroupsSafe(
+    ProjectDescriptor project,
+  ) async {
+    // 中文注释: 项目级智能体组属于增强能力，读取失败不应该让整个草稿生成链中断。
+    final loader = _loadAvailableGroups;
+    if (loader == null) {
+      return const <JsonMap>[];
+    }
+    try {
+      return await loader(project);
+    } catch (_) {
+      return const <JsonMap>[];
+    }
+  }
+
+  List<JsonMap> _mergeEntriesById(
+    List<JsonMap> primaryEntries,
+    List<JsonMap> secondaryEntries,
+  ) {
+    // 中文注释: 项目内定义优先覆盖内置同名条目，保证用户可在项目范围内替换协作角色与协作组。
+    final byId = <String, JsonMap>{};
+    for (final entry in secondaryEntries) {
+      final id = ValueReaders.stringValue(entry['id']).trim();
+      if (id.isEmpty) {
+        continue;
+      }
+      byId[id] = entry;
+    }
+    for (final entry in primaryEntries) {
+      final id = ValueReaders.stringValue(entry['id']).trim();
+      if (id.isEmpty) {
+        continue;
+      }
+      byId[id] = entry;
+    }
+    return byId.values.toList(growable: false);
   }
 
   JsonMap _subAgentEvent(

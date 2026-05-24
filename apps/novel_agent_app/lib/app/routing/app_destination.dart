@@ -1,1 +1,9 @@
-enum AppDestination { workbench, settings, agentEcosystem }
+enum AppDestination {
+  workbench,
+  settings,
+  agentEcosystem,
+  projectCollection,
+  taskCenter,
+  reviewCenter,
+  promptTemplates,
+}

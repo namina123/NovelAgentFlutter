@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../../output/terminal_printer.dart';
@@ -11,27 +14,75 @@ class WorkflowCommand {
     required ProjectRepository projectRepository,
     required SaveDraftUseCase saveDraftUseCase,
     required CliGenerateDraftUseCaseFactory generateDraftUseCaseFactory,
+    required ProjectWorkflowRuntimeService workflowRuntimeService,
     required TerminalPrinter printer,
   }) : _settingsRepository = settingsRepository,
        _projectRepository = projectRepository,
        _saveDraftUseCase = saveDraftUseCase,
        _generateDraftUseCaseFactory = generateDraftUseCaseFactory,
+       _workflowRuntimeService = workflowRuntimeService,
        _printer = printer;
 
   final SettingsRepository _settingsRepository;
   final ProjectRepository _projectRepository;
   final SaveDraftUseCase _saveDraftUseCase;
   final CliGenerateDraftUseCaseFactory _generateDraftUseCaseFactory;
+  final ProjectWorkflowRuntimeService _workflowRuntimeService;
   final TerminalPrinter _printer;
 
   Future<int> run(List<String> args) async {
-    // 中文注释: workflow 命令当前先打通草稿生成最小闭环，让桌面端有真实可用的共享运行入口。
+    // 中文注释: workflow 命令从这里统一分发，确保 GUI 与 CLI 共享同一套长任务运行时而不是两套逻辑。
     final action = args.isEmpty ? 'help' : args.first;
-    if (action == 'draft') {
-      return _runDraft(args.skip(1).toList(growable: false));
+    final rest = args.isEmpty
+        ? const <String>[]
+        : args.skip(1).toList(growable: false);
+    switch (action) {
+      case 'draft':
+        return _runDraft(rest);
+      case 'create':
+        return _runCreate(rest);
+      case 'list':
+        return _runList(rest);
+      case 'next':
+        return _runNext(rest);
+      case 'preflight':
+        return _runPreflight(rest);
+      case 'plan':
+        return _runPlan(rest);
+      case 'chain':
+        return _runChain(rest);
+      case 'prepare':
+        return _runPrepare(rest);
+      case 'run-once':
+        return _runSelectedOnce(rest);
+      case 'run-next':
+        return _runNextOnce(rest);
+      case 'run-queue':
+        return _runQueue(rest);
+      case 'postprocess-once':
+        return _runPostprocessOnce(rest);
+      case 'postprocess-next':
+        return _runPostprocessNext(rest);
+      case 'complete-next':
+        return _runCompleteAndNext(rest);
+      case 'pause':
+        return _runPause(rest);
+      case 'resume':
+        return _runResume(rest);
+      case 'accept-revision':
+        return _runAcceptRevision(rest);
+      case 'rollback-revision':
+        return _runRollbackRevision(rest);
+      case 'help':
+      case '--help':
+      case '-h':
+        _printHelp();
+        return 0;
+      default:
+        _printer.error('未知 workflow 子命令: $action');
+        _printHelp();
+        return 2;
     }
-    _printHelp();
-    return action == 'help' ? 0 : 2;
   }
 
   Future<int> _runDraft(List<String> args) async {
@@ -42,11 +93,8 @@ class WorkflowCommand {
       _printer.error('未找到可用 provider。');
       return 2;
     }
-    final projectPath =
-        _optionValue(args, '--project') ?? settings.defaultProjectPath;
-    final project = await _projectRepository.openByPath(projectPath);
+    final project = await _openProject(args, defaultProjectPath: settings.defaultProjectPath);
     if (project == null) {
-      _printer.error('项目不存在: $projectPath');
       return 2;
     }
     final prompt = _optionValue(args, '--prompt') ?? _joinedPositional(args);
@@ -100,12 +148,437 @@ class WorkflowCommand {
     }
   }
 
+  Future<int> _runCreate(List<String> args) async {
+    // 中文注释: 长任务开局只生成计划与任务文件，方便 CLI 和 GUI 共用后续执行链。
+    final context = await _workflowContext(args);
+    if (context == null) {
+      return 2;
+    }
+    final result = await _workflowRuntimeService.createLongTaskWorkflow(
+      context.project,
+      _optionValue(args, '--mode') ?? TaskRuntimeConstants.modeHumanOutlineAiDraft,
+      options: <String, Object?>{
+        'outline_path': _optionValue(args, '--outline') ?? 'outline/outline.md',
+        'seed_prompt': _optionValue(args, '--seed') ?? '',
+        'chapter_count': _intOption(args, '--chapters', 12),
+        'checkpoint_interval': _intOption(args, '--checkpoint', 3),
+      },
+    );
+    return _printWorkflowResult(result, success: '长任务队列已生成。');
+  }
+
+  Future<int> _runList(List<String> args) async {
+    // 中文注释: 任务列表命令输出共享排序结果，便于终端快速核对当前项目队列。
+    final context = await _workflowContext(args);
+    if (context == null) {
+      return 2;
+    }
+    final tasks = await _workflowRuntimeService.listWorkflowTasks(context.project);
+    if (tasks.isEmpty) {
+      _printer.info('当前项目还没有任务。');
+      return 0;
+    }
+    final lines = tasks
+        .map(
+          (task) =>
+              '${ValueReaders.stringValue(task['status'])}'
+              '｜${ValueReaders.stringValue(task['task_type'])}'
+              '｜${ValueReaders.stringValue(task['title'])}'
+              '｜${ValueReaders.stringValue(task['relative_path'])}',
+        )
+        .join('\n');
+    _printer.block('任务列表', lines);
+    return 0;
+  }
+
+  Future<int> _runNext(List<String> args) async {
+    // 中文注释: 下一任务预览只显示共享调度层认定的下一条 runnable 任务。
+    final context = await _workflowContext(args);
+    if (context == null) {
+      return 2;
+    }
+    final nextTask = await _workflowRuntimeService.nextWorkflowTask(context.project);
+    if (nextTask.isEmpty) {
+      _printer.info('当前没有可运行任务。');
+      return 0;
+    }
+    _printer.block('下一任务', _prettyJson(nextTask));
+    return 0;
+  }
+
+  Future<int> _runPreflight(List<String> args) async {
+    // 中文注释: 预检命令复用共享 preflight 规则，让 CLI 看到的阻塞原因和 GUI 完全一致。
+    final context = await _workflowContext(args);
+    if (context == null) {
+      return 2;
+    }
+    final result = await _workflowRuntimeService.taskQueuePreflight(
+      context.project,
+    );
+    _printer.block('队列预检', _prettyJson(result));
+    return ValueReaders.boolValue(result['runnable']) ? 0 : 1;
+  }
+
+  Future<int> _runPlan(List<String> args) async {
+    // 中文注释: 单任务计划导出成 Markdown 文件，供先审阅再执行的终端流程使用。
+    final context = await _workflowContext(args);
+    if (context == null) {
+      return 2;
+    }
+    final selector = await _taskSelectorFromArgs(context.project, args);
+    if (selector.isEmpty) {
+      _printer.error('请通过 --task 或 --id 选择任务。');
+      return 2;
+    }
+    final result = await _workflowRuntimeService.saveWorkflowTaskPlan(
+      context.project,
+      selector,
+    );
+    return _printWorkflowResult(result, success: '任务计划已生成。');
+  }
+
+  Future<int> _runChain(List<String> args) async {
+    // 中文注释: 链路命令用于查看当前任务链结构和下一步位置，便于终端恢复现场。
+    final context = await _workflowContext(args);
+    if (context == null) {
+      return 2;
+    }
+    final result = await _workflowRuntimeService.workflowChainView(context.project);
+    _printer.block('任务链', _prettyJson(result));
+    return 0;
+  }
+
+  Future<int> _runPrepare(List<String> args) async {
+    // 中文注释: prepare 只生成执行包，不直接触发模型，适合先检查 prompt 和输出路径。
+    final context = await _workflowContext(args);
+    if (context == null) {
+      return 2;
+    }
+    final selector = await _taskSelectorFromArgs(context.project, args);
+    if (selector.isEmpty) {
+      _printer.error('请通过 --task 或 --id 选择任务。');
+      return 2;
+    }
+    final result = await _workflowRuntimeService.prepareWorkflowTaskExecution(
+      context.project,
+      selector,
+      contextSettings: context.settings.contextSettings,
+    );
+    return _printWorkflowResult(result, success: '执行包已准备完成。');
+  }
+
+  Future<int> _runSelectedOnce(List<String> args) async {
+    // 中文注释: run-once 只推进指定任务一轮，方便终端精确控制节奏。
+    final context = await _workflowContext(args, requireProvider: true);
+    if (context == null) {
+      return 2;
+    }
+    final selector = await _taskSelectorFromArgs(context.project, args);
+    if (selector.isEmpty) {
+      _printer.error('请通过 --task 或 --id 选择任务。');
+      return 2;
+    }
+    final result = await _workflowRuntimeService.runWorkflowTaskOnce(
+      context.project,
+      context.settings,
+      selector,
+    );
+    return _printWorkflowResult(result, success: '当前任务已执行一轮。');
+  }
+
+  Future<int> _runNextOnce(List<String> args) async {
+    // 中文注释: run-next 让共享调度层自己挑选下一可运行任务并推进一次。
+    final context = await _workflowContext(args, requireProvider: true);
+    if (context == null) {
+      return 2;
+    }
+    final result = await _workflowRuntimeService.runNextWorkflowTaskOnce(
+      context.project,
+      context.settings,
+    );
+    return _printWorkflowResult(result, success: '下一任务已执行一轮。');
+  }
+
+  Future<int> _runQueue(List<String> args) async {
+    // 中文注释: run-queue 走共享受控连续运行逻辑，让 CLI 也遵守同样的安全停机规则。
+    final context = await _workflowContext(args, requireProvider: true);
+    if (context == null) {
+      return 2;
+    }
+    final result = await _workflowRuntimeService.runWorkflowTaskQueue(
+      context.project,
+      context.settings,
+      options: <String, Object?>{
+        'max_steps': _intOption(args, '--steps', 3),
+      },
+    );
+    return _printWorkflowResult(result, success: '队列运行已推进。');
+  }
+
+  Future<int> _runPostprocessOnce(List<String> args) async {
+    // 中文注释: 后处理单步不会改写正文规划，而是推进摘要、记忆和检查产物。
+    final context = await _workflowContext(args, requireProvider: true);
+    if (context == null) {
+      return 2;
+    }
+    final selector = await _taskSelectorFromArgs(context.project, args);
+    if (selector.isEmpty) {
+      _printer.error('请通过 --task 或 --id 选择任务。');
+      return 2;
+    }
+    final result = await _workflowRuntimeService.runWorkflowTaskPostprocessOnce(
+      context.project,
+      context.settings,
+      selector,
+    );
+    return _printWorkflowResult(result, success: '当前任务后处理已执行一轮。');
+  }
+
+  Future<int> _runPostprocessNext(List<String> args) async {
+    // 中文注释: 自动选择下一条待后处理任务并推进一轮。
+    final context = await _workflowContext(args, requireProvider: true);
+    if (context == null) {
+      return 2;
+    }
+    final result =
+        await _workflowRuntimeService.runNextWorkflowTaskPostprocessOnce(
+          context.project,
+          context.settings,
+        );
+    return _printWorkflowResult(result, success: '下一条后处理已执行一轮。');
+  }
+
+  Future<int> _runCompleteAndNext(List<String> args) async {
+    // 中文注释: complete-next 用于人工确认后把当前任务标记完成，并尝试继续下一条。
+    final context = await _workflowContext(args, requireProvider: true);
+    if (context == null) {
+      return 2;
+    }
+    final selector = await _taskSelectorFromArgs(context.project, args);
+    if (selector.isEmpty) {
+      _printer.error('请通过 --task 或 --id 选择任务。');
+      return 2;
+    }
+    final result = await _workflowRuntimeService.completeWorkflowTaskAndRunNext(
+      context.project,
+      context.settings,
+      selector,
+    );
+    return _printWorkflowResult(result, success: '已完成当前任务，并尝试继续下一条。');
+  }
+
+  Future<int> _runPause(List<String> args) async {
+    // 中文注释: 暂停优先使用命令参数指定运行记录，否则回退到最近一条长任务运行记录。
+    final context = await _workflowContext(args);
+    if (context == null) {
+      return 2;
+    }
+    final runPath = await _resolveRunPath(context.project, args);
+    if (runPath.isEmpty) {
+      _printer.error('当前没有可暂停的长任务运行记录。');
+      return 2;
+    }
+    final result = await _workflowRuntimeService.pauseLongTaskRun(
+      context.project,
+      runPath,
+    );
+    return _printWorkflowResult(result, success: '长任务运行已暂停。');
+  }
+
+  Future<int> _runResume(List<String> args) async {
+    // 中文注释: 恢复长任务继续复用共享队列运行入口，不在 CLI 层另造一套继续逻辑。
+    final context = await _workflowContext(args, requireProvider: true);
+    if (context == null) {
+      return 2;
+    }
+    final runPath = await _resolveRunPath(context.project, args);
+    if (runPath.isEmpty) {
+      _printer.error('当前没有可恢复的长任务运行记录。');
+      return 2;
+    }
+    final result = await _workflowRuntimeService.resumeLongTaskRun(
+      context.project,
+      context.settings,
+      runPath,
+    );
+    return _printWorkflowResult(result, success: '长任务运行已恢复推进。');
+  }
+
+  Future<int> _runAcceptRevision(List<String> args) async {
+    // 中文注释: 接受修订结果只变更共享任务状态，不在 CLI 层直接操作 diff 文件。
+    final context = await _workflowContext(args);
+    if (context == null) {
+      return 2;
+    }
+    final selector = await _taskSelectorFromArgs(context.project, args);
+    if (selector.isEmpty) {
+      _printer.error('请通过 --task 或 --id 选择 revision 任务。');
+      return 2;
+    }
+    final result = await _workflowRuntimeService.acceptRevisionTask(
+      context.project,
+      selector,
+    );
+    return _printWorkflowResult(result, success: '修订结果已接受。');
+  }
+
+  Future<int> _runRollbackRevision(List<String> args) async {
+    // 中文注释: 回滚修订依赖 revision diff 中的 backup 配对，这个过程完全交给共享 runtime 执行。
+    final context = await _workflowContext(args);
+    if (context == null) {
+      return 2;
+    }
+    final selector = await _taskSelectorFromArgs(context.project, args);
+    if (selector.isEmpty) {
+      _printer.error('请通过 --task 或 --id 选择 revision 任务。');
+      return 2;
+    }
+    final result = await _workflowRuntimeService.rollbackRevisionTask(
+      context.project,
+      selector,
+    );
+    return _printWorkflowResult(result, success: '修订结果已回滚。');
+  }
+
+  Future<_WorkflowContext?> _workflowContext(
+    List<String> args, {
+    bool requireProvider = false,
+  }) async {
+    // 中文注释: 共享设置与项目打开逻辑集中在这里，避免每个子命令各自拼默认项目路径和 provider 校验。
+    final settings = await _settingsRepository.load();
+    if (requireProvider && settings.defaultProvider() == null) {
+      _printer.error('未找到可用 provider。');
+      return null;
+    }
+    final project = await _openProject(
+      args,
+      defaultProjectPath: settings.defaultProjectPath,
+    );
+    if (project == null) {
+      return null;
+    }
+    return _WorkflowContext(project: project, settings: settings);
+  }
+
+  Future<ProjectDescriptor?> _openProject(
+    List<String> args, {
+    required String defaultProjectPath,
+  }) async {
+    final projectPath = _optionValue(args, '--project') ?? defaultProjectPath;
+    final project = await _projectRepository.openByPath(projectPath);
+    if (project == null) {
+      _printer.error('项目不存在: $projectPath');
+      return null;
+    }
+    return project;
+  }
+
+  Future<JsonMap> _taskSelectorFromArgs(
+    ProjectDescriptor project,
+    List<String> args,
+  ) async {
+    // 中文注释: 任务选择支持 path 与 id 两种方式，兼容旧项目里“路径定位”和“任务 id 定位”的双习惯。
+    final taskPath = _optionValue(args, '--task') ?? _optionValue(args, '--path');
+    if ((taskPath ?? '').trim().isNotEmpty) {
+      return <String, Object?>{'relative_path': taskPath!.trim()};
+    }
+    final taskId = _optionValue(args, '--id');
+    if ((taskId ?? '').trim().isNotEmpty) {
+      return <String, Object?>{'task_id': taskId!.trim()};
+    }
+    final positional = _joinedPositional(args);
+    if (positional.trim().isNotEmpty) {
+      return <String, Object?>{'relative_path': positional.trim()};
+    }
+    final nextTask = await _workflowRuntimeService.nextWorkflowTask(project);
+    if (nextTask.isNotEmpty) {
+      return <String, Object?>{
+        'relative_path': ValueReaders.stringValue(nextTask['relative_path']),
+      };
+    }
+    return <String, Object?>{};
+  }
+
+  Future<String> _resolveRunPath(
+    ProjectDescriptor project,
+    List<String> args,
+  ) async {
+    final explicit = _optionValue(args, '--run') ?? '';
+    if (explicit.trim().isNotEmpty) {
+      return explicit.trim();
+    }
+    final runs = await _workflowRuntimeService.listLongTaskRuns(project, limit: 1);
+    if (runs.isEmpty) {
+      return '';
+    }
+    return ValueReaders.stringValue(runs.first['relative_path']);
+  }
+
+  int _printWorkflowResult(JsonMap result, {required String success}) {
+    // 中文注释: workflow 所有共享结果都从这里统一提炼终端输出口径，避免每个命令各写各的成功提示。
+    if (!ValueReaders.boolValue(result['ok'])) {
+      _printer.error(ValueReaders.stringValue(result['error'], '执行失败。'));
+      final response = ValueReaders.mapValue(result['response']);
+      if (response.isNotEmpty) {
+        _printer.block('响应摘要', _prettyJson(response));
+      }
+      return 1;
+    }
+    _printer.success(success);
+    final relativePath = ValueReaders.stringValue(
+      result['relative_path'],
+      ValueReaders.stringValue(result['long_task_run_path']),
+    );
+    if (relativePath.trim().isNotEmpty) {
+      _printer.info('项目路径: $relativePath');
+    }
+    final changedPaths = ValueReaders.stringList(result['changed_paths']);
+    if (changedPaths.isNotEmpty) {
+      for (final path in changedPaths) {
+        _printer.info('已更新: $path');
+      }
+    }
+    final outputPaths = ValueReaders.stringList(result['output_paths']);
+    if (outputPaths.isNotEmpty) {
+      for (final path in outputPaths) {
+        _printer.info('输出: $path');
+      }
+    }
+    final response = ValueReaders.mapValue(result['response']);
+    final content = ValueReaders.stringValue(response['content']).trim();
+    if (content.isNotEmpty) {
+      _printer.block('模型输出', content);
+    }
+    final record = ValueReaders.mapValue(result['record']);
+    if (record.isNotEmpty) {
+      _printer.block('运行记录', _prettyJson(record));
+    }
+    return 0;
+  }
+
   void _printHelp() {
-    // 中文注释: workflow 帮助只覆盖当前已经可用的子命令，避免暴露尚未接通的承诺接口。
+    // 中文注释: workflow 帮助只展示已经接通的共享运行入口，避免 CLI 承诺不存在的子命令。
     _printer.block(
       'workflow help',
       [
         'workflow draft --prompt "写第一章开场" [--project 路径] [--title 标题] [--model 模型] [--no-save]',
+        'workflow create --mode human_outline_ai_draft [--outline outline/outline.md] [--seed 创作说明] [--chapters 12] [--checkpoint 3] [--project 路径]',
+        'workflow list [--project 路径]',
+        'workflow next [--project 路径]',
+        'workflow preflight [--project 路径]',
+        'workflow chain [--project 路径]',
+        'workflow plan --task tasks/xxx.json [--project 路径]',
+        'workflow prepare --task tasks/xxx.json [--project 路径]',
+        'workflow run-once --task tasks/xxx.json [--project 路径]',
+        'workflow run-next [--project 路径]',
+        'workflow run-queue [--steps 3] [--project 路径]',
+        'workflow postprocess-once --task tasks/xxx.json [--project 路径]',
+        'workflow postprocess-next [--project 路径]',
+        'workflow complete-next --task tasks/xxx.json [--project 路径]',
+        'workflow pause [--run tracking/long_task_runs/xxx.json] [--project 路径]',
+        'workflow resume [--run tracking/long_task_runs/xxx.json] [--project 路径]',
+        'workflow accept-revision --task tasks/xxx.json [--project 路径]',
+        'workflow rollback-revision --task tasks/xxx.json [--project 路径]',
       ].join('\n'),
     );
   }
@@ -119,8 +592,16 @@ class WorkflowCommand {
     return args[index + 1].trim();
   }
 
+  int _intOption(List<String> args, String name, int fallback) {
+    final raw = _optionValue(args, name);
+    if (raw == null) {
+      return fallback;
+    }
+    return int.tryParse(raw.trim()) ?? fallback;
+  }
+
   String _joinedPositional(List<String> args) {
-    // 中文注释: 非选项文本会被拼成 prompt，方便快速调用 CLI 做一次性生成。
+    // 中文注释: 非选项文本会被拼成 prompt 或 path，方便快速调用 CLI 做一次性操作。
     final parts = <String>[];
     for (var index = 0; index < args.length; index++) {
       final token = args[index];
@@ -143,4 +624,16 @@ class WorkflowCommand {
     }
     return firstLine.length > 24 ? firstLine.substring(0, 24) : firstLine;
   }
+
+  String _prettyJson(JsonMap value) {
+    // 中文注释: 结构化结果统一做缩进输出，便于终端排查任务运行细节。
+    return const JsonEncoder.withIndent('  ').convert(value);
+  }
+}
+
+class _WorkflowContext {
+  const _WorkflowContext({required this.project, required this.settings});
+
+  final ProjectDescriptor project;
+  final AppSettings settings;
 }

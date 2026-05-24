@@ -9,7 +9,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  path_provider: ^2.1.5
   novel_agent_core:
     path: ../../packages/novel_agent_core
   novel_agent_adapters:

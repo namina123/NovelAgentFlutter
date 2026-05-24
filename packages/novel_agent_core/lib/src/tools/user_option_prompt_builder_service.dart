@@ -43,11 +43,11 @@ class UserOptionPromptBuilderService {
       if (label.isEmpty) {
         continue;
       }
-      final description = ValueReaders.stringValue(option['description']).trim();
+      final description = ValueReaders.stringValue(
+        option['description'],
+      ).trim();
       final marker = label == selectedLabel ? '已选' : '候选';
-      parts.add(
-        '$marker：$label${description.isEmpty ? '' : '（$description）'}',
-      );
+      parts.add('$marker：$label${description.isEmpty ? '' : '（$description）'}');
     }
     return parts.join('；');
   }

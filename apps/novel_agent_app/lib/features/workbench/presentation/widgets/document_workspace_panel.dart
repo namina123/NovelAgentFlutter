@@ -43,7 +43,10 @@ class DocumentWorkspacePanel extends StatelessWidget {
                     title: viewData.activeDocumentTitle,
                     relativePath: viewData.activeDocumentPath,
                     content: viewData.activeDocumentBody,
-                    status: viewData.generationStatus,
+                    status: viewData.activeDocumentDirty
+                        ? '未保存修改'
+                        : viewData.generationStatus,
+                    onChanged: actionHandler.onDocumentBodyChanged,
                   ),
           ),
         ],

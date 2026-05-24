@@ -10,6 +10,7 @@ class EcosystemDetailPanel extends StatelessWidget {
   const EcosystemDetailPanel({
     super.key,
     required this.entry,
+    this.onOpenSourceRequested,
     required this.onCreateAgentRequested,
     required this.onCreateSkillRequested,
     required this.onCreateSkillGroupRequested,
@@ -27,10 +28,14 @@ class EcosystemDetailPanel extends StatelessWidget {
       key: key,
       entry: const EcosystemEntryViewData(
         id: '',
+        kind: 'agents',
         title: '尚未载入条目',
         subtitle: '等待扫描内置与项目内生态包',
         badge: '空',
         description: '这里会展示当前智能体、技能或分组的详细信息。',
+        sourcePath: '',
+        projectRelativePath: '',
+        isEditable: false,
       ),
       onCreateAgentRequested: onCreateAgentRequested,
       onCreateSkillRequested: onCreateSkillRequested,
@@ -40,6 +45,7 @@ class EcosystemDetailPanel extends StatelessWidget {
   }
 
   final EcosystemEntryViewData entry;
+  final VoidCallback? onOpenSourceRequested;
   final VoidCallback onCreateAgentRequested;
   final VoidCallback onCreateSkillRequested;
   final VoidCallback onCreateSkillGroupRequested;
@@ -56,7 +62,28 @@ class EcosystemDetailPanel extends StatelessWidget {
           const SizedBox(height: 18),
           _buildInfoCard('条目标识', entry.subtitle),
           const SizedBox(height: 12),
+          _buildInfoCard('条目类型', _kindLabel(entry.kind)),
+          const SizedBox(height: 12),
           _buildInfoCard('来源', entry.badge),
+          if (entry.projectRelativePath.trim().isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _buildInfoCard('项目路径', entry.projectRelativePath),
+          ],
+          if (entry.sourcePath.trim().isNotEmpty &&
+              entry.sourcePath.trim() != entry.projectRelativePath.trim()) ...[
+            const SizedBox(height: 12),
+            _buildInfoCard('源文件', entry.sourcePath),
+          ],
+          if (entry.isEditable && onOpenSourceRequested != null) ...[
+            const SizedBox(height: 14),
+            ActionButton(
+              label: '打开源文件',
+              icon: Icons.edit_note_outlined,
+              tone: ActionButtonTone.neutral,
+              expanded: true,
+              onPressed: onOpenSourceRequested!,
+            ),
+          ],
           const SizedBox(height: 22),
           const Text(
             '自定义与导入',
@@ -133,5 +160,20 @@ class EcosystemDetailPanel extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _kindLabel(String kind) {
+    // 中文注释: 条目类型标签统一映射为中文，避免展示层直接暴露内部 tab id。
+    switch (kind) {
+      case 'skills':
+        return '技能';
+      case 'skill-groups':
+        return '技能组';
+      case 'agent-groups':
+        return '智能体组';
+      case 'agents':
+      default:
+        return '智能体';
+    }
   }
 }

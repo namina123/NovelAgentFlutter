@@ -11,14 +11,12 @@ class ProjectManifestCodecService {
   }) : _projectTypeCatalogService =
            projectTypeCatalogService ?? const ProjectTypeCatalogService();
 
-  static const String manifestRelativePath = '.novel_agent/project_manifest.json';
+  static const String manifestRelativePath =
+      '.novel_agent/project_manifest.json';
 
   final ProjectTypeCatalogService _projectTypeCatalogService;
 
-  ProjectManifest create({
-    required String title,
-    required String projectType,
-  }) {
+  ProjectManifest create({required String title, required String projectType}) {
     // 中文注释: 新建 manifest 时在这里统一补齐标题和项目类型，避免不同创建入口写出不同结构。
     final normalizedType = _projectTypeCatalogService.normalize(projectType);
     final cleanTitle = title.trim().isEmpty
@@ -35,17 +33,11 @@ class ProjectManifestCodecService {
     // 中文注释: manifest 解析需要对旧文件和坏数据保持宽容，确保项目至少还能以普通小说打开。
     final cleanSource = source.trim();
     if (cleanSource.isEmpty) {
-      return create(
-        title: fallbackTitle,
-        projectType: fallbackProjectType,
-      );
+      return create(title: fallbackTitle, projectType: fallbackProjectType);
     }
     final parsed = jsonDecode(cleanSource);
     if (parsed is! Map<Object?, Object?>) {
-      return create(
-        title: fallbackTitle,
-        projectType: fallbackProjectType,
-      );
+      return create(title: fallbackTitle, projectType: fallbackProjectType);
     }
     return fromJson(
       Map<String, Object?>.from(parsed),
@@ -83,7 +75,9 @@ class ProjectManifestCodecService {
     return <String, Object?>{
       'schema_version': manifest.schemaVersion,
       'title': manifest.title,
-      'project_type': _projectTypeCatalogService.normalize(manifest.projectType),
+      'project_type': _projectTypeCatalogService.normalize(
+        manifest.projectType,
+      ),
     };
   }
 

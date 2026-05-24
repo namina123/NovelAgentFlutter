@@ -22,4 +22,12 @@ abstract class ProjectToolHostPort {
     String sourceRelativePath,
     String targetRelativePath,
   );
+
+  Future<String?> readExternalTextFile(String absolutePath);
+
+  Future<void> copyExternalFile(
+    String absolutePath,
+    String rootPath,
+    String targetRelativePath,
+  );
 }

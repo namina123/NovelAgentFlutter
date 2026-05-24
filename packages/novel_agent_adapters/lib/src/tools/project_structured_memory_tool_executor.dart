@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import 'project_file_write_tool_executor.dart';
@@ -5,13 +7,24 @@ import 'project_tool_path_policy.dart';
 
 class ProjectStructuredMemoryToolExecutor {
   ProjectStructuredMemoryToolExecutor({
+    required ProjectToolHostPort hostPort,
     required ProjectFileWriteToolExecutor writeToolExecutor,
     ProjectToolPathPolicy? pathPolicy,
+    ReviewReportNormalizerService? reviewReportNormalizerService,
+    ReviewReportMarkdownRenderer? reviewReportMarkdownRenderer,
   }) : _writeToolExecutor = writeToolExecutor,
-       _pathPolicy = pathPolicy ?? ProjectToolPathPolicy();
+       _hostPort = hostPort,
+       _pathPolicy = pathPolicy ?? ProjectToolPathPolicy(),
+       _reviewReportNormalizerService =
+           reviewReportNormalizerService ?? ReviewReportNormalizerService(),
+       _reviewReportMarkdownRenderer =
+           reviewReportMarkdownRenderer ?? ReviewReportMarkdownRenderer();
 
   final ProjectFileWriteToolExecutor _writeToolExecutor;
+  final ProjectToolHostPort _hostPort;
   final ProjectToolPathPolicy _pathPolicy;
+  final ReviewReportNormalizerService _reviewReportNormalizerService;
+  final ReviewReportMarkdownRenderer _reviewReportMarkdownRenderer;
 
   Future<JsonMap> updateWorldState(
     ProjectDescriptor project,
@@ -90,68 +103,97 @@ class ProjectStructuredMemoryToolExecutor {
   Future<JsonMap> runContinuityCheck(
     ProjectDescriptor project,
     JsonMap arguments,
-  ) {
-    // 中文注释: 连续性检查报告落到 reviews/<type>/ 目录，正文和问题列表都保持可读 Markdown。
+  ) async {
+    // 中文注释: 审稿报告同时落 JSON 和 Markdown 兄弟文件，保证报告浏览、修复任务和详情页都能共用。
     final title = ValueReaders.stringValue(arguments['title'], '连续性检查');
     final reviewType = ValueReaders.stringValue(
       arguments['review_type'],
       'continuity',
     ).trim().toLowerCase();
+    final createdAt = DateTime.now().toIso8601String();
     final issues = ValueReaders.objectList(arguments['issues'])
         .map(ValueReaders.mapValue)
         .where((entry) => entry.isNotEmpty)
         .toList(growable: false);
     final suggestions = ValueReaders.stringList(arguments['suggestions']);
     final sourcePaths = ValueReaders.stringList(arguments['source_paths']);
-    final buffer = StringBuffer()
-      ..writeln('# $title')
-      ..writeln()
-      ..writeln('- 检查类型：$reviewType');
     final scope = ValueReaders.stringValue(arguments['scope']).trim();
-    if (scope.isNotEmpty) {
-      buffer.writeln('- 范围：$scope');
+    var markdownPath = _pathPolicy.cleanRelativePath(
+      ValueReaders.stringValue(arguments['relative_path']),
+    );
+    if (markdownPath.isEmpty) {
+      markdownPath =
+          'reviews/$reviewType/${_pathPolicy.safeFileName(title)}.md';
+    } else if (markdownPath.toLowerCase().endsWith('.json')) {
+      markdownPath = '${markdownPath.substring(0, markdownPath.length - 5)}.md';
+    } else if (!markdownPath.split('/').last.contains('.')) {
+      markdownPath = '$markdownPath.md';
     }
-    if (sourcePaths.isNotEmpty) {
-      buffer.writeln('- 关联文件：${sourcePaths.join('、')}');
+    if (!_pathPolicy.isSafeFilePath(markdownPath)) {
+      return <String, Object?>{
+        'ok': false,
+        'error': 'Unsafe review report path.',
+        'relative_path': markdownPath,
+      };
     }
-    buffer
-      ..writeln()
-      ..writeln(ValueReaders.stringValue(arguments['summary']).trim());
-    if (issues.isNotEmpty) {
-      buffer
-        ..writeln()
-        ..writeln('## 问题列表');
-      for (final issue in issues) {
-        buffer
-          ..writeln()
-          ..writeln(
-            '- ${ValueReaders.stringValue(issue['title'], '未命名问题')}'
-            '（${ValueReaders.stringValue(issue['severity'], 'unknown')}）',
-          );
-        final detail = ValueReaders.stringValue(issue['detail']).trim();
-        if (detail.isNotEmpty) {
-          buffer.writeln('  - 细节：$detail');
-        }
-        final suggestion = ValueReaders.stringValue(issue['suggestion']).trim();
-        if (suggestion.isNotEmpty) {
-          buffer.writeln('  - 建议：$suggestion');
-        }
-      }
+    final overwrite = ValueReaders.boolValue(arguments['overwrite']);
+    if (!overwrite) {
+      markdownPath = await _pathPolicy.uniqueRelativePath(
+        hostPort: _hostPort,
+        rootPath: project.rootPath,
+        relativePath: markdownPath,
+      );
     }
-    if (suggestions.isNotEmpty) {
-      buffer
-        ..writeln()
-        ..writeln('## 补充建议');
-      for (final suggestion in suggestions) {
-        buffer.writeln('- $suggestion');
-      }
+    final jsonPath = '${markdownPath.substring(0, markdownPath.length - 3)}json';
+    final report = _reviewReportNormalizerService.normalizeReport(
+      <String, Object?>{
+        'id':
+            'review_${_pathPolicy.safeFileName(title, fallback: 'report')}_${DateTime.now().microsecondsSinceEpoch}',
+        'review_type': reviewType,
+        'title': title,
+        'scope': scope,
+        'summary': ValueReaders.stringValue(arguments['summary']).trim(),
+        'issues': issues,
+        'suggestions': suggestions,
+        'source_paths': sourcePaths,
+        'related_paths': ValueReaders.stringList(arguments['related_paths']),
+        'metadata': <String, Object?>{
+          'origin': 'run_continuity_check',
+        },
+        'created_at': createdAt,
+        'json_path': jsonPath,
+        'markdown_path': markdownPath,
+      },
+      createdAt: createdAt,
+    );
+    final markdown = _reviewReportMarkdownRenderer.renderMarkdown(report);
+    await _hostPort.writeTextFile(
+      project.rootPath,
+      jsonPath,
+      const JsonEncoder.withIndent('  ').convert(report),
+    );
+    final markdownResult = await _writeToolExecutor.writeProjectFile(
+      project,
+      <String, Object?>{
+        'content_type': 'summary',
+        'title': title,
+        'relative_path': markdownPath,
+        'content': markdown,
+        'overwrite': true,
+      },
+    );
+    if (!ValueReaders.boolValue(markdownResult['ok'])) {
+      return markdownResult;
     }
-    return _writeToolExecutor.writeProjectFile(project, <String, Object?>{
-      'content_type': 'summary',
-      'title': title,
-      'relative_path':
-          'reviews/$reviewType/${_pathPolicy.safeFileName(title)}.md',
-      'content': buffer.toString().trim(),
-    });
+    return <String, Object?>{
+      'ok': true,
+      'relative_path': markdownPath,
+      'markdown_path': markdownPath,
+      'json_path': jsonPath,
+      'review_type': reviewType,
+      'source_paths': sourcePaths,
+      'changed_paths': <Object?>[jsonPath, markdownPath],
+      'summary': '已保存审稿报告：$markdownPath',
+    };
   }
 }

@@ -70,4 +70,31 @@ class LocalProjectFileMutationAdapter {
       await sourceDirectory.rename(targetPath);
     }
   }
+
+  Future<String?> readExternalTextFile(String absolutePath) async {
+    // 中文注释: 外部文本读取只承接宿主绝对路径，不参与项目内相对路径规则。
+    final file = File(absolutePath);
+    if (!await file.exists()) {
+      return null;
+    }
+    return file.readAsString();
+  }
+
+  Future<void> copyExternalFile(
+    String absolutePath,
+    String rootPath,
+    String targetRelativePath,
+  ) async {
+    // 中文注释: 外部文件导入统一落到这里，保证目标仍然经过项目根目录边界检查。
+    final sourceFile = File(absolutePath);
+    if (!await sourceFile.exists()) {
+      throw ArgumentError.value(absolutePath, 'absolutePath', '源文件不存在。');
+    }
+    final targetPath = _pathResolver.resolve(
+      rootPath: rootPath,
+      relativePath: targetRelativePath,
+    );
+    await Directory(targetPath).parent.create(recursive: true);
+    await sourceFile.copy(targetPath);
+  }
 }

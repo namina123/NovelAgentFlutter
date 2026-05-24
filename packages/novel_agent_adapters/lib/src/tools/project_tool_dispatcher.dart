@@ -1,8 +1,12 @@
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../packages/local_skill_group_catalog.dart';
+import '../packages/local_skill_package_catalog.dart';
 import 'project_file_edit_tool_executor.dart';
 import 'project_file_read_tool_executor.dart';
 import 'project_file_write_tool_executor.dart';
+import 'project_agent_skill_tool_executor.dart';
+import 'project_management_tool_executor.dart';
 import 'project_structured_memory_tool_executor.dart';
 import 'project_task_tool_executor.dart';
 import 'project_tool_path_policy.dart';
@@ -11,6 +15,8 @@ import 'project_tool_result_factory.dart';
 class ProjectToolDispatcher implements ToolExecutionPort {
   ProjectToolDispatcher({
     required ProjectToolHostPort hostPort,
+    LocalSkillPackageCatalog? skillPackageCatalog,
+    LocalSkillGroupCatalog? skillGroupCatalog,
     ToolCallNormalizerService? toolCallNormalizerService,
     ProjectToolPathPolicy? pathPolicy,
     ProjectToolResultFactory? resultFactory,
@@ -33,6 +39,7 @@ class ProjectToolDispatcher implements ToolExecutionPort {
          resultFactory: resultFactory,
        ),
        _structuredMemoryToolExecutor = ProjectStructuredMemoryToolExecutor(
+         hostPort: hostPort,
          writeToolExecutor: ProjectFileWriteToolExecutor(
            hostPort: hostPort,
            pathPolicy: pathPolicy,
@@ -44,6 +51,15 @@ class ProjectToolDispatcher implements ToolExecutionPort {
          hostPort: hostPort,
          pathPolicy: pathPolicy,
          resultFactory: resultFactory,
+       ),
+       _managementToolExecutor = ProjectManagementToolExecutor(
+         hostPort: hostPort,
+         resultFactory: resultFactory,
+       ),
+       _agentSkillToolExecutor = ProjectAgentSkillToolExecutor(
+         skillPackageCatalog: skillPackageCatalog,
+         skillGroupCatalog: skillGroupCatalog,
+         resultFactory: resultFactory,
        );
 
   final ToolCallNormalizerService _toolCallNormalizerService;
@@ -53,6 +69,8 @@ class ProjectToolDispatcher implements ToolExecutionPort {
   final ProjectFileEditToolExecutor _editToolExecutor;
   final ProjectStructuredMemoryToolExecutor _structuredMemoryToolExecutor;
   final ProjectTaskToolExecutor _taskToolExecutor;
+  final ProjectManagementToolExecutor _managementToolExecutor;
+  final ProjectAgentSkillToolExecutor _agentSkillToolExecutor;
 
   @override
   Future<JsonMap> execute({
@@ -121,28 +139,17 @@ class ProjectToolDispatcher implements ToolExecutionPort {
       case 'set_agent_tasks':
         return _setAgentTasks(arguments);
       case 'load_agent_skill':
-        return _resultFactory.notExecuted(
-          'load_agent_skill 已识别，但内置技能包目录迁移仍在继续。',
-        );
+        return _agentSkillToolExecutor.loadAgentSkill(project, arguments);
       case 'call_sub_agent':
         return _resultFactory.notExecuted(
-          'call_sub_agent 已识别，但跨智能体运行入口仍在继续接入。',
+          'call_sub_agent 由上层 ToolExecutionService 直接接管；当前分发器只保留兜底结果。',
         );
       case 'rename_project':
-        return _resultFactory.notExecuted(
-          'rename_project 已识别，但项目清单持久化入口尚未迁移完成。',
-        );
+        return _managementToolExecutor.renameProject(project, arguments);
       case 'reorder_project_file':
-        return _resultFactory.notExecuted(
-          'reorder_project_file 已识别，但当前项目没有独立排序元数据可更新。',
-        );
+        return _managementToolExecutor.reorderProjectFile(arguments);
       case 'request_gateway_tool':
-        return _resultFactory.notExecuted(
-          '当前宿主没有接入外部 gateway 工具执行通道。',
-          data: <String, Object?>{
-            'gateway_tool': ValueReaders.stringValue(arguments['gateway_tool']),
-          },
-        );
+        return _managementToolExecutor.requestGatewayTool(arguments);
       default:
         return _resultFactory.error('Unknown project tool: $toolName');
     }

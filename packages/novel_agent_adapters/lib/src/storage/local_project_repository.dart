@@ -25,7 +25,8 @@ class LocalProjectRepository implements ProjectRepository {
     final projectName = normalizedName.endsWith('/')
         ? normalizedName.substring(0, normalizedName.length - 1)
         : normalizedName;
-    final manifestPath = '${directory.path}${Platform.pathSeparator}${ProjectManifestCodecService.manifestRelativePath.replaceAll('/', Platform.pathSeparator)}';
+    final manifestPath =
+        '${directory.path}${Platform.pathSeparator}${ProjectManifestCodecService.manifestRelativePath.replaceAll('/', Platform.pathSeparator)}';
     final manifestFile = File(manifestPath);
     final manifest = await manifestFile.exists()
         ? _projectManifestCodecService.parse(

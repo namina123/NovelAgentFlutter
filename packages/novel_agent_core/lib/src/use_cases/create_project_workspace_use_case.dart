@@ -1,5 +1,7 @@
 import '../ports/project_repository.dart';
 import '../ports/project_workspace_port.dart';
+import '../customization/customization_index_document_service.dart';
+import '../customization/customization_root_catalog_service.dart';
 import '../project/project_descriptor.dart';
 import '../project/project_manifest_codec_service.dart';
 import '../project/project_type_catalog_service.dart';
@@ -11,6 +13,8 @@ class CreateProjectWorkspaceUseCase {
     required ProjectWorkspacePort projectWorkspacePort,
     ProjectTypeCatalogService? projectTypeCatalogService,
     ProjectManifestCodecService? projectManifestCodecService,
+    CustomizationRootCatalogService? customizationRootCatalogService,
+    CustomizationIndexDocumentService? customizationIndexDocumentService,
   }) : _projectRepository = projectRepository,
        _projectWorkspacePort = projectWorkspacePort,
        _projectTypeCatalogService =
@@ -20,12 +24,24 @@ class CreateProjectWorkspaceUseCase {
            ProjectManifestCodecService(
              projectTypeCatalogService:
                  projectTypeCatalogService ?? const ProjectTypeCatalogService(),
+           ),
+       _customizationRootCatalogService =
+           customizationRootCatalogService ??
+           const CustomizationRootCatalogService(),
+       _customizationIndexDocumentService =
+           customizationIndexDocumentService ??
+           CustomizationIndexDocumentService(
+             rootCatalogService:
+                 customizationRootCatalogService ??
+                 const CustomizationRootCatalogService(),
            );
 
   final ProjectRepository _projectRepository;
   final ProjectWorkspacePort _projectWorkspacePort;
   final ProjectTypeCatalogService _projectTypeCatalogService;
   final ProjectManifestCodecService _projectManifestCodecService;
+  final CustomizationRootCatalogService _customizationRootCatalogService;
+  final CustomizationIndexDocumentService _customizationIndexDocumentService;
 
   Future<ProjectDescriptor> execute({
     required String projectsRootPath,
@@ -83,6 +99,17 @@ class CreateProjectWorkspaceUseCase {
         rootPath,
         '${descriptor.path}README.md',
         '# ${descriptor.name}\n',
+      );
+    }
+    for (final descriptor in _customizationRootCatalogService.roots()) {
+      final root = descriptor['root'] ?? '';
+      if (root.trim().isEmpty) {
+        continue;
+      }
+      await _projectWorkspacePort.writeTextFile(
+        rootPath,
+        '$root/index.json',
+        _customizationIndexDocumentService.buildIndexDocument(root),
       );
     }
     await _projectWorkspacePort.writeTextFile(

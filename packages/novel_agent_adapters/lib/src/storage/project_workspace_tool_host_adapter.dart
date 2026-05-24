@@ -65,4 +65,24 @@ class ProjectWorkspaceToolHostAdapter implements ProjectToolHostPort {
       targetRelativePath,
     );
   }
+
+  @override
+  Future<String?> readExternalTextFile(String absolutePath) {
+    // 中文注释: 外部文本读取仍由更细的宿主变更适配器承接，避免工作区端口引入宿主绝对路径概念。
+    return _fileMutationAdapter.readExternalTextFile(absolutePath);
+  }
+
+  @override
+  Future<void> copyExternalFile(
+    String absolutePath,
+    String rootPath,
+    String targetRelativePath,
+  ) {
+    // 中文注释: 外部文件复制属于宿主导入行为，因此保持在变更适配器边界内。
+    return _fileMutationAdapter.copyExternalFile(
+      absolutePath,
+      rootPath,
+      targetRelativePath,
+    );
+  }
 }

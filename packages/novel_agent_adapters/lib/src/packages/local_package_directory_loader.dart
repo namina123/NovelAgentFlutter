@@ -63,7 +63,12 @@ class LocalPackageDirectoryLoader {
           .last;
       final parsed = parse(content, packageId);
       if (parsed.isNotEmpty) {
-        result.add(parsed);
+        result.add(<String, Object?>{
+          ...parsed,
+          'package_root_path': root.path,
+          'package_directory_path': entity.path,
+          'entry_file_path': entryFile.path,
+        });
       }
     }
     return result;
