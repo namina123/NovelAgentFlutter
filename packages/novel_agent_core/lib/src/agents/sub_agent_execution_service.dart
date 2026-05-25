@@ -162,9 +162,9 @@ class SubAgentExecutionService {
     final toolSchemas = _toolSchemaBuilderService.buildOpenAiSchemas(
       exposedChildToolIds,
     );
-    final messages = ValueReaders.mapList(package['messages']).toList(
-      growable: true,
-    );
+    final messages = ValueReaders.mapList(
+      package['messages'],
+    ).toList(growable: true);
     final executedTools = <Object?>[];
     var finalContent = '';
     var waitingForUserChoice = false;

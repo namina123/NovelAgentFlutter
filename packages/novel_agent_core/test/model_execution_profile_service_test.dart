@@ -120,5 +120,61 @@ void main() {
       expect(requestOptions['max_tokens'], 8192);
       expect(requestOptions['reasoning_effort'], 'high');
     });
+
+    test(
+      'applies project agent model override before agent profile override',
+      () {
+        final service = ModelExecutionProfileService();
+        final settings = AppSettings(
+          defaultProviderId: 'deepseek',
+          defaultAgentId: 'default_generalist',
+          defaultModelId: 'deepseek-v4-pro',
+          defaultProjectPath: 'D:/Novel',
+          autoSaveDrafts: true,
+          providers: const <ProviderEndpointSettings>[
+            ProviderEndpointSettings(
+              id: 'deepseek',
+              title: 'DeepSeek',
+              protocol: 'openai_compatible',
+              baseUrl: 'https://api.deepseek.com',
+              apiKey: 'demo-key',
+              modelId: 'deepseek-v4-pro',
+              description: '',
+            ),
+          ],
+          extraSettings: const <String, Object?>{
+            'model_settings': <String, Object?>{
+              'provider_id': 'deepseek',
+              'model_id': 'deepseek-v4-pro',
+              'temperature': '0.60',
+            },
+          },
+        );
+
+        final resolved = service.resolve(
+          settings: settings,
+          projectAgentBinding: const ProjectAgentBinding(
+            agentId: 'writer',
+            modelOverride: ProjectAgentModelOverride(
+              agentId: 'writer',
+              modelId: 'deepseek-v4-flash',
+              temperature: 0.41,
+              topP: 0.74,
+            ),
+          ),
+          agent: const <String, Object?>{'temperature': 0.88},
+        );
+        final runtimeProfile = ValueReaders.mapValue(
+          resolved['runtime_profile'],
+        );
+        final requestOptions = ValueReaders.mapValue(
+          resolved['request_options'],
+        );
+
+        expect(runtimeProfile['model'], 'deepseek-v4-flash');
+        expect(requestOptions['temperature'], 0.88);
+        expect(requestOptions['top_p'], 0.74);
+      },
+    );
   });
 }

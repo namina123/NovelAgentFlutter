@@ -43,7 +43,7 @@ final class BuiltinToolCatalog {
         BuiltinToolDefinition(
           id: 'load_agent_skill',
           name: '按需读取技能说明',
-          description: '只在当前任务需要某个技能时读取该技能的完整说明，避免把所有技能一次性塞进上下文。',
+          description: '只在当前任务需要某个技能时读取该技能摘要；默认返回压缩说明，确实需要时再请求 full。',
         ),
         BuiltinToolDefinition(
           id: 'call_sub_agent',

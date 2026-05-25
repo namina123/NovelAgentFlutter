@@ -11,18 +11,23 @@ class ProjectAgentSkillToolExecutor {
     ProjectToolResultFactory? resultFactory,
     AgentSkillSummaryService? skillSummaryService,
     AgentProfileCatalogService? agentProfileCatalogService,
+    SkillInstructionDigestService? skillInstructionDigestService,
   }) : _skillPackageCatalog = skillPackageCatalog ?? LocalSkillPackageCatalog(),
        _skillGroupCatalog = skillGroupCatalog ?? LocalSkillGroupCatalog(),
        _resultFactory = resultFactory ?? ProjectToolResultFactory(),
        _skillSummaryService = skillSummaryService ?? AgentSkillSummaryService(),
        _agentProfileCatalogService =
-           agentProfileCatalogService ?? AgentProfileCatalogService();
+           agentProfileCatalogService ?? AgentProfileCatalogService(),
+       _skillInstructionDigestService =
+           skillInstructionDigestService ??
+           const SkillInstructionDigestService();
 
   final LocalSkillPackageCatalog _skillPackageCatalog;
   final LocalSkillGroupCatalog _skillGroupCatalog;
   final ProjectToolResultFactory _resultFactory;
   final AgentSkillSummaryService _skillSummaryService;
   final AgentProfileCatalogService _agentProfileCatalogService;
+  final SkillInstructionDigestService _skillInstructionDigestService;
 
   Future<JsonMap> loadAgentSkill(
     ProjectDescriptor project,
@@ -90,9 +95,16 @@ class ProjectAgentSkillToolExecutor {
     final instructionMarkdown = ValueReaders.stringValue(
       skillPackage['instruction_markdown'],
     ).trim();
-    final instructionText = instructionMarkdown.isNotEmpty
-        ? instructionMarkdown
-        : _fallbackInstructionText(skillPackage);
+    final detailLevel = ValueReaders.stringValue(
+      arguments['detail_level'],
+      'summary',
+    ).trim().toLowerCase();
+    final useFullText = detailLevel == 'full';
+    final instructionText = useFullText
+        ? (instructionMarkdown.isNotEmpty
+              ? instructionMarkdown
+              : _fallbackInstructionText(skillPackage))
+        : _skillInstructionDigestService.buildDigest(skillPackage);
     return _resultFactory.success(
       '已读取技能说明：${ValueReaders.stringValue(skillPackage['name'], skillId)}',
       data: <String, Object?>{
@@ -101,7 +113,10 @@ class ProjectAgentSkillToolExecutor {
         'name': ValueReaders.stringValue(skillPackage['name'], skillId),
         'description': ValueReaders.stringValue(skillPackage['description']),
         'instructions': instructionText,
-        'instruction_markdown': instructionMarkdown,
+        'detail_level': useFullText ? 'full' : 'summary',
+        'instruction_character_count': instructionMarkdown.length,
+        'full_instruction_available': instructionMarkdown.isNotEmpty,
+        if (useFullText) 'instruction_markdown': instructionMarkdown,
         'activation_hints': ValueReaders.stringList(
           skillPackage['activation_hints'],
         ),

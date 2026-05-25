@@ -13,6 +13,12 @@ import '../../features/agent_ecosystem/application/services/ecosystem_entry_edit
 import '../../features/agent_ecosystem/presentation/contracts/agent_ecosystem_action_handler.dart';
 import '../../features/agent_ecosystem/presentation/models/ecosystem_editor_view_data.dart';
 import '../../features/agent_ecosystem/presentation/models/ecosystem_import_command_view_data.dart';
+import '../../features/project_creation/application/controllers/project_creation_controller.dart';
+import '../../features/long_task_station/application/controllers/long_task_station_controller.dart';
+import '../../features/project_assets/application/models/project_assets_snapshot.dart';
+import '../../features/project_assets/application/services/project_assets_view_data_service.dart';
+import '../../features/project_assets/presentation/contracts/project_assets_action_handler.dart';
+import '../../features/project_assets/presentation/models/project_assets_view_data.dart';
 import '../../features/prompt_templates/application/services/prompt_templates_view_data_service.dart';
 import '../../features/prompt_templates/presentation/contracts/prompt_templates_action_handler.dart';
 import '../../features/prompt_templates/presentation/models/prompt_templates_view_data.dart';
@@ -30,10 +36,11 @@ import '../../features/task_center/application/services/task_center_guidance_rev
 import '../../features/task_center/presentation/contracts/task_center_action_handler.dart';
 import '../../features/task_center/presentation/models/task_center_contract_action_view_data.dart';
 import '../../features/task_center/presentation/models/task_center_view_data.dart';
-import '../../features/workbench/application/models/conversation_session_state.dart';
-import '../../features/workbench/application/models/conversation_retry_request.dart';
-import '../../features/workbench/application/models/open_document_state.dart';
-import '../../features/workbench/application/models/workbench_primary_action_plan.dart';
+import '../../features/workbench/application/controllers/generate_draft_use_case_factory.dart';
+import '../../features/workbench/application/controllers/workbench_conversation_controller.dart';
+import '../../features/workbench/application/controllers/workbench_workspace_controller.dart';
+import '../../features/workbench/application/models/workbench_conversation_runtime_state.dart';
+import '../../features/workbench/application/models/workbench_project_runtime_state.dart';
 import '../../features/workbench/application/services/conversation_session_state_service.dart';
 import '../../features/workbench/application/services/conversation_streaming_state_service.dart';
 import '../../features/workbench/application/services/conversation_guide_view_data_service.dart';
@@ -44,20 +51,13 @@ import '../../features/workbench/application/services/conversation_user_visible_
 import '../../features/workbench/presentation/contracts/conversation_action_handler.dart';
 import '../../features/workbench/presentation/contracts/document_workspace_action_handler.dart';
 import '../../features/workbench/presentation/contracts/resource_manager_action_handler.dart';
-import '../../features/workbench/presentation/models/project_launcher_view_data.dart';
-import '../../features/workbench/presentation/models/retry_request_view_data.dart';
 import '../../features/workbench/presentation/models/project_create_request_view_data.dart';
 import '../../features/workbench/presentation/models/selector_option_view_data.dart';
 import '../../features/workbench/presentation/models/user_option_view_data.dart';
 import '../../features/workbench/presentation/models/workbench_view_data.dart';
 import '../../shared/view_models/app_shell_view_model.dart';
 import '../routing/app_destination.dart';
-
-typedef GenerateDraftUseCaseFactory =
-    GenerateDraftUseCase Function(
-      ProviderEndpointSettings provider,
-      JsonMap networkSettings,
-    );
+import 'app_shell_destination_controller.dart';
 typedef LoadAgentPackages =
     Future<List<JsonMap>> Function(ProjectDescriptor project);
 typedef LoadAgentGroups =
@@ -69,15 +69,13 @@ typedef LoadSkillGroups =
 
 class AppShellController extends ChangeNotifier
     implements
-        ResourceManagerActionHandler,
-        DocumentWorkspaceActionHandler,
-        ConversationActionHandler,
         SettingsActionHandler,
         AgentEcosystemActionHandler,
         ProjectCollectionActionHandler,
         TaskCenterActionHandler,
         ReviewCenterActionHandler,
-        PromptTemplatesActionHandler {
+        PromptTemplatesActionHandler,
+        ProjectAssetsActionHandler {
   AppShellController({
     required SettingsRepository settingsRepository,
     required LoadProjectWorkspaceUseCase loadProjectWorkspaceUseCase,
@@ -113,6 +111,8 @@ class AppShellController extends ChangeNotifier
     required ProjectWorkflowRuntimeService workflowRuntimeService,
     required ProjectReviewReportService reviewReportService,
     required ProjectPromptTemplateService promptTemplateService,
+    required ProjectAssetLibraryService projectAssetLibraryService,
+    required LongTaskStationController longTaskStationController,
     ConversationSessionStateService? conversationSessionStateService,
     ConversationStreamingStateService? conversationStreamingStateService,
     ConversationGuideViewDataService? conversationGuideViewDataService,
@@ -132,6 +132,7 @@ class AppShellController extends ChangeNotifier
     taskCenterGuidanceRevisitMarkdownService,
     ReviewCenterViewDataService? reviewCenterViewDataService,
     PromptTemplatesViewDataService? promptTemplatesViewDataService,
+    ProjectAssetsViewDataService? projectAssetsViewDataService,
     PromptTemplatePreviewService? promptTemplatePreviewService,
     PromptTemplateNormalizerService? promptTemplateNormalizerService,
     ModelSettingsViewDataService? modelSettingsViewDataService,
@@ -170,6 +171,8 @@ class AppShellController extends ChangeNotifier
        _workflowRuntimeService = workflowRuntimeService,
        _reviewReportService = reviewReportService,
        _promptTemplateService = promptTemplateService,
+       _projectAssetLibraryService = projectAssetLibraryService,
+       _longTaskStationController = longTaskStationController,
        _conversationSessionStateService =
            conversationSessionStateService ?? ConversationSessionStateService(),
        _conversationStreamingStateService =
@@ -217,6 +220,8 @@ class AppShellController extends ChangeNotifier
        _promptTemplatesViewDataService =
            promptTemplatesViewDataService ??
            const PromptTemplatesViewDataService(),
+       _projectAssetsViewDataService =
+           projectAssetsViewDataService ?? const ProjectAssetsViewDataService(),
        _promptTemplatePreviewService =
            promptTemplatePreviewService ?? PromptTemplatePreviewService(),
        _promptTemplateNormalizerService =
@@ -227,7 +232,111 @@ class AppShellController extends ChangeNotifier
            modelExecutionProfileService ?? ModelExecutionProfileService(),
        _modeGuidanceTransitionService =
            modeGuidanceTransitionService ?? ModeGuidanceTransitionService(),
-       _viewModel = AppShellViewModel.initial();
+       _viewModel = AppShellViewModel.initial() {
+    _destinationController = AppShellDestinationController(
+      changeDestination: _changeDestination,
+      refreshAgentEcosystem: _refreshAgentEcosystem,
+      refreshTaskCenter: _refreshTaskCenter,
+      refreshReviewCenter: _refreshReviewCenter,
+      refreshPromptTemplates: _refreshPromptTemplates,
+      refreshProjectAssets: _refreshProjectAssets,
+      longTaskStationController: _longTaskStationController,
+    );
+    _workbenchWorkspaceController = WorkbenchWorkspaceController(
+      loadProjectWorkspaceUseCase: _loadProjectWorkspaceUseCase,
+      readProjectFileUseCase: _readProjectFileUseCase,
+      saveDraftUseCase: _saveDraftUseCase,
+      createProjectEntryUseCase: _createProjectEntryUseCase,
+      importProjectFilesUseCase: _importProjectFilesUseCase,
+      updateProjectManifestUseCase: _updateProjectManifestUseCase,
+      reviewReportService: _reviewReportService,
+      readProjectState: () => _workbenchProjectRuntimeState,
+      writeProjectState: (state) {
+        _workbenchProjectRuntimeState = state;
+      },
+      resetConversationRuntimeState: () {
+        _workbenchConversationRuntimeState =
+            const WorkbenchConversationRuntimeState();
+      },
+      readWorkbench: () => _viewModel.workbench,
+      mutateWorkbench: _mutateWorkbench,
+      applyConversationState: (base) =>
+          _workbenchConversationController.applyConversationState(base),
+      readSettings: () => _settings,
+      saveSettingsSilently: _saveSettingsSilently,
+      refreshSettingsViewData: _refreshSettingsViewData,
+      refreshAgentEcosystem: _refreshAgentEcosystem,
+      refreshActiveDestinationAfterProjectLoad:
+          _refreshActiveDestinationAfterProjectLoad,
+      modelOptionsBuilder: _modelSelectorOptions,
+      agentOptionsBuilder: _agentSelectorOptions,
+      projectSubtitleFor: _projectSubtitleFor,
+      showSettings: () async => _destinationController.showSettings(),
+      showAgentEcosystem: _destinationController.showAgentEcosystem,
+      showTaskCenter: _destinationController.showTaskCenter,
+      showLongTaskStation: _destinationController.showLongTaskStation,
+      showReviewCenter: _destinationController.showReviewCenter,
+      showPromptTemplates: _destinationController.showPromptTemplates,
+      showProjectAssets: _destinationController.showProjectAssets,
+      announce: _announce,
+    );
+    _workbenchConversationController = WorkbenchConversationController(
+      saveDraftUseCase: _saveDraftUseCase,
+      generateDraftUseCaseFactory: _generateDraftUseCaseFactory,
+      modelExecutionProfileService: _modelExecutionProfileService,
+      conversationSessionStateService: _conversationSessionStateService,
+      conversationStreamingStateService: _conversationStreamingStateService,
+      conversationGuideViewDataService: _conversationGuideViewDataService,
+      conversationUserVisibleTextService: _conversationUserVisibleTextService,
+      workbenchPrimaryActionService: _workbenchPrimaryActionService,
+      userOptionPromptBuilderService: _userOptionPromptBuilderService,
+      loadModeGuidanceStateUseCase: _loadModeGuidanceStateUseCase,
+      answerModeGuidanceStageUseCase: _answerModeGuidanceStageUseCase,
+      buildModeGuidancePlanInputUseCase: _buildModeGuidancePlanInputUseCase,
+      modeGuidanceTransitionService: _modeGuidanceTransitionService,
+      workflowRuntimeService: _workflowRuntimeService,
+      workspaceController: _workbenchWorkspaceController,
+      readRuntimeState: () => _workbenchConversationRuntimeState,
+      writeRuntimeState: (state) {
+        _workbenchConversationRuntimeState = state;
+      },
+      readWorkbench: () => _viewModel.workbench,
+      mutateWorkbench: _mutateWorkbench,
+      readSettings: () => _settings,
+      persistSettings: _persistSettings,
+      refreshSettingsViewData: _refreshSettingsViewData,
+      readThemeMode: () => _themeMode,
+      writeThemeMode: (themeMode) {
+        _themeMode = themeMode;
+      },
+      notifyShell: _safeNotifyListeners,
+      showSettings: () async => _destinationController.showSettings(),
+      contextStrategySettingsOf: _contextStrategySettingsOf,
+      selectedModelProvider: _selectedModelProvider,
+      agentLabel: _agentLabel,
+      announce: _announce,
+    );
+    _projectCreationController = ProjectCreationController(
+      loadProjectWorkspaceUseCase: _loadProjectWorkspaceUseCase,
+      createProjectWorkspaceUseCase: _createProjectWorkspaceUseCase,
+      discoverProjectsUseCase: _discoverProjectsUseCase,
+      desktopProjectDirectoryPickerService: _desktopProjectDirectoryPickerService,
+      projectLauncherViewDataService: _projectLauncherViewDataService,
+      readWorkbench: () => _viewModel.workbench,
+      mutateWorkbench: _mutateWorkbench,
+      readCurrentProject: () => _workbenchWorkspaceController.currentProject,
+      loadProject: _workbenchWorkspaceController.loadProject,
+      resetToProjectlessWorkbench: _workbenchWorkspaceController.resetToProjectlessWorkbench,
+      announce: _announce,
+      readSettings: () => _settings,
+      defaultProjectsRootPath: _defaultProjectsRootPath,
+      settingsSearchRoots: _settingsSearchRoots,
+      isMobileProjectRootLocked: _isMobileProjectRootLocked,
+    );
+    _workbenchWorkspaceController.attachProjectCreationController(
+      _projectCreationController,
+    );
+  }
 
   final SettingsRepository _settingsRepository;
   final LoadProjectWorkspaceUseCase _loadProjectWorkspaceUseCase;
@@ -262,6 +371,8 @@ class AppShellController extends ChangeNotifier
   final ProjectWorkflowRuntimeService _workflowRuntimeService;
   final ProjectReviewReportService _reviewReportService;
   final ProjectPromptTemplateService _promptTemplateService;
+  final ProjectAssetLibraryService _projectAssetLibraryService;
+  final LongTaskStationController _longTaskStationController;
   final ConversationSessionStateService _conversationSessionStateService;
   final ConversationStreamingStateService _conversationStreamingStateService;
   final ConversationGuideViewDataService _conversationGuideViewDataService;
@@ -282,26 +393,30 @@ class AppShellController extends ChangeNotifier
   _taskCenterGuidanceRevisitMarkdownService;
   final ReviewCenterViewDataService _reviewCenterViewDataService;
   final PromptTemplatesViewDataService _promptTemplatesViewDataService;
+  final ProjectAssetsViewDataService _projectAssetsViewDataService;
   final PromptTemplatePreviewService _promptTemplatePreviewService;
   final PromptTemplateNormalizerService _promptTemplateNormalizerService;
   final ModelSettingsViewDataService _modelSettingsViewDataService;
   final ModelExecutionProfileService _modelExecutionProfileService;
   final ModeGuidanceTransitionService _modeGuidanceTransitionService;
+  late final AppShellDestinationController _destinationController;
+  late final WorkbenchWorkspaceController _workbenchWorkspaceController;
+  late final WorkbenchConversationController _workbenchConversationController;
+  late final ProjectCreationController _projectCreationController;
 
   AppShellViewModel _viewModel;
   AppSettings? _settings;
-  ProjectDescriptor? _currentProject;
-  List<ConversationSessionState> _conversationSessions =
-      const <ConversationSessionState>[];
-  String _activeSessionId = '';
-  bool _showSessionHistory = false;
-  String _conversationGuideScope = '';
-  ModeGuidanceState? _activeModeGuidanceState;
+  WorkbenchProjectRuntimeState _workbenchProjectRuntimeState =
+      const WorkbenchProjectRuntimeState();
+  WorkbenchConversationRuntimeState _workbenchConversationRuntimeState =
+      const WorkbenchConversationRuntimeState();
   ThemeMode _themeMode = ThemeMode.light;
   bool _disposed = false;
   bool _initialized = false;
   AgentEcosystemSnapshot _agentEcosystemSnapshot =
       AgentEcosystemSnapshot.initial();
+  ProjectAssetsSnapshot _projectAssetsSnapshot =
+      ProjectAssetsSnapshot.initial();
   ProjectCollectionSnapshot _projectCollectionSnapshot =
       ProjectCollectionSnapshot.initial();
   String _agentEcosystemStatusMessage = '';
@@ -323,14 +438,19 @@ class AppShellController extends ChangeNotifier
   String _selectedPromptTemplateId = '';
   String _promptTemplatesStatusMessage = '';
   String _promptTemplatePreviewText = '';
-  List<JsonMap> _resourceSnapshotEntries = const <JsonMap>[];
-  Set<String> _expandedResourceDirectories = <String>{};
-  List<OpenDocumentState> _openDocuments = const <OpenDocumentState>[];
-  String _activeOpenDocumentId = '';
-  bool _savingWorkbenchSnapshot = false;
+  String _projectAssetsStatusMessage = '';
 
   AppShellViewModel get viewModel => _viewModel;
   ThemeMode get themeMode => _themeMode;
+  LongTaskStationController get longTaskStationController =>
+      _longTaskStationController;
+  ResourceManagerActionHandler get resourceManagerHandler =>
+      _workbenchWorkspaceController;
+  DocumentWorkspaceActionHandler get documentWorkspaceHandler =>
+      _workbenchWorkspaceController;
+  ConversationActionHandler get conversationHandler =>
+      _workbenchConversationController;
+  ProjectDescriptor? get _currentProject => _workbenchWorkspaceController.currentProject;
 
   Future<void> initialize() async {
     // 中文注释: 控制器初始化负责加载默认设置和项目，但不会把适配器实例化逻辑带进状态层。
@@ -359,7 +479,7 @@ class AppShellController extends ChangeNotifier
         ),
       );
       _safeNotifyListeners();
-      await _loadDefaultProject();
+      await _projectCreationController.loadDefaultProject();
     } catch (error) {
       _updateWorkbench(
         _viewModel.workbench.copyWith(
@@ -372,868 +492,166 @@ class AppShellController extends ChangeNotifier
 
   void showWorkbench() {
     // 中文注释: 该方法统一负责切回主工作台，避免页面自己决定全局导航状态。
-    _viewModel = _viewModel.copyWith(destination: AppDestination.workbench);
-    _safeNotifyListeners();
+    _destinationController.showWorkbench();
   }
 
   void showSettings() {
     // 中文注释: 该方法统一负责切换到设置页，让设置入口不再分散在多个组件内部。
-    _viewModel = _viewModel.copyWith(destination: AppDestination.settings);
-    _safeNotifyListeners();
+    _destinationController.showSettings();
   }
 
   void showAgentEcosystem() {
     // 中文注释: 该方法统一负责切换到智能体生态页，避免资源面板和会话面板各自维护路由。
-    _viewModel = _viewModel.copyWith(
-      destination: AppDestination.agentEcosystem,
-    );
-    _safeNotifyListeners();
-    _refreshAgentEcosystem();
+    _destinationController.showAgentEcosystem();
   }
 
   void showTaskCenter() {
     // 中文注释: 长任务中心导航和数据刷新统一收口，避免资源栏与会话动作各自重复读任务目录。
-    _viewModel = _viewModel.copyWith(destination: AppDestination.taskCenter);
-    _safeNotifyListeners();
-    _refreshTaskCenter();
+    _destinationController.showTaskCenter();
+  }
+
+  void showLongTaskStation() {
+    // 中文注释: 全局长任务总站只在壳层完成路由切换，真正的运行列表与动作逻辑交给独立子域控制器。
+    _destinationController.showLongTaskStation();
   }
 
   void showReviewCenter() {
     // 中文注释: 审稿中心切换后立即刷新报告列表，让文档工具栏和左栏入口共用同一页面状态。
-    _viewModel = _viewModel.copyWith(destination: AppDestination.reviewCenter);
-    _safeNotifyListeners();
-    _refreshReviewCenter();
+    _destinationController.showReviewCenter();
   }
 
   void showPromptTemplates() {
     // 中文注释: 模板页导航与数据刷新统一收口，避免后续从设置页或任务页进入时出现两套状态来源。
-    _viewModel = _viewModel.copyWith(
-      destination: AppDestination.promptTemplates,
-    );
-    _safeNotifyListeners();
-    _refreshPromptTemplates();
+    _destinationController.showPromptTemplates();
   }
 
-  @override
-  void onModelSettingsRequested() {
-    // 中文注释: 资源管理器的模型按钮直接跳到设置页，但不接触设置页内部状态。
-    showSettings();
+  void showProjectAssets() {
+    // 中文注释: 项目资产页统一负责风格、伏笔与资产包入口，不把资产逻辑散回工作台。
+    _destinationController.showProjectAssets();
   }
 
-  @override
-  void onCreateProjectRequested() async {
-    // 中文注释: 新建项目入口先拉起创建面板，让创建标题和后续模板扩展都能挂在同一交互壳里。
-    await _showProjectLauncher(
-      ProjectLauncherMode.create,
-      canDismiss: _currentProject != null,
-    );
-  }
+  void onModelSettingsRequested() => _workbenchWorkspaceController.onModelSettingsRequested();
 
-  @override
-  void onOpenProjectRequested() async {
-    // 中文注释: 桌面端打开已有项目统一让用户亲自选择目录；移动端保留固定根策略，因此不暴露这个入口。
-    if (_isMobileProjectRootLocked) {
-      _announce('移动端只允许在应用项目目录内创建项目。');
-      return;
-    }
-    final selectedPath = await _desktopProjectDirectoryPickerService
-        .pickProjectDirectory();
-    if (selectedPath == null || selectedPath.trim().isEmpty) {
-      if (_currentProject == null) {
-        await _showProjectLauncher(
-          ProjectLauncherMode.create,
-          status: '未选择目录。请创建项目，或重新选择已有项目目录。',
-          canDismiss: false,
-        );
-      }
-      return;
-    }
-    final normalizedPath = selectedPath.trim();
-    final snapshot = await _loadProjectWorkspaceUseCase.execute(normalizedPath);
-    if (snapshot == null) {
-      if (_currentProject == null) {
-        await _showProjectLauncher(
-          ProjectLauncherMode.create,
-          status: '所选目录不是有效项目。请选择项目根目录，或直接创建新项目。',
-          canDismiss: false,
-        );
-      } else {
-        _announce('所选目录不是有效项目。请选择包含项目配置的项目根目录。');
-      }
-      return;
-    }
-    _updateWorkbench(
-      _viewModel.workbench.copyWith(
-        projectLauncher: null,
-        generationStatus: '正在打开项目...',
-      ),
-    );
-    await _loadProject(snapshot.project.rootPath);
-  }
+  void onCreateProjectRequested() => _projectCreationController.onCreateProjectRequested();
 
-  @override
-  void onProjectLauncherDismissed() {
-    // 中文注释: 项目启动弹层的关闭只重置工作台上的弹层状态，不触碰当前项目本身。
-    if (_currentProject == null) {
-      return;
-    }
-    _updateWorkbench(_viewModel.workbench.copyWith(projectLauncher: null));
-  }
+  void onOpenProjectRequested() => _projectCreationController.onOpenProjectRequested();
 
-  @override
-  void onProjectLauncherRefreshRequested() async {
-    // 中文注释: 打开项目面板的刷新只重扫默认项目根，不让面板自己直接碰文件系统。
-    final launcher = _viewModel.workbench.projectLauncher;
-    if (launcher == null) {
-      return;
-    }
-    await _showProjectLauncher(
-      launcher.mode,
-      status: launcher.mode == ProjectLauncherMode.open
-          ? '项目列表已刷新。'
-          : launcher.status,
-    );
-  }
+  void onProjectLauncherDismissed() =>
+      _projectCreationController.onProjectLauncherDismissed();
 
-  @override
-  void onProjectEntryOpened(String projectPath) async {
-    // 中文注释: 选择项目条目后直接切换工作区，并关闭项目弹层。
-    _updateWorkbench(
-      _viewModel.workbench.copyWith(
-        projectLauncher: null,
-        generationStatus: '正在打开项目...',
-      ),
-    );
-    await _loadProject(projectPath);
-  }
+  void onProjectLauncherRefreshRequested() =>
+      _projectCreationController.onProjectLauncherRefreshRequested();
 
-  @override
-  void onProjectCreationSubmitted(ProjectCreateRequestViewData request) async {
-    // 中文注释: 创建项目的真正副作用统一收口在这里，弹层只负责收集用户输入。
-    final cleanTitle = request.title.trim();
-    final projectTypeId = request.projectTypeId.trim().isEmpty
-        ? 'novel'
-        : request.projectTypeId.trim();
-    _updateWorkbench(
-      _withConversationState(
-        _viewModel.workbench.copyWith(
-          projectLauncher: _projectLauncherViewDataService.build(
-            mode: ProjectLauncherMode.create,
-            projectsRootPath: _defaultProjectsRootPath,
-            projects: const <JsonMap>[],
-            status: '正在创建项目：${cleanTitle.isEmpty ? '未命名项目' : cleanTitle}',
-            selectedProjectTypeId: projectTypeId,
-            canDismiss: _currentProject != null,
-            allowOpenExisting: !_isMobileProjectRootLocked,
-          ),
-        ),
-      ),
-    );
-    try {
-      final project = await _createProjectWorkspaceUseCase.execute(
-        projectsRootPath: _defaultProjectsRootPath,
-        title: cleanTitle,
-        projectType: projectTypeId,
-      );
-      _updateWorkbench(_viewModel.workbench.copyWith(projectLauncher: null));
-      await _loadProject(project.rootPath);
-      _announce('已创建并打开新项目：${project.name}');
-    } catch (error) {
-      await _showProjectLauncher(
-        ProjectLauncherMode.create,
-        status: '创建项目失败：$error',
-      );
-    }
-  }
+  void onProjectEntryOpened(String projectPath) =>
+      _projectCreationController.onProjectEntryOpened(projectPath);
 
-  @override
-  void onEditProjectInfoRequested() {
-    // 中文注释: 项目信息编辑只负责弹出表单，不在资源面板内部直接操作项目文件。
-    final project = _currentProject;
-    _showWorkspaceCommand(
-      WorkspaceCommandViewData(
-        mode: WorkspaceCommandMode.editProjectInfo,
-        title: '编辑项目信息',
-        description: '更新项目标题、类型与简介文档。',
-        confirmLabel: '保存项目',
-        status: project == null ? '当前还没有打开项目。' : '',
-        projectTitle: project?.name ?? '',
-        projectType: project?.projectType ?? 'novel',
-        genre: '',
-        premise: '',
-        notes: '',
-        relativePath: '',
-        entryName: '',
-        content: '',
-        sourcePathsText: '',
-        targetDirectory: '',
-      ),
-    );
-  }
+  void onProjectCreationSubmitted(ProjectCreateRequestViewData request) =>
+      _projectCreationController.onProjectCreationSubmitted(request);
 
-  @override
-  void onRefreshFilesRequested() {
-    // 中文注释: 刷新动作统一重载当前项目工作区，避免资源树自己直接接文件系统。
-    if (_currentProject != null) {
-      _loadProject(_currentProject!.rootPath);
-      return;
-    }
-    _loadDefaultProject();
-  }
+  void onEditProjectInfoRequested() =>
+      _workbenchWorkspaceController.onEditProjectInfoRequested();
 
-  @override
-  void onCreateFileRequested() {
-    // 中文注释: 新建文件走统一工作区命令弹层，让 GUI 和 CLI 后续都能复用相同核心用例。
-    _showWorkspaceCommand(
-      const WorkspaceCommandViewData(
-        mode: WorkspaceCommandMode.createFile,
-        title: '新建文件',
-        description: '在项目目录下创建一个新文件。',
-        confirmLabel: '创建文件',
-        status: '',
-        projectTitle: '',
-        projectType: '',
-        genre: '',
-        premise: '',
-        notes: '',
-        relativePath: 'drafts',
-        entryName: 'new_file.md',
-        content: '',
-        sourcePathsText: '',
-        targetDirectory: '',
-      ),
-    );
-  }
+  void onRefreshFilesRequested() =>
+      _workbenchWorkspaceController.onRefreshFilesRequested();
 
-  @override
-  void onCreateFolderRequested() {
-    // 中文注释: 新建目录也走同一命令弹层，避免不同项目操作入口各自管理表单状态。
-    _showWorkspaceCommand(
-      const WorkspaceCommandViewData(
-        mode: WorkspaceCommandMode.createFolder,
-        title: '新建文件夹',
-        description: '在项目目录下创建一个新目录。',
-        confirmLabel: '创建目录',
-        status: '',
-        projectTitle: '',
-        projectType: '',
-        genre: '',
-        premise: '',
-        notes: '',
-        relativePath: 'world',
-        entryName: 'new_folder',
-        content: '',
-        sourcePathsText: '',
-        targetDirectory: '',
-      ),
-    );
-  }
+  void onCreateFileRequested() =>
+      _workbenchWorkspaceController.onCreateFileRequested();
 
-  @override
-  void onImportRequested() {
-    // 中文注释: 导入入口先走绝对路径表单，后续再补平台文件选择器也不影响核心导入用例。
-    _showWorkspaceCommand(
-      const WorkspaceCommandViewData(
-        mode: WorkspaceCommandMode.importFiles,
-        title: '导入文件',
-        description: '每行输入一个绝对路径，导入到项目指定目录。',
-        confirmLabel: '导入文件',
-        status: '',
-        projectTitle: '',
-        projectType: '',
-        genre: '',
-        premise: '',
-        notes: '',
-        relativePath: '',
-        entryName: '',
-        content: '',
-        sourcePathsText: '',
-        targetDirectory: 'assets',
-      ),
-    );
-  }
+  void onCreateFolderRequested() =>
+      _workbenchWorkspaceController.onCreateFolderRequested();
 
-  @override
-  void onCreateChapterRequested() {
-    // 中文注释: 当前阶段先引导用户通过发送提示词生成草稿，章节显式创建后续再接表单流程。
-    _announce('直接在右侧输入章节需求并发送，当前版本会自动保存到 drafts/。');
-  }
+  void onImportRequested() => _workbenchWorkspaceController.onImportRequested();
 
-  @override
-  void onSaveCurrentRequested() {
-    // 中文注释: 当前保存逻辑只处理已经载入的活动草稿，避免工具栏自己碰文件路径规则。
-    _saveCurrentDocument();
-  }
+  void onCreateChapterRequested() =>
+      _workbenchWorkspaceController.onCreateChapterRequested();
 
-  @override
-  void onAgentEcosystemRequested() {
-    // 中文注释: 左侧快捷入口统一跳转到生态页，保持工作台与生态页解耦。
-    showAgentEcosystem();
-  }
+  void onSaveCurrentRequested() =>
+      _workbenchWorkspaceController.onSaveCurrentRequested();
 
-  @override
-  void onTasksRequested() {
-    // 中文注释: 任务入口直接进入真实任务中心，而不是停留在旧的泛集合浏览页。
-    showTaskCenter();
-  }
+  void onAgentEcosystemRequested() =>
+      _workbenchWorkspaceController.onAgentEcosystemRequested();
 
-  @override
-  void onReviewsRequested() {
-    // 中文注释: 审稿入口直接进入真实审稿中心，后续修复任务和过滤都从这里继续推进。
-    showReviewCenter();
-  }
+  void onTasksRequested() => _workbenchWorkspaceController.onTasksRequested();
 
-  @override
-  void onTemplatesRequested() {
-    // 中文注释: 模板入口切到真实模板页，支持项目覆盖、内置恢复和预览。
-    showPromptTemplates();
-  }
+  void onLongTaskStationRequested() =>
+      _workbenchWorkspaceController.onLongTaskStationRequested();
 
-  @override
-  void onResourceEntrySelected(String entryId) {
-    // 中文注释: 资源树点击统一走读取用例，保持文件打开逻辑脱离具体组件。
-    _openResource(entryId);
-  }
+  void onReviewsRequested() => _workbenchWorkspaceController.onReviewsRequested();
 
-  @override
-  void onWorkspaceCommandDismissed() {
-    // 中文注释: 工作区命令弹层关闭只清理弹层状态，不触碰项目和文档状态。
-    _updateWorkbench(_viewModel.workbench.copyWith(workspaceCommand: null));
-  }
+  void onTemplatesRequested() =>
+      _workbenchWorkspaceController.onTemplatesRequested();
 
-  @override
-  void onWorkspaceCommandSubmitted(WorkspaceCommandRequestViewData request) {
-    // 中文注释: 命令提交统一从这里分派到共享用例，避免表单组件直接碰业务依赖。
-    switch (request.mode) {
-      case WorkspaceCommandMode.editProjectInfo:
-        _submitProjectInfoCommand(request);
-        return;
-      case WorkspaceCommandMode.createFile:
-        _submitCreateFileCommand(request);
-        return;
-      case WorkspaceCommandMode.createFolder:
-        _submitCreateFolderCommand(request);
-        return;
-      case WorkspaceCommandMode.importFiles:
-        _submitImportFilesCommand(request);
-        return;
-    }
-  }
+  void onProjectAssetsRequested() =>
+      _workbenchWorkspaceController.onProjectAssetsRequested();
 
-  @override
-  void onDocumentActionRequested(DocumentToolbarAction action) {
-    // 中文注释: 文档工具栏动作尽量接到真实工作流，避免再次出现只有提示没有行为的空按钮。
-    switch (action) {
-      case DocumentToolbarAction.save:
-        _saveCurrentDocument();
-        break;
-      case DocumentToolbarAction.render:
-        _toggleActiveDocumentRenderMode();
-        break;
-      case DocumentToolbarAction.outline:
-        _openLikelyOutlineDocument();
-        break;
-      case DocumentToolbarAction.review:
-        _createReviewTaskForCurrentDocument();
-        break;
-    }
-  }
+  void onResourceEntrySelected(String entryId) =>
+      _workbenchWorkspaceController.onResourceEntrySelected(entryId);
 
-  @override
-  void onDocumentSelected(String documentId) {
-    // 中文注释: 标签切换只改变活动文档，不在这里引入任何读盘副作用。
-    if (documentId.trim().isEmpty || documentId == _activeOpenDocumentId) {
-      return;
-    }
-    _activeOpenDocumentId = documentId;
-    _updateWorkbench(
-      _applyOpenDocuments(
-        _viewModel.workbench.copyWith(generationStatus: '已切换文档。'),
-      ),
-    );
-    _persistWorkbenchSnapshot();
-  }
+  void onWorkspaceCommandDismissed() =>
+      _workbenchWorkspaceController.onWorkspaceCommandDismissed();
 
-  @override
-  void onDocumentClosed(String documentId) {
-    // 中文注释: 关闭标签只维护内存中的打开文档集合，保存策略仍由显式保存按钮控制。
-    final index = _openDocuments.indexWhere(
-      (document) => document.id == documentId,
-    );
-    if (index < 0) {
-      return;
-    }
-    final nextDocuments = List<OpenDocumentState>.from(_openDocuments)
-      ..removeAt(index);
-    _openDocuments = nextDocuments;
-    if (_activeOpenDocumentId == documentId) {
-      if (nextDocuments.isEmpty) {
-        _activeOpenDocumentId = '';
-      } else if (index >= nextDocuments.length) {
-        _activeOpenDocumentId = nextDocuments.last.id;
-      } else {
-        _activeOpenDocumentId = nextDocuments[index].id;
-      }
-    }
-    _updateWorkbench(
-      _applyOpenDocuments(
-        _viewModel.workbench.copyWith(generationStatus: '已关闭文档。'),
-      ),
-    );
-    _persistWorkbenchSnapshot();
-  }
+  void onWorkspaceCommandSubmitted(WorkspaceCommandRequestViewData request) =>
+      _workbenchWorkspaceController.onWorkspaceCommandSubmitted(request);
 
-  @override
-  void onDocumentBodyChanged(String value) {
-    // 中文注释: 正文编辑只改工作台当前文档内容和脏标记，不在输入过程中触发任何持久化副作用。
-    final active = _activeOpenDocument();
-    if (active == null) {
-      return;
-    }
-    _replaceOpenDocument(
-      active.copyWith(content: value, isDirty: true, isRendered: false),
-    );
-    _updateWorkbench(_applyOpenDocuments(_viewModel.workbench));
-  }
+  void onDocumentActionRequested(DocumentToolbarAction action) =>
+      _workbenchWorkspaceController.onDocumentActionRequested(action);
 
-  @override
-  void onModelSelected(String modelId) {
-    // 中文注释: 会话栏顶部模型选择直接落到共享设置，保持 GUI/CLI 同一份默认运行配置。
-    final settings = _settings;
-    final cleanModelId = modelId.trim();
-    if (settings == null || cleanModelId.isEmpty) {
-      return;
-    }
-    final updated = settings.copyWith(
-      defaultModelId: cleanModelId,
-      extraSettings: <String, Object?>{
-        ...settings.extraSettings,
-        'model_settings': <String, Object?>{
-          ..._modelSettingsOf(settings),
-          'model_id': cleanModelId,
-        },
-      },
-    );
-    _persistSettings(updated, successMessage: '已切换模型：$cleanModelId');
-  }
+  void onDocumentSelected(String documentId) =>
+      _workbenchWorkspaceController.onDocumentSelected(documentId);
 
-  @override
-  void onAgentSelected(String agentId) {
-    // 中文注释: 会话栏顶部智能体选择只改默认智能体 id，不在展示层直接拼接角色正文。
-    final settings = _settings;
-    final cleanAgentId = agentId.trim();
-    if (settings == null || cleanAgentId.isEmpty) {
-      return;
-    }
-    final updated = settings.copyWith(defaultAgentId: cleanAgentId);
-    _persistSettings(updated, successMessage: '已切换智能体：${_agentLabel(updated)}');
-  }
+  void onDocumentClosed(String documentId) =>
+      _workbenchWorkspaceController.onDocumentClosed(documentId);
 
-  @override
-  void onQuickThemeRequested() {
-    // 中文注释: 快速主题先在浅色和夜间模式之间切换，后续更细的主题设置仍可挂到同一状态入口。
-    _themeMode = _themeMode == ThemeMode.light
-        ? ThemeMode.dark
-        : ThemeMode.light;
-    _refreshSettingsViewData();
-    _safeNotifyListeners();
-  }
+  void onDocumentBodyChanged(String value) =>
+      _workbenchWorkspaceController.onDocumentBodyChanged(value);
 
-  @override
-  void onScreenModeRequested() {
-    // 中文注释: 屏幕模式按钮当前负责在会话视图与文档视图之间切换，避免窄屏入口成为空按钮。
-    final nextVisible = !_viewModel.workbench.isDocumentsWorkspaceVisible;
-    _updateWorkbench(
-      _withConversationState(
-        _viewModel.workbench.copyWith(
-          isDocumentsWorkspaceVisible: nextVisible,
-          generationStatus: nextVisible ? '已切到文档视图。' : '已切回会话视图。',
-        ),
-      ),
-    );
-  }
+  void onModelSelected(String modelId) =>
+      _workbenchConversationController.onModelSelected(modelId);
 
-  @override
-  void onDocumentsWorkspaceRequested() {
-    // 中文注释: 窄屏或双栏模式下，文档工作区通过统一状态切换进入，避免会话栏自己直接装配其他面板。
-    _updateWorkbench(
-      _withConversationState(
-        _viewModel.workbench.copyWith(isDocumentsWorkspaceVisible: true),
-      ),
-    );
-  }
+  void onAgentSelected(String agentId) =>
+      _workbenchConversationController.onAgentSelected(agentId);
 
-  @override
-  void onDocumentsWorkspaceDismissRequested() {
-    // 中文注释: 返回会话时只切回工作台视图状态，不重载项目和文档内容。
-    _updateWorkbench(
-      _withConversationState(
-        _viewModel.workbench.copyWith(isDocumentsWorkspaceVisible: false),
-      ),
-    );
-  }
+  void onQuickThemeRequested() =>
+      _workbenchConversationController.onQuickThemeRequested();
 
-  @override
-  void onHistoryRequested() {
-    // 中文注释: 历史按钮只切换面板显隐，不把会话列表逻辑散落到多个子控件里。
-    _showSessionHistory = !_showSessionHistory;
-    _updateWorkbench(_withConversationState(_viewModel.workbench));
-  }
+  void onScreenModeRequested() =>
+      _workbenchConversationController.onScreenModeRequested();
 
-  @override
-  void onNewSessionRequested() {
-    // 中文注释: 新会话只重置交互链，不影响项目工作区与已打开文档。
-    final activeState = _activeConversationState();
-    if (activeState != null &&
-        activeState.entries.isEmpty &&
-        _needsGoalSelection(activeState)) {
-      _showSessionHistory = false;
-      _updateWorkbench(
-        _withConversationState(
-          _viewModel.workbench.copyWith(generationStatus: '当前已经是一个待选择目标的新会话。'),
-        ),
-      );
-      return;
-    }
-    final session = _createConversationSession();
-    _replaceConversationSession(session, activate: true);
-    _showSessionHistory = false;
-    _conversationGuideScope = '';
-    _updateWorkbench(
-      _withConversationState(
-        _viewModel.workbench.copyWith(
-          generationStatus: '已创建新会话，请先选择一个入口，或直接输入第一句话。',
-        ),
-      ),
-    );
-  }
+  void onDocumentsWorkspaceRequested() =>
+      _workbenchConversationController.onDocumentsWorkspaceRequested();
 
-  @override
-  void onSessionHistorySelected(String sessionId) {
-    // 中文注释: 历史切换只改变活动会话指针，具体会话内容仍由会话状态服务维护。
-    final exists = _conversationSessions.any(
-      (state) => _sessionIdOf(state) == sessionId,
-    );
-    if (!exists) {
-      return;
-    }
-    _activeSessionId = sessionId;
-    _showSessionHistory = false;
-    _conversationGuideScope = '';
-    _updateWorkbench(
-      _withConversationState(
-        _viewModel.workbench.copyWith(generationStatus: '已切换到所选历史会话。'),
-      ),
-    );
-  }
+  void onDocumentsWorkspaceDismissRequested() =>
+      _workbenchConversationController.onDocumentsWorkspaceDismissRequested();
 
-  @override
-  void onUserOptionSelected(UserOptionViewData option) async {
-    // 中文注释: 选项点击统一转换成补充提示词，再复用同一条发送链继续推进。
-    final prompt = _userOptionPromptBuilderService.build(<String, Object?>{
-      'label': option.label,
-      'description': option.description,
-      'prompt': option.prompt,
-      '_source_question': option.sourceQuestion,
-      '_all_options': option.allOptions,
-    });
-    await _sendPrompt(
-      prompt,
-      visibleText: _conversationUserVisibleTextService.textForUserOption(
-        option,
-      ),
-    );
-  }
+  void onHistoryRequested() =>
+      _workbenchConversationController.onHistoryRequested();
 
-  @override
-  void onConversationSettingsRequested() {
-    // 中文注释: 会话栏顶部设置入口复用全局设置页，避免再生一套局部设置状态。
-    showSettings();
-  }
+  void onNewSessionRequested() =>
+      _workbenchConversationController.onNewSessionRequested();
 
-  @override
-  void onPrimaryActionRequested(String actionId) async {
-    // 中文注释: 主动作执行计划交给独立服务解析，控制器只负责执行刷新、播报或发送三种结果。
-    PrimaryActionViewData? action;
-    for (final item in _viewModel.workbench.primaryActions) {
-      if (item.id == actionId) {
-        action = item;
-        break;
-      }
-    }
-    if (action == null) {
-      _announce('未找到对应的工作流入口。');
-      return;
-    }
-    if (await _handleGuideNavigationAction(action)) {
-      return;
-    }
-    final plan = _workbenchPrimaryActionService.build(
-      action: action,
-      project: _currentProjectInfo(),
-      activeDocumentPath: _viewModel.workbench.activeDocumentPath,
-      activeDocumentBody: _viewModel.workbench.activeDocumentBody,
-    );
-    switch (plan.kind) {
-      case WorkbenchPrimaryActionPlanKind.refreshProject:
-        onRefreshFilesRequested();
-        return;
-      case WorkbenchPrimaryActionPlanKind.announce:
-        _announce(plan.message);
-        return;
-      case WorkbenchPrimaryActionPlanKind.sendPrompt:
-        _conversationGuideScope = '';
-        _startPrimaryActionPrompt(
-          plan,
-          userVisibleText: _conversationUserVisibleTextService
-              .textForPrimaryAction(action, plan),
-        );
-        return;
-    }
-  }
+  void onSessionHistorySelected(String sessionId) =>
+      _workbenchConversationController.onSessionHistorySelected(sessionId);
 
-  @override
-  void onRetryLastFailedRequested() async {
-    // 中文注释: 重试只复用上一轮失败请求，不额外插入新的用户消息，也不把失败展示继续带进后续上下文。
-    final retryRequest = _activeConversationState()?.retryRequest;
-    if (retryRequest == null) {
-      _announce('当前没有可重试的失败请求。');
-      return;
-    }
-    await _sendPrompt(
-      retryRequest.prompt,
-      visibleText: retryRequest.visibleText,
-      retryLastFailure: true,
-    );
-  }
+  void onUserOptionSelected(UserOptionViewData option) =>
+      _workbenchConversationController.onUserOptionSelected(option);
 
-  @override
-  void onOptimizeRequested() {
-    // 中文注释: 还没有单独提示词优化链路前，这里先给出轻量引导，避免空按钮体验。
-    _announce('当前先直接发送自然语言需求；提示词优化链路后续会接独立用例。');
-  }
+  void onConversationSettingsRequested() =>
+      _workbenchConversationController.onConversationSettingsRequested();
 
-  @override
-  void onToolOptionsRequested() {
-    // 中文注释: 工具选项当前直接复用设置页入口，避免按钮存在但没有任何实际行为。
-    showSettings();
-    _announce('已打开设置页，可继续调整工具策略与权限。');
-  }
+  void onPrimaryActionRequested(String actionId) =>
+      _workbenchConversationController.onPrimaryActionRequested(actionId);
 
-  @override
-  void onSendRequested(String text) async {
-    // 中文注释: 发送动作统一复用同一条会话请求链，避免按钮发送与选项发送走出两套行为。
-    await _sendPrompt(text);
-  }
+  void onRetryLastFailedRequested() =>
+      _workbenchConversationController.onRetryLastFailedRequested();
 
-  Future<void> _sendPrompt(
-    String text, {
-    String visibleText = '',
-    bool retryLastFailure = false,
-  }) async {
-    // 中文注释: 真正的发送链在这里收口，统一处理会话状态写入、上下文渲染、生成和结果回放。
-    final cleanText = text.trim();
-    if (cleanText.isEmpty) {
-      _announce('请输入创作需求后再发送。');
-      return;
-    }
-    if (_conversationGuideScope == 'mode_guidance' &&
-        _activeModeGuidanceState != null &&
-        !_activeModeGuidanceState!.isReady) {
-      final question = _modeGuidanceTransitionService.buildQuestion(
-        _activeModeGuidanceState!,
-      );
-      if (!question.allowFreeText) {
-        _announce('当前阶段请先从下方选项里选择一个方向。');
-        return;
-      }
-      await _answerModeGuidanceWithFreeText(
-        text: cleanText,
-        visibleText: visibleText,
-        question: question,
-      );
-      return;
-    }
-    final settings = _settings;
-    final project = _currentProject;
-    if (settings == null || project == null) {
-      _announce('默认项目尚未加载完成，请稍后再试。');
-      return;
-    }
-    final provider = _selectedModelProvider(settings);
-    if (provider == null) {
-      _announce('当前没有可用 provider 配置。');
-      return;
-    }
-    final executionProfile = _modelExecutionProfileService.resolve(
-      settings: settings,
-      provider: provider,
-    );
-    final runtimeProfile = _mapValue(executionProfile['runtime_profile']);
-    final contextStrategySettings = _contextStrategySettingsOf(settings);
-    final resolvedModelId = _stringValue(
-      executionProfile['resolved_model_id'],
-      settings.defaultModelId,
-    );
-    if (provider.baseUrl.trim().isEmpty || resolvedModelId.trim().isEmpty) {
-      _announce('请先在 novel_agent_settings.json 或环境变量里配置真实的模型接口地址和模型名。');
-      return;
-    }
-    final title = _titleFromPrompt(cleanText);
-    final activeState = _ensureConversationSession();
-    final userPromptState = retryLastFailure
-        ? _conversationSessionStateService.stateAfterRetryCleanup(activeState)
-        : _conversationSessionStateService.stateWithUserPrompt(
-            activeState,
-            cleanText,
-            displayContent: visibleText,
-            strategySettings: contextStrategySettings,
-            modelProfile: runtimeProfile,
-          );
-    _replaceConversationSession(userPromptState, activate: true);
-    _showSessionHistory = false;
-    _conversationGuideScope = '';
-    _activeModeGuidanceState = null;
-    _updateWorkbench(
-      _withConversationState(
-        _viewModel.workbench.copyWith(
-          isGenerating: true,
-          generationStatus: '正在请求 ${provider.title} 生成草稿...',
-          toolCoreStatus: '',
-        ),
-        contextSummaryOverride: _conversationSummary(
-          userPromptState,
-          fallback: '正在整理会话与项目上下文',
-        ),
-      ),
-    );
-    final sessionContext = _conversationSessionStateService
-        .sessionContextMarkdown(
-          userPromptState,
-          excludeLatestUserContent: cleanText,
-        );
-    void handleProgress(DraftGenerationProgress progress) {
-      final streamingState = _conversationStreamingStateService
-          .stateWithProgress(userPromptState, progress);
-      _replaceConversationSession(streamingState, activate: true);
-      _updateWorkbench(
-        _withConversationState(
-          _viewModel.workbench.copyWith(
-            isGenerating: true,
-            generationStatus: _streamingGenerationStatus(provider, progress),
-            toolCoreStatus: progress.pendingToolCalls.isNotEmpty
-                ? '正在调用工具'
-                : '',
-          ),
-          contextSummaryOverride: _conversationSummary(
-            streamingState,
-            fallback: '正在接收模型输出',
-          ),
-        ),
-      );
-    }
+  void onOptimizeRequested() =>
+      _workbenchConversationController.onOptimizeRequested();
 
-    try {
-      final useCase = _generateDraftUseCaseFactory(
-        provider,
-        settings.networkSettings,
-      );
-      final result = await useCase.execute(
-        project: project,
-        userPrompt: cleanText,
-        modelId: resolvedModelId,
-        title: title,
-        sessionContext: sessionContext,
-        requestOptions: _mapValue(executionProfile['request_options']),
-        contextSettings: contextStrategySettings,
-        modelProfile: runtimeProfile,
-        activeDocumentPath: _viewModel.workbench.activeDocumentPath,
-        activeDocumentBody: _activeOpenDocument()?.content ?? '',
-        onProgress: handleProgress,
-      );
-      final assistantState = _conversationSessionStateService
-          .stateWithAssistantResult(
-            userPromptState,
-            result,
-            strategySettings: contextStrategySettings,
-            modelProfile: runtimeProfile,
-          );
-      _replaceConversationSession(assistantState, activate: true);
-      var savedPath = result.writtenPaths.isEmpty
-          ? ''
-          : result.writtenPaths.first;
-      if (savedPath.isEmpty &&
-          settings.autoSaveDrafts &&
-          !result.waitingForUserChoice &&
-          result.draftMarkdown.trim().isNotEmpty) {
-        savedPath = await _saveDraftUseCase.execute(
-          project: project,
-          content: result.draftMarkdown,
-          title: title,
-        );
-      }
-      final selectedResourcePath = savedPath.isEmpty
-          ? _viewModel.workbench.activeDocumentPath
-          : savedPath;
-      final shouldReloadResources =
-          savedPath.isNotEmpty ||
-          result.writtenPaths.isNotEmpty ||
-          result.changedPaths.isNotEmpty;
-      final resourceEntries = shouldReloadResources
-          ? await _reloadResourceEntries(selectedId: selectedResourcePath)
-          : _markResourceSelection(
-              _viewModel.workbench.resourceEntries,
-              selectedId: selectedResourcePath,
-            );
-      final resolvedBody = await _resolvedDocumentBody(
-        project: project,
-        generatedMarkdown: result.draftMarkdown,
-        relativePath: savedPath,
-      );
-      final hasDocumentContent = resolvedBody.trim().isNotEmpty;
-      if (hasDocumentContent) {
-        _openOrActivateDocument(
-          relativePath: savedPath,
-          title: title.isEmpty ? '新草稿' : title,
-          content: resolvedBody,
-        );
-      }
-      final nextWorkbench = _applyOpenDocuments(
-        _viewModel.workbench.copyWith(
-          resourceEntries: resourceEntries,
-          modelLabel: '${provider.title} · ${result.modelId}',
-          contextSummary: _resultContextSummary(result, assistantState),
-          generationStatus: _generationStatusFor(result, savedPath),
-          toolCoreStatus: result.waitingForUserChoice ? '等待选择' : '',
-          isGenerating: false,
-        ),
-      );
-      _updateWorkbench(_withConversationState(nextWorkbench));
-    } catch (error) {
-      final failedState = _conversationSessionStateService
-          .stateWithAssistantFailure(
-            userPromptState,
-            '生成失败：$error',
-            retryRequest: ConversationRetryRequest(
-              prompt: cleanText,
-              visibleText: visibleText,
-              errorMessage: '生成失败：$error',
-            ),
-            strategySettings: contextStrategySettings,
-            modelProfile: runtimeProfile,
-          );
-      _replaceConversationSession(failedState, activate: true);
-      _updateWorkbench(
-        _withConversationState(
-          _viewModel.workbench.copyWith(
-            generationStatus: '生成失败：$error',
-            toolCoreStatus: '',
-            isGenerating: false,
-          ),
-        ),
-      );
-    }
-  }
+  void onToolOptionsRequested() =>
+      _workbenchConversationController.onToolOptionsRequested();
+
+  void onSendRequested(String text) =>
+      _workbenchConversationController.onSendRequested(text);
 
   @override
   void onSettingsBackRequested() {
@@ -1882,161 +1300,6 @@ class AppShellController extends ChangeNotifier
   void _showWorkspaceCommand(WorkspaceCommandViewData command) {
     // 中文注释: 工作区命令弹层状态统一从这里进入，方便后续替换为全局弹层容器。
     _updateWorkbench(_viewModel.workbench.copyWith(workspaceCommand: command));
-  }
-
-  Future<void> _submitProjectInfoCommand(
-    WorkspaceCommandRequestViewData request,
-  ) async {
-    final project = _currentProject;
-    if (project == null) {
-      _announce('请先打开项目。');
-      return;
-    }
-    final cleanTitle = request.projectTitle.trim();
-    try {
-      await _updateProjectManifestUseCase.execute(
-        project: project,
-        title: cleanTitle.isEmpty ? project.name : cleanTitle,
-        projectType: request.projectType.trim().isEmpty
-            ? project.projectType
-            : request.projectType.trim(),
-        genre: request.genre,
-        premise: request.premise,
-        notes: request.notes,
-      );
-      onWorkspaceCommandDismissed();
-      await _loadProject(project.rootPath);
-      _announce('已更新项目信息。');
-    } catch (error) {
-      _announce('保存项目信息失败：$error');
-    }
-  }
-
-  Future<void> _submitCreateFileCommand(
-    WorkspaceCommandRequestViewData request,
-  ) async {
-    final project = _currentProject;
-    if (project == null) {
-      _announce('请先打开项目。');
-      return;
-    }
-    final relativePath = _joinedProjectPath(
-      request.relativePath,
-      request.entryName,
-      defaultFileName: 'new_file.md',
-    );
-    final initialContent = request.content.trim().isEmpty
-        ? '# ${_displayNameOf(relativePath)}\n\n'
-        : request.content;
-    try {
-      final result = await _createProjectEntryUseCase.execute(
-        project: project,
-        relativePath: relativePath,
-        content: initialContent,
-      );
-      if (!_boolValue(result['ok'])) {
-        _announce(_stringValue(result['error'], '创建文件失败。'));
-        return;
-      }
-      final createdPath = _stringValue(result['relative_path']);
-      onWorkspaceCommandDismissed();
-      final resourceEntries = await _reloadResourceEntries(
-        selectedId: createdPath,
-      );
-      _updateWorkbench(
-        _viewModel.workbench.copyWith(resourceEntries: resourceEntries),
-      );
-      await _openResource(createdPath);
-      _announce('已创建文件：$createdPath');
-    } catch (error) {
-      _announce('创建文件失败：$error');
-    }
-  }
-
-  Future<void> _submitCreateFolderCommand(
-    WorkspaceCommandRequestViewData request,
-  ) async {
-    final project = _currentProject;
-    if (project == null) {
-      _announce('请先打开项目。');
-      return;
-    }
-    final relativePath = _joinedProjectPath(
-      request.relativePath,
-      request.entryName,
-      defaultFileName: 'new_folder',
-    );
-    try {
-      final result = await _createProjectEntryUseCase.execute(
-        project: project,
-        relativePath: relativePath,
-        isFolder: true,
-      );
-      if (!_boolValue(result['ok'])) {
-        _announce(_stringValue(result['error'], '创建目录失败。'));
-        return;
-      }
-      final createdPath = _stringValue(result['relative_path']);
-      onWorkspaceCommandDismissed();
-      final resourceEntries = await _reloadResourceEntries(
-        selectedId: createdPath,
-      );
-      _updateWorkbench(
-        _viewModel.workbench.copyWith(
-          resourceEntries: resourceEntries,
-          generationStatus: '已创建目录：$createdPath',
-        ),
-      );
-    } catch (error) {
-      _announce('创建目录失败：$error');
-    }
-  }
-
-  Future<void> _submitImportFilesCommand(
-    WorkspaceCommandRequestViewData request,
-  ) async {
-    final project = _currentProject;
-    if (project == null) {
-      _announce('请先打开项目。');
-      return;
-    }
-    final sourcePaths = request.sourcePathsText
-        .split(RegExp(r'\r?\n'))
-        .map((value) => value.trim())
-        .where((value) => value.isNotEmpty)
-        .toList(growable: false);
-    if (sourcePaths.isEmpty) {
-      _announce('请至少填写一个要导入的文件路径。');
-      return;
-    }
-    try {
-      final result = await _importProjectFilesUseCase.execute(
-        project: project,
-        sourcePaths: sourcePaths,
-        targetDirectory: request.targetDirectory,
-      );
-      if (!_boolValue(result['ok'])) {
-        _announce(
-          _stringValue(result['error'], _stringValue(result['summary'])),
-        );
-        return;
-      }
-      final importedPaths = ValueReaders.stringList(result['imported_paths']);
-      onWorkspaceCommandDismissed();
-      final selectedId = importedPaths.isEmpty ? '' : importedPaths.first;
-      final resourceEntries = await _reloadResourceEntries(
-        selectedId: selectedId,
-      );
-      _updateWorkbench(
-        _viewModel.workbench.copyWith(resourceEntries: resourceEntries),
-      );
-      if (selectedId.isNotEmpty) {
-        await _openResource(selectedId);
-      }
-      _announce(_stringValue(result['summary'], '导入完成。'));
-    } catch (error) {
-      _announce('导入文件失败：$error');
-    }
   }
 
   Future<void> _createEcosystemEntry(String kind) async {
@@ -2968,6 +2231,228 @@ class AppShellController extends ChangeNotifier
     );
   }
 
+  @override
+  void onProjectAssetsBackRequested() {
+    // 中文注释: 资产页返回只切回工作台，资产快照仍留在控制器里供下次直接恢复。
+    showWorkbench();
+  }
+
+  @override
+  void onProjectAssetsRefreshRequested() {
+    // 中文注释: 资产刷新统一重读 styles/ 与 world/foreshadows/，避免页面直接扫目录。
+    _refreshProjectAssets();
+  }
+
+  @override
+  void onProjectAssetsTabSelected(String tabId) {
+    _projectAssetsSnapshot = _projectAssetsSnapshot.copyWith(
+      activeTabId: tabId,
+    );
+    _refreshProjectAssetsView();
+  }
+
+  @override
+  void onProjectAssetsEntrySelected(String entryId) {
+    if (_projectAssetsSnapshot.activeTabId == 'foreshadows') {
+      _projectAssetsSnapshot = _projectAssetsSnapshot.copyWith(
+        selectedForeshadowId: entryId,
+      );
+    } else {
+      _projectAssetsSnapshot = _projectAssetsSnapshot.copyWith(
+        selectedStyleId: entryId,
+      );
+    }
+    _refreshProjectAssetsView();
+  }
+
+  @override
+  void onProjectAssetsNewRequested() {
+    if (_projectAssetsSnapshot.activeTabId == 'foreshadows') {
+      _projectAssetsSnapshot = _projectAssetsSnapshot.copyWith(
+        selectedForeshadowId: '',
+      );
+      _projectAssetsStatusMessage = '正在创建新的伏笔资产。';
+    } else {
+      _projectAssetsSnapshot = _projectAssetsSnapshot.copyWith(
+        selectedStyleId: '',
+      );
+      _projectAssetsStatusMessage = '正在创建新的风格资产。';
+    }
+    _refreshProjectAssetsView();
+  }
+
+  @override
+  void onProjectAssetsSaveStyleRequested(
+    StyleProfileEditorRequestViewData request,
+  ) async {
+    final project = _currentProject;
+    if (project == null) {
+      await _refreshProjectAssets(status: '请先创建或打开项目。');
+      return;
+    }
+    final result = await _projectAssetLibraryService
+        .saveStyle(project, <String, Object?>{
+          'id': request.id.trim(),
+          'display_name': request.displayName.trim(),
+          'summary': request.summary,
+          'genre': request.genre.trim(),
+          'tone': request.tone.trim(),
+          'audience': request.audience.trim(),
+          'tags': _csvList(request.tagsText),
+          'guardrails': _csvList(request.guardrailsText),
+          'example_paths': _csvList(request.examplePathsText),
+          'inherited_from_ids': _csvList(request.inheritedIdsText),
+          'default_for_project': request.defaultForProject,
+        });
+    await _syncWorkbenchResources();
+    if (ValueReaders.boolValue(result['ok'])) {
+      _projectAssetsSnapshot = _projectAssetsSnapshot.copyWith(
+        activeTabId: 'styles',
+        selectedStyleId: ValueReaders.stringValue(
+          ValueReaders.mapValue(result['asset'])['id'],
+        ),
+      );
+    }
+    await _refreshProjectAssets(
+      status: _resultMessage(result, success: '风格资产已保存。'),
+    );
+  }
+
+  @override
+  void onProjectAssetsSaveForeshadowRequested(
+    ForeshadowRecordEditorRequestViewData request,
+  ) async {
+    final project = _currentProject;
+    if (project == null) {
+      await _refreshProjectAssets(status: '请先创建或打开项目。');
+      return;
+    }
+    final result = await _projectAssetLibraryService
+        .saveForeshadow(project, <String, Object?>{
+          'id': request.id.trim(),
+          'title': request.title.trim(),
+          'status': request.status.trim(),
+          'summary': request.summary,
+          'planted_chapter_path': request.plantedChapterPath.trim(),
+          'target_payoff_path': request.targetPayoffPath.trim(),
+          'related_entity_ids': _csvList(request.relatedEntityIdsText),
+          'related_paths': _csvList(request.relatedPathsText),
+          'trigger_conditions': _csvList(request.triggerConditionsText),
+          'payoff_expectations': _csvList(request.payoffExpectationsText),
+          'tags': _csvList(request.tagsText),
+          'notes': request.notes,
+        });
+    await _syncWorkbenchResources();
+    if (ValueReaders.boolValue(result['ok'])) {
+      _projectAssetsSnapshot = _projectAssetsSnapshot.copyWith(
+        activeTabId: 'foreshadows',
+        selectedForeshadowId: ValueReaders.stringValue(
+          ValueReaders.mapValue(result['asset'])['id'],
+        ),
+      );
+    }
+    await _refreshProjectAssets(
+      status: _resultMessage(result, success: '伏笔资产已保存。'),
+    );
+  }
+
+  @override
+  void onProjectAssetsDeleteRequested({
+    required String kind,
+    required String id,
+  }) async {
+    final project = _currentProject;
+    if (project == null) {
+      await _refreshProjectAssets(status: '请先创建或打开项目。');
+      return;
+    }
+    if (id.trim().isEmpty) {
+      await _refreshProjectAssets(status: '请先选择一个资产。');
+      return;
+    }
+    final result = kind == 'foreshadow'
+        ? await _projectAssetLibraryService.deleteForeshadow(project, id.trim())
+        : await _projectAssetLibraryService.deleteStyle(project, id.trim());
+    await _syncWorkbenchResources();
+    if (ValueReaders.boolValue(result['ok'])) {
+      if (kind == 'foreshadow') {
+        _projectAssetsSnapshot = _projectAssetsSnapshot.copyWith(
+          selectedForeshadowId: '',
+        );
+      } else {
+        _projectAssetsSnapshot = _projectAssetsSnapshot.copyWith(
+          selectedStyleId: '',
+        );
+      }
+    }
+    await _refreshProjectAssets(
+      status: _resultMessage(result, success: '资产已删除。'),
+    );
+  }
+
+  @override
+  void onProjectAssetsImportBundleRequested(
+    ProjectAssetBundleImportRequestViewData request,
+  ) async {
+    final project = _currentProject;
+    if (project == null) {
+      await _refreshProjectAssets(status: '请先创建或打开项目。');
+      return;
+    }
+    if (request.absolutePath.trim().isEmpty) {
+      await _refreshProjectAssets(status: '请提供资产包绝对路径。');
+      return;
+    }
+    final bundleContent = await _projectAssetLibraryService.readExternalBundle(
+      request.absolutePath.trim(),
+    );
+    if ((bundleContent ?? '').trim().isEmpty) {
+      await _refreshProjectAssets(status: '资产包文件不存在或不可读。');
+      return;
+    }
+    final preview = _projectAssetLibraryService.previewImportBundle(
+      project,
+      bundleContent: bundleContent!,
+      currentStyles: _projectAssetsSnapshot.styles,
+      currentForeshadows: _projectAssetsSnapshot.foreshadows,
+      overwrite: request.overwrite,
+    );
+    if (!ValueReaders.boolValue(preview['ok'])) {
+      await _refreshProjectAssets(status: '资产包预检失败。');
+      return;
+    }
+    final result = await _projectAssetLibraryService.importBundle(
+      project,
+      bundleContent: bundleContent,
+      overwrite: request.overwrite,
+    );
+    await _syncWorkbenchResources();
+    await _refreshProjectAssets(
+      status:
+          '${_resultMessage(result, success: '资产包已导入。')} 预检条目 ${ValueReaders.objectList(preview['items']).length} 个。',
+    );
+  }
+
+  @override
+  void onProjectAssetsExportBundleRequested(
+    ProjectAssetBundleExportRequestViewData request,
+  ) async {
+    final project = _currentProject;
+    if (project == null) {
+      await _refreshProjectAssets(status: '请先创建或打开项目。');
+      return;
+    }
+    final result = await _projectAssetLibraryService.exportBundle(
+      project,
+      title: request.title.trim(),
+      description: request.description.trim(),
+    );
+    await _syncWorkbenchResources();
+    await _refreshProjectAssets(
+      status: _resultMessage(result, success: '资产包已导出。'),
+    );
+  }
+
   Future<void> _refreshTaskCenter({String? status}) async {
     // 中文注释: 任务中心刷新统一拉取任务列表、预检和调度摘要，保证多个按钮回到同一页面快照口径。
     final project = _currentProject;
@@ -3257,6 +2742,46 @@ class AppShellController extends ChangeNotifier
     _safeNotifyListeners();
   }
 
+  Future<void> _refreshProjectAssets({String? status}) async {
+    // 中文注释: 资产页刷新统一走资产服务，GUI 不直接操作 frontmatter 和项目目录规则。
+    final project = _currentProject;
+    if (project == null) {
+      _projectAssetsSnapshot = ProjectAssetsSnapshot.initial();
+      _projectAssetsStatusMessage = status ?? '请先创建或打开项目。';
+      _refreshProjectAssetsView();
+      return;
+    }
+    final styles = await _projectAssetLibraryService.listStyles(project);
+    final foreshadows = await _projectAssetLibraryService.listForeshadows(
+      project,
+    );
+    _projectAssetsSnapshot = _projectAssetsSnapshot.copyWith(
+      styles: styles,
+      foreshadows: foreshadows,
+      selectedStyleId: _selectedAssetIdOrFallback(
+        currentId: _projectAssetsSnapshot.selectedStyleId,
+        entries: styles,
+      ),
+      selectedForeshadowId: _selectedAssetIdOrFallback(
+        currentId: _projectAssetsSnapshot.selectedForeshadowId,
+        entries: foreshadows,
+      ),
+    );
+    _projectAssetsStatusMessage = status ?? _projectAssetsStatusMessage;
+    _refreshProjectAssetsView();
+  }
+
+  void _refreshProjectAssetsView() {
+    // 中文注释: 资产页视图重建只做快照到表单的投影，不在这里碰文件系统。
+    _viewModel = _viewModel.copyWith(
+      projectAssets: _projectAssetsViewDataService.build(
+        snapshot: _projectAssetsSnapshot,
+        status: _projectAssetsStatusMessage,
+      ),
+    );
+    _safeNotifyListeners();
+  }
+
   Future<void> _runTaskCenterSelectorCommand({
     required String pendingMessage,
     required String successMessage,
@@ -3375,26 +2900,6 @@ class AppShellController extends ChangeNotifier
       workbench: _viewModel.workbench.copyWith(resourceEntries: entries),
     );
     _safeNotifyListeners();
-  }
-
-  void _openLikelyOutlineDocument() {
-    // 中文注释: “大纲”按钮优先尝试旧项目常见的大纲路径，没有则给出明确提示而不是空操作。
-    const candidates = <String>[
-      'outline/outline.md',
-      'outline/project_outline.md',
-      'volume_outlines/index.md',
-      'chapter_outlines/index.md',
-    ];
-    final existingIds = _viewModel.workbench.resourceEntries
-        .map((entry) => entry.id)
-        .toSet();
-    for (final candidate in candidates) {
-      if (existingIds.contains(candidate)) {
-        _openResource(candidate);
-        return;
-      }
-    }
-    _announce('当前项目还没有可直接打开的大纲文件。');
   }
 
   void _createReviewTaskForCurrentDocument() async {
@@ -3613,6 +3118,15 @@ class AppShellController extends ChangeNotifier
     return null;
   }
 
+  List<String> _csvList(String rawText) {
+    // 中文注释: 资产编辑器里的轻量列表字段统一按逗号切分，避免每个保存动作重复做同样转换。
+    return rawText
+        .split(',')
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+  }
+
   String _resultMessage(JsonMap result, {required String success}) {
     // 中文注释: 共享服务返回仍是字典风格，这里统一提炼一条用户可读状态文案。
     if (ValueReaders.boolValue(result['ok'])) {
@@ -3621,6 +3135,23 @@ class AppShellController extends ChangeNotifier
     }
     final error = ValueReaders.stringValue(result['error']).trim();
     return error.isEmpty ? '操作失败。' : '操作失败：$error';
+  }
+
+  String _selectedAssetIdOrFallback({
+    required String currentId,
+    required List<JsonMap> entries,
+  }) {
+    // 中文注释: 资产刷新后统一修正选中态，避免新增、删除或导入后仍指向失效条目。
+    final cleanCurrentId = currentId.trim();
+    for (final entry in entries) {
+      if (_stringValue(entry['id']) == cleanCurrentId) {
+        return cleanCurrentId;
+      }
+    }
+    if (entries.isEmpty) {
+      return '';
+    }
+    return _stringValue(entries.first['id']);
   }
 
   Map<String, String> _nextEcosystemSelections({
@@ -3756,236 +3287,20 @@ class AppShellController extends ChangeNotifier
   void dispose() {
     // 中文注释: 控制器销毁时标记生命周期状态，避免异步回调在组件已卸载后继续通知 UI。
     _disposed = true;
+    _longTaskStationController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadDefaultProject() async {
-    // 中文注释: 默认项目加载走统一入口，这样设置仓储与工作区用例的边界始终稳定。
-    final settings = _settings;
-    if (settings == null) {
-      return;
-    }
-    final defaultPath = settings.defaultProjectPath.trim();
-    if (defaultPath.isEmpty) {
-      _resetToProjectlessWorkbench(status: '请先创建项目，或在桌面端打开一个已有项目。');
-      await _showProjectLauncher(
-        ProjectLauncherMode.create,
-        status: '当前还没有有效项目。请先创建项目，或打开已有项目。',
-        canDismiss: false,
-      );
-      return;
-    }
-    await _loadProject(defaultPath);
-  }
-
-  Future<void> _loadProject(String rootPath) async {
-    // 中文注释: 项目加载统一负责刷新工作台基础信息，不让资源树和文档面板各自拼状态。
-    _updateWorkbench(
-      _viewModel.workbench.copyWith(
-        generationStatus: '正在加载项目...',
-        toolCoreStatus: '',
-      ),
-    );
-    final snapshot = await _loadProjectWorkspaceUseCase.execute(rootPath);
-    if (snapshot == null) {
-      _currentProject = null;
-      _resetToProjectlessWorkbench(status: '当前没有有效项目。请先创建项目，或打开已有项目。');
-      _refreshSettingsViewData();
-      await _showProjectLauncher(
-        ProjectLauncherMode.create,
-        status: rootPath.trim().isEmpty
-            ? '当前还没有有效项目。请先创建项目，或打开已有项目。'
-            : '未识别到有效项目：$rootPath',
-        canDismiss: false,
-      );
-      return;
-    }
-    _currentProject = snapshot.project;
-    _resourceSnapshotEntries = snapshot.entries;
-    _expandedResourceDirectories = _defaultExpandedDirectories(
-      snapshot.entries,
-    );
-    _openDocuments = const <OpenDocumentState>[];
-    _activeOpenDocumentId = '';
-    _resetConversationSessions();
-    var workbench = _viewModel.workbench.copyWith(
-      projectName: snapshot.project.name,
-      projectSubtitle: _projectSubtitleFor(snapshot.project.projectType),
-      projectPath: snapshot.project.rootPath,
-      toolCoreStatus: '',
-      modelOptions: _settings == null
-          ? _viewModel.workbench.modelOptions
-          : _modelSelectorOptions(_settings!),
-      agentOptions: _agentSelectorOptions(),
-      resourceEntries: _markResourceSelection(
-        _resourceEntriesFrom(snapshot.entries),
-        selectedId: '',
-      ),
-      contextSummary: '资源 ${snapshot.entries.length} 项',
-      generationStatus: '',
-      documents: const <DocumentTabViewData>[],
-      activeDocumentTitle: '',
-      activeDocumentPath: '',
-      activeDocumentBody: '',
-      activeDocumentDirty: false,
-      conversationEntries: const [],
-      pendingOptions: const [],
-      subAgentRuns: const [],
-      sessionHistoryEntries: const [],
-      activeSessionId: '',
-      showSessionHistory: false,
-      isDocumentsWorkspaceVisible: false,
-      projectLauncher: null,
-      workspaceCommand: null,
-      isGenerating: false,
-    );
-    final firstOpenable = _firstOpenablePath(snapshot.entries);
-    if (firstOpenable.trim().isNotEmpty) {
-      _expandResourceAncestors(firstOpenable);
-      final content = await _readProjectFileUseCase.execute(
-        snapshot.project,
-        firstOpenable,
-      );
-      if (content != null && content.trim().isNotEmpty) {
-        _openOrActivateDocument(
-          relativePath: firstOpenable,
-          title: _displayNameOf(firstOpenable),
-          content: content,
-        );
-        workbench = _applyOpenDocuments(
-          workbench.copyWith(
-            resourceEntries: _markResourceSelection(
-              workbench.resourceEntries,
-              selectedId: firstOpenable,
-            ),
-            generationStatus: '已打开 $firstOpenable',
-          ),
-        );
-      }
-    }
-    _replaceConversationSession(_createConversationSession(), activate: true);
-    _refreshSettingsViewData();
-    _updateWorkbench(_withConversationState(workbench));
-    await _persistLastProjectPath(snapshot.project.rootPath);
-    await _refreshAgentEcosystem();
-    await _restoreWorkbenchSnapshot(snapshot.project);
-    await _refreshActiveDestinationAfterProjectLoad();
-  }
-
   Future<void> _openResource(String relativePath) async {
-    // 中文注释: 资源点击会先判断目录折叠状态；只有文本文件才进入真正的打开逻辑。
-    final project = _currentProject;
-    if (project == null) {
-      _announce('项目尚未加载完成。');
-      return;
-    }
-    final selectedEntry = _resourceEntryById(relativePath);
-    if (selectedEntry != null && selectedEntry.isDirectory) {
-      _toggleResourceDirectory(relativePath);
-      return;
-    }
-    _expandResourceAncestors(relativePath);
-    final content = await _readProjectFileUseCase.execute(
-      project,
-      relativePath,
-    );
-    if (content == null) {
-      _updateWorkbench(
-        _viewModel.workbench.copyWith(
-          resourceEntries: _markResourceSelection(
-            _viewModel.workbench.resourceEntries,
-            selectedId: relativePath,
-          ),
-          generationStatus: '已选中目录或非文本资源：$relativePath',
-        ),
-      );
-      return;
-    }
-    _openOrActivateDocument(
-      relativePath: relativePath,
-      title: _displayNameOf(relativePath),
-      content: content,
-    );
-    _updateWorkbench(
-      _applyOpenDocuments(
-        _viewModel.workbench.copyWith(
-          resourceEntries: _markResourceSelection(
-            _viewModel.workbench.resourceEntries,
-            selectedId: relativePath,
-          ),
-          generationStatus: '已打开 $relativePath',
-        ),
-      ),
-    );
-    _persistWorkbenchSnapshot();
-  }
-
-  Future<void> _saveCurrentDocument() async {
-    // 中文注释: 当前保存仅处理活动文档内容，保持工具栏行为与项目写入规则解耦。
-    final project = _currentProject;
-    final body = _viewModel.workbench.activeDocumentBody.trim();
-    if (project == null || body.isEmpty) {
-      _announce('当前没有可保存的草稿内容。');
-      return;
-    }
-    try {
-      final savedPath = await _saveDraftUseCase.execute(
-        project: project,
-        content: _viewModel.workbench.activeDocumentBody,
-        title: _viewModel.workbench.activeDocumentTitle,
-        relativePath: _viewModel.workbench.activeDocumentPath,
-      );
-      final resourceEntries = await _reloadResourceEntries(
-        selectedId: savedPath,
-      );
-      final activeDocument = _activeOpenDocument();
-      if (activeDocument != null) {
-        _replaceOpenDocument(
-          activeDocument.copyWith(
-            id: savedPath,
-            title: _viewModel.workbench.activeDocumentTitle,
-            relativePath: savedPath,
-            content: _viewModel.workbench.activeDocumentBody,
-            isDirty: false,
-          ),
-        );
-        _activeOpenDocumentId = savedPath;
-      }
-      _updateWorkbench(
-        _applyOpenDocuments(
-          _viewModel.workbench.copyWith(
-            resourceEntries: resourceEntries,
-            generationStatus: '已保存到 $savedPath',
-          ),
-        ),
-      );
-      _persistWorkbenchSnapshot();
-    } catch (error) {
-      _announce('保存失败：$error');
-    }
+    // 中文注释: 资源打开统一委派给工作区控制器，壳层不再直接读盘或维护文档标签。
+    await _workbenchWorkspaceController.openResource(relativePath);
   }
 
   Future<List<ResourceEntryViewData>> _reloadResourceEntries({
     required String selectedId,
   }) async {
-    // 中文注释: 保存新草稿后重新拉取资源树，可以让 GUI 立刻反映项目目录的真实状态。
-    final project = _currentProject;
-    if (project == null) {
-      return _viewModel.workbench.resourceEntries;
-    }
-    final snapshot = await _loadProjectWorkspaceUseCase.execute(
-      project.rootPath,
-    );
-    if (snapshot == null) {
-      return _viewModel.workbench.resourceEntries;
-    }
-    _resourceSnapshotEntries = snapshot.entries;
-    _expandedResourceDirectories = _mergedExpandedDirectories(
-      entries: snapshot.entries,
-      selectedId: selectedId,
-    );
-    return _markResourceSelection(
-      _resourceEntriesFrom(snapshot.entries),
+    // 中文注释: 资源树重载统一从工作区控制器获取，避免壳层继续维护目录快照细节。
+    return _workbenchWorkspaceController.reloadResourceEntries(
       selectedId: selectedId,
     );
   }
@@ -3993,6 +3308,9 @@ class AppShellController extends ChangeNotifier
   Future<void> _refreshActiveDestinationAfterProjectLoad() async {
     // 中文注释: 切换项目后，如果当前正停留在任务/审稿/模板页，就把这些页面一并刷新到新项目上下文。
     switch (_viewModel.destination) {
+      case AppDestination.longTaskStation:
+        await _longTaskStationController.refresh();
+        return;
       case AppDestination.taskCenter:
         await _refreshTaskCenter();
         return;
@@ -4001,6 +3319,9 @@ class AppShellController extends ChangeNotifier
         return;
       case AppDestination.promptTemplates:
         await _refreshPromptTemplates();
+        return;
+      case AppDestination.projectAssets:
+        await _refreshProjectAssets();
         return;
       case AppDestination.workbench:
       case AppDestination.settings:
@@ -4267,11 +3588,7 @@ class AppShellController extends ChangeNotifier
 
   Future<void> _saveSettingsSilently(AppSettings nextSettings) async {
     // 中文注释: 工作台记忆这类背景状态更新不应打断用户，因此单独走静默保存链。
-    if (_savingWorkbenchSnapshot) {
-      return;
-    }
     try {
-      _savingWorkbenchSnapshot = true;
       final savedSettings = await _settingsRepository.save(nextSettings);
       _settings = savedSettings;
       _themeMode = _themeModeFromSettings(savedSettings);
@@ -4286,150 +3603,7 @@ class AppShellController extends ChangeNotifier
       );
     } catch (_) {
       // 中文注释: 记忆保存失败不影响主流程，因此这里静默吞掉。
-    } finally {
-      _savingWorkbenchSnapshot = false;
     }
-  }
-
-  Future<void> _persistLastProjectPath(String rootPath) async {
-    // 中文注释: 上次打开项目属于明确的用户便利记忆，应与工作台快照一起落到设置层。
-    final settings = _settings;
-    if (settings == null || rootPath.trim().isEmpty) {
-      return;
-    }
-    if (_normalizePathForCompare(settings.defaultProjectPath) ==
-        _normalizePathForCompare(rootPath)) {
-      await _persistWorkbenchSnapshot();
-      return;
-    }
-    await _saveSettingsSilently(
-      settings.copyWith(defaultProjectPath: rootPath),
-    );
-    await _persistWorkbenchSnapshot();
-  }
-
-  Future<void> _persistWorkbenchSnapshot() async {
-    // 中文注释: 工作台快照只保存可恢复现场所需的轻量字段，不写入临时正文内容。
-    final settings = _settings;
-    final project = _currentProject;
-    if (settings == null || project == null) {
-      return;
-    }
-    final snapshot = <String, Object?>{
-      'project_root_path': project.rootPath,
-      'active_document_path': _viewModel.workbench.activeDocumentPath,
-      'expanded_directories': _expandedResourceDirectories.toList(
-        growable: false,
-      ),
-    };
-    final currentSnapshot = _mapValue(
-      settings.extraSettings['workbench_state'],
-    );
-    final unchanged =
-        _normalizePathForCompare(
-              ValueReaders.stringValue(currentSnapshot['project_root_path']),
-            ) ==
-            _normalizePathForCompare(project.rootPath) &&
-        ValueReaders.stringValue(currentSnapshot['active_document_path']) ==
-            _viewModel.workbench.activeDocumentPath &&
-        _stringListsEqual(
-          ValueReaders.stringList(currentSnapshot['expanded_directories']),
-          _expandedResourceDirectories.toList(growable: false),
-        );
-    if (unchanged &&
-        _normalizePathForCompare(settings.defaultProjectPath) ==
-            _normalizePathForCompare(project.rootPath)) {
-      return;
-    }
-    await _saveSettingsSilently(
-      settings.copyWith(
-        defaultProjectPath: project.rootPath,
-        extraSettings: <String, Object?>{
-          ...settings.extraSettings,
-          'workbench_state': snapshot,
-        },
-      ),
-    );
-  }
-
-  Future<void> _restoreWorkbenchSnapshot(ProjectDescriptor project) async {
-    // 中文注释: 工作台恢复只恢复目录展开与最后打开文档，避免把一次性视图状态强行带回新会话。
-    final settings = _settings;
-    if (settings == null) {
-      return;
-    }
-    final snapshot = _mapValue(settings.extraSettings['workbench_state']);
-    if (_normalizePathForCompare(
-          ValueReaders.stringValue(snapshot['project_root_path']),
-        ) !=
-        _normalizePathForCompare(project.rootPath)) {
-      return;
-    }
-    final knownDirectoryPaths = _resourceSnapshotEntries
-        .where((entry) => _boolValue(entry['is_dir']))
-        .map((entry) => _stringValue(entry['relative_path']))
-        .toSet();
-    _expandedResourceDirectories = ValueReaders.stringList(
-      snapshot['expanded_directories'],
-    ).where(knownDirectoryPaths.contains).toSet();
-    final activeDocumentPath = _stringValue(
-      snapshot['active_document_path'],
-    ).trim();
-    if (activeDocumentPath.isEmpty) {
-      _updateWorkbench(
-        _viewModel.workbench.copyWith(
-          resourceEntries: _markResourceSelection(
-            _resourceEntriesFrom(_resourceSnapshotEntries),
-            selectedId: '',
-          ),
-        ),
-      );
-      return;
-    }
-    final content = await _readProjectFileUseCase.execute(
-      project,
-      activeDocumentPath,
-    );
-    if (content == null || content.trim().isEmpty) {
-      _updateWorkbench(
-        _viewModel.workbench.copyWith(
-          resourceEntries: _markResourceSelection(
-            _resourceEntriesFrom(_resourceSnapshotEntries),
-            selectedId: '',
-          ),
-        ),
-      );
-      return;
-    }
-    _expandResourceAncestors(activeDocumentPath);
-    _openOrActivateDocument(
-      relativePath: activeDocumentPath,
-      title: _displayNameOf(activeDocumentPath),
-      content: content,
-    );
-    _updateWorkbench(
-      _applyOpenDocuments(
-        _viewModel.workbench.copyWith(
-          resourceEntries: _markResourceSelection(
-            _resourceEntriesFrom(_resourceSnapshotEntries),
-            selectedId: activeDocumentPath,
-          ),
-          generationStatus: '已恢复上次打开的项目现场。',
-        ),
-      ),
-    );
-  }
-
-  bool _stringListsEqual(List<String> left, List<String> right) {
-    if (left.length != right.length) {
-      return false;
-    }
-    for (var index = 0; index < left.length; index++) {
-      if (left[index] != right[index]) {
-        return false;
-      }
-    }
-    return true;
   }
 
   ThemeMode _themeModeFromSettings(AppSettings settings) {
@@ -4465,186 +3639,6 @@ class AppShellController extends ChangeNotifier
       case ThemeMode.light:
         return '浅色';
     }
-  }
-
-  List<ResourceEntryViewData> _resourceEntriesFrom(List<JsonMap> entries) {
-    // 中文注释: 资源树在这里转换成“可展开目录 + 可见文件”的视图层结构，并隐藏不该直接暴露给用户的 JSON。
-    final visibleEntries = entries
-        .where(
-          (entry) =>
-              !_shouldHideResourcePath(_stringValue(entry['relative_path'])),
-        )
-        .toList(growable: false);
-    final byParent = <String, List<JsonMap>>{};
-    for (final entry in visibleEntries) {
-      final relativePath = _stringValue(entry['relative_path']);
-      final parentPath = _parentPathOf(relativePath);
-      byParent.putIfAbsent(parentPath, () => <JsonMap>[]).add(entry);
-    }
-    final results = <ResourceEntryViewData>[];
-
-    void visit(String parentPath, int depth) {
-      final siblings = byParent[parentPath];
-      if (siblings == null || siblings.isEmpty) {
-        return;
-      }
-      final orderedSiblings = siblings.toList(growable: true)
-        ..sort((left, right) => _compareResourceEntries(left, right));
-      for (final entry in orderedSiblings) {
-        final relativePath = _stringValue(entry['relative_path']);
-        final isDirectory = _boolValue(entry['is_dir']);
-        final hasChildren =
-            (byParent[relativePath] ?? const <JsonMap>[]).isNotEmpty;
-        final childCount = (byParent[relativePath] ?? const <JsonMap>[])
-            .where(
-              (child) => !_shouldHideResourcePath(
-                _stringValue(child['relative_path']),
-              ),
-            )
-            .length;
-        final isExpanded =
-            !isDirectory || _expandedResourceDirectories.contains(relativePath);
-        results.add(
-          ResourceEntryViewData(
-            id: relativePath,
-            title: _resourceTitleOf(relativePath, isDirectory: isDirectory),
-            depth: depth,
-            isDirectory: isDirectory,
-            childCount: childCount,
-            hasChildren: hasChildren,
-            isExpanded: isExpanded,
-          ),
-        );
-        if (isDirectory && isExpanded) {
-          visit(relativePath, depth + 1);
-        }
-      }
-    }
-
-    visit('', 0);
-    return results;
-  }
-
-  List<ResourceEntryViewData> _markResourceSelection(
-    List<ResourceEntryViewData> entries, {
-    required String selectedId,
-  }) {
-    // 中文注释: 资源选中状态单独重建，避免每次打开文件都重复计算其他工作台字段。
-    return entries
-        .map(
-          (entry) => ResourceEntryViewData(
-            id: entry.id,
-            title: entry.title,
-            depth: entry.depth,
-            isDirectory: entry.isDirectory,
-            childCount: entry.childCount,
-            hasChildren: entry.hasChildren,
-            isExpanded: entry.isExpanded,
-            isSelected: entry.id == selectedId,
-          ),
-        )
-        .toList(growable: false);
-  }
-
-  void _openOrActivateDocument({
-    required String relativePath,
-    required String title,
-    required String content,
-  }) {
-    // 中文注释: 打开文档时优先复用已有标签，避免同一路径反复堆出重复标签。
-    final documentId = relativePath.trim().isEmpty ? title : relativePath;
-    final existingIndex = _openDocuments.indexWhere(
-      (document) => document.id == documentId,
-    );
-    final nextDocument = OpenDocumentState(
-      id: documentId,
-      title: title.trim().isEmpty ? '未命名草稿' : title,
-      relativePath: relativePath,
-      content: content,
-    );
-    final nextDocuments = List<OpenDocumentState>.from(_openDocuments);
-    if (existingIndex >= 0) {
-      nextDocuments[existingIndex] = nextDocument;
-    } else {
-      nextDocuments.add(nextDocument);
-    }
-    _openDocuments = nextDocuments;
-    _activeOpenDocumentId = documentId;
-  }
-
-  void _replaceOpenDocument(OpenDocumentState document) {
-    // 中文注释: 已打开文档内容变更统一通过这里回写，避免多个回调各自维护列表替换逻辑。
-    final index = _openDocuments.indexWhere((item) => item.id == document.id);
-    if (index < 0) {
-      return;
-    }
-    final nextDocuments = List<OpenDocumentState>.from(_openDocuments);
-    nextDocuments[index] = document;
-    _openDocuments = nextDocuments;
-  }
-
-  OpenDocumentState? _activeOpenDocument() {
-    for (final document in _openDocuments) {
-      if (document.id == _activeOpenDocumentId) {
-        return document;
-      }
-    }
-    return _openDocuments.isEmpty ? null : _openDocuments.last;
-  }
-
-  void _toggleActiveDocumentRenderMode() {
-    // 中文注释: 渲染只对当前活动 Markdown 文档生效，不再挟持整个工作台进入专门布局。
-    final active = _activeOpenDocument();
-    if (active == null) {
-      _announce('当前没有可渲染的文档。');
-      return;
-    }
-    if (!active.canRender) {
-      _announce('只有 Markdown 文档支持渲染。');
-      return;
-    }
-    _replaceOpenDocument(active.copyWith(isRendered: !active.isRendered));
-    _updateWorkbench(
-      _applyOpenDocuments(
-        _viewModel.workbench.copyWith(
-          generationStatus: active.isRendered ? '已返回编辑视图。' : '已切到渲染视图。',
-        ),
-      ),
-    );
-  }
-
-  WorkbenchViewData _applyOpenDocuments(WorkbenchViewData base) {
-    // 中文注释: 打开文档集合到工作台展示态的投影统一收口，避免多处手拼 active 文档字段。
-    final active = _activeOpenDocument();
-    if (active == null) {
-      return base.copyWith(
-        documents: const <DocumentTabViewData>[],
-        activeDocumentTitle: '',
-        activeDocumentPath: '',
-        activeDocumentBody: '',
-        activeDocumentDirty: false,
-        activeDocumentCanRender: false,
-        isActiveDocumentRendered: false,
-      );
-    }
-    return base.copyWith(
-      documents: _openDocuments
-          .map(
-            (document) => DocumentTabViewData(
-              id: document.id,
-              title: document.title,
-              isActive: document.id == active.id,
-              isDirty: document.isDirty,
-            ),
-          )
-          .toList(growable: false),
-      activeDocumentTitle: active.title,
-      activeDocumentPath: active.relativePath,
-      activeDocumentBody: active.content,
-      activeDocumentDirty: active.isDirty,
-      activeDocumentCanRender: active.canRender,
-      isActiveDocumentRendered: active.isRendered,
-    );
   }
 
   List<SelectorOptionViewData> _modelSelectorOptions(AppSettings settings) {
@@ -4702,97 +3696,9 @@ class AppShellController extends ChangeNotifier
     return options;
   }
 
-  String _displayNameOf(String relativePath) {
-    // 中文注释: 展示名称统一从相对路径末段提取，保持资源树和文档标题口径一致。
-    final segments = relativePath.split('/');
-    return segments.isEmpty ? relativePath : segments.last;
-  }
-
   String _projectSubtitleFor(String projectType) {
     // 中文注释: 项目副标题只显示类型语义，不再占位置解释运行链路状态。
     return ProjectTypeCatalogService().definitionOf(projectType).name;
-  }
-
-  String _resourceTitleOf(String relativePath, {required bool isDirectory}) {
-    // 中文注释: 资源树只显示中文映射或文件名本身，实际磁盘路径仍保持英文目录结构。
-    final cleanPath = relativePath.trim();
-    if (cleanPath.isEmpty) {
-      return '';
-    }
-    final segments = cleanPath.split('/');
-    final topLevel = segments.first;
-    if (isDirectory && segments.length == 1) {
-      return _workspaceDirectoryLabel(topLevel);
-    }
-    return segments.last;
-  }
-
-  String _joinedProjectPath(
-    String directoryPath,
-    String entryName, {
-    required String defaultFileName,
-  }) {
-    // 中文注释: 项目相对路径拼接统一收口，避免创建文件、目录和导入动作各自处理斜杠细节。
-    final cleanDirectory = directoryPath.replaceAll('\\', '/').trim();
-    final cleanEntryName = entryName.trim().isEmpty
-        ? defaultFileName
-        : entryName.trim();
-    if (cleanDirectory.isEmpty) {
-      return cleanEntryName;
-    }
-    final normalizedDirectory = cleanDirectory.replaceAll(RegExp(r'/+$'), '');
-    final normalizedEntry = cleanEntryName.replaceAll(RegExp(r'^/+'), '');
-    return '$normalizedDirectory/$normalizedEntry';
-  }
-
-  String _workspaceDirectoryLabel(String directoryName) {
-    // 中文注释: 顶层工作区目录统一映射为中文标签，避免展示层泄露英文目录结构细节。
-    const labels = <String, String>{
-      'specs': '项目规格',
-      'styles': '风格',
-      'outline': '总纲',
-      'volume_outlines': '卷纲',
-      'chapter_outlines': '章纲',
-      'drafts': '草稿',
-      'chapters': '正文',
-      'world': '设定',
-      'characters': '角色',
-      'summaries': '摘要',
-      'knowledge': '知识库',
-      'inspiration': '灵感',
-      'assets': '素材',
-      'tasks': '任务',
-      'reviews': '审稿',
-      'agents': '智能体配置',
-      'agent_groups': '智能体组配置',
-      'skills': '技能配置',
-      'skill_groups': '技能组配置',
-      'prompts': '提示词模板',
-      'tracking': '执行追踪',
-      'runs': '生成记录',
-      'backups': '备份',
-      'exports': '导出包',
-    };
-    return labels[directoryName] ?? directoryName;
-  }
-
-  String _firstOpenablePath(List<JsonMap> entries) {
-    // 中文注释: 初始打开文件只挑第一个文本资源，避免工作台加载后完全空白。
-    for (final entry in entries) {
-      final isDir = _boolValue(entry['is_dir']);
-      final path = _stringValue(entry['relative_path']);
-      if (isDir || _shouldHideResourcePath(path)) {
-        continue;
-      }
-      final normalized = path.toLowerCase();
-      if (normalized.endsWith('.md') ||
-          normalized.endsWith('.txt') ||
-          normalized.endsWith('.yaml') ||
-          normalized.endsWith('.yml')) {
-        return path;
-      }
-    }
-    return '';
   }
 
   String _defaultModelLabel(AppSettings settings) {
@@ -4860,170 +3766,6 @@ class AppShellController extends ChangeNotifier
     return result.isEmpty ? 'interface' : result;
   }
 
-  ResourceEntryViewData? _resourceEntryById(String entryId) {
-    // 中文注释: 当前可见资源项查询集中在这里，避免目录点击和文件打开逻辑各自重复遍历视图列表。
-    for (final entry in _viewModel.workbench.resourceEntries) {
-      if (entry.id == entryId) {
-        return entry;
-      }
-    }
-    return null;
-  }
-
-  void _toggleResourceDirectory(String relativePath) {
-    // 中文注释: 目录展开状态由控制器统一维护，这样资源树控件保持纯展示而不私藏结构状态。
-    final nextExpanded = Set<String>.from(_expandedResourceDirectories);
-    if (nextExpanded.contains(relativePath)) {
-      nextExpanded.remove(relativePath);
-    } else {
-      nextExpanded.add(relativePath);
-    }
-    _expandedResourceDirectories = nextExpanded;
-    _updateWorkbench(
-      _viewModel.workbench.copyWith(
-        resourceEntries: _resourceEntriesFrom(_resourceSnapshotEntries),
-        generationStatus: '已切换目录：$relativePath',
-      ),
-    );
-    _persistWorkbenchSnapshot();
-  }
-
-  Set<String> _defaultExpandedDirectories(List<JsonMap> entries) {
-    // 中文注释: 默认资源树保持全部折叠，只在用户展开或打开文档时补齐祖先链。
-    return <String>{};
-  }
-
-  Set<String> _mergedExpandedDirectories({
-    required List<JsonMap> entries,
-    required String selectedId,
-  }) {
-    // 中文注释: 刷新资源树后保留用户当前展开状态，同时补齐新目录和选中文档祖先的展开链。
-    final existingDirectoryPaths = entries
-        .where(
-          (entry) =>
-              _boolValue(entry['is_dir']) &&
-              !_shouldHideResourcePath(_stringValue(entry['relative_path'])),
-        )
-        .map((entry) => _stringValue(entry['relative_path']))
-        .toSet();
-    final nextExpanded = _expandedResourceDirectories
-        .where(existingDirectoryPaths.contains)
-        .toSet();
-    if (selectedId.trim().isNotEmpty) {
-      nextExpanded.addAll(_ancestorDirectoryPathsOf(selectedId));
-    }
-    return nextExpanded;
-  }
-
-  void _expandResourceAncestors(String relativePath) {
-    // 中文注释: 打开文件时自动展开祖先目录，保证当前选中文档在资源树中始终可见。
-    _expandedResourceDirectories = <String>{
-      ..._expandedResourceDirectories,
-      ..._ancestorDirectoryPathsOf(relativePath),
-    };
-  }
-
-  Set<String> _ancestorDirectoryPathsOf(String relativePath) {
-    final ancestors = <String>{};
-    var current = _parentPathOf(relativePath);
-    while (current.isNotEmpty) {
-      ancestors.add(current);
-      current = _parentPathOf(current);
-    }
-    return ancestors;
-  }
-
-  String _parentPathOf(String relativePath) {
-    final cleanPath = relativePath.replaceAll('\\', '/').trim();
-    final slashIndex = cleanPath.lastIndexOf('/');
-    if (slashIndex <= 0) {
-      return '';
-    }
-    return cleanPath.substring(0, slashIndex);
-  }
-
-  bool _shouldHideResourcePath(String relativePath) {
-    // 中文注释: 普通用户资源树默认隐藏 JSON/JSONL 和内部元数据目录，减少误改后项目不可用的风险。
-    final cleanPath = relativePath.trim().toLowerCase();
-    if (cleanPath.isEmpty) {
-      return false;
-    }
-    if (cleanPath.startsWith('.novel_agent/')) {
-      return true;
-    }
-    if (cleanPath.endsWith('.json') || cleanPath.endsWith('.jsonl')) {
-      return true;
-    }
-    if (cleanPath == 'readme.md') {
-      return true;
-    }
-    if (RegExp(r'^[^/]+/readme\.md$').hasMatch(cleanPath)) {
-      return true;
-    }
-    return false;
-  }
-
-  int _compareResourceEntries(JsonMap left, JsonMap right) {
-    // 中文注释: 资源树排序先尊重目录优先和顶层工作区认知顺序，再回退到稳定字典序。
-    final leftPath = _stringValue(left['relative_path']);
-    final rightPath = _stringValue(right['relative_path']);
-    final leftIsDirectory = _boolValue(left['is_dir']);
-    final rightIsDirectory = _boolValue(right['is_dir']);
-    final leftParent = _parentPathOf(leftPath);
-    final rightParent = _parentPathOf(rightPath);
-    if (leftParent.isEmpty && rightParent.isEmpty) {
-      final topLevelOrder = _topLevelWorkspaceOrder();
-      final leftRank = topLevelOrder.indexOf(leftPath.split('/').first);
-      final rightRank = topLevelOrder.indexOf(rightPath.split('/').first);
-      if (leftRank >= 0 || rightRank >= 0) {
-        if (leftRank < 0) {
-          return 1;
-        }
-        if (rightRank < 0) {
-          return -1;
-        }
-        final compareRank = leftRank.compareTo(rightRank);
-        if (compareRank != 0) {
-          return compareRank;
-        }
-      }
-    }
-    if (leftIsDirectory != rightIsDirectory) {
-      return leftIsDirectory ? -1 : 1;
-    }
-    return leftPath.compareTo(rightPath);
-  }
-
-  List<String> _topLevelWorkspaceOrder() {
-    // 中文注释: 顶层目录顺序按用户常见创作流程排列，而不是简单字典序。
-    return const <String>[
-      'outline',
-      'volume_outlines',
-      'chapter_outlines',
-      'chapters',
-      'drafts',
-      'world',
-      'characters',
-      'styles',
-      'summaries',
-      'knowledge',
-      'inspiration',
-      'assets',
-      'tasks',
-      'reviews',
-      'prompts',
-      'agents',
-      'agent_groups',
-      'skills',
-      'skill_groups',
-      'specs',
-      'tracking',
-      'runs',
-      'backups',
-      'exports',
-      'README.md',
-    ];
-  }
 
   String _agentLabel(AppSettings settings) {
     // 中文注释: 默认智能体标签优先使用已加载生态名称，避免会话栏直接暴露内部 id。
@@ -5039,332 +3781,13 @@ class AppShellController extends ChangeNotifier
     return settings.defaultAgentId;
   }
 
-  String _titleFromPrompt(String prompt) {
-    // 中文注释: 自动保存需要一个轻量标题，这里从提示词首句提取，避免额外打断用户。
-    final firstLine = prompt.split('\n').first.trim();
-    if (firstLine.isEmpty) {
-      return '新草稿';
-    }
-    return firstLine.length > 24 ? firstLine.substring(0, 24) : firstLine;
-  }
-
   void _announce(String message) {
-    // 中文注释: 轻量状态提示统一落到工作台状态栏，避免到处散落 debugPrint。
+    // 中文注释: 轻量提示仍由壳层汇总，但会话投影交给专用会话控制器统一处理。
     _updateWorkbench(
-      _withConversationState(
+      _workbenchConversationController.applyConversationState(
         _viewModel.workbench.copyWith(generationStatus: message),
       ),
     );
-  }
-
-  ConversationSessionState _createConversationSession() {
-    // 中文注释: 新会话实例统一由这里创建，确保 GUI 端所有会话骨架都走同一套 core 规则。
-    return _conversationSessionStateService.createSession(
-      sessionId: 'session_${DateTime.now().microsecondsSinceEpoch}',
-      title: '',
-      needsGoalSelection: true,
-    );
-  }
-
-  ConversationSessionState _ensureConversationSession() {
-    // 中文注释: 发送前如果还没有活动会话，则自动补一个，避免多个入口各自兜底。
-    final activeState = _activeConversationState();
-    if (activeState != null) {
-      return activeState;
-    }
-    final session = _createConversationSession();
-    _replaceConversationSession(session, activate: true);
-    return session;
-  }
-
-  ConversationSessionState? _activeConversationState() {
-    // 中文注释: 活动会话查找独立收口，减少控制器四处散落查表逻辑。
-    for (final state in _conversationSessions) {
-      if (_sessionIdOf(state) == _activeSessionId) {
-        return state;
-      }
-    }
-    return _conversationSessions.isEmpty ? null : _conversationSessions.last;
-  }
-
-  void _replaceConversationSession(
-    ConversationSessionState state, {
-    required bool activate,
-  }) {
-    // 中文注释: 会话替换通过同一入口维护顺序和活动指针，避免列表更新逻辑分叉。
-    final sessionId = _sessionIdOf(state);
-    final next = <ConversationSessionState>[];
-    var replaced = false;
-    for (final current in _conversationSessions) {
-      if (_sessionIdOf(current) == sessionId) {
-        next.add(state);
-        replaced = true;
-        continue;
-      }
-      next.add(current);
-    }
-    if (!replaced) {
-      next.add(state);
-    }
-    _conversationSessions = next;
-    if (activate || _activeSessionId.trim().isEmpty) {
-      _activeSessionId = sessionId;
-    }
-  }
-
-  void _resetConversationSessions() {
-    // 中文注释: 切换项目时会话链整体重置，避免不同项目的历史上下文相互污染。
-    _conversationSessions = const <ConversationSessionState>[];
-    _activeSessionId = '';
-    _showSessionHistory = false;
-    _conversationGuideScope = '';
-  }
-
-  String _sessionIdOf(ConversationSessionState state) {
-    // 中文注释: 会话 id 从记录里统一抽取，避免上层直接理解 sessionRecord 的内部结构。
-    final id = _stringValue(state.sessionRecord['session_id']).trim();
-    if (id.isNotEmpty) {
-      return id;
-    }
-    return _stringValue(state.sessionRecord['id']);
-  }
-
-  WorkbenchViewData _withConversationState(
-    WorkbenchViewData base, {
-    String? contextSummaryOverride,
-  }) {
-    // 中文注释: 工作台与会话状态的投影统一在这里完成，避免 controller 多处手拼右栏字段。
-    final activeState = _activeConversationState();
-    final guide = _conversationGuideViewDataService.build(
-      projectType: _currentProject?.projectType ?? 'novel',
-      needsGoalSelection: _needsGoalSelection(activeState),
-      isGenerating: base.isGenerating,
-      guideScope: _conversationGuideScope,
-      modeGuidanceState: _activeModeGuidanceState,
-    );
-    return base.copyWith(
-      workflowTitle: guide.workflowTitle,
-      workflowDescription: guide.workflowDescription,
-      composerHint: guide.composerHint,
-      primaryActions: guide.primaryActions,
-      conversationEntries: activeState?.entries ?? const [],
-      pendingOptions: activeState?.pendingOptions ?? const [],
-      subAgentRuns: activeState?.subAgentRuns ?? const [],
-      retryRequest: _retryRequestViewData(activeState?.retryRequest),
-      sessionHistoryEntries: _conversationSessionStateService.historyEntries(
-        _conversationSessions,
-        _activeSessionId,
-      ),
-      activeSessionId: _activeSessionId,
-      showSessionHistory: _showSessionHistory,
-      contextSummary:
-          contextSummaryOverride ??
-          _conversationSummary(activeState, fallback: base.contextSummary),
-    );
-  }
-
-  String _conversationSummary(
-    ConversationSessionState? state, {
-    required String fallback,
-  }) {
-    // 中文注释: 会话摘要优先展示多轮上下文状态，没有有效会话内容时再退回项目摘要。
-    if (state == null || state.entries.isEmpty) {
-      return fallback;
-    }
-    final summary = _conversationSessionStateService
-        .publicSummary(state)
-        .trim();
-    return summary.isEmpty ? fallback : summary;
-  }
-
-  bool _needsGoalSelection(ConversationSessionState? state) {
-    // 中文注释: 会话是否仍在待选目标阶段只看会话记录本身，避免页面状态反向决定核心流程。
-    return state == null
-        ? true
-        : _boolValue(state.sessionRecord['needs_goal_selection']);
-  }
-
-  RetryRequestViewData? _retryRequestViewData(
-    ConversationRetryRequest? retryRequest,
-  ) {
-    if (retryRequest == null) {
-      return null;
-    }
-    return RetryRequestViewData(
-      label: '重试上次失败请求',
-      errorMessage: retryRequest.errorMessage,
-    );
-  }
-
-  Future<bool> _handleGuideNavigationAction(
-    PrimaryActionViewData action,
-  ) async {
-    // 中文注释: 工作流细分页导航只改变引导视图，不直接触发模型或工具链。
-    switch (action.commandId.trim()) {
-      case 'guide.open_long_task_modes':
-        _conversationGuideScope = 'long_task_modes';
-        _activeModeGuidanceState = null;
-        _showSessionHistory = false;
-        _updateWorkbench(_withConversationState(_viewModel.workbench));
-        return true;
-      case 'guide.open_mode_guidance':
-        final project = _currentProject;
-        if (project == null) {
-          _announce('请先创建或打开长篇项目。');
-          return true;
-        }
-        final modeId = _stringValue(
-          action.payload['mode'],
-          'seed_autopilot_novel',
-        );
-        _activeModeGuidanceState = await _loadModeGuidanceStateUseCase.execute(
-          project,
-          modeId: modeId,
-        );
-        _conversationGuideScope = 'mode_guidance';
-        _showSessionHistory = false;
-        _updateWorkbench(_withConversationState(_viewModel.workbench));
-        return true;
-      case 'guide.answer_mode_guidance':
-        final project = _currentProject;
-        if (project == null) {
-          _announce('请先创建或打开长篇项目。');
-          return true;
-        }
-        final modeId = _stringValue(
-          action.payload['mode'],
-          'seed_autopilot_novel',
-        );
-        final stageId = _stringValue(action.payload['stage_id']);
-        final fieldKey = _stringValue(action.payload['field_key']);
-        final value = _stringValue(action.payload['value']);
-        if (stageId.isEmpty || fieldKey.isEmpty || value.isEmpty) {
-          _announce('当前引导动作缺少必要参数。');
-          return true;
-        }
-        _activeModeGuidanceState = await _answerModeGuidanceStageUseCase
-            .execute(
-              project,
-              modeId: modeId,
-              stageId: stageId,
-              fieldKey: fieldKey,
-              value: value,
-              label: _stringValue(action.payload['label']),
-              source: _stringValue(action.payload['source'], 'option'),
-            );
-        _conversationGuideScope = 'mode_guidance';
-        _showSessionHistory = false;
-        _updateWorkbench(_withConversationState(_viewModel.workbench));
-        return true;
-      case 'guide.create_workflow_from_mode_guidance':
-        final project = _currentProject;
-        if (project == null) {
-          _announce('请先创建或打开长篇项目。');
-          return true;
-        }
-        final modeId = _stringValue(
-          action.payload['mode'],
-          'seed_autopilot_novel',
-        );
-        final planInput = await _buildModeGuidancePlanInputUseCase.execute(
-          project,
-          modeId: modeId,
-        );
-        if (planInput == null) {
-          _announce('当前还没有可用的模式状态，请先完成模式引导。');
-          return true;
-        }
-        if (!planInput.isReady) {
-          _announce('当前模式信息尚未收束完成，请先完成当前阶段。');
-          return true;
-        }
-        await _createWorkflowFromModeGuidance(planInput);
-        return true;
-      case 'guide.back.default':
-        _conversationGuideScope = '';
-        _activeModeGuidanceState = null;
-        _showSessionHistory = false;
-        _updateWorkbench(_withConversationState(_viewModel.workbench));
-        return true;
-      default:
-        return false;
-    }
-  }
-
-  Future<void> _answerModeGuidanceWithFreeText({
-    required String text,
-    required String visibleText,
-    required ModeGuidanceQuestion question,
-  }) async {
-    // 中文注释: 模式引导下的自由输入不走模型，而是直接写回当前阶段答案，保证“选项/自由输入”共用同一状态机。
-    final project = _currentProject;
-    if (project == null) {
-      _announce('请先创建或打开长篇项目。');
-      return;
-    }
-    _activeModeGuidanceState = await _answerModeGuidanceStageUseCase.execute(
-      project,
-      modeId: question.modeId,
-      stageId: question.stageId,
-      fieldKey: question.fieldKey,
-      value: text,
-      label: visibleText.trim(),
-      source: 'free_text',
-    );
-    _conversationGuideScope = 'mode_guidance';
-    _showSessionHistory = false;
-    _updateWorkbench(_withConversationState(_viewModel.workbench));
-  }
-
-  Future<void> _createWorkflowFromModeGuidance(
-    ModeGuidancePlanInput planInput,
-  ) async {
-    // 中文注释: 模式引导完成后的队列创建直接走共享 runtime，避免再把已收束状态重新翻译成自然语言交给模型猜。
-    final project = _currentProject;
-    if (project == null) {
-      _announce('请先创建或打开长篇项目。');
-      return;
-    }
-    _conversationGuideScope = '';
-    _activeModeGuidanceState = null;
-    _updateWorkbench(
-      _withConversationState(
-        _viewModel.workbench.copyWith(
-          generationStatus: '正在根据模式引导生成长任务队列...',
-          toolCoreStatus: '',
-        ),
-      ),
-    );
-    try {
-      final result = await _workflowRuntimeService.createLongTaskWorkflow(
-        project,
-        planInput.runtimeMode,
-        options: planInput.options,
-      );
-      await _syncWorkbenchResources();
-      await _refreshTaskCenter(
-        status: _resultMessage(result, success: '长任务队列已根据模式引导生成。'),
-      );
-      _announce(_resultMessage(result, success: '长任务队列已根据模式引导生成。'));
-    } catch (error) {
-      _announce('根据模式引导生成长任务队列失败：$error');
-    } finally {
-      _updateWorkbench(_withConversationState(_viewModel.workbench));
-    }
-  }
-
-  JsonMap _currentProjectInfo() {
-    // 中文注释: 当前项目的轻量上下文给动作计划和提示词构建服务复用，避免它们直接依赖控制器内部对象。
-    final project = _currentProject;
-    if (project == null) {
-      return const <String, Object?>{};
-    }
-    return <String, Object?>{
-      'id': project.id,
-      'title': project.name,
-      'path': project.rootPath,
-      'project_type': project.projectType,
-    };
   }
 
   JsonMap _contextStrategySettingsOf(AppSettings settings) {
@@ -5379,197 +3802,17 @@ class AppShellController extends ChangeNotifier
     };
   }
 
-  Future<void> _startPrimaryActionPrompt(
-    WorkbenchPrimaryActionPlan plan, {
-    String userVisibleText = '',
-  }) async {
-    // 中文注释: 主动作如果会启动一条真实提示词链，先写入目标模式，再复用同一发送入口继续推进。
-    final activeState = _ensureConversationSession();
-    if (plan.sessionMode.trim().isNotEmpty) {
-      final nextState = _conversationSessionStateService.stateWithGoalSelection(
-        activeState,
-        plan.sessionMode,
-      );
-      _replaceConversationSession(nextState, activate: true);
-    }
-    if (plan.message.trim().isNotEmpty) {
-      _updateWorkbench(
-        _withConversationState(
-          _viewModel.workbench.copyWith(generationStatus: plan.message),
-        ),
-      );
-    }
-    await _sendPrompt(plan.prompt, visibleText: userVisibleText);
+  void _changeDestination(AppDestination destination) {
+    // 中文注释: 壳层自己只保留全局路由切换，不把任何 feature 状态偷偷绑在目的地切换里。
+    _viewModel = _viewModel.copyWith(destination: destination);
+    _safeNotifyListeners();
   }
 
-  String _resultContextSummary(
-    DraftGenerationResult result,
-    ConversationSessionState assistantState,
+  void _mutateWorkbench(
+    WorkbenchViewData Function(WorkbenchViewData current) transform,
   ) {
-    // 中文注释: 结果摘要把会话、文件和工具三类信息压成一行，供右栏状态徽章直接复用。
-    final sessionSummary = _conversationSummary(
-      assistantState,
-      fallback: '会话已更新',
-    );
-    final contextPackSummary = _stringValue(
-      result.contextPack['summary'],
-      '上下文已更新',
-    );
-    return '$sessionSummary · $contextPackSummary · 读取 ${result.selectedPaths.length} 个文件 · 工具 ${result.executedTools.length} 次';
-  }
-
-  String _generationStatusFor(DraftGenerationResult result, String savedPath) {
-    // 中文注释: 生成状态文案集中在这里，避免不同完成分支手写出不一致的提示语。
-    if (result.stoppedByToolError) {
-      final errorSummary = result.toolErrorSummary.trim();
-      return errorSummary.isEmpty ? '工具执行失败。' : '工具执行失败：$errorSummary';
-    }
-    if (result.waitingForUserChoice) {
-      return '智能体需要你先确认下一步选项。';
-    }
-    if (savedPath.isNotEmpty) {
-      return '草稿生成完成，并已保存到 $savedPath';
-    }
-    if (result.draftMarkdown.trim().isNotEmpty) {
-      return '草稿生成完成，尚未保存到项目目录。';
-    }
-    if (result.writtenPaths.isNotEmpty || result.changedPaths.isNotEmpty) {
-      return '处理完成，项目文件已更新。';
-    }
-    return '本轮处理完成。';
-  }
-
-  String _streamingGenerationStatus(
-    ProviderEndpointSettings provider,
-    DraftGenerationProgress progress,
-  ) {
-    // 中文注释: 流式阶段状态只描述当前进度，不提前承诺最终结果，避免把中间态说成已经完成。
-    if (progress.pendingToolCalls.isNotEmpty) {
-      return '正在通过 ${provider.title} 组织工具调用...';
-    }
-    if (progress.executedTools.isNotEmpty &&
-        progress.draftMarkdown.trim().isEmpty) {
-      return '正在通过 ${provider.title} 处理工具结果...';
-    }
-    return '正在通过 ${provider.title} 接收流式内容...';
-  }
-
-  Future<String> _resolvedDocumentBody({
-    required ProjectDescriptor project,
-    required String generatedMarkdown,
-    required String relativePath,
-  }) async {
-    // 中文注释: 当内容是由工具直接写入文件而不是正文回复时，这里兜底读取真实文件内容给正文区展示。
-    if (generatedMarkdown.trim().isNotEmpty) {
-      return generatedMarkdown;
-    }
-    if (relativePath.trim().isEmpty) {
-      return '';
-    }
-    final content = await _readProjectFileUseCase.execute(
-      project,
-      relativePath,
-    );
-    return content ?? '';
-  }
-
-  Future<void> _showProjectLauncher(
-    ProjectLauncherMode mode, {
-    String status = '',
-    bool? canDismiss,
-  }) async {
-    // 中文注释: 项目启动弹层的数据准备统一在这里完成，避免打开和创建两条入口各自重复扫描项目根目录。
-    final projects = mode == ProjectLauncherMode.open
-        ? await _discoverProjectsAcrossRoots()
-        : const <JsonMap>[];
-    _updateWorkbench(
-      _withConversationState(
-        _viewModel.workbench.copyWith(
-          projectLauncher: _projectLauncherViewDataService.build(
-            mode: mode,
-            projectsRootPath: _defaultProjectsRootPath,
-            projects: projects,
-            status: status,
-            canDismiss: canDismiss ?? _currentProject != null,
-            allowOpenExisting: !_isMobileProjectRootLocked,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<List<JsonMap>> _discoverProjectsAcrossRoots() async {
-    // 中文注释: 项目发现按设置搜索根去重聚合，避免把“默认项目目录”误当成唯一合法来源。
-    final roots = <String>[];
-    void addRoot(String value) {
-      final clean = value.trim();
-      if (clean.isEmpty) {
-        return;
-      }
-      final normalized = _normalizePathForCompare(clean);
-      final exists = roots.any(
-        (entry) => _normalizePathForCompare(entry) == normalized,
-      );
-      if (!exists) {
-        roots.add(clean);
-      }
-    }
-
-    addRoot(_defaultProjectsRootPath);
-    for (final root in _settingsSearchRoots) {
-      addRoot(root);
-    }
-
-    final projects = <JsonMap>[];
-    final seenPaths = <String>{};
-    for (final root in roots) {
-      final discovered = await _discoverProjectsUseCase.execute(root);
-      for (final project in discovered) {
-        final path = _stringValue(project['path']);
-        final normalized = _normalizePathForCompare(path);
-        if (normalized.isEmpty || seenPaths.contains(normalized)) {
-          continue;
-        }
-        seenPaths.add(normalized);
-        projects.add(ValueReaders.deepCopyMap(project));
-      }
-    }
-    projects.sort((left, right) {
-      final leftTitle = _stringValue(left['title']);
-      final rightTitle = _stringValue(right['title']);
-      return leftTitle.compareTo(rightTitle);
-    });
-    return projects;
-  }
-
-  void _resetToProjectlessWorkbench({required String status}) {
-    // 中文注释: 无有效项目时统一清空工作区状态，避免旧项目残留继续暴露在界面上。
-    _resourceSnapshotEntries = const <JsonMap>[];
-    _expandedResourceDirectories.clear();
-    _openDocuments = const <OpenDocumentState>[];
-    _activeOpenDocumentId = '';
-    _resetConversationSessions();
-    _updateWorkbench(
-      _withConversationState(
-        _viewModel.workbench.copyWith(
-          projectName: '',
-          projectSubtitle: '',
-          projectPath: '',
-          resourceEntries: const [],
-          documents: const <DocumentTabViewData>[],
-          activeDocumentTitle: '',
-          activeDocumentPath: '',
-          activeDocumentBody: '',
-          activeDocumentDirty: false,
-          generationStatus: status,
-          contextSummary: '尚未打开项目',
-          toolCoreStatus: '',
-          isGenerating: false,
-          workspaceCommand: null,
-          isDocumentsWorkspaceVisible: false,
-        ),
-      ),
-    );
+    // 中文注释: 所有工作台视图态变更都经过同一入口，避免多个子控制器各自直接改 viewModel。
+    _updateWorkbench(transform(_viewModel.workbench));
   }
 
   void _updateWorkbench(WorkbenchViewData workbench) {

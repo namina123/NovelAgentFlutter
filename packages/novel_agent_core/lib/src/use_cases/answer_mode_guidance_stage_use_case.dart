@@ -8,7 +8,8 @@ class AnswerModeGuidanceStageUseCase {
     required ModeGuidanceStatePort statePort,
     ModeGuidanceTransitionService? transitionService,
   }) : _statePort = statePort,
-       _transitionService = transitionService ?? ModeGuidanceTransitionService();
+       _transitionService =
+           transitionService ?? ModeGuidanceTransitionService();
 
   final ModeGuidanceStatePort _statePort;
   final ModeGuidanceTransitionService _transitionService;

@@ -2,6 +2,596 @@
 
 最后更新：2026-05-25
 
+## 本轮长任务收口补丁
+
+- 已把项目级 `runtime_profile.json` 真正接入长任务启动链：
+  - adapters 新增 `ProjectRuntimeProfileRepository`
+  - adapters 新增 `ProjectTaskQueueRuntimeOptionResolver`
+  - `ProjectWorkflowRuntimeService.runWorkflowTaskQueue(...)` 现在会先读取项目隐藏目录下的 runtime profile，再与本次显式参数合并
+  - `TaskQueueOptionService / LongTaskRunOptionService` 已补保留：
+    - `runtime_baseline_id`
+    - `runtime_mode`
+    - `unattended`
+    - `auto_advance_chapters`
+    - `keep_alive_across_project_switch`
+- 已把 `chapter_collaboration_autorun` 的章级 gate 从“只有合同”推进到“自动 repair + 真阻塞下游”：
+  - adapters 新增 `ProjectLongTaskChapterGateService`
+  - review 任务若属于 `chapter_gate_review` 且报告有 issue / suggestion：
+    - 自动派生或复用 repair revision 任务
+    - 自动把直接依赖该 gate review 的下游任务改挂到 repair 任务
+    - repair 任务继承 `runtime_baseline_id`、`workflow_mode`、长期上下文路径与前置 review 依赖
+- 已新增验证：
+  - `project_long_task_chapter_gate_service_test.dart`
+  - `project_workflow_runtime_service_test.dart` 新增 runtime profile 启动读取用例
+  - `project_long_task_review_repair_task_service_test.dart` 补继承字段断言
+
+当前验证结果：
+
+- `packages/novel_agent_core` 相关回归测试通过
+- `packages/novel_agent_adapters` 针对本轮改动的定向测试通过
+- `dart analyze packages/novel_agent_core packages/novel_agent_adapters apps/novel_agent_app apps/novel_agent_cli` 通过
+- adapters 全量仍只剩既有 4 条失败：
+  - `openai_llm_gateway_test.dart` 1 条
+  - `project_tool_dispatcher_path_test.dart` 3 条
+
+## 本轮 Session 01 收口
+
+- 已按 `docs/major-redesign-session-order.md` 的 Session 01 落地项目主存储策略合同
+- core 已新增：
+  - `ProjectStorageStrategy`
+  - `ProjectContentRepository`
+  - `ProjectReadableProjectionService`
+  - `ProjectDirectoryLayout`
+  - `ProjectDirectoryLayoutService`
+- `ProjectManifest / ProjectDescriptor / ProjectManifestCodecService` 已带 `storage_strategy`
+- adapters 已新增：
+  - `markdown_project_content_repository`
+  - `sqlite_project_content_repository`
+  - `project_storage_strategy_resolver`
+  - 两个 delegating 分发壳
+  - 两个 readable projection 壳
+- 创建项目 use case 已正式改成：
+  - 目录布局解析
+  - 主内容初始化
+  - 可读投影生成
+- Flutter app bootstrap 与本轮相关 probe / test 构造点已补齐新的用例依赖
+- 已新增针对 Session 01 的最小测试：
+  - `project_manifest_storage_strategy_test.dart`
+  - `project_directory_layout_service_test.dart`
+
+当前仍明确未做：
+
+- 新目录树真正切换
+- SQLite schema / 表结构细节
+- 跨策略迁移
+- UI 创建流程改造
+
+## 本轮 Session 02 收口
+
+- 已把项目创建链正式改成“三段式领域流程”的基础版本：
+  - 项目类型
+  - 主存储策略
+  - 长任务运行基准预留
+- core 已新增：
+  - `ProjectCreateRequest`
+  - `ProjectCreationPlan`
+  - `ProjectCreationNextStep`
+  - `ProjectRuntimeBaselineDefinition`
+  - `ProjectRuntimeBaselineCatalogService`
+- `CreateProjectWorkspaceUseCase` 已新增：
+  - `prepare(...)`
+  - `executePrepared(...)`
+- 当前规则已经明确：
+  - 普通项目可直接创建
+  - 长任务项目若未补选运行基准，只返回“下一步需要选择运行基准”的计划结果
+  - 直接落盘入口不再绕过这条规则
+- app 创建浮层已接入最小闭环：
+  - 基础信息页可选项目类型与主存储策略
+  - 选择长任务项目后会进入运行基准补选页
+  - 补选完成后才正式创建并打开项目
+- 现有长任务探针脚本已补成显式 `runtimeBaselineId`，避免被新规则卡住
+- 已新增 Session 02 最小测试：
+  - `packages/novel_agent_core/test/create_project_workspace_use_case_test.dart`
+
+当前仍明确未做：
+
+- 长任务运行基准写入项目元数据与初始运行配置
+  - 已在后续 Session 09 完成
+- 最终版项目创建 UI 打磨
+- 基于项目类型限制不同模板 / 资产预设的创建阶段
+
+## 本轮 Session 03 收口
+
+- 已按 `docs/major-redesign-session-order.md` 的 Session 03 落地 Markdown 项目骨架重排
+- core 已调整：
+  - `ProjectWorkspaceCatalog`
+    - 顶层用户认知目录改为 `premise / outlines / drafts / assets / tasks / analysis / exports`
+    - 新增 `visibleWorkspaceSkeletonDirs`
+    - 隐藏目录扩成 `.novel_agent/state|runtime|runs|threads|tasks|checkpoints|indexes|cache|settings|logs|modes|sqlite`
+  - `ProjectDirectoryLayoutService`
+    - Markdown 主内容目录与 SQLite 可读投影目录都切到新的骨架目录列表
+- adapters 已调整：
+  - 新增 `MarkdownProjectDirectorySkeletonService`
+  - `MarkdownProjectContentRepository` 只负责触发骨架初始化，不再自己内嵌目录创建细节
+  - `MarkdownProjectReadableProjectionService` 改为写入 `premise/project_brief.md`
+  - `SqliteProjectReadableProjectionService` 的可读入口也同步到 `premise/project_brief.md`
+- app 已调整：
+  - 新增 `WorkspaceResourceDisplayService`
+  - 资源树中文映射、隐藏规则、排序规则与“大纲按钮”候选路径已从 `AppShellController` 抽离
+  - 资源树现在按新目录结构显示中文映射，但底层真实路径仍保持英文
+- 旧占位清理策略：
+  - 新骨架不再生成 `README.md`
+  - 资源树继续隐藏根目录和一级子目录的 `README.md`
+  - 项目清单默认隐藏 `.novel_agent/project_manifest.json` 与 `.novel_agent/` 内部结构
+- 已新增 / 更新验证：
+  - `packages/novel_agent_core/test/project_directory_layout_service_test.dart`
+  - `packages/novel_agent_adapters/test/markdown_project_directory_skeleton_service_test.dart`
+
+当前仍明确未做：
+
+- 旧 runtime / tool / workflow 路径全面切换到新目录语义
+- SQLite 主内容 schema 与正文字段设计
+- 长任务系统对新目录结构的彻底迁移
+
+## 本轮 Session 04 收口
+
+- 已按 `docs/major-redesign-session-order.md` 的 Session 04 落地 `sqlite_project_store` 基础仓储壳
+- core 已新增 SQLite 正文主存储模型：
+  - `SqliteProjectBodyTextStorageFormat`
+  - `SqliteProjectBodyTextSegment`
+  - `SqliteProjectBodyTextDocument`
+  - `SqliteProjectBodyTextPolicyService`
+- 当前 core 已明确表达：
+  - SQLite 正文只能是 `plain_text` 或 `segmented_text`
+  - 明确禁止把整篇 Markdown blob 当作正文主存储
+- adapters 已新增并拆分：
+  - `SqliteProjectDirectorySkeletonService`
+  - `SqliteProjectDatabaseOpener`
+  - `SqliteProjectDatabaseInitializer`
+  - `SqliteProjectMetadataStore`
+  - `SqliteProjectBodyTextStore`
+- `SqliteProjectContentRepository` 现在只编排两件事：
+  - 创建 SQLite 项目的高级/隐藏目录骨架
+  - 执行最小建库初始化
+- 当前最小 SQLite schema 已落地：
+  - `project_store_meta`
+  - `body_text_document`
+  - `body_text_segment`
+- 初始化时会写入最小项目元数据：
+  - `storage_strategy`
+  - `project_type`
+  - `schema_version`
+  - `body_storage_policy`
+  - `body_markdown_blob_allowed=false`
+
+当前仍明确未做：
+
+- SQLite 正文读写仓储的真正 save/load 用例
+- SQLite 资产表、关系表、投影表
+- SQLite -> Markdown 导出 codec
+- 跨策略迁移与互转
+
+## 本轮 Session 05 收口
+
+- 已按 `docs/major-redesign-session-order.md` 的 Session 05 把长任务从“项目内功能”正式提升为 core 里的全局运行合同
+- core 已新增 runtime 基础模型与目录：
+  - `RuntimeBaseline`
+  - `RuntimeBaselineCatalogService`
+  - `RunProjectReference`
+  - `RunInstance`
+  - `LongTaskRunStatus`
+  - `LongTaskRunRegistry`
+  - `LongTaskHeartbeatPolicy`
+  - `DefaultLongTaskHeartbeatPolicy`
+  - `LongTaskRunStateMachine`
+  - `RunInstanceFactoryService`
+- 当前已明确：
+  - 长任务运行实例是全局对象，不依赖某个页面是否打开
+  - 运行基线不是模式策略本身，而是独立 runtime 合同
+  - 项目关联通过 `RunProjectReference` 显式表达
+  - 基础状态机统一使用：
+    - `drafting_guidance`
+    - `ready_to_start`
+    - `running`
+    - `waiting_gate`
+    - `paused`
+    - `recovering`
+    - `failed_manual_attention`
+    - `stopped`
+- `ProjectRuntimeBaselineCatalogService` 已内部复用新的 runtime baseline 目录，保持项目创建链与全局 runtime 基线一致
+- 当前心跳策略只定义：
+  - 哪些状态需要心跳
+  - 心跳间隔
+  - 何时算 stale
+  - 不包含自动恢复实现
+
+当前仍明确未做：
+
+- `LongTaskRunRegistry` 的本地持久化 adapter
+- `LongTaskSupervisor` 与心跳轮询调度
+- 自动恢复策略与恢复动作
+- 现有 `workflow` map 结构与新 typed runtime model 的正式对接
+
+## 本轮 Session 06 收口
+
+- 已按 `docs/major-redesign-session-order.md` 的 Session 06 在 adapters 落地长任务全局运行适配层
+- 新增 `runtime/` 子域并明确拆分为：
+  - `LocalLongTaskRuntimePathService`
+  - `RunInstanceDocumentCodecService`
+  - `LocalLongTaskRunRegistry`
+  - `LongTaskHeartbeatScheduler`
+  - `LongTaskSupervisor`
+  - `LongTaskHeartbeatEvent`
+- 当前职责已经分开：
+  - `registry` 只负责全局运行实例落盘与查询
+  - `scheduler` 只负责扫描活跃运行实例并派发心跳 / stale 事件
+  - `supervisor` 只负责编排 registry 与 scheduler，不直接推进 workflow
+- 全局运行实例当前默认持久化到用户级设置根目录下：
+  - `long_task_runtime/runs/*.json`
+- `AdapterBundle` 已新增：
+  - `longTaskRunRegistry`
+  - `longTaskSupervisor`
+  但尚未接入 Flutter 页面
+- 当前心跳基础调度已实现：
+  - 支持 `start/stop`
+  - 支持 `pollOnce`
+  - 支持基于 runtime baseline 与 heartbeat policy 的 due/stale 判断
+  - 明确不包含自动恢复动作
+
+当前仍明确未做：
+
+- supervisor 与现有项目内 `ProjectWorkflowRuntimeService` 的正式对接
+- app 级 `long_task_station` 子域
+- CLI 对全局运行实例的查看 / 暂停 / 恢复入口
+- 自动恢复与恢复后动作策略
+
+## 本轮 Session 07 收口
+
+- 已按 `docs/major-redesign-session-order.md` 的 Session 07 在 Flutter app 落地独立 `long_task_station` 子域
+- 新增 app 级子域文件：
+  - `features/long_task_station/application/controllers/long_task_station_controller.dart`
+  - `features/long_task_station/application/models/long_task_station_snapshot.dart`
+  - `features/long_task_station/application/services/long_task_station_view_data_service.dart`
+  - `features/long_task_station/presentation/*`
+- 当前职责已经拆开：
+  - `LongTaskStationController` 只负责全局运行实例查询、选中态和动作入口壳
+  - `LongTaskStationViewDataService` 只负责把 runtime snapshot 投影成 Flutter 展示模型
+  - 页面与列表/详情控件只负责展示和交互
+- app 壳层当前只做最薄接线：
+  - 新增 `AppDestination.longTaskStation`
+  - `AppRouter` 已接入独立页面
+  - `AppBootstrap` 负责实例化 `LongTaskStationController`
+  - `AppShellController` 只保留导航入口与刷新转发，不承接总站业务状态
+- adapters 侧补齐了总站动作需要的 supervisor 壳：
+  - `pauseRun(...)`
+  - `resumeRun(...)`
+  - `stopRun(...)`
+  这些动作统一复用 core 的 `LongTaskRunStateMachine`
+- 工作台左栏底部快捷入口已新增“长任务总站”，保证 GUI 里存在独立全局入口
+- 已补最小验证：
+  - `packages/novel_agent_adapters/test/long_task_supervisor_test.dart` 新增暂停/恢复/停止状态迁移测试
+
+当前仍明确未做：
+
+- 长任务总站详情树、章节树和运行事件时间线
+- supervisor 与真实 workflow runtime 的自动恢复联动
+- CLI 侧的全局长任务总站命令入口
+- 长任务总站最终 UI 打磨
+
+## 本轮 Session 08 收口
+
+- 已按 `docs/major-redesign-session-order.md` 的 Session 08 把第二种长任务运行基准正式压进 core 运行链
+- core 已新增并接通：
+  - `RuntimeBaselineExecutionModeService`
+  - `LongTaskChapterGatePolicyService`
+  - `LongTaskChapterGateReviewTaskFactoryService`
+- 当前已经明确：
+  - `continuous_autonomous` 默认映射到 `seed_to_full_novel`
+  - `chapter_collaboration_autorun` 默认映射到 `human_outline_ai_draft`
+- `ModeGuidancePlanInput` 已正式带：
+  - `runtimeBaselineId`
+  - `runtime_baseline_id`
+  并且：
+  - mode 1 会输出 `continuous_autonomous`
+  - mode 2 会输出 `chapter_collaboration_autorun`
+  - mode 2 默认 `checkpoint_interval` 已收紧为 `0`，避免和逐章 gate 的自动推进语义冲突
+- `LongTaskPlanRecordService / LongTaskRunOptionService / LongTaskRunRecordService` 已开始保留 `runtime_baseline_id`
+- `LongTaskTaskFactoryService` 已新增 baseline 感知：
+  - 先由 baseline 解析实际 runtime mode
+  - `chapter_collaboration_autorun` 下会在每章后自动插入 gate review 任务
+  - 下一章依赖会接到 gate review 后面，而不是直接接前一章
+- `LongTaskDynamicTaskFactoryService` 已开始继承和回传 `runtime_baseline_id`
+- `LongTaskTaskCompletionPolicyService` 已新增 baseline 规则：
+  - `chapter_collaboration_autorun` 下的 `chapter / review / revision` 成功后默认自动 `succeeded`
+  - 不再沿用“非 chapter 一律 waiting_user”的旧口径
+- `TaskExecutionPlanService` 已能为章级 gate 任务显式补出：
+  - 章级审稿闸门
+  - 必要时自动返工
+  - 闸门通过后推进下一章
+- `LongTaskControllerProfileService / LongTaskUnattendedStrategyService` 已新增 baseline-aware 画像：
+  - `checkpoint_policy=after_chapter_gate`
+  - `autonomy_level=chapter_gate_autorun`
+  - 运行画像里会显式回传 `runtime_baseline_id`
+- 已补 Session 08 定向测试：
+  - `runtime_baseline_execution_mode_service_test.dart`
+  - `long_task_chapter_gate_policy_service_test.dart`
+  - `long_task_chapter_gate_review_task_factory_service_test.dart`
+  - `long_task_task_factory_runtime_baseline_test.dart`
+  - 同时更新了 mode guidance / completion policy / execution plan 相关测试
+
+当前仍明确未做：
+
+- adapter 侧“review 报告判定后自动创建 repair task 并阻塞下一章”的自动物化还没正式接上
+- scheduler / workflow runtime 还没有把 `reviewOutcomeDecision(...)` 接成真正的章级放行器
+- UI 仍未消费新的 baseline 解释信息，本轮也未触碰 UI
+
+## 本轮 Session 09 收口
+
+- 已按 `docs/major-redesign-session-order.md` 的 Session 09 把“长任务项目 -> 运行基准选择”正式闭环回项目创建链
+- core 已新增并落地：
+  - `ProjectRuntimeProfile`
+  - `ProjectRuntimeProfileDocumentService`
+- 当前项目创建链已明确形成两层结果：
+  - `manifest` 保存项目级静态元数据
+  - `runtime_profile` 保存项目级初始运行配置快照
+- `CreateProjectWorkspaceUseCase` 现在在长任务项目创建成功后会同时写入：
+  - `.novel_agent/project_manifest.json`
+  - `.novel_agent/settings/runtime_profile.json`
+- 当前落盘规则已经明确：
+  - `runtime_baseline_id` 进入 `ProjectManifest`
+  - 初始运行配置会显式保存：
+    - `runtime_baseline_id`
+    - `runtime_mode`
+    - `auto_start_on_create=false`
+    - `unattended`
+    - `auto_advance_chapters`
+    - `keep_alive_across_project_switch`
+- `ProjectDescriptor / LocalProjectRepository / LoadProjectWorkspaceUseCase / DiscoverProjectsUseCase` 已全部补齐 `runtimeBaselineId`
+- `UpdateProjectManifestUseCase` 已改为保留现有项目的 `runtimeBaselineId`，避免项目简介更新时把长任务基准写丢
+- 当前 Session 09 的后续扩展点已经固定在：
+  - `packages/novel_agent_core/lib/src/project/project_runtime_profile.dart`
+  - `packages/novel_agent_core/lib/src/project/project_runtime_profile_document_service.dart`
+  - `packages/novel_agent_core/lib/src/use_cases/create_project_workspace_use_case.dart`
+  - `packages/novel_agent_adapters/lib/src/storage/local_project_repository.dart`
+
+本轮已验证：
+
+- `dart analyze` in `packages/novel_agent_core`
+- `dart analyze` in `packages/novel_agent_adapters`
+- `dart test test/create_project_workspace_use_case_test.dart test/project_manifest_storage_strategy_test.dart` in `packages/novel_agent_core`
+- `dart test test/local_project_repository_test.dart` in `packages/novel_agent_adapters`
+
+## 本轮 Session 10 收口
+
+- 已按 `docs/major-redesign-session-order.md` 的 Session 10 收束共享角色卡 / 组织卡 / 风格绑定 / 项目级智能体覆写合同
+- core 已新增并明确：
+  - `AgentProfile` 强类型合同
+  - `AgentProfileMapperService`
+  - `ProjectAgentBinding`
+  - `ProjectAgentBindingNormalizerService`
+  - `ProjectAgentBindingResolverService`
+  - `ProjectAgentModelOverride`
+  - `ProjectAgentModelOverrideNormalizerService`
+  - `ProjectStyleBinding`
+  - `ProjectStyleBindingNormalizerService`
+  - `ProjectStyleBindingResolverService`
+  - `CharacterProfile`
+  - `CharacterProfileNormalizerService`
+  - `CharacterProfileIdentityService`
+  - `OrganizationProfile`
+  - `OrganizationProfileNormalizerService`
+- 当前已经明确分层：
+  - `AgentProfile` 只描述智能体身份与能力定义
+  - `ProjectAgentBinding` 只描述项目内启用/默认/阶段作用域与可选模型覆写
+  - `ProjectAgentModelOverride` 只描述项目内这个智能体默认使用的模型与参数
+  - `ProjectStyleBinding` 只描述项目如何采用某个风格，而不污染风格资产本体
+  - `CharacterProfile.id` 与 `displayName` 已彻底分开，角色改名不再等于换身份
+- 共享运行链当前已开始消费新合同：
+  - `AgentProfileCatalogService` 已新增强类型输出入口
+  - `ModelExecutionProfileService.resolve(...)` 已支持：
+    - `projectAgentBinding`
+    - `projectAgentModelOverride`
+  - 项目级模型覆写会先于智能体自身覆盖层生效
+- 同时补平了两个老口子：
+  - `AgentPackageMetadataProfileService` 现在会正确拆分逗号字符串形式的 `skills / stages / skill_groups`
+  - `AgentProfileNormalizerService` 现在会统一对智能体采样参数做裁剪，不再让扩展字段绕过规范化
+
+当前 Session 10 的后续扩展点已经固定在：
+
+- `packages/novel_agent_core/lib/src/agents/project_agent_binding*.dart`
+- `packages/novel_agent_core/lib/src/agents/project_agent_model_override*.dart`
+- `packages/novel_agent_core/lib/src/assets/project_style_binding*.dart`
+- `packages/novel_agent_core/lib/src/assets/character_profile*.dart`
+- `packages/novel_agent_core/lib/src/assets/organization_profile*.dart`
+- `packages/novel_agent_core/lib/src/settings/model_execution_profile_service.dart`
+
+本轮已验证：
+
+- `dart analyze` in `packages/novel_agent_core`
+- `dart test test/agent_services_test.dart test/model_execution_profile_service_test.dart test/project_agent_binding_services_test.dart test/project_style_binding_resolver_service_test.dart test/character_profile_identity_service_test.dart` in `packages/novel_agent_core`
+
+## 本轮 Session 11 收口
+
+- 已按 `docs/major-redesign-session-order.md` 的 Session 11 收束伏笔 / 时间线 / 关系三类共享写作资产
+- core 已新增并明确：
+  - `TimelineRecord`
+  - `TimelineRecordNormalizerService`
+  - `TimelineRecordMarkdownParserService`
+  - `TimelineRecordMarkdownCodecService`
+  - `RelationshipRecord`
+  - `RelationshipRecordNormalizerService`
+  - `RelationshipRecordMarkdownParserService`
+  - `RelationshipRecordMarkdownCodecService`
+  - `SharedNarrativeAssetReference`
+  - `SharedNarrativeAssetReferenceIndex`
+  - `SharedNarrativeAssetReferenceIndexService`
+- 当前已经明确：
+  - `ForeshadowRecord` 不再只是轻量备注对象，而是正式带有：
+    - `relatedTimelineIds`
+    - `relatedRelationshipIds`
+    - `sourcePath`
+  - 三类资产都已统一成：
+    - 稳定 `id`
+    - 独立摘要
+    - 与实体 ID 解耦的引用字段
+    - 可读 Markdown 往返合同
+  - 最小共享关联规则已经落成统一索引，而不是散在长任务或 UI 内部：
+    - 正向引用会被识别
+    - 单边引用会自动补成反向邻接
+    - 缺失引用会保留为 `missingReferenceKeys`
+    - 关系资产会统一暴露 `left/right entity` 与补充实体引用
+- 这意味着一般小说项目与长任务项目现在都可以通过同一入口读取三类资产的共享引用视图，而不需要先绑定图谱页面或长任务 mode
+
+当前 Session 11 的后续扩展点已经固定在：
+
+- `packages/novel_agent_core/lib/src/assets/timeline_record*.dart`
+- `packages/novel_agent_core/lib/src/assets/relationship_record*.dart`
+- `packages/novel_agent_core/lib/src/assets/shared_narrative_asset_reference*.dart`
+- `packages/novel_agent_core/lib/src/assets/foreshadow_record*.dart`
+
+当前仍明确未做：
+
+- 时间线 / 关系资产的项目级导入导出闭环
+- 资产中心 GUI 对时间线 / 关系的编辑入口
+- SQLite 侧对三类资产的拆表投影
+- 基于共享引用索引的连续性检查、伏笔回收分析、图谱视图
+
+本轮已验证：
+
+- `dart analyze` in `packages/novel_agent_core`
+- `dart test test/asset_markdown_parser_service_test.dart test/shared_narrative_asset_reference_index_service_test.dart` in `packages/novel_agent_core`
+- `dart test test/customization_use_cases_test.dart` in `packages/novel_agent_core`
+
+## 本轮 Session 12 收口
+
+- 已按 `docs/major-redesign-session-order.md` 的 Session 12 把“章节分析结果 -> 建议对象 -> 重写计划 -> 建议转任务”闭环落到 core
+- core 已新增并明确：
+  - `ChapterAnalysisIssue`
+  - `ChapterAnalysisIssueNormalizerService`
+  - `ChapterAnalysisSuggestion`
+  - `ChapterAnalysisSuggestionNormalizerService`
+  - `ChapterAnalysisTargetSegment`
+  - `ChapterAnalysisResult`
+  - `ChapterAnalysisResultNormalizerService`
+  - `ChapterRewriteActionKind`
+  - `ChapterRewritePlan`
+  - `ChapterRewritePlanBuilderService`
+  - `ChapterRewriteTaskFactoryService`
+- 当前已经明确：
+  - 章节分析结果是正式领域对象，不再直接暴露 provider 原始响应字段
+  - 建议对象已经能区分三种路径：
+    - `rewrite_full`
+    - `rewrite_partial`
+    - `suggestions_only`
+  - 局部重写现在有正式的 `target segment` 合同，不需要把“片段范围”塞成临时字符串
+  - 建议转任务已经进入共享 revision 链：
+    - 整章重写计划可直接转 `revision` 任务
+    - 局部重写计划可直接转 `revision` 任务
+    - 只建议型计划不会自动变成修订任务
+    - 但用户选中的建议仍然可以单独转成 `revision` 任务
+- 当前这层与既有 review / task 的边界已经明确：
+  - `analysis result` 负责表达结构化判断与建议
+  - `rewrite plan` 负责表达“准备怎么改”
+  - `revision task` 仍然是实际进入任务中心和执行链的对象
+
+当前 Session 12 的后续扩展点已经固定在：
+
+- `packages/novel_agent_core/lib/src/review/chapter_analysis_*.dart`
+- `packages/novel_agent_core/lib/src/review/chapter_rewrite_*.dart`
+
+当前仍明确未做：
+
+- 章节分析结果的 Markdown / JSON 文档编解码
+- 章节分析结果与现有审稿报告之间的桥接投影
+- GUI / CLI 的“分析结果页、建议勾选、一键转任务”入口
+- provider 侧把真实模型响应映射成 `ChapterAnalysisResult` 的适配层
+
+本轮已验证：
+
+- `dart analyze` in `packages/novel_agent_core`
+- `dart test test/chapter_analysis_services_test.dart test/review_report_services_test.dart test/customization_use_cases_test.dart` in `packages/novel_agent_core`
+
+## 本轮 Session 13 收口
+
+- 已按 `docs/major-redesign-session-order.md` 的 Session 13 把项目级导入导出与资产 bundle 体系先立成 core 合同
+- core 已新增 bundle 基座：
+  - `BundleKind`
+  - `BundleHeader`
+  - `BundleHeaderBuilderService`
+  - `BundleHeaderNormalizerService`
+  - `BundleChecksumService`
+  - `BundleValidationIssue`
+  - `BundleValidationResult`
+  - `BundleValidationService`
+  - `BundleConflictItem`
+  - `BundleImportPreview`
+  - `BundleImportPreviewBuilderService`
+  - `BundleConflictPreviewService`
+- 当前已经明确：
+  - 所有新 bundle 都走统一版本头：
+    - `kind`
+    - `schema_version`
+    - `bundle_version`
+    - `title`
+    - `description`
+    - `created_at`
+    - `checksum`
+  - checksum 现在已进入 core 合同，且不依赖最终 zip 方案
+  - 冲突预检也已统一成共享模型，不再让不同 bundle 各自长一套统计口径
+- 已新增四类正式 bundle 文档合同：
+  - `CharacterCardBundleDocumentService`
+  - `StyleBundleDocumentService`
+  - `PromptTemplateBundleDocumentService`
+  - `ProjectPackageDocumentService`
+- 已新增对应的冲突预检服务：
+  - `CharacterCardBundleImportPreviewService`
+  - `StyleBundleImportPreviewService`
+  - `PromptTemplateBundleImportPreviewService`
+  - `ProjectPackageImportPreviewService`
+- 当前项目包合同已经明确可表达：
+  - `project manifest`
+  - `runtime profile`
+  - 角色 / 组织 / 风格 / 伏笔 / 关系 / 时间线
+  - prompt templates
+  但这轮仍只停在 core 合同和预检，不进入 zip/目录打包实现
+
+当前 Session 13 的后续扩展点已经固定在：
+
+- `packages/novel_agent_core/lib/src/bundles/*.dart`
+- `packages/novel_agent_core/lib/src/assets/project_asset_bundle_document_service.dart`
+- `packages/novel_agent_core/lib/src/customization/customization_bundle_document_service.dart`
+
+当前仍明确未做：
+
+- bundle 到 zip / 目录导出的 adapter 实现
+- 项目包真实导入写盘用例
+- 角色卡包 / 风格包 / 模板包的真实导入写盘用例
+- bundle 级别的跨存储策略迁移实现
+- GUI / CLI 的正式导入导出入口编排
+
+本轮已验证：
+
+- `dart analyze` in `packages/novel_agent_core`
+- `dart test test/bundle_contract_services_test.dart test/customization_use_cases_test.dart` in `packages/novel_agent_core`
+
+## 本轮文档骨架更新
+
+- 新增 `docs/absorption/` 吸收层目录骨架
+- 将参考项目吸收工作拆成：
+  - `00-governance` 治理层
+  - `10-projects` 单项目档案层
+  - `20-synthesis` 跨项目归并层
+- 为后续逐个总结 `references/` 中参考项目预留统一入口
+- 明确吸收层只吸收理念、能力与架构启发，不转译 GPL 等受限项目实现
+- 已完成第一份单项目吸收档案：`references/Ai-Novel-main`
+- 已完成第二份单项目吸收档案：`references/AIxiezuo-main`
+- 已完成第三份单项目吸收档案：`references/Writingway-main`
+- 已完成第四份单项目吸收档案：`references/novel-writer-main`
+- 已完成第五份单项目吸收档案：`references/book-os-main`
+- 已完成第六份单项目吸收档案：`references/DeepSeek-TUI-main`
+- 已新增重构级总设计文档：`docs/major-redesign-master-plan.md`
+- 已新增会话级重构顺序文档：`docs/major-redesign-session-order.md`
+
 ## 当前结论
 
 当前项目已经不只是空壳：
@@ -1177,11 +1767,81 @@
 - `dart run tool/seed_autopilot_checkpoint_revisit_probe.dart` in `apps/novel_agent_app` -> `PASS`
 - `dart run tool/mode_guidance_cli_probe.dart` in `apps/novel_agent_cli` -> `PASS`
 - `flutter build windows --release` in `apps/novel_agent_app`
+- `dart run tool/real_long_task_probe.dart` in `apps/novel_agent_app` -> `PASS`
+- `dart analyze apps/novel_agent_app`
+- `flutter test test/widget_test.dart` in `apps/novel_agent_app`
+- `dart test test/project_directory_layout_service_test.dart test/project_manifest_storage_strategy_test.dart test/create_project_workspace_use_case_test.dart test/runtime_baseline_catalog_service_test.dart test/runtime_baseline_execution_mode_service_test.dart test/long_task_run_state_machine_test.dart test/long_task_task_factory_runtime_baseline_test.dart test/long_task_task_completion_policy_service_test.dart test/long_task_chapter_gate_policy_service_test.dart test/long_task_chapter_gate_review_task_factory_service_test.dart` in `packages/novel_agent_core`
+- `dart test test/markdown_project_directory_skeleton_service_test.dart test/sqlite_project_content_repository_test.dart test/project_storage_strategy_resolver_test.dart test/local_long_task_run_registry_test.dart test/long_task_supervisor_test.dart test/long_task_heartbeat_scheduler_test.dart` in `packages/novel_agent_adapters`
+- `dart analyze packages/novel_agent_core packages/novel_agent_adapters apps/novel_agent_app`
+- `dart run tool/full_outline_mode_probe.dart` in `apps/novel_agent_app` -> `gap_probe PASS`, `plan_probe PASS`
+- `flutter test test/widget_test.dart` in `apps/novel_agent_app` after Session 16 regression pass
 
 ## 当前仍存在的明确缺口
 
+### 本轮新增完成
+
+- Session 16 已完成一次围绕四条主链的联调回归：
+  - 目录新结构
+  - 项目主存储策略创建链
+  - 长任务全局运行实例链
+  - 第二种运行基准 `chapter_collaboration_autorun`
+- 本轮没有发现新的核心主线断裂，唯一实际修复项落在真实探针基础设施：
+  - `apps/novel_agent_app/tool/probe_support.dart`
+- 修复内容：
+  - 真实探针读取接口配置时，优先使用 `test_api.txt`
+  - 如果当前机器没有 `test_api.txt`，自动回退读取 `temp/novel_agent_settings.json`
+  - 回退读取现已兼容 snake_case 字段：
+    - `default_provider_id`
+    - `default_model_id`
+    - `base_url`
+    - `api_key`
+    - `model_id`
+- 修复后的联调结果：
+  - `full_outline_mode_probe.dart` 已恢复可跑
+  - mode 2 的“信息不足补问 / 信息充分建纲”两条真实链路都再次通过
+  - Session 15 的 app 壳层拆分没有打断项目创建、双存储策略、全局运行链和第二运行基准
+
+- Session 15 已完成第一轮 app 壳层拆分收口：
+  - `app/state/app_shell_destination_controller.dart`
+  - `features/project_creation/application/controllers/project_creation_controller.dart`
+  - `features/workbench/application/controllers/workbench_workspace_controller.dart`
+  - `features/workbench/application/controllers/workbench_conversation_controller.dart`
+  - `features/workbench/application/models/workbench_project_runtime_state.dart`
+  - `features/workbench/application/models/workbench_conversation_runtime_state.dart`
+- `AppShellController` 已从 `5621` 行收缩到 `3635` 行，壳层职责改为：
+  - 全局装配
+  - 目的地切换
+  - 非工作台子域的桥接刷新
+- 工作台职责已拆成两个明确扩展点：
+  - `WorkbenchWorkspaceController`：项目加载、资源树、文档标签、工作区命令
+  - `WorkbenchConversationController`：会话发送链、会话历史、引导态、模型/智能体选择
+- 项目入口职责已拆成独立扩展点：
+  - `ProjectCreationController`：默认项目恢复、项目创建、桌面端打开已有项目、启动器状态
+- 壳层导航已拆成独立扩展点：
+  - `AppShellDestinationController`：`shell -> destination` 切换与页面级刷新触发
+- `WorkbenchPage` 已不再直接把整个 `AppShellController` 作为资源/文档/会话三类 handler 传入，而是显式接：
+  - `resourceManagerHandler`
+  - `documentWorkspaceHandler`
+  - `conversationHandler`
+
+- skill / agent 包元数据已收紧为“通用核心字段 + `metadata.novel_agent` 扩展字段”的双层规范
+- `load_agent_skill` 默认改为返回执行摘要，避免超长技能正文直接挤占上下文；完整正文改为显式按需读取
+- 风格资产已落成独立 `style` 结构、Markdown codec 与标准化服务
+- 伏笔资产已落成独立 `foreshadow` 结构、Markdown codec 与标准化服务
+- 项目级资产包已补齐基础闭环：导出文档、导入预检、正式导入
+- 这轮资产层先做 core 基座，GUI/CLI 后续只接入口与浏览，不再各自重复造导入导出逻辑
+- 已新增项目资产中心 GUI 入口：风格中心、伏笔中心、资产包导入/导出
+- 已新增 CLI `asset` 命令组，直接复用同一套项目资产服务
+- 已补 style / foreshadow Markdown 解析器，项目资产现在可以从标准 Markdown 真实回读
+
 ### 本轮已补
 
+- `seed_to_full_novel` 的常规章节现在默认写入 `chapters/`，样章仍保留在 `drafts/` 作为确认门槛
+- 长任务章节成功后的完成状态已拆成共享策略：样章/监督队列继续等待用户，常规章节可自动 `succeeded`
+- 章节总字数约束已进入共享任务参数，并支持“是否开启”的共享设置语义
+- `default_generalist` 现已允许读取 `novel-control-station`，真实长任务探针中已观察到 `load_agent_skill` 被调用
+- OpenAI 兼容网关已加入“有限内置传输重试”能力，默认用于 `Connection closed before full header` 一类瞬时错误
+- 新增真实长任务探针：`apps/novel_agent_app/tool/real_long_task_probe.dart`
 - 选项区、重试区、子智能体活动已并入同一会话滚动区，不再出现“选项出现后滚轮只卡在底部区域”的分裂滚动体验
 - 同轮语义完全一致的重复工具调用现在会在 core 侧去重，不再因为不同 `tool_call id` 被重复执行
 - 会话失败后已经补上可重试入口；重试会清掉上一条失败展示和重试按钮，且失败内容默认不进入后续上下文
@@ -1190,6 +1850,9 @@
 - 已新增第一种长任务模式的架构设计文档：`docs/long-task-mode-1-architecture.md`
 - 已新增策略优先预设计文档：`docs/strategy-first-predesign.md`
 - 已新增策略优先实施顺序文档：`docs/implementation-order-strategy-first.md`
+- Session 14 已完成第一批 core 落地：新增共享 `inspiration` 子域，正式定义灵感记录、收束阶段目录与从灵感到 `premise/style/world/characters` 的共享映射入口
+- `ModeGuidanceState` 到共享灵感记录的转换已抽成独立 mapper，现有长任务开局链开始复用共享灵感域，而不再把“灵感收束”写死在长任务私有 builder 里
+- `ModeGuidanceAssetBundle` 已补 premise / character profile 视角，现有上下文注入现在可以直接带入“故事前提”而不只有风格、世界与实体摘要
 
 ### 生态系统
 
@@ -1217,20 +1880,18 @@
 
 恢复时从这里继续：
 
-1. 补生态页生态包导出 UI 入口
-2. 做独立 prompt debug 组合页
-3. 补 `Responses API` 的真实 HTTP 分流，而不是只保留设置项
-4. 继续把图片类 gateway 做成更完整的供应商 / 输出文件闭环
-5. 做 Android 打包回归
-6. 继续推进第一种长任务模式的“执行后漂移控制 / 检查点复盘 / 风格守恒”节点
-7. 在已有复盘包与 review task 物化之上，继续补“review report -> repair task / 返工建议”这一层共享规则
-8. 给第一种长任务模式补更细的风格 / 世界 / 角色漂移严重度判断
-9. 把 checkpoint action package 与 revision resolution package 接到 Flutter 任务中心的真实用户入口
-10. 继续推进 mode 1 的风格 / 世界 / 角色漂移专门检测，从“静态信号”走向“更细的规则分层”
-11. 让 checkpoint review 的领域信号继续影响 follow-up task 类型和优先级，而不只是影响严重度显示
-12. 继续把 checkpoint 中尚未物化的建议动作逐步接通真实宿主入口，例如继续主链、确认 checkpoint、回看长期约束
-13. 把“回看长期约束”从 CLI / 共享动作包继续接进 Flutter 任务中心详情区，让用户不必只看状态消息
-14. 继续细化 `request_revision_followup` 的后续 UX，例如直接展示关联 review 分支、回到源 checkpoint 的推荐顺序，以及与 repair 完成后的再审稿衔接
+1. 把“传输层有限内置重试”的设置真正接到 GUI 可见文案与 CLI 配置说明
+2. 把风格 / 伏笔 / 资产包接进真实 GUI/CLI 入口，而不是只停在 core
+3. 把资产中心继续细化成图谱/时间线/默认风格切换，而不只停在表单中心
+4. 补生态页生态包导出 UI 入口
+5. 做独立 prompt debug 组合页
+6. 补 `Responses API` 的真实 HTTP 分流，而不是只保留设置项
+7. 继续把图片类 gateway 做成更完整的供应商 / 输出文件闭环
+8. 做 Android 打包回归
+9. 继续推进第一种长任务模式的“执行后漂移控制 / 检查点复盘 / 风格守恒”节点
+10. 在已有复盘包与 review task 物化之上，继续补“review report -> repair task / 返工建议”这一层共享规则
+11. 给第一种长任务模式补更细的风格 / 世界 / 角色漂移严重度判断
+12. 把 checkpoint action package 与 revision resolution package 接到 Flutter 任务中心的真实用户入口
 
 ## 恢复注意事项
 

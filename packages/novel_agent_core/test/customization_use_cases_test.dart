@@ -91,5 +91,165 @@ void main() {
       expect(entries.first['skill_group_count'], 1);
       expect(entries.first['agent_group_count'], 0);
     });
+
+    test(
+      'project asset bundle preview distinguishes new and conflicting assets',
+      () {
+        // 中文注释: 资产包预检要能给 GUI/CLI 一致的冲突判断，不把风格和伏笔混成笼统导入结果。
+        final useCase = PreviewProjectAssetBundleImportUseCase();
+        final preview = useCase.execute(
+          bundleContent: jsonEncode(<String, Object?>{
+            'kind': 'novel_agent_project_asset_bundle',
+            'title': '资产包',
+            'styles': <Object?>[
+              <String, Object?>{'id': 'serial-style', 'display_name': '连载风格'},
+            ],
+            'foreshadows': <Object?>[
+              <String, Object?>{'id': 'tower-secret', 'title': '高塔秘密'},
+            ],
+          }),
+          overwrite: false,
+          projectStyles: const <JsonMap>[
+            <String, Object?>{'id': 'serial-style'},
+          ],
+        );
+        expect(preview['ok'], isTrue);
+        final items = ValueReaders.objectList(
+          preview['items'],
+        ).map(ValueReaders.mapValue).toList(growable: false);
+        expect(items, hasLength(2));
+        expect(items.first['status'], 'project_conflict');
+        expect(items.first['action'], 'skip');
+        expect(items.last['status'], 'new');
+        expect(items.last['action'], 'import');
+      },
+    );
+
+    test(
+      'project asset bundle import writes style and foreshadow files',
+      () async {
+        // 中文注释: 导入落盘必须统一生成标准资产路径，后续 GUI/CLI 才能共享浏览、索引和上下文装配。
+        final hostPort = _FakeProjectToolHostPort();
+        final useCase = ImportProjectAssetBundleUseCase(
+          projectToolHostPort: hostPort,
+        );
+        final result = await useCase.execute(
+          project: const ProjectDescriptor(
+            id: 'demo',
+            name: '示例项目',
+            rootPath: 'D:/demo',
+          ),
+          overwrite: false,
+          bundleContent: jsonEncode(<String, Object?>{
+            'kind': 'novel_agent_project_asset_bundle',
+            'title': '资产包',
+            'styles': <Object?>[
+              <String, Object?>{
+                'id': 'serial-style',
+                'display_name': '连载风格',
+                'summary': '偏克制、偏悬疑、偏角色驱动。',
+              },
+            ],
+            'foreshadows': <Object?>[
+              <String, Object?>{
+                'id': 'tower-secret',
+                'title': '高塔秘密',
+                'summary': '第一卷埋下高塔异常。',
+                'notes': '第三卷回收。',
+              },
+            ],
+          }),
+        );
+
+        expect(result['ok'], isTrue);
+        expect(ValueReaders.stringList(result['changed_paths']), hasLength(2));
+        expect(
+          hostPort.readStored('styles/serial-style.style.md'),
+          allOf(contains('display_name:'), contains('连载风格')),
+        );
+        expect(
+          hostPort.readStored('world/foreshadows/tower-secret.foreshadow.md'),
+          contains('## 备注'),
+        );
+      },
+    );
   });
+}
+
+class _FakeProjectToolHostPort implements ProjectToolHostPort {
+  final Map<String, String> _files = <String, String>{};
+  final Set<String> _directories = <String>{};
+
+  String readStored(String relativePath) => _files[relativePath] ?? '';
+
+  @override
+  Future<void> copyExternalFile(
+    String absolutePath,
+    String rootPath,
+    String targetRelativePath,
+  ) async {}
+
+  @override
+  Future<void> createDirectory(String rootPath, String relativePath) async {
+    _directories.add(relativePath);
+  }
+
+  @override
+  Future<void> deleteEntry(String rootPath, String relativePath) async {
+    _files.remove(relativePath);
+    _directories.remove(relativePath);
+  }
+
+  @override
+  Future<bool> entryExists(String rootPath, String relativePath) async {
+    return _files.containsKey(relativePath) ||
+        _directories.contains(relativePath);
+  }
+
+  @override
+  Future<List<JsonMap>> listEntries(
+    String rootPath, {
+    bool recursive = true,
+  }) async {
+    return _files.keys
+        .map(
+          (path) => <String, Object?>{
+            'relative_path': path,
+            'display_name': path.split('/').last,
+            'is_dir': false,
+          },
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<void> moveEntry(
+    String rootPath,
+    String sourceRelativePath,
+    String targetRelativePath,
+  ) async {
+    final value = _files.remove(sourceRelativePath);
+    if (value != null) {
+      _files[targetRelativePath] = value;
+    }
+  }
+
+  @override
+  Future<String?> readExternalTextFile(String absolutePath) async {
+    return null;
+  }
+
+  @override
+  Future<String?> readTextFile(String rootPath, String relativePath) async {
+    return _files[relativePath];
+  }
+
+  @override
+  Future<void> writeTextFile(
+    String rootPath,
+    String relativePath,
+    String content,
+  ) async {
+    _files[relativePath] = content;
+  }
 }

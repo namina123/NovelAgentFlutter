@@ -44,21 +44,23 @@ resource_hints:
   assets: []
   schemas: []
   memory: []
-source: project_package
-source_scope: project
-enabled_by_default: false
-customizable: true
-stages: []
-skills: []
-skill_groups: []
-provider_profile: default
-thinking_supported: true
-thinking_enabled: false
-thinking_effort: medium
-temperature: 0.7
-top_p: 0.9
-top_k: 0
-advanced_model_overrides: []
+metadata:
+  novel_agent:
+    source: project_package
+    source_scope: project
+    enabled_by_default: false
+    customizable: true
+    stages: []
+    skills: []
+    skill_groups: []
+    provider_profile: default
+    thinking_supported: true
+    thinking_enabled: false
+    thinking_effort: medium
+    temperature: 0.7
+    top_p: 0.9
+    top_k: 0
+    advanced_model_overrides: []
 ---
 
 # $resolvedName

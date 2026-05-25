@@ -6,6 +6,7 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 import '../commands/project/project_command.dart';
 import '../commands/review/review_command.dart';
 import '../commands/session/session_command.dart';
+import '../commands/asset/asset_command.dart';
 import '../commands/template/template_command.dart';
 import '../commands/workflow/workflow_command.dart';
 import '../output/terminal_printer.dart';
@@ -46,6 +47,10 @@ class CliBootstrap {
     );
     final promptTemplateService = ProjectPromptTemplateService(
       workspacePort: bundle.projectWorkspacePort,
+    );
+    final projectAssetLibraryService = ProjectAssetLibraryService(
+      workspacePort: bundle.projectWorkspacePort,
+      projectToolHostPort: bundle.projectToolHostPort,
     );
     final reviewReportService = ProjectReviewReportService(
       workspacePort: bundle.projectWorkspacePort,
@@ -145,6 +150,12 @@ class CliBootstrap {
       reviewReportService: reviewReportService,
       printer: printer,
     );
+    final assetCommand = AssetCommand(
+      settingsRepository: bundle.settingsRepository,
+      projectRepository: bundle.projectRepository,
+      assetLibraryService: projectAssetLibraryService,
+      printer: printer,
+    );
     final templateCommand = TemplateCommand(
       settingsRepository: bundle.settingsRepository,
       projectRepository: bundle.projectRepository,
@@ -168,6 +179,8 @@ class CliBootstrap {
         return sessionCommand.run(args.skip(1).toList(growable: false));
       case 'review':
         return reviewCommand.run(args.skip(1).toList(growable: false));
+      case 'asset':
+        return assetCommand.run(args.skip(1).toList(growable: false));
       case 'template':
         return templateCommand.run(args.skip(1).toList(growable: false));
       case 'help':
@@ -190,6 +203,7 @@ class CliBootstrap {
         'workflow draft --prompt "写第一章开场"',
         'project --project D:\\YourNovel',
         'review list --project D:\\YourNovel',
+        'asset list --project D:\\YourNovel',
         'template list --project D:\\YourNovel',
         'session',
       ].join('\n'),

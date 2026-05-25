@@ -313,7 +313,9 @@ class ToolEventPresenterService {
       result['error'],
       ValueReaders.stringValue(event['error']),
     ).trim();
-    final prefix = suggestedTool.trim().isEmpty ? '需要补充信息' : '需要先$suggestedTool';
+    final prefix = suggestedTool.trim().isEmpty
+        ? '需要补充信息'
+        : '需要先$suggestedTool';
     final clean = (rawError.isNotEmpty ? rawError : text).trim();
     if (clean.isEmpty) {
       return prefix;

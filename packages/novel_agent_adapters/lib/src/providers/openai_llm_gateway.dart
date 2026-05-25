@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -13,6 +14,8 @@ class OpenAiLlmGateway implements LlmGateway {
     String proxyRule = '',
     String proxyUsername = '',
     String proxyPassword = '',
+    bool transportRetryEnabled = true,
+    int transportRetryAttempts = 2,
     SystemProxyResolver? systemProxyResolver,
   }) : _baseUrl = _normalizeBaseUrl(baseUrl),
        _apiKey = apiKey,
@@ -20,6 +23,8 @@ class OpenAiLlmGateway implements LlmGateway {
        _proxyRule = proxyRule.trim(),
        _proxyUsername = proxyUsername.trim(),
        _proxyPassword = proxyPassword,
+       _transportRetryEnabled = transportRetryEnabled,
+       _transportRetryAttempts = transportRetryAttempts.clamp(0, 5),
        _systemProxyResolver =
            systemProxyResolver ?? const SystemProxyResolver();
 
@@ -35,6 +40,12 @@ class OpenAiLlmGateway implements LlmGateway {
       proxyRule: _proxyRuleFromNetworkSettings(networkSettings),
       proxyUsername: '${networkSettings['proxy_username'] ?? ''}',
       proxyPassword: '${networkSettings['proxy_password'] ?? ''}',
+      transportRetryEnabled: _transportRetryEnabledFromNetworkSettings(
+        networkSettings,
+      ),
+      transportRetryAttempts: _transportRetryAttemptsFromNetworkSettings(
+        networkSettings,
+      ),
     );
   }
 
@@ -44,6 +55,8 @@ class OpenAiLlmGateway implements LlmGateway {
   final String _proxyRule;
   final String _proxyUsername;
   final String _proxyPassword;
+  final bool _transportRetryEnabled;
+  final int _transportRetryAttempts;
   final SystemProxyResolver _systemProxyResolver;
 
   @override
@@ -56,40 +69,54 @@ class OpenAiLlmGateway implements LlmGateway {
   }) async {
     // 中文注释: 这里负责 OpenAI 兼容多轮消息和工具调用协议的 HTTP 往返，不承接项目上下文规则。
     final requestUri = Uri.parse('$_baseUrl/chat/completions');
-    final client = HttpClient()..connectionTimeout = _timeout;
-    try {
-      await _configureProxy(client, requestUri);
-      final request = await client.postUrl(requestUri).timeout(_timeout);
-      request.headers.contentType = ContentType.json;
-      if (_apiKey.trim().isNotEmpty) {
-        request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $_apiKey');
-      }
-      request.write(
-        jsonEncode(_requestPayload(messages, modelId, tools, options)),
-      );
-      final response = await request.close().timeout(_timeout);
-      if (_responseMayStream(response, options)) {
-        return await _streamingResponseResult(
-          response,
-          requestUri,
-          onStreamUpdate: onStreamUpdate,
+    final totalAttempts = _transportRetryEnabled
+        ? _transportRetryAttempts + 1
+        : 1;
+    for (var attempt = 1; attempt <= totalAttempts; attempt += 1) {
+      final client = HttpClient()..connectionTimeout = _timeout;
+      try {
+        await _configureProxy(client, requestUri);
+        final request = await client.postUrl(requestUri).timeout(_timeout);
+        request.headers.contentType = ContentType.json;
+        if (_apiKey.trim().isNotEmpty) {
+          request.headers.set(
+            HttpHeaders.authorizationHeader,
+            'Bearer $_apiKey',
+          );
+        }
+        request.write(
+          jsonEncode(_requestPayload(messages, modelId, tools, options)),
         );
+        final response = await request.close().timeout(_timeout);
+        if (_responseMayStream(response, options)) {
+          return await _streamingResponseResult(
+            response,
+            requestUri,
+            onStreamUpdate: onStreamUpdate,
+          );
+        }
+        final body = await response.transform(utf8.decoder).join();
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          throw HttpException(
+            '模型请求失败(${response.statusCode}): $body',
+            uri: requestUri,
+          );
+        }
+        if (_looksLikeEventStream(body)) {
+          return _eventStreamResult(body, onStreamUpdate: onStreamUpdate);
+        }
+        return _jsonResult(body);
+      } catch (error) {
+        if (attempt >= totalAttempts || !_shouldRetryTransportError(error)) {
+          rethrow;
+        }
+        await Future<void>.delayed(_retryDelay(attempt));
+      } finally {
+        // 中文注释: HTTP client 生命周期由网关单次请求自行收口，避免 CLI 长时间持有空闲连接。
+        client.close(force: true);
       }
-      final body = await response.transform(utf8.decoder).join();
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw HttpException(
-          '模型请求失败(${response.statusCode}): $body',
-          uri: requestUri,
-        );
-      }
-      if (_looksLikeEventStream(body)) {
-        return _eventStreamResult(body, onStreamUpdate: onStreamUpdate);
-      }
-      return _jsonResult(body);
-    } finally {
-      // 中文注释: HTTP client 生命周期由网关单次请求自行收口，避免 CLI 长时间持有空闲连接。
-      client.close(force: true);
     }
+    throw StateError('unreachable');
   }
 
   Future<void> _configureProxy(HttpClient client, Uri requestUri) async {
@@ -128,13 +155,15 @@ class OpenAiLlmGateway implements LlmGateway {
 
   static String _proxyRuleFromNetworkSettings(JsonMap networkSettings) {
     // 中文注释: 自定义代理只在这里转成 HttpClient 可识别规则，宿主层不需要理解底层格式。
-    final mode =
-        '${networkSettings['proxy_mode'] ?? 'system'}'.trim().toLowerCase();
+    final mode = '${networkSettings['proxy_mode'] ?? 'system'}'
+        .trim()
+        .toLowerCase();
     if (mode != 'custom') {
       return '';
     }
-    final protocol =
-        '${networkSettings['proxy_protocol'] ?? ''}'.trim().toLowerCase();
+    final protocol = '${networkSettings['proxy_protocol'] ?? ''}'
+        .trim()
+        .toLowerCase();
     final host = '${networkSettings['proxy_host'] ?? ''}'.trim();
     final port = '${networkSettings['proxy_port'] ?? ''}'.trim();
     if (host.isEmpty || port.isEmpty) {
@@ -148,6 +177,28 @@ class OpenAiLlmGateway implements LlmGateway {
       return 'PROXY $host:$port';
     }
     return 'PROXY $host:$port';
+  }
+
+  static bool _transportRetryEnabledFromNetworkSettings(
+    JsonMap networkSettings,
+  ) {
+    // 中文注释: 网络层默认开启有限自动重试，用户显式关闭时才完全交回手动处理。
+    if (!networkSettings.containsKey('transport_retry_enabled')) {
+      return true;
+    }
+    return networkSettings['transport_retry_enabled'] == true;
+  }
+
+  static int _transportRetryAttemptsFromNetworkSettings(
+    JsonMap networkSettings,
+  ) {
+    // 中文注释: 这里把“重试次数”解释为失败后的额外尝试次数，不包含首次请求。
+    final raw = '${networkSettings['transport_retry_attempts'] ?? ''}'.trim();
+    final parsed = int.tryParse(raw);
+    if (parsed == null) {
+      return 2;
+    }
+    return parsed.clamp(0, 5);
   }
 
   @override
@@ -311,6 +362,36 @@ class OpenAiLlmGateway implements LlmGateway {
       'tool_calls': toolCalls,
       'raw_response': root,
     };
+  }
+
+  bool _shouldRetryTransportError(Object error) {
+    // 中文注释: 这里只对典型瞬时传输层故障做自动重试，避免把明确的业务错误误当成网络抖动。
+    if (error is SocketException ||
+        error is HandshakeException ||
+        error is TimeoutException) {
+      return true;
+    }
+    final message = '$error'.toLowerCase();
+    if (message.contains('connection closed before full header')) {
+      return true;
+    }
+    if (message.contains('connection reset') ||
+        message.contains('connection terminated') ||
+        message.contains('broken pipe')) {
+      return true;
+    }
+    return message.contains('模型请求失败(502)') ||
+        message.contains('模型请求失败(503)') ||
+        message.contains('模型请求失败(504)') ||
+        message.contains('模型请求失败(520)') ||
+        message.contains('模型请求失败(522)') ||
+        message.contains('模型请求失败(524)');
+  }
+
+  Duration _retryDelay(int attempt) {
+    // 中文注释: 重试退避保持轻量指数增长，既不太激进，也不把用户卡太久。
+    final milliseconds = 800 * attempt;
+    return Duration(milliseconds: milliseconds);
   }
 
   bool _looksLikeEventStream(String body) {

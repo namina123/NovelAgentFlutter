@@ -43,12 +43,18 @@ void main() {
       }
 
       final bundle = builder.build(state);
+      expect(bundle.premises, hasLength(1));
       expect(bundle.styleProfiles, hasLength(1));
       expect(bundle.worldRuleSets, hasLength(1));
+      expect(bundle.characterProfiles, hasLength(1));
       expect(bundle.entityIdentities, hasLength(1));
       expect(bundle.styleProfiles.single.guardrails, contains('高压权谋与连续逆转。'));
       expect(bundle.worldRuleSets.single.rules, hasLength(2));
       expect(bundle.entityIdentities.single.kind, 'character');
+      expect(
+        bundle.markdownPathFor(bundle.premises.single.id),
+        'premise/seed_autopilot_premise.md',
+      );
       expect(
         bundle.markdownPathFor(bundle.styleProfiles.single.id),
         'styles/seed_autopilot_style.md',
@@ -87,10 +93,16 @@ void main() {
         }
 
         final bundle = builder.build(state);
+        expect(bundle.premises, hasLength(1));
         expect(bundle.styleProfiles, hasLength(1));
+        expect(bundle.characterProfiles, hasLength(1));
         expect(bundle.entityIdentities, hasLength(1));
         expect(bundle.worldRuleSets, isEmpty);
-        expect(bundle.entityIdentities.single.displayName, '主角焦点');
+        expect(bundle.characterProfiles.single.displayName, '核心角色锚点');
+        expect(
+          bundle.markdownPathFor(bundle.premises.single.id),
+          'premise/full_outline_consensus_premise.md',
+        );
       },
     );
   });

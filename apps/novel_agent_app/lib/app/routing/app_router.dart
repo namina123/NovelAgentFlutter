@@ -1,6 +1,8 @@
 import 'package:flutter/widgets.dart';
 
 import '../../features/agent_ecosystem/presentation/pages/agent_ecosystem_page.dart';
+import '../../features/long_task_station/presentation/pages/long_task_station_page.dart';
+import '../../features/project_assets/presentation/pages/project_assets_page.dart';
 import '../../features/prompt_templates/presentation/pages/prompt_templates_page.dart';
 import '../../features/project_collection/presentation/pages/project_collection_page.dart';
 import '../../features/review_center/presentation/pages/review_center_page.dart';
@@ -19,9 +21,14 @@ class AppRouter {
       case AppDestination.workbench:
         return WorkbenchPage(
           viewData: controller.viewModel.workbench,
-          resourceHandler: controller,
-          documentHandler: controller,
-          conversationHandler: controller,
+          resourceHandler: controller.resourceManagerHandler,
+          documentHandler: controller.documentWorkspaceHandler,
+          conversationHandler: controller.conversationHandler,
+        );
+      case AppDestination.longTaskStation:
+        return LongTaskStationPage(
+          controller: controller.longTaskStationController,
+          onBackRequested: controller.showWorkbench,
         );
       case AppDestination.settings:
         return SettingsPage(
@@ -51,6 +58,11 @@ class AppRouter {
       case AppDestination.promptTemplates:
         return PromptTemplatesPage(
           viewData: controller.viewModel.promptTemplates,
+          actionHandler: controller,
+        );
+      case AppDestination.projectAssets:
+        return ProjectAssetsPage(
+          viewData: controller.viewModel.projectAssets,
           actionHandler: controller,
         );
     }

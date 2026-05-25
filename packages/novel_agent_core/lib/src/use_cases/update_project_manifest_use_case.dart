@@ -1,6 +1,6 @@
 import '../project/project_descriptor.dart';
 import '../project/project_manifest_codec_service.dart';
-import '../project/project_workspace_catalog.dart';
+import '../project/project_storage_strategy.dart';
 import 'write_project_text_file_use_case.dart';
 
 class UpdateProjectManifestUseCase {
@@ -18,6 +18,7 @@ class UpdateProjectManifestUseCase {
     required ProjectDescriptor project,
     required String title,
     required String projectType,
+    ProjectStorageStrategy? storageStrategy,
     String genre = '',
     String premise = '',
     String notes = '',
@@ -26,6 +27,8 @@ class UpdateProjectManifestUseCase {
     final manifest = _projectManifestCodecService.create(
       title: title,
       projectType: projectType,
+      storageStrategy: storageStrategy ?? project.storageStrategy,
+      runtimeBaselineId: project.runtimeBaselineId,
     );
     await _writeProjectTextFileUseCase.execute(
       project: project,
@@ -35,25 +38,14 @@ class UpdateProjectManifestUseCase {
     final typeLabel = _projectTypeLabel(manifest.projectType);
     await _writeProjectTextFileUseCase.execute(
       project: project,
-      relativePath: 'specs/project_brief.md',
+      relativePath: 'premise/project_brief.md',
       content:
           '# ${manifest.title}\n\n- 项目类型：$typeLabel\n- 题材：${genre.trim()}\n- 核心设定：${premise.trim()}\n- 备注：${notes.trim()}\n',
-    );
-    await _writeProjectTextFileUseCase.execute(
-      project: project,
-      relativePath: 'README.md',
-      content:
-          '# ${manifest.title}\n\nNovelAgent Flutter 项目工作区。\n\n- 项目类型：$typeLabel\n',
     );
   }
 
   String _projectTypeLabel(String projectType) {
-    // 中文注释: 项目类型标签只在简介文档中使用，因此直接从目录目录表外部轻量映射即可。
-    for (final descriptor in ProjectWorkspaceCatalog.userWorkspaceDirs) {
-      if (descriptor.path == 'outline/') {
-        break;
-      }
-    }
+    // 中文注释: 项目类型标签只在简介文档中使用，因此保留轻量级本地映射即可。
     switch (projectType.trim()) {
       case 'long_task':
         return '长任务';

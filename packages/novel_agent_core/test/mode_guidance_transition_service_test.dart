@@ -86,13 +86,41 @@ void main() {
       expect(firstQuestion.isReadyToLaunch, isFalse);
 
       for (final answer in const <Map<String, String>>[
-        <String, String>{'stage': 'seed_scope', 'field': 'seed_scope', 'value': 'A'},
-        <String, String>{'stage': 'core_promise', 'field': 'core_promise', 'value': 'B'},
-        <String, String>{'stage': 'world_anchor', 'field': 'world_anchor', 'value': 'C'},
-        <String, String>{'stage': 'protagonist_drive', 'field': 'protagonist_drive', 'value': 'D'},
-        <String, String>{'stage': 'style_target', 'field': 'style_target', 'value': 'E'},
-        <String, String>{'stage': 'autonomy_guardrails', 'field': 'autonomy_guardrails', 'value': 'F'},
-        <String, String>{'stage': 'review_ready', 'field': 'review_ready', 'value': 'G'},
+        <String, String>{
+          'stage': 'seed_scope',
+          'field': 'seed_scope',
+          'value': 'A',
+        },
+        <String, String>{
+          'stage': 'core_promise',
+          'field': 'core_promise',
+          'value': 'B',
+        },
+        <String, String>{
+          'stage': 'world_anchor',
+          'field': 'world_anchor',
+          'value': 'C',
+        },
+        <String, String>{
+          'stage': 'protagonist_drive',
+          'field': 'protagonist_drive',
+          'value': 'D',
+        },
+        <String, String>{
+          'stage': 'style_target',
+          'field': 'style_target',
+          'value': 'E',
+        },
+        <String, String>{
+          'stage': 'autonomy_guardrails',
+          'field': 'autonomy_guardrails',
+          'value': 'F',
+        },
+        <String, String>{
+          'stage': 'review_ready',
+          'field': 'review_ready',
+          'value': 'G',
+        },
       ]) {
         state = service.answer(
           state,

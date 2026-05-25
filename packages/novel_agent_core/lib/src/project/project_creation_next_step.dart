@@ -1,0 +1,1 @@
+enum ProjectCreationNextStep { selectRuntimeBaseline, readyToCreate }

@@ -9,11 +9,20 @@ import '../packages/local_skill_group_catalog.dart';
 import '../packages/local_skill_package_catalog.dart';
 import '../packages/package_root_path_resolver.dart';
 import '../providers/openai_llm_gateway.dart';
+import '../runtime/local_long_task_run_registry.dart';
+import '../runtime/long_task_heartbeat_scheduler.dart';
+import '../runtime/long_task_supervisor.dart';
 import '../storage/local_project_file_mutation_adapter.dart';
 import '../storage/local_project_repository.dart';
 import '../storage/local_project_workspace_port.dart';
+import '../storage/delegating_project_content_repository.dart';
+import '../storage/delegating_project_readable_projection_service.dart';
+import '../storage/markdown_project_content_repository.dart';
+import '../storage/markdown_project_readable_projection_service.dart';
 import '../storage/project_tree_order_service.dart';
 import '../storage/project_workspace_tool_host_adapter.dart';
+import '../storage/sqlite_project_content_repository.dart';
+import '../storage/sqlite_project_readable_projection_service.dart';
 import '../tools/project_tool_dispatcher.dart';
 import 'desktop_app_paths_provider.dart';
 import 'workspace_root_locator.dart';
@@ -25,9 +34,13 @@ class AdapterBundle {
     required this.defaultProjectRootPath,
     required this.settingsRepository,
     required this.projectRepository,
+    required this.projectContentRepository,
+    required this.projectReadableProjectionService,
     required this.projectWorkspacePort,
     required this.projectToolHostPort,
     required this.projectToolExecutionPort,
+    required this.longTaskRunRegistry,
+    required this.longTaskSupervisor,
     required this.agentGroupCatalog,
     required this.agentPackageCatalog,
     required this.skillGroupCatalog,
@@ -61,6 +74,34 @@ class AdapterBundle {
     final treeOrderService = ProjectTreeOrderService();
     final projectWorkspacePort = LocalProjectWorkspacePort(
       treeOrderService: treeOrderService,
+    );
+    final projectContentRepository = DelegatingProjectContentRepository(
+      markdownRepository: MarkdownProjectContentRepository(
+        projectWorkspacePort: projectWorkspacePort,
+      ),
+      sqliteRepository: SqliteProjectContentRepository(
+        projectWorkspacePort: projectWorkspacePort,
+      ),
+    );
+    final projectReadableProjectionService =
+        DelegatingProjectReadableProjectionService(
+          markdownService: MarkdownProjectReadableProjectionService(
+            projectWorkspacePort: projectWorkspacePort,
+          ),
+          sqliteService: SqliteProjectReadableProjectionService(
+            projectWorkspacePort: projectWorkspacePort,
+          ),
+        );
+    final longTaskRunRegistry = LocalLongTaskRunRegistry(
+      settingsRootPath: resolvedSettingsRootPath,
+    );
+    final longTaskHeartbeatScheduler = LongTaskHeartbeatScheduler(
+      runRegistry: longTaskRunRegistry,
+      runtimeBaselineCatalogService: const RuntimeBaselineCatalogService(),
+    );
+    final longTaskSupervisor = LongTaskSupervisor(
+      runRegistry: longTaskRunRegistry,
+      heartbeatScheduler: longTaskHeartbeatScheduler,
     );
     final toolHostPort = ProjectWorkspaceToolHostAdapter(
       workspacePort: projectWorkspacePort,
@@ -100,8 +141,12 @@ class AdapterBundle {
         environment: environment,
       ),
       projectRepository: LocalProjectRepository(),
+      projectContentRepository: projectContentRepository,
+      projectReadableProjectionService: projectReadableProjectionService,
       projectWorkspacePort: projectWorkspacePort,
       projectToolHostPort: toolHostPort,
+      longTaskRunRegistry: longTaskRunRegistry,
+      longTaskSupervisor: longTaskSupervisor,
       agentGroupCatalog: agentGroupCatalog,
       agentPackageCatalog: agentPackageCatalog,
       skillGroupCatalog: skillGroupCatalog,
@@ -120,9 +165,13 @@ class AdapterBundle {
   final String defaultProjectRootPath;
   final SettingsRepository settingsRepository;
   final ProjectRepository projectRepository;
+  final ProjectContentRepository projectContentRepository;
+  final ProjectReadableProjectionService projectReadableProjectionService;
   final ProjectWorkspacePort projectWorkspacePort;
   final ProjectToolHostPort projectToolHostPort;
   final ToolExecutionPort projectToolExecutionPort;
+  final LongTaskRunRegistry longTaskRunRegistry;
+  final LongTaskSupervisor longTaskSupervisor;
   final LocalAgentGroupCatalog agentGroupCatalog;
   final LocalAgentPackageCatalog agentPackageCatalog;
   final LocalSkillGroupCatalog skillGroupCatalog;

@@ -6,9 +6,8 @@ import 'package:sqlite3/sqlite3.dart';
 import 'project_sqlite_path_service.dart';
 
 class ProjectModeGuidanceSqliteStore {
-  ProjectModeGuidanceSqliteStore({
-    ProjectSqlitePathService? sqlitePathService,
-  }) : _sqlitePathService = sqlitePathService ?? ProjectSqlitePathService();
+  ProjectModeGuidanceSqliteStore({ProjectSqlitePathService? sqlitePathService})
+    : _sqlitePathService = sqlitePathService ?? ProjectSqlitePathService();
 
   final ProjectSqlitePathService _sqlitePathService;
 
@@ -181,8 +180,7 @@ class ProjectModeGuidanceSqliteStore {
   }
 
   void _ensureSchema(Database database) {
-    database.execute(
-      '''
+    database.execute('''
       CREATE TABLE IF NOT EXISTS mode_guidance_state (
         mode_id TEXT PRIMARY KEY,
         project_strategy_id TEXT NOT NULL,
@@ -194,10 +192,8 @@ class ProjectModeGuidanceSqliteStore {
         markdown_path TEXT NOT NULL,
         state_path TEXT NOT NULL
       )
-      ''',
-    );
-    database.execute(
-      '''
+      ''');
+    database.execute('''
       CREATE TABLE IF NOT EXISTS mode_guidance_answer (
         mode_id TEXT NOT NULL,
         stage_id TEXT NOT NULL,
@@ -208,7 +204,6 @@ class ProjectModeGuidanceSqliteStore {
         updated_at TEXT NOT NULL,
         PRIMARY KEY (mode_id, stage_id, field_key)
       )
-      ''',
-    );
+      ''');
   }
 }

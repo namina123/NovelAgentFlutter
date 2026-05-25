@@ -87,9 +87,9 @@ class ModeGuidanceState {
       ),
       createdAt: ValueReaders.stringValue(document['created_at']),
       updatedAt: ValueReaders.stringValue(document['updated_at']),
-      answers: ValueReaders.mapList(document['answers'])
-          .map(ModeGuidanceAnswer.fromJsonMap)
-          .toList(growable: false),
+      answers: ValueReaders.mapList(
+        document['answers'],
+      ).map(ModeGuidanceAnswer.fromJsonMap).toList(growable: false),
     );
   }
 }

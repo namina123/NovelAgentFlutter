@@ -2,6 +2,7 @@ import '../common/json_types.dart';
 import '../entity/entity_identity.dart';
 import '../assets/style_profile.dart';
 import '../assets/world_rule_set.dart';
+import '../inspiration/inspiration_premise.dart';
 import 'mode_guidance_asset_bundle.dart';
 
 class ModeGuidanceAssetContextSectionService {
@@ -10,6 +11,17 @@ class ModeGuidanceAssetContextSectionService {
   List<JsonMap> build(ModeGuidanceAssetBundle bundle) {
     // 中文注释: 该服务只把模式引导资产翻译成上下文片段，供执行链注入模型，不关心项目读取或持久化。
     final sections = <JsonMap>[];
+    for (final premise in bundle.premises) {
+      sections.add(
+        _section(
+          id: 'mode_premise_${_safeId(premise.id)}',
+          title: '故事前提',
+          priority: 98,
+          source: bundle.markdownPathFor(premise.id),
+          content: _premiseContent(premise),
+        ),
+      );
+    }
     for (final style in bundle.styleProfiles) {
       sections.add(
         _section(
@@ -44,6 +56,26 @@ class ModeGuidanceAssetContextSectionService {
       );
     }
     return sections;
+  }
+
+  String _premiseContent(InspirationPremise premise) {
+    final lines = <String>[
+      '前提档案：${premise.displayName}',
+      '故事摘要：${premise.summary}',
+    ];
+    if (premise.corePromise.trim().isNotEmpty) {
+      lines.add('核心承诺：${premise.corePromise.trim()}');
+    }
+    if (premise.mainConflict.trim().isNotEmpty) {
+      lines.add('主线冲突：${premise.mainConflict.trim()}');
+    }
+    if (premise.boundaries.isNotEmpty) {
+      lines.add('创作边界：');
+      for (final boundary in premise.boundaries) {
+        lines.add('- ${boundary.trim()}');
+      }
+    }
+    return lines.join('\n');
   }
 
   JsonMap _section({

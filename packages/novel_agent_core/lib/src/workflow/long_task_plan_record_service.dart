@@ -33,6 +33,7 @@ class LongTaskPlanRecordService {
     // 中文注释: 计划记录里的 options 只保留必要字段，并在需要时截断长文本。
     final result = <String, Object?>{};
     for (final key in const <String>[
+      'runtime_baseline_id',
       'outline_path',
       'seed_prompt',
       'chapter_count',

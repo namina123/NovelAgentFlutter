@@ -74,40 +74,43 @@ void main() {
       );
     });
 
-    test('serializes assistant tool call message back to openai compatible shape', () {
-      // 中文注释: 网关返回给 core 的 tool_calls 是归一化结构，回传下一轮请求前必须重新变回 OpenAI 兼容格式。
-      final message = toolMessageService.assistantToolCallMessage(
-        <String, Object?>{
-          'reasoning_content': '先列目录',
-          'message': <String, Object?>{
-            'role': 'assistant',
-            'content': '',
-            'tool_calls': <Object?>[
-              <String, Object?>{
-                'id': 'call_1',
-                'name': 'list_project_files',
-                'arguments': <String, Object?>{'relative_path': 'outline'},
-              },
-            ],
-          },
-        },
-        <Object?>[
+    test(
+      'serializes assistant tool call message back to openai compatible shape',
+      () {
+        // 中文注释: 网关返回给 core 的 tool_calls 是归一化结构，回传下一轮请求前必须重新变回 OpenAI 兼容格式。
+        final message = toolMessageService.assistantToolCallMessage(
           <String, Object?>{
-            'id': 'call_1',
-            'name': 'list_project_files',
-            'arguments': <String, Object?>{'relative_path': 'outline'},
+            'reasoning_content': '先列目录',
+            'message': <String, Object?>{
+              'role': 'assistant',
+              'content': '',
+              'tool_calls': <Object?>[
+                <String, Object?>{
+                  'id': 'call_1',
+                  'name': 'list_project_files',
+                  'arguments': <String, Object?>{'relative_path': 'outline'},
+                },
+              ],
+            },
           },
-        ],
-      );
+          <Object?>[
+            <String, Object?>{
+              'id': 'call_1',
+              'name': 'list_project_files',
+              'arguments': <String, Object?>{'relative_path': 'outline'},
+            },
+          ],
+        );
 
-      final toolCalls = ValueReaders.objectList(message['tool_calls']);
-      final firstCall = ValueReaders.mapValue(toolCalls.first);
-      final functionData = ValueReaders.mapValue(firstCall['function']);
-      expect(firstCall['type'], 'function');
-      expect(functionData['name'], 'list_project_files');
-      expect(functionData['arguments'], '{"relative_path":"outline"}');
-      expect(message['reasoning_content'], '先列目录');
-    });
+        final toolCalls = ValueReaders.objectList(message['tool_calls']);
+        final firstCall = ValueReaders.mapValue(toolCalls.first);
+        final functionData = ValueReaders.mapValue(firstCall['function']);
+        expect(firstCall['type'], 'function');
+        expect(functionData['name'], 'list_project_files');
+        expect(functionData['arguments'], '{"relative_path":"outline"}');
+        expect(message['reasoning_content'], '先列目录');
+      },
+    );
 
     test('dedupes semantically identical tool calls even if ids differ', () {
       // 中文注释: 某些兼容网关会把同一个工具调用重复回传成不同 id，这里应只执行一次。

@@ -55,6 +55,8 @@ Future<void> main(List<String> arguments) async {
   final createProjectWorkspaceUseCase = CreateProjectWorkspaceUseCase(
     projectRepository: bundle.projectRepository,
     projectWorkspacePort: bundle.projectWorkspacePort,
+    projectContentRepository: bundle.projectContentRepository,
+    projectReadableProjectionService: bundle.projectReadableProjectionService,
   );
   final modelProfileService = ModelExecutionProfileService();
   final executionProfile = modelProfileService.resolve(

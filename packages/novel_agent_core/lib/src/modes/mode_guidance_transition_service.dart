@@ -22,7 +22,9 @@ class ModeGuidanceTransitionService {
       projectStrategyId: definition.projectStrategyId,
       workflowStrategyId: definition.workflowStrategyId,
       status: ModeGuidanceState.statusCollecting,
-      currentStageId: definition.stages.isEmpty ? '' : definition.stages.first.id,
+      currentStageId: definition.stages.isEmpty
+          ? ''
+          : definition.stages.first.id,
       answers: const <ModeGuidanceAnswer>[],
       completedStageIds: const <String>[],
       createdAt: now,
@@ -69,7 +71,8 @@ class ModeGuidanceTransitionService {
       helperText: currentStage.helperText,
       allowFreeText: currentStage.allowFreeText,
       options: currentStage.options,
-      progressText: '${state.completedStageIds.length}/${definition.stages.length}',
+      progressText:
+          '${state.completedStageIds.length}/${definition.stages.length}',
       isReadyToLaunch: false,
     );
   }
@@ -88,21 +91,22 @@ class ModeGuidanceTransitionService {
       return state;
     }
     final now = DateTime.now().toIso8601String();
-    final answers = state.answers
-        .where(
-          (item) => !(item.stageId == stageId && item.fieldKey == fieldKey),
-        )
-        .toList(growable: true)
-      ..add(
-        ModeGuidanceAnswer(
-          stageId: stageId,
-          fieldKey: fieldKey,
-          value: cleanValue,
-          label: label.trim(),
-          source: source.trim().isEmpty ? 'free_text' : source.trim(),
-          updatedAt: now,
-        ),
-      );
+    final answers =
+        state.answers
+            .where(
+              (item) => !(item.stageId == stageId && item.fieldKey == fieldKey),
+            )
+            .toList(growable: true)
+          ..add(
+            ModeGuidanceAnswer(
+              stageId: stageId,
+              fieldKey: fieldKey,
+              value: cleanValue,
+              label: label.trim(),
+              source: source.trim().isEmpty ? 'free_text' : source.trim(),
+              updatedAt: now,
+            ),
+          );
     final definition = _strategyCatalogService.modeDefinitionById(state.modeId);
     final completedStageIds = <String>[];
     for (final stage in definition.stages) {

@@ -1,7 +1,15 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import 'skill_package_metadata_profile_service.dart';
 
 class SkillPackageValidatorService {
+  SkillPackageValidatorService({
+    SkillPackageMetadataProfileService? metadataProfileService,
+  }) : _metadataProfileService =
+           metadataProfileService ?? const SkillPackageMetadataProfileService();
+
+  final SkillPackageMetadataProfileService _metadataProfileService;
+
   JsonMap validate(JsonMap skill) {
     // 中文注释: 技能校验服务集中给出错误和警告，保证外部技能包进入项目前就能发现结构性问题。
     final errors = <String>[];
@@ -12,14 +20,15 @@ class SkillPackageValidatorService {
     final instruction = ValueReaders.stringValue(
       skill['instruction_markdown'],
     ).trim();
+    final extensions = _metadataProfileService.extractExtensions(skill);
     final requiredCapabilities = ValueReaders.stringList(
-      skill['required_capabilities'],
+      extensions['required_capabilities'],
     );
     final optionalCapabilities = ValueReaders.stringList(
-      skill['optional_capabilities'],
+      extensions['optional_capabilities'],
     );
     final safeWithoutTools = ValueReaders.boolValue(
-      skill['safe_without_tools'],
+      extensions['safe_without_tools'],
       true,
     );
     if (id.isEmpty) {
@@ -60,8 +69,11 @@ class SkillPackageValidatorService {
     if (!hasResources && instruction.length > 4000) {
       warnings.add('SKILL.md 正文较长但未声明 references/scripts/assets，建议把细节下沉到包内资源。');
     }
-    if (ValueReaders.mapValue(skill['tool_schema']).isNotEmpty) {
+    if (ValueReaders.mapValue(extensions['tool_schema']).isNotEmpty) {
       warnings.add('技能携带了 tool_schema；请确认这是技能自己的调用入口，而不是对宿主内置工具的硬依赖。');
+    }
+    if (ValueReaders.mapValue(skill['portable_core']).isEmpty) {
+      warnings.add('建议补齐可移植核心字段，提升技能被其他宿主部分理解的概率。');
     }
     return <String, Object?>{
       'ok': errors.isEmpty,

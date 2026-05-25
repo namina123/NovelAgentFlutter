@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:novel_agent_app/app/app.dart';
 import 'package:novel_agent_app/app/state/app_shell_controller.dart';
+import 'package:novel_agent_app/features/long_task_station/application/controllers/long_task_station_controller.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -44,6 +45,10 @@ void main() {
     final promptTemplateService = ProjectPromptTemplateService(
       workspacePort: bundle.projectWorkspacePort,
     );
+    final projectAssetLibraryService = ProjectAssetLibraryService(
+      workspacePort: bundle.projectWorkspacePort,
+      projectToolHostPort: bundle.projectToolHostPort,
+    );
     final reviewReportService = ProjectReviewReportService(
       workspacePort: bundle.projectWorkspacePort,
       taskRepository: projectTaskRepository,
@@ -63,6 +68,9 @@ void main() {
           projectPromptContract: ProjectPromptContract(),
         );
       },
+    );
+    final longTaskStationController = LongTaskStationController(
+      longTaskSupervisor: bundle.longTaskSupervisor,
     );
     final controller = AppShellController(
       settingsRepository: bundle.settingsRepository,
@@ -88,6 +96,9 @@ void main() {
       createProjectWorkspaceUseCase: CreateProjectWorkspaceUseCase(
         projectRepository: bundle.projectRepository,
         projectWorkspacePort: bundle.projectWorkspacePort,
+        projectContentRepository: bundle.projectContentRepository,
+        projectReadableProjectionService:
+            bundle.projectReadableProjectionService,
       ),
       discoverProjectsUseCase: DiscoverProjectsUseCase(
         projectRepository: bundle.projectRepository,
@@ -131,6 +142,8 @@ void main() {
       workflowRuntimeService: workflowRuntimeService,
       reviewReportService: reviewReportService,
       promptTemplateService: promptTemplateService,
+      projectAssetLibraryService: projectAssetLibraryService,
+      longTaskStationController: longTaskStationController,
       generateDraftUseCaseFactory: (provider, networkSettings) {
         // 中文注释: widget 测试沿用真实装配，确保最小可用链路至少能在界面层成功挂载。
         return GenerateDraftUseCase(

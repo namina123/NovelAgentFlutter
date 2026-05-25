@@ -4,79 +4,163 @@ final class ProjectWorkspaceCatalog {
   static const List<WorkspaceDirectoryDescriptor> userWorkspaceDirs =
       <WorkspaceDirectoryDescriptor>[
         WorkspaceDirectoryDescriptor(
-          path: 'specs/',
-          name: '项目规格',
-          purpose: '项目名、题材、创作宪法、核心卖点和不可违背的长期要求。',
+          path: 'premise/',
+          name: '前提',
+          purpose: '题材、核心设定、开局摘要、创作意图和长期不可违背的项目承诺。',
         ),
         WorkspaceDirectoryDescriptor(
-          path: 'styles/',
-          name: '风格',
-          purpose: '叙事声音、文风规范、禁用表达、节奏和读者体验要求。',
+          path: 'outlines/',
+          name: '大纲',
+          purpose: '总纲、分卷纲、章纲等结构化创作规划。',
         ),
         WorkspaceDirectoryDescriptor(
-          path: 'outline/',
-          name: '总纲',
-          purpose: '主线结构、世界阶段、主要冲突、结局方向。',
+          path: 'drafts/',
+          name: '草稿',
+          purpose: '章节草稿、场景稿和待确认正文内容。',
         ),
         WorkspaceDirectoryDescriptor(
-          path: 'volume_outlines/',
+          path: 'assets/',
+          name: '资产',
+          purpose: '角色、组织、地点、物品、世界、风格、伏笔、关系和时间线等共享写作资产。',
+        ),
+        WorkspaceDirectoryDescriptor(
+          path: 'tasks/',
+          name: '任务',
+          purpose: '面向用户可理解的计划、审稿和返工任务文档。',
+        ),
+        WorkspaceDirectoryDescriptor(
+          path: 'analysis/',
+          name: '分析',
+          purpose: '分析结果、图谱导出和结构化审稿摘要。',
+        ),
+        WorkspaceDirectoryDescriptor(
+          path: 'exports/',
+          name: '导出',
+          purpose: '项目导出包、共享资产包和对外交换结果。',
+        ),
+      ];
+
+  static const List<WorkspaceDirectoryDescriptor> visibleWorkspaceSkeletonDirs =
+      <WorkspaceDirectoryDescriptor>[
+        WorkspaceDirectoryDescriptor(
+          path: 'premise/',
+          name: '前提',
+          purpose: '题材、核心设定、开局摘要、创作意图和长期不可违背的项目承诺。',
+        ),
+        WorkspaceDirectoryDescriptor(
+          path: 'outlines/',
+          name: '大纲',
+          purpose: '总纲、分卷纲、章纲等结构化创作规划。',
+        ),
+        WorkspaceDirectoryDescriptor(
+          path: 'outlines/story/',
+          name: '故事总纲',
+          purpose: '主线结构、主题承诺、核心冲突和结局方向。',
+        ),
+        WorkspaceDirectoryDescriptor(
+          path: 'outlines/volumes/',
           name: '卷纲',
-          purpose: '分卷目标、阶段性矛盾、卷内节奏。',
+          purpose: '分卷目标、阶段冲突和卷内节奏。',
         ),
         WorkspaceDirectoryDescriptor(
-          path: 'chapter_outlines/',
+          path: 'outlines/chapters/',
           name: '章纲',
           purpose: '章节任务、场景目标、关键事件与卡点。',
         ),
         WorkspaceDirectoryDescriptor(
           path: 'drafts/',
           name: '草稿',
-          purpose: 'AI 或人工生成的章节工作草稿、样章、局部补写和待确认正文；可自动保存，确认后再进入正式正文。',
+          purpose: '章节草稿、场景稿和待确认正文内容。',
         ),
         WorkspaceDirectoryDescriptor(
-          path: 'chapters/',
-          name: '正文',
-          purpose: '正式小说正文；只有用户确认或任务明确要求的可交付正文/定稿才能写入这里。',
+          path: 'drafts/chapters/',
+          name: '章节草稿',
+          purpose: '正式章节级草稿、待确认正文和样章。',
         ),
         WorkspaceDirectoryDescriptor(
-          path: 'world/',
-          name: '设定',
-          purpose: '世界规则、地点、势力、能力体系、术语、道具、伏笔和时间线。',
-        ),
-        WorkspaceDirectoryDescriptor(
-          path: 'characters/',
-          name: '角色',
-          purpose: '角色卡、人物关系、当前状态、口吻、成长变化和秘密。',
-        ),
-        WorkspaceDirectoryDescriptor(
-          path: 'summaries/',
-          name: '摘要',
-          purpose: '会话、阶段、章节、全书或上下文包摘要，供后续压缩与续写读取。',
-        ),
-        WorkspaceDirectoryDescriptor(
-          path: 'knowledge/',
-          name: '知识库',
-          purpose: '资料、考据、可复用参考，不等同于已确认设定。',
-        ),
-        WorkspaceDirectoryDescriptor(
-          path: 'inspiration/',
-          name: '灵感',
-          purpose: '尚未确认的脑洞、备选方案和零散想法；不要直接当作正文事实。',
+          path: 'drafts/scenes/',
+          name: '场景草稿',
+          purpose: '局部场景、片段补写和实验性片段。',
         ),
         WorkspaceDirectoryDescriptor(
           path: 'assets/',
-          name: '素材',
-          purpose: '图片、封面、参考资料等资源。',
+          name: '资产',
+          purpose: '角色、组织、地点、物品、世界、风格、伏笔、关系和时间线等共享写作资产。',
+        ),
+        WorkspaceDirectoryDescriptor(
+          path: 'assets/characters/',
+          name: '角色',
+          purpose: '角色卡、状态卡、角色映射和成长变化记录。',
+        ),
+        WorkspaceDirectoryDescriptor(
+          path: 'assets/organizations/',
+          name: '组织',
+          purpose: '势力、门派、团体和组织关系资料。',
+        ),
+        WorkspaceDirectoryDescriptor(
+          path: 'assets/locations/',
+          name: '地点',
+          purpose: '地图节点、地点卡和场景地点资料。',
+        ),
+        WorkspaceDirectoryDescriptor(
+          path: 'assets/items/',
+          name: '物品',
+          purpose: '道具、装备、资源和关键物件记录。',
+        ),
+        WorkspaceDirectoryDescriptor(
+          path: 'assets/styles/',
+          name: '风格',
+          purpose: '叙事声音、文风规范、禁用表达和读者体验要求。',
+        ),
+        WorkspaceDirectoryDescriptor(
+          path: 'assets/world/',
+          name: '世界',
+          purpose: '世界规则、能力体系、术语和长期稳定设定。',
+        ),
+        WorkspaceDirectoryDescriptor(
+          path: 'assets/foreshadows/',
+          name: '伏笔',
+          purpose: '伏笔布设、回收状态和风险提醒。',
+        ),
+        WorkspaceDirectoryDescriptor(
+          path: 'assets/relationships/',
+          name: '关系',
+          purpose: '角色关系、阵营关系和关系变更记录。',
+        ),
+        WorkspaceDirectoryDescriptor(
+          path: 'assets/timeline/',
+          name: '时间线',
+          purpose: '事件时间轴、阶段推进和关键节点记录。',
         ),
         WorkspaceDirectoryDescriptor(
           path: 'tasks/',
           name: '任务',
-          purpose: '长任务流、章节原子任务、修订任务和检查点。',
+          purpose: '面向用户可理解的计划、审稿和返工任务文档。',
         ),
         WorkspaceDirectoryDescriptor(
-          path: 'reviews/',
-          name: '审稿',
-          purpose: '连续性、剧情、文风和综合检查报告。',
+          path: 'tasks/plans/',
+          name: '计划',
+          purpose: '项目计划、阶段计划和执行任务清单。',
+        ),
+        WorkspaceDirectoryDescriptor(
+          path: 'tasks/reviews/',
+          name: '审稿任务',
+          purpose: '待执行或已归档的审稿任务文档。',
+        ),
+        WorkspaceDirectoryDescriptor(
+          path: 'tasks/revisions/',
+          name: '返工任务',
+          purpose: '修订、返工和重写类任务文档。',
+        ),
+        WorkspaceDirectoryDescriptor(
+          path: 'analysis/',
+          name: '分析',
+          purpose: '分析结果、图谱导出和结构化审稿摘要。',
+        ),
+        WorkspaceDirectoryDescriptor(
+          path: 'exports/',
+          name: '导出',
+          purpose: '项目导出包、共享资产包和对外交换结果。',
         ),
       ];
 
@@ -90,13 +174,34 @@ final class ProjectWorkspaceCatalog {
         WorkspaceDirectoryDescriptor(path: 'tracking/', name: '执行追踪'),
         WorkspaceDirectoryDescriptor(path: 'runs/', name: '生成记录'),
         WorkspaceDirectoryDescriptor(path: 'backups/', name: '备份'),
-        WorkspaceDirectoryDescriptor(path: 'exports/', name: '导出包'),
       ];
 
-  static const List<WorkspaceDirectoryDescriptor> internalWorkspaceDirs =
-      <WorkspaceDirectoryDescriptor>[
-        WorkspaceDirectoryDescriptor(path: '.novel_agent/', name: '内部状态'),
-        WorkspaceDirectoryDescriptor(path: '.novel_agent/modes/', name: '模式状态'),
-        WorkspaceDirectoryDescriptor(path: '.novel_agent/sqlite/', name: 'SQLite 索引'),
-      ];
+  static const List<WorkspaceDirectoryDescriptor>
+  internalWorkspaceDirs = <WorkspaceDirectoryDescriptor>[
+    WorkspaceDirectoryDescriptor(path: '.novel_agent/', name: '内部状态'),
+    WorkspaceDirectoryDescriptor(path: '.novel_agent/state/', name: '状态'),
+    WorkspaceDirectoryDescriptor(path: '.novel_agent/runtime/', name: '运行态'),
+    WorkspaceDirectoryDescriptor(path: '.novel_agent/runs/', name: '运行记录'),
+    WorkspaceDirectoryDescriptor(path: '.novel_agent/threads/', name: '线程'),
+    WorkspaceDirectoryDescriptor(path: '.novel_agent/tasks/', name: '内部任务'),
+    WorkspaceDirectoryDescriptor(
+      path: '.novel_agent/checkpoints/',
+      name: '检查点',
+    ),
+    WorkspaceDirectoryDescriptor(path: '.novel_agent/indexes/', name: '索引'),
+    WorkspaceDirectoryDescriptor(path: '.novel_agent/cache/', name: '缓存'),
+    WorkspaceDirectoryDescriptor(path: '.novel_agent/settings/', name: '设置'),
+    WorkspaceDirectoryDescriptor(path: '.novel_agent/logs/', name: '日志'),
+    WorkspaceDirectoryDescriptor(path: '.novel_agent/modes/', name: '模式状态'),
+    WorkspaceDirectoryDescriptor(
+      path: '.novel_agent/sqlite/',
+      name: 'SQLite 索引',
+    ),
+  ];
+
+  static List<WorkspaceDirectoryDescriptor>
+  get resourceTreeDirectoryDescriptors => <WorkspaceDirectoryDescriptor>[
+    ...visibleWorkspaceSkeletonDirs,
+    ...advancedWorkspaceDirs,
+  ];
 }

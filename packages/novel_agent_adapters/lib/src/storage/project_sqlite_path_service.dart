@@ -4,12 +4,15 @@ class ProjectSqlitePathService {
   ProjectSqlitePathService({ProjectRelativePathResolver? pathResolver})
     : _pathResolver = pathResolver ?? ProjectRelativePathResolver();
 
+  static const String databaseRelativePath =
+      '.novel_agent/sqlite/novel_agent.db';
+
   final ProjectRelativePathResolver _pathResolver;
 
   String databasePath(String rootPath) {
     return _pathResolver.resolve(
       rootPath: rootPath,
-      relativePath: '.novel_agent/sqlite/novel_agent.db',
+      relativePath: databaseRelativePath,
     );
   }
 }

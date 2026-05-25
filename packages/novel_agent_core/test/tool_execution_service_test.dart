@@ -59,44 +59,50 @@ void main() {
       },
     );
 
-    test('fills read tool relative_path from active document context when missing', () async {
-      // 中文注释: 这里验证模型把读取参数丢成空对象时，核心层可以用当前打开文件路径做最小兜底。
-      final port = _FakeToolExecutionPort(
-        resultByToolName: <String, JsonMap>{
-          'read_project_file': <String, Object?>{
-            'ok': true,
-            'relative_path': 'specs/project_brief.md',
-            'content': '# 项目简介',
-            'changed_paths': const <Object?>[],
+    test(
+      'fills read tool relative_path from active document context when missing',
+      () async {
+        // 中文注释: 这里验证模型把读取参数丢成空对象时，核心层可以用当前打开文件路径做最小兜底。
+        final port = _FakeToolExecutionPort(
+          resultByToolName: <String, JsonMap>{
+            'read_project_file': <String, Object?>{
+              'ok': true,
+              'relative_path': 'specs/project_brief.md',
+              'content': '# 项目简介',
+              'changed_paths': const <Object?>[],
+            },
           },
-        },
-      );
-      final service = ToolExecutionService(toolExecutionPort: port);
+        );
+        final service = ToolExecutionService(toolExecutionPort: port);
 
-      await service.executeRound(
-        project: const ProjectDescriptor(
-          id: 'demo',
-          name: '示例项目',
-          rootPath: 'D:/demo',
-        ),
-        assistantMessage: const <String, Object?>{
-          'role': 'assistant',
-          'content': '',
-        },
-        toolCalls: const <Object?>[
-          <String, Object?>{
-            'id': 'call_1',
-            'name': 'read_project_file',
-            'arguments': <String, Object?>{},
+        await service.executeRound(
+          project: const ProjectDescriptor(
+            id: 'demo',
+            name: '示例项目',
+            rootPath: 'D:/demo',
+          ),
+          assistantMessage: const <String, Object?>{
+            'role': 'assistant',
+            'content': '',
           },
-        ],
-        mainContext: const <String, Object?>{
-          'active_document_path': 'specs/project_brief.md',
-        },
-      );
+          toolCalls: const <Object?>[
+            <String, Object?>{
+              'id': 'call_1',
+              'name': 'read_project_file',
+              'arguments': <String, Object?>{},
+            },
+          ],
+          mainContext: const <String, Object?>{
+            'active_document_path': 'specs/project_brief.md',
+          },
+        );
 
-      expect(port.lastCallArguments['relative_path'], 'specs/project_brief.md');
-    });
+        expect(
+          port.lastCallArguments['relative_path'],
+          'specs/project_brief.md',
+        );
+      },
+    );
   });
 }
 

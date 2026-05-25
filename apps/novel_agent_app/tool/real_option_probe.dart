@@ -122,9 +122,24 @@ Future<void> main(List<String> arguments) async {
     'executedTools: ${result.executedTools.map((tool) => ValueReaders.stringValue(ValueReaders.mapValue(tool)['name'])).join(', ')}',
   );
 
+  final readPathCounts = <String, int>{};
   for (final rawTool in result.executedTools) {
     final tool = ValueReaders.mapValue(rawTool);
     final name = ValueReaders.stringValue(tool['name']);
+    if (name == 'read_project_file') {
+      final arguments = ValueReaders.mapValue(tool['arguments']);
+      final toolResult = ValueReaders.mapValue(tool['result']);
+      final relativePath = ValueReaders.stringValue(arguments['relative_path']);
+      final nextCount = (readPathCounts[relativePath] ?? 0) + 1;
+      readPathCounts[relativePath] = nextCount;
+      stdout.writeln(
+        'read_project_file[$nextCount]: ${nextCount == 1 ? 'first_read' : 'repeat_read'} | $relativePath',
+      );
+      stdout.writeln(
+        'read_project_file.ok: ${ValueReaders.boolValue(toolResult['ok'], true)}',
+      );
+      continue;
+    }
     if (name != 'present_user_options') {
       continue;
     }
@@ -157,6 +172,12 @@ Future<void> main(List<String> arguments) async {
     final option = state.pendingOptions[index];
     stdout.writeln(
       'state.option[$index]: label=${option.label} | prompt=${option.prompt}',
+    );
+  }
+  stdout.writeln('read_summary:');
+  for (final entry in readPathCounts.entries) {
+    stdout.writeln(
+      '- ${entry.value > 1 ? 'repeat' : 'unique'} | count=${entry.value} | path=${entry.key}',
     );
   }
   stdout.writeln('draftMarkdownPreview: ${result.draftMarkdown.substring(0, result.draftMarkdown.length > 120 ? 120 : result.draftMarkdown.length)}');

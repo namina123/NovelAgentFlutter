@@ -1,5 +1,6 @@
 import '../../app/routing/app_destination.dart';
 import '../../features/agent_ecosystem/presentation/models/agent_ecosystem_view_data.dart';
+import '../../features/project_assets/presentation/models/project_assets_view_data.dart';
 import '../../features/prompt_templates/presentation/models/prompt_templates_view_data.dart';
 import '../../features/project_collection/presentation/models/project_collection_view_data.dart';
 import '../../features/review_center/presentation/models/review_center_view_data.dart';
@@ -17,6 +18,7 @@ class AppShellViewModel {
     required this.taskCenter,
     required this.reviewCenter,
     required this.promptTemplates,
+    required this.projectAssets,
   });
 
   final AppDestination destination;
@@ -27,6 +29,7 @@ class AppShellViewModel {
   final TaskCenterViewData taskCenter;
   final ReviewCenterViewData reviewCenter;
   final PromptTemplatesViewData promptTemplates;
+  final ProjectAssetsViewData projectAssets;
 
   factory AppShellViewModel.initial() {
     return AppShellViewModel(
@@ -38,6 +41,7 @@ class AppShellViewModel {
       taskCenter: TaskCenterViewData.initial(),
       reviewCenter: ReviewCenterViewData.initial(),
       promptTemplates: PromptTemplatesViewData.initial(),
+      projectAssets: ProjectAssetsViewData.initial(),
     );
   }
 
@@ -50,6 +54,7 @@ class AppShellViewModel {
     TaskCenterViewData? taskCenter,
     ReviewCenterViewData? reviewCenter,
     PromptTemplatesViewData? promptTemplates,
+    ProjectAssetsViewData? projectAssets,
   }) {
     // 中文注释: copyWith 用于只替换当前页面相关的视图状态，避免整份壳层状态被粗暴重建。
     return AppShellViewModel(
@@ -61,6 +66,7 @@ class AppShellViewModel {
       taskCenter: taskCenter ?? this.taskCenter,
       reviewCenter: reviewCenter ?? this.reviewCenter,
       promptTemplates: promptTemplates ?? this.promptTemplates,
+      projectAssets: projectAssets ?? this.projectAssets,
     );
   }
 }

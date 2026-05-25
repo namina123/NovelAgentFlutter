@@ -34,9 +34,13 @@ abstract class ResourceManagerActionHandler {
 
   void onTasksRequested();
 
+  void onLongTaskStationRequested();
+
   void onReviewsRequested();
 
   void onTemplatesRequested();
+
+  void onProjectAssetsRequested();
 
   void onResourceEntrySelected(String entryId);
 

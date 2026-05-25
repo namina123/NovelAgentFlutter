@@ -1,4 +1,7 @@
 import '../agents/agent_model_override_service.dart';
+import '../agents/project_agent_binding.dart';
+import '../agents/project_agent_model_override.dart';
+import '../agents/project_agent_model_override_normalizer_service.dart';
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
 import '../llm/capabilities/provider_capability_resolver.dart';
@@ -14,6 +17,8 @@ class ModelExecutionProfileService {
     ProviderCatalogService? catalogService,
     ProviderProfileService? profileService,
     AgentModelOverrideService? agentModelOverrideService,
+    ProjectAgentModelOverrideNormalizerService?
+    projectAgentModelOverrideNormalizerService,
     ProviderRequestOptionsService? requestOptionsService,
   }) : _catalogService = catalogService ?? ProviderCatalogService.seeded(),
        _profileService =
@@ -24,12 +29,17 @@ class ModelExecutionProfileService {
            ),
        _agentModelOverrideService =
            agentModelOverrideService ?? AgentModelOverrideService(),
+       _projectAgentModelOverrideNormalizerService =
+           projectAgentModelOverrideNormalizerService ??
+           ProjectAgentModelOverrideNormalizerService(),
        _requestOptionsService =
            requestOptionsService ?? ProviderRequestOptionsService();
 
   final ProviderCatalogService _catalogService;
   final ProviderProfileService _profileService;
   final AgentModelOverrideService _agentModelOverrideService;
+  final ProjectAgentModelOverrideNormalizerService
+  _projectAgentModelOverrideNormalizerService;
   final ProviderRequestOptionsService _requestOptionsService;
 
   JsonMap resolve({
@@ -37,6 +47,8 @@ class ModelExecutionProfileService {
     ProviderEndpointSettings? provider,
     String overrideModelId = '',
     JsonMap agent = const <String, Object?>{},
+    ProjectAgentBinding? projectAgentBinding,
+    ProjectAgentModelOverride? projectAgentModelOverride,
   }) {
     // 中文注释: 这里把设置文件、接口、模型默认值与智能体重写收束成单一执行视图。
     final modelSettings = _modelSettingsOf(settings);
@@ -122,6 +134,14 @@ class ModelExecutionProfileService {
       modelProfile,
       credential,
     );
+    final effectiveProjectOverride =
+        projectAgentModelOverride ?? projectAgentBinding?.modelOverride;
+    if (effectiveProjectOverride != null) {
+      runtimeProfile = _applyProjectAgentOverride(
+        runtimeProfile,
+        effectiveProjectOverride,
+      );
+    }
     if (agent.isNotEmpty) {
       runtimeProfile = _agentModelOverrideService.applyOverrides(
         runtimeProfile,
@@ -139,6 +159,23 @@ class ModelExecutionProfileService {
       'request_options': requestOptions,
       'model_settings': ValueReaders.deepCopyMap(modelSettings),
     };
+  }
+
+  JsonMap _applyProjectAgentOverride(
+    JsonMap runtimeProfile,
+    ProjectAgentModelOverride projectOverride,
+  ) {
+    // 中文注释: 项目级智能体模型覆写先于智能体定义层生效，用来表达“同一个智能体在这个项目里默认用什么模型和参数”。
+    final merged = ValueReaders.deepCopyMap(runtimeProfile);
+    if (projectOverride.providerProfile.trim().isNotEmpty) {
+      merged['provider_profile'] = projectOverride.providerProfile;
+    }
+    if (projectOverride.modelId.trim().isNotEmpty) {
+      merged['model'] = projectOverride.modelId;
+    }
+    final overrideDocument = _projectAgentModelOverrideNormalizerService
+        .toDocument(projectOverride);
+    return _agentModelOverrideService.applyOverrides(merged, overrideDocument);
   }
 
   ProviderEndpointSettings? _selectedProvider(

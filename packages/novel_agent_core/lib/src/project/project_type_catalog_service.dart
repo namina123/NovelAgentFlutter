@@ -16,6 +16,7 @@ class ProjectTypeCatalogService {
           name: '长任务开局',
           description: '适合长篇或长任务项目，强调队列、检查点和可恢复推进。',
           defaultTitle: '未命名长篇',
+          requiresRuntimeBaselineSelection: true,
         ),
         ProjectTypeDefinition(
           id: 'knowledge_base',

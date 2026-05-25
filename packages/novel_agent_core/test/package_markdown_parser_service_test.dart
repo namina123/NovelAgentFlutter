@@ -1,5 +1,6 @@
 import 'package:novel_agent_core/novel_agent_core.dart';
 import 'package:test/test.dart';
+import 'dart:io';
 
 void main() {
   group('Package entry file names', () {
@@ -134,6 +135,88 @@ resource_hints:
       );
     });
 
+    test('skill parser reads novel_agent extensions from metadata block', () {
+      // 中文注释: 新规范下的技能扩展字段会放进 metadata.novel_agent，解析后仍应回到统一平面结构。
+      final parser = SkillMarkdownPackageParserService();
+      final parsed = parser.parsePackage('''
+---
+name: compact-skill
+description: 用来验证扩展块解析。
+resource_hints:
+  references:
+    - references/compact.md
+metadata:
+  novel_agent:
+    activation_hints:
+      - 用户要压缩上下文
+    preferred_output: 精简执行摘要
+    safe_without_tools: true
+---
+# Compact Skill
+
+先给简短摘要。
+''');
+      expect(parsed['activation_hints'], contains('用户要压缩上下文'));
+      expect(parsed['preferred_output'], '精简执行摘要');
+      final extensions = ValueReaders.mapValue(
+        parsed['novel_agent_extensions'],
+      );
+      expect(extensions['preferred_output'], '精简执行摘要');
+    });
+
+    test(
+      'agent renderer writes novel_agent extensions into metadata block',
+      () {
+        // 中文注释: 智能体渲染应把宿主私有配置折叠进 metadata.novel_agent，减少顶层私有字段泄漏。
+        final renderer = AgentMarkdownPackageRendererService();
+        final markdown = renderer.renderPackage(<String, Object?>{
+          'id': 'portable-agent',
+          'name': 'Portable Agent',
+          'description': '测试智能体',
+          'role': '规划',
+          'objective': '给出可执行计划',
+          'system_prompt': '# Portable Agent\n\n先计划，再执行。',
+          'skills': <String>['generate_outline'],
+          'provider_profile': 'default',
+        });
+        expect(markdown, contains('metadata:'));
+        expect(markdown, contains('novel_agent:'));
+        expect(markdown, contains('skills:'));
+        expect(
+          markdown,
+          isNot(contains('source_scope: project\nsource_scope: project')),
+        );
+      },
+    );
+
+    test(
+      'builtin novel control station skill parses as a valid markdown package',
+      () {
+        // 中文注释: 这里直接冒烟仓库内置技能，防止真实 SKILL.md 因 frontmatter 或兼容说明改动后悄悄失效。
+        final parser = SkillMarkdownPackageParserService();
+        final workspaceRoot = _findWorkspaceRoot();
+        final skillFile = File(
+          '${workspaceRoot.path}${Platform.pathSeparator}builtin_packages${Platform.pathSeparator}skills${Platform.pathSeparator}novel-control-station${Platform.pathSeparator}SKILL.md',
+        );
+        final parsed = parser.parsePackage(
+          skillFile.readAsStringSync(),
+          fallbackId: 'novel-control-station',
+        );
+        expect(parsed['id'], 'novel-control-station');
+        expect(parsed['name'], 'novel-control-station');
+        expect(parsed['activation_hints'], contains('用户要写长篇小说'));
+        final resourceHints = parsed['resource_hints'] as Map<String, Object?>;
+        expect(
+          (resourceHints['references'] as List<Object?>),
+          contains('references/upstream-attribution.md'),
+        );
+        expect(
+          parsed['instruction_markdown'].toString(),
+          contains('## NovelAgent Compatibility'),
+        );
+      },
+    );
+
     test('skill validator warns on risky coupling', () {
       // 中文注释: 技能校验会提醒“看起来绑死工具”的结构，帮助我们提前发现生态兼容风险。
       final validator = SkillPackageValidatorService();
@@ -167,4 +250,22 @@ resource_hints:
       expect(errors, contains('system_prompt'));
     });
   });
+}
+
+Directory _findWorkspaceRoot() {
+  // 中文注释: 测试运行目录可能在包目录或仓库根目录，这里向上回溯到包含 builtin_packages 的工作区根。
+  var current = Directory.current.absolute;
+  while (true) {
+    final marker = Directory(
+      '${current.path}${Platform.pathSeparator}builtin_packages',
+    );
+    if (marker.existsSync()) {
+      return current;
+    }
+    final parent = current.parent;
+    if (parent.path == current.path) {
+      throw StateError('未找到包含 builtin_packages 的仓库根目录。');
+    }
+    current = parent;
+  }
 }

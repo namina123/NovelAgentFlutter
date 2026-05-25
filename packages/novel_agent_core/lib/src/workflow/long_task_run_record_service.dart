@@ -60,6 +60,12 @@ class LongTaskRunRecordService {
       'id': runId,
       'plan_id': planId,
       'mode': mode,
+      'runtime_baseline_id': ValueReaders.stringValue(
+        cleanOptions['runtime_baseline_id'],
+        ValueReaders.stringValue(
+          ValueReaders.mapValue(plan['options'])['runtime_baseline_id'],
+        ),
+      ).trim(),
       'strategy': _strategyService.modeStrategy(mode),
       'status': TaskRuntimeConstants.statusRunning,
       'options': cleanOptions,

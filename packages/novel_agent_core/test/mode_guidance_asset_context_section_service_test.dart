@@ -9,6 +9,15 @@ void main() {
       final sections = service.build(
         const ModeGuidanceAssetBundle(
           modeId: 'seed_autopilot_novel',
+          premises: <InspirationPremise>[
+            InspirationPremise(
+              id: 'premise.main',
+              displayName: '核心故事前提',
+              summary: '主角要在帝国压迫下翻案。',
+              corePromise: '高压权谋与持续逆转。',
+              boundaries: <String>['跨卷转折先确认。'],
+            ),
+          ],
           styleProfiles: <StyleProfile>[
             StyleProfile(
               id: 'style.main',
@@ -36,6 +45,7 @@ void main() {
             ),
           ],
           markdownPathsByAssetId: <String, String>{
+            'premise.main': 'premise/seed_autopilot_premise.md',
             'style.main': 'styles/seed_autopilot_style.md',
             'world.main': 'world/seed_autopilot_world_anchor.md',
             'entity.hero': 'characters/seed_autopilot_protagonist.md',
@@ -43,7 +53,15 @@ void main() {
         ),
       );
 
-      expect(sections, hasLength(3));
+      expect(sections, hasLength(4));
+      expect(
+        sections.any(
+          (section) =>
+              section['title'] == '故事前提' &&
+              '${section['content']}'.contains('高压权谋与持续逆转'),
+        ),
+        isTrue,
+      );
       expect(
         sections.any(
           (section) =>

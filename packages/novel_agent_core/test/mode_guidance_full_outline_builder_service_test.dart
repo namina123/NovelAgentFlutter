@@ -49,12 +49,17 @@ void main() {
 
       final input = builder.build(state);
       expect(input.isReady, isTrue);
+      expect(input.runtimeBaselineId, 'chapter_collaboration_autorun');
       expect(input.runtimeMode, TaskRuntimeConstants.modeHumanOutlineAiDraft);
+      expect(
+        ValueReaders.stringValue(input.options['runtime_baseline_id']),
+        'chapter_collaboration_autorun',
+      );
       expect(
         ValueReaders.stringValue(input.options['outline_text']),
         contains('【分卷结构】第一卷回京入局'),
       );
-      expect(ValueReaders.intValue(input.options['checkpoint_interval']), 1);
+      expect(ValueReaders.intValue(input.options['checkpoint_interval']), 0);
       expect(
         ValueReaders.stringList(input.options['persistent_context_paths']),
         contains('outline/full_outline_consensus_overview.md'),

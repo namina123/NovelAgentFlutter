@@ -1,4 +1,5 @@
 import '../workflow/task_runtime_constants.dart';
+import '../runtime/runtime_baseline_execution_mode_service.dart';
 import 'mode_guidance_plan_input.dart';
 import 'mode_guidance_state.dart';
 import 'mode_guidance_workspace_path_service.dart';
@@ -11,17 +12,23 @@ class ModeGuidancePlanInputBuilderService {
     ModeGuidanceTransitionService? transitionService,
     ModeGuidanceWorkspacePathService? workspacePathService,
     ModeGuidanceProjectionDocumentService? projectionDocumentService,
+    RuntimeBaselineExecutionModeService? runtimeBaselineExecutionModeService,
   }) : _transitionService =
            transitionService ?? ModeGuidanceTransitionService(),
        _workspacePathService =
            workspacePathService ?? const ModeGuidanceWorkspacePathService(),
        _projectionDocumentService =
            projectionDocumentService ??
-           const ModeGuidanceProjectionDocumentService();
+           const ModeGuidanceProjectionDocumentService(),
+       _runtimeBaselineExecutionModeService =
+           runtimeBaselineExecutionModeService ??
+           RuntimeBaselineExecutionModeService();
 
   final ModeGuidanceTransitionService _transitionService;
   final ModeGuidanceWorkspacePathService _workspacePathService;
   final ModeGuidanceProjectionDocumentService _projectionDocumentService;
+  final RuntimeBaselineExecutionModeService
+  _runtimeBaselineExecutionModeService;
 
   ModeGuidancePlanInput build(ModeGuidanceState state) {
     // 中文注释: 该服务把模式引导状态转成共享长任务计划输入，避免 GUI/CLI 各自手写模式到计划参数的映射。
@@ -34,6 +41,7 @@ class ModeGuidancePlanInputBuilderService {
       default:
         return ModeGuidancePlanInput(
           modeId: state.modeId,
+          runtimeBaselineId: '',
           runtimeMode: TaskRuntimeConstants.modeHumanOutlineAiDraft,
           isReady: state.isReady,
           options: const <String, Object?>{},
@@ -50,6 +58,7 @@ class ModeGuidancePlanInputBuilderService {
   ) {
     final values = _answerValues(state);
     final projected = _projectionDocumentService.buildDocuments(state);
+    const runtimeBaselineId = 'continuous_autonomous';
     final seedPrompt = [
       '【模式】灵感托管式长篇',
       if (_value(values, 'seed_scope').isNotEmpty)
@@ -67,9 +76,14 @@ class ModeGuidancePlanInputBuilderService {
     ].join('\n');
     return ModeGuidancePlanInput(
       modeId: state.modeId,
-      runtimeMode: TaskRuntimeConstants.modeSeedToFullNovel,
+      runtimeBaselineId: runtimeBaselineId,
+      runtimeMode: _runtimeBaselineExecutionModeService.resolveRuntimeMode(
+        runtimeBaselineId: runtimeBaselineId,
+        runtimeMode: TaskRuntimeConstants.modeSeedToFullNovel,
+      ),
       isReady: state.isReady,
       options: <String, Object?>{
+        'runtime_baseline_id': runtimeBaselineId,
         'seed_prompt': seedPrompt,
         'chapter_count': _chapterCountFromAutonomy(
           _value(values, 'autonomy_guardrails'),
@@ -99,6 +113,7 @@ class ModeGuidancePlanInputBuilderService {
   ) {
     final values = _answerValues(state);
     final projected = _projectionDocumentService.buildDocuments(state);
+    const runtimeBaselineId = 'chapter_collaboration_autorun';
     final outlineSeed = [
       '【模式】全书共拟式长篇',
       if (_value(values, 'book_premise').isNotEmpty)
@@ -114,12 +129,17 @@ class ModeGuidancePlanInputBuilderService {
     ].join('\n');
     return ModeGuidancePlanInput(
       modeId: state.modeId,
-      runtimeMode: TaskRuntimeConstants.modeHumanOutlineAiDraft,
+      runtimeBaselineId: runtimeBaselineId,
+      runtimeMode: _runtimeBaselineExecutionModeService.resolveRuntimeMode(
+        runtimeBaselineId: runtimeBaselineId,
+        runtimeMode: TaskRuntimeConstants.modeHumanOutlineAiDraft,
+      ),
       isReady: state.isReady,
       options: <String, Object?>{
+        'runtime_baseline_id': runtimeBaselineId,
         'outline_text': outlineSeed,
         'chapter_count': 12,
-        'checkpoint_interval': 1,
+        'checkpoint_interval': 0,
         'source_paths': <Object?>[
           _workspacePathService.summaryMarkdownPath(state.modeId),
           ...projected.keys,

@@ -176,6 +176,9 @@ class ToolSchemaBuilderService {
           properties: <String, Object?>{
             'skill_id': _stringSchema('要读取的技能 ID。'),
             'query': _stringSchema('当尚未确定 skill_id 时，用任务描述匹配最合适的技能。'),
+            'detail_level': _stringSchema(
+              'summary 或 full。默认 summary，只返回压缩后的技能执行摘要。',
+            ),
           },
         );
       case 'call_sub_agent':

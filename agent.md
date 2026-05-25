@@ -243,21 +243,76 @@ native adapter -> native
 - 先做一堆底层实现
 - 再让上层页面或控制器去硬拼出一种流程
 
-## 6.5 双存储兼容优先
+## 6.5 存储策略优先
 
-从现在开始，项目级正式采用 `Markdown + SQLite` 双兼容的长期存储原则。
+从现在开始，项目级正式采用“多存储策略并存”的长期原则。
+
+当前已明确的两种策略是：
+
+- `markdown_project_store`
+- `sqlite_project_store`
+
+后续允许扩展更多轻量存储策略，但必须继续遵守相同约束。
 
 ### 核心定义
 
-- 用户可编辑、可浏览、可迁移的叙事资产以 `Markdown / 普通文件` 为主
-- `SQLite` 只承担结构化索引、关系查询、恢复加速和视图投影
-- `GUI / CLI` 只能通过共享 core 合同访问这些能力
+这里的 `Markdown + SQLite`，不是指“同一个项目默认同时混用 Markdown 和 SQLite 作为主内容存储”。
 
-禁止演化成：
+真正的含义是：
 
-- 把 SQLite 直接暴露给用户作为主编辑入口
-- 把大量内部 JSON / DB 文件暴露到普通资源树
+- 系统支持多种项目主存储策略
+- 一种策略把主内容存成分散的 `Markdown / 普通文件`
+- 另一种策略把主内容存进 `SQLite`
+- 这些策略在 core 合同层必须尽量保持可互转、可迁移、可共用上层工作流
+
+也就是说，优先目标是：
+
+1. 不同存储策略可兼容
+2. 若某些能力暂时不能完全互转，必须明确隔离
+3. 项目创建时必须知道自己使用哪种主存储策略
+
+### Markdown 策略约束
+
+当项目使用 `markdown_project_store` 时：
+
+- 用户资产以 Markdown / 普通文本文件为主
+- 正文、章纲、风格、角色卡等使用 Markdown 允许表达的文本形态
+- SQLite 如果存在，也只能作为索引、缓存、关系投影或恢复加速层
+
+### SQLite 策略约束
+
+当项目使用 `sqlite_project_store` 时：
+
+- 主内容以数据库中的结构化字段、普通文本字段或分段文本字段存储
+- 正文内容不应存成“Markdown 文档字符串再塞进 SQLite”的做法
+- SQLite 策略下的正文是正文文本，不是 Markdown 文件内容搬运体
+- Markdown 视图如果需要，只能作为导出、投影、预览或互转产物
+
+### 如果互转做不到，必须先隔离
+
+如果某一阶段做不到高质量互转，那么必须采用：
+
+- 项目创建时明确选择主存储策略
+- 不同策略项目各自独立运行
+- 共享上层 use case，分开底层 adapter
+
+禁止出现这种含糊状态：
+
+- 用户以为自己是 Markdown 项目，实际正文写进了 SQLite blob
+- 用户以为自己是 SQLite 项目，实际核心内容仍散落在 Markdown 文件里
+
+### GUI / CLI 约束
+
+- `GUI / CLI` 只能通过共享 core 合同访问存储
+- `app / cli / controller` 不允许直接写 SQL
+- `app / cli / controller` 不允许直接拼接 Markdown 主内容存储规则
+
+### 禁止演化成
+
+- 把 SQLite 直接暴露给用户作为唯一编辑入口却没有投影层
+- 把 Markdown 内容原样塞进 SQLite 正文字段冒充 SQLite 存储策略
 - 在 app / cli / controller 中直接写 SQL 或耦合数据库细节
+- 不声明项目存储策略就让同一项目半 Markdown、半 SQLite 地漂移
 
 ### 内部路径规则
 
@@ -541,11 +596,16 @@ GUI 与 CLI 是两个壳，不是一个模式切换。
 
 1. 标准目录优先使用 `skills/<id>/SKILL.md`，入口文件名大小写不敏感。
 2. `SKILL.md` 优先使用 YAML frontmatter；至少包含 `name` 与 `description`。
-3. 技能要声明“能力需求”，不要把宿主内置工具名写成硬依赖前提。
-4. 技能在没有工具时也应尽量能降级为流程指导、结构草案或人工步骤。
-5. 详细资料优先放 `references/`，确定性步骤优先放 `scripts/`，最终产出模板优先放 `assets/`。
-6. 不要把同一份长信息同时堆在 `SKILL.md` 和 `references/`。
-7. 内置技能与外部技能使用同一包结构与解析规则，不允许内置另搞一套私有格式。
+3. 技能元数据必须分层:
+   - 顶层只放“可移植核心字段”，例如 `id`、`name`、`description`、`version`、`tags`
+   - NovelAgent 私有扩展统一放入 `metadata.novel_agent`
+   - 不允许把 NovelAgent 专用字段长期散落在顶层
+4. 技能要声明“能力需求”，不要把宿主内置工具名写成硬依赖前提。
+5. 技能在没有工具时也应尽量能降级为流程指导、结构草案或人工步骤。
+6. 详细资料优先放 `references/`，确定性步骤优先放 `scripts/`，最终产出模板优先放 `assets/`。
+7. 不要把同一份长信息同时堆在 `SKILL.md` 和 `references/`。
+8. 默认加载技能时优先返回摘要，不默认把整份超长技能正文塞入上下文；完整正文必须按需读取。
+9. 内置技能与外部技能使用同一包结构与解析规则，不允许内置另搞一套私有格式。
 
 ## 11.2 智能体包规则
 
@@ -553,12 +613,16 @@ GUI 与 CLI 是两个壳，不是一个模式切换。
 
 1. 标准目录优先使用 `agents/<id>/AGENT.md`，入口文件名大小写不敏感。
 2. `AGENT.md` 优先使用 YAML frontmatter；至少包含 `name`、`description`、`role`、`objective`。
-3. 智能体必须显式声明边界：建议至少给出 `can_do` 与 `must_not_do`。
-4. 智能体应声明其知识来源与能力依赖，优先写“能力类型”，不要把具体宿主工具名写成唯一前提。
-5. 预期输出可以通过 `preferred_output`、`output_schema_path` 或 `output_schema` 表达。
-6. 智能体应声明记忆与反思策略，例如 `short_term_memory_policy`、`long_term_memory_paths`、`reflection_mode`。
-7. `references/`、`scripts/`、`assets/`、`schemas/`、`memory/` 等资源目录可以按需存在，但含义必须稳定。
-8. 内置智能体与外部智能体使用同一包结构与解析规则，不允许内置另搞一套私有格式。
+3. 智能体元数据必须分层:
+   - 顶层只放“可移植核心字段”，例如 `id`、`name`、`description`、`role`、`objective`、`can_do`、`must_not_do`
+   - NovelAgent 私有运行参数统一放入 `metadata.novel_agent`
+   - 不允许把宿主专用 provider / preset / model override 长期散落在顶层
+4. 智能体必须显式声明边界：建议至少给出 `can_do` 与 `must_not_do`。
+5. 智能体应声明其知识来源与能力依赖，优先写“能力类型”，不要把具体宿主工具名写成唯一前提。
+6. 预期输出可以通过 `preferred_output`、`output_schema_path` 或 `output_schema` 表达。
+7. 智能体应声明记忆与反思策略，例如 `short_term_memory_policy`、`long_term_memory_paths`、`reflection_mode`。
+8. `references/`、`scripts/`、`assets/`、`schemas/`、`memory/` 等资源目录可以按需存在，但含义必须稳定。
+9. 内置智能体与外部智能体使用同一包结构与解析规则，不允许内置另搞一套私有格式。
 
 ## 12. 演化策略
 

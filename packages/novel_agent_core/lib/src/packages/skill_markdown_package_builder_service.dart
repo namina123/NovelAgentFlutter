@@ -18,20 +18,22 @@ class SkillMarkdownPackageBuilderService {
 name: $resolvedId
 description: $resolvedDescription
 version: 1
-activation_hints:
-  - 请补充触发条件
-inputs: []
-outputs: []
-required_capabilities: []
-optional_capabilities: []
-safe_without_tools: true
 resource_hints:
   scripts: []
   references: []
   assets: []
-preferred_output: 请补充偏好的输出格式
-source: project_package
-source_scope: project
+metadata:
+  novel_agent:
+    activation_hints:
+      - 请补充触发条件
+    inputs: []
+    outputs: []
+    required_capabilities: []
+    optional_capabilities: []
+    safe_without_tools: true
+    preferred_output: 请补充偏好的输出格式
+    source: project_package
+    source_scope: project
 ---
 
 # $resolvedName

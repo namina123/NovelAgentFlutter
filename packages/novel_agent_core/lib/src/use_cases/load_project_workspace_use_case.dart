@@ -35,6 +35,8 @@ class LoadProjectWorkspaceUseCase {
       'title': project.name,
       'path': project.rootPath,
       'project_type': project.projectType,
+      'storage_strategy': project.storageStrategy.id,
+      'runtime_baseline_id': project.runtimeBaselineId,
       'stage': 'draft',
     };
   }

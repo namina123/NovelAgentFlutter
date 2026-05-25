@@ -33,6 +33,8 @@ Future<void> main() async {
   final createProjectWorkspaceUseCase = CreateProjectWorkspaceUseCase(
     projectRepository: bundle.projectRepository,
     projectWorkspacePort: bundle.projectWorkspacePort,
+    projectContentRepository: bundle.projectContentRepository,
+    projectReadableProjectionService: bundle.projectReadableProjectionService,
   );
   final taskRepository = ProjectTaskRepository(
     workspacePort: bundle.projectWorkspacePort,
@@ -79,6 +81,7 @@ Future<void> main() async {
       projectsRootPath: projectRoot.path,
       title: '审稿返工探针',
       projectType: 'long_novel',
+      runtimeBaselineId: 'continuous_autonomous',
     );
     await bundle.projectWorkspacePort.writeTextFile(
       project.rootPath,

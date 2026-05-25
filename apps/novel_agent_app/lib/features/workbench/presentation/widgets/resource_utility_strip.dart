@@ -6,12 +6,16 @@ class ResourceUtilityStrip extends StatelessWidget {
   const ResourceUtilityStrip({
     super.key,
     required this.onAgentEcosystemRequested,
+    required this.onProjectAssetsRequested,
+    required this.onLongTaskStationRequested,
     required this.onTasksRequested,
     required this.onReviewsRequested,
     required this.onTemplatesRequested,
   });
 
   final VoidCallback onAgentEcosystemRequested;
+  final VoidCallback onProjectAssetsRequested;
+  final VoidCallback onLongTaskStationRequested;
   final VoidCallback onTasksRequested;
   final VoidCallback onReviewsRequested;
   final VoidCallback onTemplatesRequested;
@@ -27,6 +31,16 @@ class ResourceUtilityStrip extends StatelessWidget {
           icon: Icons.groups_2_outlined,
           tooltip: '智能体生态',
           onPressed: onAgentEcosystemRequested,
+        ),
+        ToolbarIconButton(
+          icon: Icons.auto_awesome_mosaic_outlined,
+          tooltip: '项目资产',
+          onPressed: onProjectAssetsRequested,
+        ),
+        ToolbarIconButton(
+          icon: Icons.hub_outlined,
+          tooltip: '长任务总站',
+          onPressed: onLongTaskStationRequested,
         ),
         ToolbarIconButton(
           icon: Icons.checklist_rounded,

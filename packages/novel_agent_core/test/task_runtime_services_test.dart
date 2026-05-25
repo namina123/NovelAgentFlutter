@@ -55,5 +55,24 @@ void main() {
         'read_seed',
       );
     });
+
+    test('adds chapter gate steps for autorun baseline chapter task', () {
+      final plan = planService.executionPlan(<String, Object?>{
+        'id': 'chapter-1',
+        'task_type': 'chapter',
+        'mode': TaskRuntimeConstants.modeHumanOutlineAiDraft,
+        'metadata': <String, Object?>{
+          'runtime_baseline_id': 'chapter_collaboration_autorun',
+        },
+      });
+
+      final stepIds = (plan['steps'] as List<Object?>)
+          .whereType<Map<String, Object?>>()
+          .map((item) => item['id'])
+          .toList(growable: false);
+      expect(stepIds, contains('run_chapter_gate_review'));
+      expect(stepIds, contains('repair_if_gate_failed'));
+      expect(stepIds, contains('advance_after_gate'));
+    });
   });
 }

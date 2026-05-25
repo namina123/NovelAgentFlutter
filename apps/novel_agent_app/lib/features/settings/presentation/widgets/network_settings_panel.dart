@@ -29,6 +29,8 @@ class _NetworkSettingsPanelState extends State<NetworkSettingsPanel> {
   late final TextEditingController _usernameController;
   late final TextEditingController _passwordController;
   late final TextEditingController _timeoutController;
+  late final TextEditingController _transportRetryAttemptsController;
+  late bool _transportRetryEnabled;
 
   @override
   void initState() {
@@ -38,6 +40,7 @@ class _NetworkSettingsPanelState extends State<NetworkSettingsPanel> {
     _usernameController = TextEditingController();
     _passwordController = TextEditingController();
     _timeoutController = TextEditingController();
+    _transportRetryAttemptsController = TextEditingController();
     _sync();
   }
 
@@ -56,6 +59,7 @@ class _NetworkSettingsPanelState extends State<NetworkSettingsPanel> {
     _usernameController.dispose();
     _passwordController.dispose();
     _timeoutController.dispose();
+    _transportRetryAttemptsController.dispose();
     super.dispose();
   }
 
@@ -145,6 +149,31 @@ class _NetworkSettingsPanelState extends State<NetworkSettingsPanel> {
                 controller: _timeoutController,
                 keyboardType: TextInputType.number,
               ),
+              const SizedBox(height: 12),
+              SwitchListTile.adaptive(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                value: _transportRetryEnabled,
+                title: const Text('瞬时网络错误自动重试'),
+                subtitle: const Text('默认对连接被提前关闭等抖动做有限内置重试。'),
+                onChanged: (value) {
+                  setState(() {
+                    _transportRetryEnabled = value;
+                  });
+                },
+              ),
+              const SizedBox(height: 12),
+              SettingsLabeledTextField(
+                label: '自动重试次数',
+                controller: _transportRetryAttemptsController,
+                enabled: _transportRetryEnabled,
+                keyboardType: TextInputType.number,
+                hintText: '0-5',
+                inputFormatters: <TextInputFormatter>[
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(1),
+                ],
+              ),
             ],
           ),
         ),
@@ -163,6 +192,9 @@ class _NetworkSettingsPanelState extends State<NetworkSettingsPanel> {
               'proxy_username': _usernameController.text.trim(),
               'proxy_password': _passwordController.text,
               'timeout_seconds': _timeoutController.text.trim(),
+              'transport_retry_enabled': _transportRetryEnabled,
+              'transport_retry_attempts': _transportRetryAttemptsController.text
+                  .trim(),
             });
           },
         ),
@@ -175,12 +207,16 @@ class _NetworkSettingsPanelState extends State<NetworkSettingsPanel> {
     _proxyProtocol = (widget.settings['proxy_protocol'] ?? '').toString();
     _hostController.text = (widget.settings['proxy_host'] ?? '').toString();
     _portController.text = (widget.settings['proxy_port'] ?? '').toString();
-    _usernameController.text =
-        (widget.settings['proxy_username'] ?? '').toString();
-    _passwordController.text =
-        (widget.settings['proxy_password'] ?? '').toString();
+    _usernameController.text = (widget.settings['proxy_username'] ?? '')
+        .toString();
+    _passwordController.text = (widget.settings['proxy_password'] ?? '')
+        .toString();
     _timeoutController.text = (widget.settings['timeout_seconds'] ?? '900')
         .toString();
+    _transportRetryEnabled =
+        widget.settings['transport_retry_enabled'] != false;
+    _transportRetryAttemptsController.text =
+        (widget.settings['transport_retry_attempts'] ?? '2').toString();
   }
 
   String _normalizedPortText(String rawValue) {

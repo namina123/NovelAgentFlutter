@@ -6,6 +6,10 @@ class LongTaskRunOptionService {
     // 中文注释: 运行选项规范化在 core 里完成，让 GUI 和 CLI 共用一致的步数和时长限制。
     return <String, Object?>{
       'run_id': ValueReaders.stringValue(options['run_id']),
+      'runtime_baseline_id': ValueReaders.stringValue(
+        options['runtime_baseline_id'],
+      ),
+      'runtime_mode': ValueReaders.stringValue(options['runtime_mode']),
       'agent_id': ValueReaders.stringValue(
         options['agent_id'],
         'default_generalist',
@@ -30,6 +34,19 @@ class LongTaskRunOptionService {
       'resume_after_crash': ValueReaders.boolValue(
         options['resume_after_crash'],
         true,
+      ),
+      'auto_start_on_create': ValueReaders.boolValue(
+        options['auto_start_on_create'],
+        false,
+      ),
+      'unattended': ValueReaders.boolValue(options['unattended'], false),
+      'auto_advance_chapters': ValueReaders.boolValue(
+        options['auto_advance_chapters'],
+        false,
+      ),
+      'keep_alive_across_project_switch': ValueReaders.boolValue(
+        options['keep_alive_across_project_switch'],
+        false,
       ),
     };
   }

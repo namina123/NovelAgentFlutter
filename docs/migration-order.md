@@ -119,6 +119,12 @@
 - [ ] UI 窄屏 / 双栏 / 三栏退化逻辑进一步对齐旧项目
 - [ ] 移动端输入法、横屏与平板策略继续细化
 - [~] Windows / Android 打包验证
+- [x] 长任务常规章节 `chapters/` 落盘与自动完成策略
+- [x] 瞬时传输错误有限内置重试
+- [x] 真实长任务探针回归
+- [x] skill / agent 元数据双层规范基线
+- [x] 风格 / 伏笔 / 项目资产包 core 基座
+- [x] 项目资产中心 GUI/CLI 接线
 
 ## 当前执行策略
 
@@ -146,6 +152,10 @@
 - revision postprocess -> review report / checkpoint review 回写入口
 - 第一种长任务模式的 UI 分阶段引导接线
 - 第二种长任务模式的复用式并行落地与探针回归
+- 项目创建链的三段式领域化：
+  - 项目类型
+  - 主存储策略
+  - 长任务运行基准预留
 - CLI `guidance-status / create-from-guidance` 共用入口探针
 - 提供商兼容基线与 Responses API 约束
 - 会话失败重试闭环与滚动区体验修正
@@ -157,6 +167,8 @@
 - 图片类 gateway 完整闭环
 - 设置页网络代理与共享运行链继续细修
 - 现有工具语义继续向真实使用场景补洞，但不再把传输层口子暴露给模型
+- 风格 / 伏笔 / 项目资产包的 GUI/CLI 入口接线
+- 风格中心 / 伏笔中心继续向图谱、时间线和默认策略联动深化
 - 在 review task 物化和 repair task 入口之后，继续推进 repair 完成后的再审稿 / 回写检查点闭环
 - 在 revision postprocess 回写稳定后，继续把“accept / retry / rollback / 回到长任务 checkpoint”抽成共享用例动作
 - 在修订收口动作层稳定后，继续给 checkpoint review 增加严重度分级与建议动作物化

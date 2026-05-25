@@ -24,9 +24,29 @@ class TaskQueueOptionService {
     return <String, Object?>{
       'max_steps': maxSteps,
       'max_seconds': maxSeconds,
+      'runtime_baseline_id': ValueReaders.stringValue(
+        options['runtime_baseline_id'],
+      ),
+      'runtime_mode': ValueReaders.stringValue(options['runtime_mode']),
       'agent_id': ValueReaders.stringValue(
         options['agent_id'],
         'default_generalist',
+      ),
+      'auto_start_on_create': _boolOption(
+        options,
+        'auto_start_on_create',
+        false,
+      ),
+      'unattended': _boolOption(options, 'unattended', false),
+      'auto_advance_chapters': _boolOption(
+        options,
+        'auto_advance_chapters',
+        false,
+      ),
+      'keep_alive_across_project_switch': _boolOption(
+        options,
+        'keep_alive_across_project_switch',
+        false,
       ),
       'stop_on_waiting_user': _boolOption(
         options,

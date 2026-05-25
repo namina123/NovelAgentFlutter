@@ -1,5 +1,7 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import '../runtime/runtime_baseline_execution_mode_service.dart';
+import 'long_task_chapter_output_policy_service.dart';
 import 'long_task_mode_context_path_service.dart';
 import 'long_task_mode_service.dart';
 import 'long_task_path_policy_service.dart';
@@ -9,19 +11,28 @@ class LongTaskDynamicTaskFactoryService {
   LongTaskDynamicTaskFactoryService({
     required LongTaskModeService modeService,
     required LongTaskPathPolicyService pathPolicyService,
+    LongTaskChapterOutputPolicyService? chapterOutputPolicyService,
     LongTaskModeContextPathService? modeContextPathService,
-  }) : _modeService = modeService,
-       _pathPolicyService = pathPolicyService,
+    RuntimeBaselineExecutionModeService? runtimeBaselineExecutionModeService,
+  }) : _pathPolicyService = pathPolicyService,
+       _chapterOutputPolicyService =
+           chapterOutputPolicyService ??
+           LongTaskChapterOutputPolicyService(modeService: modeService),
        _modeContextPathService =
            modeContextPathService ??
            LongTaskModeContextPathService(
              modeService: modeService,
              pathPolicyService: pathPolicyService,
-           );
+           ),
+       _runtimeBaselineExecutionModeService =
+           runtimeBaselineExecutionModeService ??
+           RuntimeBaselineExecutionModeService(modeService: modeService);
 
-  final LongTaskModeService _modeService;
   final LongTaskPathPolicyService _pathPolicyService;
+  final LongTaskChapterOutputPolicyService _chapterOutputPolicyService;
   final LongTaskModeContextPathService _modeContextPathService;
+  final RuntimeBaselineExecutionModeService
+  _runtimeBaselineExecutionModeService;
 
   JsonMap buildCheckpointTask(
     JsonMap record,
@@ -37,17 +48,19 @@ class LongTaskDynamicTaskFactoryService {
       record['plan_id'],
       ValueReaders.stringValue(arguments['plan_id'], 'long_task'),
     );
-    final mode = _modeService.normalizeMode(
-      ValueReaders.stringValue(
-        record['mode'],
-        ValueReaders.stringValue(arguments['mode']),
-      ),
-    );
     final afterTaskId = ValueReaders.stringValue(
       arguments['after_task_id'],
       ValueReaders.stringValue(record['last_task_id']),
     ).trim();
     final afterTask = _taskAt(tasks, _indexById(tasks, afterTaskId));
+    final runtimeBaselineId = _runtimeBaselineId(arguments, afterTask);
+    final mode = _runtimeBaselineExecutionModeService.resolveRuntimeMode(
+      runtimeBaselineId: runtimeBaselineId,
+      runtimeMode: ValueReaders.stringValue(
+        record['mode'],
+        ValueReaders.stringValue(arguments['mode']),
+      ),
+    );
     final checkpointId = _pathPolicyService.safeId(
       ValueReaders.stringValue(
         arguments['id'],
@@ -95,6 +108,8 @@ class LongTaskDynamicTaskFactoryService {
         'manual_checkpoint': true,
         'generated_by': 'LongTaskRevision',
         'persistent_context_paths': inheritedPersistentPaths,
+        if (runtimeBaselineId.isNotEmpty)
+          'runtime_baseline_id': runtimeBaselineId,
       },
       'tool_hint': '检查点任务只等待用户确认；通常不需要执行模型。',
       'created_at': now,
@@ -123,8 +138,17 @@ class LongTaskDynamicTaskFactoryService {
       record['plan_id'],
       ValueReaders.stringValue(arguments['plan_id'], 'long_task'),
     );
-    final mode = _modeService.normalizeMode(
-      ValueReaders.stringValue(
+    final afterTaskId = ValueReaders.stringValue(
+      arguments['after_task_id'],
+      ValueReaders.stringValue(record['last_task_id']),
+    ).trim();
+    final runtimeBaselineId = _runtimeBaselineId(
+      arguments,
+      _taskAt(tasks, _indexById(tasks, afterTaskId)),
+    );
+    final mode = _runtimeBaselineExecutionModeService.resolveRuntimeMode(
+      runtimeBaselineId: runtimeBaselineId,
+      runtimeMode: ValueReaders.stringValue(
         record['mode'],
         ValueReaders.stringValue(arguments['mode']),
       ),
@@ -137,10 +161,6 @@ class LongTaskDynamicTaskFactoryService {
       arguments['title'],
       '续写章节 $chapterNumber',
     ).trim();
-    final afterTaskId = ValueReaders.stringValue(
-      arguments['after_task_id'],
-      ValueReaders.stringValue(record['last_task_id']),
-    ).trim();
     final dependsOn = <Object?>[];
     if (afterTaskId.isNotEmpty) {
       dependsOn.add(afterTaskId);
@@ -148,14 +168,20 @@ class LongTaskDynamicTaskFactoryService {
     var outputPath = _pathPolicyService.safeProjectPath(
       ValueReaders.stringValue(arguments['output_path']),
     );
+    final stage = ValueReaders.stringValue(arguments['stage'], 'draft');
     if (outputPath.isEmpty) {
-      outputPath =
-          'drafts/第${chapterNumber.toString().padLeft(2, '0')}章_${_safeFilePart(title, 'chapter')}.md';
+      outputPath = _chapterOutputPolicyService.defaultOutputPath(
+        mode: mode,
+        stage: stage,
+        fileStem:
+            '第${chapterNumber.toString().padLeft(2, '0')}章_${_safeFilePart(title, 'chapter')}',
+      );
     }
     final inheritedPersistentPaths = _persistentContextPaths(
       arguments,
       _taskAt(tasks, _indexById(tasks, afterTaskId)),
     );
+    final wordConstraints = _chapterWordConstraintMetadata(arguments);
     return <String, Object?>{
       'schema_version': 1,
       'id': _pathPolicyService.safeId(
@@ -199,9 +225,12 @@ class LongTaskDynamicTaskFactoryService {
         'plan_id': planId,
         'workflow_mode': mode,
         'sort_order': _maxSortOrder(tasks) + 1,
-        'stage': ValueReaders.stringValue(arguments['stage'], 'draft'),
+        'stage': stage,
         'generated_by': 'LongTaskRevision',
         'persistent_context_paths': inheritedPersistentPaths,
+        if (runtimeBaselineId.isNotEmpty)
+          'runtime_baseline_id': runtimeBaselineId,
+        ...wordConstraints,
       },
       'tool_hint': ValueReaders.stringValue(
         arguments['tool_hint'],
@@ -283,5 +312,39 @@ class LongTaskDynamicTaskFactoryService {
     }
     final metadata = ValueReaders.mapValue(afterTask['metadata']);
     return _pathPolicyService.stringList(metadata['persistent_context_paths']);
+  }
+
+  JsonMap _chapterWordConstraintMetadata(JsonMap arguments) {
+    // 中文注释: 动态追加章节时允许显式传入字数目标；未传时就让后续步骤继承默认提示策略。
+    if (arguments.containsKey('enable_chapter_word_constraints') &&
+        !ValueReaders.boolValue(arguments['enable_chapter_word_constraints'])) {
+      return const <String, Object?>{};
+    }
+    final result = <String, Object?>{};
+    final target = ValueReaders.intValue(arguments['chapter_word_target']);
+    final min = ValueReaders.intValue(arguments['chapter_word_min']);
+    final max = ValueReaders.intValue(arguments['chapter_word_max']);
+    if (target > 0) {
+      result['chapter_word_target'] = target;
+    }
+    if (min > 0) {
+      result['chapter_word_min'] = min;
+    }
+    if (max > 0) {
+      result['chapter_word_max'] = max;
+    }
+    return result;
+  }
+
+  String _runtimeBaselineId(JsonMap arguments, JsonMap afterTask) {
+    final explicit = ValueReaders.stringValue(
+      arguments['runtime_baseline_id'],
+    ).trim();
+    if (explicit.isNotEmpty) {
+      return explicit;
+    }
+    return ValueReaders.stringValue(
+      ValueReaders.mapValue(afterTask['metadata'])['runtime_baseline_id'],
+    ).trim();
   }
 }

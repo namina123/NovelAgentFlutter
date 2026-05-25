@@ -1,161 +1,125 @@
+import '../assets/character_profile_identity_service.dart';
 import '../assets/style_profile.dart';
 import '../assets/world_rule_set.dart';
 import '../entity/entity_identity.dart';
+import '../inspiration/inspiration_premise.dart';
+import '../inspiration/inspiration_projection.dart';
+import '../inspiration/inspiration_projection_service.dart';
 import 'mode_guidance_asset_bundle.dart';
+import 'mode_guidance_inspiration_record_mapper_service.dart';
 import 'mode_guidance_state.dart';
 
 class ModeGuidanceAssetBundleBuilderService {
-  const ModeGuidanceAssetBundleBuilderService();
+  const ModeGuidanceAssetBundleBuilderService({
+    ModeGuidanceInspirationRecordMapperService? inspirationRecordMapperService,
+    InspirationProjectionService? inspirationProjectionService,
+    CharacterProfileIdentityService? characterProfileIdentityService,
+  }) : _inspirationRecordMapperService =
+           inspirationRecordMapperService ??
+           const ModeGuidanceInspirationRecordMapperService(),
+       _inspirationProjectionService =
+           inspirationProjectionService ?? const InspirationProjectionService(),
+       _characterProfileIdentityService =
+           characterProfileIdentityService ??
+           const CharacterProfileIdentityService();
+
+  final ModeGuidanceInspirationRecordMapperService
+  _inspirationRecordMapperService;
+  final InspirationProjectionService _inspirationProjectionService;
+  final CharacterProfileIdentityService _characterProfileIdentityService;
 
   ModeGuidanceAssetBundle build(ModeGuidanceState state) {
-    // 中文注释: 模式引导状态在这里被压缩成可复用资产，避免后续运行层只能反复啃摘要 Markdown。
-    switch (state.modeId) {
-      case 'seed_autopilot_novel':
-        return _buildSeedAutopilotBundle(state);
-      case 'full_outline_consensus':
-        return _buildFullOutlineBundle(state);
-      default:
-        return ModeGuidanceAssetBundle(modeId: state.modeId);
-    }
-  }
-
-  ModeGuidanceAssetBundle _buildSeedAutopilotBundle(ModeGuidanceState state) {
-    final values = _answerValues(state);
-    final styleTarget = _value(values, 'style_target');
-    final corePromise = _value(values, 'core_promise');
-    final autonomyGuardrails = _value(values, 'autonomy_guardrails');
-    final worldAnchor = _value(values, 'world_anchor');
-    final protagonistDrive = _value(values, 'protagonist_drive');
-    final styles = <StyleProfile>[];
-    final worlds = <WorldRuleSet>[];
-    final entities = <EntityIdentity>[];
-    final markdownPaths = <String, String>{};
-    if (styleTarget.isNotEmpty) {
-      const assetId = 'seed_autopilot.primary_style';
-      styles.add(
-        StyleProfile(
-          id: assetId,
-          displayName: '默认风格锚点',
-          summary: styleTarget,
-          guardrails: _nonEmptyLines(<String>[corePromise, autonomyGuardrails]),
-        ),
-      );
-      markdownPaths[assetId] = 'styles/seed_autopilot_style.md';
-    }
-    if (worldAnchor.isNotEmpty) {
-      const assetId = 'seed_autopilot.primary_world';
-      worlds.add(
-        WorldRuleSet(
-          id: assetId,
-          displayName: '默认世界锚点',
-          summary: worldAnchor,
-          rules: _splitParagraphRules(worldAnchor),
-        ),
-      );
-      markdownPaths[assetId] = 'world/seed_autopilot_world_anchor.md';
-    }
-    if (protagonistDrive.isNotEmpty) {
-      const assetId = 'seed_autopilot.primary_protagonist';
-      entities.add(
-        EntityIdentity(
-          id: assetId,
-          kind: 'character',
-          displayName: '主角',
-          summary: protagonistDrive,
-        ),
-      );
-      markdownPaths[assetId] = 'characters/seed_autopilot_protagonist.md';
-    }
+    // 中文注释: 这里先把 mode guidance 状态转成共享灵感记录，再投影为 premise/style/world/characters，
+    // 这样后续一般小说、长任务或拆书后的二次创作都能复用同一条收束链。
+    final record = _inspirationRecordMapperService.map(state);
+    final projection = _inspirationProjectionService.build(record);
+    final entities = projection.characterProfiles
+        .map(_characterProfileIdentityService.toEntityIdentity)
+        .toList(growable: false);
+    final markdownPaths = _markdownPathsFor(state.modeId, projection, entities);
     return ModeGuidanceAssetBundle(
       modeId: state.modeId,
-      styleProfiles: styles,
-      worldRuleSets: worlds,
+      premises: projection.premises,
+      styleProfiles: projection.styleProfiles,
+      worldRuleSets: projection.worldRuleSets,
+      characterProfiles: projection.characterProfiles,
       entityIdentities: entities,
       markdownPathsByAssetId: markdownPaths,
     );
   }
 
-  ModeGuidanceAssetBundle _buildFullOutlineBundle(ModeGuidanceState state) {
-    final values = _answerValues(state);
-    final styleTarget = _value(values, 'style_and_boundaries');
-    final premise = _value(values, 'book_premise');
-    final mainArc = _value(values, 'main_arc');
-    final entities = <EntityIdentity>[];
-    final styles = <StyleProfile>[];
+  Map<String, String> _markdownPathsFor(
+    String modeId,
+    InspirationProjection projection,
+    List<EntityIdentity> entities,
+  ) {
     final markdownPaths = <String, String>{};
-    if (styleTarget.isNotEmpty) {
-      const assetId = 'full_outline.primary_style';
-      styles.add(
-        StyleProfile(
-          id: assetId,
-          displayName: '全书共识风格',
-          summary: styleTarget,
-          guardrails: _nonEmptyLines(<String>[mainArc]),
-        ),
-      );
-      markdownPaths[assetId] = 'styles/full_outline_consensus_style.md';
-    }
-    if (premise.isNotEmpty || mainArc.isNotEmpty) {
-      const assetId = 'full_outline.primary_story_focus';
-      entities.add(
-        EntityIdentity(
-          id: assetId,
-          kind: 'character',
-          displayName: '主角焦点',
-          summary: _nonEmptyLines(<String>[premise, mainArc]).join(' '),
-        ),
-      );
-      markdownPaths[assetId] =
-          'characters/full_outline_consensus_core_roles.md';
-    }
-    return ModeGuidanceAssetBundle(
-      modeId: state.modeId,
-      styleProfiles: styles,
-      entityIdentities: entities,
-      markdownPathsByAssetId: markdownPaths,
-    );
+    _assignPremisePaths(modeId, projection.premises, markdownPaths);
+    _assignStylePaths(modeId, projection.styleProfiles, markdownPaths);
+    _assignWorldPaths(modeId, projection.worldRuleSets, markdownPaths);
+    _assignEntityPaths(modeId, entities, markdownPaths);
+    return markdownPaths;
   }
 
-  Map<String, String> _answerValues(ModeGuidanceState state) {
-    final values = <String, String>{};
-    for (final answer in state.answers) {
-      values[answer.fieldKey] = answer.value.trim();
+  void _assignPremisePaths(
+    String modeId,
+    List<InspirationPremise> premises,
+    Map<String, String> markdownPaths,
+  ) {
+    for (var index = 0; index < premises.length; index++) {
+      markdownPaths[premises[index].id] = switch (modeId) {
+        'seed_autopilot_novel' => 'premise/seed_autopilot_premise.md',
+        'full_outline_consensus' => 'premise/full_outline_consensus_premise.md',
+        _ => 'premise/${_safeModeId(modeId)}_premise_${index + 1}.md',
+      };
     }
-    return values;
   }
 
-  String _value(Map<String, String> values, String key) {
-    return values[key] ?? '';
+  void _assignStylePaths(
+    String modeId,
+    List<StyleProfile> styles,
+    Map<String, String> markdownPaths,
+  ) {
+    for (var index = 0; index < styles.length; index++) {
+      markdownPaths[styles[index].id] = switch (modeId) {
+        'seed_autopilot_novel' => 'styles/seed_autopilot_style.md',
+        'full_outline_consensus' => 'styles/full_outline_consensus_style.md',
+        _ => 'styles/${_safeModeId(modeId)}_style_${index + 1}.md',
+      };
+    }
   }
 
-  List<String> _nonEmptyLines(List<String> rawValues) {
-    final lines = <String>[];
-    for (final rawValue in rawValues) {
-      final cleanValue = rawValue.trim();
-      if (cleanValue.isNotEmpty) {
-        lines.add(cleanValue);
-      }
+  void _assignWorldPaths(
+    String modeId,
+    List<WorldRuleSet> worlds,
+    Map<String, String> markdownPaths,
+  ) {
+    for (var index = 0; index < worlds.length; index++) {
+      markdownPaths[worlds[index].id] = switch (modeId) {
+        'seed_autopilot_novel' => 'world/seed_autopilot_world_anchor.md',
+        'full_outline_consensus' =>
+          'world/full_outline_consensus_world_anchor.md',
+        _ => 'world/${_safeModeId(modeId)}_world_${index + 1}.md',
+      };
     }
-    return lines;
   }
 
-  List<String> _splitParagraphRules(String rawText) {
-    final normalized = rawText
-        .replaceAll('；', '。')
-        .replaceAll(';', '.')
-        .replaceAll('\r', '\n');
-    final fragments = normalized.split(RegExp(r'[。\n]+'));
-    final rules = <String>[];
-    for (final fragment in fragments) {
-      final cleanFragment = fragment.trim();
-      if (cleanFragment.isNotEmpty) {
-        rules.add(cleanFragment);
-      }
+  void _assignEntityPaths(
+    String modeId,
+    List<EntityIdentity> entities,
+    Map<String, String> markdownPaths,
+  ) {
+    for (var index = 0; index < entities.length; index++) {
+      markdownPaths[entities[index].id] = switch (modeId) {
+        'seed_autopilot_novel' => 'characters/seed_autopilot_protagonist.md',
+        'full_outline_consensus' =>
+          'characters/full_outline_consensus_core_roles.md',
+        _ => 'characters/${_safeModeId(modeId)}_character_${index + 1}.md',
+      };
     }
-    if (rules.isNotEmpty) {
-      return rules;
-    }
-    final fallback = rawText.trim();
-    return fallback.isEmpty ? const <String>[] : <String>[fallback];
+  }
+
+  String _safeModeId(String modeId) {
+    return modeId.trim().replaceAll(RegExp(r'[^a-zA-Z0-9]+'), '_');
   }
 }

@@ -67,8 +67,16 @@ class ProjectLauncherOverlay extends StatelessWidget {
         return ProjectCreatePanel(
           projectsRootPath: viewData.projectsRootPath,
           status: viewData.status,
+          draftTitle: viewData.draftTitle,
           projectTypeOptions: viewData.projectTypeOptions,
           selectedProjectTypeId: viewData.selectedProjectTypeId,
+          storageStrategyOptions: viewData.storageStrategyOptions,
+          selectedStorageStrategyId: viewData.selectedStorageStrategyId,
+          creationPhase: viewData.creationPhase,
+          runtimeBaselineOptions: viewData.runtimeBaselineOptions,
+          selectedRuntimeBaselineId: viewData.selectedRuntimeBaselineId,
+          selectedProjectTypeRequiresRuntimeBaseline:
+              viewData.selectedProjectTypeRequiresRuntimeBaseline,
           allowOpenExisting: viewData.allowOpenExisting,
           onOpenExistingRequested: actionHandler.onOpenProjectRequested,
           onCreateSubmitted: actionHandler.onProjectCreationSubmitted,

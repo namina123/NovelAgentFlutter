@@ -58,6 +58,14 @@ class LongTaskTaskTransactionService {
       ),
       'tool_hint': ValueReaders.stringValue(task['tool_hint']),
       'metadata': metadata,
+      'chapter_word_constraints': <String, Object?>{
+        if (ValueReaders.intValue(metadata['chapter_word_target']) > 0)
+          'target': ValueReaders.intValue(metadata['chapter_word_target']),
+        if (ValueReaders.intValue(metadata['chapter_word_min']) > 0)
+          'min': ValueReaders.intValue(metadata['chapter_word_min']),
+        if (ValueReaders.intValue(metadata['chapter_word_max']) > 0)
+          'max': ValueReaders.intValue(metadata['chapter_word_max']),
+      },
       'context_needs': _contextService.commonContextNeeds(task),
       'tool_contracts': _contractService.toolContractsForTask(task),
       'instructions': _contractService.primaryInstructionsForTask(task),

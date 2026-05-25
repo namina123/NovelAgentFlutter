@@ -62,6 +62,7 @@ skills:
   - chapter_drafting_method
   - summarize_chapter
   - check_continuity
+  - novel-control-station
   - skill-creator-cn
 skill_groups:
   - project_io

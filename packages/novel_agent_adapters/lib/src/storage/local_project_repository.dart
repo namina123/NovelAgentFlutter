@@ -2,13 +2,19 @@ import 'dart:io';
 
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import 'project_storage_strategy_resolver.dart';
+
 class LocalProjectRepository implements ProjectRepository {
   LocalProjectRepository({
     ProjectManifestCodecService? projectManifestCodecService,
+    ProjectStorageStrategyResolver? projectStorageStrategyResolver,
   }) : _projectManifestCodecService =
-           projectManifestCodecService ?? ProjectManifestCodecService();
+           projectManifestCodecService ?? ProjectManifestCodecService(),
+       _projectStorageStrategyResolver =
+           projectStorageStrategyResolver ?? ProjectStorageStrategyResolver();
 
   final ProjectManifestCodecService _projectManifestCodecService;
+  final ProjectStorageStrategyResolver _projectStorageStrategyResolver;
 
   @override
   Future<ProjectDescriptor?> openByPath(String rootPath) async {
@@ -37,11 +43,18 @@ class LocalProjectRepository implements ProjectRepository {
             title: projectName,
             projectType: 'novel',
           );
+    final storageStrategy = manifestFile.existsSync()
+        ? await _projectStorageStrategyResolver.resolveFromRootPath(
+            directory.path,
+          )
+        : ProjectStorageStrategy.markdownProjectStore;
     return ProjectDescriptor(
       id: _projectIdFromName(manifest.title),
       name: manifest.title,
       rootPath: directory.path,
       projectType: manifest.projectType,
+      storageStrategy: storageStrategy,
+      runtimeBaselineId: manifest.runtimeBaselineId,
     );
   }
 

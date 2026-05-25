@@ -88,5 +88,29 @@ void main() {
       expect((package['messages'] as List<Object?>).length, 3);
       expect(brief, contains('writer'));
     });
+
+    test('maps normalized agent profile into typed contract', () {
+      final model = profileCatalog.builtinProfileModelsFromJson('''
+{
+  "profiles": [
+    {
+      "id": "writer",
+      "name": "作者",
+      "role": "负责正文",
+      "provider_profile": "deepseek-main",
+      "skills": ["draft"],
+      "thinking_enabled": true,
+      "temperature": 0.72
+    }
+  ]
+}
+''').single;
+
+      expect(model.id, 'writer');
+      expect(model.providerProfile, 'deepseek-main');
+      expect(model.skills, <String>['draft']);
+      expect(model.thinkingEnabled, isTrue);
+      expect(model.temperature, 0.72);
+    });
   });
 }

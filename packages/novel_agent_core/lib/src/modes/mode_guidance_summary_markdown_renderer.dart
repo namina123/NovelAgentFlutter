@@ -47,9 +47,8 @@ class ModeGuidanceSummaryMarkdownRenderer {
   }
 
   String _stageTitle(String modeId, String stageId) {
-    for (final stage in _strategyCatalogService
-        .modeDefinitionById(modeId)
-        .stages) {
+    for (final stage
+        in _strategyCatalogService.modeDefinitionById(modeId).stages) {
       if (stage.id == stageId) {
         return stage.title;
       }

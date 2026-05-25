@@ -16,20 +16,23 @@ void main() {
       expect(strategy.includeInContext(role: 'system'), isFalse);
     });
 
-    test('compression strategy resolves threshold from percent and model profile', () {
-      // 中文注释: 压缩阈值策略应根据模型窗口和百分比推导真实字符阈值。
-      final service = SessionCompressionStrategyService();
+    test(
+      'compression strategy resolves threshold from percent and model profile',
+      () {
+        // 中文注释: 压缩阈值策略应根据模型窗口和百分比推导真实字符阈值。
+        final service = SessionCompressionStrategyService();
 
-      final threshold = service.thresholdChars(
-        strategySettings: const <String, Object?>{
-          'compression_threshold_percent': 50,
-        },
-        modelProfile: const <String, Object?>{
-          'compression_context_length': 20000,
-        },
-      );
+        final threshold = service.thresholdChars(
+          strategySettings: const <String, Object?>{
+            'compression_threshold_percent': 50,
+          },
+          modelProfile: const <String, Object?>{
+            'compression_context_length': 20000,
+          },
+        );
 
-      expect(threshold, 20000);
-    });
+        expect(threshold, 20000);
+      },
+    );
   });
 }

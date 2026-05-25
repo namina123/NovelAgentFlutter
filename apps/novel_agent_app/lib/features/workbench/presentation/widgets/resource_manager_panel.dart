@@ -62,6 +62,10 @@ class ResourceManagerPanel extends StatelessWidget {
               ResourceUtilityStrip(
                 onAgentEcosystemRequested:
                     actionHandler.onAgentEcosystemRequested,
+                onProjectAssetsRequested:
+                    actionHandler.onProjectAssetsRequested,
+                onLongTaskStationRequested:
+                    actionHandler.onLongTaskStationRequested,
                 onTasksRequested: actionHandler.onTasksRequested,
                 onReviewsRequested: actionHandler.onReviewsRequested,
                 onTemplatesRequested: actionHandler.onTemplatesRequested,

@@ -400,5 +400,80 @@ void main() {
         );
       },
     );
+
+    test(
+      'runWorkflowTaskQueue reads runtime profile initial run options before starting long run',
+      () async {
+        final emptyRoot = Directory(
+          '${tempDirectory.path}${Platform.pathSeparator}runtime_profile_case',
+        )..createSync(recursive: true);
+        final emptyProject = ProjectDescriptor(
+          id: 'runtime_profile_case',
+          name: '运行画像读取测试',
+          rootPath: emptyRoot.path,
+          projectType: 'long_novel',
+        );
+        await workspacePort.writeTextFile(
+          emptyProject.rootPath,
+          ProjectRuntimeProfileDocumentService.profileRelativePath,
+          '''
+{
+  "schema_version": 1,
+  "project_type": "long_novel",
+  "runtime_baseline_id": "chapter_collaboration_autorun",
+  "runtime_mode": "human_outline_ai_draft",
+  "initial_run_options": {
+    "runtime_baseline_id": "chapter_collaboration_autorun",
+    "runtime_mode": "human_outline_ai_draft",
+    "max_steps": 2,
+    "unattended": true
+  }
+}
+''',
+        );
+
+        final result = await workflowRuntimeService.runWorkflowTaskQueue(
+          emptyProject,
+          const AppSettings(
+            defaultProviderId: '',
+            defaultAgentId: '',
+            defaultModelId: '',
+            defaultProjectPath: '',
+            autoSaveDrafts: false,
+            providers: <ProviderEndpointSettings>[],
+          ),
+        );
+
+        expect(ValueReaders.boolValue(result['ok']), isTrue);
+        expect(
+          ValueReaders.stringValue(result['stop_reason']),
+          'no_runnable_task',
+        );
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(
+              result['long_task_record'],
+            )['runtime_baseline_id'],
+          ),
+          'chapter_collaboration_autorun',
+        );
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(
+              ValueReaders.mapValue(result['record'])['options'],
+            )['runtime_mode'],
+          ),
+          'human_outline_ai_draft',
+        );
+        expect(
+          ValueReaders.intValue(
+            ValueReaders.mapValue(
+              ValueReaders.mapValue(result['long_task_record'])['options'],
+            )['max_steps'],
+          ),
+          2,
+        );
+      },
+    );
   });
 }

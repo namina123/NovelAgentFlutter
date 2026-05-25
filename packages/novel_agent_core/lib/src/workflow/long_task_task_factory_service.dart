@@ -1,5 +1,8 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import '../runtime/runtime_baseline_execution_mode_service.dart';
+import 'long_task_chapter_output_policy_service.dart';
+import 'long_task_chapter_gate_review_task_factory_service.dart';
 import 'long_task_mode_context_path_service.dart';
 import 'long_task_mode_service.dart';
 import 'long_task_path_policy_service.dart';
@@ -9,19 +12,35 @@ class LongTaskTaskFactoryService {
   LongTaskTaskFactoryService({
     required LongTaskModeService modeService,
     required LongTaskPathPolicyService pathPolicyService,
+    LongTaskChapterOutputPolicyService? chapterOutputPolicyService,
     LongTaskModeContextPathService? modeContextPathService,
-  }) : _modeService = modeService,
-       _pathPolicyService = pathPolicyService,
+    RuntimeBaselineExecutionModeService? runtimeBaselineExecutionModeService,
+    LongTaskChapterGateReviewTaskFactoryService?
+    chapterGateReviewTaskFactoryService,
+  }) : _pathPolicyService = pathPolicyService,
+       _chapterOutputPolicyService =
+           chapterOutputPolicyService ??
+           LongTaskChapterOutputPolicyService(modeService: modeService),
        _modeContextPathService =
            modeContextPathService ??
            LongTaskModeContextPathService(
              modeService: modeService,
              pathPolicyService: pathPolicyService,
-           );
+           ),
+       _runtimeBaselineExecutionModeService =
+           runtimeBaselineExecutionModeService ??
+           RuntimeBaselineExecutionModeService(modeService: modeService),
+       _chapterGateReviewTaskFactoryService =
+           chapterGateReviewTaskFactoryService ??
+           LongTaskChapterGateReviewTaskFactoryService();
 
-  final LongTaskModeService _modeService;
   final LongTaskPathPolicyService _pathPolicyService;
+  final LongTaskChapterOutputPolicyService _chapterOutputPolicyService;
   final LongTaskModeContextPathService _modeContextPathService;
+  final RuntimeBaselineExecutionModeService
+  _runtimeBaselineExecutionModeService;
+  final LongTaskChapterGateReviewTaskFactoryService
+  _chapterGateReviewTaskFactoryService;
 
   List<JsonMap> buildTasks(
     String mode,
@@ -30,7 +49,10 @@ class LongTaskTaskFactoryService {
     String createdAt = '',
   }) {
     // 中文注释: 模式任务工厂把长任务模式翻成基础任务骨架，供 GUI 和 CLI 共用。
-    final cleanMode = _modeService.normalizeMode(mode);
+    final cleanMode = _runtimeBaselineExecutionModeService.resolveRuntimeMode(
+      runtimeBaselineId: _runtimeBaselineIdFromOptions(options),
+      runtimeMode: mode,
+    );
     if (cleanMode == TaskRuntimeConstants.modeSeedToFullNovel) {
       return _seedToFullTasks(planId, options, createdAt: createdAt);
     }
@@ -112,7 +134,11 @@ class LongTaskTaskFactoryService {
       ValueReaders.stringValue(options['output_path']),
     );
     if (outputPath.isEmpty) {
-      outputPath = 'drafts/${_chapterFileName(1, title)}.md';
+      outputPath = _chapterOutputPolicyService.defaultOutputPath(
+        mode: TaskRuntimeConstants.modeSingleChapterAtomic,
+        stage: 'atomic',
+        fileStem: _chapterFileName(1, title),
+      );
     }
     final sourcePaths = _modeContextPathService.mergeTaskSourcePaths(
       TaskRuntimeConstants.modeSingleChapterAtomic,
@@ -156,6 +182,7 @@ class LongTaskTaskFactoryService {
       TaskRuntimeConstants.modeSeedToFullNovel,
       options,
     );
+    final runtimeBaselineId = _runtimeBaselineIdFromOptions(options);
     final chapterCount = ValueReaders.intValue(
       options['chapter_count'],
       8,
@@ -182,6 +209,7 @@ class LongTaskTaskFactoryService {
         sortOrder,
         createdAt,
         persistentPaths,
+        runtimeBaselineId: runtimeBaselineId,
       ),
     );
     sortOrder += 1;
@@ -198,6 +226,7 @@ class LongTaskTaskFactoryService {
         sortOrder,
         createdAt,
         persistentPaths,
+        runtimeBaselineId: runtimeBaselineId,
       ),
     );
     sortOrder += 1;
@@ -209,8 +238,12 @@ class LongTaskTaskFactoryService {
     ) {
       final chapterId =
           '${planId}_chapter_${chapterNumber.toString().padLeft(3, '0')}';
-      final outputPath =
-          'drafts/${_chapterFileName(chapterNumber, 'seed_to_full')}.md';
+      final stage = chapterNumber == 1 ? 'sample' : 'draft';
+      final outputPath = _chapterOutputPolicyService.defaultOutputPath(
+        mode: TaskRuntimeConstants.modeSeedToFullNovel,
+        stage: stage,
+        fileStem: _chapterFileName(chapterNumber, 'seed_to_full'),
+      );
       var brief = '根据规划任务生成的作品规格、总纲和章纲写作。初始种子：$seedPrompt';
       if (chapterNumber == 1) {
         brief =
@@ -235,10 +268,15 @@ class LongTaskTaskFactoryService {
           'output_paths': <Object?>[outputPath],
           'plan_id': planId,
           'sort_order': sortOrder,
-          'stage': chapterNumber == 1 ? 'sample' : 'draft',
+          'stage': stage,
+          'runtime_baseline_id': runtimeBaselineId,
           'tool_hint':
               '先读取项目规格、总纲、章纲、摘要和必要设定；如果规划尚未充分，请先调用 present_user_options 或写入大纲，而不是硬写正文。',
           'persistent_context_paths': persistentPaths,
+          'chapter_word_constraints': _chapterWordConstraints(
+            options,
+            stage: stage,
+          ),
         }, createdAt: createdAt),
       );
       previousDependency = chapterId;
@@ -266,6 +304,7 @@ class LongTaskTaskFactoryService {
             sortOrder,
             createdAt,
             persistentPaths,
+            runtimeBaselineId: runtimeBaselineId,
           ),
         );
         previousDependency = checkpointId;
@@ -290,9 +329,11 @@ class LongTaskTaskFactoryService {
       options['chapter_count'],
       defaultChapters,
     ).clamp(1, 120);
+    final runtimeBaselineId = _runtimeBaselineIdFromOptions(options);
+    final gateAutorun = runtimeBaselineId == 'chapter_collaboration_autorun';
     final checkpointInterval = ValueReaders.intValue(
       options['checkpoint_interval'],
-      defaultCheckpointInterval,
+      gateAutorun ? 0 : defaultCheckpointInterval,
     ).clamp(0, 30);
     final outlinePath = _pathPolicyService.safeProjectPath(
       ValueReaders.stringValue(options['outline_path']),
@@ -322,8 +363,14 @@ class LongTaskTaskFactoryService {
       final chapterNumber = index + 1;
       final chapterId =
           '${planId}_chapter_${chapterNumber.toString().padLeft(3, '0')}';
-      final outputPath =
-          'drafts/${_chapterFileName(chapterNumber, ValueReaders.stringValue(item['title']))}.md';
+      final outputPath = _chapterOutputPolicyService.defaultOutputPath(
+        mode: mode,
+        stage: 'draft',
+        fileStem: _chapterFileName(
+          chapterNumber,
+          ValueReaders.stringValue(item['title']),
+        ),
+      );
       final depends = <Object?>[];
       if (previousDependency.isNotEmpty) {
         depends.add(previousDependency);
@@ -343,12 +390,32 @@ class LongTaskTaskFactoryService {
           'plan_id': planId,
           'sort_order': sortOrder,
           'stage': 'draft',
+          'runtime_baseline_id': runtimeBaselineId,
           'tool_hint': chapterToolHint,
           'persistent_context_paths': persistentPaths,
+          'chapter_word_constraints': _chapterWordConstraints(
+            options,
+            stage: 'draft',
+          ),
         }, createdAt: createdAt),
       );
       previousDependency = chapterId;
       sortOrder += 1;
+      final gateReviewTasks = _chapterGateReviewTaskFactoryService
+          .buildReviewTasksForChapter(
+            tasks.last,
+            options: options,
+            startingSortOrder: sortOrder,
+            createdAt: createdAt,
+          );
+      if (gateReviewTasks.isNotEmpty) {
+        tasks.addAll(gateReviewTasks);
+        previousDependency = ValueReaders.stringValue(
+          gateReviewTasks.last['id'],
+          previousDependency,
+        );
+        sortOrder += gateReviewTasks.length;
+      }
       if (checkpointInterval > 0 &&
           chapterNumber % checkpointInterval == 0 &&
           chapterNumber < items.length) {
@@ -366,6 +433,7 @@ class LongTaskTaskFactoryService {
             sortOrder,
             createdAt,
             persistentPaths,
+            runtimeBaselineId: runtimeBaselineId,
           ),
         );
         previousDependency = checkpointId;
@@ -381,8 +449,9 @@ class LongTaskTaskFactoryService {
     String seedPrompt,
     int sortOrder,
     String createdAt,
-    List<String> persistentPaths,
-  ) {
+    List<String> persistentPaths, {
+    String runtimeBaselineId = '',
+  }) {
     // 中文注释: 规划任务是 seed_to_full 模式的入口，不写正文，只产出规格和任务清单。
     return _baseTask(<String, Object?>{
       'id': taskId,
@@ -416,6 +485,8 @@ class LongTaskTaskFactoryService {
         'seed_prompt': seedPrompt,
         'generated_by': 'LongTaskPlanner',
         'persistent_context_paths': persistentPaths,
+        if (runtimeBaselineId.trim().isNotEmpty)
+          'runtime_baseline_id': runtimeBaselineId.trim(),
       },
       'tool_hint':
           '不要写正文。优先保存 specs/project_spec.md、outline/总纲.md、chapter_outlines/章节任务清单.md；需要用户确认时调用 present_user_options。',
@@ -445,8 +516,17 @@ class LongTaskTaskFactoryService {
         'sort_order': ValueReaders.intValue(data['sort_order']),
         'stage': ValueReaders.stringValue(data['stage'], 'draft'),
         'generated_by': 'LongTaskPlanner',
+        if (ValueReaders.stringValue(
+          data['runtime_baseline_id'],
+        ).trim().isNotEmpty)
+          'runtime_baseline_id': ValueReaders.stringValue(
+            data['runtime_baseline_id'],
+          ).trim(),
         'persistent_context_paths': _pathPolicyService.stringList(
           data['persistent_context_paths'],
+        ),
+        ..._chapterWordConstraintMetadata(
+          ValueReaders.mapValue(data['chapter_word_constraints']),
         ),
       },
       'tool_hint': ValueReaders.stringValue(data['tool_hint']),
@@ -463,8 +543,9 @@ class LongTaskTaskFactoryService {
     List<Object?> outputPaths,
     int sortOrder,
     String createdAt,
-    List<String> persistentPaths,
-  ) {
+    List<String> persistentPaths, {
+    String runtimeBaselineId = '',
+  }) {
     // 中文注释: 检查点任务本身不自动跑模型，只提供用户确认、调整和继续的安全停顿点。
     final dependsOn = <Object?>[];
     if (dependencyId.trim().isNotEmpty) {
@@ -489,6 +570,8 @@ class LongTaskTaskFactoryService {
         'generated_by': 'LongTaskPlanner',
         'manual_checkpoint': true,
         'persistent_context_paths': persistentPaths,
+        if (runtimeBaselineId.trim().isNotEmpty)
+          'runtime_baseline_id': runtimeBaselineId.trim(),
       },
       'tool_hint': '检查点任务只等待用户确认；通常不需要执行模型。',
     }, createdAt);
@@ -622,5 +705,72 @@ class LongTaskTaskFactoryService {
       return prefix;
     }
     return '${prefix}_$safeTitle';
+  }
+
+  JsonMap _chapterWordConstraints(JsonMap options, {required String stage}) {
+    // 中文注释: 字数限制先作为共享任务参数进入计划与提示，不把模式差异散落到 UI 或模型文案里。
+    final enabled = options.containsKey('enable_chapter_word_constraints')
+        ? ValueReaders.boolValue(options['enable_chapter_word_constraints'])
+        : _hasAnyChapterWordConstraint(options);
+    if (!enabled) {
+      return const <String, Object?>{};
+    }
+    final cleanStage = stage.trim().toLowerCase();
+    final useSampleOverride = cleanStage == 'sample';
+    final target = ValueReaders.intValue(
+      useSampleOverride
+          ? options['sample_chapter_word_target']
+          : options['chapter_word_target'],
+      ValueReaders.intValue(options['chapter_word_target']),
+    );
+    final min = ValueReaders.intValue(
+      useSampleOverride
+          ? options['sample_chapter_word_min']
+          : options['chapter_word_min'],
+      ValueReaders.intValue(options['chapter_word_min']),
+    );
+    final max = ValueReaders.intValue(
+      useSampleOverride
+          ? options['sample_chapter_word_max']
+          : options['chapter_word_max'],
+      ValueReaders.intValue(options['chapter_word_max']),
+    );
+    return _chapterWordConstraintMetadata(<String, Object?>{
+      if (target > 0) 'chapter_word_target': target,
+      if (min > 0) 'chapter_word_min': min,
+      if (max > 0) 'chapter_word_max': max,
+    });
+  }
+
+  bool _hasAnyChapterWordConstraint(JsonMap options) {
+    // 中文注释: 兼容旧数据：如果历史记录里直接带了字数值但还没有开关字段，就按“已开启”处理。
+    return ValueReaders.intValue(options['chapter_word_target']) > 0 ||
+        ValueReaders.intValue(options['chapter_word_min']) > 0 ||
+        ValueReaders.intValue(options['chapter_word_max']) > 0 ||
+        ValueReaders.intValue(options['sample_chapter_word_target']) > 0 ||
+        ValueReaders.intValue(options['sample_chapter_word_min']) > 0 ||
+        ValueReaders.intValue(options['sample_chapter_word_max']) > 0;
+  }
+
+  JsonMap _chapterWordConstraintMetadata(JsonMap data) {
+    // 中文注释: 元数据里只保留有效数字，避免把 0 值噪音带进任务文件和上下文。
+    final result = <String, Object?>{};
+    final target = ValueReaders.intValue(data['chapter_word_target']);
+    final min = ValueReaders.intValue(data['chapter_word_min']);
+    final max = ValueReaders.intValue(data['chapter_word_max']);
+    if (target > 0) {
+      result['chapter_word_target'] = target;
+    }
+    if (min > 0) {
+      result['chapter_word_min'] = min;
+    }
+    if (max > 0) {
+      result['chapter_word_max'] = max;
+    }
+    return result;
+  }
+
+  String _runtimeBaselineIdFromOptions(JsonMap options) {
+    return ValueReaders.stringValue(options['runtime_baseline_id']).trim();
   }
 }

@@ -89,6 +89,8 @@ activation_hints:
       expect(result['ok'], isTrue);
       expect(result['skill_id'], 'generate_outline');
       expect(result['instructions'], contains('先搭结构'));
+      expect(result['detail_level'], 'summary');
+      expect(result.containsKey('instruction_markdown'), isFalse);
     });
 
     test(
@@ -116,5 +118,30 @@ activation_hints:
         expect((result['available_skills'] as List<Object?>), hasLength(1));
       },
     );
+
+    test('supports explicit full skill loading for long instructions', () async {
+      // 中文注释: 默认摘要模式省上下文，但调用方仍可在确实需要时请求 full 版本正文。
+      final executor = ProjectAgentSkillToolExecutor(
+        skillPackageCatalog: LocalSkillPackageCatalog(
+          packageRootPathResolver: PackageRootPathResolver(
+            workspaceRootPath: workspaceRoot.path,
+          ),
+        ),
+      );
+
+      final result = await executor.loadAgentSkill(project, <String, Object?>{
+        'skill_id': 'generate_outline',
+        'detail_level': 'full',
+        '_agent': <String, Object?>{
+          'id': 'default_generalist',
+          'skills': <String>['generate_outline'],
+        },
+      });
+
+      expect(result['ok'], isTrue);
+      expect(result['detail_level'], 'full');
+      expect(result['instruction_markdown'], contains('# 大纲生成'));
+      expect(ValueReaders.intValue(result['instruction_character_count']), greaterThan(10));
+    });
   });
 }

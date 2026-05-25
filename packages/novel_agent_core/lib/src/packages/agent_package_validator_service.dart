@@ -1,7 +1,15 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import 'agent_package_metadata_profile_service.dart';
 
 class AgentPackageValidatorService {
+  AgentPackageValidatorService({
+    AgentPackageMetadataProfileService? metadataProfileService,
+  }) : _metadataProfileService =
+           metadataProfileService ?? const AgentPackageMetadataProfileService();
+
+  final AgentPackageMetadataProfileService _metadataProfileService;
+
   JsonMap validate(JsonMap agent) {
     // 中文注释: 这里集中校验智能体包的目标、边界、能力和输出合同，避免“只有人设没有约束”的空壳智能体混进项目。
     final errors = <String>[];
@@ -61,6 +69,9 @@ class AgentPackageValidatorService {
     }
     if (ValueReaders.stringValue(agent['reflection_mode']).trim().isEmpty) {
       warnings.add('建议显式声明 reflection_mode。');
+    }
+    if (_metadataProfileService.extractExtensions(agent).isEmpty) {
+      warnings.add('建议把宿主私有配置收进 metadata.novel_agent，保持智能体包核心字段更可移植。');
     }
 
     return <String, Object?>{

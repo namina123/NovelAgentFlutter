@@ -1,19 +1,24 @@
 import '../agents/agent_profile_normalizer_service.dart';
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import 'agent_package_metadata_profile_service.dart';
 import 'frontmatter_yaml_writer_service.dart';
 
 class AgentMarkdownPackageRendererService {
   AgentMarkdownPackageRendererService({
     AgentProfileNormalizerService? normalizerService,
     FrontmatterYamlWriterService? yamlWriterService,
+    AgentPackageMetadataProfileService? metadataProfileService,
   }) : _normalizerService =
            normalizerService ?? AgentProfileNormalizerService(),
        _yamlWriterService =
-           yamlWriterService ?? const FrontmatterYamlWriterService();
+           yamlWriterService ?? const FrontmatterYamlWriterService(),
+       _metadataProfileService =
+           metadataProfileService ?? const AgentPackageMetadataProfileService();
 
   final AgentProfileNormalizerService _normalizerService;
   final FrontmatterYamlWriterService _yamlWriterService;
+  final AgentPackageMetadataProfileService _metadataProfileService;
 
   String renderPackage(JsonMap agent) {
     // 中文注释: 智能体包渲染统一输出 AGENT.md，保证导入和导出都回到项目标准包结构。
@@ -42,23 +47,7 @@ class AgentMarkdownPackageRendererService {
       'long_term_memory_paths': normalized['long_term_memory_paths'],
       'reflection_mode': normalized['reflection_mode'],
       'resource_hints': normalized['resource_hints'],
-      'source': normalized['source'],
-      'source_scope': normalized['source_scope'],
-      'enabled_by_default': normalized['enabled_by_default'],
-      'builtin_preset': normalized['builtin_preset'],
-      'customizable': normalized['customizable'],
-      'stages': normalized['stages'],
-      'skills': normalized['skills'],
-      'skill_groups': normalized['skill_groups'],
-      'memory_path': normalized['memory_path'],
-      'provider_profile': normalized['provider_profile'],
-      'thinking_supported': normalized['thinking_supported'],
-      'thinking_enabled': normalized['thinking_enabled'],
-      'thinking_effort': normalized['thinking_effort'],
-      'temperature': normalized['temperature'],
-      'top_p': normalized['top_p'],
-      'top_k': normalized['top_k'],
-      'advanced_model_overrides': normalized['advanced_model_overrides'],
+      'metadata': _metadataProfileService.buildRendererMetadata(normalized),
     };
     final markdownBody = body.isEmpty
         ? '# ${ValueReaders.stringValue(normalized["name"], ValueReaders.stringValue(normalized["id"]))}\n\n请补充这个智能体的操作手册。\n'

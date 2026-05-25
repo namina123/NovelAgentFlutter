@@ -4,19 +4,24 @@ import '../common/json_types.dart';
 import '../common/value_readers.dart';
 import 'frontmatter_metadata_reader_service.dart';
 import 'markdown_package_metadata_reader_service.dart';
+import 'skill_package_metadata_profile_service.dart';
 
 class SkillMarkdownPackageParserService {
   SkillMarkdownPackageParserService({
     MarkdownPackageMetadataReaderService? metadataReaderService,
     FrontmatterMetadataReaderService? frontmatterMetadataReaderService,
+    SkillPackageMetadataProfileService? metadataProfileService,
   }) : _metadataReaderService =
            metadataReaderService ?? MarkdownPackageMetadataReaderService(),
        _frontmatterMetadataReaderService =
            frontmatterMetadataReaderService ??
-           FrontmatterMetadataReaderService();
+           FrontmatterMetadataReaderService(),
+       _metadataProfileService =
+           metadataProfileService ?? const SkillPackageMetadataProfileService();
 
   final MarkdownPackageMetadataReaderService _metadataReaderService;
   final FrontmatterMetadataReaderService _frontmatterMetadataReaderService;
+  final SkillPackageMetadataProfileService _metadataProfileService;
 
   JsonMap parsePackage(String content, {String fallbackId = ''}) {
     // 中文注释: 技能包解析和智能体保持同一原则：既支持 JSON，也支持带元数据代码块的 SKILL.md。
@@ -65,6 +70,9 @@ class SkillMarkdownPackageParserService {
     final normalizedId = _normalizeId(
       resolvedId.isEmpty ? 'skill_package' : resolvedId,
     );
+    final resourceHints = _normalizeResourceHints(rawSkill['resource_hints']);
+    final extensions = _metadataProfileService.extractExtensions(rawSkill);
+    final metadata = _metadataProfileService.extractPlainMetadata(rawSkill);
     return <String, Object?>{
       'id': normalizedId,
       'name': ValueReaders.stringValue(rawSkill['name'], normalizedId),
@@ -76,27 +84,38 @@ class SkillMarkdownPackageParserService {
       ),
       'tags': ValueReaders.stringList(rawSkill['tags']),
       'activation_hints': ValueReaders.stringList(
-        rawSkill['activation_hints'] ?? rawSkill['triggers'],
+        extensions['activation_hints'],
       ),
-      'inputs': ValueReaders.stringList(rawSkill['inputs']),
-      'outputs': ValueReaders.stringList(rawSkill['outputs']),
+      'inputs': ValueReaders.stringList(extensions['inputs']),
+      'outputs': ValueReaders.stringList(extensions['outputs']),
       'required_capabilities': ValueReaders.stringList(
-        rawSkill['required_capabilities'],
+        extensions['required_capabilities'],
       ),
       'optional_capabilities': ValueReaders.stringList(
-        rawSkill['optional_capabilities'],
+        extensions['optional_capabilities'],
       ),
       'safe_without_tools': ValueReaders.boolValue(
-        rawSkill['safe_without_tools'],
+        extensions['safe_without_tools'],
         true,
       ),
-      'resource_hints': _normalizeResourceHints(rawSkill['resource_hints']),
+      'resource_hints': resourceHints,
       'preferred_output': ValueReaders.stringValue(
-        rawSkill['preferred_output'],
+        extensions['preferred_output'],
       ),
-      'source': ValueReaders.stringValue(rawSkill['source'], 'package'),
-      'tool_schema': ValueReaders.mapValue(rawSkill['tool_schema']),
-      'metadata': ValueReaders.mapValue(rawSkill['metadata']),
+      'source': ValueReaders.stringValue(extensions['source'], 'package'),
+      'source_scope': ValueReaders.stringValue(extensions['source_scope']),
+      'tool_schema': ValueReaders.mapValue(extensions['tool_schema']),
+      'metadata': metadata,
+      'portable_core': _metadataProfileService.buildPortableCore(
+        rawSkill,
+        normalizedId: normalizedId,
+        normalizedName: ValueReaders.stringValue(
+          rawSkill['name'],
+          normalizedId,
+        ),
+        resourceHints: resourceHints,
+      ),
+      'novel_agent_extensions': extensions,
     };
   }
 

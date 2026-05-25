@@ -1,6 +1,7 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
 import '../llm/profile/provider_custom_parameter_service.dart';
+import '../packages/agent_package_metadata_profile_service.dart';
 import 'agent_effort_service.dart';
 import 'agent_id_service.dart';
 import 'agent_sampling_service.dart';
@@ -13,18 +14,22 @@ class AgentProfileNormalizerService {
     AgentEffortService? effortService,
     AgentStringListService? stringListService,
     ProviderCustomParameterService? customParameterService,
+    AgentPackageMetadataProfileService? metadataProfileService,
   }) : _idService = idService ?? AgentIdService(),
        _samplingService = samplingService ?? AgentSamplingService(),
        _effortService = effortService ?? AgentEffortService(),
        _stringListService = stringListService ?? AgentStringListService(),
        _customParameterService =
-           customParameterService ?? ProviderCustomParameterService();
+           customParameterService ?? ProviderCustomParameterService(),
+       _metadataProfileService =
+           metadataProfileService ?? const AgentPackageMetadataProfileService();
 
   final AgentIdService _idService;
   final AgentSamplingService _samplingService;
   final AgentEffortService _effortService;
   final AgentStringListService _stringListService;
   final ProviderCustomParameterService _customParameterService;
+  final AgentPackageMetadataProfileService _metadataProfileService;
 
   JsonMap normalizeAgentProfile(JsonMap agent) {
     // 中文注释: 这里把项目标准智能体包收敛成稳定结构，确保角色、边界、能力、记忆和输出合同都能被统一消费。
@@ -32,8 +37,11 @@ class AgentProfileNormalizerService {
       ValueReaders.stringValue(agent['id']).trim(),
     );
     final sampling = _samplingService.normalizeSampling(agent);
+    final extensions = _metadataProfileService.extractExtensions(agent);
+    final extensionSampling = _samplingService.normalizeSampling(extensions);
+    final resourceHints = _normalizeResourceHints(agent['resource_hints']);
     final enabledByDefault = ValueReaders.boolValue(
-      agent['enabled_by_default'],
+      extensions['enabled_by_default'],
       id == 'default_generalist',
     );
     return <String, Object?>{
@@ -85,27 +93,27 @@ class AgentProfileNormalizerService {
         agent['reflection_mode'],
         'on_demand',
       ).trim(),
-      'resource_hints': _normalizeResourceHints(agent['resource_hints']),
-      'source': ValueReaders.stringValue(agent['source'], 'builtin'),
+      'resource_hints': resourceHints,
+      'source': ValueReaders.stringValue(extensions['source'], 'builtin'),
       'source_scope': ValueReaders.stringValue(
-        agent['source_scope'],
+        extensions['source_scope'],
         'builtin',
       ),
       'enabled_by_default': enabledByDefault,
       'builtin_preset': ValueReaders.stringValue(
-        agent['builtin_preset'],
+        extensions['builtin_preset'],
         enabledByDefault ? 'default_single_agent' : 'optional_multi_agent',
       ),
-      'customizable': ValueReaders.boolValue(agent['customizable'], true),
-      'stages': _stringListService.normalize(agent['stages']),
-      'skills': _stringListService.normalize(agent['skills']),
-      'skill_groups': _stringListService.normalize(agent['skill_groups']),
+      'customizable': ValueReaders.boolValue(extensions['customizable'], true),
+      'stages': _stringListService.normalize(extensions['stages']),
+      'skills': _stringListService.normalize(extensions['skills']),
+      'skill_groups': _stringListService.normalize(extensions['skill_groups']),
       'memory_path': ValueReaders.stringValue(
-        agent['memory_path'],
+        extensions['memory_path'],
         id.isEmpty ? '' : 'agents/${id}_memory.md',
       ),
       'provider_profile': ValueReaders.stringValue(
-        agent['provider_profile'],
+        extensions['provider_profile'],
         'default',
       ),
       'system_prompt': ValueReaders.stringValue(agent['system_prompt']).trim(),
@@ -114,18 +122,37 @@ class AgentProfileNormalizerService {
         ValueReaders.stringValue(agent['system_prompt']),
       ).trim(),
       'thinking_supported': ValueReaders.boolValue(
-        agent['thinking_supported'],
+        extensions['thinking_supported'],
         true,
       ),
-      'thinking_enabled': ValueReaders.boolValue(agent['thinking_enabled']),
-      'thinking_effort': _effortService.normalizeEffort(
-        ValueReaders.stringValue(agent['thinking_effort'], 'high'),
+      'thinking_enabled': ValueReaders.boolValue(
+        extensions['thinking_enabled'],
       ),
-      'temperature': sampling['temperature'],
-      'top_p': sampling['top_p'],
-      'top_k': sampling['top_k'],
+      'thinking_effort': _effortService.normalizeEffort(
+        ValueReaders.stringValue(extensions['thinking_effort'], 'high'),
+      ),
+      'temperature': _hasExplicitValue(extensions['temperature'])
+          ? extensionSampling['temperature']
+          : sampling['temperature'],
+      'top_p': _hasExplicitValue(extensions['top_p'])
+          ? extensionSampling['top_p']
+          : sampling['top_p'],
+      'top_k': _hasExplicitValue(extensions['top_k'])
+          ? extensionSampling['top_k']
+          : sampling['top_k'],
       'advanced_model_overrides': _customParameterService
-          .normalizeCustomParameters(agent['advanced_model_overrides']),
+          .normalizeCustomParameters(extensions['advanced_model_overrides']),
+      'metadata': _metadataProfileService.extractPlainMetadata(agent),
+      'portable_core': _metadataProfileService.buildPortableCore(
+        agent,
+        normalizedId: id,
+        normalizedName: ValueReaders.stringValue(
+          agent['name'],
+          id.isEmpty ? '未命名智能体' : id,
+        ).trim(),
+        resourceHints: resourceHints,
+      ),
+      'novel_agent_extensions': extensions,
     };
   }
 
@@ -139,5 +166,15 @@ class AgentProfileNormalizerService {
       'schemas': _stringListService.normalize(rawMap['schemas']),
       'memory': _stringListService.normalize(rawMap['memory']),
     };
+  }
+
+  bool _hasExplicitValue(Object? value) {
+    if (value == null) {
+      return false;
+    }
+    if (value is String) {
+      return value.trim().isNotEmpty;
+    }
+    return true;
   }
 }

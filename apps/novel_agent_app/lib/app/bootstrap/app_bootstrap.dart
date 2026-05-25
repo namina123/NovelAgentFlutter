@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../../features/long_task_station/application/controllers/long_task_station_controller.dart';
 import '../app.dart';
 import '../state/app_shell_controller.dart';
 import 'mobile_project_root_provider.dart';
@@ -37,6 +38,10 @@ class AppBootstrap {
     final promptTemplateService = ProjectPromptTemplateService(
       workspacePort: bundle.projectWorkspacePort,
     );
+    final projectAssetLibraryService = ProjectAssetLibraryService(
+      workspacePort: bundle.projectWorkspacePort,
+      projectToolHostPort: bundle.projectToolHostPort,
+    );
     final reviewReportService = ProjectReviewReportService(
       workspacePort: bundle.projectWorkspacePort,
       taskRepository: projectTaskRepository,
@@ -62,6 +67,9 @@ class AppBootstrap {
         );
       },
     );
+    final longTaskStationController = LongTaskStationController(
+      longTaskSupervisor: bundle.longTaskSupervisor,
+    );
     final controller = AppShellController(
       settingsRepository: bundle.settingsRepository,
       loadProjectWorkspaceUseCase: LoadProjectWorkspaceUseCase(
@@ -85,6 +93,9 @@ class AppBootstrap {
       ),
       createProjectWorkspaceUseCase: CreateProjectWorkspaceUseCase(
         projectRepository: bundle.projectRepository,
+        projectContentRepository: bundle.projectContentRepository,
+        projectReadableProjectionService:
+            bundle.projectReadableProjectionService,
         projectWorkspacePort: bundle.projectWorkspacePort,
       ),
       discoverProjectsUseCase: DiscoverProjectsUseCase(
@@ -129,6 +140,8 @@ class AppBootstrap {
       workflowRuntimeService: workflowRuntimeService,
       reviewReportService: reviewReportService,
       promptTemplateService: promptTemplateService,
+      projectAssetLibraryService: projectAssetLibraryService,
+      longTaskStationController: longTaskStationController,
       generateDraftUseCaseFactory: (provider, networkSettings) {
         // 中文注释: 草稿生成用例按当前 provider 动态创建，避免控制器直接依赖具体 HTTP 实现。
         return GenerateDraftUseCase(

@@ -114,7 +114,9 @@ class ToolExecutionService {
     final arguments = ValueReaders.deepCopyMap(
       ValueReaders.mapValue(call['arguments']),
     );
-    if (ValueReaders.stringValue(arguments['relative_path']).trim().isNotEmpty) {
+    if (ValueReaders.stringValue(
+      arguments['relative_path'],
+    ).trim().isNotEmpty) {
       return call;
     }
     final activeDocumentPath = ValueReaders.stringValue(

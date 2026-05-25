@@ -2,6 +2,7 @@ import '../common/json_types.dart';
 import '../common/value_readers.dart';
 import 'long_task_mode_service.dart';
 import 'long_task_path_policy_service.dart';
+import 'task_runtime_constants.dart';
 
 class LongTaskTransactionContractService {
   LongTaskTransactionContractService({
@@ -59,6 +60,9 @@ class LongTaskTransactionContractService {
       task['task_type'],
       'chapter',
     ).trim();
+    final mode = _modeService.normalizeMode(
+      ValueReaders.stringValue(task['mode']),
+    );
     final instructions = <String>[];
     if (taskType == 'revision') {
       _addUnique(instructions, '这是修订任务：读取审稿报告和待修订文件，备份后做最小必要修改。');
@@ -79,6 +83,13 @@ class LongTaskTransactionContractService {
       _addUnique(instructions, '这是长篇章节写作单步：只推进当前章节，不跨章节抢写。');
       _addUnique(instructions, '写作前先对齐项目规格、章纲、最近摘要、人物状态和风格边界。');
       _addUnique(instructions, '如果上下文不满足写作条件，先保存/呈现需要补齐的选择，而不是硬写。');
+    }
+    if (mode == TaskRuntimeConstants.modeSeedToFullNovel ||
+        mode == TaskRuntimeConstants.modeHumanOutlineAiDraft) {
+      _addUnique(
+        instructions,
+        '这是长篇主链任务；本轮开始前优先调用 load_agent_skill 读取 novel-control-station，再按其中适合当前阶段的方法执行。',
+      );
     }
     return instructions;
   }

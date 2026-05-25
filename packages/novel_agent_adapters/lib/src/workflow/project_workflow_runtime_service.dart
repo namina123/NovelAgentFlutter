@@ -3,14 +3,17 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 import '../storage/project_mode_guidance_repository.dart';
 import '../storage/project_prompt_template_service.dart';
 import '../storage/project_review_report_service.dart';
+import '../storage/project_runtime_profile_repository.dart';
 import '../storage/project_task_repository.dart';
 import 'project_long_task_checkpoint_action_service.dart';
+import 'project_long_task_chapter_gate_service.dart';
 import 'project_long_task_checkpoint_review_service.dart';
 import 'project_long_task_checkpoint_review_task_service.dart';
 import 'project_long_task_postprocess_result_service.dart';
 import 'project_long_task_revision_resolution_service.dart';
 import 'project_long_task_review_repair_task_service.dart';
 import 'project_mode_guidance_memory_section_service.dart';
+import 'project_task_queue_runtime_option_resolver.dart';
 
 typedef WorkflowGenerateDraftUseCaseFactory =
     GenerateDraftUseCase Function(
@@ -52,6 +55,7 @@ class ProjectWorkflowRuntimeService {
     ModelExecutionProfileService? modelExecutionProfileService,
     LongTaskProjectFileSectionPlanService?
     longTaskProjectFileSectionPlanService,
+    LongTaskTaskCompletionPolicyService? taskCompletionPolicyService,
     ProjectModeGuidanceMemorySectionService? modeGuidanceMemorySectionService,
     ProjectLongTaskCheckpointReviewService? checkpointReviewService,
     ProjectLongTaskCheckpointReviewTaskService? checkpointReviewTaskService,
@@ -59,6 +63,8 @@ class ProjectWorkflowRuntimeService {
     ProjectLongTaskPostprocessResultService? postprocessResultService,
     ProjectLongTaskReviewRepairTaskService? reviewRepairTaskService,
     ProjectLongTaskRevisionResolutionService? revisionResolutionService,
+    ProjectLongTaskChapterGateService? chapterGateService,
+    ProjectTaskQueueRuntimeOptionResolver? taskQueueRuntimeOptionResolver,
   }) : _taskRepository = taskRepository,
        _promptTemplateService = promptTemplateService,
        _generateDraftUseCaseFactory = generateDraftUseCaseFactory,
@@ -184,6 +190,11 @@ class ProjectWorkflowRuntimeService {
              pathPolicyService:
                  longTaskPathPolicyService ?? LongTaskPathPolicyService(),
            ),
+       _taskCompletionPolicyService =
+           taskCompletionPolicyService ??
+           LongTaskTaskCompletionPolicyService(
+             modeService: longTaskModeService ?? LongTaskModeService(),
+           ),
        _modeGuidanceMemorySectionService =
            modeGuidanceMemorySectionService ??
            ProjectModeGuidanceMemorySectionService(
@@ -238,6 +249,31 @@ class ProjectWorkflowRuntimeService {
                taskRepository: taskRepository,
              ),
            ),
+       _chapterGateService =
+           chapterGateService ??
+           ProjectLongTaskChapterGateService(
+             taskRepository: taskRepository,
+             reviewReportService: ProjectReviewReportService(
+               workspacePort: taskRepository.workspacePort,
+               taskRepository: taskRepository,
+             ),
+             reviewRepairTaskService:
+                 reviewRepairTaskService ??
+                 ProjectLongTaskReviewRepairTaskService(
+                   taskRepository: taskRepository,
+                   reviewReportService: ProjectReviewReportService(
+                     workspacePort: taskRepository.workspacePort,
+                     taskRepository: taskRepository,
+                   ),
+                 ),
+           ),
+       _taskQueueRuntimeOptionResolver =
+           taskQueueRuntimeOptionResolver ??
+           ProjectTaskQueueRuntimeOptionResolver(
+             runtimeProfileRepository: ProjectRuntimeProfileRepository(
+               workspacePort: taskRepository.workspacePort,
+             ),
+           ),
        _revisionResolutionService =
            revisionResolutionService ??
            ProjectLongTaskRevisionResolutionService(
@@ -285,6 +321,7 @@ class ProjectWorkflowRuntimeService {
   final ModelExecutionProfileService _modelExecutionProfileService;
   final LongTaskProjectFileSectionPlanService
   _longTaskProjectFileSectionPlanService;
+  final LongTaskTaskCompletionPolicyService _taskCompletionPolicyService;
   final ProjectModeGuidanceMemorySectionService
   _modeGuidanceMemorySectionService;
   final ProjectLongTaskCheckpointReviewService _checkpointReviewService;
@@ -292,6 +329,8 @@ class ProjectWorkflowRuntimeService {
   final ProjectLongTaskCheckpointReviewTaskService _checkpointReviewTaskService;
   final ProjectLongTaskCheckpointActionService _checkpointActionService;
   final ProjectLongTaskReviewRepairTaskService _reviewRepairTaskService;
+  final ProjectLongTaskChapterGateService _chapterGateService;
+  final ProjectTaskQueueRuntimeOptionResolver _taskQueueRuntimeOptionResolver;
   final ProjectLongTaskRevisionResolutionService _revisionResolutionService;
 
   List<JsonMap> listTaskRuntimeModes() {
@@ -875,11 +914,42 @@ class ProjectWorkflowRuntimeService {
         execution: executionRecord,
       );
     }
+    final gateOutcome = await _chapterGateService.applyReviewOutcome(
+      project: project,
+      task: task,
+    );
+    if (!ValueReaders.boolValue(gateOutcome['ok'], true)) {
+      await _taskRepository.transitionTask(
+        project,
+        selector,
+        TaskRuntimeConstants.statusFailed,
+        note: '章级闸门返工链创建失败：${ValueReaders.stringValue(gateOutcome["error"])}',
+      );
+      return <String, Object?>{
+        'ok': false,
+        'error': ValueReaders.stringValue(
+          gateOutcome['error'],
+          'Chapter gate handling failed.',
+        ),
+        'response': _resultAsResponse(result),
+        'output_paths': outputPaths,
+        'revision_diff': revisionDiff,
+        'checkpoint_review': checkpointReview,
+        'gate_outcome': gateOutcome,
+        'executed_tools': result.executedTools,
+        'changed_paths': _mergePaths(
+          result.changedPaths,
+          ValueReaders.stringList(gateOutcome['changed_paths']),
+        ),
+      };
+    }
+    final nextStatus = _taskCompletionPolicyService
+        .statusAfterSuccessfulModelStep(task);
     await _taskRepository.transitionTask(
       project,
       selector,
-      TaskRuntimeConstants.statusWaitingUser,
-      note: outputPaths.isEmpty ? '模型已返回，等待用户确认后继续。' : '模型已写入项目文件，等待用户确认后继续。',
+      nextStatus,
+      note: _completionNote(nextStatus, outputPaths),
       extra: <String, Object?>{
         'output_paths': outputPaths,
         if (ValueReaders.boolValue(revisionDiff['ok']))
@@ -898,6 +968,10 @@ class ProjectWorkflowRuntimeService {
           'checkpoint_review_summary': ValueReaders.stringValue(
             ValueReaders.mapValue(checkpointReview['review'])['summary'],
           ),
+        if (ValueReaders.stringValue(gateOutcome['action']).isNotEmpty)
+          'chapter_gate_action': ValueReaders.stringValue(
+            gateOutcome['action'],
+          ),
       },
     );
     return <String, Object?>{
@@ -906,9 +980,23 @@ class ProjectWorkflowRuntimeService {
       'output_paths': outputPaths,
       'revision_diff': revisionDiff,
       'checkpoint_review': checkpointReview,
+      'gate_outcome': gateOutcome,
       'executed_tools': result.executedTools,
-      'changed_paths': result.changedPaths,
+      'changed_paths': _mergePaths(
+        result.changedPaths,
+        ValueReaders.stringList(gateOutcome['changed_paths']),
+      ),
     };
+  }
+
+  String _completionNote(String status, List<String> outputPaths) {
+    // 中文注释: 成功后的说明与状态一起收束，避免章节自动完成后仍留下“等待确认”的误导文案。
+    if (status == TaskRuntimeConstants.statusSucceeded) {
+      return outputPaths.isEmpty
+          ? '模型单步已完成，本任务按当前模式自动标记完成。'
+          : '模型已写入项目文件，本任务按当前模式自动标记完成。';
+    }
+    return outputPaths.isEmpty ? '模型已返回，等待用户确认后继续。' : '模型已写入项目文件，等待用户确认后继续。';
   }
 
   Future<JsonMap> runNextWorkflowTaskOnce(
@@ -1055,7 +1143,13 @@ class ProjectWorkflowRuntimeService {
     JsonMap agent = const <String, Object?>{},
   }) async {
     // 中文注释: 受控连续运行按安全步数推进，并把队列记录与长任务记录都写到 tracking/。
-    final cleanOptions = _taskQueueOptionService.normalizeOptions(options);
+    final resolvedOptions = await _taskQueueRuntimeOptionResolver.resolve(
+      project,
+      options: options,
+    );
+    final cleanOptions = _taskQueueOptionService.normalizeOptions(
+      resolvedOptions,
+    );
     final queueId = 'task_queue_${DateTime.now().microsecondsSinceEpoch}';
     final queuePath = 'tracking/task_queue_runs/$queueId.json';
     var queueRecord = <String, Object?>{
@@ -1073,8 +1167,8 @@ class ProjectWorkflowRuntimeService {
     await _taskRepository.saveRecord(project, queuePath, queueRecord);
 
     var longRunPath = ValueReaders.stringValue(
-      options['continue_long_task_run_path'],
-      ValueReaders.stringValue(options['long_task_run_path']),
+      resolvedOptions['continue_long_task_run_path'],
+      ValueReaders.stringValue(resolvedOptions['long_task_run_path']),
     ).trim();
     JsonMap longRunRecord = const <String, Object?>{};
     if (longRunPath.isEmpty) {

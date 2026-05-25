@@ -33,6 +33,8 @@ Future<void> main() async {
   final createProjectWorkspaceUseCase = CreateProjectWorkspaceUseCase(
     projectRepository: bundle.projectRepository,
     projectWorkspacePort: bundle.projectWorkspacePort,
+    projectContentRepository: bundle.projectContentRepository,
+    projectReadableProjectionService: bundle.projectReadableProjectionService,
   );
   final modeRepository = ProjectModeGuidanceRepository(
     workspacePort: bundle.projectWorkspacePort,
@@ -80,6 +82,7 @@ Future<void> main() async {
       projectsRootPath: projectRoot.path,
       title: '模式一执行探针',
       projectType: 'long_novel',
+      runtimeBaselineId: 'continuous_autonomous',
     );
     await _seedReadyState(
       repository: modeRepository,

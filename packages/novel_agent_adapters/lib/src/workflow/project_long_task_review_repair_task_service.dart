@@ -39,11 +39,17 @@ class ProjectLongTaskReviewRepairTaskService {
       resolvedReportPath,
     );
     if (existing.isNotEmpty) {
+      final enrichedExisting = await _enrichCreatedTask(
+        project,
+        existing,
+        sourceTask: task,
+        reviewReportPath: resolvedReportPath,
+      );
       return <String, Object?>{
         'ok': true,
         'duplicated': true,
         'review_report_path': resolvedReportPath,
-        'task': existing,
+        'task': enrichedExisting,
         'changed_paths': const <Object?>[],
       };
     }
@@ -144,12 +150,21 @@ class ProjectLongTaskReviewRepairTaskService {
       sourceTask['mode'],
       ValueReaders.stringValue(sourceMetadata['workflow_mode']),
     );
+    final runtimeBaselineId = ValueReaders.stringValue(
+      sourceMetadata['runtime_baseline_id'],
+    ).trim();
     final persistentContextPaths = ValueReaders.stringList(
       sourceMetadata['persistent_context_paths'],
+    );
+    final dependsOn = _mergePaths(
+      ValueReaders.stringList(createdTask['depends_on']),
+      <String>[ValueReaders.stringValue(sourceTask['id'])],
     );
     final nextMetadata = <String, Object?>{
       ...createdMetadata,
       if (workflowMode.trim().isNotEmpty) 'workflow_mode': workflowMode,
+      if (runtimeBaselineId.isNotEmpty)
+        'runtime_baseline_id': runtimeBaselineId,
       if (persistentContextPaths.isNotEmpty)
         'persistent_context_paths': persistentContextPaths,
       'origin_review_task_id': ValueReaders.stringValue(sourceTask['id']),
@@ -168,6 +183,7 @@ class ProjectLongTaskReviewRepairTaskService {
       ..['mode'] = workflowMode.trim().isEmpty
           ? ValueReaders.stringValue(createdTask['mode'])
           : workflowMode
+      ..['depends_on'] = dependsOn
       ..['metadata'] = nextMetadata
       ..['source_paths'] = _mergePaths(
         ValueReaders.stringList(createdTask['source_paths']),

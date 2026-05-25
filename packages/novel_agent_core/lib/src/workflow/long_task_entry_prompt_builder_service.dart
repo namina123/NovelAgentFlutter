@@ -65,10 +65,10 @@ class LongTaskEntryPromptBuilderService {
         final modeProfile = _longTaskWritingModeCatalogService.modeById(mode);
         final modeTitle = ValueReaders.stringValue(modeProfile['title'], mode);
         final bestFor = ValueReaders.stringValue(modeProfile['best_for']);
-        final description = ValueReaders.stringValue(modeProfile['description']);
-        final parts = <String>[
-          '请为当前项目启动“生成长篇队列”流程，本次选定的长任务写作模式是：$modeTitle。',
-        ];
+        final description = ValueReaders.stringValue(
+          modeProfile['description'],
+        );
+        final parts = <String>['请为当前项目启动“生成长篇队列”流程，本次选定的长任务写作模式是：$modeTitle。'];
         if (description.trim().isNotEmpty) {
           parts.add(description.trim());
         }
@@ -116,18 +116,14 @@ class LongTaskEntryPromptBuilderService {
         ];
         switch (modeId) {
           case 'seed_autopilot_novel':
-            requirements.add(
-              '优先把创作种子压缩成“世界观、主线承诺、主角轨迹、结局方向、禁区”五类长期约束。',
-            );
+            requirements.add('优先把创作种子压缩成“世界观、主线承诺、主角轨迹、结局方向、禁区”五类长期约束。');
             requirements.add('把人工确认点压低到关键世界观和总主线，不要默认逐章征求确认。');
             requirements.add(
               '如果 `${_modeGuidanceWorkspacePathService.summaryMarkdownPath(modeId)}` 已存在，必须先读取它，再决定是否补问或建队列。',
             );
             break;
           case 'full_outline_consensus':
-            requirements.add(
-              '前几步必须先完成全书走向、卷结构和主要角色弧光协商，再进入正文执行任务。',
-            );
+            requirements.add('前几步必须先完成全书走向、卷结构和主要角色弧光协商，再进入正文执行任务。');
             requirements.add('把全书大纲确认设计成显式检查点，确认前不要直接大规模写正文。');
             requirements.add(
               '如果 tracking/modes/full_outline_consensus/guidance.md 已显示当前模式已进入“确认开建”或完成状态，则应把现有共识视为足够先落一个“可修订的总纲/卷纲草案”，不要无条件退回 present_user_options。',
@@ -141,18 +137,12 @@ class LongTaskEntryPromptBuilderService {
             requirements.add('卷内允许智能体自主推进，但跨卷转折必须预留复核任务。');
             break;
           case 'chapter_brief_supervised':
-            requirements.add(
-              '把章纲确认放在高优先级检查点，正文和后处理放到章纲确认之后自动推进。',
-            );
+            requirements.add('把章纲确认放在高优先级检查点，正文和后处理放到章纲确认之后自动推进。');
             requirements.add('避免把每章都拆成过细的人工逐句确认任务。');
             break;
           case 'salvage_restructure_existing':
-            requirements.add(
-              '先读取并分类旧稿、旧大纲、设定碎片和断档章节，再决定重构顺序。',
-            );
-            requirements.add(
-              '优先生成“旧材料盘点 -> 主线重建 -> 阶段修复 -> 正式续写”的恢复式任务链。',
-            );
+            requirements.add('先读取并分类旧稿、旧大纲、设定碎片和断档章节，再决定重构顺序。');
+            requirements.add('优先生成“旧材料盘点 -> 主线重建 -> 阶段修复 -> 正式续写”的恢复式任务链。');
             break;
           default:
             break;

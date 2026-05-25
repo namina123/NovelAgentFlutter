@@ -1,14 +1,19 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import 'long_task_chapter_gate_policy_service.dart';
 import 'task_definition_service.dart';
 import 'task_runtime_constants.dart';
 
 class TaskExecutionPlanService {
   TaskExecutionPlanService({
     required TaskDefinitionService taskDefinitionService,
-  }) : _taskDefinitionService = taskDefinitionService;
+    LongTaskChapterGatePolicyService? chapterGatePolicyService,
+  }) : _taskDefinitionService = taskDefinitionService,
+       _chapterGatePolicyService =
+           chapterGatePolicyService ?? const LongTaskChapterGatePolicyService();
 
   final TaskDefinitionService _taskDefinitionService;
+  final LongTaskChapterGatePolicyService _chapterGatePolicyService;
 
   JsonMap executionPlan(JsonMap task) {
     // 中文注释: 执行计划只生成步骤骨架，不直接调用模型或存储，是纯领域规则的一部分。
@@ -47,6 +52,22 @@ class TaskExecutionPlanService {
         _step('expand_seed_spec', '扩展创作规格', '从主题、世界观和走向拆出作品规格和章节队列。'),
       );
       steps.add(_step('major_checkpoint', '关键节点确认', '在大纲、样章或卷末要求用户确认。'));
+    }
+    if (taskType == 'chapter' &&
+        _chapterGatePolicyService.requiresChapterGate(normalized)) {
+      steps.addAll(<JsonMap>[
+        _step(
+          'run_chapter_gate_review',
+          '执行章级审稿闸门',
+          '对当前章节运行结构化审稿，检查连续性、剧情推进和风格守恒。',
+        ),
+        _step(
+          'repair_if_gate_failed',
+          '必要时自动返工',
+          '若审稿报告指出问题，则沿用共享 repair 链创建返工任务并修复当前章。',
+        ),
+        _step('advance_after_gate', '通过闸门后推进下一章', '仅当本章闸门通过时，才允许自动解锁下一章任务。'),
+      ]);
     }
     return <String, Object?>{
       'task_id': normalized['id'],

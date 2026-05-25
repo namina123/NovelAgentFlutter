@@ -54,7 +54,12 @@ void main() {
 
       final input = builder.build(state);
       expect(input.isReady, isTrue);
+      expect(input.runtimeBaselineId, 'continuous_autonomous');
       expect(input.runtimeMode, TaskRuntimeConstants.modeSeedToFullNovel);
+      expect(
+        ValueReaders.stringValue(input.options['runtime_baseline_id']),
+        'continuous_autonomous',
+      );
       expect(
         ValueReaders.stringValue(input.options['seed_prompt']),
         contains('【核心承诺】高压权谋与连续逆转。'),

@@ -2,13 +2,20 @@ import 'dart:convert';
 
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import 'agent_profile.dart';
+import 'agent_profile_mapper_service.dart';
 import 'agent_profile_normalizer_service.dart';
 
 class AgentProfileCatalogService {
-  AgentProfileCatalogService({AgentProfileNormalizerService? normalizerService})
-    : _normalizerService = normalizerService ?? AgentProfileNormalizerService();
+  AgentProfileCatalogService({
+    AgentProfileNormalizerService? normalizerService,
+    AgentProfileMapperService? mapperService,
+  }) : _normalizerService =
+           normalizerService ?? AgentProfileNormalizerService(),
+       _mapperService = mapperService ?? const AgentProfileMapperService();
 
   final AgentProfileNormalizerService _normalizerService;
+  final AgentProfileMapperService _mapperService;
 
   List<JsonMap> builtinProfilesFromJson(String rawJson) {
     // 中文注释: 内置智能体原型只解析纯 JSON 文本，不触碰任何宿主资源读取职责。
@@ -73,6 +80,17 @@ class AgentProfileCatalogService {
       'top_k': 0,
       'system_prompt': '你是 NOVEL Agent 的默认全能创作智能体。你要按需读取技能，真实读写必须通过工具完成。',
     });
+  }
+
+  List<AgentProfile> builtinProfileModelsFromJson(String rawJson) {
+    // 中文注释: 强类型列表专门服务后续项目级绑定、模式策略和运行配置，不再让这些层只消费动态字典。
+    return builtinProfilesFromJson(
+      rawJson,
+    ).map(_mapperService.fromDocument).toList(growable: false);
+  }
+
+  AgentProfile fallbackDefaultAgentModel() {
+    return _mapperService.fromDocument(fallbackDefaultAgent());
   }
 
   String agentProfileSummaryText(List<Object?> agents) {

@@ -136,16 +136,19 @@ class LocalSettingsRepository implements SettingsRepository {
   Map<String, Object?> _normalizedNetworkDocument(JsonMap networkSettings) {
     // 中文注释: 网络设置持久化前在这里统一收敛，保证代理模式、协议和端口范围都落在稳定结构里。
     final normalized = Map<String, Object?>.from(networkSettings);
-    final mode = _stringValue(normalized['proxy_mode'], 'system')
-        .toLowerCase();
+    final mode = _stringValue(normalized['proxy_mode'], 'system').toLowerCase();
     final protocol = _stringValue(normalized['proxy_protocol']).toLowerCase();
     final host = _stringValue(normalized['proxy_host']);
     final port = NetworkProxyPortPolicy.normalizeText(
       _stringValue(normalized['proxy_port']),
     );
+    final retryAttempts = int.tryParse(
+      _stringValue(normalized['transport_retry_attempts']),
+    );
     normalized['proxy_mode'] = mode == 'custom' ? 'custom' : 'system';
-    normalized['proxy_protocol'] =
-        protocol == 'http' || protocol == 'socks5' ? protocol : '';
+    normalized['proxy_protocol'] = protocol == 'http' || protocol == 'socks5'
+        ? protocol
+        : '';
     normalized['proxy_port'] = port;
     if (mode != 'custom' || host.isEmpty || port.isEmpty) {
       normalized['proxy_mode'] = 'system';
@@ -159,6 +162,11 @@ class LocalSettingsRepository implements SettingsRepository {
       normalized['proxy_username'] = _stringValue(normalized['proxy_username']);
       normalized['proxy_password'] = _stringValue(normalized['proxy_password']);
     }
+    normalized['transport_retry_enabled'] =
+        normalized['transport_retry_enabled'] != false;
+    normalized['transport_retry_attempts'] = retryAttempts == null
+        ? '2'
+        : retryAttempts.clamp(0, 5).toString();
     return normalized;
   }
 

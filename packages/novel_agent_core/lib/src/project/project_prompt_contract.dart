@@ -22,7 +22,7 @@ class ProjectPromptContract {
     lines.add('- $advanced。');
     lines.add('');
     lines.add(
-      '归档原则：头脑风暴和备选方案放 inspiration/；未确认章节正文和样章草稿放 drafts/；用户确认后的正式正文放 chapters/；确认后的长期规则放 specs/、styles/、world/ 或 characters/；总结和压缩记忆放 summaries/。',
+      '归档原则：题材、创作意图和项目承诺放 premise/；总纲、卷纲、章纲放 outlines/story/、outlines/volumes/、outlines/chapters/；未确认正文和场景稿放 drafts/chapters/ 或 drafts/scenes/；角色、组织、地点、物品、风格、世界、伏笔、关系、时间线放 assets/ 子目录；任务文档放 tasks/；分析结果放 analysis/；导出结果放 exports/。',
     );
     return lines.join('\n');
   }
@@ -50,6 +50,7 @@ class ProjectPromptContract {
     final lines = <String>[
       '当前项目：《${ValueReaders.stringValue(project['title'], '未命名项目')}》',
       '项目类型：${ValueReaders.stringValue(project['project_type'], 'novel')}',
+      '主存储策略：${ValueReaders.stringValue(project['storage_strategy'], 'markdown_project_store')}',
       '项目阶段：${ValueReaders.stringValue(project['stage'], 'opening')}',
       '当前内容意图：$intent',
       '项目根路径：${ValueReaders.stringValue(project['path'])}（仅供系统定位；工具调用仍必须传项目相对路径）',

@@ -73,6 +73,7 @@ void main() {
           'mode': TaskRuntimeConstants.modeSeedToFullNovel,
           'metadata': <String, Object?>{
             'workflow_mode': TaskRuntimeConstants.modeSeedToFullNovel,
+            'runtime_baseline_id': 'chapter_collaboration_autorun',
             'persistent_context_paths': <Object?>[
               'tracking/modes/seed_autopilot_novel/guidance.md',
             ],
@@ -110,6 +111,20 @@ void main() {
           )['origin_checkpoint_review_path'],
         ),
         'tracking/checkpoint_reviews/sample.json',
+      );
+      expect(
+        ValueReaders.stringValue(
+          ValueReaders.mapValue(
+            ValueReaders.mapValue(first['task'])['metadata'],
+          )['runtime_baseline_id'],
+        ),
+        'chapter_collaboration_autorun',
+      );
+      expect(
+        ValueReaders.stringList(
+          ValueReaders.mapValue(first['task'])['depends_on'],
+        ),
+        contains('review_task_001'),
       );
 
       final second = await service.createTask(

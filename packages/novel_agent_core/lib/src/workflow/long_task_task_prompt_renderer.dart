@@ -40,6 +40,27 @@ class LongTaskTaskPromptRenderer {
     if (reviewType.isNotEmpty && reviewType != 'general') {
       lines.add('- 审稿类型：$reviewType');
     }
+    final chapterWordConstraints = ValueReaders.mapValue(
+      transaction['chapter_word_constraints'],
+    );
+    if (chapterWordConstraints.isNotEmpty) {
+      final parts = <String>[];
+      final target = ValueReaders.intValue(chapterWordConstraints['target']);
+      final min = ValueReaders.intValue(chapterWordConstraints['min']);
+      final max = ValueReaders.intValue(chapterWordConstraints['max']);
+      if (target > 0) {
+        parts.add('目标约 $target 字');
+      }
+      if (min > 0) {
+        parts.add('不少于 $min 字');
+      }
+      if (max > 0) {
+        parts.add('尽量不超过 $max 字');
+      }
+      if (parts.isNotEmpty) {
+        lines.add('- 字数约束：${parts.join('；')}');
+      }
+    }
 
     final proposed = ValueReaders.mapValue(
       transaction['proposed_output_paths'],
