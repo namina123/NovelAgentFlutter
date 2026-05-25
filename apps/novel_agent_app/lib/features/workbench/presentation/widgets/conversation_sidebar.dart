@@ -6,6 +6,7 @@ import '../models/workbench_view_data.dart';
 import 'conversation_empty_state_panel.dart';
 import 'conversation_secondary_actions_row.dart';
 import 'conversation_timeline.dart';
+import 'conversation_retry_banner.dart';
 import 'composer_panel.dart';
 import 'context_status_badge.dart';
 import 'conversation_toolbar.dart';
@@ -136,6 +137,7 @@ class _ConversationSidebarState extends State<ConversationSidebar> {
               ? ConversationTimeline(
                   entries: widget.viewData.conversationEntries,
                   isGenerating: widget.viewData.isGenerating,
+                  footer: _buildConversationFooter(),
                 )
               : WorkflowGuideCard(
                   title: widget.viewData.workflowTitle,
@@ -151,18 +153,48 @@ class _ConversationSidebarState extends State<ConversationSidebar> {
             actionHandler: widget.actionHandler,
           ),
         ],
-        if (widget.viewData.pendingOptions.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          UserOptionPanel(
-            options: widget.viewData.pendingOptions,
-            onSelected: _handleOptionSelected,
-          ),
-        ],
-        if (widget.viewData.subAgentRuns.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          SubAgentActivityPanel(runs: widget.viewData.subAgentRuns),
-        ],
       ],
+    );
+  }
+
+  Widget? _buildConversationFooter() {
+    // 中文注释: 会话附加区并入同一滚动容器，避免待选项出现后鼠标滚轮落在下半区却无法继续滚动时间线。
+    final children = <Widget>[];
+    final retryRequest = widget.viewData.retryRequest;
+    if (retryRequest != null) {
+      children.add(
+        ConversationRetryBanner(
+          retryRequest: retryRequest,
+          onRetryRequested: widget.actionHandler.onRetryLastFailedRequested,
+        ),
+      );
+    }
+    if (widget.viewData.pendingOptions.isNotEmpty) {
+      if (children.isNotEmpty) {
+        children.add(const SizedBox(height: 12));
+      }
+      children.add(
+        UserOptionPanel(
+          options: widget.viewData.pendingOptions,
+          onSelected: _handleOptionSelected,
+        ),
+      );
+    }
+    if (widget.viewData.subAgentRuns.isNotEmpty) {
+      if (children.isNotEmpty) {
+        children.add(const SizedBox(height: 12));
+      }
+      children.add(SubAgentActivityPanel(runs: widget.viewData.subAgentRuns));
+    }
+    if (children.isEmpty) {
+      return null;
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: children,
+      ),
     );
   }
 

@@ -95,17 +95,24 @@ class SessionGuideProfileService {
     return SessionGuideProfile(
       profileId: 'long_novel_workflow',
       title: '长篇小说工作台',
-      description: '长篇项目优先围绕任务队列、检查点和可恢复推进来组织。先生成或检查长任务队列，再决定是否手动单步或受控连续运行。',
+      description:
+          '长篇项目优先围绕任务队列、检查点和可恢复推进来组织。先选一种长任务写作模式，再决定如何生成、检查和推进任务链。',
       composerHint: isRunning
           ? '长篇运行中：补充队列调整、检查点要求或下一步约束，会在下一轮工具调用前送达。'
           : '输入长篇创作要求、长任务类型、队列调整意见，或直接描述当前想推进的阶段。',
       statusHint: '长篇队列会保存在当前项目 tasks/，运行记录保存在 tracking/，不会跨项目共享。',
       primaryActions: <SessionGuideAction>[
         SessionGuideAction(
+          id: 'guide.open_long_task_modes',
+          commandId: 'guide.open_long_task_modes',
+          title: '长任务开局',
+          description: '先细分选择长篇协作模式，再生成适合该模式的可恢复任务链。',
+        ),
+        SessionGuideAction(
           id: 'long_task.create_queue.seed_to_full_novel',
           commandId: 'long_task.create_queue',
-          title: '生成长篇队列',
-          description: '按创作种子或大纲生成可恢复任务链，适合正式进入长任务模式。',
+          title: '直接生成队列',
+          description: '跳过模式细分，按当前项目资料直接尝试生成默认长篇任务链。',
           payload: <String, Object?>{'mode': 'seed_to_full_novel'},
         ),
         SessionGuideAction(

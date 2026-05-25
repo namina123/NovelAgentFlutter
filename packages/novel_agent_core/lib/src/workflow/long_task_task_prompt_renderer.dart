@@ -34,6 +34,12 @@ class LongTaskTaskPromptRenderer {
     lines.add(
       '- 目标输出/修订路径：${_contractService.joinOrNone(ValueReaders.objectList(transaction['output_paths']))}',
     );
+    final reviewType = ValueReaders.stringValue(
+      transaction['review_type'],
+    ).trim();
+    if (reviewType.isNotEmpty && reviewType != 'general') {
+      lines.add('- 审稿类型：$reviewType');
+    }
 
     final proposed = ValueReaders.mapValue(
       transaction['proposed_output_paths'],

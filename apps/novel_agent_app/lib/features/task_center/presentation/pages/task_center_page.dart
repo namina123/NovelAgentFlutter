@@ -9,6 +9,7 @@ import '../contracts/task_center_action_handler.dart';
 import '../models/task_center_view_data.dart';
 import '../widgets/task_center_detail_panel.dart';
 import '../widgets/task_center_diagnostics_panel.dart';
+import '../widgets/task_center_shared_actions_panel.dart';
 import '../widgets/task_center_task_list_panel.dart';
 
 class TaskCenterPage extends StatefulWidget {
@@ -143,6 +144,8 @@ class _TaskCenterPageState extends State<TaskCenterPage> {
                           detailBody: widget.viewData.detailBody,
                           queueSummary: widget.viewData.queueSummary,
                           schedulerSummary: widget.viewData.schedulerSummary,
+                          guidanceRevisitBody:
+                              widget.viewData.guidanceRevisitBody,
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -242,6 +245,13 @@ class _TaskCenterPageState extends State<TaskCenterPage> {
                             icon: Icons.playlist_add_rounded,
                             expanded: true,
                             onPressed: _submitWorkflowCreate,
+                          ),
+                          const SizedBox(height: 16),
+                          TaskCenterSharedActionsPanel(
+                            groups: widget.viewData.actionGroups,
+                            onActionRequested: widget
+                                .actionHandler
+                                .onTaskCenterSharedActionRequested,
                           ),
                           const SizedBox(height: 16),
                           const SectionHeading(title: '运行动作'),

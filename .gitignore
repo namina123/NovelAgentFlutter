@@ -26,6 +26,10 @@ Thumbs.db
 # Local logs and temp workspace
 logs/
 temp/
+artifacts/
+**/artifacts/
+test_api.txt
+references/MuMuAINovel-main/
 
 # Python / node misc from references or helper scripts
 **/__pycache__/

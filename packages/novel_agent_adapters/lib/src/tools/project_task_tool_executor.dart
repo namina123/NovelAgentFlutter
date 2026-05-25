@@ -10,13 +10,47 @@ class ProjectTaskToolExecutor {
     required ProjectToolHostPort hostPort,
     ProjectToolPathPolicy? pathPolicy,
     ProjectToolResultFactory? resultFactory,
+    TaskDefinitionService? taskDefinitionService,
   }) : _hostPort = hostPort,
        _pathPolicy = pathPolicy ?? ProjectToolPathPolicy(),
-       _resultFactory = resultFactory ?? ProjectToolResultFactory();
+       _resultFactory = resultFactory ?? ProjectToolResultFactory(),
+       _taskDefinitionService =
+           taskDefinitionService ?? TaskDefinitionService();
 
   final ProjectToolHostPort _hostPort;
   final ProjectToolPathPolicy _pathPolicy;
   final ProjectToolResultFactory _resultFactory;
+  final TaskDefinitionService _taskDefinitionService;
+
+  Future<JsonMap> setAgentTasks(
+    ProjectDescriptor project,
+    JsonMap arguments,
+  ) async {
+    // 中文注释: 计划型任务也要落成真实任务文件，这样 mark_task_status、GUI 和 CLI 才能看到同一批任务实体。
+    final goal = ValueReaders.stringValue(arguments['goal']);
+    final tasks = ValueReaders.objectList(arguments['tasks'])
+        .map(ValueReaders.mapValue)
+        .where((task) => task.isNotEmpty)
+        .toList(growable: false);
+    final changedPaths = <Object?>[];
+    final normalizedTasks = <Object?>[];
+    for (final task in tasks) {
+      final record = await _upsertAgentTaskRecord(project, goal, task);
+      final relativePath = ValueReaders.stringValue(record['relative_path']);
+      if (relativePath.isNotEmpty) {
+        changedPaths.add(relativePath);
+      }
+      normalizedTasks.add(ValueReaders.mapValue(record['task']));
+    }
+    return _resultFactory.success(
+      '已更新任务清单：${normalizedTasks.length} 项',
+      data: <String, Object?>{
+        'goal': goal,
+        'tasks': normalizedTasks,
+        'changed_paths': changedPaths,
+      },
+    );
+  }
 
   Future<JsonMap> createChapterTask(
     ProjectDescriptor project,
@@ -150,8 +184,174 @@ class ProjectTaskToolExecutor {
     return '';
   }
 
+  Future<JsonMap> _upsertAgentTaskRecord(
+    ProjectDescriptor project,
+    String goal,
+    JsonMap task,
+  ) async {
+    final providedId = ValueReaders.stringValue(task['id']).trim();
+    final title = ValueReaders.stringValue(task['title'], '未命名计划任务');
+    final taskId = providedId.isEmpty ? _taskId(title) : providedId;
+    final relativePath = await _resolveTaskRecordPath(
+      project,
+      taskId,
+      title,
+      task,
+    );
+    final existingRecord = await _readTaskRecord(project, relativePath);
+    final createdAt = ValueReaders.stringValue(
+      existingRecord['created_at'],
+      DateTime.now().toIso8601String(),
+    );
+    final seeded = _seedTaskRecord(
+      goal: goal,
+      taskId: taskId,
+      title: title,
+      task: task,
+      existingRecord: existingRecord,
+      createdAt: createdAt,
+    );
+    final record = _taskDefinitionService.normalizeTask(seeded)
+      ..['relative_path'] = relativePath;
+    await _hostPort.writeTextFile(
+      project.rootPath,
+      relativePath,
+      const JsonEncoder.withIndent('  ').convert(record),
+    );
+    return <String, Object?>{'relative_path': relativePath, 'task': record};
+  }
+
+  JsonMap _seedTaskRecord({
+    required String goal,
+    required String taskId,
+    required String title,
+    required JsonMap task,
+    required JsonMap existingRecord,
+    required String createdAt,
+  }) {
+    final mergedMetadata =
+        ValueReaders.deepCopyMap(
+          ValueReaders.mapValue(existingRecord['metadata']),
+        )..addAll(
+          ValueReaders.deepCopyMap(ValueReaders.mapValue(task['metadata'])),
+        );
+    final rawStatus = ValueReaders.stringValue(
+      task['status'],
+      ValueReaders.stringValue(existingRecord['status']),
+    );
+    final history = ValueReaders.objectList(existingRecord['history']);
+    if (history.isEmpty) {
+      history.add(<String, Object?>{
+        'status': rawStatus.trim().isEmpty
+            ? TaskRuntimeConstants.statusQueued
+            : rawStatus,
+        'note': 'created',
+        'created_at': createdAt,
+      });
+    }
+    return <String, Object?>{
+      'id': taskId,
+      'title': title,
+      'goal': ValueReaders.stringValue(task['goal'], goal),
+      'description': ValueReaders.stringValue(task['description']),
+      'brief': ValueReaders.stringValue(
+        task['brief'],
+        ValueReaders.stringValue(existingRecord['brief']),
+      ),
+      'task_type': ValueReaders.stringValue(
+        task['task_type'],
+        ValueReaders.stringValue(existingRecord['task_type'], 'agent_task'),
+      ),
+      'mode': ValueReaders.stringValue(
+        task['mode'],
+        ValueReaders.stringValue(existingRecord['mode']),
+      ),
+      'status': rawStatus,
+      'note': ValueReaders.stringValue(
+        task['note'],
+        ValueReaders.stringValue(existingRecord['note']),
+      ),
+      'chapter': ValueReaders.stringValue(
+        task['chapter'],
+        ValueReaders.stringValue(existingRecord['chapter']),
+      ),
+      'depends_on': _mergedStringList(
+        existingRecord['depends_on'],
+        task['depends_on'],
+      ),
+      'source_paths': _mergedStringList(
+        existingRecord['source_paths'],
+        task['source_paths'],
+      ),
+      'output_paths': _mergedStringList(
+        existingRecord['output_paths'],
+        task['output_paths'],
+      ),
+      'tool_hint': ValueReaders.stringValue(
+        task['tool_hint'],
+        ValueReaders.stringValue(existingRecord['tool_hint']),
+      ),
+      'metadata': mergedMetadata,
+      'parent_goal': goal,
+      'created_at': createdAt,
+      'updated_at': DateTime.now().toIso8601String(),
+      'history': history,
+    };
+  }
+
+  Future<String> _resolveTaskRecordPath(
+    ProjectDescriptor project,
+    String taskId,
+    String title,
+    JsonMap task,
+  ) async {
+    final explicitPath = _pathPolicy.cleanRelativePath(
+      ValueReaders.stringValue(task['relative_path']),
+    );
+    if (_pathPolicy.isSafeFilePath(explicitPath)) {
+      return explicitPath;
+    }
+    final existingPath = await _taskPathById(project, taskId);
+    if (existingPath.isNotEmpty) {
+      return existingPath;
+    }
+    return _pathPolicy.uniqueRelativePath(
+      hostPort: _hostPort,
+      rootPath: project.rootPath,
+      relativePath: 'tasks/${_pathPolicy.safeFileName(title)}.task.json',
+    );
+  }
+
+  Future<JsonMap> _readTaskRecord(
+    ProjectDescriptor project,
+    String relativePath,
+  ) async {
+    final content = await _hostPort.readTextFile(
+      project.rootPath,
+      relativePath,
+    );
+    if (content == null || content.trim().isEmpty) {
+      return const <String, Object?>{};
+    }
+    try {
+      return ValueReaders.mapValue(jsonDecode(content));
+    } catch (_) {
+      return const <String, Object?>{};
+    }
+  }
+
   String _taskId(String title) {
     // 中文注释: 任务 ID 既需要稳定可读，也需要避免文件系统不安全字符。
     return 'task_${_pathPolicy.safeFileName(title)}_${DateTime.now().microsecondsSinceEpoch}';
+  }
+
+  List<String> _mergedStringList(Object? left, Object? right) {
+    final result = <String>[...ValueReaders.stringList(left)];
+    for (final item in ValueReaders.stringList(right)) {
+      if (!result.contains(item)) {
+        result.add(item);
+      }
+    }
+    return result;
   }
 }

@@ -31,6 +31,7 @@ class LongTaskTransactionContractService {
     } else if (taskType == 'review') {
       _addUnique(contracts, '只读取来源文件和必要上下文，不修改正文、大纲、设定或风格文件。');
       _addUnique(contracts, '调用 run_continuity_check 保存结构化审稿报告。');
+      _addUnique(contracts, '本步结束前必须至少写出一份 reviews/ 下的报告文件；没有保存报告就不算完成。');
     } else if (taskType == 'planning') {
       _addUnique(
         contracts,
@@ -64,7 +65,10 @@ class LongTaskTransactionContractService {
       _addUnique(instructions, '最终只简短说明改了什么、写入了哪里、仍需人工确认什么。');
     } else if (taskType == 'review') {
       _addUnique(instructions, '这是独立审稿任务：读取来源，定位问题，保存报告，不重写正文。');
-      _addUnique(instructions, '最终只告诉用户报告路径和最重要风险，不要把报告伪装成章节内容。');
+      _addUnique(
+        instructions,
+        '必须实际调用工具把报告写到 reviews/，最终只告诉用户报告路径和最重要风险，不要把口头分析冒充成已保存报告。',
+      );
     } else if (taskType == 'planning') {
       _addUnique(instructions, '这是长篇规划任务：把种子扩展为可执行的作品规格、总纲、卷纲/章纲和任务清单。');
       _addUnique(instructions, '如项目已有规划，先判断是否兼容；不兼容时提出迁移或修订选项。');

@@ -98,6 +98,29 @@ class ProjectFileReadToolExecutor {
             'read_project_file 未找到目标文件。请先调用 list_project_files，再直接复制返回的英文 relative_path。',
       );
     }
+    final lineWindow = _resolveReadLineWindow(content, arguments);
+    if (lineWindow != null) {
+      final excludeLineNumbers = ValueReaders.boolValue(
+        arguments['exclude_line_numbers'],
+      );
+      return _resultFactory.success(
+        '已读取项目文件：$relativePath',
+        data: <String, Object?>{
+          'relative_path': relativePath,
+          'content': _renderSelectedLines(
+            lineWindow.lines,
+            excludeLineNumbers: excludeLineNumbers,
+          ),
+          'content_chars': content.length,
+          'line_count': lineWindow.lineCount,
+          'selected_start_line': lineWindow.startLine,
+          'selected_end_line': lineWindow.endLine,
+          'selected_lines': lineWindow.lines,
+          'truncated': lineWindow.truncated,
+          'changed_paths': const <Object?>[],
+        },
+      );
+    }
     const maxChars = 16000;
     final truncated = content.length > maxChars;
     final safeContent = truncated ? content.substring(0, maxChars) : content;
@@ -211,8 +234,20 @@ class ProjectFileReadToolExecutor {
     }
     final limit = _clamp(ValueReaders.intValue(arguments['limit'], 50), 1, 200);
     final caseSensitive = ValueReaders.boolValue(arguments['case_sensitive']);
+    final useRegex = ValueReaders.boolValue(arguments['use_regex']);
     final includeJson = ValueReaders.boolValue(arguments['include_json']);
     final needle = caseSensitive ? pattern : pattern.toLowerCase();
+    RegExp? regex;
+    if (useRegex) {
+      try {
+        regex = RegExp(pattern, caseSensitive: caseSensitive, multiLine: true);
+      } catch (_) {
+        return _resultFactory.error(
+          'pattern 不是合法正则表达式。',
+          data: <String, Object?>{'matches': const <Object?>[]},
+        );
+      }
+    }
     final entries = await _hostPort.listEntries(project.rootPath);
     final matches = <Object?>[];
     for (final entry in entries) {
@@ -237,8 +272,10 @@ class ProjectFileReadToolExecutor {
           .split('\n');
       for (var index = 0; index < lines.length; index++) {
         final line = lines[index];
-        final haystack = caseSensitive ? line : line.toLowerCase();
-        if (!haystack.contains(needle)) {
+        final matched = regex != null
+            ? regex.hasMatch(line)
+            : (caseSensitive ? line : line.toLowerCase()).contains(needle);
+        if (!matched) {
           continue;
         }
         matches.add(<String, Object?>{
@@ -426,6 +463,86 @@ class ProjectFileReadToolExecutor {
     return '${text.substring(0, maxChars - 1)}…';
   }
 
+  _ReadLineWindow? _resolveReadLineWindow(String content, JsonMap arguments) {
+    // 中文注释: 读取局部窗口时统一在这里解析行范围，避免主流程里混杂过多参数兼容逻辑。
+    final hasStart =
+        arguments.containsKey('start_line') ||
+        arguments.containsKey('startLine');
+    final hasEnd =
+        arguments.containsKey('end_line') || arguments.containsKey('endLine');
+    final hasLimit = arguments.containsKey('limit');
+    if (!hasStart && !hasEnd && !hasLimit) {
+      return null;
+    }
+    final lines = content
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\r', '\n')
+        .split('\n');
+    if (lines.isEmpty) {
+      return const _ReadLineWindow(
+        lineCount: 0,
+        startLine: 0,
+        endLine: 0,
+        truncated: false,
+        lines: <Object?>[],
+      );
+    }
+    final lineCount = lines.length;
+    final startLine = _resolveExistingLineNumber(
+      ValueReaders.intValue(
+        arguments['start_line'] ?? arguments['startLine'],
+        1,
+      ),
+      lineCount,
+    );
+    var endLine = hasEnd
+        ? _resolveExistingLineNumber(
+            ValueReaders.intValue(
+              arguments['end_line'] ?? arguments['endLine'],
+              startLine,
+            ),
+            lineCount,
+            minValue: startLine,
+          )
+        : startLine;
+    final limit = ValueReaders.intValue(arguments['limit'], 0);
+    if (limit > 0) {
+      endLine = _clamp(startLine + limit - 1, startLine, lineCount);
+    }
+    final selected = <Object?>[];
+    for (var index = startLine - 1; index < endLine; index++) {
+      selected.add(<String, Object?>{'line': index + 1, 'text': lines[index]});
+    }
+    return _ReadLineWindow(
+      lineCount: lineCount,
+      startLine: startLine,
+      endLine: endLine,
+      truncated: endLine - startLine + 1 < lineCount,
+      lines: selected,
+    );
+  }
+
+  int _resolveExistingLineNumber(int value, int lineCount, {int minValue = 1}) {
+    // 中文注释: 负数行号兼容从文件尾部回数，便于模型读取“最后几行”。
+    final normalized = value < 0 ? lineCount + value + 1 : value;
+    return _clamp(normalized, minValue, lineCount);
+  }
+
+  String _renderSelectedLines(
+    List<Object?> selectedLines, {
+    required bool excludeLineNumbers,
+  }) {
+    // 中文注释: 局部读取默认带行号，方便后续 edit/manipulate 工具基于行号继续动作。
+    return selectedLines
+        .map(ValueReaders.mapValue)
+        .map(
+          (line) => excludeLineNumbers
+              ? ValueReaders.stringValue(line['text'])
+              : '${ValueReaders.intValue(line['line'])}: ${ValueReaders.stringValue(line['text'])}',
+        )
+        .join('\n');
+  }
+
   Future<List<JsonMap>> _visibleEntries(ProjectDescriptor project) async {
     // 中文注释: 失败回退时也只暴露安全可见的资源树条目，避免内部记录混进模型纠错提示。
     final entries = await _hostPort.listEntries(project.rootPath);
@@ -468,7 +585,9 @@ class ProjectFileReadToolExecutor {
       if (path.isEmpty) {
         continue;
       }
-      final prefix = ValueReaders.boolValue(entry['is_dir']) ? '[DIR]' : '[FILE]';
+      final prefix = ValueReaders.boolValue(entry['is_dir'])
+          ? '[DIR]'
+          : '[FILE]';
       lines.add('$prefix $path');
       if (lines.length >= maxLines) {
         lines.add('... (truncated)');
@@ -477,4 +596,20 @@ class ProjectFileReadToolExecutor {
     }
     return lines.join('\n');
   }
+}
+
+class _ReadLineWindow {
+  const _ReadLineWindow({
+    required this.lineCount,
+    required this.startLine,
+    required this.endLine,
+    required this.truncated,
+    required this.lines,
+  });
+
+  final int lineCount;
+  final int startLine;
+  final int endLine;
+  final bool truncated;
+  final List<Object?> lines;
 }

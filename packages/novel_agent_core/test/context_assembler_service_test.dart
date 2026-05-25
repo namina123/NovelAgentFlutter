@@ -17,7 +17,7 @@ void main() {
 
         final result = assembler.assemble(<String, Object?>{
           'project': <String, Object?>{
-            'title': '游戏融合现实',
+            'title': '示例长篇项目',
             'project_type': 'novel',
             'stage': 'opening',
             'path': 'D:/projects/demo',

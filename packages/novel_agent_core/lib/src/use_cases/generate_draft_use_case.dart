@@ -6,6 +6,7 @@ import '../agents/agent_tool_message_service.dart';
 import '../agents/agent_tool_policy_service.dart';
 import '../agents/sub_agent_execution_service.dart';
 import 'dart:convert';
+import '../common/host_platform.dart';
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
 import '../context/context_assembler_service.dart';
@@ -20,6 +21,7 @@ import '../runtime/draft_prompt_builder_service.dart';
 import '../runtime/project_context_file_selection_service.dart';
 import '../runtime/tool_execution_service.dart';
 import '../tools/tool_call_parser_service.dart';
+import '../tools/tool_exposure_policy_service.dart';
 import '../tools/tool_schema_builder_service.dart';
 import '../tools/tool_strategy_prompt_builder.dart';
 import '../tools/tool_strategy_service.dart';
@@ -47,6 +49,8 @@ class GenerateDraftUseCase {
     ToolExecutionService? toolExecutionService,
     BuiltinCollaboratorCatalogService? collaboratorCatalogService,
     AgentCollaborationBriefService? collaborationBriefService,
+    ToolExposurePolicyService? toolExposurePolicyService,
+    HostPlatform hostPlatform = HostPlatform.unknown,
   }) : _projectWorkspacePort = projectWorkspacePort,
        _llmGateway = llmGateway,
        _contextAssemblerService = contextAssemblerService,
@@ -67,6 +71,9 @@ class GenerateDraftUseCase {
        _collaborationBriefService =
            collaborationBriefService ?? AgentCollaborationBriefService(),
        _toolStrategyService = toolStrategyService ?? ToolStrategyService(),
+       _toolExposurePolicyService =
+           toolExposurePolicyService ?? const ToolExposurePolicyService(),
+       _hostPlatform = hostPlatform,
        _toolCallParserService =
            toolCallParserService ?? ToolCallParserService(),
        _toolSchemaBuilderService =
@@ -86,6 +93,10 @@ class GenerateDraftUseCase {
                toolExecutionPort: toolExecutionPort,
                loadAvailableAgents: loadAvailableAgents,
                loadAvailableGroups: loadAvailableAgentGroups,
+               hostPlatform: hostPlatform,
+               toolExposurePolicyService:
+                   toolExposurePolicyService ??
+                   const ToolExposurePolicyService(),
              ),
            ),
        _toolStrategyPromptBuilder = ToolStrategyPromptBuilder(
@@ -107,6 +118,8 @@ class GenerateDraftUseCase {
   final BuiltinCollaboratorCatalogService _collaboratorCatalogService;
   final AgentCollaborationBriefService _collaborationBriefService;
   final ToolStrategyService _toolStrategyService;
+  final ToolExposurePolicyService _toolExposurePolicyService;
+  final HostPlatform _hostPlatform;
   final ToolCallParserService _toolCallParserService;
   final ToolSchemaBuilderService _toolSchemaBuilderService;
   final AgentLoopContractService _agentLoopContractService;
@@ -125,6 +138,9 @@ class GenerateDraftUseCase {
     JsonMap requestOptions = const <String, Object?>{},
     JsonMap contextSettings = const <String, Object?>{},
     JsonMap modelProfile = const <String, Object?>{},
+    List<Object?> memorySections = const <Object?>[],
+    List<Object?> projectFileSectionPlan = const <Object?>[],
+    JsonMap projectFileContents = const <String, Object?>{},
     String activeDocumentPath = '',
     String activeDocumentBody = '',
     void Function(DraftGenerationProgress progress)? onProgress,
@@ -136,8 +152,11 @@ class GenerateDraftUseCase {
     }
     final entries = await _projectWorkspacePort.listEntries(project.rootPath);
     final selectedPaths = _fileSelectionService.select(entries);
-    final fileContents = <String, Object?>{};
+    final fileContents = ValueReaders.deepCopyMap(projectFileContents);
     for (final path in selectedPaths) {
+      if (fileContents.containsKey(path)) {
+        continue;
+      }
       final content = await _projectWorkspacePort.readTextFile(
         project.rootPath,
         path,
@@ -178,6 +197,8 @@ class GenerateDraftUseCase {
       'optional_agents': optionalAgents,
       'context_settings': contextSettings,
       'model_profile': modelProfile,
+      'memory_sections': memorySections,
+      'project_file_section_plan': projectFileSectionPlan,
     });
     final prompt = _draftPromptBuilderService.build(
       project: projectInfo,
@@ -189,8 +210,12 @@ class GenerateDraftUseCase {
     );
     final toolSettings = _toolStrategyService.defaultSettings();
     final enabledToolIds = _toolStrategyService.enabledToolIds(toolSettings);
-    final toolSchemas = _toolSchemaBuilderService.buildOpenAiSchemas(
+    final exposedToolIds = _toolExposurePolicyService.filterExposedToolIds(
       enabledToolIds,
+      hostPlatform: _hostPlatform,
+    );
+    final toolSchemas = _toolSchemaBuilderService.buildOpenAiSchemas(
+      exposedToolIds,
     );
     final llmRequestOptions = _llmRequestOptions(
       requestOptions,
@@ -224,6 +249,7 @@ class GenerateDraftUseCase {
         if (collaborationBrief.trim().isNotEmpty) collaborationBrief,
       ].join('\n\n'),
       styleNote: '当前请求已经附带上下文包；如需更多文件，请调用项目工具按需读取。',
+      toolIds: exposedToolIds,
     );
     final messages = <JsonMap>[
       <String, Object?>{'role': 'system', 'content': systemPrompt},
@@ -283,7 +309,9 @@ class GenerateDraftUseCase {
       );
       final action = ValueReaders.stringValue(contract['action']);
       if (action == 'execute_tools') {
-        final normalizedToolCalls = ValueReaders.objectList(contract['tool_calls']);
+        final normalizedToolCalls = ValueReaders.objectList(
+          contract['tool_calls'],
+        );
         onProgress?.call(
           DraftGenerationProgress(
             phase: 'tool_calls_ready',
@@ -308,8 +336,7 @@ class GenerateDraftUseCase {
         previousToolFingerprint = toolFingerprint;
         if (repeatedReadOnlyToolRounds >= 2) {
           stoppedByToolError = true;
-          toolErrorSummary =
-              '工具重复空转：同一组只读工具调用连续重复，已主动停止。';
+          toolErrorSummary = '工具重复空转：同一组只读工具调用连续重复，已主动停止。';
           break;
         }
         final toolRound = await _toolExecutionService.executeRound(
@@ -326,6 +353,8 @@ class GenerateDraftUseCase {
             'project_tree_note': _projectPromptContract.projectTreeSummary(
               entries,
             ),
+            'active_document_path': activeDocumentPath,
+            'active_document_body': activeDocumentBody,
             'style_note': '当前请求已经附带上下文包；如需更多文件，请调用项目工具按需读取。',
           },
         );
@@ -412,7 +441,10 @@ class GenerateDraftUseCase {
       modelId: modelId,
       draftMarkdown: resolvedContent.trim(),
       contextPack: contextPack,
-      selectedPaths: selectedPaths,
+      selectedPaths: _mergePaths(
+        selectedPaths,
+        fileContents.keys.toList(growable: false),
+      ),
       executedTools: executedTools,
       writtenPaths: writtenPaths,
       changedPaths: changedPaths,
@@ -513,6 +545,17 @@ class GenerateDraftUseCase {
     return byId.values.toList(growable: false);
   }
 
+  List<String> _mergePaths(List<String> left, List<String> right) {
+    // 中文注释: 探针和上层摘要需要知道显式注入了哪些文件，因此把自动选择和计划注入路径合并后返回。
+    final result = <String>[...left];
+    for (final item in right) {
+      if (!result.contains(item)) {
+        result.add(item);
+      }
+    }
+    return result;
+  }
+
   String _toolErrorSummary(List<Object?> executedTools) {
     // 中文注释: 工具失败摘要统一从本轮执行记录提取，避免上层再次理解底层工具返回结构。
     for (final rawTool in executedTools.reversed) {
@@ -539,12 +582,14 @@ class GenerateDraftUseCase {
     final normalized = toolCalls
         .map(ValueReaders.mapValue)
         .where((call) => call.isNotEmpty)
-        .map((call) => <String, Object?>{
-              'name': ValueReaders.stringValue(call['name']),
-              'arguments': ValueReaders.deepCopyMap(
-                ValueReaders.mapValue(call['arguments']),
-              ),
-            })
+        .map(
+          (call) => <String, Object?>{
+            'name': ValueReaders.stringValue(call['name']),
+            'arguments': ValueReaders.deepCopyMap(
+              ValueReaders.mapValue(call['arguments']),
+            ),
+          },
+        )
         .toList(growable: false);
     return jsonEncode(normalized);
   }

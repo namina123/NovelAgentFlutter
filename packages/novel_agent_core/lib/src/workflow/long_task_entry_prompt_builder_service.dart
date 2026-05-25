@@ -1,8 +1,19 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import '../modes/mode_guidance_workspace_path_service.dart';
+import 'long_task_writing_mode_catalog_service.dart';
 
 class LongTaskEntryPromptBuilderService {
-  const LongTaskEntryPromptBuilderService();
+  const LongTaskEntryPromptBuilderService({
+    LongTaskWritingModeCatalogService longTaskWritingModeCatalogService =
+        const LongTaskWritingModeCatalogService(),
+    ModeGuidanceWorkspacePathService modeGuidanceWorkspacePathService =
+        const ModeGuidanceWorkspacePathService(),
+  }) : _longTaskWritingModeCatalogService = longTaskWritingModeCatalogService,
+       _modeGuidanceWorkspacePathService = modeGuidanceWorkspacePathService;
+
+  final LongTaskWritingModeCatalogService _longTaskWritingModeCatalogService;
+  final ModeGuidanceWorkspacePathService _modeGuidanceWorkspacePathService;
 
   String build({
     required String actionId,
@@ -31,7 +42,7 @@ class LongTaskEntryPromptBuilderService {
     }
     lines.add('');
     lines.add('本次动作要求：');
-    for (final item in _requirements(actionId)) {
+    for (final item in _requirements(actionId, payload: payload)) {
       lines.add('- $item');
     }
     return lines.join('\n');
@@ -51,11 +62,28 @@ class LongTaskEntryPromptBuilderService {
           payload['mode'],
           'seed_to_full_novel',
         );
-        return '请为当前项目启动“生成长篇队列”流程，优先判断适合的长任务模式，并围绕 $mode 给出可恢复任务链。';
+        final modeProfile = _longTaskWritingModeCatalogService.modeById(mode);
+        final modeTitle = ValueReaders.stringValue(modeProfile['title'], mode);
+        final bestFor = ValueReaders.stringValue(modeProfile['best_for']);
+        final description = ValueReaders.stringValue(modeProfile['description']);
+        final parts = <String>[
+          '请为当前项目启动“生成长篇队列”流程，本次选定的长任务写作模式是：$modeTitle。',
+        ];
+        if (description.trim().isNotEmpty) {
+          parts.add(description.trim());
+        }
+        if (bestFor.trim().isNotEmpty) {
+          parts.add('这个模式适合：$bestFor');
+        }
+        parts.add('请围绕该模式给出可恢复任务链，而不是退回泛泛的通用建议。');
+        return parts.join(' ');
     }
   }
 
-  List<String> _requirements(String actionId) {
+  List<String> _requirements(
+    String actionId, {
+    JsonMap payload = const <String, Object?>{},
+  }) {
     switch (actionId.trim()) {
       case 'long_task.run_next':
         return const <String>[
@@ -77,11 +105,59 @@ class LongTaskEntryPromptBuilderService {
         ];
       case 'long_task.create_queue':
       default:
-        return const <String>[
+        final mode = _longTaskWritingModeCatalogService.modeById(
+          ValueReaders.stringValue(payload['mode']),
+        );
+        final modeId = ValueReaders.stringValue(mode['id']);
+        final requirements = <String>[
           '先判断当前更像“已有大纲驱动写作”还是“只有创作种子，需要先规划长篇结构”。',
           '如果资料不足，不要硬生成庞大队列；先收束项目种子、主线目标、阶段结构和检查点要求。',
           '如果资料足够，请生成可恢复任务链，并明确建议保存到 tasks/ 和 tracking/ 的哪些位置。',
         ];
+        switch (modeId) {
+          case 'seed_autopilot_novel':
+            requirements.add(
+              '优先把创作种子压缩成“世界观、主线承诺、主角轨迹、结局方向、禁区”五类长期约束。',
+            );
+            requirements.add('把人工确认点压低到关键世界观和总主线，不要默认逐章征求确认。');
+            requirements.add(
+              '如果 `${_modeGuidanceWorkspacePathService.summaryMarkdownPath(modeId)}` 已存在，必须先读取它，再决定是否补问或建队列。',
+            );
+            break;
+          case 'full_outline_consensus':
+            requirements.add(
+              '前几步必须先完成全书走向、卷结构和主要角色弧光协商，再进入正文执行任务。',
+            );
+            requirements.add('把全书大纲确认设计成显式检查点，确认前不要直接大规模写正文。');
+            requirements.add(
+              '如果 tracking/modes/full_outline_consensus/guidance.md 已显示当前模式已进入“确认开建”或完成状态，则应把现有共识视为足够先落一个“可修订的总纲/卷纲草案”，不要无条件退回 present_user_options。',
+            );
+            requirements.add(
+              '只有在主线、分卷结构或结局承诺明显缺失时，才退回 present_user_options；否则优先写 outline/ 或 volume_outlines/ 的结构化草案。',
+            );
+            break;
+          case 'volume_checkpoint_handoff':
+            requirements.add('任务链要按卷分段，每卷结束设置显式回合总结和人工确认点。');
+            requirements.add('卷内允许智能体自主推进，但跨卷转折必须预留复核任务。');
+            break;
+          case 'chapter_brief_supervised':
+            requirements.add(
+              '把章纲确认放在高优先级检查点，正文和后处理放到章纲确认之后自动推进。',
+            );
+            requirements.add('避免把每章都拆成过细的人工逐句确认任务。');
+            break;
+          case 'salvage_restructure_existing':
+            requirements.add(
+              '先读取并分类旧稿、旧大纲、设定碎片和断档章节，再决定重构顺序。',
+            );
+            requirements.add(
+              '优先生成“旧材料盘点 -> 主线重建 -> 阶段修复 -> 正式续写”的恢复式任务链。',
+            );
+            break;
+          default:
+            break;
+        }
+        return requirements;
     }
   }
 

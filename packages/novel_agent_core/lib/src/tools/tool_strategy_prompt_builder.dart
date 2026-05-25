@@ -19,11 +19,13 @@ class ToolStrategyPromptBuilder {
     required String projectTreeNote,
     required String agentNote,
     required String styleNote,
+    List<String>? toolIds,
   }) {
     // 中文注释: Prompt 构建从策略服务拆出来，避免一个类同时负责配置规则和长文本拼装。
     final normalized = _toolStrategyService.normalize(settings);
     final mode = normalized['mode']?.toString() ?? 'balanced';
-    final enabledTools = _toolStrategyService.enabledToolIds(normalized);
+    final enabledTools =
+        toolIds ?? _toolStrategyService.enabledToolIds(normalized);
     final toolLines = _toolPromptLines(enabledTools);
     final modeNote = _toolStrategyService.modePromptNote(mode);
     final fallbackNote = normalized['allow_inline_fallback'] == true

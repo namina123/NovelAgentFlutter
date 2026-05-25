@@ -57,7 +57,73 @@ void main() {
       expect(gateway.lastPrompt, contains('保持冷静克制'));
       expect(gateway.lastOptions['temperature'], 0.55);
       expect(gateway.lastOptions['stream'], isFalse);
+      expect(gateway.lastToolNames, isNot(contains('request_gateway_tool')));
     });
+
+    test(
+      'generate draft honors planned sections and injected memory sections',
+      () async {
+        // 中文注释: 这里验证显式执行计划与模式长期约束会真正进入共享生成链，而不是只停留在准备记录里。
+        final workspacePort = _FakeProjectWorkspacePort(
+          entries: [
+            <String, Object?>{
+              'relative_path': 'outline/总纲.md',
+              'is_dir': false,
+            },
+          ],
+          files: const {'outline/总纲.md': '# 总纲\n第一卷回京。'},
+        );
+        final gateway = _FakeLlmGateway();
+        final useCase = GenerateDraftUseCase(
+          projectWorkspacePort: workspacePort,
+          llmGateway: gateway,
+          toolExecutionPort: _FakeToolExecutionPort(),
+          contextAssemblerService: ContextAssemblerService(
+            budgetService: ContextBudgetService(),
+            staticSectionService: ContextStaticSectionService(
+              projectPromptContract: ProjectPromptContract(),
+            ),
+            projectFileSectionService: ContextProjectFileSectionService(),
+          ),
+          projectPromptContract: ProjectPromptContract(),
+        );
+
+        final result = await useCase.execute(
+          project: const ProjectDescriptor(
+            id: 'demo',
+            name: '示例项目',
+            rootPath: 'D:/demo',
+          ),
+          userPrompt: '继续写第一章',
+          modelId: 'test-model',
+          memorySections: const <Object?>[
+            <String, Object?>{
+              'id': 'mode_style_1',
+              'title': '风格锚点',
+              'priority': 97,
+              'content': '保持干净利落，每章必须有钩子。',
+            },
+          ],
+          projectFileSectionPlan: const <Object?>[
+            <String, Object?>{
+              'id': 'planned_outline',
+              'title': '任务指定来源',
+              'source': 'source_paths',
+              'priority': 88,
+              'paths': <Object?>['outline/总纲.md'],
+            },
+          ],
+          projectFileContents: const <String, Object?>{
+            'outline/总纲.md': '# 总纲\n第一卷回京。',
+          },
+        );
+
+        expect(gateway.lastPrompt, contains('风格锚点'));
+        expect(gateway.lastPrompt, contains('每章必须有钩子'));
+        expect(gateway.lastPrompt, contains('第一卷回京'));
+        expect(result.selectedPaths, contains('outline/总纲.md'));
+      },
+    );
 
     test('save draft writes into drafts directory by default', () async {
       // 中文注释: 这里验证草稿保存用例会复用 core 路径规则，而不是让宿主层自己拼接 drafts 路径。
@@ -212,6 +278,86 @@ void main() {
         contains('llm_completed'),
       );
     });
+
+    test(
+      'generate draft forwards active document path into tool fallback context',
+      () async {
+        // 中文注释: 这里验证空 relative_path 的读取工具能拿到当前打开文件路径，不再因为宿主漏传上下文而空转。
+        final workspacePort = _FakeProjectWorkspacePort(entries: [], files: {});
+        final gateway = _FakeLlmGateway(
+          scriptedResults: [
+            <String, Object?>{
+              'ok': true,
+              'content': '',
+              'tool_calls': <Object?>[
+                <String, Object?>{
+                  'id': 'call_read_1',
+                  'name': 'read_project_file',
+                  'arguments': <String, Object?>{},
+                },
+              ],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '',
+              },
+            },
+            <String, Object?>{
+              'ok': true,
+              'content': '已读取当前文档。',
+              'tool_calls': const <Object?>[],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '已读取当前文档。',
+              },
+            },
+          ],
+        );
+        final toolExecutionPort = _FakeToolExecutionPort(
+          resultByToolName: <String, JsonMap>{
+            'read_project_file': <String, Object?>{
+              'ok': true,
+              'relative_path': 'specs/project_brief.md',
+              'content': '# 项目简介',
+              'changed_paths': const <Object?>[],
+            },
+          },
+        );
+        final useCase = GenerateDraftUseCase(
+          projectWorkspacePort: workspacePort,
+          llmGateway: gateway,
+          toolExecutionPort: toolExecutionPort,
+          contextAssemblerService: ContextAssemblerService(
+            budgetService: ContextBudgetService(),
+            staticSectionService: ContextStaticSectionService(
+              projectPromptContract: ProjectPromptContract(),
+            ),
+            projectFileSectionService: ContextProjectFileSectionService(),
+          ),
+          projectPromptContract: ProjectPromptContract(),
+        );
+
+        await useCase.execute(
+          project: const ProjectDescriptor(
+            id: 'demo',
+            name: '示例项目',
+            rootPath: 'D:/demo',
+          ),
+          userPrompt: '继续',
+          modelId: 'test-model',
+          activeDocumentPath: 'specs/project_brief.md',
+          activeDocumentBody: '# 项目简介',
+        );
+
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(
+              toolExecutionPort.lastToolCall['arguments'],
+            )['relative_path'],
+          ),
+          'specs/project_brief.md',
+        );
+      },
+    );
   });
 }
 
@@ -264,6 +410,7 @@ class _FakeLlmGateway implements LlmGateway {
   String lastPrompt = '';
   String lastModelId = '';
   JsonMap lastOptions = const <String, Object?>{};
+  List<String> lastToolNames = const <String>[];
   final List<JsonMap> _scriptedResults;
 
   @override
@@ -296,13 +443,19 @@ class _FakeLlmGateway implements LlmGateway {
     lastPrompt = promptMessage['content']?.toString() ?? '';
     lastModelId = modelId;
     lastOptions = ValueReaders.deepCopyMap(options);
+    lastToolNames = tools
+        .map(ValueReaders.mapValue)
+        .map(
+          (tool) => ValueReaders.stringValue(
+            ValueReaders.mapValue(tool['function'])['name'],
+          ),
+        )
+        .where((name) => name.trim().isNotEmpty)
+        .toList(growable: false);
     if (_scriptedResults.isNotEmpty) {
       if (onStreamUpdate != null) {
         onStreamUpdate(
-          const LlmStreamUpdate(
-            content: '流式正文',
-            reasoningContent: '流式思考',
-          ),
+          const LlmStreamUpdate(content: '流式正文', reasoningContent: '流式思考'),
         );
       }
       return _scriptedResults.removeAt(0);
@@ -333,6 +486,7 @@ class _FakeToolExecutionPort implements ToolExecutionPort {
 
   final Map<String, JsonMap> _resultByToolName;
   final List<String> executedToolNames = <String>[];
+  JsonMap lastToolCall = const <String, Object?>{};
 
   @override
   Future<JsonMap> execute({
@@ -342,6 +496,7 @@ class _FakeToolExecutionPort implements ToolExecutionPort {
     // 中文注释: 测试替身记录执行过的工具名，方便断言工具循环是否真实发生。
     final toolName = toolCall['name']?.toString() ?? '';
     executedToolNames.add(toolName);
+    lastToolCall = ValueReaders.deepCopyMap(toolCall);
     return _resultByToolName[toolName] ??
         <String, Object?>{'ok': true, 'changed_paths': const <Object?>[]};
   }

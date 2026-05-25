@@ -18,6 +18,8 @@ class ProjectLauncherViewDataService {
     required List<JsonMap> projects,
     String status = '',
     String selectedProjectTypeId = 'novel',
+    bool canDismiss = true,
+    bool allowOpenExisting = true,
   }) {
     // 中文注释: 项目启动面板的数据投影统一收口在这里，避免控制器直接理解核心层返回的动态字典。
     final options = _projectTypeCatalogService
@@ -49,6 +51,8 @@ class ProjectLauncherViewDataService {
       selectedProjectTypeId: _projectTypeCatalogService.normalize(
         selectedProjectTypeId,
       ),
+      canDismiss: canDismiss,
+      allowOpenExisting: allowOpenExisting,
     );
   }
 }

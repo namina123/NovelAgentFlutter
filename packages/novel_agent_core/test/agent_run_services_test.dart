@@ -8,6 +8,7 @@ void main() {
     final responseService = AgentResponsePackageService();
     final subAgentResultService = SubAgentResultPackageService();
     final toolMessageService = AgentToolMessageService();
+    final toolCallParserService = ToolCallParserService();
 
     test('builds tool execution contract and final content policy', () {
       // 中文注释: 这里验证工具轮合同会驱动宿主继续执行，而计划型空回复会触发统一兜底提示。
@@ -106,6 +107,27 @@ void main() {
       expect(functionData['name'], 'list_project_files');
       expect(functionData['arguments'], '{"relative_path":"outline"}');
       expect(message['reasoning_content'], '先列目录');
+    });
+
+    test('dedupes semantically identical tool calls even if ids differ', () {
+      // 中文注释: 某些兼容网关会把同一个工具调用重复回传成不同 id，这里应只执行一次。
+      final toolCalls = toolCallParserService.parseToolCalls(<String, Object?>{
+        'tool_calls': <Object?>[
+          <String, Object?>{
+            'id': 'call_1',
+            'name': 'list_project_files',
+            'arguments': <String, Object?>{'relative_path': 'outline'},
+          },
+          <String, Object?>{
+            'id': 'call_2',
+            'name': 'list_project_files',
+            'arguments': <String, Object?>{'relative_path': 'outline'},
+          },
+        ],
+      });
+
+      expect(toolCalls, hasLength(1));
+      expect(toolCalls.single['name'], 'list_project_files');
     });
   });
 }

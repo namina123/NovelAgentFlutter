@@ -1,7 +1,16 @@
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../storage/project_mode_guidance_repository.dart';
 import '../storage/project_prompt_template_service.dart';
+import '../storage/project_review_report_service.dart';
 import '../storage/project_task_repository.dart';
+import 'project_long_task_checkpoint_action_service.dart';
+import 'project_long_task_checkpoint_review_service.dart';
+import 'project_long_task_checkpoint_review_task_service.dart';
+import 'project_long_task_postprocess_result_service.dart';
+import 'project_long_task_revision_resolution_service.dart';
+import 'project_long_task_review_repair_task_service.dart';
+import 'project_mode_guidance_memory_section_service.dart';
 
 typedef WorkflowGenerateDraftUseCaseFactory =
     GenerateDraftUseCase Function(
@@ -41,6 +50,15 @@ class ProjectWorkflowRuntimeService {
     TaskQueueRecordRenderer? taskQueueRecordRenderer,
     LongTaskRunMarkdownRenderer? longTaskRunMarkdownRenderer,
     ModelExecutionProfileService? modelExecutionProfileService,
+    LongTaskProjectFileSectionPlanService?
+    longTaskProjectFileSectionPlanService,
+    ProjectModeGuidanceMemorySectionService? modeGuidanceMemorySectionService,
+    ProjectLongTaskCheckpointReviewService? checkpointReviewService,
+    ProjectLongTaskCheckpointReviewTaskService? checkpointReviewTaskService,
+    ProjectLongTaskCheckpointActionService? checkpointActionService,
+    ProjectLongTaskPostprocessResultService? postprocessResultService,
+    ProjectLongTaskReviewRepairTaskService? reviewRepairTaskService,
+    ProjectLongTaskRevisionResolutionService? revisionResolutionService,
   }) : _taskRepository = taskRepository,
        _promptTemplateService = promptTemplateService,
        _generateDraftUseCaseFactory = generateDraftUseCaseFactory,
@@ -159,7 +177,81 @@ class ProjectWorkflowRuntimeService {
        _longTaskRunMarkdownRenderer =
            longTaskRunMarkdownRenderer ?? LongTaskRunMarkdownRenderer(),
        _modelExecutionProfileService =
-           modelExecutionProfileService ?? ModelExecutionProfileService();
+           modelExecutionProfileService ?? ModelExecutionProfileService(),
+       _longTaskProjectFileSectionPlanService =
+           longTaskProjectFileSectionPlanService ??
+           LongTaskProjectFileSectionPlanService(
+             pathPolicyService:
+                 longTaskPathPolicyService ?? LongTaskPathPolicyService(),
+           ),
+       _modeGuidanceMemorySectionService =
+           modeGuidanceMemorySectionService ??
+           ProjectModeGuidanceMemorySectionService(
+             repository: ProjectModeGuidanceRepository(
+               workspacePort: taskRepository.workspacePort,
+             ),
+           ),
+       _checkpointReviewService =
+           checkpointReviewService ??
+           ProjectLongTaskCheckpointReviewService(
+             taskRepository: taskRepository,
+           ),
+       _postprocessResultService =
+           postprocessResultService ??
+           ProjectLongTaskPostprocessResultService(
+             taskRepository: taskRepository,
+             checkpointReviewService:
+                 checkpointReviewService ??
+                 ProjectLongTaskCheckpointReviewService(
+                   taskRepository: taskRepository,
+                 ),
+           ),
+       _checkpointReviewTaskService =
+           checkpointReviewTaskService ??
+           ProjectLongTaskCheckpointReviewTaskService(
+             taskRepository: taskRepository,
+             reviewReportService: ProjectReviewReportService(
+               workspacePort: taskRepository.workspacePort,
+               taskRepository: taskRepository,
+             ),
+           ),
+       _checkpointActionService =
+           checkpointActionService ??
+           ProjectLongTaskCheckpointActionService(
+             taskRepository: taskRepository,
+             checkpointReviewTaskService:
+                 checkpointReviewTaskService ??
+                 ProjectLongTaskCheckpointReviewTaskService(
+                   taskRepository: taskRepository,
+                   reviewReportService: ProjectReviewReportService(
+                     workspacePort: taskRepository.workspacePort,
+                     taskRepository: taskRepository,
+                   ),
+                 ),
+           ),
+       _reviewRepairTaskService =
+           reviewRepairTaskService ??
+           ProjectLongTaskReviewRepairTaskService(
+             taskRepository: taskRepository,
+             reviewReportService: ProjectReviewReportService(
+               workspacePort: taskRepository.workspacePort,
+               taskRepository: taskRepository,
+             ),
+           ),
+       _revisionResolutionService =
+           revisionResolutionService ??
+           ProjectLongTaskRevisionResolutionService(
+             taskRepository: taskRepository,
+             checkpointReviewTaskService:
+                 checkpointReviewTaskService ??
+                 ProjectLongTaskCheckpointReviewTaskService(
+                   taskRepository: taskRepository,
+                   reviewReportService: ProjectReviewReportService(
+                     workspacePort: taskRepository.workspacePort,
+                     taskRepository: taskRepository,
+                   ),
+                 ),
+           );
 
   final ProjectTaskRepository _taskRepository;
   final ProjectPromptTemplateService _promptTemplateService;
@@ -191,6 +283,16 @@ class ProjectWorkflowRuntimeService {
   final TaskQueueRecordRenderer _taskQueueRecordRenderer;
   final LongTaskRunMarkdownRenderer _longTaskRunMarkdownRenderer;
   final ModelExecutionProfileService _modelExecutionProfileService;
+  final LongTaskProjectFileSectionPlanService
+  _longTaskProjectFileSectionPlanService;
+  final ProjectModeGuidanceMemorySectionService
+  _modeGuidanceMemorySectionService;
+  final ProjectLongTaskCheckpointReviewService _checkpointReviewService;
+  final ProjectLongTaskPostprocessResultService _postprocessResultService;
+  final ProjectLongTaskCheckpointReviewTaskService _checkpointReviewTaskService;
+  final ProjectLongTaskCheckpointActionService _checkpointActionService;
+  final ProjectLongTaskReviewRepairTaskService _reviewRepairTaskService;
+  final ProjectLongTaskRevisionResolutionService _revisionResolutionService;
 
   List<JsonMap> listTaskRuntimeModes() {
     // 中文注释: 模式定义直接来自 core，确保任务中心和 CLI 的枚举完全同源。
@@ -339,6 +441,117 @@ class ProjectWorkflowRuntimeService {
     return _taskRepository.loadRecord(project, relativePath);
   }
 
+  Future<JsonMap> createCheckpointReviewTasks(
+    ProjectDescriptor project,
+    JsonMap selector,
+  ) async {
+    // 中文注释: 该入口把已有检查点复盘手动物化成审稿任务，供 GUI/CLI 共用，不自动影响调度。
+    final task = await _taskRepository.loadTask(project, selector);
+    if (task.isEmpty) {
+      return <String, Object?>{
+        'ok': false,
+        'error': 'Task not found.',
+        'tasks': const <Object?>[],
+        'changed_paths': const <Object?>[],
+      };
+    }
+    final checkpointReviewPath = ValueReaders.stringValue(
+      selector['checkpoint_review_path'],
+      ValueReaders.stringValue(task['checkpoint_review_path']),
+    ).trim();
+    if (checkpointReviewPath.isEmpty) {
+      return <String, Object?>{
+        'ok': false,
+        'error': 'Checkpoint review path is missing.',
+        'tasks': const <Object?>[],
+        'changed_paths': const <Object?>[],
+      };
+    }
+    final checkpointReview = await _taskRepository.loadRecord(
+      project,
+      checkpointReviewPath,
+    );
+    if (checkpointReview.isEmpty) {
+      return <String, Object?>{
+        'ok': false,
+        'error': 'Checkpoint review not found.',
+        'tasks': const <Object?>[],
+        'changed_paths': const <Object?>[],
+      };
+    }
+    final created = await _checkpointReviewTaskService.createTasks(
+      project: project,
+      task: task,
+      checkpointReview: checkpointReview,
+    );
+    return <String, Object?>{
+      ...created,
+      'checkpoint_review_path': checkpointReviewPath,
+      'task': _taskDefinitionService.taskSummary(task),
+    };
+  }
+
+  Future<JsonMap> buildCheckpointReviewActionPackage(
+    ProjectDescriptor project,
+    String checkpointReviewPath,
+  ) {
+    // 中文注释: checkpoint 动作包通过共享 adapter 入口暴露，供任务中心和 CLI 后续直接接线。
+    return _checkpointActionService.buildActionPackage(
+      project,
+      checkpointReviewPath,
+    );
+  }
+
+  Future<JsonMap> buildCheckpointGuidanceRevisitPackage(
+    ProjectDescriptor project,
+    String checkpointReviewPath,
+  ) {
+    // 中文注释: 任务中心与 CLI 可通过这个只读入口直接加载长期约束回看包，而不触发任何任务写盘。
+    return _checkpointActionService.buildGuidanceRevisitPackage(
+      project,
+      checkpointReviewPath,
+    );
+  }
+
+  Future<JsonMap> applyCheckpointReviewAction(
+    ProjectDescriptor project,
+    String checkpointReviewPath,
+    String command,
+  ) {
+    // 中文注释: checkpoint 动作统一由 adapter 层物化，GUI/CLI 不直接操心后续审稿、返工或长期约束回看细节。
+    return _checkpointActionService.applyAction(
+      project,
+      checkpointReviewPath,
+      command,
+    );
+  }
+
+  Future<JsonMap> createWorkflowReviewRepairTask(
+    ProjectDescriptor project,
+    JsonMap selector,
+  ) async {
+    // 中文注释: 该入口把 review 任务产出的报告继续转成修复任务，让 mode 1 后续返工也能共用同一条链。
+    final task = await _taskRepository.loadTask(project, selector);
+    if (task.isEmpty) {
+      return <String, Object?>{
+        'ok': false,
+        'error': 'Task not found.',
+        'changed_paths': const <Object?>[],
+      };
+    }
+    final created = await _reviewRepairTaskService.createTask(
+      project: project,
+      task: task,
+      reviewReportPath: ValueReaders.stringValue(
+        selector['review_report_path'],
+      ),
+    );
+    return <String, Object?>{
+      ...created,
+      'source_task': _taskDefinitionService.taskSummary(task),
+    };
+  }
+
   String renderTaskQueueRunMarkdown(JsonMap record) {
     // 中文注释: 队列运行 Markdown 供 GUI 日志面板和 CLI 直接复用。
     return _taskQueueRecordRenderer.renderMarkdown(record);
@@ -415,6 +628,10 @@ class ProjectWorkflowRuntimeService {
     final entries = await _taskRepository.workspacePort.listEntries(
       project.rootPath,
     );
+    final memorySections = await _modeGuidanceMemorySectionService.buildForTask(
+      project,
+      task,
+    );
     final result = _prepareExecutionUseCase.execute(<String, Object?>{
       'project': projectInfo.isEmpty
           ? <String, Object?>{
@@ -434,6 +651,14 @@ class ProjectWorkflowRuntimeService {
       'optional_agents': const <Object?>[],
       'context_settings': contextSettings,
       'model_profile': modelProfile,
+      'memory_sections': memorySections,
+      'project_file_section_plan': _longTaskProjectFileSectionPlanService.build(
+        task,
+      ),
+      'project_file_contents': await _readPlannedProjectFileContents(
+        project,
+        task,
+      ),
     });
     if (!ValueReaders.boolValue(result['ok'])) {
       await _taskRepository.transitionTask(
@@ -564,6 +789,17 @@ class ProjectWorkflowRuntimeService {
       provider,
       settings.networkSettings,
     );
+    final memorySections = await _modeGuidanceMemorySectionService.buildForTask(
+      project,
+      task,
+    );
+    final projectFileSectionPlan = _longTaskProjectFileSectionPlanService.build(
+      task,
+    );
+    final projectFileContents = await _readPlannedProjectFileContents(
+      project,
+      task,
+    );
     final result = await useCase.execute(
       project: project,
       userPrompt: prompt,
@@ -579,6 +815,15 @@ class ProjectWorkflowRuntimeService {
       requestOptions: ValueReaders.mapValue(
         executionProfile['request_options'],
       ),
+      contextSettings: settings.contextSettings,
+      modelProfile: <String, Object?>{
+        'id': provider.id,
+        'base_url': provider.baseUrl,
+        'model_id': provider.modelId,
+      },
+      memorySections: memorySections,
+      projectFileSectionPlan: projectFileSectionPlan,
+      projectFileContents: projectFileContents,
     );
     final outputPaths = result.writtenPaths;
     JsonMap revisionDiff = const <String, Object?>{};
@@ -592,13 +837,14 @@ class ProjectWorkflowRuntimeService {
     final executionPath = ValueReaders.stringValue(
       task['atomic_execution_path'],
     );
+    JsonMap executionRecord = const <String, Object?>{};
     if (executionPath.trim().isNotEmpty) {
-      final execution = await _taskRepository.loadRecord(
+      executionRecord = await _taskRepository.loadRecord(
         project,
         executionPath,
       );
-      if (execution.isNotEmpty) {
-        final nextExecution = ValueReaders.deepCopyMap(execution)
+      if (executionRecord.isNotEmpty) {
+        final nextExecution = ValueReaders.deepCopyMap(executionRecord)
           ..['output_paths'] = outputPaths
           ..['last_result_preview'] = result.draftMarkdown
           ..['updated_at'] = DateTime.now().toIso8601String();
@@ -608,7 +854,26 @@ class ProjectWorkflowRuntimeService {
           );
         }
         await _taskRepository.saveRecord(project, executionPath, nextExecution);
+        executionRecord = nextExecution;
       }
+    }
+    JsonMap checkpointReview = const <String, Object?>{};
+    if (result.executedTools.isNotEmpty ||
+        outputPaths.isNotEmpty ||
+        result.draftMarkdown.trim().isNotEmpty) {
+      checkpointReview = await _checkpointReviewService.saveReview(
+        project: project,
+        task: task,
+        result: <String, Object?>{
+          'ok': true,
+          'output_paths': outputPaths,
+          'changed_paths': result.changedPaths,
+          'executed_tools': result.executedTools,
+          'response': _resultAsResponse(result),
+        },
+        memorySections: memorySections,
+        execution: executionRecord,
+      );
     }
     await _taskRepository.transitionTask(
       project,
@@ -625,6 +890,14 @@ class ProjectWorkflowRuntimeService {
           'revision_diff_summary': ValueReaders.stringValue(
             ValueReaders.mapValue(revisionDiff['report'])['summary'],
           ),
+        if (ValueReaders.boolValue(checkpointReview['ok']))
+          'checkpoint_review_path': ValueReaders.stringValue(
+            checkpointReview['relative_path'],
+          ),
+        if (ValueReaders.boolValue(checkpointReview['ok']))
+          'checkpoint_review_summary': ValueReaders.stringValue(
+            ValueReaders.mapValue(checkpointReview['review'])['summary'],
+          ),
       },
     );
     return <String, Object?>{
@@ -632,6 +905,7 @@ class ProjectWorkflowRuntimeService {
       'response': _resultAsResponse(result),
       'output_paths': outputPaths,
       'revision_diff': revisionDiff,
+      'checkpoint_review': checkpointReview,
       'executed_tools': result.executedTools,
       'changed_paths': result.changedPaths,
     };
@@ -1025,18 +1299,69 @@ class ProjectWorkflowRuntimeService {
       ValueReaders.stringList(task['output_paths']),
       result.writtenPaths,
     );
+    final memorySections = await _modeGuidanceMemorySectionService.buildForTask(
+      project,
+      task,
+    );
+    final savedPostprocess = await _postprocessResultService.saveResult(
+      project: project,
+      task: task,
+      execution: execution,
+      result: result,
+      memorySections: memorySections,
+    );
     await _taskRepository.transitionTask(
       project,
       selector,
       TaskRuntimeConstants.statusWaitingUser,
       note: '后处理已返回，等待用户确认是否标记完成或继续修订。',
-      extra: <String, Object?>{'output_paths': mergedOutputs},
+      extra: <String, Object?>{
+        'output_paths': mergedOutputs,
+        'postprocess_review_report_path': ValueReaders.stringValue(
+          savedPostprocess['postprocess_review_report_path'],
+        ),
+        'postprocess_review_report_json_path': ValueReaders.stringValue(
+          savedPostprocess['postprocess_review_report_json_path'],
+        ),
+        if (ValueReaders.boolValue(
+          ValueReaders.mapValue(savedPostprocess['checkpoint_review'])['ok'],
+        ))
+          'postprocess_checkpoint_review_path': ValueReaders.stringValue(
+            ValueReaders.mapValue(
+              savedPostprocess['checkpoint_review'],
+            )['relative_path'],
+          ),
+        if (ValueReaders.boolValue(
+          ValueReaders.mapValue(savedPostprocess['checkpoint_review'])['ok'],
+        ))
+          'postprocess_checkpoint_review_summary': ValueReaders.stringValue(
+            ValueReaders.mapValue(
+              ValueReaders.mapValue(
+                savedPostprocess['checkpoint_review'],
+              )['review'],
+            )['summary'],
+          ),
+      },
     );
     return <String, Object?>{
       'ok': true,
       'response': _resultAsResponse(result),
       'output_paths': result.writtenPaths,
       'tool_names': _toolNamesFromExecutedTools(result.executedTools),
+      'execution': ValueReaders.mapValue(savedPostprocess['execution']),
+      'checkpoint_review': ValueReaders.mapValue(
+        savedPostprocess['checkpoint_review'],
+      ),
+      'postprocess_review_report_path': ValueReaders.stringValue(
+        savedPostprocess['postprocess_review_report_path'],
+      ),
+      'postprocess_review_report_json_path': ValueReaders.stringValue(
+        savedPostprocess['postprocess_review_report_json_path'],
+      ),
+      'changed_paths': _mergePaths(
+        result.changedPaths,
+        ValueReaders.stringList(savedPostprocess['changed_paths']),
+      ),
     };
   }
 
@@ -1109,131 +1434,48 @@ class ProjectWorkflowRuntimeService {
     };
   }
 
+  Future<JsonMap> buildRevisionResolution(
+    ProjectDescriptor project,
+    JsonMap selector,
+  ) {
+    // 中文注释: 修订收口动作合同从共享规则生成，供 GUI/CLI 后续直接消费。
+    return _revisionResolutionService.buildResolution(
+      project: project,
+      selector: selector,
+    );
+  }
+
+  Future<JsonMap> applyRevisionResolutionAction(
+    ProjectDescriptor project,
+    JsonMap selector,
+    String command,
+  ) {
+    // 中文注释: 修订收口动作统一经过 adapter 服务，避免 UI/CLI 各自实现接受、返工、回滚细节。
+    return _revisionResolutionService.applyAction(
+      project: project,
+      selector: selector,
+      command: command,
+    );
+  }
+
   Future<JsonMap> acceptRevisionTask(
     ProjectDescriptor project,
     JsonMap selector,
-  ) async {
-    // 中文注释: 接受修复结果只更新任务状态和已接受的 diff 路径。
-    final task = await _taskRepository.loadTask(project, selector);
-    if (task.isEmpty) {
-      return <String, Object?>{
-        'ok': false,
-        'error': 'Task not found.',
-        'relative_path': '',
-      };
-    }
-    if (ValueReaders.stringValue(task['task_type']) != 'revision') {
-      return <String, Object?>{
-        'ok': false,
-        'error': 'Only revision tasks can be accepted here.',
-        'relative_path': ValueReaders.stringValue(task['relative_path']),
-      };
-    }
-    return _taskRepository.transitionTask(
-      project,
-      selector,
-      TaskRuntimeConstants.statusSucceeded,
-      note: '用户接受修复结果。',
-      extra: <String, Object?>{
-        'accepted_revision_diff_path': ValueReaders.stringValue(
-          task['revision_diff_path'],
-        ),
-      },
-    );
+  ) {
+    // 中文注释: 兼容旧入口，内部转发到新的修订收口动作层。
+    return applyRevisionResolutionAction(project, selector, 'accept_revision');
   }
 
   Future<JsonMap> rollbackRevisionTask(
     ProjectDescriptor project,
     JsonMap selector,
-  ) async {
-    // 中文注释: 回滚依据修复 diff 中记录的 backup_path -> target_path 配对直接恢复文件。
-    final task = await _taskRepository.loadTask(project, selector);
-    if (task.isEmpty) {
-      return <String, Object?>{
-        'ok': false,
-        'error': 'Task not found.',
-        'relative_path': '',
-      };
-    }
-    if (ValueReaders.stringValue(task['task_type']) != 'revision') {
-      return <String, Object?>{
-        'ok': false,
-        'error': 'Only revision tasks can be rolled back here.',
-        'relative_path': ValueReaders.stringValue(task['relative_path']),
-      };
-    }
-    final diffPath = ValueReaders.stringValue(
-      task['revision_diff_path'],
-    ).trim();
-    if (diffPath.isEmpty) {
-      return <String, Object?>{
-        'ok': false,
-        'error': 'Revision diff path is missing.',
-        'relative_path': ValueReaders.stringValue(task['relative_path']),
-      };
-    }
-    final report = await _taskRepository.loadRecord(
-      project,
-      diffPath.replaceAll(RegExp(r'\.md$'), '.json'),
-    );
-    if (report.isEmpty) {
-      return <String, Object?>{
-        'ok': false,
-        'error': 'Revision diff not found.',
-        'relative_path': ValueReaders.stringValue(task['relative_path']),
-      };
-    }
-    final restored = <String>[];
-    final failed = <JsonMap>[];
-    for (final pair in ValueReaders.mapList(report['pairs'])) {
-      final backupPath = ValueReaders.stringValue(pair['backup_path']).trim();
-      final targetPath = ValueReaders.stringValue(pair['target_path']).trim();
-      if (backupPath.isEmpty || targetPath.isEmpty) {
-        failed.add(<String, Object?>{
-          'target_path': targetPath,
-          'backup_path': backupPath,
-          'error': 'Missing backup or target path.',
-        });
-        continue;
-      }
-      final backupContent =
-          await _taskRepository.readTextFile(project, backupPath) ?? '';
-      if (backupContent.isEmpty) {
-        failed.add(<String, Object?>{
-          'target_path': targetPath,
-          'backup_path': backupPath,
-          'error': 'Backup file not found.',
-        });
-        continue;
-      }
-      await _taskRepository.writeTextFile(project, targetPath, backupContent);
-      restored.add(targetPath);
-    }
-    final transition = await _taskRepository.transitionTask(
+  ) {
+    // 中文注释: 兼容旧入口，内部转发到新的修订收口动作层。
+    return applyRevisionResolutionAction(
       project,
       selector,
-      TaskRuntimeConstants.statusCancelled,
-      note: '用户根据修复 Diff 回滚修复。',
-      extra: <String, Object?>{
-        'rollback_result': <String, Object?>{
-          'ok': failed.isEmpty && restored.isNotEmpty,
-          'restored_paths': restored,
-          'failed': failed,
-        },
-        'rolled_back_revision_diff_path': diffPath,
-      },
+      'rollback_revision',
     );
-    return <String, Object?>{
-      'ok': failed.isEmpty && restored.isNotEmpty,
-      'relative_path': ValueReaders.stringValue(task['relative_path']),
-      'rollback': <String, Object?>{
-        'ok': failed.isEmpty && restored.isNotEmpty,
-        'restored_paths': restored,
-        'failed': failed,
-      },
-      'transition': transition,
-      'warning': failed.isEmpty ? '' : '部分或全部目标回滚失败。',
-    };
   }
 
   Future<JsonMap> transitionWorkflowTask(
@@ -1623,6 +1865,27 @@ class ProjectWorkflowRuntimeService {
         ),
       ),
     );
+  }
+
+  Future<JsonMap> _readPlannedProjectFileContents(
+    ProjectDescriptor project,
+    JsonMap task,
+  ) async {
+    // 中文注释: 执行包准备只预读计划片段中明确点名的文件，避免又退回整仓扫读。
+    final plan = _longTaskProjectFileSectionPlanService.build(task);
+    final contents = <String, Object?>{};
+    for (final section in plan) {
+      for (final path in ValueReaders.stringList(section['paths'])) {
+        if (contents.containsKey(path)) {
+          continue;
+        }
+        final content = await _taskRepository.readTextFile(project, path);
+        if (content != null && content.trim().isNotEmpty) {
+          contents[path] = content;
+        }
+      }
+    }
+    return contents;
   }
 
   static BuildLongTaskRevisionPlanUseCase

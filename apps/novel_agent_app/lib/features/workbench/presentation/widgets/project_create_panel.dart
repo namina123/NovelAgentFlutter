@@ -4,6 +4,7 @@ import '../../../../../app/theme/app_palette.dart';
 import '../../../../../shared/widgets/action_button.dart';
 import '../models/project_create_request_view_data.dart';
 import '../models/project_type_option_view_data.dart';
+import 'project_type_option_tile.dart';
 
 class ProjectCreatePanel extends StatefulWidget {
   const ProjectCreatePanel({
@@ -12,6 +13,8 @@ class ProjectCreatePanel extends StatefulWidget {
     required this.status,
     required this.projectTypeOptions,
     required this.selectedProjectTypeId,
+    required this.allowOpenExisting,
+    required this.onOpenExistingRequested,
     required this.onCreateSubmitted,
   });
 
@@ -19,6 +22,8 @@ class ProjectCreatePanel extends StatefulWidget {
   final String status;
   final List<ProjectTypeOptionViewData> projectTypeOptions;
   final String selectedProjectTypeId;
+  final bool allowOpenExisting;
+  final VoidCallback onOpenExistingRequested;
   final ValueChanged<ProjectCreateRequestViewData> onCreateSubmitted;
 
   @override
@@ -47,13 +52,13 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
 
   @override
   Widget build(BuildContext context) {
-    // 中文注释: 创建项目面板先只做最小可用骨架，保证入口真实可用，再逐步扩成完整向导。
+    // 中文注释: 创建项目面板统一承接“无项目时先建项目”的主入口，桌面端可额外挂现有项目目录选择。
     final selectedOption = _selectedOption();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          '新建项目',
+          '创建项目',
           style: TextStyle(
             color: AppPalette.text,
             fontSize: 18,
@@ -61,6 +66,11 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
           ),
         ),
         const SizedBox(height: 8),
+        const Text(
+          '先创建项目，再进入文件、会话和模型调用。',
+          style: TextStyle(color: AppPalette.mutedText, fontSize: 12),
+        ),
+        const SizedBox(height: 10),
         Text(
           '创建位置：${widget.projectsRootPath}',
           style: const TextStyle(color: AppPalette.mutedText, fontSize: 12),
@@ -75,36 +85,40 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
           onSubmitted: _submit,
         ),
         const SizedBox(height: 12),
-        DropdownButtonFormField<String>(
-          initialValue: _selectedProjectTypeId,
-          decoration: const InputDecoration(
-            labelText: '项目类型',
-            hintText: '选择项目类型',
+        const Text(
+          '项目类型',
+          style: TextStyle(
+            color: AppPalette.text,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
           ),
-          items: widget.projectTypeOptions
-              .map(
-                (option) => DropdownMenuItem<String>(
-                  value: option.id,
-                  child: Text(option.title),
-                ),
-              )
-              .toList(growable: false),
-          onChanged: (value) {
-            if (value == null) {
-              return;
-            }
-            _handleProjectTypeChanged(value);
-          },
         ),
         const SizedBox(height: 8),
-        Text(
-          selectedOption?.description ?? '',
-          style: const TextStyle(
-            color: AppPalette.mutedText,
-            fontSize: 12,
-            height: 1.45,
+        Expanded(
+          child: ListView.separated(
+            itemCount: widget.projectTypeOptions.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 8),
+            itemBuilder: (context, index) {
+              final option = widget.projectTypeOptions[index];
+              return ProjectTypeOptionTile(
+                option: option,
+                isSelected: option.id == _selectedProjectTypeId,
+                onTap: () => _handleProjectTypeChanged(option.id),
+              );
+            },
           ),
         ),
+        if ((selectedOption?.description ?? '').trim().isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Text(
+            selectedOption!.description,
+            style: const TextStyle(
+              color: AppPalette.mutedText,
+              fontSize: 12,
+              height: 1.45,
+            ),
+          ),
+        ],
         if (widget.status.trim().isNotEmpty) ...[
           const SizedBox(height: 12),
           Text(
@@ -116,13 +130,31 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
             ),
           ),
         ],
-        const Spacer(),
-        ActionButton(
-          label: '创建并打开',
-          icon: Icons.add_business_outlined,
-          expanded: true,
-          tone: ActionButtonTone.warm,
-          onPressed: () => _submit(_controller.text),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            if (widget.allowOpenExisting) ...[
+              Expanded(
+                child: ActionButton(
+                  label: '打开已有项目',
+                  icon: Icons.folder_open_outlined,
+                  expanded: true,
+                  tone: ActionButtonTone.neutral,
+                  onPressed: widget.onOpenExistingRequested,
+                ),
+              ),
+              const SizedBox(width: 10),
+            ],
+            Expanded(
+              child: ActionButton(
+                label: '创建并打开',
+                icon: Icons.add_business_outlined,
+                expanded: true,
+                tone: ActionButtonTone.warm,
+                onPressed: () => _submit(_controller.text),
+              ),
+            ),
+          ],
         ),
       ],
     );

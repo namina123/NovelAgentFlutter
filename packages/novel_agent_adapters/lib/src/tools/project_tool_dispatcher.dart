@@ -161,7 +161,7 @@ class ProjectToolDispatcher implements ToolExecutionPort {
       case 'present_user_options':
         return _presentUserOptions(arguments);
       case 'set_agent_tasks':
-        return _setAgentTasks(arguments);
+        return _taskToolExecutor.setAgentTasks(project, arguments);
       case 'load_agent_skill':
         return _agentSkillToolExecutor.loadAgentSkill(project, arguments);
       case 'call_sub_agent':
@@ -190,10 +190,8 @@ class ProjectToolDispatcher implements ToolExecutionPort {
       case 'list_project_files':
       case 'search_project_files':
       case 'reorder_project_file':
-        normalized['relative_path'] = await _relativePathResolver.resolveScopePath(
-          project,
-          normalized,
-        );
+        normalized['relative_path'] = await _relativePathResolver
+            .resolveScopePath(project, normalized);
         return normalized;
       case 'read_project_file':
       case 'get_project_file_info':
@@ -201,34 +199,29 @@ class ProjectToolDispatcher implements ToolExecutionPort {
       case 'create_backup':
       case 'edit_project_file':
       case 'rename_project_file':
-        normalized['relative_path'] = await _relativePathResolver.resolveFilePath(
-          project,
-          normalized,
-        );
+        normalized['relative_path'] = await _relativePathResolver
+            .resolveFilePath(project, normalized);
         return normalized;
       case 'write_project_file':
       case 'create_project_entry':
-        normalized['relative_path'] = _relativePathResolver.normalizeProjectPath(
-          ValueReaders.stringValue(normalized['relative_path']),
-        );
+        normalized['relative_path'] = _relativePathResolver
+            .normalizeProjectPath(
+              ValueReaders.stringValue(normalized['relative_path']),
+            );
         return normalized;
       case 'move_project_file':
-        normalized['relative_path'] = await _relativePathResolver.resolveFilePath(
-          project,
-          normalized,
-        );
-        normalized['target_relative_path'] =
-            _relativePathResolver.normalizeProjectPath(
+        normalized['relative_path'] = await _relativePathResolver
+            .resolveFilePath(project, normalized);
+        normalized['target_relative_path'] = _relativePathResolver
+            .normalizeProjectPath(
               ValueReaders.stringValue(normalized['target_relative_path']),
             );
         return normalized;
       case 'manipulate_project_file_lines':
-        normalized['relative_path'] = await _relativePathResolver.resolveFilePath(
-          project,
-          normalized,
-        );
-        normalized['target_relative_path'] =
-            _relativePathResolver.normalizeProjectPath(
+        normalized['relative_path'] = await _relativePathResolver
+            .resolveFilePath(project, normalized);
+        normalized['target_relative_path'] = _relativePathResolver
+            .normalizeProjectPath(
               ValueReaders.stringValue(normalized['target_relative_path']),
             );
         return normalized;
@@ -340,20 +333,5 @@ class ProjectToolDispatcher implements ToolExecutionPort {
       });
     }
     return result;
-  }
-
-  JsonMap _setAgentTasks(JsonMap arguments) {
-    // 中文注释: 计划工具只返回结构化任务清单，供主循环记录，不直接改写项目文件。
-    final tasks = ValueReaders.objectList(arguments['tasks'])
-        .map(ValueReaders.mapValue)
-        .where((entry) => entry.isNotEmpty)
-        .toList(growable: false);
-    return _resultFactory.success(
-      '已更新任务清单：${tasks.length} 项',
-      data: <String, Object?>{
-        'goal': ValueReaders.stringValue(arguments['goal']),
-        'tasks': tasks,
-      },
-    );
   }
 }

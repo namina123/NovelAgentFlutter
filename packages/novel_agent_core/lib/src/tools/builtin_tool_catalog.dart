@@ -1,4 +1,5 @@
 import 'builtin_tool_definition.dart';
+import 'tool_platform_policy.dart';
 
 final class BuiltinToolCatalog {
   static const List<BuiltinToolDefinition> definitions =
@@ -145,6 +146,7 @@ final class BuiltinToolCatalog {
           id: 'request_gateway_tool',
           name: '请求网关工具',
           description: '请求桌面端或远程 Gateway 执行联网、命令、媒体等高级能力。',
+          platformPolicy: ToolPlatformPolicy.transportOnly,
           enabledByDefault: false,
         ),
       ];

@@ -305,10 +305,7 @@ class ProjectReviewReportService {
 
   String _markdownPathFor(String jsonPath) {
     // 中文注释: JSON 报告与 Markdown 报告保持同名兄弟文件，路径转换集中在这里。
-    if (!jsonPath.toLowerCase().endsWith('.json')) {
-      return jsonPath;
-    }
-    return '${jsonPath.substring(0, jsonPath.length - 5)}md';
+    return _pathPolicyService.reviewMarkdownPath(jsonPath);
   }
 
   String _extractMarkdownTitle(String relativePath, String body) {

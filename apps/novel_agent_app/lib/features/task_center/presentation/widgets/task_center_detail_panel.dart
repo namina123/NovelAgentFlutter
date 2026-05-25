@@ -12,6 +12,7 @@ class TaskCenterDetailPanel extends StatelessWidget {
     required this.detailBody,
     required this.queueSummary,
     required this.schedulerSummary,
+    required this.guidanceRevisitBody,
   });
 
   final String title;
@@ -19,6 +20,7 @@ class TaskCenterDetailPanel extends StatelessWidget {
   final String detailBody;
   final String queueSummary;
   final String schedulerSummary;
+  final String guidanceRevisitBody;
 
   @override
   Widget build(BuildContext context) {
@@ -38,6 +40,8 @@ class TaskCenterDetailPanel extends StatelessWidget {
                     '\n\n## 队列预检\n$queueSummary',
                   if (schedulerSummary.trim().isNotEmpty)
                     '\n\n## 调度摘要\n$schedulerSummary',
+                  if (guidanceRevisitBody.trim().isNotEmpty)
+                    '\n\n$guidanceRevisitBody',
                 ].join(),
                 style: const TextStyle(
                   fontSize: 13,

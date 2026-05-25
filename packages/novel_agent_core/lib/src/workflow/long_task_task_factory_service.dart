@@ -1,5 +1,6 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import 'long_task_mode_context_path_service.dart';
 import 'long_task_mode_service.dart';
 import 'long_task_path_policy_service.dart';
 import 'task_runtime_constants.dart';
@@ -8,11 +9,19 @@ class LongTaskTaskFactoryService {
   LongTaskTaskFactoryService({
     required LongTaskModeService modeService,
     required LongTaskPathPolicyService pathPolicyService,
+    LongTaskModeContextPathService? modeContextPathService,
   }) : _modeService = modeService,
-       _pathPolicyService = pathPolicyService;
+       _pathPolicyService = pathPolicyService,
+       _modeContextPathService =
+           modeContextPathService ??
+           LongTaskModeContextPathService(
+             modeService: modeService,
+             pathPolicyService: pathPolicyService,
+           );
 
   final LongTaskModeService _modeService;
   final LongTaskPathPolicyService _pathPolicyService;
+  final LongTaskModeContextPathService _modeContextPathService;
 
   List<JsonMap> buildTasks(
     String mode,
@@ -105,14 +114,18 @@ class LongTaskTaskFactoryService {
     if (outputPath.isEmpty) {
       outputPath = 'drafts/${_chapterFileName(1, title)}.md';
     }
-    final sourcePaths = _pathPolicyService.stringList(
-      options['source_paths'] ??
-          const <Object?>[
-            'specs/project_spec.md',
-            'summaries',
-            'styles',
-            'knowledge',
-          ],
+    final sourcePaths = _modeContextPathService.mergeTaskSourcePaths(
+      TaskRuntimeConstants.modeSingleChapterAtomic,
+      options,
+      ValueReaders.objectList(
+        options['source_paths'] ??
+            const <Object?>[
+              'specs/project_spec.md',
+              'summaries',
+              'styles',
+              'knowledge',
+            ],
+      ),
     );
     return <JsonMap>[
       _chapterTask(<String, Object?>{
@@ -139,6 +152,10 @@ class LongTaskTaskFactoryService {
     required String createdAt,
   }) {
     // 中文注释: 种子到长篇模式先规划，再样章确认，再进入章节队列和关键检查点。
+    final persistentPaths = _modeContextPathService.persistentContextPaths(
+      TaskRuntimeConstants.modeSeedToFullNovel,
+      options,
+    );
     final chapterCount = ValueReaders.intValue(
       options['chapter_count'],
       8,
@@ -158,7 +175,14 @@ class LongTaskTaskFactoryService {
     var sortOrder = 1;
     final planningId = '${planId}_planning';
     tasks.add(
-      _planningTask(planId, planningId, seedPrompt, sortOrder, createdAt),
+      _planningTask(
+        planId,
+        planningId,
+        seedPrompt,
+        sortOrder,
+        createdAt,
+        persistentPaths,
+      ),
     );
     sortOrder += 1;
     final outlineCheckpointId = '${planId}_checkpoint_outline';
@@ -169,10 +193,11 @@ class LongTaskTaskFactoryService {
         outlineCheckpointId,
         '检查点：确认总纲与章节任务',
         planningId,
-        <Object?>['specs/project_spec.md', 'outline/总纲.md'],
+        <Object?>['specs/project_spec.md', 'outline/总纲.md', ...persistentPaths],
         <Object?>['outline/总纲.md', 'chapter_outlines/章节任务清单.md'],
         sortOrder,
         createdAt,
+        persistentPaths,
       ),
     );
     sortOrder += 1;
@@ -205,6 +230,7 @@ class LongTaskTaskFactoryService {
             'specs/project_spec.md',
             'outline/总纲.md',
             'chapter_outlines/章节任务清单.md',
+            ...persistentPaths,
           ],
           'output_paths': <Object?>[outputPath],
           'plan_id': planId,
@@ -212,6 +238,7 @@ class LongTaskTaskFactoryService {
           'stage': chapterNumber == 1 ? 'sample' : 'draft',
           'tool_hint':
               '先读取项目规格、总纲、章纲、摘要和必要设定；如果规划尚未充分，请先调用 present_user_options 或写入大纲，而不是硬写正文。',
+          'persistent_context_paths': persistentPaths,
         }, createdAt: createdAt),
       );
       previousDependency = chapterId;
@@ -234,10 +261,11 @@ class LongTaskTaskFactoryService {
             checkpointId,
             checkpointTitle,
             previousDependency,
-            <Object?>['summaries', outputPath],
+            <Object?>['summaries', outputPath, ...persistentPaths],
             <Object?>[outputPath],
             sortOrder,
             createdAt,
+            persistentPaths,
           ),
         );
         previousDependency = checkpointId;
@@ -277,6 +305,15 @@ class LongTaskTaskFactoryService {
     if (outlinePath.isNotEmpty) {
       sourcePaths.add(outlinePath);
     }
+    final modeSourcePaths = _modeContextPathService.mergeTaskSourcePaths(
+      mode,
+      options,
+      sourcePaths,
+    );
+    final persistentPaths = _modeContextPathService.persistentContextPaths(
+      mode,
+      options,
+    );
     final tasks = <JsonMap>[];
     var previousDependency = '';
     var sortOrder = 1;
@@ -301,12 +338,13 @@ class LongTaskTaskFactoryService {
           'brief': ValueReaders.stringValue(item['brief']),
           'mode': mode,
           'depends_on': depends,
-          'source_paths': sourcePaths,
+          'source_paths': modeSourcePaths,
           'output_paths': <Object?>[outputPath],
           'plan_id': planId,
           'sort_order': sortOrder,
           'stage': 'draft',
           'tool_hint': chapterToolHint,
+          'persistent_context_paths': persistentPaths,
         }, createdAt: createdAt),
       );
       previousDependency = chapterId;
@@ -323,10 +361,11 @@ class LongTaskTaskFactoryService {
             checkpointId,
             '检查点：第 $chapterNumber 章后确认',
             previousDependency,
-            sourcePaths,
+            modeSourcePaths,
             <Object?>[outputPath],
             sortOrder,
             createdAt,
+            persistentPaths,
           ),
         );
         previousDependency = checkpointId;
@@ -342,6 +381,7 @@ class LongTaskTaskFactoryService {
     String seedPrompt,
     int sortOrder,
     String createdAt,
+    List<String> persistentPaths,
   ) {
     // 中文注释: 规划任务是 seed_to_full 模式的入口，不写正文，只产出规格和任务清单。
     return _baseTask(<String, Object?>{
@@ -353,12 +393,16 @@ class LongTaskTaskFactoryService {
       'goal': '根据用户种子扩展项目规格、创作宪法、总纲、卷纲/章纲，并在必要时创建或修订后续章节任务。',
       'brief': seedPrompt,
       'depends_on': <Object?>[],
-      'source_paths': <Object?>[
-        'specs/project_spec.md',
-        'styles',
-        'knowledge',
-        'inspiration',
-      ],
+      'source_paths': _modeContextPathService.mergeTaskSourcePaths(
+        TaskRuntimeConstants.modeSeedToFullNovel,
+        <String, Object?>{'persistent_context_paths': persistentPaths},
+        <Object?>[
+          'specs/project_spec.md',
+          'styles',
+          'knowledge',
+          'inspiration',
+        ],
+      ),
       'output_paths': <Object?>[
         'specs/project_spec.md',
         'outline/总纲.md',
@@ -371,6 +415,7 @@ class LongTaskTaskFactoryService {
         'stage': 'planning',
         'seed_prompt': seedPrompt,
         'generated_by': 'LongTaskPlanner',
+        'persistent_context_paths': persistentPaths,
       },
       'tool_hint':
           '不要写正文。优先保存 specs/project_spec.md、outline/总纲.md、chapter_outlines/章节任务清单.md；需要用户确认时调用 present_user_options。',
@@ -400,6 +445,9 @@ class LongTaskTaskFactoryService {
         'sort_order': ValueReaders.intValue(data['sort_order']),
         'stage': ValueReaders.stringValue(data['stage'], 'draft'),
         'generated_by': 'LongTaskPlanner',
+        'persistent_context_paths': _pathPolicyService.stringList(
+          data['persistent_context_paths'],
+        ),
       },
       'tool_hint': ValueReaders.stringValue(data['tool_hint']),
     }, createdAt);
@@ -415,6 +463,7 @@ class LongTaskTaskFactoryService {
     List<Object?> outputPaths,
     int sortOrder,
     String createdAt,
+    List<String> persistentPaths,
   ) {
     // 中文注释: 检查点任务本身不自动跑模型，只提供用户确认、调整和继续的安全停顿点。
     final dependsOn = <Object?>[];
@@ -439,6 +488,7 @@ class LongTaskTaskFactoryService {
         'stage': 'checkpoint',
         'generated_by': 'LongTaskPlanner',
         'manual_checkpoint': true,
+        'persistent_context_paths': persistentPaths,
       },
       'tool_hint': '检查点任务只等待用户确认；通常不需要执行模型。',
     }, createdAt);

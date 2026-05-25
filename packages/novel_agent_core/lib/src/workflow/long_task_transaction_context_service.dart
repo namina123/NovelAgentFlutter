@@ -54,6 +54,12 @@ class LongTaskTransactionContextService {
     final metadata = ValueReaders.mapValue(task['metadata']);
     final needs = <String>[];
     _addUnique(needs, '先读取任务 source_paths 中明确列出的文件。');
+    final persistentPaths = _pathPolicyService.stringList(
+      metadata['persistent_context_paths'],
+    );
+    if (persistentPaths.isNotEmpty) {
+      _addUnique(needs, '把长期约束路径中的风格、世界、角色与模式摘要视为持续硬约束；除非用户明确改动，否则不要自行漂移。');
+    }
     _addUnique(
       needs,
       '需要时读取 specs/project_spec.md、styles/、knowledge/ 和相关人物/世界状态。',

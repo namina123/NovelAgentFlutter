@@ -57,7 +57,14 @@ void main() {
       final tasks = factory.buildTasks(
         TaskRuntimeConstants.modeSeedToFullNovel,
         'plan_a',
-        options: <String, Object?>{'seed_prompt': '都市异能长篇', 'chapter_count': 3},
+        options: <String, Object?>{
+          'seed_prompt': '都市异能长篇',
+          'chapter_count': 3,
+          'persistent_context_paths': <Object?>[
+            'tracking/modes/seed_autopilot_novel/guidance.md',
+            'styles/seed_autopilot_style.md',
+          ],
+        },
         createdAt: '2026-05-23T10:00:00Z',
       );
       final record = recordService.startRecord(
@@ -88,6 +95,14 @@ void main() {
       expect(action['action'], 'call_model');
       expect(prompt, contains('长篇任务流单步'));
       expect(prompt, contains('项目模板'));
+      expect(
+        ValueReaders.stringList(tasks.first['source_paths']),
+        contains('styles/seed_autopilot_style.md'),
+      );
+      expect(
+        ValueReaders.stringList(transaction['context_needs']),
+        contains('把长期约束路径中的风格、世界、角色与模式摘要视为持续硬约束；除非用户明确改动，否则不要自行漂移。'),
+      );
     });
 
     test(
@@ -116,6 +131,14 @@ void main() {
           'ok': false,
           'error': '模型失败',
           'output_paths': <Object?>[],
+          'checkpoint_review': <String, Object?>{
+            'relative_path': 'tracking/checkpoint_reviews/rev.json',
+            'review': <String, Object?>{
+              'summary': '需要人工判断是否重试。',
+              'severity': 'critical',
+              'action_summary': '建议动作：回看长期约束、生成后续审稿',
+            },
+          },
           'response': <String, Object?>{},
         }, createdAt: '2026-05-23T10:01:00Z');
         final postTx = postprocessTransaction.buildPostprocessTransaction(
@@ -140,6 +163,12 @@ void main() {
         expect(recoveryPlan['action'], 'pause_for_failure');
         expect(failureAction['task_status'], TaskRuntimeConstants.statusQueued);
         expect(markdown.renderMarkdown(stepped), contains('模型失败'));
+        expect(
+          markdown.renderMarkdown(stepped),
+          contains('tracking/checkpoint_reviews/rev.json'),
+        );
+        expect(markdown.renderMarkdown(stepped), contains('风险级别：critical'));
+        expect(markdown.renderMarkdown(stepped), contains('动作建议：建议动作'));
       },
     );
   });

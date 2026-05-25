@@ -48,7 +48,13 @@ class ToolSchemaBuilderService {
         return _objectSchema(
           required: const <String>['relative_path'],
           properties: <String, Object?>{
-            'relative_path': _stringSchema('要读取的项目英文相对路径。必须直接复制 list_project_files 返回的 relative_path。'),
+            'relative_path': _stringSchema(
+              '要读取的项目英文相对路径。必须直接复制 list_project_files 返回的 relative_path。',
+            ),
+            'start_line': _intSchema('可选起始行，1-based；负数表示从文件尾部反向定位。'),
+            'end_line': _intSchema('可选结束行，1-based；负数表示从文件尾部反向定位。'),
+            'limit': _intSchema('可选最大返回行数；只在行范围读取时生效。'),
+            'exclude_line_numbers': _boolSchema('行范围读取时是否不要在 content 中附带行号。'),
           },
         );
       case 'write_project_file':
@@ -76,6 +82,14 @@ class ToolSchemaBuilderService {
             'old_text': _stringSchema(
               'replace、insert_before、insert_after、delete 所依赖的原文锚点。',
             ),
+            'pattern': _stringSchema('可选正则表达式；当 use_regex=true 时作为匹配模式。'),
+            'use_regex': _boolSchema(
+              'replace/delete 是否把 pattern 或 old_text 当作正则表达式。',
+            ),
+            'start_text': _stringSchema('可选范围起始锚点；replace/delete 时可用于锚点范围处理。'),
+            'end_text': _stringSchema('可选范围结束锚点；replace/delete 时可用于锚点范围处理。'),
+            'include_start': _boolSchema('锚点范围处理时是否连同 start_text 一起替换或删除。'),
+            'include_end': _boolSchema('锚点范围处理时是否连同 end_text 一起替换或删除。'),
             'expected_occurrences': _intSchema('可选，replace 时期望命中次数。'),
             'replace_all': _boolSchema('replace/delete 是否处理全部命中。'),
             'content_type': _stringSchema('可选内容类型，用于权限和目录语义。'),
@@ -118,8 +132,40 @@ class ToolSchemaBuilderService {
                 properties: <String, Object?>{
                   'id': _stringSchema('任务标识。'),
                   'title': _stringSchema('任务标题。'),
+                  'goal': _stringSchema('任务目标。'),
                   'description': _stringSchema('任务说明。'),
+                  'brief': _stringSchema('给执行层的简短说明。'),
+                  'task_type': _stringSchema(
+                    'planning、chapter、checkpoint、revision 等任务类型。',
+                  ),
+                  'mode': _stringSchema('任务运行模式，例如 seed_to_full_novel。'),
                   'status': _stringSchema('任务状态。'),
+                  'chapter': _stringSchema('章节名或阶段名。'),
+                  'depends_on': <String, Object?>{
+                    'type': 'array',
+                    'items': _stringSchema('依赖任务 ID。'),
+                  },
+                  'source_paths': <String, Object?>{
+                    'type': 'array',
+                    'items': _stringSchema('执行前应优先读取的项目路径。'),
+                  },
+                  'output_paths': <String, Object?>{
+                    'type': 'array',
+                    'items': _stringSchema('该任务预期写出的项目路径。'),
+                  },
+                  'tool_hint': _stringSchema('给后续执行层的工具使用提示。'),
+                  'metadata': _objectSchema(
+                    properties: <String, Object?>{
+                      'plan_id': _stringSchema('所属计划 ID。'),
+                      'workflow_mode': _stringSchema('工作流模式。'),
+                      'stage': _stringSchema('阶段标识。'),
+                      'sort_order': <String, Object?>{'type': 'integer'},
+                      'persistent_context_paths': <String, Object?>{
+                        'type': 'array',
+                        'items': _stringSchema('需要长期保留的约束路径。'),
+                      },
+                    },
+                  ),
                 },
               ),
             },
@@ -260,6 +306,7 @@ class ToolSchemaBuilderService {
             'relative_path': _stringSchema('可选搜索范围目录。'),
             'limit': _intSchema('最大返回命中数。'),
             'case_sensitive': _boolSchema('是否区分大小写。'),
+            'use_regex': _boolSchema('是否把 pattern 作为正则表达式。'),
             'include_json': _boolSchema('是否搜索 json/jsonl。'),
           },
         );
@@ -314,10 +361,10 @@ class ToolSchemaBuilderService {
           properties: <String, Object?>{
             'relative_path': _stringSchema('源文件相对路径。'),
             'operation': _stringSchema('copy、cut、delete。'),
-            'start_line': _intSchema('起始行，1-based。'),
-            'end_line': _intSchema('结束行，1-based。'),
+            'start_line': _intSchema('起始行，1-based；负数表示从文件尾部反向定位。'),
+            'end_line': _intSchema('结束行，1-based；负数表示从文件尾部反向定位。'),
             'target_relative_path': _stringSchema('copy/cut 时可选目标文件路径。'),
-            'target_line': _intSchema('插入到目标文件的行号。'),
+            'target_line': _intSchema('插入到目标文件的行号；负数表示按目标文件尾部反向定位。'),
           },
         );
       case 'list_history_sessions':

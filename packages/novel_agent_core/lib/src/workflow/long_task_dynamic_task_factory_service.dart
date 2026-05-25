@@ -1,5 +1,6 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import 'long_task_mode_context_path_service.dart';
 import 'long_task_mode_service.dart';
 import 'long_task_path_policy_service.dart';
 import 'task_runtime_constants.dart';
@@ -8,11 +9,19 @@ class LongTaskDynamicTaskFactoryService {
   LongTaskDynamicTaskFactoryService({
     required LongTaskModeService modeService,
     required LongTaskPathPolicyService pathPolicyService,
+    LongTaskModeContextPathService? modeContextPathService,
   }) : _modeService = modeService,
-       _pathPolicyService = pathPolicyService;
+       _pathPolicyService = pathPolicyService,
+       _modeContextPathService =
+           modeContextPathService ??
+           LongTaskModeContextPathService(
+             modeService: modeService,
+             pathPolicyService: pathPolicyService,
+           );
 
   final LongTaskModeService _modeService;
   final LongTaskPathPolicyService _pathPolicyService;
+  final LongTaskModeContextPathService _modeContextPathService;
 
   JsonMap buildCheckpointTask(
     JsonMap record,
@@ -50,6 +59,10 @@ class LongTaskDynamicTaskFactoryService {
     if (afterTaskId.isNotEmpty) {
       dependsOn.add(afterTaskId);
     }
+    final inheritedPersistentPaths = _persistentContextPaths(
+      arguments,
+      afterTask,
+    );
     return <String, Object?>{
       'schema_version': 1,
       'id': checkpointId,
@@ -64,8 +77,12 @@ class LongTaskDynamicTaskFactoryService {
       ),
       'brief': ValueReaders.stringValue(arguments['brief'], '这是动态插入的长任务检查点。'),
       'depends_on': dependsOn,
-      'source_paths': _pathPolicyService.stringList(
-        arguments['source_paths'] ?? afterTask['output_paths'],
+      'source_paths': _modeContextPathService.mergeTaskSourcePaths(
+        mode,
+        <String, Object?>{'persistent_context_paths': inheritedPersistentPaths},
+        ValueReaders.objectList(
+          arguments['source_paths'] ?? afterTask['output_paths'],
+        ),
       ),
       'output_paths': _pathPolicyService.stringList(
         arguments['output_paths'] ?? afterTask['output_paths'],
@@ -77,6 +94,7 @@ class LongTaskDynamicTaskFactoryService {
         'stage': 'checkpoint',
         'manual_checkpoint': true,
         'generated_by': 'LongTaskRevision',
+        'persistent_context_paths': inheritedPersistentPaths,
       },
       'tool_hint': '检查点任务只等待用户确认；通常不需要执行模型。',
       'created_at': now,
@@ -134,6 +152,10 @@ class LongTaskDynamicTaskFactoryService {
       outputPath =
           'drafts/第${chapterNumber.toString().padLeft(2, '0')}章_${_safeFilePart(title, 'chapter')}.md';
     }
+    final inheritedPersistentPaths = _persistentContextPaths(
+      arguments,
+      _taskAt(tasks, _indexById(tasks, afterTaskId)),
+    );
     return <String, Object?>{
       'schema_version': 1,
       'id': _pathPolicyService.safeId(
@@ -160,13 +182,17 @@ class LongTaskDynamicTaskFactoryService {
       ),
       'brief': ValueReaders.stringValue(arguments['brief']),
       'depends_on': dependsOn,
-      'source_paths': _pathPolicyService.stringList(
-        arguments['source_paths'] ??
-            const <Object?>[
-              'specs/project_spec.md',
-              'outline/总纲.md',
-              'summaries',
-            ],
+      'source_paths': _modeContextPathService.mergeTaskSourcePaths(
+        mode,
+        <String, Object?>{'persistent_context_paths': inheritedPersistentPaths},
+        ValueReaders.objectList(
+          arguments['source_paths'] ??
+              const <Object?>[
+                'specs/project_spec.md',
+                'outline/总纲.md',
+                'summaries',
+              ],
+        ),
       ),
       'output_paths': <Object?>[outputPath],
       'metadata': <String, Object?>{
@@ -175,6 +201,7 @@ class LongTaskDynamicTaskFactoryService {
         'sort_order': _maxSortOrder(tasks) + 1,
         'stage': ValueReaders.stringValue(arguments['stage'], 'draft'),
         'generated_by': 'LongTaskRevision',
+        'persistent_context_paths': inheritedPersistentPaths,
       },
       'tool_hint': ValueReaders.stringValue(
         arguments['tool_hint'],
@@ -244,5 +271,17 @@ class LongTaskDynamicTaskFactoryService {
     // 中文注释: 文件名片段沿用核心路径策略，避免动态章节生成出脏路径。
     final result = _pathPolicyService.safeId(value, fallbackPrefix: fallback);
     return result.isEmpty ? fallback : result;
+  }
+
+  List<String> _persistentContextPaths(JsonMap arguments, JsonMap afterTask) {
+    // 中文注释: 动态任务默认继承前序任务的长期约束路径；调用方显式传入时，以显式值为准。
+    final explicit = _pathPolicyService.stringList(
+      arguments['persistent_context_paths'],
+    );
+    if (explicit.isNotEmpty) {
+      return explicit;
+    }
+    final metadata = ValueReaders.mapValue(afterTask['metadata']);
+    return _pathPolicyService.stringList(metadata['persistent_context_paths']);
   }
 }

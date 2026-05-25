@@ -1,4 +1,5 @@
 import '../models/task_center_view_data.dart';
+import '../models/task_center_contract_action_view_data.dart';
 
 abstract class TaskCenterActionHandler {
   void onTaskCenterBackRequested();
@@ -48,4 +49,8 @@ abstract class TaskCenterActionHandler {
   void onTaskCenterRetryRequested();
 
   void onTaskCenterCancelRequested();
+
+  void onTaskCenterSharedActionRequested(
+    TaskCenterContractActionViewData action,
+  );
 }

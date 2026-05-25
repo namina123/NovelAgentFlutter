@@ -1,9 +1,11 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import '../common/host_platform.dart';
 import '../ports/llm_gateway.dart';
 import '../ports/tool_execution_port.dart';
 import '../project/project_descriptor.dart';
 import '../tools/tool_call_parser_service.dart';
+import '../tools/tool_exposure_policy_service.dart';
 import '../tools/tool_event_presenter_service.dart';
 import '../tools/tool_schema_builder_service.dart';
 import '../tools/tool_strategy_service.dart';
@@ -34,6 +36,8 @@ class SubAgentExecutionService {
     AgentToolMessageService? agentToolMessageService,
     AgentToolPolicyService? agentToolPolicyService,
     ToolEventPresenterService? toolEventPresenterService,
+    ToolExposurePolicyService? toolExposurePolicyService,
+    HostPlatform hostPlatform = HostPlatform.unknown,
   }) : _llmGateway = llmGateway,
        _toolExecutionPort = toolExecutionPort,
        _loadAvailableAgents = loadAvailableAgents,
@@ -46,6 +50,9 @@ class SubAgentExecutionService {
        _groupSelectionService =
            groupSelectionService ?? SubAgentGroupSelectionService(),
        _toolStrategyService = toolStrategyService ?? ToolStrategyService(),
+       _toolExposurePolicyService =
+           toolExposurePolicyService ?? const ToolExposurePolicyService(),
+       _hostPlatform = hostPlatform,
        _toolSchemaBuilderService =
            toolSchemaBuilderService ?? ToolSchemaBuilderService(),
        _toolCallParserService =
@@ -70,6 +77,8 @@ class SubAgentExecutionService {
   final BuiltinCollaboratorCatalogService _collaboratorCatalogService;
   final SubAgentGroupSelectionService _groupSelectionService;
   final ToolStrategyService _toolStrategyService;
+  final ToolExposurePolicyService _toolExposurePolicyService;
+  final HostPlatform _hostPlatform;
   final ToolSchemaBuilderService _toolSchemaBuilderService;
   final ToolCallParserService _toolCallParserService;
   final AgentLoopContractService _agentLoopContractService;
@@ -146,10 +155,16 @@ class SubAgentExecutionService {
         .enabledToolIds(toolSettings)
         .where((toolId) => !blockedTools.contains(toolId))
         .toList(growable: false);
-    final toolSchemas = _toolSchemaBuilderService.buildOpenAiSchemas(
+    final exposedChildToolIds = _toolExposurePolicyService.filterExposedToolIds(
       childToolIds,
+      hostPlatform: _hostPlatform,
     );
-    final messages = ValueReaders.mapList(package['messages']);
+    final toolSchemas = _toolSchemaBuilderService.buildOpenAiSchemas(
+      exposedChildToolIds,
+    );
+    final messages = ValueReaders.mapList(package['messages']).toList(
+      growable: true,
+    );
     final executedTools = <Object?>[];
     var finalContent = '';
     var waitingForUserChoice = false;

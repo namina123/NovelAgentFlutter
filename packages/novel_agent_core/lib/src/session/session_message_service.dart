@@ -8,7 +8,7 @@ class SessionMessageService {
         .map(ValueReaders.mapValue)
         .where((entry) => entry.isNotEmpty)
         .map(ValueReaders.deepCopyMap)
-        .toList(growable: false);
+        .toList(growable: true);
   }
 
   int messagesChars(List<Object?> messages) {

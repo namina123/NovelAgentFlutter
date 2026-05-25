@@ -1,0 +1,98 @@
+import 'dart:io';
+
+import 'package:novel_agent_adapters/novel_agent_adapters.dart';
+import 'package:novel_agent_core/novel_agent_core.dart';
+import 'package:test/test.dart';
+
+import '../lib/src/tools/project_task_tool_executor.dart';
+
+void main() {
+  group('ProjectTaskToolExecutor', () {
+    late Directory tempDirectory;
+    late ProjectDescriptor project;
+    late ProjectTaskToolExecutor executor;
+
+    setUp(() async {
+      tempDirectory = await Directory.systemTemp.createTemp(
+        'novel_agent_task_executor_test_',
+      );
+      final workspacePort = LocalProjectWorkspacePort();
+      final hostPort = ProjectWorkspaceToolHostAdapter(
+        workspacePort: workspacePort,
+        fileMutationAdapter: LocalProjectFileMutationAdapter(),
+      );
+      executor = ProjectTaskToolExecutor(hostPort: hostPort);
+      project = ProjectDescriptor(
+        id: 'project_task_test',
+        name: '任务测试项目',
+        rootPath: tempDirectory.path,
+        projectType: 'long_novel',
+      );
+    });
+
+    tearDown(() async {
+      if (await tempDirectory.exists()) {
+        await tempDirectory.delete(recursive: true);
+      }
+    });
+
+    test(
+      'setAgentTasks persists plan tasks and markTaskStatus can update them',
+      () async {
+        final planResult = await executor.setAgentTasks(
+          project,
+          <String, Object?>{
+            'goal': '建立总纲与卷纲',
+            'tasks': <Object?>[
+              <String, Object?>{
+                'id': 'phase-1',
+                'title': '扩展全书总纲',
+                'description': '写入 outline/',
+                'task_type': 'planning',
+                'mode': TaskRuntimeConstants.modeSeedToFullNovel,
+                'source_paths': <Object?>[
+                  'tracking/modes/seed_autopilot_novel/guidance.md',
+                ],
+                'output_paths': <Object?>['outline/总纲.md'],
+                'metadata': <String, Object?>{
+                  'persistent_context_paths': <Object?>[
+                    'tracking/modes/seed_autopilot_novel/guidance.md',
+                    'styles/seed_autopilot_style.md',
+                  ],
+                },
+              },
+            ],
+          },
+        );
+
+        final changedPaths = ValueReaders.stringList(
+          planResult['changed_paths'],
+        );
+        expect(changedPaths, hasLength(1));
+        final statusResult = await executor.markTaskStatus(
+          project,
+          <String, Object?>{
+            'task_id': 'phase-1',
+            'status': 'running',
+            'note': '开始执行',
+          },
+        );
+        expect(ValueReaders.boolValue(statusResult['ok']), isTrue);
+        final relativePath = ValueReaders.stringValue(
+          statusResult['relative_path'],
+        );
+        final taskFile = File(
+          '${tempDirectory.path}${Platform.pathSeparator}${relativePath.replaceAll('/', Platform.pathSeparator)}',
+        );
+        expect(await taskFile.exists(), isTrue);
+        final content = await taskFile.readAsString();
+        expect(content, contains('"status": "running"'));
+        expect(content, contains('"id": "phase-1"'));
+        expect(content, contains('"task_type": "planning"'));
+        expect(content, contains('"mode": "seed_to_full_novel"'));
+        expect(content, contains('"source_paths"'));
+        expect(content, contains('"persistent_context_paths"'));
+      },
+    );
+  });
+}

@@ -11,6 +11,8 @@ class ProjectLauncherViewData {
     required this.status,
     required this.projectTypeOptions,
     required this.selectedProjectTypeId,
+    required this.canDismiss,
+    required this.allowOpenExisting,
   });
 
   final ProjectLauncherMode mode;
@@ -19,4 +21,6 @@ class ProjectLauncherViewData {
   final String status;
   final List<ProjectTypeOptionViewData> projectTypeOptions;
   final String selectedProjectTypeId;
+  final bool canDismiss;
+  final bool allowOpenExisting;
 }

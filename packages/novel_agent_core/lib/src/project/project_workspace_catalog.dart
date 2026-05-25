@@ -92,4 +92,11 @@ final class ProjectWorkspaceCatalog {
         WorkspaceDirectoryDescriptor(path: 'backups/', name: '备份'),
         WorkspaceDirectoryDescriptor(path: 'exports/', name: '导出包'),
       ];
+
+  static const List<WorkspaceDirectoryDescriptor> internalWorkspaceDirs =
+      <WorkspaceDirectoryDescriptor>[
+        WorkspaceDirectoryDescriptor(path: '.novel_agent/', name: '内部状态'),
+        WorkspaceDirectoryDescriptor(path: '.novel_agent/modes/', name: '模式状态'),
+        WorkspaceDirectoryDescriptor(path: '.novel_agent/sqlite/', name: 'SQLite 索引'),
+      ];
 }

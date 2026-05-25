@@ -31,6 +31,9 @@ void main() {
     final writeProjectTextFileUseCase = WriteProjectTextFileUseCase(
       projectWorkspacePort: bundle.projectWorkspacePort,
     );
+    final modeGuidanceRepository = ProjectModeGuidanceRepository(
+      workspacePort: bundle.projectWorkspacePort,
+    );
     final generateCustomizationIndexesUseCase =
         GenerateCustomizationIndexesUseCase(
           writeProjectTextFileUseCase: writeProjectTextFileUseCase,
@@ -66,6 +69,15 @@ void main() {
       loadProjectWorkspaceUseCase: LoadProjectWorkspaceUseCase(
         projectRepository: bundle.projectRepository,
         projectWorkspacePort: bundle.projectWorkspacePort,
+      ),
+      loadModeGuidanceStateUseCase: LoadModeGuidanceStateUseCase(
+        statePort: modeGuidanceRepository,
+      ),
+      answerModeGuidanceStageUseCase: AnswerModeGuidanceStageUseCase(
+        statePort: modeGuidanceRepository,
+      ),
+      buildModeGuidancePlanInputUseCase: BuildModeGuidancePlanInputUseCase(
+        statePort: modeGuidanceRepository,
       ),
       readProjectFileUseCase: ReadProjectFileUseCase(
         bundle.projectWorkspacePort,

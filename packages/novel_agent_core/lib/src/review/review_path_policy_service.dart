@@ -13,9 +13,27 @@ class ReviewPathPolicyService {
       return '';
     }
     if (path.endsWith('.md')) {
-      return '${path.substring(0, path.length - 3)}json';
+      return '${path.substring(0, path.length - 3)}.json';
     }
     if (!path.endsWith('.json')) {
+      return '';
+    }
+    return path;
+  }
+
+  String reviewMarkdownPath(String markdownOrJsonPath) {
+    // 中文注释: 兄弟 Markdown 路径转换集中在这里，避免各宿主重复写 .json/.md 规则再踩错。
+    var path = markdownOrJsonPath.trim().replaceAll('\\', '/');
+    while (path.startsWith('/')) {
+      path = path.substring(1);
+    }
+    if (path.isEmpty || path.contains('..') || !path.startsWith('reviews/')) {
+      return '';
+    }
+    if (path.endsWith('.json')) {
+      return '${path.substring(0, path.length - 5)}.md';
+    }
+    if (!path.endsWith('.md')) {
       return '';
     }
     return path;

@@ -1,5 +1,6 @@
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../models/conversation_retry_request.dart';
 import '../models/conversation_session_state.dart';
 import '../../presentation/models/conversation_entry_view_data.dart';
 import '../../presentation/models/session_history_entry_view_data.dart';
@@ -103,6 +104,7 @@ class ConversationSessionStateService {
       entries: const <ConversationEntryViewData>[],
       pendingOptions: const <UserOptionViewData>[],
       subAgentRuns: const <SubAgentRunViewData>[],
+      retryRequest: null,
     );
   }
 
@@ -133,12 +135,16 @@ class ConversationSessionStateService {
     String prompt, {
     String now = '',
     String displayContent = '',
+    bool clearRetryableFailure = true,
     JsonMap strategySettings = const <String, Object?>{},
     JsonMap modelProfile = const <String, Object?>{},
   }) {
     // 中文注释: 用户输入会同时进入会话记录与展示时间线，并清空上一轮待选项。
+    final cleanedState = clearRetryableFailure
+        ? stateAfterRetryCleanup(state)
+        : state;
     final prepared = _applyCompressionStrategy(
-      state.sessionRecord,
+      cleanedState.sessionRecord,
       strategySettings: strategySettings,
       modelProfile: modelProfile,
     );
@@ -156,8 +162,9 @@ class ConversationSessionStateService {
     );
     return state.copyWith(
       sessionRecord: record,
-      entries: <ConversationEntryViewData>[...state.entries, entry],
+      entries: <ConversationEntryViewData>[...cleanedState.entries, entry],
       pendingOptions: const <UserOptionViewData>[],
+      retryRequest: null,
     );
   }
 
@@ -196,12 +203,14 @@ class ConversationSessionStateService {
         state.subAgentRuns,
         result.executedTools,
       ),
+      retryRequest: null,
     );
   }
 
   ConversationSessionState stateWithAssistantFailure(
     ConversationSessionState state,
     String errorMessage, {
+    ConversationRetryRequest? retryRequest,
     String now = '',
     JsonMap strategySettings = const <String, Object?>{},
     JsonMap modelProfile = const <String, Object?>{},
@@ -235,9 +244,25 @@ class ConversationSessionStateService {
           title: '本轮失败',
           body: errorMessage.trim(),
           isError: true,
+          isRetryableFailure: retryRequest != null,
         ),
       ],
       pendingOptions: const <UserOptionViewData>[],
+      retryRequest: retryRequest,
+    );
+  }
+
+  ConversationSessionState stateAfterRetryCleanup(
+    ConversationSessionState state,
+  ) {
+    // 中文注释: 重新执行上一轮失败请求前，只清掉尾部可重试错误展示与重试状态，不碰真实用户消息历史。
+    if (state.retryRequest == null) {
+      return state;
+    }
+    final nextEntries = _entriesWithoutTrailingRetryableFailure(state.entries);
+    return state.copyWith(
+      entries: nextEntries,
+      retryRequest: null,
     );
   }
 
@@ -481,6 +506,16 @@ class ConversationSessionStateService {
             SessionRecordConstants.defaultThresholdChars,
           ),
         );
+    return next;
+  }
+
+  List<ConversationEntryViewData> _entriesWithoutTrailingRetryableFailure(
+    List<ConversationEntryViewData> entries,
+  ) {
+    final next = List<ConversationEntryViewData>.from(entries);
+    while (next.isNotEmpty && next.last.isRetryableFailure) {
+      next.removeLast();
+    }
     return next;
   }
 }

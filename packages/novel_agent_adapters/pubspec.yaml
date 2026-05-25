@@ -9,6 +9,7 @@ environment:
 dependencies:
   novel_agent_core:
     path: ../novel_agent_core
+  sqlite3: ^2.7.7
 
 dev_dependencies:
   lints: ^6.0.0

@@ -1,5 +1,6 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import '../workflow/task_runtime_constants.dart';
 import 'review_path_policy_service.dart';
 import 'review_report_normalizer_service.dart';
 import 'review_type_catalog_service.dart';
@@ -64,24 +65,92 @@ class ReviewTaskFactoryService {
           : fileName;
       title = '${_typeCatalogService.reviewTypeLabel(reviewType)}：$baseName';
     }
+    final reportPaths = _reviewReportPaths(reviewType, title, sourcePath);
+    final metadata = <String, Object?>{
+      'origin': 'one_click_review',
+      'review_type': reviewType,
+      'source_path': sourcePath,
+      'review_report_path': reportPaths.first,
+      ...ValueReaders.mapValue(arguments['metadata']),
+    };
+    final inheritedMode = ValueReaders.stringValue(
+      arguments['mode'],
+      ValueReaders.stringValue(
+        metadata['workflow_mode'],
+        TaskRuntimeConstants.modeSingleChapterAtomic,
+      ),
+    );
+    final sourcePaths = _mergePaths(<String>[
+      sourcePath,
+    ], ValueReaders.stringList(metadata['persistent_context_paths']));
     return <String, Object?>{
       'title': title,
       'task_type': 'review',
       'chapter': sourcePath,
       'goal': _typeCatalogService.reviewGoal(reviewType),
       'brief':
-          '读取来源文件并保存${_typeCatalogService.reviewTypeLabel(reviewType)}报告；不要修改原文。',
-      'mode': 'single_chapter_atomic',
-      'source_paths': <String>[sourcePath],
-      'output_paths': <Object?>[],
-      'metadata': <String, Object?>{
-        'origin': 'one_click_review',
-        'review_type': reviewType,
-        'source_path': sourcePath,
-      },
+          '读取来源文件并保存${_typeCatalogService.reviewTypeLabel(reviewType)}报告；不要修改原文，也不要只返回口头分析。',
+      'mode': inheritedMode,
+      'source_paths': sourcePaths,
+      'output_paths': reportPaths,
+      'metadata': metadata,
       'tool_hint':
-          '先 read_project_file 读取来源，再调用 run_continuity_check 保存审稿报告到 reviews/。',
+          '先 read_project_file 读取来源，再调用 run_continuity_check，并把 review_type 设为当前任务类型，把报告保存到约定的 reviews/ 路径。',
     };
+  }
+
+  List<String> _reviewReportPaths(
+    String reviewType,
+    String title,
+    String sourcePath,
+  ) {
+    final baseTitle = title.trim().isNotEmpty
+        ? title
+        : sourcePath.split('/').last;
+    final safeTitle = _safePathPart(baseTitle);
+    return <String>[
+      'reviews/$reviewType/$safeTitle.md',
+      'reviews/$reviewType/$safeTitle.json',
+    ];
+  }
+
+  String _safePathPart(String value) {
+    var result = value.trim();
+    for (final token in const <String>[
+      '\\',
+      '/',
+      ':',
+      '*',
+      '?',
+      '"',
+      '<',
+      '>',
+      '|',
+      '\n',
+      '\r',
+      '\t',
+      ' ',
+    ]) {
+      result = result.replaceAll(token, '_');
+    }
+    if (result.isEmpty) {
+      result = 'review_${DateTime.now().microsecondsSinceEpoch}';
+    }
+    if (result.length > 80) {
+      result = result.substring(0, 80);
+    }
+    return result;
+  }
+
+  List<String> _mergePaths(List<String> left, List<String> right) {
+    final result = <String>[...left];
+    for (final item in right) {
+      final clean = item.trim();
+      if (clean.isNotEmpty && !result.contains(clean)) {
+        result.add(clean);
+      }
+    }
+    return result;
   }
 
   String _repairGoal(JsonMap report) {

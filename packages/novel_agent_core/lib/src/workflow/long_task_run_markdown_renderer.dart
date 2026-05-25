@@ -26,12 +26,30 @@ class LongTaskRunMarkdownRenderer {
       final detail = ValueReaders.boolValue(step['ok'])
           ? ValueReaders.stringList(step['output_paths']).join('、')
           : ValueReaders.stringValue(step['error']);
+      final checkpointReviewPath = ValueReaders.stringValue(
+        step['checkpoint_review_path'],
+      ).trim();
       lines.add(
         '- #${ValueReaders.intValue(step['index'])}'
         '｜${ValueReaders.stringValue(step['phase'])}'
         '｜${ValueReaders.stringValue(task['title'])}'
         '｜$detail',
       );
+      if (checkpointReviewPath.isNotEmpty) {
+        lines.add('  复盘：$checkpointReviewPath');
+      }
+      final checkpointSeverity = ValueReaders.stringValue(
+        step['checkpoint_review_severity'],
+      ).trim();
+      if (checkpointSeverity.isNotEmpty) {
+        lines.add('  风险级别：$checkpointSeverity');
+      }
+      final checkpointActionSummary = ValueReaders.stringValue(
+        step['checkpoint_review_action_summary'],
+      ).trim();
+      if (checkpointActionSummary.isNotEmpty) {
+        lines.add('  动作建议：$checkpointActionSummary');
+      }
     }
     return lines.join('\n');
   }

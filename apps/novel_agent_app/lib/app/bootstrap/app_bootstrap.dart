@@ -13,6 +13,7 @@ class AppBootstrap {
     // 中文注释: bootstrap 负责 GUI 组合根依赖，确保适配器实例化只发生在这一层。
     WidgetsFlutterBinding.ensureInitialized();
     final bundle = await _createAdapterBundle();
+    final hostPlatform = _currentHostPlatform();
     final contextAssemblerService = ContextAssemblerService(
       budgetService: ContextBudgetService(),
       staticSectionService: ContextStaticSectionService(
@@ -22,6 +23,9 @@ class AppBootstrap {
     );
     final writeProjectTextFileUseCase = WriteProjectTextFileUseCase(
       projectWorkspacePort: bundle.projectWorkspacePort,
+    );
+    final modeGuidanceRepository = ProjectModeGuidanceRepository(
+      workspacePort: bundle.projectWorkspacePort,
     );
     final generateCustomizationIndexesUseCase =
         GenerateCustomizationIndexesUseCase(
@@ -50,6 +54,7 @@ class AppBootstrap {
           toolExecutionPort: bundle.projectToolExecutionPort,
           contextAssemblerService: contextAssemblerService,
           projectPromptContract: ProjectPromptContract(),
+          hostPlatform: hostPlatform,
           loadAvailableAgents: (project) =>
               bundle.agentPackageCatalog.loadAgentPackages(project),
           loadAvailableAgentGroups: (project) =>
@@ -62,6 +67,15 @@ class AppBootstrap {
       loadProjectWorkspaceUseCase: LoadProjectWorkspaceUseCase(
         projectRepository: bundle.projectRepository,
         projectWorkspacePort: bundle.projectWorkspacePort,
+      ),
+      loadModeGuidanceStateUseCase: LoadModeGuidanceStateUseCase(
+        statePort: modeGuidanceRepository,
+      ),
+      answerModeGuidanceStageUseCase: AnswerModeGuidanceStageUseCase(
+        statePort: modeGuidanceRepository,
+      ),
+      buildModeGuidancePlanInputUseCase: BuildModeGuidancePlanInputUseCase(
+        statePort: modeGuidanceRepository,
       ),
       readProjectFileUseCase: ReadProjectFileUseCase(
         bundle.projectWorkspacePort,
@@ -126,6 +140,7 @@ class AppBootstrap {
           toolExecutionPort: bundle.projectToolExecutionPort,
           contextAssemblerService: contextAssemblerService,
           projectPromptContract: ProjectPromptContract(),
+          hostPlatform: hostPlatform,
           loadAvailableAgents: (project) =>
               bundle.agentPackageCatalog.loadAgentPackages(project),
           loadAvailableAgentGroups: (project) =>
@@ -160,5 +175,25 @@ class AppBootstrap {
       settingsSearchRoots: desktopPaths.settingsSearchRoots,
       defaultProjectRootPath: desktopPaths.defaultProjectRootPath,
     );
+  }
+
+  HostPlatform _currentHostPlatform() {
+    // 中文注释: GUI 平台识别集中在 bootstrap，避免下层 core 再直接依赖 dart:io Platform。
+    if (Platform.isWindows) {
+      return HostPlatform.windows;
+    }
+    if (Platform.isLinux) {
+      return HostPlatform.linux;
+    }
+    if (Platform.isMacOS) {
+      return HostPlatform.macos;
+    }
+    if (Platform.isAndroid) {
+      return HostPlatform.android;
+    }
+    if (Platform.isIOS) {
+      return HostPlatform.ios;
+    }
+    return HostPlatform.unknown;
   }
 }

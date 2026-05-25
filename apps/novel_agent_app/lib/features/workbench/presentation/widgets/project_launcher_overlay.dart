@@ -35,10 +35,11 @@ class ProjectLauncherOverlay extends StatelessWidget {
                   Row(
                     children: [
                       const Spacer(),
-                      IconButton(
-                        onPressed: actionHandler.onProjectLauncherDismissed,
-                        icon: const Icon(Icons.close_rounded),
-                      ),
+                      if (viewData.canDismiss)
+                        IconButton(
+                          onPressed: actionHandler.onProjectLauncherDismissed,
+                          icon: const Icon(Icons.close_rounded),
+                        ),
                     ],
                   ),
                   Expanded(child: _buildBody()),
@@ -68,6 +69,8 @@ class ProjectLauncherOverlay extends StatelessWidget {
           status: viewData.status,
           projectTypeOptions: viewData.projectTypeOptions,
           selectedProjectTypeId: viewData.selectedProjectTypeId,
+          allowOpenExisting: viewData.allowOpenExisting,
+          onOpenExistingRequested: actionHandler.onOpenProjectRequested,
           onCreateSubmitted: actionHandler.onProjectCreationSubmitted,
         );
     }

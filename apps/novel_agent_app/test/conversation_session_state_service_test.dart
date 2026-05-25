@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import 'package:novel_agent_app/features/workbench/application/models/conversation_retry_request.dart';
 import 'package:novel_agent_app/features/workbench/application/services/conversation_session_state_service.dart';
 import 'package:novel_agent_app/features/workbench/application/services/conversation_streaming_state_service.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/conversation_entry_view_data.dart';
@@ -24,6 +25,37 @@ void main() {
       expect(markdown, contains('user: 先写开场'));
       expect(markdown, isNot(contains('网络异常')));
       expect(failedState.entries.last.isError, isTrue);
+    });
+
+    test('retry cleanup removes retryable failure entry without removing user turn', () {
+      // 中文注释: 重试应复用上一轮用户请求，只清掉失败展示和重试态，不制造重复用户消息。
+      final service = ConversationSessionStateService();
+      final created = service.createSession(
+        sessionId: 's_retry',
+        needsGoalSelection: false,
+      );
+      final userState = service.stateWithUserPrompt(created, '继续写开局');
+      final failedState = service.stateWithAssistantFailure(
+        userState,
+        '生成失败：网络超时',
+        retryRequest: const ConversationRetryRequest(
+          prompt: '继续写开局',
+          visibleText: '继续写开局',
+          errorMessage: '生成失败：网络超时',
+        ),
+      );
+
+      final retriedBase = service.stateAfterRetryCleanup(failedState);
+      expect(retriedBase.retryRequest, isNull);
+      expect(retriedBase.entries, hasLength(1));
+      expect(retriedBase.entries.single.kind, ConversationEntryKind.user);
+      expect(
+        service.sessionContextMarkdown(
+          retriedBase,
+          excludeLatestUserContent: '继续写开局',
+        ),
+        isNot(contains('网络超时')),
+      );
     });
 
     test('user prompt can use dedicated visible text without changing context payload', () {

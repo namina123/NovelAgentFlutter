@@ -108,6 +108,8 @@ class ToolCallNormalizerService {
     // 中文注释: 这里把旧字段名统一成当前核心约定，避免每个执行器重复兼容 path/query/newName。
     final normalized = ValueReaders.deepCopyMap(arguments);
     _copyIfMissing(normalized, 'relative_path', <String>[
+      'source_relative_path',
+      'sourceRelativePath',
       'relativePath',
       'path',
       'file_path',
@@ -158,6 +160,27 @@ class ToolCallNormalizerService {
       'targetLine',
       'insert_line',
       'insertLine',
+    ]);
+    _copyIfMissing(normalized, 'start_text', <String>[
+      'startText',
+      'start_anchor',
+      'startAnchor',
+    ]);
+    _copyIfMissing(normalized, 'end_text', <String>[
+      'endText',
+      'end_anchor',
+      'endAnchor',
+    ]);
+    _copyIfMissing(normalized, 'use_regex', <String>[
+      'useRegex',
+      'regex',
+      'regular_expression',
+      'regularExpression',
+    ]);
+    _copyIfMissing(normalized, 'exclude_line_numbers', <String>[
+      'excludeLineNumbers',
+      'without_line_numbers',
+      'withoutLineNumbers',
     ]);
     _copyIfMissing(normalized, 'overwrite', <String>['force']);
     if (canonicalName == 'request_gateway_tool' &&

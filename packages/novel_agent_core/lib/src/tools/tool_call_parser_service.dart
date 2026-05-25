@@ -129,16 +129,25 @@ class ToolCallParserService {
   List<JsonMap> _dedupeCalls(List<JsonMap> calls) {
     // 中文注释: 去重避免同一个原生 tool_call 又被 fallback 文本重复解析执行两次。
     final result = <JsonMap>[];
-    final seen = <String>{};
+    final seenExact = <String>{};
+    final seenByNameAndArguments = <String>{};
     for (final call in calls) {
-      final signature = jsonEncode(<String, Object?>{
+      final exactSignature = jsonEncode(<String, Object?>{
         'id': call['id'],
         'name': call['name'],
         'arguments': call['arguments'],
       });
-      if (seen.add(signature)) {
-        result.add(call);
+      final semanticSignature = jsonEncode(<String, Object?>{
+        'name': call['name'],
+        'arguments': call['arguments'],
+      });
+      if (!seenExact.add(exactSignature)) {
+        continue;
       }
+      if (!seenByNameAndArguments.add(semanticSignature)) {
+        continue;
+      }
+      result.add(call);
     }
     return result;
   }

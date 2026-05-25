@@ -7,6 +7,7 @@ class ConversationEntryViewData {
     required this.title,
     required this.body,
     this.isError = false,
+    this.isRetryableFailure = false,
     this.detailTitle = '',
     this.detailSummary = '',
     this.detailBody = '',
@@ -18,6 +19,7 @@ class ConversationEntryViewData {
   final String title;
   final String body;
   final bool isError;
+  final bool isRetryableFailure;
   final String detailTitle;
   final String detailSummary;
   final String detailBody;

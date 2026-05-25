@@ -1,9 +1,16 @@
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import 'task_center_contract_action_view_data_service.dart';
 import '../../presentation/models/task_center_view_data.dart';
 
 class TaskCenterViewDataService {
-  const TaskCenterViewDataService();
+  const TaskCenterViewDataService({
+    TaskCenterContractActionViewDataService? contractActionViewDataService,
+  }) : _contractActionViewDataService =
+           contractActionViewDataService ??
+           const TaskCenterContractActionViewDataService();
+
+  final TaskCenterContractActionViewDataService _contractActionViewDataService;
 
   TaskCenterViewData build({
     required List<JsonMap> tasks,
@@ -19,6 +26,9 @@ class TaskCenterViewDataService {
     required String selectedTaskQueueRunPath,
     required String longTaskRunLog,
     required String taskQueueRunLog,
+    JsonMap checkpointActionPackage = const <String, Object?>{},
+    JsonMap revisionResolution = const <String, Object?>{},
+    String guidanceRevisitBody = '',
     String nextTaskPath = '',
     String nextPostprocessPath = '',
     String status = '',
@@ -93,6 +103,11 @@ class TaskCenterViewDataService {
       defaultSeedPrompt: '',
       defaultChapterCount: 12,
       defaultCheckpointInterval: 3,
+      actionGroups: _contractActionViewDataService.buildGroups(
+        checkpointActionPackage: checkpointActionPackage,
+        revisionResolution: revisionResolution,
+      ),
+      guidanceRevisitBody: guidanceRevisitBody,
     );
   }
 

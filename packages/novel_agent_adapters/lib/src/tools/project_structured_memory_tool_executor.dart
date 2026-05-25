@@ -145,7 +145,7 @@ class ProjectStructuredMemoryToolExecutor {
       );
     }
     final jsonPath =
-        '${markdownPath.substring(0, markdownPath.length - 3)}json';
+        '${markdownPath.substring(0, markdownPath.length - 3)}.json';
     final report = _reviewReportNormalizerService.normalizeReport(<
       String,
       Object?

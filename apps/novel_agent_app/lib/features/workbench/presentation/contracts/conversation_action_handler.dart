@@ -25,6 +25,8 @@ abstract class ConversationActionHandler {
 
   void onPrimaryActionRequested(String actionId);
 
+  void onRetryLastFailedRequested();
+
   void onOptimizeRequested();
 
   void onToolOptionsRequested();

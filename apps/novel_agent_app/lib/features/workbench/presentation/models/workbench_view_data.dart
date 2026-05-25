@@ -3,6 +3,7 @@ import 'document_tab_view_data.dart';
 import 'primary_action_view_data.dart';
 import 'project_launcher_view_data.dart';
 import 'resource_entry_view_data.dart';
+import 'retry_request_view_data.dart';
 import 'selector_option_view_data.dart';
 import 'session_history_entry_view_data.dart';
 import 'sub_agent_run_view_data.dart';
@@ -40,6 +41,7 @@ class WorkbenchViewData {
     required this.conversationEntries,
     required this.pendingOptions,
     required this.subAgentRuns,
+    required this.retryRequest,
     required this.sessionHistoryEntries,
     required this.activeSessionId,
     required this.showSessionHistory,
@@ -74,6 +76,7 @@ class WorkbenchViewData {
   final List<ConversationEntryViewData> conversationEntries;
   final List<UserOptionViewData> pendingOptions;
   final List<SubAgentRunViewData> subAgentRuns;
+  final RetryRequestViewData? retryRequest;
   final List<SessionHistoryEntryViewData> sessionHistoryEntries;
   final String activeSessionId;
   final bool showSessionHistory;
@@ -122,6 +125,7 @@ class WorkbenchViewData {
       conversationEntries: [],
       pendingOptions: [],
       subAgentRuns: [],
+      retryRequest: null,
       sessionHistoryEntries: [],
       activeSessionId: '',
       showSessionHistory: false,
@@ -162,6 +166,7 @@ class WorkbenchViewData {
     List<ConversationEntryViewData>? conversationEntries,
     List<UserOptionViewData>? pendingOptions,
     List<SubAgentRunViewData>? subAgentRuns,
+    Object? retryRequest = _retryRequestViewSentinel,
     List<SessionHistoryEntryViewData>? sessionHistoryEntries,
     String? activeSessionId,
     bool? showSessionHistory,
@@ -199,6 +204,9 @@ class WorkbenchViewData {
       conversationEntries: conversationEntries ?? this.conversationEntries,
       pendingOptions: pendingOptions ?? this.pendingOptions,
       subAgentRuns: subAgentRuns ?? this.subAgentRuns,
+      retryRequest: identical(retryRequest, _retryRequestViewSentinel)
+          ? this.retryRequest
+          : retryRequest as RetryRequestViewData?,
       sessionHistoryEntries:
           sessionHistoryEntries ?? this.sessionHistoryEntries,
       activeSessionId: activeSessionId ?? this.activeSessionId,
@@ -219,3 +227,4 @@ class WorkbenchViewData {
 
 const Object _projectLauncherSentinel = Object();
 const Object _workspaceCommandSentinel = Object();
+const Object _retryRequestViewSentinel = Object();

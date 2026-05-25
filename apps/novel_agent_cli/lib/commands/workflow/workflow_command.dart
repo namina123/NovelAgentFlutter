@@ -16,6 +16,9 @@ class WorkflowCommand {
     required SettingsRepository settingsRepository,
     required ProjectRepository projectRepository,
     required SaveDraftUseCase saveDraftUseCase,
+    required BuildModeGuidancePlanInputUseCase
+    buildModeGuidancePlanInputUseCase,
+    required LoadModeGuidanceStateUseCase loadModeGuidanceStateUseCase,
     required CliGenerateDraftUseCaseFactory generateDraftUseCaseFactory,
     required ProjectWorkflowRuntimeService workflowRuntimeService,
     required TerminalPrinter printer,
@@ -23,6 +26,8 @@ class WorkflowCommand {
   }) : _settingsRepository = settingsRepository,
        _projectRepository = projectRepository,
        _saveDraftUseCase = saveDraftUseCase,
+       _buildModeGuidancePlanInputUseCase = buildModeGuidancePlanInputUseCase,
+       _loadModeGuidanceStateUseCase = loadModeGuidanceStateUseCase,
        _generateDraftUseCaseFactory = generateDraftUseCaseFactory,
        _workflowRuntimeService = workflowRuntimeService,
        _printer = printer,
@@ -32,6 +37,8 @@ class WorkflowCommand {
   final SettingsRepository _settingsRepository;
   final ProjectRepository _projectRepository;
   final SaveDraftUseCase _saveDraftUseCase;
+  final BuildModeGuidancePlanInputUseCase _buildModeGuidancePlanInputUseCase;
+  final LoadModeGuidanceStateUseCase _loadModeGuidanceStateUseCase;
   final CliGenerateDraftUseCaseFactory _generateDraftUseCaseFactory;
   final ProjectWorkflowRuntimeService _workflowRuntimeService;
   final TerminalPrinter _printer;
@@ -66,6 +73,10 @@ class WorkflowCommand {
         return _runNextOnce(rest);
       case 'run-queue':
         return _runQueue(rest);
+      case 'guidance-status':
+        return _runGuidanceStatus(rest);
+      case 'create-from-guidance':
+        return _runCreateFromGuidance(rest);
       case 'postprocess-once':
         return _runPostprocessOnce(rest);
       case 'postprocess-next':
@@ -76,6 +87,14 @@ class WorkflowCommand {
         return _runPause(rest);
       case 'resume':
         return _runResume(rest);
+      case 'checkpoint-actions':
+        return _runCheckpointActions(rest);
+      case 'apply-checkpoint-action':
+        return _runApplyCheckpointAction(rest);
+      case 'revision-resolution':
+        return _runRevisionResolution(rest);
+      case 'apply-revision-resolution':
+        return _runApplyRevisionResolution(rest);
       case 'accept-revision':
         return _runAcceptRevision(rest);
       case 'rollback-revision':
@@ -338,6 +357,49 @@ class WorkflowCommand {
     return _printWorkflowResult(result, success: '队列运行已推进。');
   }
 
+  Future<int> _runGuidanceStatus(List<String> args) async {
+    // 中文注释: guidance-status 只读取共享模式状态并输出，不触发任何模型或任务写入。
+    final context = await _workflowContext(args);
+    if (context == null) {
+      return 2;
+    }
+    final modeId = _optionValue(args, '--mode') ?? 'seed_autopilot_novel';
+    final state = await _loadModeGuidanceStateUseCase.execute(
+      context.project,
+      modeId: modeId,
+      initializeIfMissing: false,
+    );
+    _printer.block('模式引导状态', _prettyJson(state.toJsonMap()));
+    return 0;
+  }
+
+  Future<int> _runCreateFromGuidance(List<String> args) async {
+    // 中文注释: create-from-guidance 直接把已收束的模式状态映射成共享任务骨架，CLI 不再要求用户重复手填同样信息。
+    final context = await _workflowContext(args);
+    if (context == null) {
+      return 2;
+    }
+    final modeId = _optionValue(args, '--mode') ?? 'seed_autopilot_novel';
+    final planInput = await _buildModeGuidancePlanInputUseCase.execute(
+      context.project,
+      modeId: modeId,
+    );
+    if (planInput == null) {
+      _printer.error('当前项目还没有模式引导状态。');
+      return 2;
+    }
+    if (!planInput.isReady) {
+      _printer.error('当前模式信息尚未完成，缺失阶段：${planInput.missingFields.join(', ')}');
+      return 2;
+    }
+    final result = await _workflowRuntimeService.createLongTaskWorkflow(
+      context.project,
+      planInput.runtimeMode,
+      options: planInput.options,
+    );
+    return _printWorkflowResult(result, success: '已根据模式引导生成长任务队列。');
+  }
+
   Future<int> _runPostprocessOnce(List<String> args) async {
     // 中文注释: 后处理单步不会改写正文规划，而是推进摘要、记忆和检查产物。
     final context = await _workflowContext(args, requireProvider: true);
@@ -422,6 +484,90 @@ class WorkflowCommand {
       runPath,
     );
     return _printWorkflowResult(result, success: '长任务运行已恢复推进。');
+  }
+
+  Future<int> _runCheckpointActions(List<String> args) async {
+    // 中文注释: checkpoint 动作合同只读取共享 runtime 输出，CLI 不自己重建动作判断。
+    final context = await _workflowContext(args);
+    if (context == null) {
+      return 2;
+    }
+    final reviewPath = _optionValue(args, '--review') ?? '';
+    if (reviewPath.trim().isEmpty) {
+      _printer.error('请通过 --review 指定 checkpoint review 路径。');
+      return 2;
+    }
+    final result = await _workflowRuntimeService
+        .buildCheckpointReviewActionPackage(context.project, reviewPath.trim());
+    if (!ValueReaders.boolValue(result['ok'])) {
+      _printer.error(ValueReaders.stringValue(result['error'], '执行失败。'));
+      return 1;
+    }
+    _printer.block('checkpoint 动作包', _prettyJson(result));
+    return 0;
+  }
+
+  Future<int> _runApplyCheckpointAction(List<String> args) async {
+    // 中文注释: checkpoint 动作应用统一转发给 runtime，CLI 只负责参数收集和结果展示。
+    final context = await _workflowContext(args);
+    if (context == null) {
+      return 2;
+    }
+    final reviewPath = _optionValue(args, '--review') ?? '';
+    final command = _optionValue(args, '--command') ?? '';
+    if (reviewPath.trim().isEmpty || command.trim().isEmpty) {
+      _printer.error('请通过 --review 和 --command 指定 checkpoint 动作。');
+      return 2;
+    }
+    final result = await _workflowRuntimeService.applyCheckpointReviewAction(
+      context.project,
+      reviewPath.trim(),
+      command.trim(),
+    );
+    return _printWorkflowResult(result, success: 'checkpoint 动作已应用。');
+  }
+
+  Future<int> _runRevisionResolution(List<String> args) async {
+    // 中文注释: revision 收口合同也走共享 runtime，CLI 不重新推断当前能否返工或回滚。
+    final context = await _workflowContext(args);
+    if (context == null) {
+      return 2;
+    }
+    final selector = await _taskSelectorFromArgs(context.project, args);
+    if (selector.isEmpty) {
+      _printer.error('请通过 --task 或 --id 选择 revision 任务。');
+      return 2;
+    }
+    final result = await _workflowRuntimeService.buildRevisionResolution(
+      context.project,
+      selector,
+    );
+    if (!ValueReaders.boolValue(result['ok'])) {
+      _printer.error(ValueReaders.stringValue(result['error'], '执行失败。'));
+      return 1;
+    }
+    _printer.block('revision 收口动作', _prettyJson(result));
+    return 0;
+  }
+
+  Future<int> _runApplyRevisionResolution(List<String> args) async {
+    // 中文注释: revision 收口动作应用统一转发给 runtime，避免 CLI 与 GUI 各自实现一套分支。
+    final context = await _workflowContext(args);
+    if (context == null) {
+      return 2;
+    }
+    final selector = await _taskSelectorFromArgs(context.project, args);
+    final command = _optionValue(args, '--command') ?? '';
+    if (selector.isEmpty || command.trim().isEmpty) {
+      _printer.error('请通过 --task 或 --id 选择 revision 任务，并通过 --command 指定动作。');
+      return 2;
+    }
+    final result = await _workflowRuntimeService.applyRevisionResolutionAction(
+      context.project,
+      selector,
+      command.trim(),
+    );
+    return _printWorkflowResult(result, success: 'revision 收口动作已应用。');
   }
 
   Future<int> _runAcceptRevision(List<String> args) async {
@@ -591,6 +737,8 @@ class WorkflowCommand {
         'workflow next [--project 路径]',
         'workflow preflight [--project 路径]',
         'workflow chain [--project 路径]',
+        'workflow guidance-status [--mode seed_autopilot_novel] [--project 路径]',
+        'workflow create-from-guidance [--mode seed_autopilot_novel] [--project 路径]',
         'workflow plan --task tasks/xxx.json [--project 路径]',
         'workflow prepare --task tasks/xxx.json [--project 路径]',
         'workflow run-once --task tasks/xxx.json [--project 路径]',
@@ -601,6 +749,10 @@ class WorkflowCommand {
         'workflow complete-next --task tasks/xxx.json [--project 路径]',
         'workflow pause [--run tracking/long_task_runs/xxx.json] [--project 路径]',
         'workflow resume [--run tracking/long_task_runs/xxx.json] [--project 路径]',
+        'workflow checkpoint-actions --review tracking/checkpoint_reviews/xxx.json [--project 路径]',
+        'workflow apply-checkpoint-action --review tracking/checkpoint_reviews/xxx.json --command create_followup_review_tasks [--project 路径]',
+        'workflow revision-resolution --task tasks/xxx.json [--project 路径]',
+        'workflow apply-revision-resolution --task tasks/xxx.json --command create_followup_review_tasks [--project 路径]',
         'workflow accept-revision --task tasks/xxx.json [--project 路径]',
         'workflow rollback-revision --task tasks/xxx.json [--project 路径]',
       ].join('\n'),

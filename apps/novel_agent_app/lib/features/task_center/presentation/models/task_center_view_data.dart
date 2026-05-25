@@ -1,3 +1,5 @@
+import 'task_center_action_group_view_data.dart';
+
 class TaskCenterViewData {
   const TaskCenterViewData({
     required this.title,
@@ -22,6 +24,8 @@ class TaskCenterViewData {
     required this.defaultSeedPrompt,
     required this.defaultChapterCount,
     required this.defaultCheckpointInterval,
+    required this.actionGroups,
+    required this.guidanceRevisitBody,
   });
 
   final String title;
@@ -46,6 +50,8 @@ class TaskCenterViewData {
   final String defaultSeedPrompt;
   final int defaultChapterCount;
   final int defaultCheckpointInterval;
+  final List<TaskCenterActionGroupViewData> actionGroups;
+  final String guidanceRevisitBody;
 
   factory TaskCenterViewData.initial() {
     return const TaskCenterViewData(
@@ -71,6 +77,8 @@ class TaskCenterViewData {
       defaultSeedPrompt: '',
       defaultChapterCount: 6,
       defaultCheckpointInterval: 3,
+      actionGroups: <TaskCenterActionGroupViewData>[],
+      guidanceRevisitBody: '',
     );
   }
 }

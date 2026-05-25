@@ -45,5 +45,24 @@ void main() {
       expect(repairTask['task_type'], 'revision');
       expect(vars['review_goal'], contains('文风一致性'));
     });
+
+    test('builds review task with concrete report output paths', () {
+      final reviewTask = taskFactory.reviewTaskFromSource(
+        const <String, Object?>{
+          'source_path': 'drafts/ch01.md',
+          'review_type': 'plot',
+          'title': '剧情检查：第01章',
+        },
+      );
+
+      expect(reviewTask['task_type'], 'review');
+      expect(
+        ValueReaders.stringList(reviewTask['output_paths']),
+        containsAll(<String>[
+          'reviews/plot/剧情检查：第01章.md',
+          'reviews/plot/剧情检查：第01章.json',
+        ]),
+      );
+    });
   });
 }

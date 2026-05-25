@@ -26,14 +26,18 @@ import '../../features/settings/application/services/model_settings_view_data_se
 import '../../features/settings/presentation/contracts/settings_action_handler.dart';
 import '../../features/settings/presentation/models/settings_view_data.dart';
 import '../../features/task_center/application/services/task_center_view_data_service.dart';
+import '../../features/task_center/application/services/task_center_guidance_revisit_markdown_service.dart';
 import '../../features/task_center/presentation/contracts/task_center_action_handler.dart';
+import '../../features/task_center/presentation/models/task_center_contract_action_view_data.dart';
 import '../../features/task_center/presentation/models/task_center_view_data.dart';
 import '../../features/workbench/application/models/conversation_session_state.dart';
+import '../../features/workbench/application/models/conversation_retry_request.dart';
 import '../../features/workbench/application/models/open_document_state.dart';
 import '../../features/workbench/application/models/workbench_primary_action_plan.dart';
 import '../../features/workbench/application/services/conversation_session_state_service.dart';
 import '../../features/workbench/application/services/conversation_streaming_state_service.dart';
 import '../../features/workbench/application/services/conversation_guide_view_data_service.dart';
+import '../../features/workbench/application/services/desktop_project_directory_picker_service.dart';
 import '../../features/workbench/application/services/project_launcher_view_data_service.dart';
 import '../../features/workbench/application/services/workbench_primary_action_service.dart';
 import '../../features/workbench/application/services/conversation_user_visible_text_service.dart';
@@ -41,6 +45,7 @@ import '../../features/workbench/presentation/contracts/conversation_action_hand
 import '../../features/workbench/presentation/contracts/document_workspace_action_handler.dart';
 import '../../features/workbench/presentation/contracts/resource_manager_action_handler.dart';
 import '../../features/workbench/presentation/models/project_launcher_view_data.dart';
+import '../../features/workbench/presentation/models/retry_request_view_data.dart';
 import '../../features/workbench/presentation/models/project_create_request_view_data.dart';
 import '../../features/workbench/presentation/models/selector_option_view_data.dart';
 import '../../features/workbench/presentation/models/user_option_view_data.dart';
@@ -76,6 +81,10 @@ class AppShellController extends ChangeNotifier
   AppShellController({
     required SettingsRepository settingsRepository,
     required LoadProjectWorkspaceUseCase loadProjectWorkspaceUseCase,
+    required LoadModeGuidanceStateUseCase loadModeGuidanceStateUseCase,
+    required AnswerModeGuidanceStageUseCase answerModeGuidanceStageUseCase,
+    required BuildModeGuidancePlanInputUseCase
+    buildModeGuidancePlanInputUseCase,
     required ReadProjectFileUseCase readProjectFileUseCase,
     required SaveDraftUseCase saveDraftUseCase,
     required CreateProjectWorkspaceUseCase createProjectWorkspaceUseCase,
@@ -108,6 +117,7 @@ class AppShellController extends ChangeNotifier
     ConversationStreamingStateService? conversationStreamingStateService,
     ConversationGuideViewDataService? conversationGuideViewDataService,
     ConversationUserVisibleTextService? conversationUserVisibleTextService,
+    DesktopProjectDirectoryPickerService? desktopProjectDirectoryPickerService,
     ProjectLauncherViewDataService? projectLauncherViewDataService,
     WorkbenchPrimaryActionService? workbenchPrimaryActionService,
     UserOptionPromptBuilderService? userOptionPromptBuilderService,
@@ -118,14 +128,20 @@ class AppShellController extends ChangeNotifier
     customizationImportPreviewTextService,
     ProjectCollectionLoaderService? projectCollectionLoaderService,
     TaskCenterViewDataService? taskCenterViewDataService,
+    TaskCenterGuidanceRevisitMarkdownService?
+    taskCenterGuidanceRevisitMarkdownService,
     ReviewCenterViewDataService? reviewCenterViewDataService,
     PromptTemplatesViewDataService? promptTemplatesViewDataService,
     PromptTemplatePreviewService? promptTemplatePreviewService,
     PromptTemplateNormalizerService? promptTemplateNormalizerService,
     ModelSettingsViewDataService? modelSettingsViewDataService,
     ModelExecutionProfileService? modelExecutionProfileService,
+    ModeGuidanceTransitionService? modeGuidanceTransitionService,
   }) : _settingsRepository = settingsRepository,
        _loadProjectWorkspaceUseCase = loadProjectWorkspaceUseCase,
+       _loadModeGuidanceStateUseCase = loadModeGuidanceStateUseCase,
+       _answerModeGuidanceStageUseCase = answerModeGuidanceStageUseCase,
+       _buildModeGuidancePlanInputUseCase = buildModeGuidancePlanInputUseCase,
        _readProjectFileUseCase = readProjectFileUseCase,
        _saveDraftUseCase = saveDraftUseCase,
        _createProjectWorkspaceUseCase = createProjectWorkspaceUseCase,
@@ -169,6 +185,9 @@ class AppShellController extends ChangeNotifier
        _conversationUserVisibleTextService =
            conversationUserVisibleTextService ??
            const ConversationUserVisibleTextService(),
+       _desktopProjectDirectoryPickerService =
+           desktopProjectDirectoryPickerService ??
+           const DesktopProjectDirectoryPickerService(),
        _projectLauncherViewDataService =
            projectLauncherViewDataService ?? ProjectLauncherViewDataService(),
        _workbenchPrimaryActionService =
@@ -190,6 +209,9 @@ class AppShellController extends ChangeNotifier
            projectCollectionLoaderService ?? ProjectCollectionLoaderService(),
        _taskCenterViewDataService =
            taskCenterViewDataService ?? const TaskCenterViewDataService(),
+       _taskCenterGuidanceRevisitMarkdownService =
+           taskCenterGuidanceRevisitMarkdownService ??
+           const TaskCenterGuidanceRevisitMarkdownService(),
        _reviewCenterViewDataService =
            reviewCenterViewDataService ?? const ReviewCenterViewDataService(),
        _promptTemplatesViewDataService =
@@ -203,10 +225,15 @@ class AppShellController extends ChangeNotifier
            modelSettingsViewDataService ?? ModelSettingsViewDataService(),
        _modelExecutionProfileService =
            modelExecutionProfileService ?? ModelExecutionProfileService(),
+       _modeGuidanceTransitionService =
+           modeGuidanceTransitionService ?? ModeGuidanceTransitionService(),
        _viewModel = AppShellViewModel.initial();
 
   final SettingsRepository _settingsRepository;
   final LoadProjectWorkspaceUseCase _loadProjectWorkspaceUseCase;
+  final LoadModeGuidanceStateUseCase _loadModeGuidanceStateUseCase;
+  final AnswerModeGuidanceStageUseCase _answerModeGuidanceStageUseCase;
+  final BuildModeGuidancePlanInputUseCase _buildModeGuidancePlanInputUseCase;
   final ReadProjectFileUseCase _readProjectFileUseCase;
   final SaveDraftUseCase _saveDraftUseCase;
   final CreateProjectWorkspaceUseCase _createProjectWorkspaceUseCase;
@@ -239,6 +266,8 @@ class AppShellController extends ChangeNotifier
   final ConversationStreamingStateService _conversationStreamingStateService;
   final ConversationGuideViewDataService _conversationGuideViewDataService;
   final ConversationUserVisibleTextService _conversationUserVisibleTextService;
+  final DesktopProjectDirectoryPickerService
+  _desktopProjectDirectoryPickerService;
   final ProjectLauncherViewDataService _projectLauncherViewDataService;
   final WorkbenchPrimaryActionService _workbenchPrimaryActionService;
   final UserOptionPromptBuilderService _userOptionPromptBuilderService;
@@ -249,12 +278,15 @@ class AppShellController extends ChangeNotifier
   _customizationImportPreviewTextService;
   final ProjectCollectionLoaderService _projectCollectionLoaderService;
   final TaskCenterViewDataService _taskCenterViewDataService;
+  final TaskCenterGuidanceRevisitMarkdownService
+  _taskCenterGuidanceRevisitMarkdownService;
   final ReviewCenterViewDataService _reviewCenterViewDataService;
   final PromptTemplatesViewDataService _promptTemplatesViewDataService;
   final PromptTemplatePreviewService _promptTemplatePreviewService;
   final PromptTemplateNormalizerService _promptTemplateNormalizerService;
   final ModelSettingsViewDataService _modelSettingsViewDataService;
   final ModelExecutionProfileService _modelExecutionProfileService;
+  final ModeGuidanceTransitionService _modeGuidanceTransitionService;
 
   AppShellViewModel _viewModel;
   AppSettings? _settings;
@@ -263,6 +295,8 @@ class AppShellController extends ChangeNotifier
       const <ConversationSessionState>[];
   String _activeSessionId = '';
   bool _showSessionHistory = false;
+  String _conversationGuideScope = '';
+  ModeGuidanceState? _activeModeGuidanceState;
   ThemeMode _themeMode = ThemeMode.light;
   bool _disposed = false;
   bool _initialized = false;
@@ -389,18 +423,60 @@ class AppShellController extends ChangeNotifier
   @override
   void onCreateProjectRequested() async {
     // 中文注释: 新建项目入口先拉起创建面板，让创建标题和后续模板扩展都能挂在同一交互壳里。
-    await _showProjectLauncher(ProjectLauncherMode.create);
+    await _showProjectLauncher(
+      ProjectLauncherMode.create,
+      canDismiss: _currentProject != null,
+    );
   }
 
   @override
-  void onOpenProjectRequested() {
-    // 中文注释: 打开项目入口统一走默认项目根目录扫描，移动端与桌面端都不需要直接暴露系统文件夹。
-    _showProjectLauncher(ProjectLauncherMode.open);
+  void onOpenProjectRequested() async {
+    // 中文注释: 桌面端打开已有项目统一让用户亲自选择目录；移动端保留固定根策略，因此不暴露这个入口。
+    if (_isMobileProjectRootLocked) {
+      _announce('移动端只允许在应用项目目录内创建项目。');
+      return;
+    }
+    final selectedPath = await _desktopProjectDirectoryPickerService
+        .pickProjectDirectory();
+    if (selectedPath == null || selectedPath.trim().isEmpty) {
+      if (_currentProject == null) {
+        await _showProjectLauncher(
+          ProjectLauncherMode.create,
+          status: '未选择目录。请创建项目，或重新选择已有项目目录。',
+          canDismiss: false,
+        );
+      }
+      return;
+    }
+    final normalizedPath = selectedPath.trim();
+    final snapshot = await _loadProjectWorkspaceUseCase.execute(normalizedPath);
+    if (snapshot == null) {
+      if (_currentProject == null) {
+        await _showProjectLauncher(
+          ProjectLauncherMode.create,
+          status: '所选目录不是有效项目。请选择项目根目录，或直接创建新项目。',
+          canDismiss: false,
+        );
+      } else {
+        _announce('所选目录不是有效项目。请选择包含项目配置的项目根目录。');
+      }
+      return;
+    }
+    _updateWorkbench(
+      _viewModel.workbench.copyWith(
+        projectLauncher: null,
+        generationStatus: '正在打开项目...',
+      ),
+    );
+    await _loadProject(snapshot.project.rootPath);
   }
 
   @override
   void onProjectLauncherDismissed() {
     // 中文注释: 项目启动弹层的关闭只重置工作台上的弹层状态，不触碰当前项目本身。
+    if (_currentProject == null) {
+      return;
+    }
     _updateWorkbench(_viewModel.workbench.copyWith(projectLauncher: null));
   }
 
@@ -447,6 +523,8 @@ class AppShellController extends ChangeNotifier
             projects: const <JsonMap>[],
             status: '正在创建项目：${cleanTitle.isEmpty ? '未命名项目' : cleanTitle}',
             selectedProjectTypeId: projectTypeId,
+            canDismiss: _currentProject != null,
+            allowOpenExisting: !_isMobileProjectRootLocked,
           ),
         ),
       ),
@@ -820,6 +898,7 @@ class AppShellController extends ChangeNotifier
     final session = _createConversationSession();
     _replaceConversationSession(session, activate: true);
     _showSessionHistory = false;
+    _conversationGuideScope = '';
     _updateWorkbench(
       _withConversationState(
         _viewModel.workbench.copyWith(
@@ -840,6 +919,7 @@ class AppShellController extends ChangeNotifier
     }
     _activeSessionId = sessionId;
     _showSessionHistory = false;
+    _conversationGuideScope = '';
     _updateWorkbench(
       _withConversationState(
         _viewModel.workbench.copyWith(generationStatus: '已切换到所选历史会话。'),
@@ -859,7 +939,9 @@ class AppShellController extends ChangeNotifier
     });
     await _sendPrompt(
       prompt,
-      visibleText: _conversationUserVisibleTextService.textForUserOption(option),
+      visibleText: _conversationUserVisibleTextService.textForUserOption(
+        option,
+      ),
     );
   }
 
@@ -870,7 +952,7 @@ class AppShellController extends ChangeNotifier
   }
 
   @override
-  void onPrimaryActionRequested(String actionId) {
+  void onPrimaryActionRequested(String actionId) async {
     // 中文注释: 主动作执行计划交给独立服务解析，控制器只负责执行刷新、播报或发送三种结果。
     PrimaryActionViewData? action;
     for (final item in _viewModel.workbench.primaryActions) {
@@ -881,6 +963,9 @@ class AppShellController extends ChangeNotifier
     }
     if (action == null) {
       _announce('未找到对应的工作流入口。');
+      return;
+    }
+    if (await _handleGuideNavigationAction(action)) {
       return;
     }
     final plan = _workbenchPrimaryActionService.build(
@@ -897,6 +982,7 @@ class AppShellController extends ChangeNotifier
         _announce(plan.message);
         return;
       case WorkbenchPrimaryActionPlanKind.sendPrompt:
+        _conversationGuideScope = '';
         _startPrimaryActionPrompt(
           plan,
           userVisibleText: _conversationUserVisibleTextService
@@ -904,6 +990,21 @@ class AppShellController extends ChangeNotifier
         );
         return;
     }
+  }
+
+  @override
+  void onRetryLastFailedRequested() async {
+    // 中文注释: 重试只复用上一轮失败请求，不额外插入新的用户消息，也不把失败展示继续带进后续上下文。
+    final retryRequest = _activeConversationState()?.retryRequest;
+    if (retryRequest == null) {
+      _announce('当前没有可重试的失败请求。');
+      return;
+    }
+    await _sendPrompt(
+      retryRequest.prompt,
+      visibleText: retryRequest.visibleText,
+      retryLastFailure: true,
+    );
   }
 
   @override
@@ -925,11 +1026,32 @@ class AppShellController extends ChangeNotifier
     await _sendPrompt(text);
   }
 
-  Future<void> _sendPrompt(String text, {String visibleText = ''}) async {
+  Future<void> _sendPrompt(
+    String text, {
+    String visibleText = '',
+    bool retryLastFailure = false,
+  }) async {
     // 中文注释: 真正的发送链在这里收口，统一处理会话状态写入、上下文渲染、生成和结果回放。
     final cleanText = text.trim();
     if (cleanText.isEmpty) {
       _announce('请输入创作需求后再发送。');
+      return;
+    }
+    if (_conversationGuideScope == 'mode_guidance' &&
+        _activeModeGuidanceState != null &&
+        !_activeModeGuidanceState!.isReady) {
+      final question = _modeGuidanceTransitionService.buildQuestion(
+        _activeModeGuidanceState!,
+      );
+      if (!question.allowFreeText) {
+        _announce('当前阶段请先从下方选项里选择一个方向。');
+        return;
+      }
+      await _answerModeGuidanceWithFreeText(
+        text: cleanText,
+        visibleText: visibleText,
+        question: question,
+      );
       return;
     }
     final settings = _settings;
@@ -959,16 +1081,19 @@ class AppShellController extends ChangeNotifier
     }
     final title = _titleFromPrompt(cleanText);
     final activeState = _ensureConversationSession();
-    final userPromptState = _conversationSessionStateService
-        .stateWithUserPrompt(
-          activeState,
-          cleanText,
-          displayContent: visibleText,
-          strategySettings: contextStrategySettings,
-          modelProfile: runtimeProfile,
-        );
+    final userPromptState = retryLastFailure
+        ? _conversationSessionStateService.stateAfterRetryCleanup(activeState)
+        : _conversationSessionStateService.stateWithUserPrompt(
+            activeState,
+            cleanText,
+            displayContent: visibleText,
+            strategySettings: contextStrategySettings,
+            modelProfile: runtimeProfile,
+          );
     _replaceConversationSession(userPromptState, activate: true);
     _showSessionHistory = false;
+    _conversationGuideScope = '';
+    _activeModeGuidanceState = null;
     _updateWorkbench(
       _withConversationState(
         _viewModel.workbench.copyWith(
@@ -1007,6 +1132,7 @@ class AppShellController extends ChangeNotifier
         ),
       );
     }
+
     try {
       final useCase = _generateDraftUseCaseFactory(
         provider,
@@ -1088,6 +1214,11 @@ class AppShellController extends ChangeNotifier
           .stateWithAssistantFailure(
             userPromptState,
             '生成失败：$error',
+            retryRequest: ConversationRetryRequest(
+              prompt: cleanText,
+              visibleText: visibleText,
+              errorMessage: '生成失败：$error',
+            ),
             strategySettings: contextStrategySettings,
             modelProfile: runtimeProfile,
           );
@@ -2505,23 +2636,37 @@ class AppShellController extends ChangeNotifier
 
   @override
   void onTaskCenterAcceptRevisionRequested() {
-    _runTaskCenterSelectorCommand(
-      pendingMessage: '正在接受修复结果...',
-      successMessage: '修复结果已接受。',
-      operation: (project, selector, settings) {
-        return _workflowRuntimeService.acceptRevisionTask(project, selector);
-      },
+    final selectedTask = _taskByPath(_selectedTaskId);
+    onTaskCenterSharedActionRequested(
+      TaskCenterContractActionViewData(
+        id: 'accept_revision',
+        label: '接受修复',
+        note: '',
+        tone: 'success',
+        invocationKind: 'revision_resolution',
+        enabled: true,
+        disabledReason: '',
+        ownerTaskPath: ValueReaders.stringValue(selectedTask['relative_path']),
+        checkpointReviewPath: '',
+      ),
     );
   }
 
   @override
   void onTaskCenterRollbackRevisionRequested() {
-    _runTaskCenterSelectorCommand(
-      pendingMessage: '正在回滚修复结果...',
-      successMessage: '修复结果已回滚。',
-      operation: (project, selector, settings) {
-        return _workflowRuntimeService.rollbackRevisionTask(project, selector);
-      },
+    final selectedTask = _taskByPath(_selectedTaskId);
+    onTaskCenterSharedActionRequested(
+      TaskCenterContractActionViewData(
+        id: 'rollback_revision',
+        label: '回滚修复',
+        note: '',
+        tone: 'danger',
+        invocationKind: 'revision_resolution',
+        enabled: true,
+        disabledReason: '',
+        ownerTaskPath: ValueReaders.stringValue(selectedTask['relative_path']),
+        checkpointReviewPath: '',
+      ),
     );
   }
 
@@ -2588,6 +2733,25 @@ class AppShellController extends ChangeNotifier
         );
       },
     );
+  }
+
+  @override
+  void onTaskCenterSharedActionRequested(
+    TaskCenterContractActionViewData action,
+  ) {
+    if (!action.enabled) {
+      return;
+    }
+    switch (action.invocationKind) {
+      case 'checkpoint_review':
+        _runTaskCenterCheckpointAction(action);
+        return;
+      case 'revision_resolution':
+        _runTaskCenterRevisionResolutionAction(action);
+        return;
+      default:
+        _announce('当前动作类型尚未支持。');
+    }
   }
 
   @override
@@ -2894,6 +3058,22 @@ class AppShellController extends ChangeNotifier
         _taskSelector(selectedTask),
       );
     }
+    final checkpointActionPackage = selectedTask.isEmpty
+        ? const <String, Object?>{}
+        : await _loadTaskCenterCheckpointActionPackage(
+            project,
+            selectedTask,
+            execution,
+          );
+    final guidanceRevisitPackage = checkpointActionPackage.isEmpty
+        ? const <String, Object?>{}
+        : await _loadTaskCenterGuidanceRevisitPackage(
+            project,
+            checkpointActionPackage,
+          );
+    final revisionResolution = selectedTask.isEmpty
+        ? const <String, Object?>{}
+        : await _loadTaskCenterRevisionResolution(project, selectedTask);
     final selectedLongRun = _selectedLongTaskRunPath.trim().isEmpty
         ? const <String, Object?>{}
         : await _workflowRuntimeService.loadLongTaskRun(
@@ -2941,6 +3121,11 @@ class AppShellController extends ChangeNotifier
           ValueReaders.mapValue(
             chainView['next_postprocess_task'],
           )['relative_path'],
+        ),
+        checkpointActionPackage: checkpointActionPackage,
+        revisionResolution: revisionResolution,
+        guidanceRevisitBody: _taskCenterGuidanceRevisitMarkdownService.render(
+          guidanceRevisitPackage,
         ),
         status: _taskCenterStatusMessage,
       ),
@@ -3256,6 +3441,115 @@ class AppShellController extends ChangeNotifier
     return _taskSelector(selected);
   }
 
+  Future<JsonMap> _loadTaskCenterCheckpointActionPackage(
+    ProjectDescriptor project,
+    JsonMap task,
+    JsonMap execution,
+  ) async {
+    // 中文注释: 普通任务优先显示检查点动作，revision 任务则交给修订收口合同单独处理。
+    if (ValueReaders.stringValue(task['task_type']) == 'revision') {
+      return const <String, Object?>{};
+    }
+    final checkpointReviewPath = _taskCenterCheckpointReviewPath(
+      task,
+      execution,
+    );
+    if (checkpointReviewPath.isEmpty) {
+      return const <String, Object?>{};
+    }
+    return _workflowRuntimeService.buildCheckpointReviewActionPackage(
+      project,
+      checkpointReviewPath,
+    );
+  }
+
+  Future<JsonMap> _loadTaskCenterRevisionResolution(
+    ProjectDescriptor project,
+    JsonMap task,
+  ) {
+    // 中文注释: revision 专属的收口动作直接复用共享 runtime 合同，不在控制器里重写判断规则。
+    if (ValueReaders.stringValue(task['task_type']) != 'revision') {
+      return Future<JsonMap>.value(const <String, Object?>{});
+    }
+    return _workflowRuntimeService.buildRevisionResolution(
+      project,
+      _taskSelector(task),
+    );
+  }
+
+  Future<JsonMap> _loadTaskCenterGuidanceRevisitPackage(
+    ProjectDescriptor project,
+    JsonMap checkpointActionPackage,
+  ) {
+    // 中文注释: 只有当前 checkpoint 动作已经建议“回看长期约束”时，详情区才去加载对应回看包。
+    for (final action in ValueReaders.mapList(
+      checkpointActionPackage['actions'],
+    )) {
+      if (ValueReaders.stringValue(action['id']) == 'revisit_mode_guidance' &&
+          ValueReaders.boolValue(action['enabled'])) {
+        final checkpointReviewPath = ValueReaders.stringValue(
+          checkpointActionPackage['checkpoint_review_path'],
+        ).trim();
+        if (checkpointReviewPath.isEmpty) {
+          return Future<JsonMap>.value(const <String, Object?>{});
+        }
+        return _workflowRuntimeService.buildCheckpointGuidanceRevisitPackage(
+          project,
+          checkpointReviewPath,
+        );
+      }
+    }
+    return Future<JsonMap>.value(const <String, Object?>{});
+  }
+
+  String _taskCenterCheckpointReviewPath(JsonMap task, JsonMap execution) {
+    // 中文注释: 旧记录可能只在 execution 上有检查点路径，因此这里做一次统一兜底。
+    for (final candidate in <String>[
+      ValueReaders.stringValue(task['checkpoint_review_path']),
+      ValueReaders.stringValue(execution['checkpoint_review_path']),
+    ]) {
+      final clean = candidate.trim();
+      if (clean.isNotEmpty) {
+        return clean;
+      }
+    }
+    return '';
+  }
+
+  void _runTaskCenterCheckpointAction(TaskCenterContractActionViewData action) {
+    _runTaskCenterProjectCommand(
+      pendingMessage: action.id == 'revisit_mode_guidance'
+          ? '正在载入长期约束回看...'
+          : '正在执行${action.label}...',
+      successMessage: action.id == 'revisit_mode_guidance'
+          ? '已载入长期约束回看。'
+          : '${action.label}已完成。',
+      operation: (project, settings) {
+        return _workflowRuntimeService.applyCheckpointReviewAction(
+          project,
+          action.checkpointReviewPath,
+          action.id,
+        );
+      },
+    );
+  }
+
+  void _runTaskCenterRevisionResolutionAction(
+    TaskCenterContractActionViewData action,
+  ) {
+    _runTaskCenterProjectCommand(
+      pendingMessage: '正在执行${action.label}...',
+      successMessage: '${action.label}已完成。',
+      operation: (project, settings) {
+        return _workflowRuntimeService.applyRevisionResolutionAction(
+          project,
+          <String, Object?>{'relative_path': action.ownerTaskPath},
+          action.id,
+        );
+      },
+    );
+  }
+
   JsonMap _taskSelector(JsonMap task) {
     return <String, Object?>{
       'relative_path': ValueReaders.stringValue(task['relative_path']),
@@ -3471,7 +3765,17 @@ class AppShellController extends ChangeNotifier
     if (settings == null) {
       return;
     }
-    await _loadProject(settings.defaultProjectPath);
+    final defaultPath = settings.defaultProjectPath.trim();
+    if (defaultPath.isEmpty) {
+      _resetToProjectlessWorkbench(status: '请先创建项目，或在桌面端打开一个已有项目。');
+      await _showProjectLauncher(
+        ProjectLauncherMode.create,
+        status: '当前还没有有效项目。请先创建项目，或打开已有项目。',
+        canDismiss: false,
+      );
+      return;
+    }
+    await _loadProject(defaultPath);
   }
 
   Future<void> _loadProject(String rootPath) async {
@@ -3485,12 +3789,14 @@ class AppShellController extends ChangeNotifier
     final snapshot = await _loadProjectWorkspaceUseCase.execute(rootPath);
     if (snapshot == null) {
       _currentProject = null;
+      _resetToProjectlessWorkbench(status: '当前没有有效项目。请先创建项目，或打开已有项目。');
       _refreshSettingsViewData();
-      _updateWorkbench(
-        _viewModel.workbench.copyWith(
-          generationStatus: '未找到默认项目目录：$rootPath',
-          toolCoreStatus: '',
-        ),
+      await _showProjectLauncher(
+        ProjectLauncherMode.create,
+        status: rootPath.trim().isEmpty
+            ? '当前还没有有效项目。请先创建项目，或打开已有项目。'
+            : '未识别到有效项目：$rootPath',
+        canDismiss: false,
       );
       return;
     }
@@ -4811,6 +5117,7 @@ class AppShellController extends ChangeNotifier
     _conversationSessions = const <ConversationSessionState>[];
     _activeSessionId = '';
     _showSessionHistory = false;
+    _conversationGuideScope = '';
   }
 
   String _sessionIdOf(ConversationSessionState state) {
@@ -4832,6 +5139,8 @@ class AppShellController extends ChangeNotifier
       projectType: _currentProject?.projectType ?? 'novel',
       needsGoalSelection: _needsGoalSelection(activeState),
       isGenerating: base.isGenerating,
+      guideScope: _conversationGuideScope,
+      modeGuidanceState: _activeModeGuidanceState,
     );
     return base.copyWith(
       workflowTitle: guide.workflowTitle,
@@ -4841,6 +5150,7 @@ class AppShellController extends ChangeNotifier
       conversationEntries: activeState?.entries ?? const [],
       pendingOptions: activeState?.pendingOptions ?? const [],
       subAgentRuns: activeState?.subAgentRuns ?? const [],
+      retryRequest: _retryRequestViewData(activeState?.retryRequest),
       sessionHistoryEntries: _conversationSessionStateService.historyEntries(
         _conversationSessions,
         _activeSessionId,
@@ -4872,6 +5182,175 @@ class AppShellController extends ChangeNotifier
     return state == null
         ? true
         : _boolValue(state.sessionRecord['needs_goal_selection']);
+  }
+
+  RetryRequestViewData? _retryRequestViewData(
+    ConversationRetryRequest? retryRequest,
+  ) {
+    if (retryRequest == null) {
+      return null;
+    }
+    return RetryRequestViewData(
+      label: '重试上次失败请求',
+      errorMessage: retryRequest.errorMessage,
+    );
+  }
+
+  Future<bool> _handleGuideNavigationAction(
+    PrimaryActionViewData action,
+  ) async {
+    // 中文注释: 工作流细分页导航只改变引导视图，不直接触发模型或工具链。
+    switch (action.commandId.trim()) {
+      case 'guide.open_long_task_modes':
+        _conversationGuideScope = 'long_task_modes';
+        _activeModeGuidanceState = null;
+        _showSessionHistory = false;
+        _updateWorkbench(_withConversationState(_viewModel.workbench));
+        return true;
+      case 'guide.open_mode_guidance':
+        final project = _currentProject;
+        if (project == null) {
+          _announce('请先创建或打开长篇项目。');
+          return true;
+        }
+        final modeId = _stringValue(
+          action.payload['mode'],
+          'seed_autopilot_novel',
+        );
+        _activeModeGuidanceState = await _loadModeGuidanceStateUseCase.execute(
+          project,
+          modeId: modeId,
+        );
+        _conversationGuideScope = 'mode_guidance';
+        _showSessionHistory = false;
+        _updateWorkbench(_withConversationState(_viewModel.workbench));
+        return true;
+      case 'guide.answer_mode_guidance':
+        final project = _currentProject;
+        if (project == null) {
+          _announce('请先创建或打开长篇项目。');
+          return true;
+        }
+        final modeId = _stringValue(
+          action.payload['mode'],
+          'seed_autopilot_novel',
+        );
+        final stageId = _stringValue(action.payload['stage_id']);
+        final fieldKey = _stringValue(action.payload['field_key']);
+        final value = _stringValue(action.payload['value']);
+        if (stageId.isEmpty || fieldKey.isEmpty || value.isEmpty) {
+          _announce('当前引导动作缺少必要参数。');
+          return true;
+        }
+        _activeModeGuidanceState = await _answerModeGuidanceStageUseCase
+            .execute(
+              project,
+              modeId: modeId,
+              stageId: stageId,
+              fieldKey: fieldKey,
+              value: value,
+              label: _stringValue(action.payload['label']),
+              source: _stringValue(action.payload['source'], 'option'),
+            );
+        _conversationGuideScope = 'mode_guidance';
+        _showSessionHistory = false;
+        _updateWorkbench(_withConversationState(_viewModel.workbench));
+        return true;
+      case 'guide.create_workflow_from_mode_guidance':
+        final project = _currentProject;
+        if (project == null) {
+          _announce('请先创建或打开长篇项目。');
+          return true;
+        }
+        final modeId = _stringValue(
+          action.payload['mode'],
+          'seed_autopilot_novel',
+        );
+        final planInput = await _buildModeGuidancePlanInputUseCase.execute(
+          project,
+          modeId: modeId,
+        );
+        if (planInput == null) {
+          _announce('当前还没有可用的模式状态，请先完成模式引导。');
+          return true;
+        }
+        if (!planInput.isReady) {
+          _announce('当前模式信息尚未收束完成，请先完成当前阶段。');
+          return true;
+        }
+        await _createWorkflowFromModeGuidance(planInput);
+        return true;
+      case 'guide.back.default':
+        _conversationGuideScope = '';
+        _activeModeGuidanceState = null;
+        _showSessionHistory = false;
+        _updateWorkbench(_withConversationState(_viewModel.workbench));
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  Future<void> _answerModeGuidanceWithFreeText({
+    required String text,
+    required String visibleText,
+    required ModeGuidanceQuestion question,
+  }) async {
+    // 中文注释: 模式引导下的自由输入不走模型，而是直接写回当前阶段答案，保证“选项/自由输入”共用同一状态机。
+    final project = _currentProject;
+    if (project == null) {
+      _announce('请先创建或打开长篇项目。');
+      return;
+    }
+    _activeModeGuidanceState = await _answerModeGuidanceStageUseCase.execute(
+      project,
+      modeId: question.modeId,
+      stageId: question.stageId,
+      fieldKey: question.fieldKey,
+      value: text,
+      label: visibleText.trim(),
+      source: 'free_text',
+    );
+    _conversationGuideScope = 'mode_guidance';
+    _showSessionHistory = false;
+    _updateWorkbench(_withConversationState(_viewModel.workbench));
+  }
+
+  Future<void> _createWorkflowFromModeGuidance(
+    ModeGuidancePlanInput planInput,
+  ) async {
+    // 中文注释: 模式引导完成后的队列创建直接走共享 runtime，避免再把已收束状态重新翻译成自然语言交给模型猜。
+    final project = _currentProject;
+    if (project == null) {
+      _announce('请先创建或打开长篇项目。');
+      return;
+    }
+    _conversationGuideScope = '';
+    _activeModeGuidanceState = null;
+    _updateWorkbench(
+      _withConversationState(
+        _viewModel.workbench.copyWith(
+          generationStatus: '正在根据模式引导生成长任务队列...',
+          toolCoreStatus: '',
+        ),
+      ),
+    );
+    try {
+      final result = await _workflowRuntimeService.createLongTaskWorkflow(
+        project,
+        planInput.runtimeMode,
+        options: planInput.options,
+      );
+      await _syncWorkbenchResources();
+      await _refreshTaskCenter(
+        status: _resultMessage(result, success: '长任务队列已根据模式引导生成。'),
+      );
+      _announce(_resultMessage(result, success: '长任务队列已根据模式引导生成。'));
+    } catch (error) {
+      _announce('根据模式引导生成长任务队列失败：$error');
+    } finally {
+      _updateWorkbench(_withConversationState(_viewModel.workbench));
+    }
   }
 
   JsonMap _currentProjectInfo() {
@@ -4932,7 +5411,10 @@ class AppShellController extends ChangeNotifier
       assistantState,
       fallback: '会话已更新',
     );
-    final contextPackSummary = _stringValue(result.contextPack['summary'], '上下文已更新');
+    final contextPackSummary = _stringValue(
+      result.contextPack['summary'],
+      '上下文已更新',
+    );
     return '$sessionSummary · $contextPackSummary · 读取 ${result.selectedPaths.length} 个文件 · 工具 ${result.executedTools.length} 次';
   }
 
@@ -4994,11 +5476,12 @@ class AppShellController extends ChangeNotifier
   Future<void> _showProjectLauncher(
     ProjectLauncherMode mode, {
     String status = '',
+    bool? canDismiss,
   }) async {
     // 中文注释: 项目启动弹层的数据准备统一在这里完成，避免打开和创建两条入口各自重复扫描项目根目录。
-    final projects = await _discoverProjectsUseCase.execute(
-      _defaultProjectsRootPath,
-    );
+    final projects = mode == ProjectLauncherMode.open
+        ? await _discoverProjectsAcrossRoots()
+        : const <JsonMap>[];
     _updateWorkbench(
       _withConversationState(
         _viewModel.workbench.copyWith(
@@ -5007,7 +5490,83 @@ class AppShellController extends ChangeNotifier
             projectsRootPath: _defaultProjectsRootPath,
             projects: projects,
             status: status,
+            canDismiss: canDismiss ?? _currentProject != null,
+            allowOpenExisting: !_isMobileProjectRootLocked,
           ),
+        ),
+      ),
+    );
+  }
+
+  Future<List<JsonMap>> _discoverProjectsAcrossRoots() async {
+    // 中文注释: 项目发现按设置搜索根去重聚合，避免把“默认项目目录”误当成唯一合法来源。
+    final roots = <String>[];
+    void addRoot(String value) {
+      final clean = value.trim();
+      if (clean.isEmpty) {
+        return;
+      }
+      final normalized = _normalizePathForCompare(clean);
+      final exists = roots.any(
+        (entry) => _normalizePathForCompare(entry) == normalized,
+      );
+      if (!exists) {
+        roots.add(clean);
+      }
+    }
+
+    addRoot(_defaultProjectsRootPath);
+    for (final root in _settingsSearchRoots) {
+      addRoot(root);
+    }
+
+    final projects = <JsonMap>[];
+    final seenPaths = <String>{};
+    for (final root in roots) {
+      final discovered = await _discoverProjectsUseCase.execute(root);
+      for (final project in discovered) {
+        final path = _stringValue(project['path']);
+        final normalized = _normalizePathForCompare(path);
+        if (normalized.isEmpty || seenPaths.contains(normalized)) {
+          continue;
+        }
+        seenPaths.add(normalized);
+        projects.add(ValueReaders.deepCopyMap(project));
+      }
+    }
+    projects.sort((left, right) {
+      final leftTitle = _stringValue(left['title']);
+      final rightTitle = _stringValue(right['title']);
+      return leftTitle.compareTo(rightTitle);
+    });
+    return projects;
+  }
+
+  void _resetToProjectlessWorkbench({required String status}) {
+    // 中文注释: 无有效项目时统一清空工作区状态，避免旧项目残留继续暴露在界面上。
+    _resourceSnapshotEntries = const <JsonMap>[];
+    _expandedResourceDirectories.clear();
+    _openDocuments = const <OpenDocumentState>[];
+    _activeOpenDocumentId = '';
+    _resetConversationSessions();
+    _updateWorkbench(
+      _withConversationState(
+        _viewModel.workbench.copyWith(
+          projectName: '',
+          projectSubtitle: '',
+          projectPath: '',
+          resourceEntries: const [],
+          documents: const <DocumentTabViewData>[],
+          activeDocumentTitle: '',
+          activeDocumentPath: '',
+          activeDocumentBody: '',
+          activeDocumentDirty: false,
+          generationStatus: status,
+          contextSummary: '尚未打开项目',
+          toolCoreStatus: '',
+          isGenerating: false,
+          workspaceCommand: null,
+          isDocumentsWorkspaceVisible: false,
         ),
       ),
     );

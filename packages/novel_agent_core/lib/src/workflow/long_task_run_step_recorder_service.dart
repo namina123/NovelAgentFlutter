@@ -21,6 +21,12 @@ class LongTaskRunStepRecorderService {
     final next = ValueReaders.deepCopyMap(record);
     final steps = ValueReaders.objectList(next['steps']);
     final response = ValueReaders.mapValue(result['response']);
+    final checkpointReviewEnvelope = ValueReaders.mapValue(
+      result['checkpoint_review'],
+    );
+    final checkpointReview = ValueReaders.mapValue(
+      checkpointReviewEnvelope['review'],
+    );
     final toolNames = <String>[];
     for (final rawCall in ValueReaders.objectList(response['tool_calls'])) {
       final call = ValueReaders.mapValue(rawCall);
@@ -40,6 +46,18 @@ class LongTaskRunStepRecorderService {
       'error': ValueReaders.stringValue(result['error']),
       'output_paths': ValueReaders.stringList(result['output_paths']),
       'tool_names': toolNames,
+      'checkpoint_review_path': ValueReaders.stringValue(
+        checkpointReviewEnvelope['relative_path'],
+      ),
+      'checkpoint_review_summary': ValueReaders.stringValue(
+        checkpointReview['summary'],
+      ),
+      'checkpoint_review_severity': ValueReaders.stringValue(
+        checkpointReview['severity'],
+      ),
+      'checkpoint_review_action_summary': ValueReaders.stringValue(
+        checkpointReview['action_summary'],
+      ),
       'created_at': now,
     });
     next['steps'] = steps;
@@ -47,6 +65,12 @@ class LongTaskRunStepRecorderService {
     next['last_task_id'] = ValueReaders.stringValue(task['id']);
     next['last_task_title'] = ValueReaders.stringValue(task['title']);
     next['last_output_paths'] = ValueReaders.stringList(result['output_paths']);
+    next['last_checkpoint_review_path'] = ValueReaders.stringValue(
+      checkpointReviewEnvelope['relative_path'],
+    );
+    next['last_checkpoint_review_severity'] = ValueReaders.stringValue(
+      checkpointReview['severity'],
+    );
     next['updated_at'] = now;
     if (!ValueReaders.boolValue(result['ok'])) {
       next['failed_steps'] = ValueReaders.intValue(next['failed_steps']) + 1;

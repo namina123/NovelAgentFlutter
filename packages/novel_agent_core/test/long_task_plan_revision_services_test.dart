@@ -62,7 +62,14 @@ void main() {
           'mode': TaskRuntimeConstants.modeHumanOutlineAiDraft,
           'status': TaskRuntimeConstants.statusWaitingUser,
           'output_paths': <Object?>['drafts/第01章.md'],
-          'metadata': <String, Object?>{'sort_order': 1, 'stage': 'checkpoint'},
+          'metadata': <String, Object?>{
+            'sort_order': 1,
+            'stage': 'checkpoint',
+            'persistent_context_paths': <Object?>[
+              'tracking/modes/full_outline_consensus/guidance.md',
+              'styles/full_outline_consensus_style.md',
+            ],
+          },
         },
       ];
       final confirmPlan = buildRevisionUseCase.execute(
@@ -108,6 +115,13 @@ void main() {
       expect(
         (newTask['output_paths'] as List<Object?>).first,
         contains('drafts/'),
+      );
+      final sourcePaths = ValueReaders.stringList(newTask['source_paths']);
+      expect(sourcePaths, contains('styles/full_outline_consensus_style.md'));
+      final metadata = ValueReaders.mapValue(newTask['metadata']);
+      expect(
+        ValueReaders.stringList(metadata['persistent_context_paths']),
+        contains('tracking/modes/full_outline_consensus/guidance.md'),
       );
     });
   });

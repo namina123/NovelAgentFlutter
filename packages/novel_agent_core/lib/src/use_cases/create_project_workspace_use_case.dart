@@ -79,6 +79,9 @@ class CreateProjectWorkspaceUseCase {
     for (final descriptor in ProjectWorkspaceCatalog.advancedWorkspaceDirs) {
       await _projectWorkspacePort.createDirectory(rootPath, descriptor.path);
     }
+    for (final descriptor in ProjectWorkspaceCatalog.internalWorkspaceDirs) {
+      await _projectWorkspacePort.createDirectory(rootPath, descriptor.path);
+    }
     final manifest = _projectManifestCodecService.create(
       title: title,
       projectType: projectType,

@@ -1,6 +1,6 @@
 # NovelAgent Flutter 迁移顺序文档
 
-最后更新：2026-05-24
+最后更新：2026-05-25
 
 ## 目标
 
@@ -88,6 +88,11 @@
 - [x] 文件工具分发基本迁移到 workspace 适配层
 - [x] `reorder_project_file` 排序元数据与资源树接线
 - [x] `request_gateway_tool` 的抓取 / 搜索 / 命令执行接线
+- [x] OpenAI 兼容流式 `tool_call` 分片聚合修复，真实 `present_user_options` 链路恢复
+- [x] 建立保留型全工具探针脚本并完成首轮 `31/31` 通过
+- [x] 建立工具暴露过滤层：移动端不支持工具与传输层工具不进入模型 schema
+- [x] 补齐当前工具语义：局部行窗读取、正则替换、锚点范围替换、负数行号、正则搜索
+- [x] 全工具探针扩到 `35/35` 通过
 - [~] 旧项目剩余工具调度细节全面对齐核查
 - [x] 导入、备份、索引相关宿主入口补齐
 - [x] 模板相关宿主入口补齐
@@ -128,11 +133,41 @@
 
 当前正在推进：
 
+- `Markdown + SQLite` 双兼容存储基线
+- 长任务模式化开局与共享模式目录
+- 第一种长任务模式的分阶段引导状态机
+- 第一种长任务模式的隐藏状态 / Markdown 摘要 / SQLite 索引
+- 第一种长任务模式的共享资产投影（风格 / 世界 / 角色）
+- 第一种长任务模式的执行阶段上下文桥接：让模式资产真正进入 `runWorkflowTaskOnce(...)`
+- 长任务规划工具 `set_agent_tasks` 的字段保真，避免后续追加任务丢失长期约束
+- 第一种长任务模式的检查点复盘包与运行记录挂接
+- 第一种长任务模式的 checkpoint review -> review task 建议与手动物化入口
+- review task -> review report -> repair task 共享返工入口
+- revision postprocess -> review report / checkpoint review 回写入口
+- 第一种长任务模式的 UI 分阶段引导接线
+- 第二种长任务模式的复用式并行落地与探针回归
+- CLI `guidance-status / create-from-guidance` 共用入口探针
+- 提供商兼容基线与 Responses API 约束
+- 会话失败重试闭环与滚动区体验修正
+- 工具重复调用进一步收敛
+- `set_agent_tasks -> mark_task_status` 工具闭环
 - 生态页导出入口
 - prompt debug 组合页
 - Responses API 真实网关分流
 - 图片类 gateway 完整闭环
 - 设置页网络代理与共享运行链继续细修
+- 现有工具语义继续向真实使用场景补洞，但不再把传输层口子暴露给模型
+- 在 review task 物化和 repair task 入口之后，继续推进 repair 完成后的再审稿 / 回写检查点闭环
+- 在 revision postprocess 回写稳定后，继续把“accept / retry / rollback / 回到长任务 checkpoint”抽成共享用例动作
+- 在修订收口动作层稳定后，继续给 checkpoint review 增加严重度分级与建议动作物化
+- 再把这批共享动作接回 Flutter 任务中心与 CLI 命令入口
+- 在 checkpoint review 动作包稳定后，把风险级别和推荐动作挂进长任务运行回放
+- 再继续拆成更专门的风格漂移 / 世界规则漂移 / 角色锚点漂移检查层
+- 在 CLI 已接入 checkpoint / revision 动作合同之后，把同一套入口接到 Flutter 任务中心
+- 再让领域漂移信号继续反哺 follow-up review 类型选择与优先级
+- 再继续把 checkpoint 合同里仍为建议态的动作逐个物化到共享宿主入口
+- 再把高风险 checkpoint 的“长期约束回看包”接进 Flutter 详情投影，而不只停在 CLI / probe 可见
+- 再细化 `request_revision_followup` 的 GUI/CLI 展示与分支回收，而不是重新定义它的共享语义
 
 ## 恢复时优先顺序
 

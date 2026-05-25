@@ -1,9 +1,11 @@
+import 'tool_platform_policy.dart';
+
 class BuiltinToolDefinition {
   const BuiltinToolDefinition({
     required this.id,
     required this.name,
     required this.description,
-    this.platformPolicy = 'mobile_safe_if_project_scoped',
+    this.platformPolicy = ToolPlatformPolicy.mobileSafeIfProjectScoped,
     this.enabledByDefault = true,
   });
 

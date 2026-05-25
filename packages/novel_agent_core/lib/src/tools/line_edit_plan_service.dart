@@ -19,21 +19,20 @@ class LineEditPlanService {
         .replaceAll('\r', '\n')
         .split('\n');
     final lineCount = lines.length;
-    final startLine = _clampLine(
+    final startLine = _resolveExistingLineNumber(
       ValueReaders.intValue(
         arguments['start_line'] ?? arguments['startLine'],
         1,
       ),
-      1,
       lineCount,
     );
-    final endLine = _clampLine(
+    final endLine = _resolveExistingLineNumber(
       ValueReaders.intValue(
         arguments['end_line'] ?? arguments['endLine'],
         startLine,
       ),
-      startLine,
       lineCount,
+      minValue: startLine,
     );
     final selectedText = lines.sublist(startLine - 1, endLine).join('\n');
     var nextSource = original;
@@ -53,9 +52,12 @@ class LineEditPlanService {
     var nextTarget = ValueReaders.stringValue(arguments['target_content']);
     if ((operation == 'copy' || operation == 'cut') &&
         arguments.containsKey('target_content')) {
-      final targetLine = ValueReaders.intValue(
-        arguments['target_line'] ?? arguments['targetLine'],
-        -1,
+      final targetLine = _resolveInsertionLineNumber(
+        ValueReaders.intValue(
+          arguments['target_line'] ?? arguments['targetLine'],
+          -1,
+        ),
+        nextTarget,
       );
       nextTarget = _insertTextAtLine(nextTarget, selectedText, targetLine);
       targetChanged =
@@ -82,6 +84,25 @@ class LineEditPlanService {
     return <String, Object?>{'ok': false, 'error': message};
   }
 
+  int _resolveExistingLineNumber(int value, int lineCount, {int minValue = 1}) {
+    // 中文注释: 读取现有行时允许负数从尾部反向定位，例如 -1 表示最后一行。
+    final normalized = value < 0 ? lineCount + value + 1 : value;
+    return _clampLine(normalized, minValue, lineCount);
+  }
+
+  int _resolveInsertionLineNumber(int value, String original) {
+    // 中文注释: 目标插入位置同样支持负数；-1 视为追加到最后一行之后。
+    final lines = original
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\r', '\n')
+        .split('\n');
+    final lineCount = lines.length;
+    if (value < 0) {
+      return _clampLine(lineCount + value + 2, 1, lineCount + 1);
+    }
+    return _clampLine(value, 1, lineCount + 1);
+  }
+
   int _clampLine(int value, int minValue, int maxValue) {
     // 中文注释: 行号仍以 1-based 对外暴露，这里统一夹取合法范围。
     if (value < minValue) {
@@ -106,11 +127,20 @@ class LineEditPlanService {
         .replaceAll('\r\n', '\n')
         .replaceAll('\r', '\n')
         .split('\n');
-    final insertIndex = _clampLine(targetLine, 1, lines.length + 1) - 1;
+    final normalizedTargetLine = _clampLine(targetLine, 1, lines.length + 1);
+    final hasTrailingNewline = original.endsWith('\n');
+    final insertIndex =
+        hasTrailingNewline && normalizedTargetLine == lines.length + 1
+        ? lines.length - 1
+        : normalizedTargetLine - 1;
     final insertLines = text
         .replaceAll('\r\n', '\n')
         .replaceAll('\r', '\n')
-        .split('\n');
+        .split('\n')
+        .toList(growable: true);
+    if (insertLines.isNotEmpty && insertLines.last.isEmpty) {
+      insertLines.removeLast();
+    }
     lines.insertAll(insertIndex, insertLines);
     return lines.join('\n');
   }

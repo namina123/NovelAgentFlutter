@@ -13,6 +13,7 @@ import '../output/terminal_printer.dart';
 class CliBootstrap {
   Future<int> run(List<String> args) async {
     // 中文注释: CLI bootstrap 是唯一允许组装适配器和命令对象的地方，命令本身只消费依赖。
+    final hostPlatform = _currentHostPlatform();
     final desktopPaths = DesktopAppPathsProvider().resolve(
       workingDirectoryPath: Directory.current.path,
     );
@@ -32,6 +33,9 @@ class CliBootstrap {
     );
     final writeProjectTextFileUseCase = WriteProjectTextFileUseCase(
       projectWorkspacePort: bundle.projectWorkspacePort,
+    );
+    final modeGuidanceRepository = ProjectModeGuidanceRepository(
+      workspacePort: bundle.projectWorkspacePort,
     );
     final generateCustomizationIndexesUseCase =
         GenerateCustomizationIndexesUseCase(
@@ -60,6 +64,7 @@ class CliBootstrap {
           toolExecutionPort: bundle.projectToolExecutionPort,
           contextAssemblerService: contextAssemblerService,
           projectPromptContract: ProjectPromptContract(),
+          hostPlatform: hostPlatform,
         );
       },
     );
@@ -68,6 +73,12 @@ class CliBootstrap {
       projectRepository: bundle.projectRepository,
       saveDraftUseCase: SaveDraftUseCase(
         projectWorkspacePort: bundle.projectWorkspacePort,
+      ),
+      buildModeGuidancePlanInputUseCase: BuildModeGuidancePlanInputUseCase(
+        statePort: modeGuidanceRepository,
+      ),
+      loadModeGuidanceStateUseCase: LoadModeGuidanceStateUseCase(
+        statePort: modeGuidanceRepository,
       ),
       workflowRuntimeService: workflowRuntimeService,
       generateDraftUseCaseFactory: (provider, networkSettings) {
@@ -81,6 +92,7 @@ class CliBootstrap {
           toolExecutionPort: bundle.projectToolExecutionPort,
           contextAssemblerService: contextAssemblerService,
           projectPromptContract: ProjectPromptContract(),
+          hostPlatform: hostPlatform,
         );
       },
       printer: printer,
@@ -182,5 +194,25 @@ class CliBootstrap {
         'session',
       ].join('\n'),
     );
+  }
+
+  HostPlatform _currentHostPlatform() {
+    // 中文注释: CLI 平台识别集中在 bootstrap，后续若引入能力探测也只需在这里替换来源。
+    if (Platform.isWindows) {
+      return HostPlatform.windows;
+    }
+    if (Platform.isLinux) {
+      return HostPlatform.linux;
+    }
+    if (Platform.isMacOS) {
+      return HostPlatform.macos;
+    }
+    if (Platform.isAndroid) {
+      return HostPlatform.android;
+    }
+    if (Platform.isIOS) {
+      return HostPlatform.ios;
+    }
+    return HostPlatform.unknown;
   }
 }

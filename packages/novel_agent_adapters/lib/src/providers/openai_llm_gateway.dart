@@ -585,7 +585,11 @@ class OpenAiLlmGateway implements LlmGateway {
       final call = _mapValue(rawCall);
       final index = call['index']?.toString() ?? '';
       final callId = _stringValue(call['id']);
-      final key = callId.isNotEmpty ? callId : index;
+      final key = _toolCallBuilderKey(
+        toolCallBuilders,
+        callId: callId,
+        index: index,
+      );
       if (key.isEmpty) {
         continue;
       }
@@ -606,6 +610,28 @@ class OpenAiLlmGateway implements LlmGateway {
         builder.argumentsBuffer.write(argumentsChunk);
       }
     }
+  }
+
+  String _toolCallBuilderKey(
+    Map<String, _ToolCallBuilder> toolCallBuilders, {
+    required String callId,
+    required String index,
+  }) {
+    // 中文注释: 兼容流式首包带 id、后续包只带 index 的情况，确保同一工具调用不会被拆成两条残缺记录。
+    if (index.isNotEmpty && toolCallBuilders.containsKey(index)) {
+      return index;
+    }
+    if (callId.isNotEmpty) {
+      for (final entry in toolCallBuilders.entries) {
+        if (entry.value.id == callId) {
+          return entry.key;
+        }
+      }
+    }
+    if (index.isNotEmpty) {
+      return index;
+    }
+    return callId;
   }
 
   static const Set<String> _reservedOptionKeys = <String>{
