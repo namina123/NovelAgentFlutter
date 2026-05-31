@@ -9,6 +9,10 @@ final class ProviderProfileConstants {
   static const int defaultTopK = 0;
   static const bool defaultStreamingEnabled = true;
   static const bool defaultSupportsToolChoice = false;
+  static const bool defaultSupportsFileAttachments = false;
+  static const bool defaultSupportsImageAttachments = false;
+  static const bool defaultSupportsAttachmentUrlsOnly = false;
+  static const bool defaultSupportsMultiAttachments = false;
   static const String thinkingFormatNone = 'none';
   static const String thinkingFormatDeepseekObject = 'deepseek_thinking_object';
   static const String thinkingFormatEnableBoolean = 'enable_thinking_boolean';
@@ -36,5 +40,9 @@ final class ProviderProfileConstants {
     'supports_tools',
     'supports_tool_choice',
     'supports_image_generation',
+    'supports_file_attachments',
+    'supports_image_attachments',
+    'supports_attachment_urls_only',
+    'supports_multi_attachments',
   ];
 }

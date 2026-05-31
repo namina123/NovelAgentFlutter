@@ -475,9 +475,28 @@ class ProjectWorkflowRuntimeService {
   Future<JsonMap> loadLongTaskRun(
     ProjectDescriptor project,
     String relativePath,
-  ) {
+  ) async {
     // 中文注释: 长任务运行详情与队列运行详情共用记录读取入口，只在渲染器上分流。
-    return _taskRepository.loadRecord(project, relativePath);
+    final record = await _taskRepository.loadRecord(project, relativePath);
+    if (record.isEmpty) {
+      return record;
+    }
+    final schedulerSnapshot = _buildLongTaskSchedulerSnapshotUseCase.execute(
+      record,
+      await listWorkflowTasks(project),
+      options: ValueReaders.mapValue(record['options']),
+    );
+    final runCenterContract = _runCenterContractFromSchedulerSnapshot(
+      schedulerSnapshot,
+    );
+    return <String, Object?>{
+      ...record,
+      'run_center_contract': runCenterContract,
+      'scheduler_snapshot': <String, Object?>{
+        ...schedulerSnapshot,
+        'run_center_contract': runCenterContract,
+      },
+    };
   }
 
   Future<JsonMap> createCheckpointReviewTasks(
@@ -614,10 +633,20 @@ class ProjectWorkflowRuntimeService {
         'relative_path': '',
       };
     }
+    final memorySections = await _modeGuidanceMemorySectionService.buildForTask(
+      project,
+      task,
+    );
+    final projectFileContents = await _readPlannedProjectFileContents(
+      project,
+      task,
+    );
     final prompt = _buildLongTaskPromptUseCase.execute(
       task,
       options: <String, Object?>{
         'project_templates': await _templateMap(project),
+        'memory_sections': memorySections,
+        'project_file_contents': projectFileContents,
       },
     );
     final safeId = _longTaskPathPolicyService.safeId(
@@ -658,18 +687,24 @@ class ProjectWorkflowRuntimeService {
       TaskRuntimeConstants.statusPlanning,
       note: '开始准备章节原子执行包。',
     );
+    final memorySections = await _modeGuidanceMemorySectionService.buildForTask(
+      project,
+      task,
+    );
+    final projectFileContents = await _readPlannedProjectFileContents(
+      project,
+      task,
+    );
     final prompt = _buildLongTaskPromptUseCase.execute(
       task,
       options: <String, Object?>{
         'project_templates': await _templateMap(project),
+        'memory_sections': memorySections,
+        'project_file_contents': projectFileContents,
       },
     );
     final entries = await _taskRepository.workspacePort.listEntries(
       project.rootPath,
-    );
-    final memorySections = await _modeGuidanceMemorySectionService.buildForTask(
-      project,
-      task,
     );
     final result = _prepareExecutionUseCase.execute(<String, Object?>{
       'project': projectInfo.isEmpty
@@ -694,10 +729,7 @@ class ProjectWorkflowRuntimeService {
       'project_file_section_plan': _longTaskProjectFileSectionPlanService.build(
         task,
       ),
-      'project_file_contents': await _readPlannedProjectFileContents(
-        project,
-        task,
-      ),
+      'project_file_contents': projectFileContents,
     });
     if (!ValueReaders.boolValue(result['ok'])) {
       await _taskRepository.transitionTask(
@@ -806,28 +838,6 @@ class ProjectWorkflowRuntimeService {
       }
       task = await _taskRepository.loadTask(project, selector);
     }
-    final prompt = _buildLongTaskPromptUseCase.execute(
-      task,
-      runRecord: runRecord,
-      options: <String, Object?>{
-        'project_templates': await _templateMap(project),
-      },
-    );
-    await _taskRepository.transitionTask(
-      project,
-      selector,
-      TaskRuntimeConstants.statusRunning,
-      note: '章节原子任务开始单步模型执行。',
-    );
-    final executionProfile = _modelExecutionProfileService.resolve(
-      settings: settings,
-      provider: provider,
-      agent: agent,
-    );
-    final useCase = _generateDraftUseCaseFactory(
-      provider,
-      settings.networkSettings,
-    );
     final memorySections = await _modeGuidanceMemorySectionService.buildForTask(
       project,
       task,
@@ -838,6 +848,37 @@ class ProjectWorkflowRuntimeService {
     final projectFileContents = await _readPlannedProjectFileContents(
       project,
       task,
+    );
+    final prompt = _buildLongTaskPromptUseCase.execute(
+      task,
+      runRecord: runRecord,
+      options: <String, Object?>{
+        'project_templates': await _templateMap(project),
+        'memory_sections': memorySections,
+        'project_file_contents': projectFileContents,
+      },
+    );
+    await _taskRepository.transitionTask(
+      project,
+      selector,
+      TaskRuntimeConstants.statusRunning,
+      note: '章节原子任务开始单步模型执行。',
+      extra: const <String, Object?>{
+        'postprocess_ran_at': '',
+        'postprocess_review_report_path': '',
+        'postprocess_review_report_json_path': '',
+        'postprocess_checkpoint_review_path': '',
+        'postprocess_checkpoint_review_summary': '',
+      },
+    );
+    final executionProfile = _modelExecutionProfileService.resolve(
+      settings: settings,
+      provider: provider,
+      agent: agent,
+    );
+    final useCase = _generateDraftUseCaseFactory(
+      provider,
+      settings.networkSettings,
     );
     final result = await useCase.execute(
       project: project,
@@ -859,6 +900,16 @@ class ProjectWorkflowRuntimeService {
         'id': provider.id,
         'base_url': provider.baseUrl,
         'model_id': provider.modelId,
+      },
+      skillRoutingContext: <String, Object?>{
+        'task_type': ValueReaders.stringValue(task['task_type']),
+        'mode': ValueReaders.stringValue(task['mode']),
+        'title': ValueReaders.stringValue(task['title']),
+        'goal': ValueReaders.stringValue(task['goal']),
+        'brief': ValueReaders.stringValue(task['brief']),
+        'review_type': ValueReaders.stringValue(
+          ValueReaders.mapValue(task['metadata'])['review_type'],
+        ),
       },
       memorySections: memorySections,
       projectFileSectionPlan: projectFileSectionPlan,
@@ -943,8 +994,9 @@ class ProjectWorkflowRuntimeService {
         ),
       };
     }
-    final nextStatus = _taskCompletionPolicyService
+    final defaultNextStatus = _taskCompletionPolicyService
         .statusAfterSuccessfulModelStep(task);
+    final nextStatus = _resolveStatusAfterGate(defaultNextStatus, gateOutcome);
     await _taskRepository.transitionTask(
       project,
       selector,
@@ -972,6 +1024,26 @@ class ProjectWorkflowRuntimeService {
           'chapter_gate_action': ValueReaders.stringValue(
             gateOutcome['action'],
           ),
+        if (ValueReaders.stringValue(
+          gateOutcome['gate_disposition'],
+        ).isNotEmpty)
+          'chapter_gate_disposition': ValueReaders.stringValue(
+            gateOutcome['gate_disposition'],
+          ),
+        if (ValueReaders.stringValue(gateOutcome['gate_reason']).isNotEmpty)
+          'chapter_gate_reason': ValueReaders.stringValue(
+            gateOutcome['gate_reason'],
+          ),
+        if (ValueReaders.boolValue(gateOutcome['blocks_auto_advance']))
+          'chapter_gate_blocks_auto_advance': true,
+        if (ValueReaders.boolValue(gateOutcome['manual_attention_required']))
+          'chapter_gate_manual_attention_required': true,
+        if (ValueReaders.stringValue(
+          gateOutcome['review_report_path'],
+        ).isNotEmpty)
+          'chapter_gate_review_report_path': ValueReaders.stringValue(
+            gateOutcome['review_report_path'],
+          ),
       },
     );
     return <String, Object?>{
@@ -997,6 +1069,18 @@ class ProjectWorkflowRuntimeService {
           : '模型已写入项目文件，本任务按当前模式自动标记完成。';
     }
     return outputPaths.isEmpty ? '模型已返回，等待用户确认后继续。' : '模型已写入项目文件，等待用户确认后继续。';
+  }
+
+  String _resolveStatusAfterGate(String defaultStatus, JsonMap gateOutcome) {
+    // 中文注释: review -> gate 决策后的任务状态统一在 runtime 层做最终落点，但规则仍来自 core 返回的 disposition。
+    final decision = ValueReaders.mapValue(gateOutcome['gate_decision']);
+    if (decision.isEmpty) {
+      return defaultStatus;
+    }
+    return LongTaskChapterGatePolicyService().statusAfterReviewOutcome(
+      decision,
+      defaultStatus,
+    );
   }
 
   Future<JsonMap> runNextWorkflowTaskOnce(
@@ -1114,7 +1198,23 @@ class ProjectWorkflowRuntimeService {
       note: note,
     );
     await _taskRepository.saveRecord(project, relativePath, updated);
-    return <String, Object?>{'ok': true, 'record': updated};
+    final schedulerSnapshot = _buildLongTaskSchedulerSnapshotUseCase.execute(
+      updated,
+      await listWorkflowTasks(project),
+      options: ValueReaders.mapValue(updated['options']),
+    );
+    final runCenterContract = _runCenterContractFromSchedulerSnapshot(
+      schedulerSnapshot,
+    );
+    return <String, Object?>{
+      'ok': true,
+      'record': updated,
+      'run_center_contract': runCenterContract,
+      'scheduler_snapshot': <String, Object?>{
+        ...schedulerSnapshot,
+        'run_center_contract': runCenterContract,
+      },
+    };
   }
 
   Future<JsonMap> resumeLongTaskRun(
@@ -1309,6 +1409,15 @@ class ProjectWorkflowRuntimeService {
       'record': queueRecord,
       'long_task_run_path': longRunPath,
       'long_task_record': longRunRecord,
+      'long_task_run_center_contract': longRunRecord.isEmpty
+          ? const <String, Object?>{}
+          : _runCenterContractFromSchedulerSnapshot(
+              _buildLongTaskSchedulerSnapshotUseCase.execute(
+                longRunRecord,
+                await listWorkflowTasks(project),
+                options: cleanOptions,
+              ),
+            ),
     };
   }
 
@@ -1348,6 +1457,10 @@ class ProjectWorkflowRuntimeService {
           ? execution['output_paths']
           : task['output_paths'],
     );
+    final memorySections = await _modeGuidanceMemorySectionService.buildForTask(
+      project,
+      task,
+    );
     final prompt = _postprocessPromptRenderer.renderPostprocessPrompt(
       _postprocessTransactionService.buildPostprocessTransaction(
         task,
@@ -1355,6 +1468,12 @@ class ProjectWorkflowRuntimeService {
         draftPaths,
         options: <String, Object?>{
           'project_templates': await _templateMap(project),
+          'memory_sections': memorySections,
+          'creative_rule_stack': ValueReaders.mapValue(
+            ValueReaders.mapValue(
+              execution['context_pack'],
+            )['creative_rule_stack'],
+          ),
         },
       ),
     );
@@ -1393,10 +1512,6 @@ class ProjectWorkflowRuntimeService {
       ValueReaders.stringList(task['output_paths']),
       result.writtenPaths,
     );
-    final memorySections = await _modeGuidanceMemorySectionService.buildForTask(
-      project,
-      task,
-    );
     final savedPostprocess = await _postprocessResultService.saveResult(
       project: project,
       task: task,
@@ -1411,6 +1526,7 @@ class ProjectWorkflowRuntimeService {
       note: '后处理已返回，等待用户确认是否标记完成或继续修订。',
       extra: <String, Object?>{
         'output_paths': mergedOutputs,
+        'postprocess_ran_at': DateTime.now().toIso8601String(),
         'postprocess_review_report_path': ValueReaders.stringValue(
           savedPostprocess['postprocess_review_report_path'],
         ),
@@ -1718,6 +1834,21 @@ class ProjectWorkflowRuntimeService {
       }
     }
     return result;
+  }
+
+  JsonMap _runCenterContractFromSchedulerSnapshot(JsonMap schedulerSnapshot) {
+    // 中文注释: 兼容旧/新 snapshot 结构，优先顶层，缺失时再回退到 scheduler_plan 内。
+    final topLevel = ValueReaders.mapValue(
+      schedulerSnapshot['run_center_contract'],
+    );
+    if (topLevel.isNotEmpty) {
+      return topLevel;
+    }
+    return ValueReaders.mapValue(
+      ValueReaders.mapValue(
+        schedulerSnapshot['scheduler_plan'],
+      )['run_center_contract'],
+    );
   }
 
   Future<JsonMap> _saveRevisionDiffIfNeeded(

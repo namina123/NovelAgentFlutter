@@ -17,7 +17,7 @@ final class BuiltinToolCatalog {
         BuiltinToolDefinition(
           id: 'write_project_file',
           name: '写入项目文件',
-          description: '把草稿、正式正文和其他产物写入正确英文目录；修正同一路径时要显式 overwrite。',
+          description: '把章节正文、场景片段和其他产物写入正确英文目录；修正同一路径时要显式 overwrite。',
         ),
         BuiltinToolDefinition(
           id: 'edit_project_file',
@@ -36,6 +36,11 @@ final class BuiltinToolCatalog {
           description: '让 AI 用可点击按钮向用户列出方案。',
         ),
         BuiltinToolDefinition(
+          id: 'start_long_task_run',
+          name: '启动长任务',
+          description: '仅在长任务项目中可用；根据当前模式引导状态生成正式长任务队列。',
+        ),
+        BuiltinToolDefinition(
           id: 'set_agent_tasks',
           name: '设定智能体任务',
           description: '让 AI 为自己声明阶段目标和任务清单。',
@@ -43,7 +48,7 @@ final class BuiltinToolCatalog {
         BuiltinToolDefinition(
           id: 'load_agent_skill',
           name: '按需读取技能说明',
-          description: '只在当前任务需要某个技能时读取该技能摘要；默认返回压缩说明，确实需要时再请求 full。',
+          description: '按阶段策略读取技能摘要；确实需要时再读取 full 或指定 reference_path，避免反复整份加载。',
         ),
         BuiltinToolDefinition(
           id: 'call_sub_agent',
@@ -58,7 +63,22 @@ final class BuiltinToolCatalog {
         BuiltinToolDefinition(
           id: 'update_character_state',
           name: '更新角色状态',
-          description: '把角色卡、关系、当前状态和口吻写入 characters/。',
+          description: '更新 assets/characters/ 下的角色主档，并同步 latest 状态与历史附录。',
+        ),
+        BuiltinToolDefinition(
+          id: 'update_foreshadow_state',
+          name: '更新伏笔状态',
+          description: '更新 assets/foreshadows/ 下的伏笔主档，记录埋设、推进、回收与风险状态。',
+        ),
+        BuiltinToolDefinition(
+          id: 'update_timeline_state',
+          name: '更新时间线',
+          description: '更新 assets/timeline/ 下的时间线事件与阶段顺序。',
+        ),
+        BuiltinToolDefinition(
+          id: 'update_relationship_state',
+          name: '更新关系状态',
+          description: '更新 assets/relationships/ 下的关键关系变化与当前状态。',
         ),
         BuiltinToolDefinition(
           id: 'create_chapter_task',

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
@@ -5,29 +7,66 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 import '../../presentation/contracts/long_task_station_action_handler.dart';
 import '../../presentation/models/long_task_station_view_data.dart';
 import '../models/long_task_station_snapshot.dart';
+import '../services/long_task_station_runtime_refresh_policy_service.dart';
 import '../services/long_task_station_view_data_service.dart';
+
+typedef LongTaskStationDetailLoader =
+    Future<ProjectLongTaskStationDetail> Function(RunInstance run);
 
 class LongTaskStationController extends ChangeNotifier
     implements LongTaskStationActionHandler {
   LongTaskStationController({
     required LongTaskSupervisor longTaskSupervisor,
+    required ProjectLongTaskStationDetailService detailService,
     LongTaskStationViewDataService? viewDataService,
+    LongTaskStationRuntimeRefreshPolicyService? runtimeRefreshPolicyService,
+    LongTaskStationDetailLoader? detailLoader,
   }) : _longTaskSupervisor = longTaskSupervisor,
+       _detailService = detailService,
        _viewDataService =
            viewDataService ?? const LongTaskStationViewDataService(),
+       _runtimeRefreshPolicyService =
+           runtimeRefreshPolicyService ??
+           const LongTaskStationRuntimeRefreshPolicyService(),
+       _detailLoader = detailLoader,
        _snapshot = LongTaskStationSnapshot.initial(),
        _viewData = LongTaskStationViewData.initial();
 
   final LongTaskSupervisor _longTaskSupervisor;
+  final ProjectLongTaskStationDetailService _detailService;
   final LongTaskStationViewDataService _viewDataService;
+  final LongTaskStationRuntimeRefreshPolicyService _runtimeRefreshPolicyService;
+  final LongTaskStationDetailLoader? _detailLoader;
+  Future<void> Function(RunInstance run)? _openProjectRequested;
+  Future<void> Function(RunInstance run, String relativePath)?
+  _openResourceRequested;
+  String Function()? _readCurrentProjectPathRequested;
 
   LongTaskStationSnapshot _snapshot;
   LongTaskStationViewData _viewData;
   bool _initialized = false;
   bool _disposed = false;
+  bool _autoRefreshEnabled = false;
+  Timer? _autoRefreshTimer;
+  bool _autoRefreshInFlight = false;
 
   LongTaskStationViewData get viewData => _viewData;
   bool get isInitialized => _initialized;
+
+  @visibleForTesting
+  bool get isAutoRefreshScheduled => _autoRefreshTimer != null;
+
+  void attachNavigationCallbacks({
+    required Future<void> Function(RunInstance run) openProjectRequested,
+    required Future<void> Function(RunInstance run, String relativePath)
+    openResourceRequested,
+    required String Function() readCurrentProjectPathRequested,
+  }) {
+    // 中文注释: 总站跳转只保存壳层回调，不直接依赖工作台或页面控制器实现。
+    _openProjectRequested = openProjectRequested;
+    _openResourceRequested = openResourceRequested;
+    _readCurrentProjectPathRequested = readCurrentProjectPathRequested;
+  }
 
   Future<void> initialize() async {
     // 中文注释: 子域控制器独立初始化自己的全局运行列表，避免把 feature 首屏刷新逻辑塞回壳层。
@@ -38,8 +77,28 @@ class LongTaskStationController extends ChangeNotifier
     await refresh();
   }
 
+  void setAutoRefreshEnabled(bool enabled) {
+    if (_autoRefreshEnabled == enabled) {
+      return;
+    }
+    _autoRefreshEnabled = enabled;
+    if (!_autoRefreshEnabled) {
+      _cancelAutoRefreshTimer();
+      return;
+    }
+    if (_initialized) {
+      _scheduleAutoRefreshIfNeeded();
+    }
+  }
+
   Future<void> refresh() async {
+    _cancelAutoRefreshTimer();
+    final currentProjectPath = _currentProjectPath();
+    final filterToCurrentProject =
+        _snapshot.isCurrentProjectFilterActive && currentProjectPath.isNotEmpty;
     _snapshot = _snapshot.copyWith(
+      currentProjectPath: currentProjectPath,
+      isCurrentProjectFilterActive: filterToCurrentProject,
       isLoading: true,
       isSupervisorRunning: _longTaskSupervisor.isRunning,
       statusMessage: '正在加载全局长任务运行实例...',
@@ -47,23 +106,38 @@ class LongTaskStationController extends ChangeNotifier
     _rebuildView();
     try {
       final runs = await _longTaskSupervisor.listAllRuns();
-      final selectedRunId = _resolveSelectedRunId(
+      final filteredRuns = _filterVisibleRuns(
         runs: runs,
+        currentProjectPath: currentProjectPath,
+        isCurrentProjectFilterActive: filterToCurrentProject,
+      );
+      final selectedRunId = _resolveSelectedRunId(
+        runs: filteredRuns,
         previousSelectedRunId: _snapshot.selectedRunId,
       );
       _snapshot = _snapshot.copyWith(
         runs: runs,
         selectedRunId: selectedRunId,
-        statusMessage: runs.isEmpty
-            ? '当前没有全局长任务运行实例。'
-            : '已加载 ${runs.length} 个全局长任务运行实例。',
+        clearSelectedRunDetail: selectedRunId.trim().isEmpty,
+        detailStatusMessage: selectedRunId.trim().isEmpty
+            ? '当前没有可查看的运行实例。'
+            : '正在读取运行详情...',
+        statusMessage: _statusMessage(
+          runs: runs,
+          visibleRuns: filteredRuns,
+          filterToCurrentProject: filterToCurrentProject,
+        ),
         isLoading: false,
+        isDetailLoading: selectedRunId.trim().isNotEmpty,
         isSupervisorRunning: _longTaskSupervisor.isRunning,
       );
       _rebuildView();
+      await _loadSelectedRunDetail();
+      _scheduleAutoRefreshIfNeeded();
     } catch (error) {
       _snapshot = _snapshot.copyWith(
         isLoading: false,
+        isDetailLoading: false,
         isSupervisorRunning: _longTaskSupervisor.isRunning,
         statusMessage: '加载全局长任务运行实例失败：$error',
       );
@@ -78,8 +152,17 @@ class LongTaskStationController extends ChangeNotifier
 
   @override
   void onLongTaskStationRunSelected(String runId) {
-    _snapshot = _snapshot.copyWith(selectedRunId: runId.trim());
+    final selectedRunId = runId.trim();
+    _snapshot = _snapshot.copyWith(
+      selectedRunId: selectedRunId,
+      clearSelectedRunDetail: true,
+      detailStatusMessage: selectedRunId.isEmpty
+          ? '请选择一个运行实例查看详情。'
+          : '正在读取运行详情...',
+      isDetailLoading: selectedRunId.isNotEmpty,
+    );
     _rebuildView();
+    _loadSelectedRunDetail();
   }
 
   @override
@@ -120,8 +203,72 @@ class LongTaskStationController extends ChangeNotifier
   }
 
   @override
+  void onLongTaskStationOpenProjectRequested(String runId) {
+    _runProjectNavigation(
+      runId,
+      navigate: (run, detail, snapshot) async {
+        final callback = _openProjectRequested;
+        if (callback != null) {
+          await callback(run);
+        }
+      },
+    );
+  }
+
+  @override
+  void onLongTaskStationResourceRequested(String runId, String relativePath) {
+    _runProjectNavigation(
+      runId,
+      navigate: (run, detail, _) async {
+        final callback = _openResourceRequested;
+        if (callback == null) {
+          return;
+        }
+        final resolvedPath = relativePath.trim().isNotEmpty
+            ? relativePath.trim()
+            : detail?.activeTask?.relativePath ?? '';
+        await callback(run, resolvedPath);
+      },
+    );
+  }
+
+  @override
+  void onLongTaskStationCurrentProjectFilterToggled(bool selected) {
+    final nextFilter = selected && _snapshot.hasCurrentProjectScope;
+    final visibleRuns = _filterVisibleRuns(
+      runs: _snapshot.runs,
+      currentProjectPath: _snapshot.currentProjectPath,
+      isCurrentProjectFilterActive: nextFilter,
+    );
+    final nextSelectedRunId = _resolveSelectedRunId(
+      runs: visibleRuns,
+      previousSelectedRunId: _snapshot.selectedRunId,
+    );
+    final selectionChanged = nextSelectedRunId != _snapshot.selectedRunId;
+    _snapshot = _snapshot.copyWith(
+      isCurrentProjectFilterActive: nextFilter,
+      selectedRunId: nextSelectedRunId,
+      clearSelectedRunDetail: selectionChanged,
+      detailStatusMessage: nextSelectedRunId.trim().isEmpty
+          ? '当前没有可查看的运行实例。'
+          : (selectionChanged ? '正在读取运行详情...' : _snapshot.detailStatusMessage),
+      statusMessage: _statusMessage(
+        runs: _snapshot.runs,
+        visibleRuns: visibleRuns,
+        filterToCurrentProject: nextFilter,
+      ),
+      isDetailLoading: nextSelectedRunId.trim().isNotEmpty && selectionChanged,
+    );
+    _rebuildView();
+    if (selectionChanged && nextSelectedRunId.trim().isNotEmpty) {
+      _loadSelectedRunDetail();
+    }
+  }
+
+  @override
   void dispose() {
     _disposed = true;
+    _cancelAutoRefreshTimer();
     super.dispose();
   }
 
@@ -158,10 +305,74 @@ class LongTaskStationController extends ChangeNotifier
     } catch (error) {
       _snapshot = _snapshot.copyWith(
         isLoading: false,
+        isDetailLoading: false,
         statusMessage: '$actionLabel运行实例失败：$error',
       );
       _rebuildView();
     }
+  }
+
+  Future<void> _loadSelectedRunDetail() async {
+    final run = _snapshot.selectedRun;
+    if (run == null) {
+      _snapshot = _snapshot.copyWith(
+        clearSelectedRunDetail: true,
+        isDetailLoading: false,
+        detailStatusMessage: '请选择一个运行实例查看详情。',
+      );
+      _rebuildView();
+      return;
+    }
+    final targetRunId = run.id;
+    try {
+      final detail =
+          await (_detailLoader?.call(run) ?? _detailService.loadForRun(run));
+      if (_snapshot.selectedRunId != targetRunId) {
+        return;
+      }
+      _snapshot = _snapshot.copyWith(
+        selectedRunDetail: detail,
+        detailStatusMessage: '已加载项目链路详情。',
+        isDetailLoading: false,
+      );
+      _rebuildView();
+    } catch (error) {
+      if (_snapshot.selectedRunId != targetRunId) {
+        return;
+      }
+      _snapshot = _snapshot.copyWith(
+        clearSelectedRunDetail: true,
+        detailStatusMessage: '读取运行详情失败：$error',
+        isDetailLoading: false,
+      );
+      _rebuildView();
+    }
+  }
+
+  void _runProjectNavigation(
+    String runId, {
+    required Future<void> Function(
+      RunInstance run,
+      ProjectLongTaskStationDetail? detail,
+      LongTaskStationSnapshot snapshot,
+    )
+    navigate,
+  }) {
+    final targetRunId = runId.trim();
+    if (targetRunId.isEmpty) {
+      return;
+    }
+    RunInstance? run;
+    for (final item in _snapshot.runs) {
+      if (item.id == targetRunId) {
+        run = item;
+        break;
+      }
+    }
+    if (run == null) {
+      return;
+    }
+    navigate(run, _snapshot.selectedRunDetail, _snapshot);
   }
 
   String _resolveSelectedRunId({
@@ -179,10 +390,81 @@ class LongTaskStationController extends ChangeNotifier
     return runs.isEmpty ? '' : runs.first.id;
   }
 
+  String _currentProjectPath() {
+    final callback = _readCurrentProjectPathRequested;
+    if (callback == null) {
+      return '';
+    }
+    return callback().trim();
+  }
+
+  List<RunInstance> _filterVisibleRuns({
+    required List<RunInstance> runs,
+    required String currentProjectPath,
+    required bool isCurrentProjectFilterActive,
+  }) {
+    if (!isCurrentProjectFilterActive || currentProjectPath.isEmpty) {
+      return runs;
+    }
+    return runs
+        .where((run) => run.project.rootPath.trim() == currentProjectPath)
+        .toList(growable: false);
+  }
+
+  String _statusMessage({
+    required List<RunInstance> runs,
+    required List<RunInstance> visibleRuns,
+    required bool filterToCurrentProject,
+  }) {
+    if (runs.isEmpty) {
+      return '当前没有全局长任务运行实例。';
+    }
+    if (!filterToCurrentProject) {
+      return '已加载 ${runs.length} 个全局长任务运行实例。';
+    }
+    if (visibleRuns.isEmpty) {
+      return '当前项目暂无运行实例，已保留全局长任务总站视图。';
+    }
+    return '当前项目共有 ${visibleRuns.length} 个运行实例，已收口到总站查看。';
+  }
+
   void _rebuildView() {
     _viewData = _viewDataService.build(_snapshot);
     if (!_disposed) {
       notifyListeners();
     }
+  }
+
+  void _scheduleAutoRefreshIfNeeded() {
+    if (_disposed || !_autoRefreshEnabled) {
+      return;
+    }
+    _cancelAutoRefreshTimer();
+    final decision = _runtimeRefreshPolicyService.decide(_snapshot);
+    if (!decision.shouldRefresh) {
+      return;
+    }
+    _autoRefreshTimer = Timer(
+      decision.interval,
+      () => unawaited(_runAutoRefreshTick()),
+    );
+  }
+
+  Future<void> _runAutoRefreshTick() async {
+    if (_disposed || _autoRefreshInFlight) {
+      return;
+    }
+    _autoRefreshTimer = null;
+    _autoRefreshInFlight = true;
+    try {
+      await refresh();
+    } finally {
+      _autoRefreshInFlight = false;
+    }
+  }
+
+  void _cancelAutoRefreshTimer() {
+    _autoRefreshTimer?.cancel();
+    _autoRefreshTimer = null;
   }
 }

@@ -24,10 +24,12 @@ class ProjectLauncherViewDataService {
     String selectedProjectTypeId = 'novel',
     ProjectStorageStrategy selectedStorageStrategy =
         ProjectStorageStrategy.markdownProjectStore,
-    ProjectCreationPhase creationPhase = ProjectCreationPhase.basics,
+    ProjectCreationPhase creationPhase = ProjectCreationPhase.projectType,
     List<ProjectRuntimeBaselineDefinition> runtimeBaselineOptions =
         const <ProjectRuntimeBaselineDefinition>[],
     String selectedRuntimeBaselineId = '',
+    ProjectContinuityInputProfile continuityInput =
+        const ProjectContinuityInputProfile(),
     bool canDismiss = true,
     bool allowOpenExisting = true,
   }) {
@@ -57,6 +59,12 @@ class ProjectLauncherViewDataService {
         .toList(growable: false);
     return ProjectLauncherViewData(
       mode: mode,
+      title: _titleOf(mode: mode, creationPhase: creationPhase),
+      description: _descriptionOf(
+        mode: mode,
+        creationPhase: creationPhase,
+        allowOpenExisting: allowOpenExisting,
+      ),
       projectsRootPath: projectsRootPath,
       entries: projects
           .map(
@@ -92,9 +100,51 @@ class ProjectLauncherViewDataService {
       selectedRuntimeBaselineId: selectedRuntimeBaselineId.trim(),
       selectedProjectTypeRequiresRuntimeBaseline:
           selectedProjectType.requiresRuntimeBaselineSelection,
+      continuityInput: continuityInput,
       canDismiss: canDismiss,
       allowOpenExisting: allowOpenExisting,
     );
+  }
+
+  String _titleOf({
+    required ProjectLauncherMode mode,
+    required ProjectCreationPhase creationPhase,
+  }) {
+    switch (mode) {
+      case ProjectLauncherMode.guard:
+        return '先选择一个项目入口';
+      case ProjectLauncherMode.create:
+        switch (creationPhase) {
+          case ProjectCreationPhase.projectType:
+            return '第一步：选择项目类型';
+          case ProjectCreationPhase.storageStrategy:
+            return '第二步：选择主存储策略';
+          case ProjectCreationPhase.runtimeBaseline:
+            return '第三步：选择长任务运行基准';
+        }
+    }
+  }
+
+  String _descriptionOf({
+    required ProjectLauncherMode mode,
+    required ProjectCreationPhase creationPhase,
+    required bool allowOpenExisting,
+  }) {
+    switch (mode) {
+      case ProjectLauncherMode.guard:
+        return allowOpenExisting
+            ? '当前没有有效项目。先创建一个新项目，或从本机选择一个已有项目根目录。'
+            : '当前没有有效项目。请先在应用项目目录中创建第一个项目。';
+      case ProjectLauncherMode.create:
+        switch (creationPhase) {
+          case ProjectCreationPhase.projectType:
+            return '先决定这个项目按哪类创作策略起步，项目名会随默认模板联动。';
+          case ProjectCreationPhase.storageStrategy:
+            return '接着确定正文主存储策略，后续文件树与数据组织都会按这里落定。';
+          case ProjectCreationPhase.runtimeBaseline:
+            return '最后为需要长任务运行基准的项目补齐运行方式，再正式创建项目。';
+        }
+    }
   }
 
   ProjectStorageStrategyOptionViewData _storageOptionFrom(

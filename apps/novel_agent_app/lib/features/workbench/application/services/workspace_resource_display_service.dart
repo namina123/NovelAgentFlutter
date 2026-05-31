@@ -1,7 +1,14 @@
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import 'workspace_resource_visibility_service.dart';
+
 class WorkspaceResourceDisplayService {
-  const WorkspaceResourceDisplayService();
+  const WorkspaceResourceDisplayService({
+    WorkspaceResourceVisibilityService visibilityService =
+        const WorkspaceResourceVisibilityService(),
+  }) : _visibilityService = visibilityService;
+
+  final WorkspaceResourceVisibilityService _visibilityService;
 
   String titleOf(String relativePath, {required bool isDirectory}) {
     // 中文注释: 资源树展示名只负责把真实英文目录映射为中文显示，不改变任何底层真实路径。
@@ -20,27 +27,8 @@ class WorkspaceResourceDisplayService {
   }
 
   bool shouldHidePath(String relativePath) {
-    // 中文注释: 资源树默认隐藏内部元数据和无意义占位文件，避免用户误改系统文件或被旧骨架噪音干扰。
-    final cleanPath = _normalizePath(relativePath).toLowerCase();
-    if (cleanPath.isEmpty) {
-      return false;
-    }
-    if (cleanPath == ProjectManifestCodecService.manifestRelativePath) {
-      return true;
-    }
-    if (cleanPath.startsWith('.novel_agent/')) {
-      return true;
-    }
-    if (cleanPath.endsWith('.json') || cleanPath.endsWith('.jsonl')) {
-      return true;
-    }
-    if (cleanPath == 'readme.md') {
-      return true;
-    }
-    if (RegExp(r'^[^/]+/readme\.md$').hasMatch(cleanPath)) {
-      return true;
-    }
-    return false;
+    // 中文注释: 展示服务不再自己维护可见性规则，而是复用独立资源树投影策略服务。
+    return _visibilityService.shouldHideFromDefaultTree(relativePath);
   }
 
   int compareEntries(JsonMap left, JsonMap right) {

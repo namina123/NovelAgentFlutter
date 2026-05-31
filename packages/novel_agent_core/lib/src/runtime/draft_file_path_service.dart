@@ -1,6 +1,15 @@
+import '../project/project_content_path_policy_service.dart';
+
 class DraftFilePathService {
+  DraftFilePathService({
+    ProjectContentPathPolicyService? contentPathPolicyService,
+  }) : _contentPathPolicyService =
+           contentPathPolicyService ?? const ProjectContentPathPolicyService();
+
+  final ProjectContentPathPolicyService _contentPathPolicyService;
+
   String buildPath({required String title, DateTime? now}) {
-    // 中文注释: 草稿路径规则集中在 core，保证桌面 CLI 与 Flutter GUI 自动保存时写到同一目录约定。
+    // 中文注释: 自动内容保存路径集中在 core，保证桌面 CLI 与 Flutter GUI 始终落到同一正文目录。
     final resolvedNow = now ?? DateTime.now();
     final timestamp =
         '${resolvedNow.year.toString().padLeft(4, '0')}'
@@ -10,9 +19,12 @@ class DraftFilePathService {
         '${resolvedNow.minute.toString().padLeft(2, '0')}'
         '${resolvedNow.second.toString().padLeft(2, '0')}';
     final slug = _slugify(title);
+    final chapterRoot = _contentPathPolicyService.directoryForContentType(
+      'chapter',
+    );
     return slug.isEmpty
-        ? 'drafts/$timestamp.md'
-        : 'drafts/${timestamp}_$slug.md';
+        ? '$chapterRoot/$timestamp.md'
+        : '$chapterRoot/${timestamp}_$slug.md';
   }
 
   String _slugify(String value) {

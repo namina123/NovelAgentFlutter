@@ -7,14 +7,14 @@ void main() {
       modeService: LongTaskModeService(),
     );
 
-    test('keeps sample chapter in drafts for seed_to_full', () {
+    test('keeps sample chapter in chapters for seed_to_full', () {
       final path = service.defaultOutputPath(
         mode: TaskRuntimeConstants.modeSeedToFullNovel,
         stage: 'sample',
         fileStem: '第01章_seed_to_full',
       );
 
-      expect(path, 'drafts/第01章_seed_to_full.md');
+      expect(path, 'chapters/第01章_seed_to_full.md');
     });
 
     test('writes normal seed_to_full chapter to chapters', () {
@@ -27,14 +27,15 @@ void main() {
       expect(path, 'chapters/第02章_seed_to_full.md');
     });
 
-    test('keeps human outline mode draft oriented', () {
+    test('keeps human outline mode chapter oriented', () {
       final path = service.defaultOutputPath(
         mode: TaskRuntimeConstants.modeHumanOutlineAiDraft,
         stage: 'draft',
         fileStem: '第03章_伏笔推进',
       );
 
-      expect(path, 'drafts/第03章_伏笔推进.md');
+      expect(path, 'chapters/第03章_伏笔推进.md');
     });
   });
 }
+

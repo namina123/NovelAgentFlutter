@@ -15,7 +15,7 @@ void main() {
           <String, Object?>{
             'review_type': 'plot',
             'title': '第一章剧情分析',
-            'scope': 'drafts/chapters/ch01.md',
+            'scope': 'chapters/ch01.md',
             'summary': '章节冲突建立较慢，后半段说明偏多。',
             'overall_assessment': '可读，但需要强化前半段推动力。',
             'issues': <Object?>[
@@ -24,7 +24,7 @@ void main() {
                 'category': 'plot',
                 'severity': 'high',
                 'suggestion': '把收到短信的节点提前到前两段。',
-                'source_path': 'drafts/chapters/ch01.md',
+                'source_path': 'chapters/ch01.md',
                 'start_line': 1,
                 'end_line': 18,
               },
@@ -37,7 +37,7 @@ void main() {
                 'issue_ids': <String>['analysis_ch01_issue_1'],
                 'target_segments': <Object?>[
                   <String, Object?>{
-                    'source_path': 'drafts/chapters/ch01.md',
+                    'source_path': 'chapters/ch01.md',
                     'label': '开篇铺垫段',
                     'start_line': 1,
                     'end_line': 18,
@@ -53,7 +53,7 @@ void main() {
 
         expect(result.id, 'analysis_ch01');
         expect(result.analysisType, 'plot');
-        expect(result.chapterPath, 'drafts/chapters/ch01.md');
+        expect(result.chapterPath, 'chapters/ch01.md');
         expect(result.issues, hasLength(1));
         expect(result.suggestions, hasLength(2));
         expect(
@@ -72,7 +72,7 @@ void main() {
       final result = normalizer.normalizeResult(<String, Object?>{
         'review_type': 'style',
         'title': '第一章文风分析',
-        'scope': 'drafts/chapters/ch01.md',
+        'scope': 'chapters/ch01.md',
         'summary': '说明偏重，口吻略硬。',
         'issues': <Object?>[
           <String, Object?>{
@@ -89,7 +89,7 @@ void main() {
             'target_segments': <Object?>[
               <String, Object?>{
                 'id': 'segment_1',
-                'source_path': 'drafts/chapters/ch01.md',
+                'source_path': 'chapters/ch01.md',
                 'start_line': 1,
                 'end_line': 12,
               },
@@ -114,7 +114,7 @@ void main() {
       );
 
       expect(fullPlan.actionKind, ChapterRewriteActionKind.rewriteFull);
-      expect(fullPlan.outputPaths, contains('drafts/chapters/ch01.md'));
+      expect(fullPlan.outputPaths, contains('chapters/ch01.md'));
       expect(partialPlan.actionKind, ChapterRewriteActionKind.rewritePartial);
       expect(partialPlan.targetSegments, hasLength(1));
       expect(partialPlan.instructions, contains('目标片段'));
@@ -129,7 +129,7 @@ void main() {
       final result = normalizer.normalizeResult(<String, Object?>{
         'review_type': 'continuity',
         'title': '第一章连续性分析',
-        'scope': 'drafts/chapters/ch01.md',
+        'scope': 'chapters/ch01.md',
         'summary': '角色心态转折过快。',
         'related_paths': <String>['assets/characters/protagonist.md'],
         'suggestions': <Object?>[
@@ -138,7 +138,7 @@ void main() {
             'title': '补强心态过渡',
             'summary': '在冲突爆发前补一小段内心和观察。',
             'action_kind': 'rewrite_full',
-            'output_paths': <String>['drafts/chapters/ch01.md'],
+            'output_paths': <String>['chapters/ch01.md'],
           },
         ],
       }, generatedId: 'analysis_cont_1');
@@ -183,7 +183,7 @@ void main() {
         final result = normalizer.normalizeResult(<String, Object?>{
           'review_type': 'general',
           'title': '第一章建议整理',
-          'scope': 'drafts/chapters/ch01.md',
+          'scope': 'chapters/ch01.md',
           'suggestions': <Object?>['把开头写得更抓人。'],
         }, generatedId: 'analysis_general_1');
         final plan = planBuilder.buildSuggestionsOnlyPlan(
@@ -196,3 +196,4 @@ void main() {
     );
   });
 }
+

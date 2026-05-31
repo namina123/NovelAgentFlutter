@@ -8,12 +8,8 @@ import '../models/model_editor_view_data.dart';
 import '../models/model_parameter_entry_view_data.dart';
 import '../models/settings_search_option.dart';
 import '../models/settings_view_data.dart';
-import 'model_custom_parameter_list.dart';
-import 'settings_form_section.dart';
-import 'settings_labeled_dropdown_field.dart';
-import 'settings_labeled_search_dropdown_field.dart';
-import 'settings_labeled_text_field.dart';
-import 'settings_switch_row.dart';
+import 'model_settings_advanced_panel.dart';
+import 'model_settings_primary_panel.dart';
 
 class ModelSettingsPanel extends StatefulWidget {
   const ModelSettingsPanel({
@@ -43,6 +39,16 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
   late bool _thinkingEnabled;
   late String _thinkingEffort;
   late List<ModelParameterEntryViewData> _customParameters;
+  late bool _customSupportsReasoning;
+  late bool _customReasoningCanToggle;
+  late bool _customReasoningDefaultEnabled;
+  late bool _customReasoningSupportsEffort;
+  late String _customToggleStrategyKind;
+  late final TextEditingController _customToggleKeyController;
+  late final TextEditingController _customToggleEnabledValueController;
+  late final TextEditingController _customToggleDisabledValueController;
+  late final TextEditingController _customEffortKeyController;
+  late final Map<String, TextEditingController> _customEffortValueControllers;
 
   @override
   void initState() {
@@ -54,6 +60,14 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
     _temperatureController = TextEditingController();
     _topPController = TextEditingController();
     _topKController = TextEditingController();
+    _customToggleKeyController = TextEditingController();
+    _customToggleEnabledValueController = TextEditingController();
+    _customToggleDisabledValueController = TextEditingController();
+    _customEffortKeyController = TextEditingController();
+    _customEffortValueControllers = {
+      for (final option in const ['auto', 'low', 'medium', 'high', 'max'])
+        option: TextEditingController(),
+    };
     _sync();
   }
 
@@ -74,6 +88,13 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
     _temperatureController.dispose();
     _topPController.dispose();
     _topKController.dispose();
+    _customToggleKeyController.dispose();
+    _customToggleEnabledValueController.dispose();
+    _customToggleDisabledValueController.dispose();
+    _customEffortKeyController.dispose();
+    for (final controller in _customEffortValueControllers.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -88,208 +109,130 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
           ),
         )
         .toList(growable: false);
+    final modelOptions = widget.viewData.allModelOptions
+        .map(
+          (option) => SettingsSearchOption<String>(
+            value: option.value,
+            label: option.label,
+            note: option.note,
+          ),
+        )
+        .toList(growable: false);
     final editor = widget.viewData.modelEditor;
+    final suggestedModelOptions = editor.modelSuggestions;
+    final useSuggestedModelOptions =
+        suggestedModelOptions.isNotEmpty && _providerId == editor.providerId;
+    final visibleModelOptions = useSuggestedModelOptions
+        ? suggestedModelOptions
+        : modelOptions;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        SettingsFormSection(
-          title: '模型运行设置',
-          description: '这里定义当前应用默认使用哪个接口和模型，以及上下文窗口、流式与 API 模式。',
-          child: Column(
-            children: [
-              SettingsLabeledSearchDropdownField<String>(
-                label: '接口',
-                controller: _providerSearchController,
-                selectedValue: _providerId.isEmpty ? null : _providerId,
-                options: providerOptions,
-                hintText: '输入接口名称筛选',
-                onSelected: (value) {
-                  setState(() {
-                    _providerId = value ?? '';
-                  });
-                },
-              ),
-              const SizedBox(height: 12),
-              SettingsLabeledSearchDropdownField<String>(
-                label: '模型 ID',
-                controller: _modelIdController,
-                selectedValue: null,
-                options: editor.modelSuggestions,
-                hintText: '必填，例如 deepseek-v4-pro',
-                onSelected: (value) {
-                  if (value == null) {
-                    return;
-                  }
-                  _modelIdController.text = value;
-                },
-              ),
-              const SizedBox(height: 12),
-              SettingsLabeledTextField(
-                label: '兼容上下文长度',
-                controller: _compatibleContextWindowController,
-                hintText: '例如 65536',
-              ),
-              const SizedBox(height: 12),
-              SettingsLabeledTextField(
-                label: '应用上下文长度',
-                controller: _appContextWindowController,
-                hintText: '例如 24000',
-              ),
-              const SizedBox(height: 12),
-              SettingsLabeledDropdownField<String>(
-                label: '流式传输',
-                value: _streamMode,
-                options: const [
-                  SettingsDropdownOption(value: 'stream', label: '流式'),
-                  SettingsDropdownOption(value: 'non_stream', label: '非流式'),
-                ],
-                onChanged: (value) {
-                  if (value == null) {
-                    return;
-                  }
-                  setState(() {
-                    _streamMode = value;
-                  });
-                },
-              ),
-              const SizedBox(height: 12),
-              SettingsLabeledDropdownField<String>(
-                label: 'API 模式',
-                value: _apiMode,
-                options: const [
-                  SettingsDropdownOption(value: 'chat', label: '聊天 API'),
-                  SettingsDropdownOption(
-                    value: 'responses',
-                    label: 'Responses API',
-                  ),
-                ],
-                onChanged: (value) {
-                  if (value == null) {
-                    return;
-                  }
-                  setState(() {
-                    _apiMode = value;
-                  });
-                },
-              ),
-            ],
-          ),
+        ModelSettingsPrimaryPanel(
+          providerOptions: providerOptions,
+          providerController: _providerSearchController,
+          selectedProviderId: _providerId,
+          modelController: _modelIdController,
+          modelOptions: visibleModelOptions,
+          editor: editor,
+          thinkingEnabled: _thinkingEnabled,
+          thinkingEffort: _thinkingEffort,
+          temperatureController: _temperatureController,
+          topPController: _topPController,
+          onProviderSelected: (value) {
+            setState(() {
+              _providerId = value ?? '';
+            });
+          },
+          onModelSelected: (value) {
+            if (value == null) {
+              return;
+            }
+            _modelIdController.text = value;
+          },
+          onThinkingChanged: (value) {
+            setState(() {
+              _thinkingEnabled = value;
+            });
+          },
+          onThinkingEffortChanged: (value) {
+            if (value == null) {
+              return;
+            }
+            setState(() {
+              _thinkingEffort = value;
+            });
+          },
         ),
         const SizedBox(height: 16),
-        SettingsFormSection(
-          title: '能力摘要',
-          description: '这里显示当前接口与模型组合在核心目录中识别到的能力，供高级设置和后续智能体重写共用。',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _summaryLine('协议', _protocolLabel(editor.protocolMode)),
-              _summaryLine(
-                'Base URL',
-                editor.baseUrl.isEmpty ? '未配置' : editor.baseUrl,
-              ),
-              _summaryLine(
-                '深度思考',
-                editor.supportsReasoning
-                    ? editor.thinkingParameterLabel
-                    : '当前目录未识别到',
-              ),
-              _summaryLine('参数支持', _parameterSummary(editor)),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        SettingsFormSection(
-          title: '默认参数',
-          description: '这里配置模型级默认参数。智能体层后续可以在此基础上做持久化重写。',
-          child: Theme(
-            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-            child: ExpansionTile(
-              tilePadding: EdgeInsets.zero,
-              childrenPadding: const EdgeInsets.only(top: 12),
-              title: const Text(
-                '高级设置',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-              ),
-              subtitle: const Text('默认折叠，按需展开设置模型默认参数。'),
-              children: [
-                if (editor.supportsReasoning) ...[
-                  SettingsSwitchRow(
-                    label: '启用深度思考',
-                    value: _thinkingEnabled,
-                    onChanged: (value) {
-                      setState(() {
-                        _thinkingEnabled = value;
-                      });
-                    },
-                    note: editor.thinkingParameterLabel,
-                  ),
-                  if (editor.thinkingEffortSupported) ...[
-                    const SizedBox(height: 12),
-                    SettingsLabeledDropdownField<String>(
-                      label: '深度思考强度',
-                      value: _thinkingEffort,
-                      options: editor.thinkingEffortOptions
-                          .map(
-                            (item) => SettingsDropdownOption<String>(
-                              value: item,
-                              label: item,
-                            ),
-                          )
-                          .toList(growable: false),
-                      onChanged: (value) {
-                        if (value == null) {
-                          return;
-                        }
-                        setState(() {
-                          _thinkingEffort = value;
-                        });
-                      },
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                ],
-                if (editor.supportsTemperature) ...[
-                  SettingsLabeledTextField(
-                    label: 'Temperature',
-                    controller: _temperatureController,
-                    hintText: '例如 0.8',
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                if (editor.supportsTopP) ...[
-                  SettingsLabeledTextField(
-                    label: 'Top P',
-                    controller: _topPController,
-                    hintText: '例如 0.95',
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                if (editor.supportsTopK) ...[
-                  SettingsLabeledTextField(
-                    label: 'Top K',
-                    controller: _topKController,
-                    hintText: '例如 40',
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                ModelCustomParameterList(
-                  entries: _customParameters,
-                  onAdded: _addCustomParameter,
-                  onKeyChanged: _updateCustomParameterKey,
-                  onTypeChanged: _updateCustomParameterType,
-                  onValueChanged: _updateCustomParameterValue,
-                  onRemoved: _removeCustomParameter,
-                ),
-              ],
-            ),
-          ),
+        ModelSettingsAdvancedPanel(
+          editor: editor,
+          compatibleContextWindowController: _compatibleContextWindowController,
+          appContextWindowController: _appContextWindowController,
+          topKController: _topKController,
+          streamMode: _streamMode,
+          apiMode: _apiMode,
+          customParameters: _customParameters,
+          customReasoningOverride: editor.customReasoningOverride,
+          supportsReasoningOverride: _customSupportsReasoning,
+          reasoningCanToggleOverride: _customReasoningCanToggle,
+          reasoningDefaultEnabledOverride: _customReasoningDefaultEnabled,
+          reasoningSupportsEffortOverride: _customReasoningSupportsEffort,
+          toggleStrategyKindOverride: _customToggleStrategyKind,
+          toggleKeyController: _customToggleKeyController,
+          toggleEnabledValueController: _customToggleEnabledValueController,
+          toggleDisabledValueController: _customToggleDisabledValueController,
+          effortKeyController: _customEffortKeyController,
+          effortValueControllers: _customEffortValueControllers,
+          onStreamModeChanged: (value) {
+            if (value == null) {
+              return;
+            }
+            setState(() {
+              _streamMode = value;
+            });
+          },
+          onApiModeChanged: (value) {
+            if (value == null) {
+              return;
+            }
+            setState(() {
+              _apiMode = value;
+            });
+          },
+          onSupportsReasoningOverrideChanged: (value) {
+            setState(() {
+              _customSupportsReasoning = value;
+            });
+          },
+          onReasoningCanToggleOverrideChanged: (value) {
+            setState(() {
+              _customReasoningCanToggle = value;
+            });
+          },
+          onReasoningDefaultEnabledOverrideChanged: (value) {
+            setState(() {
+              _customReasoningDefaultEnabled = value;
+            });
+          },
+          onReasoningSupportsEffortOverrideChanged: (value) {
+            setState(() {
+              _customReasoningSupportsEffort = value;
+            });
+          },
+          onToggleStrategyKindOverrideChanged: (value) {
+            if (value == null) {
+              return;
+            }
+            setState(() {
+              _customToggleStrategyKind = value;
+            });
+          },
+          onAdded: _addCustomParameter,
+          onKeyChanged: _updateCustomParameterKey,
+          onTypeChanged: _updateCustomParameterType,
+          onValueChanged: _updateCustomParameterValue,
+          onRemoved: _removeCustomParameter,
         ),
         const SizedBox(height: 16),
         ActionButton(
@@ -322,7 +265,7 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
     _apiMode = (modelSettings['api_mode'] ?? 'chat').toString();
     _thinkingEnabled = _boolValue(
       modelSettings['thinking_enabled'],
-      editor.thinkingEnabled,
+      editor.reasoningCanToggle ? editor.thinkingEnabled : true,
     );
     _thinkingEffort = _stringValue(
       modelSettings['thinking_effort'],
@@ -341,11 +284,31 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
       editor.topK.toString(),
     );
     _customParameters = _initialCustomParameters(modelSettings, editor);
+    _customSupportsReasoning = editor.customReasoningOverride.supportsReasoning;
+    _customReasoningCanToggle =
+        editor.customReasoningOverride.reasoningCanToggle;
+    _customReasoningDefaultEnabled =
+        editor.customReasoningOverride.reasoningDefaultEnabled;
+    _customReasoningSupportsEffort =
+        editor.customReasoningOverride.reasoningSupportsEffort;
+    _customToggleStrategyKind =
+        editor.customReasoningOverride.toggleStrategyKind;
+    _customToggleKeyController.text = editor.customReasoningOverride.toggleKey;
+    _customToggleEnabledValueController.text =
+        editor.customReasoningOverride.toggleEnabledValue;
+    _customToggleDisabledValueController.text =
+        editor.customReasoningOverride.toggleDisabledValue;
+    _customEffortKeyController.text = editor.customReasoningOverride.effortKey;
+    for (final option in const ['auto', 'low', 'medium', 'high', 'max']) {
+      _customEffortValueControllers[option]!.text =
+          editor.customReasoningOverride.effortValues[option] ?? option;
+    }
   }
 
   void _save() {
     widget.onSaved(<String, Object?>{
       'default_provider_id': _providerId,
+      'provider_id': _providerId,
       'default_model_id': _modelIdController.text.trim(),
       'model_id': _modelIdController.text.trim(),
       'compatible_context_window': _compatibleContextWindowController.text
@@ -358,6 +321,9 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
       'temperature': _temperatureController.text.trim(),
       'top_p': _topPController.text.trim(),
       'top_k': _topKController.text.trim(),
+      'custom_reasoning_override': _customReasoningOverrideDocument(
+        widget.viewData.modelEditor,
+      ),
       'custom_parameters': _customParameters
           .where((entry) => entry.keyName.trim().isNotEmpty)
           .map(_parameterDocument)
@@ -443,6 +409,83 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
     };
   }
 
+  Map<String, Object?> _customReasoningOverrideDocument(
+    ModelEditorViewData editor,
+  ) {
+    if (!editor.customReasoningOverride.showCustomOverrideEditor) {
+      return const <String, Object?>{};
+    }
+    if (!_customSupportsReasoning) {
+      return const <String, Object?>{'supports_reasoning': false};
+    }
+    final effortValues = <String, Object?>{};
+    for (final option in const ['auto', 'low', 'medium', 'high', 'max']) {
+      effortValues[option] = _customEffortValueControllers[option]!.text.trim();
+    }
+    return <String, Object?>{
+      'supports_reasoning': true,
+      'reasoning_can_toggle': _customReasoningCanToggle,
+      'reasoning_default_enabled': _customReasoningCanToggle
+          ? _customReasoningDefaultEnabled
+          : true,
+      'reasoning_supports_effort': _customReasoningSupportsEffort,
+      'reasoning_toggle_parameter_strategy': <String, Object?>{
+        'kind': _customToggleStrategyKind,
+        'key': _customToggleKeyController.text.trim(),
+        'enabled_value': _parseCustomReasoningValue(
+          _customToggleEnabledValueController.text,
+          kind: _customToggleStrategyKind,
+          fallback: _customToggleStrategyKind == 'boolean' ? true : 'enabled',
+        ),
+        'disabled_value': _customReasoningCanToggle
+            ? _parseCustomReasoningValue(
+                _customToggleDisabledValueController.text,
+                kind: _customToggleStrategyKind,
+                fallback: _customToggleStrategyKind == 'boolean'
+                    ? false
+                    : 'disabled',
+              )
+            : null,
+      },
+      'reasoning_effort_parameter_strategy': _customReasoningSupportsEffort
+          ? <String, Object?>{
+              'key': _customEffortKeyController.text.trim(),
+              'values': effortValues,
+            }
+          : const <String, Object?>{},
+    };
+  }
+
+  Object? _parseCustomReasoningValue(
+    String rawValue, {
+    required String kind,
+    required Object? fallback,
+  }) {
+    final trimmed = rawValue.trim();
+    if (trimmed.isEmpty) {
+      return fallback;
+    }
+    switch (kind) {
+      case 'boolean':
+        return _boolValue(trimmed, ValueReaders.boolValue(fallback));
+      case 'thinking_object':
+        try {
+          final decoded = jsonDecode(trimmed);
+          if (decoded is Map<String, Object?>) {
+            return decoded;
+          }
+          if (decoded is Map) {
+            return decoded.map((key, value) => MapEntry(key.toString(), value));
+          }
+        } catch (_) {
+          return fallback;
+        }
+        return fallback;
+      default:
+        return trimmed;
+    }
+  }
+
   Object? _coerceValue(String rawValue, String valueType) {
     switch (valueType) {
       case 'boolean':
@@ -473,51 +516,6 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
       }
     }
     return '';
-  }
-
-  String _protocolLabel(String mode) {
-    switch (mode) {
-      case ProviderProfileConstants.kindAnthropicCompatible:
-        return 'Anthropic 兼容';
-      default:
-        return 'OpenAI 兼容';
-    }
-  }
-
-  String _parameterSummary(ModelEditorViewData editor) {
-    final chips = <String>[];
-    if (editor.supportsTemperature) {
-      chips.add('temperature');
-    }
-    if (editor.supportsTopP) {
-      chips.add('top_p');
-    }
-    if (editor.supportsTopK) {
-      chips.add('top_k');
-    }
-    if (editor.supportsToolChoice) {
-      chips.add('tool_choice');
-    }
-    return chips.isEmpty ? '未识别到可调标准参数' : chips.join(' / ');
-  }
-
-  Widget _summaryLine(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 96,
-            child: Text(
-              label,
-              style: const TextStyle(fontWeight: FontWeight.w700),
-            ),
-          ),
-          Expanded(child: Text(value)),
-        ],
-      ),
-    );
   }
 
   String _stringValue(Object? value, [String fallback = '']) {

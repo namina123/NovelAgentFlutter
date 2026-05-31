@@ -28,7 +28,7 @@ void main() {
       );
       await taskRepository.writeTextFile(
         project,
-        'drafts/ch01.md',
+        'chapters/ch01.md',
         '# 第01章\n\n样章正文',
       );
     });
@@ -47,7 +47,7 @@ void main() {
           'title': '样章：第01章',
           'task_type': 'chapter',
           'mode': TaskRuntimeConstants.modeSeedToFullNovel,
-          'output_paths': <Object?>['drafts/ch01.md'],
+          'output_paths': <Object?>['chapters/ch01.md'],
           'metadata': <String, Object?>{
             'stage': 'sample',
             'persistent_context_paths': <Object?>[
@@ -57,13 +57,27 @@ void main() {
         },
         result: <String, Object?>{
           'ok': true,
-          'output_paths': <Object?>['drafts/ch01.md'],
-          'changed_paths': <Object?>['drafts/ch01.md'],
+          'output_paths': <Object?>['chapters/ch01.md'],
+          'changed_paths': <Object?>['chapters/ch01.md'],
           'response': <String, Object?>{'content': '已写出样章。'},
         },
         memorySections: const <JsonMap>[
           <String, Object?>{'title': '风格锚点'},
         ],
+        execution: const <String, Object?>{
+          'context_pack': <String, Object?>{
+            'creative_rule_stack': <String, Object?>{
+              'expression_constraints': <Object?>[
+                <String, Object?>{
+                  'id': 'de_ai',
+                  'display_name': '去 AI 风',
+                  'summary': '降低模板化表达和解释腔。',
+                  'kind': 'natural_expression',
+                },
+              ],
+            },
+          },
+        },
       );
 
       expect(ValueReaders.boolValue(saved['ok']), isTrue);
@@ -77,6 +91,19 @@ void main() {
       expect(ValueReaders.stringValue(review['severity']), isNotEmpty);
       expect(ValueReaders.mapList(review['suggested_actions']), isNotEmpty);
       expect(ValueReaders.stringValue(review['action_summary']), isNotEmpty);
+      expect(ValueReaders.mapValue(review['disposition']), isNotEmpty);
+      expect(
+        ValueReaders.stringValue(
+          ValueReaders.mapValue(
+            review['expression_constraint_review'],
+          )['authenticity_pass_level'],
+        ),
+        'aggressive',
+      );
+      expect(
+        ValueReaders.stringValue(review['continuation_disposition']),
+        isNotEmpty,
+      );
     });
   });
 }

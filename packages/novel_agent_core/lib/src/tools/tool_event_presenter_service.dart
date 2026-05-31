@@ -128,6 +128,8 @@ class ToolEventPresenterService {
         return '删除文件';
       case 'present_user_options':
         return '整理选项';
+      case 'start_long_task_run':
+        return '启动长任务';
       case 'set_agent_tasks':
         return '整理执行计划';
       case 'load_agent_skill':
@@ -136,6 +138,16 @@ class ToolEventPresenterService {
         return '委派子智能体';
       case 'run_continuity_check':
         return '保存检查报告';
+      case 'update_world_state':
+        return '更新世界设定';
+      case 'update_character_state':
+        return '更新角色状态';
+      case 'update_foreshadow_state':
+        return '更新伏笔状态';
+      case 'update_timeline_state':
+        return '更新时间线';
+      case 'update_relationship_state':
+        return '更新关系状态';
       case 'create_backup':
         return '创建备份';
       case 'restore_backup':
@@ -172,6 +184,8 @@ class ToolEventPresenterService {
         return '已删除文件';
       case 'present_user_options':
         return '已展示选项';
+      case 'start_long_task_run':
+        return '已启动长任务';
       case 'set_agent_tasks':
         return '已整理执行计划';
       case 'load_agent_skill':
@@ -180,6 +194,16 @@ class ToolEventPresenterService {
         return '子智能体已返回';
       case 'run_continuity_check':
         return '已保存检查报告';
+      case 'update_world_state':
+        return '已更新世界设定';
+      case 'update_character_state':
+        return '已更新角色状态';
+      case 'update_foreshadow_state':
+        return '已更新伏笔状态';
+      case 'update_timeline_state':
+        return '已更新时间线';
+      case 'update_relationship_state':
+        return '已更新关系状态';
       case 'create_backup':
         return '已创建备份';
       case 'restore_backup':
@@ -214,12 +238,24 @@ class ToolEventPresenterService {
         return '项目搜索';
       case 'present_user_options':
         return '用户选项';
+      case 'start_long_task_run':
+        return '长任务启动';
       case 'set_agent_tasks':
         return '执行计划';
       case 'load_agent_skill':
         return '技能说明';
       case 'call_sub_agent':
         return '子智能体';
+      case 'update_world_state':
+        return '世界设定';
+      case 'update_character_state':
+        return '角色状态';
+      case 'update_foreshadow_state':
+        return '伏笔状态';
+      case 'update_timeline_state':
+        return '时间线';
+      case 'update_relationship_state':
+        return '关系状态';
       default:
         return name.isEmpty ? '工具' : name;
     }
@@ -266,16 +302,42 @@ class ToolEventPresenterService {
           result['question'],
           ValueReaders.stringValue(arguments['question'], '等待用户选择'),
         );
+      case 'start_long_task_run':
+        final modeId = ValueReaders.stringValue(
+          result['mode_id'],
+          ValueReaders.stringValue(
+            arguments['mode_id'],
+            ValueReaders.stringValue(arguments['mode'], '当前长任务模式'),
+          ),
+        ).trim();
+        final guidancePath = ValueReaders.stringValue(
+          result['guidance_path'],
+        ).trim();
+        if (modeId.isNotEmpty && guidancePath.isNotEmpty) {
+          return '$modeId → $guidancePath';
+        }
+        if (modeId.isNotEmpty) {
+          return modeId;
+        }
+        return '当前长任务模式';
       case 'set_agent_tasks':
         return ValueReaders.stringValue(
           result['goal'],
           ValueReaders.stringValue(arguments['goal'], '当前任务'),
         );
       case 'load_agent_skill':
-        return ValueReaders.stringValue(
+        final referencePath = ValueReaders.stringValue(
+          result['reference_path'],
+          ValueReaders.stringValue(arguments['reference_path']),
+        ).trim();
+        final name = ValueReaders.stringValue(
           result['name'],
           ValueReaders.stringValue(arguments['skill_id'], '技能'),
         );
+        if (referencePath.isNotEmpty) {
+          return '$name / $referencePath';
+        }
+        return name;
       case 'call_sub_agent':
         return ValueReaders.stringValue(
           result['agent_name'],
@@ -288,6 +350,18 @@ class ToolEventPresenterService {
         return _pathTarget(
           result,
           ValueReaders.stringValue(arguments['title'], '检查报告'),
+        );
+      case 'update_world_state':
+      case 'update_character_state':
+      case 'update_foreshadow_state':
+      case 'update_timeline_state':
+      case 'update_relationship_state':
+        return _pathTarget(
+          result,
+          ValueReaders.stringValue(
+            arguments['title'],
+            ValueReaders.stringValue(arguments['name'], '共享资产'),
+          ),
         );
       case 'restore_backup':
         return _pathTarget(

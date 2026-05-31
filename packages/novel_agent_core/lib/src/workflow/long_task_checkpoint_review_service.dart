@@ -1,5 +1,7 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import '../creative/expression_constraint_review_projection.dart';
+import '../creative/expression_constraint_review_projection_service.dart';
 import 'long_task_checkpoint_drift_signal_service.dart';
 import 'long_task_task_summary_service.dart';
 import 'task_runtime_constants.dart';
@@ -8,12 +10,19 @@ class LongTaskCheckpointReviewService {
   LongTaskCheckpointReviewService({
     required LongTaskTaskSummaryService taskSummaryService,
     LongTaskCheckpointDriftSignalService? driftSignalService,
+    ExpressionConstraintReviewProjectionService?
+    expressionConstraintReviewProjectionService,
   }) : _taskSummaryService = taskSummaryService,
        _driftSignalService =
-           driftSignalService ?? LongTaskCheckpointDriftSignalService();
+           driftSignalService ?? LongTaskCheckpointDriftSignalService(),
+       _expressionConstraintReviewProjectionService =
+           expressionConstraintReviewProjectionService ??
+           const ExpressionConstraintReviewProjectionService();
 
   final LongTaskTaskSummaryService _taskSummaryService;
   final LongTaskCheckpointDriftSignalService _driftSignalService;
+  final ExpressionConstraintReviewProjectionService
+  _expressionConstraintReviewProjectionService;
 
   JsonMap buildReview({
     required JsonMap task,
@@ -39,10 +48,19 @@ class LongTaskCheckpointReviewService {
       ValueReaders.stringList(task['output_paths']),
       outputPaths,
     );
+    final chapterLengthEvaluation = ValueReaders.mapValue(
+      result['chapter_length_evaluation'],
+    );
+    final expressionConstraintReview =
+        _expressionConstraintReviewProjectionService.buildFromCreativeRuleStack(
+          _creativeRuleStack(execution),
+        );
     final confirmationFocus = _confirmationFocus(
       taskType: taskType,
       stage: stage,
       outputPaths: cleanOutputs,
+      chapterLengthEvaluation: chapterLengthEvaluation,
+      expressionConstraintReview: expressionConstraintReview,
     );
     final driftSignals = _driftSignalService.buildSignals(
       taskType: taskType,
@@ -54,13 +72,17 @@ class LongTaskCheckpointReviewService {
       taskType: taskType,
       stage: stage,
       driftSignals: driftSignals,
+      expressionConstraintReview: expressionConstraintReview,
     );
+    final miniRecheckItems = expressionConstraintReview.miniRecheckItems;
     final nextActions = _nextActions(
       taskType: taskType,
       stage: stage,
       mode: mode,
       outputPaths: cleanOutputs,
       result: result,
+      chapterLengthEvaluation: chapterLengthEvaluation,
+      miniRecheckItems: miniRecheckItems,
     );
     final now = createdAt.isEmpty
         ? DateTime.now().toIso8601String()
@@ -74,7 +96,12 @@ class LongTaskCheckpointReviewService {
       'mode': mode,
       'task_type': taskType,
       'stage': stage,
-      'summary': _summary(task, cleanOutputs, confirmationFocus),
+      'summary': _summary(
+        task,
+        cleanOutputs,
+        confirmationFocus,
+        chapterLengthEvaluation,
+      ),
       'persistent_context_paths': ValueReaders.stringList(
         metadata['persistent_context_paths'],
       ),
@@ -85,6 +112,8 @@ class LongTaskCheckpointReviewService {
       'confirmation_focus': confirmationFocus,
       'drift_signals': driftSignals,
       'drift_watch_items': driftWatchItems,
+      'expression_constraint_review': expressionConstraintReview.toJson(),
+      'mini_recheck_items': miniRecheckItems,
       'next_actions': nextActions,
       'output_paths': cleanOutputs,
       'tool_names': _toolNames(result),
@@ -92,6 +121,7 @@ class LongTaskCheckpointReviewService {
       'result_ok': ValueReaders.boolValue(result['ok']),
       'error': ValueReaders.stringValue(result['error']),
       'response_preview': _responsePreview(result),
+      'chapter_length_evaluation': chapterLengthEvaluation,
       'context_pack_summary': ValueReaders.stringValue(
         ValueReaders.mapValue(result['response'])['context_pack_summary'],
         ValueReaders.stringValue(execution['context_pack_summary']),
@@ -104,6 +134,7 @@ class LongTaskCheckpointReviewService {
     JsonMap task,
     List<String> outputPaths,
     List<String> confirmationFocus,
+    JsonMap chapterLengthEvaluation,
   ) {
     final title = ValueReaders.stringValue(task['title'], '当前任务');
     final outputText = outputPaths.isEmpty
@@ -112,13 +143,16 @@ class LongTaskCheckpointReviewService {
     final focusText = confirmationFocus.isEmpty
         ? '建议继续人工确认。'
         : '当前最该确认：${confirmationFocus.first}';
-    return '$title 已结束当前单步，$outputText。$focusText';
+    final lengthText = _chapterLengthSummary(chapterLengthEvaluation);
+    return '$title 已结束当前单步，$outputText。$focusText${lengthText.isEmpty ? '' : ' $lengthText'}';
   }
 
   List<String> _confirmationFocus({
     required String taskType,
     required String stage,
     required List<String> outputPaths,
+    required JsonMap chapterLengthEvaluation,
+    required ExpressionConstraintReviewProjection expressionConstraintReview,
   }) {
     final items = <String>[];
     if (taskType == 'planning') {
@@ -138,6 +172,14 @@ class LongTaskCheckpointReviewService {
     if (outputPaths.isEmpty) {
       items.add('如果没有实际产物文件，需要判断是否应继续补写还是退回规划。');
     }
+    final lengthFocus = _chapterLengthFocus(chapterLengthEvaluation);
+    if (lengthFocus.isNotEmpty) {
+      items.add(lengthFocus);
+    }
+    if (expressionConstraintReview.authenticityPassLevel !=
+        ExpressionConstraintReviewProjection.authenticityDisabled) {
+      items.add('若进入真实性清理，确认没有把人物声音、题材纹理和必要术语一起洗掉。');
+    }
     return items;
   }
 
@@ -145,6 +187,7 @@ class LongTaskCheckpointReviewService {
     required String taskType,
     required String stage,
     required List<JsonMap> driftSignals,
+    required ExpressionConstraintReviewProjection expressionConstraintReview,
   }) {
     final items = <String>[];
     for (final signal in driftSignals) {
@@ -159,6 +202,16 @@ class LongTaskCheckpointReviewService {
     if (taskType == 'chapter' && stage == 'sample') {
       items.add('样章阶段重点防止世界观灌输过重或叙事入口失衡。');
     }
+    for (final item in expressionConstraintReview.continuityWatchItems) {
+      if (!items.contains(item)) {
+        items.add(item);
+      }
+    }
+    for (final note in expressionConstraintReview.voiceProtectionNotes) {
+      if (!items.contains(note)) {
+        items.add(note);
+      }
+    }
     if (items.isEmpty) {
       items.add('检查当前结果是否偏离长期约束与任务目标。');
     }
@@ -171,6 +224,8 @@ class LongTaskCheckpointReviewService {
     required String mode,
     required List<String> outputPaths,
     required JsonMap result,
+    required JsonMap chapterLengthEvaluation,
+    required List<String> miniRecheckItems,
   }) {
     final items = <String>[];
     if (!ValueReaders.boolValue(result['ok'])) {
@@ -192,7 +247,76 @@ class LongTaskCheckpointReviewService {
     if (outputPaths.isNotEmpty) {
       items.add('先审阅本轮实际写出的文件，再决定是否标记任务完成。');
     }
+    items.addAll(_chapterLengthActions(chapterLengthEvaluation));
+    if (miniRecheckItems.isNotEmpty) {
+      items.add('若本轮要做真实性/去 AI 修订，结尾再跑一轮 mini recheck，重点复核角色声音与连续性。');
+    }
     return items;
+  }
+
+  JsonMap _creativeRuleStack(JsonMap execution) {
+    final contextPack = ValueReaders.mapValue(execution['context_pack']);
+    final contextStack = ValueReaders.mapValue(
+      contextPack['creative_rule_stack'],
+    );
+    if (contextStack.isNotEmpty) {
+      return contextStack;
+    }
+    return ValueReaders.mapValue(execution['creative_rule_stack']);
+  }
+
+  String _chapterLengthSummary(JsonMap evaluation) {
+    final level = ValueReaders.stringValue(evaluation['level']).trim();
+    if (level.isEmpty) {
+      return '';
+    }
+    final current = ValueReaders.intValue(evaluation['current_length']);
+    final target = ValueReaders.intValue(evaluation['target_length']);
+    if (current <= 0 || target <= 0) {
+      return '';
+    }
+    switch (level) {
+      case 'balanced':
+        return '本章字数分布基本稳定。';
+      case 'slightly_off':
+        return '本章字数有轻微波动，可记录提醒。';
+      case 'needs_rebalance':
+        return '本章字数已偏离基准，建议在下一章主动回调分布。';
+      case 'severely_off':
+        return '本章字数偏离明显，建议把它纳入审稿/返修判断。';
+      default:
+        return '';
+    }
+  }
+
+  String _chapterLengthFocus(JsonMap evaluation) {
+    final level = ValueReaders.stringValue(evaluation['level']).trim();
+    if (level.isEmpty || level == 'balanced') {
+      return '';
+    }
+    final notes = ValueReaders.stringList(evaluation['notes']);
+    if (notes.isNotEmpty) {
+      return notes.last;
+    }
+    return '确认当前章节字数是否仍符合项目的章节节奏预期。';
+  }
+
+  List<String> _chapterLengthActions(JsonMap evaluation) {
+    final action = ValueReaders.stringValue(
+      evaluation['recommended_action'],
+    ).trim();
+    switch (action) {
+      case 'adjust_next_chapter':
+        return const <String>['下一章优先按章节字数基准回调，避免与前后章节继续拉开差距。'];
+      case 'review_or_repair':
+        return const <String>[
+          '当前章字数偏离已明显，可进入 review / repair 提示，而不是只靠后续章节自然回调。',
+        ];
+      case 'remind':
+        return const <String>['记录本章字数波动提醒，继续观察后续几章的分布。'];
+      default:
+        return const <String>[];
+    }
   }
 
   String _responsePreview(JsonMap result) {

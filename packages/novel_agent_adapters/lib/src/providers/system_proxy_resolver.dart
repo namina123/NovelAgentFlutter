@@ -1,7 +1,11 @@
 import 'dart:io';
 
 class SystemProxyResolver {
-  const SystemProxyResolver();
+  const SystemProxyResolver({
+    Future<String> Function(String name)? registryValueReader,
+  }) : _registryValueReader = registryValueReader;
+
+  final Future<String> Function(String name)? _registryValueReader;
 
   Future<String> resolveFor(Uri uri) async {
     // 中文注释: 代理解析集中在一个适配器里，保证网关层只关心“是否有代理策略”而不关心平台细节。
@@ -20,7 +24,7 @@ class SystemProxyResolver {
   Future<String> _resolveWindowsProxy(Uri uri) async {
     final proxyEnabled = await _queryRegistryValue('ProxyEnable');
     final proxyServer = await _queryRegistryValue('ProxyServer');
-    if (proxyEnabled != '0' && proxyServer.trim().isNotEmpty) {
+    if (_isEnabledValue(proxyEnabled) && proxyServer.trim().isNotEmpty) {
       final matched = _proxyFromServerValue(proxyServer, uri.scheme);
       if (matched.isNotEmpty) {
         return matched;
@@ -30,6 +34,10 @@ class SystemProxyResolver {
   }
 
   Future<String> _queryRegistryValue(String name) async {
+    final injectedReader = _registryValueReader;
+    if (injectedReader != null) {
+      return injectedReader(name);
+    }
     try {
       final result = await Process.run('reg', <String>[
         'query',
@@ -56,6 +64,26 @@ class SystemProxyResolver {
       return '';
     }
     return '';
+  }
+
+  bool _isEnabledValue(String value) {
+    final clean = value.trim().toLowerCase();
+    if (clean.isEmpty) {
+      return false;
+    }
+    if (clean == '0' || clean == '0x0' || clean == '0x00000000') {
+      return false;
+    }
+    final normalized = clean.startsWith('0x') ? clean.substring(2) : clean;
+    final parsedHex = int.tryParse(normalized, radix: 16);
+    if (parsedHex != null) {
+      return parsedHex != 0;
+    }
+    final parsedInt = int.tryParse(clean);
+    if (parsedInt != null) {
+      return parsedInt != 0;
+    }
+    return true;
   }
 
   String _proxyFromServerValue(String value, String scheme) {

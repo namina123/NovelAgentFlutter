@@ -138,8 +138,8 @@
 - `outlines/story/`
 - `outlines/volumes/`
 - `outlines/chapters/`
-- `drafts/chapters/`
-- `drafts/scenes/`
+- `chapters/`
+- `scenes/`
 - `assets/characters/`
 - `assets/organizations/`
 - `assets/locations/`

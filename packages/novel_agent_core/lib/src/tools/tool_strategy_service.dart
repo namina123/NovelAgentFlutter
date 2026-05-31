@@ -5,7 +5,7 @@ import 'tool_strategy_mode.dart';
 
 class ToolStrategyService {
   JsonMap defaultSettings() {
-    // 中文注释: 默认策略保持“可用但克制”，避免一上来就让模型把草稿乱写进正式目录。
+    // 中文注释: 默认策略保持“可用但克制”，避免一上来就让模型把片段内容乱写进错误目录。
     return <String, Object?>{
       'enabled': true,
       'mode': ToolStrategyMode.balanced,

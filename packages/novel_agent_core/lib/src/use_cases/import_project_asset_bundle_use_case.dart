@@ -58,7 +58,7 @@ class ImportProjectAssetBundleUseCase {
       if (style.id.trim().isEmpty) {
         continue;
       }
-      final relativePath = 'styles/${style.id}.style.md';
+      final relativePath = 'assets/styles/${style.id}.style.md';
       final exists = await _projectToolHostPort.entryExists(
         project.rootPath,
         relativePath,
@@ -73,10 +73,7 @@ class ImportProjectAssetBundleUseCase {
       );
       changedPaths.add(relativePath);
     }
-    await _projectToolHostPort.createDirectory(
-      project.rootPath,
-      'world/foreshadows',
-    );
+    await _projectToolHostPort.createDirectory(project.rootPath, 'assets/foreshadows');
     for (final rawRecord in ValueReaders.mapList(bundle['foreshadows'])) {
       final record = _foreshadowNormalizerService.normalize(
         ValueReaders.mapValue(rawRecord),
@@ -84,7 +81,7 @@ class ImportProjectAssetBundleUseCase {
       if (record.id.trim().isEmpty) {
         continue;
       }
-      final relativePath = 'world/foreshadows/${record.id}.foreshadow.md';
+      final relativePath = 'assets/foreshadows/${record.id}.foreshadow.md';
       final exists = await _projectToolHostPort.entryExists(
         project.rootPath,
         relativePath,

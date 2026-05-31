@@ -55,6 +55,8 @@ class AgentEcosystemSnapshot {
         return skillGroups;
       case 'agent-groups':
         return agentGroups;
+      case 'skill-loadouts':
+        return agents;
       case 'agents':
       default:
         return agents;

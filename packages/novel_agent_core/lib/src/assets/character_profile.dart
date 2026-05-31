@@ -3,6 +3,11 @@ class CharacterProfile {
     required this.id,
     required this.displayName,
     this.summary = '',
+    this.currentStatus = '',
+    this.currentStateSummary = '',
+    this.latestStageLabel = '',
+    this.latestUpdatedAt = '',
+    this.latestSourcePaths = const <String>[],
     this.aliases = const <String>[],
     this.nameHistory = const <String>[],
     this.storyRole = '',
@@ -15,6 +20,11 @@ class CharacterProfile {
   final String id;
   final String displayName;
   final String summary;
+  final String currentStatus;
+  final String currentStateSummary;
+  final String latestStageLabel;
+  final String latestUpdatedAt;
+  final List<String> latestSourcePaths;
   final List<String> aliases;
   final List<String> nameHistory;
   final String storyRole;

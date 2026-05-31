@@ -12,8 +12,8 @@ void main() {
             resultByToolName: <String, JsonMap>{
               'write_project_file': <String, Object?>{
                 'ok': true,
-                'relative_path': 'drafts/chapter_01.md',
-                'changed_paths': <Object?>['drafts/chapter_01.md'],
+                'relative_path': 'chapters/chapter_01.md',
+                'changed_paths': <Object?>['chapters/chapter_01.md'],
               },
               'present_user_options': <String, Object?>{
                 'ok': true,
@@ -39,7 +39,7 @@ void main() {
               'id': 'call_1',
               'name': 'write_project_file',
               'arguments': <String, Object?>{
-                'relative_path': 'drafts/chapter_01.md',
+                'relative_path': 'chapters/chapter_01.md',
                 'content': '# 第一章',
               },
             },
@@ -52,8 +52,8 @@ void main() {
         );
 
         expect(result.executedTools, hasLength(2));
-        expect(result.changedPaths, contains('drafts/chapter_01.md'));
-        expect(result.writtenPaths, contains('drafts/chapter_01.md'));
+        expect(result.changedPaths, contains('chapters/chapter_01.md'));
+        expect(result.writtenPaths, contains('chapters/chapter_01.md'));
         expect(result.waitingForUserChoice, isTrue);
         expect(result.transcriptMessages, hasLength(3));
       },
@@ -103,6 +103,76 @@ void main() {
         );
       },
     );
+
+    test('deduplicates repeated load_agent_skill calls in one run', () async {
+      // 中文注释: 这里验证同一任务中重复读取同一技能会被执行层直接拦下，不再重复打到宿主工具端口。
+      final port = _FakeToolExecutionPort(
+        resultByToolName: <String, JsonMap>{
+          'load_agent_skill': <String, Object?>{
+            'ok': true,
+            'skill_id': 'chapter_drafting_method',
+            'detail_level': 'summary',
+            'content': '摘要',
+            'changed_paths': const <Object?>[],
+          },
+        },
+      );
+      final service = ToolExecutionService(toolExecutionPort: port);
+      final memory = SkillLoadMemory();
+
+      await service.executeRound(
+        project: const ProjectDescriptor(
+          id: 'demo',
+          name: '示例项目',
+          rootPath: 'D:/demo',
+        ),
+        assistantMessage: const <String, Object?>{
+          'role': 'assistant',
+          'content': '',
+        },
+        toolCalls: const <Object?>[
+          <String, Object?>{
+            'id': 'call_1',
+            'name': 'load_agent_skill',
+            'arguments': <String, Object?>{
+              'skill_id': 'chapter_drafting_method',
+              'detail_level': 'summary',
+            },
+          },
+        ],
+        skillLoadMemory: memory,
+      );
+      final secondRound = await service.executeRound(
+        project: const ProjectDescriptor(
+          id: 'demo',
+          name: '示例项目',
+          rootPath: 'D:/demo',
+        ),
+        assistantMessage: const <String, Object?>{
+          'role': 'assistant',
+          'content': '',
+        },
+        toolCalls: const <Object?>[
+          <String, Object?>{
+            'id': 'call_2',
+            'name': 'load_agent_skill',
+            'arguments': <String, Object?>{
+              'skill_id': 'chapter_drafting_method',
+              'detail_level': 'summary',
+            },
+          },
+        ],
+        skillLoadMemory: memory,
+      );
+
+      expect(port.executedToolNames.where((name) => name == 'load_agent_skill'), hasLength(1));
+      expect(
+        ValueReaders.boolValue(
+          ValueReaders.mapValue(secondRound.executedTools.single)['not_executed'],
+        ),
+        isTrue,
+      );
+    });
   });
 }
 
@@ -111,6 +181,7 @@ class _FakeToolExecutionPort implements ToolExecutionPort {
     : _resultByToolName = resultByToolName;
 
   final Map<String, JsonMap> _resultByToolName;
+  final List<String> executedToolNames = <String>[];
   JsonMap lastCallArguments = const <String, Object?>{};
 
   @override
@@ -119,8 +190,10 @@ class _FakeToolExecutionPort implements ToolExecutionPort {
     required JsonMap toolCall,
   }) async {
     // 中文注释: 测试替身按工具名返回预设结果，帮助聚焦轮执行服务的聚合逻辑。
+    executedToolNames.add(ValueReaders.stringValue(toolCall['name']));
     lastCallArguments = ValueReaders.mapValue(toolCall['arguments']);
     return _resultByToolName[toolCall['name']] ??
         <String, Object?>{'ok': true, 'changed_paths': const <Object?>[]};
   }
 }
+

@@ -45,7 +45,7 @@ class PreviewProjectAssetBundleImportUseCase {
         'kind': 'style',
         'id': id,
         'title': ValueReaders.stringValue(style['display_name'], id),
-        'relative_path': 'styles/$id.style.md',
+        'relative_path': 'assets/styles/$id.style.md',
         'status': conflict ? 'project_conflict' : 'new',
         'action': conflict && !overwrite ? 'skip' : 'import',
       });
@@ -61,7 +61,7 @@ class PreviewProjectAssetBundleImportUseCase {
         'kind': 'foreshadow',
         'id': id,
         'title': ValueReaders.stringValue(record['title'], id),
-        'relative_path': 'world/foreshadows/$id.foreshadow.md',
+        'relative_path': 'assets/foreshadows/$id.foreshadow.md',
         'status': conflict ? 'project_conflict' : 'new',
         'action': conflict && !overwrite ? 'skip' : 'import',
       });

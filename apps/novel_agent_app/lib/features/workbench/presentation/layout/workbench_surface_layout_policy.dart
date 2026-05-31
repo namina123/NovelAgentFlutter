@@ -25,6 +25,12 @@ class WorkbenchSurfaceLayoutPolicy {
         showWorkspaceShortcuts: false,
       );
     }
+    if (metrics.mode == AppLayoutMode.compact) {
+      return const WorkbenchSurfaceLayout(
+        mode: WorkbenchSurfaceMode.compactWorkbench,
+        showWorkspaceShortcuts: false,
+      );
+    }
     if (isDocumentsWorkspaceVisible) {
       return const WorkbenchSurfaceLayout(
         mode: WorkbenchSurfaceMode.documentsWorkspace,

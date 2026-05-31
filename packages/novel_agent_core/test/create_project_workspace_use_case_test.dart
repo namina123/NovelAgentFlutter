@@ -45,6 +45,33 @@ void main() {
       expect(plan.nextStep, ProjectCreationNextStep.readyToCreate);
     });
 
+    test('prepare keeps book deconstruction project ready immediately', () {
+      // 中文注释: 拆书项目是平行项目策略，不应像长任务那样被要求先选择运行基准。
+      final useCase = CreateProjectWorkspaceUseCase(
+        projectRepository: _FakeProjectRepository(),
+        projectWorkspacePort: _FakeProjectWorkspacePort(),
+        projectContentRepository: _FakeProjectContentRepository(),
+        projectReadableProjectionService:
+            _FakeProjectReadableProjectionService(),
+      );
+
+      final plan = useCase.prepare(
+        const ProjectCreateRequest(
+          title: '拆书测试',
+          projectTypeId: BookDeconstructionConstants.projectTypeId,
+        ),
+      );
+
+      expect(plan.canCreate, isTrue);
+      expect(
+        plan.request.projectTypeId,
+        BookDeconstructionConstants.projectTypeId,
+      );
+      expect(plan.request.runtimeBaselineId, isEmpty);
+      expect(plan.runtimeBaselineOptions, isEmpty);
+      expect(plan.nextStep, ProjectCreationNextStep.readyToCreate);
+    });
+
     test(
       'executePrepared persists runtime baseline into manifest and profile',
       () async {

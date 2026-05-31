@@ -33,7 +33,7 @@ void main() {
       );
       await taskRepository.writeTextFile(
         project,
-        'drafts/ch01.md',
+        'chapters/ch01.md',
         '# 第01章\n\n样章正文',
       );
     });
@@ -59,7 +59,7 @@ void main() {
             'relative_path': 'tracking/checkpoint_reviews/rev_001.json',
             'task_type': 'chapter',
             'stage': 'sample',
-            'output_paths': <Object?>['drafts/ch01.md'],
+            'output_paths': <Object?>['chapters/ch01.md'],
             'drift_watch_items': <Object?>['检查文风是否仍符合已确认风格锚点，避免语言质地突然漂移。'],
           },
         );
@@ -101,7 +101,7 @@ void main() {
             'relative_path': 'tracking/checkpoint_reviews/rev_001.json',
             'task_type': 'chapter',
             'stage': 'sample',
-            'output_paths': <Object?>['drafts/ch01.md'],
+            'output_paths': <Object?>['chapters/ch01.md'],
             'drift_watch_items': <Object?>['检查文风是否仍符合已确认风格锚点，避免语言质地突然漂移。'],
           },
         );
@@ -138,7 +138,7 @@ void main() {
             'relative_path': 'tracking/checkpoint_reviews/rev_002.json',
             'task_type': 'chapter',
             'stage': 'sample',
-            'output_paths': <Object?>['drafts/ch01.md'],
+            'output_paths': <Object?>['chapters/ch01.md'],
           },
         );
 
@@ -155,3 +155,4 @@ void main() {
     );
   });
 }
+

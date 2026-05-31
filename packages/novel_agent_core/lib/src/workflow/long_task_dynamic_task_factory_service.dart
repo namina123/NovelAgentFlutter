@@ -1,6 +1,7 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
 import '../runtime/runtime_baseline_execution_mode_service.dart';
+import 'chapter_length_profile_resolver_service.dart';
 import 'long_task_chapter_output_policy_service.dart';
 import 'long_task_mode_context_path_service.dart';
 import 'long_task_mode_service.dart';
@@ -14,6 +15,7 @@ class LongTaskDynamicTaskFactoryService {
     LongTaskChapterOutputPolicyService? chapterOutputPolicyService,
     LongTaskModeContextPathService? modeContextPathService,
     RuntimeBaselineExecutionModeService? runtimeBaselineExecutionModeService,
+    ChapterLengthProfileResolverService? chapterLengthProfileResolverService,
   }) : _pathPolicyService = pathPolicyService,
        _chapterOutputPolicyService =
            chapterOutputPolicyService ??
@@ -26,13 +28,18 @@ class LongTaskDynamicTaskFactoryService {
            ),
        _runtimeBaselineExecutionModeService =
            runtimeBaselineExecutionModeService ??
-           RuntimeBaselineExecutionModeService(modeService: modeService);
+           RuntimeBaselineExecutionModeService(modeService: modeService),
+       _chapterLengthProfileResolverService =
+           chapterLengthProfileResolverService ??
+           const ChapterLengthProfileResolverService();
 
   final LongTaskPathPolicyService _pathPolicyService;
   final LongTaskChapterOutputPolicyService _chapterOutputPolicyService;
   final LongTaskModeContextPathService _modeContextPathService;
   final RuntimeBaselineExecutionModeService
   _runtimeBaselineExecutionModeService;
+  final ChapterLengthProfileResolverService
+  _chapterLengthProfileResolverService;
 
   JsonMap buildCheckpointTask(
     JsonMap record,
@@ -181,7 +188,8 @@ class LongTaskDynamicTaskFactoryService {
       arguments,
       _taskAt(tasks, _indexById(tasks, afterTaskId)),
     );
-    final wordConstraints = _chapterWordConstraintMetadata(arguments);
+    final chapterLengthMetadata = _chapterLengthProfileResolverService
+        .buildMetadataFromDynamicArguments(arguments, stage: stage);
     return <String, Object?>{
       'schema_version': 1,
       'id': _pathPolicyService.safeId(
@@ -230,7 +238,7 @@ class LongTaskDynamicTaskFactoryService {
         'persistent_context_paths': inheritedPersistentPaths,
         if (runtimeBaselineId.isNotEmpty)
           'runtime_baseline_id': runtimeBaselineId,
-        ...wordConstraints,
+        ...chapterLengthMetadata,
       },
       'tool_hint': ValueReaders.stringValue(
         arguments['tool_hint'],
@@ -312,28 +320,6 @@ class LongTaskDynamicTaskFactoryService {
     }
     final metadata = ValueReaders.mapValue(afterTask['metadata']);
     return _pathPolicyService.stringList(metadata['persistent_context_paths']);
-  }
-
-  JsonMap _chapterWordConstraintMetadata(JsonMap arguments) {
-    // 中文注释: 动态追加章节时允许显式传入字数目标；未传时就让后续步骤继承默认提示策略。
-    if (arguments.containsKey('enable_chapter_word_constraints') &&
-        !ValueReaders.boolValue(arguments['enable_chapter_word_constraints'])) {
-      return const <String, Object?>{};
-    }
-    final result = <String, Object?>{};
-    final target = ValueReaders.intValue(arguments['chapter_word_target']);
-    final min = ValueReaders.intValue(arguments['chapter_word_min']);
-    final max = ValueReaders.intValue(arguments['chapter_word_max']);
-    if (target > 0) {
-      result['chapter_word_target'] = target;
-    }
-    if (min > 0) {
-      result['chapter_word_min'] = min;
-    }
-    if (max > 0) {
-      result['chapter_word_max'] = max;
-    }
-    return result;
   }
 
   String _runtimeBaselineId(JsonMap arguments, JsonMap afterTask) {

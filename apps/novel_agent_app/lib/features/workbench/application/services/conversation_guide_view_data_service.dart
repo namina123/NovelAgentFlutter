@@ -1,66 +1,148 @@
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../models/conversation_guide_view_data.dart';
+import '../models/opening_session_projection.dart';
+import '../models/project_opening_maturity_assessment.dart';
 import '../../presentation/models/primary_action_view_data.dart';
+import 'conversation_opening_guide_view_data_service.dart';
+import 'long_task_start_action_policy_service.dart';
+import 'opening_starter_action_policy_service.dart';
 
 class ConversationGuideViewDataService {
   ConversationGuideViewDataService({
     SessionGuideProfileService? sessionGuideProfileService,
     LongTaskWritingModeCatalogService? longTaskWritingModeCatalogService,
     ModeGuidanceTransitionService? modeGuidanceTransitionService,
+    ConversationOpeningGuideViewDataService?
+    conversationOpeningGuideViewDataService,
+    LongTaskStartActionPolicyService? longTaskStartActionPolicyService,
+    OpeningStarterActionPolicyService? openingStarterActionPolicyService,
   }) : _sessionGuideProfileService =
            sessionGuideProfileService ?? const SessionGuideProfileService(),
        _longTaskWritingModeCatalogService =
            longTaskWritingModeCatalogService ??
            const LongTaskWritingModeCatalogService(),
        _modeGuidanceTransitionService =
-           modeGuidanceTransitionService ?? ModeGuidanceTransitionService();
+           modeGuidanceTransitionService ?? ModeGuidanceTransitionService(),
+       _conversationOpeningGuideViewDataService =
+           conversationOpeningGuideViewDataService ??
+           const ConversationOpeningGuideViewDataService(),
+       _longTaskStartActionPolicyService =
+           longTaskStartActionPolicyService ??
+           const LongTaskStartActionPolicyService(),
+       _openingStarterActionPolicyService =
+           openingStarterActionPolicyService ??
+           const OpeningStarterActionPolicyService();
 
   final SessionGuideProfileService _sessionGuideProfileService;
   final LongTaskWritingModeCatalogService _longTaskWritingModeCatalogService;
   final ModeGuidanceTransitionService _modeGuidanceTransitionService;
+  final ConversationOpeningGuideViewDataService
+  _conversationOpeningGuideViewDataService;
+  final LongTaskStartActionPolicyService _longTaskStartActionPolicyService;
+  final OpeningStarterActionPolicyService _openingStarterActionPolicyService;
 
   ConversationGuideViewData build({
     required String projectType,
     required bool needsGoalSelection,
     required bool isGenerating,
+    required ProjectOpeningMaturityAssessment openingMaturity,
     String guideScope = '',
     ModeGuidanceState? modeGuidanceState,
+    OpeningSessionProjection? openingProjection,
   }) {
     // 中文注释: 会话引导到界面模型的投影收口在这里，避免控制器直接理解 core profile 结构。
     if (projectType.trim() == 'long_novel' &&
         guideScope.trim() == 'long_task_modes') {
-      return _longTaskModesGuide();
+      return _conversationOpeningGuideViewDataService.attachOpeningState(
+        guide: _longTaskModesGuide(),
+        projectType: projectType,
+        maturity: openingMaturity,
+        projection: openingProjection,
+      );
     }
     if (projectType.trim() == 'long_novel' &&
         guideScope.trim() == 'mode_guidance' &&
         modeGuidanceState != null) {
-      return _modeGuidanceGuide(modeGuidanceState);
+      return _conversationOpeningGuideViewDataService.attachOpeningState(
+        guide: _modeGuidanceGuide(modeGuidanceState),
+        projectType: projectType,
+        maturity: openingMaturity,
+        projection: openingProjection,
+      );
     }
     final profile = _sessionGuideProfileService.resolve(
       projectType: projectType,
       needsGoalSelection: needsGoalSelection,
       isRunning: isGenerating,
     );
-    return ConversationGuideViewData(
+    final mappedProfileActions = profile.primaryActions
+        .map(
+          (action) => PrimaryActionViewData(
+            id: action.id,
+            title: action.title,
+            description: action.description,
+            commandId: action.commandId,
+            payload: action.payload,
+          ),
+        )
+        .toList(growable: false);
+    final longTaskStartAction = _longTaskStartActionPolicyService.build(
+      projectType: projectType,
+      openingProjection: openingProjection,
+    );
+    final fallbackGuide = ConversationGuideViewData(
       workflowTitle: profile.title,
       workflowDescription: profile.statusHint.trim().isEmpty
           ? profile.description
           : '${profile.description}\n\n${profile.statusHint}',
       composerHint: profile.composerHint,
-      primaryActions: profile.primaryActions
-          .map(
-            (action) => PrimaryActionViewData(
-              id: action.id,
-              title: action.title,
-              description: action.description,
-              commandId: action.commandId,
-              payload: action.payload,
-            ),
-          )
-          .toList(growable: false),
+      primaryActions: longTaskStartAction == null
+          ? _openingStarterActionPolicyService.apply(
+              projectType: projectType,
+              maturity: openingMaturity,
+              actions: mappedProfileActions,
+            )
+          : <PrimaryActionViewData>[longTaskStartAction],
     );
-  }
+    if (openingProjection == null) {
+      return _conversationOpeningGuideViewDataService.attachOpeningState(
+        guide: fallbackGuide,
+        projectType: projectType,
+        maturity: openingMaturity,
+        projection: null,
+        preferSingleAction: true,
+      );
+    }
+    if (!openingMaturity.shouldShowOpeningEntry) {
+      return _conversationOpeningGuideViewDataService.decorateGroundedGuide(
+        fallbackGuide: fallbackGuide,
+        projection: openingProjection,
+        maturity: openingMaturity,
+        isGenerating: isGenerating,
+      );
+    }
+    if (projectType.trim() == 'long_novel') {
+      return _conversationOpeningGuideViewDataService.buildLongTaskGuide(
+        openingProjection,
+        isGenerating: isGenerating,
+        startAction: longTaskStartAction ?? fallbackGuide.primaryActions.first,
+      );
+    }
+    if (openingProjection.currentGroupDisplayName.trim().isEmpty &&
+        openingProjection.groupSummaries.isNotEmpty) {
+      return _conversationOpeningGuideViewDataService.buildGroupResolutionGuide(
+        openingProjection,
+        isGenerating: isGenerating,
+      );
+    }
+      return _conversationOpeningGuideViewDataService.decorateInteractiveGuide(
+        fallbackGuide: fallbackGuide,
+        projection: openingProjection,
+        maturity: openingMaturity,
+        isGenerating: isGenerating,
+      );
+    }
 
   ConversationGuideViewData _longTaskModesGuide() {
     // 中文注释: 长任务模式细分页独立生成，避免把模式定义和普通入口按钮揉在一起。
@@ -71,31 +153,29 @@ class ConversationGuideViewDataService {
         description: '回到长篇项目的默认入口列表。',
         commandId: 'guide.back.default',
       ),
-      ..._longTaskWritingModeCatalogService.modes().map(
-        (mode) {
-          final modeId = ValueReaders.stringValue(mode['id']);
-          final commandId =
-              modeId == 'seed_autopilot_novel' ||
-                  modeId == 'full_outline_consensus'
-              ? 'guide.open_mode_guidance'
-              : 'long_task.create_queue';
-          return PrimaryActionViewData(
-            id: 'long_task.mode.$modeId',
-            title: ValueReaders.stringValue(mode['title']),
-            description: [
-              ValueReaders.stringValue(mode['description']),
-              if (ValueReaders.stringValue(mode['best_for']).trim().isNotEmpty)
-                '适合：${ValueReaders.stringValue(mode['best_for'])}',
-              if (ValueReaders.stringValue(mode['human_involvement'])
-                  .trim()
-                  .isNotEmpty)
-                '协作强度：${ValueReaders.stringValue(mode['human_involvement'])}',
-            ].join('\n'),
-            commandId: commandId,
-            payload: <String, Object?>{'mode': modeId},
-          );
-        },
-      ),
+      ..._longTaskWritingModeCatalogService.modes().map((mode) {
+        final modeId = ValueReaders.stringValue(mode['id']);
+        final commandId =
+            modeId == 'seed_autopilot_novel' ||
+                modeId == 'full_outline_consensus'
+            ? 'guide.open_mode_guidance'
+            : 'long_task.create_queue';
+        return PrimaryActionViewData(
+          id: 'long_task.mode.$modeId',
+          title: ValueReaders.stringValue(mode['title']),
+          description: [
+            ValueReaders.stringValue(mode['description']),
+            if (ValueReaders.stringValue(mode['best_for']).trim().isNotEmpty)
+              '适合：${ValueReaders.stringValue(mode['best_for'])}',
+            if (ValueReaders.stringValue(
+              mode['human_involvement'],
+            ).trim().isNotEmpty)
+              '协作强度：${ValueReaders.stringValue(mode['human_involvement'])}',
+          ].join('\n'),
+          commandId: commandId,
+          payload: <String, Object?>{'mode': modeId},
+        );
+      }),
     ];
     return ConversationGuideViewData(
       workflowTitle: '选择长任务写作模式',

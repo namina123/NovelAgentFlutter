@@ -47,8 +47,14 @@ class UpdateProjectManifestUseCase {
   String _projectTypeLabel(String projectType) {
     // 中文注释: 项目类型标签只在简介文档中使用，因此保留轻量级本地映射即可。
     switch (projectType.trim()) {
-      case 'long_task':
-        return '长任务';
+      case 'long_novel':
+        return '长任务长篇';
+      case 'knowledge_base':
+        return '知识库';
+      case 'short_collection':
+        return '短文集';
+      case 'book_deconstruction':
+        return '拆书项目';
       case 'novel':
       default:
         return '小说';

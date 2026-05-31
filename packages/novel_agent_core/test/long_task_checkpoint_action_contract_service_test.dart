@@ -17,7 +17,7 @@ void main() {
           'task_type': 'chapter',
           'stage': 'sample',
           'result_ok': true,
-          'output_paths': <Object?>['drafts/ch01.md'],
+          'output_paths': <Object?>['chapters/ch01.md'],
           'confirmation_focus': <Object?>['样章入口是否成立。', '主角体验是否成立。'],
           'drift_watch_items': <Object?>[
             '检查文风是否漂移。',
@@ -37,14 +37,19 @@ void main() {
           checkpointReviewPath: 'tracking/checkpoint_reviews/chapter_001.json',
         );
         final actions = ValueReaders.mapList(package['actions']);
+        final disposition = ValueReaders.mapValue(package['disposition']);
         expect(
           actions.any(
             (item) =>
                 ValueReaders.stringValue(item['id']) ==
                     'create_followup_review_tasks' &&
-                ValueReaders.boolValue(item['enabled']),
+                !ValueReaders.boolValue(item['enabled']),
           ),
           isTrue,
+        );
+        expect(
+          ValueReaders.stringValue(disposition['disposition']),
+          'blocked_wait_user',
         );
         expect(
           ValueReaders.stringValue(package['recommended_action_id']),
@@ -54,6 +59,7 @@ void main() {
           actions.any(
             (item) =>
                 ValueReaders.stringValue(item['id']) == 'continue_long_task' &&
+                ValueReaders.boolValue(item['enabled']) &&
                 ValueReaders.stringValue(item['host_command']) ==
                     'apply_checkpoint_review_action',
           ),
@@ -107,6 +113,7 @@ void main() {
               'tracking/checkpoint_reviews/checkpoint_001.json',
         );
         final actions = ValueReaders.mapList(package['actions']);
+        final disposition = ValueReaders.mapValue(package['disposition']);
 
         expect(
           actions.any(
@@ -126,6 +133,10 @@ void main() {
                     'apply_checkpoint_review_action',
           ),
           isTrue,
+        );
+        expect(
+          ValueReaders.stringValue(disposition['disposition']),
+          'auto_continue',
         );
       },
     );

@@ -2,6 +2,7 @@ import '../common/json_types.dart';
 import '../common/value_readers.dart';
 import 'agent_skill_scope_service.dart';
 import 'builtin_skill_group_catalog_service.dart';
+import 'resolved_agent_skill_loadout.dart';
 
 class AgentSkillSummaryService {
   AgentSkillSummaryService({
@@ -18,6 +19,7 @@ class AgentSkillSummaryService {
     required JsonMap agent,
     required List<Object?> allSkills,
     List<Object?> availableSkillGroups = const <Object?>[],
+    ResolvedAgentSkillLoadout? resolvedLoadout,
   }) {
     // 中文注释: 技能摘要只返回模型做二次选择所需的最小信息，不把整份技能正文提前塞进上下文。
     final skillById = <String, JsonMap>{};
@@ -29,13 +31,15 @@ class AgentSkillSummaryService {
       }
       skillById[id] = skill;
     }
-    final allowedIds = _skillScopeService.enabledSkillIds(
-      agent,
-      availableSkillGroups: availableSkillGroups.isEmpty
-          ? _skillGroupCatalogService.builtinGroups()
-          : availableSkillGroups,
-      availableSkillIds: skillById.keys.toList(growable: false),
-    );
+    final allowedIds =
+        resolvedLoadout?.finalSkillIds ??
+        _skillScopeService.enabledSkillIds(
+          agent,
+          availableSkillGroups: availableSkillGroups.isEmpty
+              ? _skillGroupCatalogService.builtinGroups()
+              : availableSkillGroups,
+          availableSkillIds: skillById.keys.toList(growable: false),
+        );
     final result = <JsonMap>[];
     for (final skillId in allowedIds) {
       final skill = skillById[skillId];

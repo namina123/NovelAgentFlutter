@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../../output/terminal_printer.dart';
@@ -33,6 +35,7 @@ class ProjectCommand {
     required LoadSkillPackages loadSkillPackages,
     required LoadSkillGroups loadSkillGroups,
     required ProjectRepository projectRepository,
+    required ProjectPackageLibraryService projectPackageLibraryService,
     required TerminalPrinter printer,
   }) : _loadProjectWorkspaceUseCase = loadProjectWorkspaceUseCase,
        _createProjectEntryUseCase = createProjectEntryUseCase,
@@ -52,6 +55,7 @@ class ProjectCommand {
        _loadSkillPackages = loadSkillPackages,
        _loadSkillGroups = loadSkillGroups,
        _projectRepository = projectRepository,
+       _projectPackageLibraryService = projectPackageLibraryService,
        _printer = printer;
 
   final LoadProjectWorkspaceUseCase _loadProjectWorkspaceUseCase;
@@ -72,6 +76,7 @@ class ProjectCommand {
   final LoadSkillPackages _loadSkillPackages;
   final LoadSkillGroups _loadSkillGroups;
   final ProjectRepository _projectRepository;
+  final ProjectPackageLibraryService _projectPackageLibraryService;
   final TerminalPrinter _printer;
 
   Future<int> run(
@@ -94,6 +99,12 @@ class ProjectCommand {
         return _runImport(rest, defaultProjectPath: defaultProjectPath);
       case 'import-bundle':
         return _runImportBundle(rest, defaultProjectPath: defaultProjectPath);
+      case 'preview-package':
+        return _runPreviewPackage(rest, defaultProjectPath: defaultProjectPath);
+      case 'import-package':
+        return _runImportPackage(rest, defaultProjectPath: defaultProjectPath);
+      case 'export-package':
+        return _runExportPackage(rest, defaultProjectPath: defaultProjectPath);
       case 'generate-index':
         return _runGenerateIndex(rest, defaultProjectPath: defaultProjectPath);
       case 'save-bundle':
@@ -297,6 +308,90 @@ class ProjectCommand {
     return 0;
   }
 
+  Future<int> _runPreviewPackage(
+    List<String> args, {
+    required String defaultProjectPath,
+  }) async {
+    final project = await _openProject(
+      args,
+      defaultProjectPath: defaultProjectPath,
+    );
+    if (project == null) {
+      return 2;
+    }
+    final sourcePath = _requiredSourcePath(args);
+    if (sourcePath == null) {
+      return 2;
+    }
+    final preview = await _projectPackageLibraryService.previewImport(
+      project,
+      sourcePath: sourcePath,
+      overwrite: _boolOption(args, '--overwrite', false),
+    );
+    return _printBundlePreview(preview, title: '项目包预检');
+  }
+
+  Future<int> _runImportPackage(
+    List<String> args, {
+    required String defaultProjectPath,
+  }) async {
+    final project = await _openProject(
+      args,
+      defaultProjectPath: defaultProjectPath,
+    );
+    if (project == null) {
+      return 2;
+    }
+    final sourcePath = _requiredSourcePath(args);
+    if (sourcePath == null) {
+      return 2;
+    }
+    return _runBundleImportFlow(
+      preview: await _projectPackageLibraryService.previewImport(
+        project,
+        sourcePath: sourcePath,
+        overwrite: _boolOption(args, '--overwrite', false),
+      ),
+      plan: await _projectPackageLibraryService.buildImportWritePlan(
+        project,
+        sourcePath: sourcePath,
+        overwrite: _boolOption(args, '--overwrite', false),
+      ),
+      result: await _projectPackageLibraryService.importBundle(
+        project,
+        sourcePath: sourcePath,
+        overwrite: _boolOption(args, '--overwrite', false),
+      ),
+      previewTitle: '项目包预检',
+      planTitle: '项目包写入计划',
+      success: '项目包已导入。',
+    );
+  }
+
+  Future<int> _runExportPackage(
+    List<String> args, {
+    required String defaultProjectPath,
+  }) async {
+    final project = await _openProject(
+      args,
+      defaultProjectPath: defaultProjectPath,
+    );
+    if (project == null) {
+      return 2;
+    }
+    final targetPath = _requiredTargetPath(args);
+    if (targetPath == null) {
+      return 2;
+    }
+    final result = await _projectPackageLibraryService.exportBundle(
+      project,
+      targetDirectoryPath: targetPath,
+      title: _optionValue(args, '--title') ?? '',
+      description: _optionValue(args, '--description') ?? '',
+    );
+    return _printExportResult(result, success: '项目包目录已导出。');
+  }
+
   Future<int> _runGenerateIndex(
     List<String> args, {
     required String defaultProjectPath,
@@ -394,6 +489,50 @@ class ProjectCommand {
     return 1;
   }
 
+  Future<int> _runBundleImportFlow({
+    required JsonMap preview,
+    required JsonMap plan,
+    required JsonMap result,
+    required String previewTitle,
+    required String planTitle,
+    required String success,
+  }) async {
+    final previewCode = _printBundlePreview(preview, title: previewTitle);
+    if (previewCode != 0) {
+      return previewCode;
+    }
+    if (!ValueReaders.boolValue(plan['ok'])) {
+      _printer.error(ValueReaders.stringValue(plan['error'], '写入计划生成失败。'));
+      return 1;
+    }
+    _printer.block(planTitle, _prettyJson(ValueReaders.mapValue(plan['write_plan'])));
+    return _printResult(<String, Object?>{...result, 'summary': success});
+  }
+
+  int _printBundlePreview(JsonMap response, {required String title}) {
+    if (!ValueReaders.boolValue(response['ok'])) {
+      _printer.error(ValueReaders.stringValue(response['error'], '导入预检失败。'));
+      return 1;
+    }
+    _printer.block(title, _prettyJson(ValueReaders.mapValue(response['preview'])));
+    return 0;
+  }
+
+  int _printExportResult(JsonMap result, {required String success}) {
+    if (!ValueReaders.boolValue(result['ok'])) {
+      _printer.error(ValueReaders.stringValue(result['error'], '导出失败。'));
+      return 1;
+    }
+    _printer.success(success);
+    _printer.info(
+      ValueReaders.stringValue(
+        result['export_directory_path'],
+        ValueReaders.stringValue(result['bundle_file_path']),
+      ),
+    );
+    return 0;
+  }
+
   void _printHelp() {
     // 中文注释: 项目命令帮助只覆盖已经接通的共享用例入口。
     _printer.block(
@@ -404,6 +543,9 @@ class ProjectCommand {
         'project create-folder --path world/sects [--project 路径]',
         'project import --source C:\\a.txt --source C:\\b.txt [--target assets] [--project 路径]',
         'project import-bundle --source C:\\bundle.customization.json [--overwrite true|false] [--allow-builtin-shadow true|false] [--project 路径]',
+        'project preview-package --source C:\\bundle_dir [--overwrite true|false] [--project 路径]',
+        'project import-package --source C:\\bundle_dir [--overwrite true|false] [--project 路径]',
+        'project export-package --target C:\\exports [--title 标题] [--description 描述] [--project 路径]',
         'project generate-index [--project 路径]',
         'project save-bundle [--title 标题] [--description 描述] [--project 路径]',
         'project update-info --title 标题 [--type novel] [--genre 题材] [--premise 设定] [--notes 备注] [--project 路径]',
@@ -418,6 +560,30 @@ class ProjectCommand {
       return null;
     }
     return args[index + 1].trim();
+  }
+
+  String? _requiredSourcePath(List<String> args) {
+    final sourcePath =
+        _optionValue(args, '--source') ?? _optionValue(args, '--path') ?? '';
+    if (sourcePath.trim().isEmpty) {
+      _printer.error('请通过 --source 指定 bundle 目录或 bundle.json 路径。');
+      return null;
+    }
+    return sourcePath;
+  }
+
+  String? _requiredTargetPath(List<String> args) {
+    final targetPath =
+        _optionValue(args, '--target') ?? _optionValue(args, '--dir') ?? '';
+    if (targetPath.trim().isEmpty) {
+      _printer.error('请通过 --target 指定导出根目录。');
+      return null;
+    }
+    return targetPath;
+  }
+
+  String _prettyJson(JsonMap value) {
+    return const JsonEncoder.withIndent('  ').convert(value);
   }
 
   List<String> _multiOptionValues(List<String> args, String name) {

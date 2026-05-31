@@ -74,5 +74,36 @@ void main() {
       expect(stepIds, contains('repair_if_gate_failed'));
       expect(stepIds, contains('advance_after_gate'));
     });
+
+    test(
+      'skips task already postprocessed when selecting next postprocess',
+      () {
+        // 中文注释: 这里验证后处理选择器不会反复捞起同一条已经跑完后处理的 waiting_user 任务。
+        final task = selectionService.nextPostprocessTaskFromTasks(<Object?>[
+          <String, Object?>{
+            'id': 'chapter-1',
+            'title': 'sample',
+            'task_type': 'chapter',
+            'status': TaskRuntimeConstants.statusWaitingUser,
+            'atomic_execution_path':
+                'tracking/chapter_atomic/sample.execution.json',
+            'output_paths': <String>['chapters/第01章.md'],
+            'postprocess_ran_at': '2026-05-26T01:20:00.000Z',
+          },
+          <String, Object?>{
+            'id': 'chapter-2',
+            'title': 'chapter 2',
+            'task_type': 'chapter',
+            'status': TaskRuntimeConstants.statusWaitingUser,
+            'atomic_execution_path':
+                'tracking/chapter_atomic/ch02.execution.json',
+            'output_paths': <String>['chapters/第02章.md'],
+          },
+        ]);
+
+        expect(task['id'], 'chapter-2');
+      },
+    );
   });
 }
+

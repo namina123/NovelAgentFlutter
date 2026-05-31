@@ -67,6 +67,9 @@ void main() {
         },
         createdAt: '2026-05-23T10:00:00Z',
       );
+      final chapterTask = tasks.firstWhere(
+        (task) => ValueReaders.stringValue(task['task_type']) == 'chapter',
+      );
       final record = recordService.startRecord(
         <String, Object?>{
           'id': 'plan_a',
@@ -81,12 +84,60 @@ void main() {
       );
       final action = actionService.nextAction(record, tasks);
       final transaction = transactionService.buildTaskTransaction(
-        tasks.first,
+        chapterTask,
         runRecord: record,
         options: <String, Object?>{
           'project_templates': <String, Object?>{
-            'long_task_planning': '模板：{{task_goal}}',
+            'chapter_atomic': '模板：{{task_goal}}',
           },
+          'project_constitution_markdown': '''
+# 项目创作宪法
+
+本书长期承诺是高压权谋与持续逆转。
+
+## 核心原则
+
+- 重大设定前后一致。
+''',
+          'project_file_contents': <String, Object?>{
+            'tracking/modes/seed_autopilot_novel/guidance.md': '''
+# 灵感托管式长篇 引导摘要
+
+当前已经确认主线方向。
+
+## 阶段答案
+
+- 高压权谋与持续逆转。
+- 总纲和重大转折先确认。
+''',
+            'styles/seed_autopilot_style.md': '''
+---
+id: style.main
+display_name: 主风格
+guardrails:
+  - 每章必须推进情报
+---
+
+# 主风格
+
+干净利落，强钩子。
+''',
+          },
+          'expression_constraint_profiles': <Object?>[
+            <String, Object?>{
+              'id': 'de_ai',
+              'display_name': '去 AI 风',
+              'summary': '降低模板化表达和解释腔。',
+              'kind': 'natural_expression',
+              'rules': <Object?>['减少工整排比和空心总结。'],
+            },
+          ],
+          'project_expression_constraint_bindings': <Object?>[
+            <String, Object?>{
+              'profile_id': 'de_ai',
+              'default_for_project': true,
+            },
+          ],
         },
       );
       final prompt = promptRenderer.renderTaskPrompt(transaction);
@@ -95,8 +146,14 @@ void main() {
       expect(action['action'], 'call_model');
       expect(prompt, contains('长篇任务流单步'));
       expect(prompt, contains('项目模板'));
+      expect(prompt, contains('技能路由策略'));
+      expect(prompt, contains('novel-control-station'));
+      expect(prompt, contains('创作约束栈'));
+      expect(prompt, contains('表达限制细则'));
+      expect(prompt, contains('减少工整排比和空心总结'));
+      expect(prompt, contains('项目创作宪法'));
       expect(
-        ValueReaders.stringList(tasks.first['source_paths']),
+        ValueReaders.stringList(chapterTask['source_paths']),
         contains('styles/seed_autopilot_style.md'),
       );
       expect(
@@ -146,8 +203,29 @@ void main() {
           <String, Object?>{
             'relative_path': 'tracking/chapter_atomic/rev.execution.json',
             'revision_diff_path': 'tracking/revision_diffs/rev.md',
+            'context_pack': <String, Object?>{
+              'creative_rule_stack': <String, Object?>{
+                'expression_constraints': <Object?>[
+                  <String, Object?>{
+                    'id': 'de_ai',
+                    'display_name': '去 AI 风',
+                    'summary': '降低模板化表达和解释腔。',
+                    'kind': 'natural_expression',
+                  },
+                ],
+              },
+            },
           },
           <Object?>['chapters/ch01.md'],
+          options: const <String, Object?>{
+            'creative_rule_stack': <String, Object?>{
+              'constitution': <String, Object?>{
+                'id': 'project_constitution',
+                'title': '项目创作宪法',
+                'summary': '保持高压权谋与持续逆转。',
+              },
+            },
+          },
         );
         final postPrompt = postprocessRenderer.renderPostprocessPrompt(postTx);
         final recoveryPlan = recovery.recoveryPlan(record, <Object?>[task]);
@@ -160,6 +238,9 @@ void main() {
 
         expect(stepped['status'], TaskRuntimeConstants.statusPaused);
         expect(postPrompt, contains('修复任务后处理'));
+        expect(postPrompt, contains('创作约束栈'));
+        expect(postPrompt, contains('Mini Recheck'));
+        expect(postPrompt, contains('真实性复核强度'));
         expect(recoveryPlan['action'], 'pause_for_failure');
         expect(failureAction['task_status'], TaskRuntimeConstants.statusQueued);
         expect(markdown.renderMarkdown(stepped), contains('模型失败'));

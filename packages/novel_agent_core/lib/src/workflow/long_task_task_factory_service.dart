@@ -1,6 +1,7 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
 import '../runtime/runtime_baseline_execution_mode_service.dart';
+import 'chapter_length_profile_resolver_service.dart';
 import 'long_task_chapter_output_policy_service.dart';
 import 'long_task_chapter_gate_review_task_factory_service.dart';
 import 'long_task_mode_context_path_service.dart';
@@ -15,6 +16,7 @@ class LongTaskTaskFactoryService {
     LongTaskChapterOutputPolicyService? chapterOutputPolicyService,
     LongTaskModeContextPathService? modeContextPathService,
     RuntimeBaselineExecutionModeService? runtimeBaselineExecutionModeService,
+    ChapterLengthProfileResolverService? chapterLengthProfileResolverService,
     LongTaskChapterGateReviewTaskFactoryService?
     chapterGateReviewTaskFactoryService,
   }) : _pathPolicyService = pathPolicyService,
@@ -30,6 +32,9 @@ class LongTaskTaskFactoryService {
        _runtimeBaselineExecutionModeService =
            runtimeBaselineExecutionModeService ??
            RuntimeBaselineExecutionModeService(modeService: modeService),
+       _chapterLengthProfileResolverService =
+           chapterLengthProfileResolverService ??
+           const ChapterLengthProfileResolverService(),
        _chapterGateReviewTaskFactoryService =
            chapterGateReviewTaskFactoryService ??
            LongTaskChapterGateReviewTaskFactoryService();
@@ -39,6 +44,8 @@ class LongTaskTaskFactoryService {
   final LongTaskModeContextPathService _modeContextPathService;
   final RuntimeBaselineExecutionModeService
   _runtimeBaselineExecutionModeService;
+  final ChapterLengthProfileResolverService
+  _chapterLengthProfileResolverService;
   final LongTaskChapterGateReviewTaskFactoryService
   _chapterGateReviewTaskFactoryService;
 
@@ -100,8 +107,8 @@ class LongTaskTaskFactoryService {
       options,
       defaultChapters: 6,
       defaultCheckpointInterval: 1,
-      chapterGoal: '在强监督长任务队列中生成本章草稿；每章完成后等待用户检查，优先稳定、可回滚和少量推进。',
-      chapterToolHint: '每次只写当前章节；写入 drafts/ 后停在检查点，等待用户确认继续或创建修复任务。',
+      chapterGoal: '在强监督长任务队列中生成本章正文；每章完成后等待用户检查，优先稳定、可回滚和少量推进。',
+      chapterToolHint: '每次只写当前章节；正文写入 chapters/ 后停在检查点，等待用户确认继续或创建修复任务。',
       createdAt: createdAt,
     );
   }
@@ -114,14 +121,14 @@ class LongTaskTaskFactoryService {
     // 中文注释: 单章原子模式只生成一个任务，不自动推演后续章节。
     var title = ValueReaders.stringValue(
       options['chapter_title'],
-      ValueReaders.stringValue(options['title'], '单章草稿'),
+      ValueReaders.stringValue(options['title'], '单章正文'),
     ).trim();
     if (title.isEmpty) {
-      title = '单章草稿';
+      title = '单章正文';
     }
     final goal = ValueReaders.stringValue(
       options['goal'],
-      ValueReaders.stringValue(options['chapter_goal'], '围绕当前目标生成或修订一个独立章节草稿。'),
+      ValueReaders.stringValue(options['chapter_goal'], '围绕当前目标生成或修订一个独立章节正文。'),
     ).trim();
     final brief = ValueReaders.stringValue(
       options['brief'],
@@ -273,7 +280,7 @@ class LongTaskTaskFactoryService {
           'tool_hint':
               '先读取项目规格、总纲、章纲、摘要和必要设定；如果规划尚未充分，请先调用 present_user_options 或写入大纲，而不是硬写正文。',
           'persistent_context_paths': persistentPaths,
-          'chapter_word_constraints': _chapterWordConstraints(
+          'chapter_length_metadata': _chapterLengthMetadata(
             options,
             stage: stage,
           ),
@@ -393,7 +400,7 @@ class LongTaskTaskFactoryService {
           'runtime_baseline_id': runtimeBaselineId,
           'tool_hint': chapterToolHint,
           'persistent_context_paths': persistentPaths,
-          'chapter_word_constraints': _chapterWordConstraints(
+          'chapter_length_metadata': _chapterLengthMetadata(
             options,
             stage: 'draft',
           ),
@@ -525,9 +532,7 @@ class LongTaskTaskFactoryService {
         'persistent_context_paths': _pathPolicyService.stringList(
           data['persistent_context_paths'],
         ),
-        ..._chapterWordConstraintMetadata(
-          ValueReaders.mapValue(data['chapter_word_constraints']),
-        ),
+        ...ValueReaders.mapValue(data['chapter_length_metadata']),
       },
       'tool_hint': ValueReaders.stringValue(data['tool_hint']),
     }, createdAt);
@@ -698,7 +703,7 @@ class LongTaskTaskFactoryService {
   }
 
   String _chapterFileName(int chapterNumber, String title) {
-    // 中文注释: 文件名保持“第xx章_标题”风格，便于用户在 drafts/ 中快速人工浏览。
+    // 中文注释: 文件名保持“第xx章_标题”风格，便于用户在项目正文目录中快速人工浏览。
     final prefix = '第${chapterNumber.toString().padLeft(2, '0')}章';
     final safeTitle = _pathPolicyService.safeId(title);
     if (safeTitle.isEmpty || safeTitle == 'seed_to_full') {
@@ -707,67 +712,12 @@ class LongTaskTaskFactoryService {
     return '${prefix}_$safeTitle';
   }
 
-  JsonMap _chapterWordConstraints(JsonMap options, {required String stage}) {
-    // 中文注释: 字数限制先作为共享任务参数进入计划与提示，不把模式差异散落到 UI 或模型文案里。
-    final enabled = options.containsKey('enable_chapter_word_constraints')
-        ? ValueReaders.boolValue(options['enable_chapter_word_constraints'])
-        : _hasAnyChapterWordConstraint(options);
-    if (!enabled) {
-      return const <String, Object?>{};
-    }
-    final cleanStage = stage.trim().toLowerCase();
-    final useSampleOverride = cleanStage == 'sample';
-    final target = ValueReaders.intValue(
-      useSampleOverride
-          ? options['sample_chapter_word_target']
-          : options['chapter_word_target'],
-      ValueReaders.intValue(options['chapter_word_target']),
+  JsonMap _chapterLengthMetadata(JsonMap options, {required String stage}) {
+    // 中文注释: 字数基准与分布策略统一在 resolver 中归一化，工厂自身不再维护 loose 字段细节。
+    return _chapterLengthProfileResolverService.buildMetadataFromOptions(
+      options,
+      stage: stage,
     );
-    final min = ValueReaders.intValue(
-      useSampleOverride
-          ? options['sample_chapter_word_min']
-          : options['chapter_word_min'],
-      ValueReaders.intValue(options['chapter_word_min']),
-    );
-    final max = ValueReaders.intValue(
-      useSampleOverride
-          ? options['sample_chapter_word_max']
-          : options['chapter_word_max'],
-      ValueReaders.intValue(options['chapter_word_max']),
-    );
-    return _chapterWordConstraintMetadata(<String, Object?>{
-      if (target > 0) 'chapter_word_target': target,
-      if (min > 0) 'chapter_word_min': min,
-      if (max > 0) 'chapter_word_max': max,
-    });
-  }
-
-  bool _hasAnyChapterWordConstraint(JsonMap options) {
-    // 中文注释: 兼容旧数据：如果历史记录里直接带了字数值但还没有开关字段，就按“已开启”处理。
-    return ValueReaders.intValue(options['chapter_word_target']) > 0 ||
-        ValueReaders.intValue(options['chapter_word_min']) > 0 ||
-        ValueReaders.intValue(options['chapter_word_max']) > 0 ||
-        ValueReaders.intValue(options['sample_chapter_word_target']) > 0 ||
-        ValueReaders.intValue(options['sample_chapter_word_min']) > 0 ||
-        ValueReaders.intValue(options['sample_chapter_word_max']) > 0;
-  }
-
-  JsonMap _chapterWordConstraintMetadata(JsonMap data) {
-    // 中文注释: 元数据里只保留有效数字，避免把 0 值噪音带进任务文件和上下文。
-    final result = <String, Object?>{};
-    final target = ValueReaders.intValue(data['chapter_word_target']);
-    final min = ValueReaders.intValue(data['chapter_word_min']);
-    final max = ValueReaders.intValue(data['chapter_word_max']);
-    if (target > 0) {
-      result['chapter_word_target'] = target;
-    }
-    if (min > 0) {
-      result['chapter_word_min'] = min;
-    }
-    if (max > 0) {
-      result['chapter_word_max'] = max;
-    }
-    return result;
   }
 
   String _runtimeBaselineIdFromOptions(JsonMap options) {

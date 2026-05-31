@@ -140,6 +140,12 @@ Future<void> main() async {
         );
     final planningSectionTitles = _sectionTitles(preparedPlanning);
     final chapterSectionTitles = _sectionTitles(preparedChapter);
+    final planningSourcePaths = ValueReaders.stringList(
+      planningTask['source_paths'],
+    );
+    final chapterSourcePaths = ValueReaders.stringList(
+      chapterTask['source_paths'],
+    );
     final changedPaths = ValueReaders.stringList(runOnce['changed_paths']);
     final checkpointReview = ValueReaders.mapValue(
       runOnce['checkpoint_review'],
@@ -171,15 +177,21 @@ Future<void> main() async {
         )
         .toList(growable: false);
     final sectionOk =
+        planningSectionTitles.contains('模式引导约束') &&
+        planningSectionTitles.contains('项目风格规范') &&
         planningSectionTitles.contains('长期约束') &&
-        planningSectionTitles.contains('风格锚点') &&
-        planningSectionTitles.contains('世界硬约束') &&
-        planningSectionTitles.contains('角色/身份锚点') &&
         chapterSectionTitles.contains('长期约束') &&
+        chapterSectionTitles.contains('模式引导约束') &&
+        chapterSectionTitles.contains('项目风格规范') &&
         chapterSectionTitles.contains('任务指定来源') &&
-        chapterSectionTitles.contains('风格锚点') &&
-        chapterSectionTitles.contains('世界硬约束') &&
-        chapterSectionTitles.contains('角色/身份锚点');
+        chapterSectionTitles.contains('项目创作宪法');
+    final guidanceSourceOk =
+        planningSourcePaths.contains(
+          'tracking/modes/seed_autopilot_novel/guidance.md',
+        ) &&
+        chapterSourcePaths.contains(
+          'tracking/modes/seed_autopilot_novel/guidance.md',
+        );
     final checkpointReviewOk =
         checkpointReviewPath.startsWith('tracking/checkpoint_reviews/') &&
         checkpointReviewMarkdownPath.endsWith('.md') &&
@@ -197,10 +209,13 @@ Future<void> main() async {
           ValueReaders.boolValue(preparedChapter['ok']) &&
           ValueReaders.boolValue(runOnce['ok']) &&
           sectionOk &&
+          guidanceSourceOk &&
           checkpointReviewOk &&
           writeOk,
       'planning_section_titles': planningSectionTitles,
       'chapter_section_titles': chapterSectionTitles,
+      'planning_source_paths': planningSourcePaths,
+      'chapter_source_paths': chapterSourcePaths,
       'executed_tool_names': executedToolNames,
       'changed_paths': changedPaths,
       'created_plan_path': ValueReaders.stringValue(created['plan_path']),
@@ -210,6 +225,7 @@ Future<void> main() async {
       'prepared_chapter_ok': ValueReaders.boolValue(preparedChapter['ok']),
       'run_once_ok': ValueReaders.boolValue(runOnce['ok']),
       'section_ok': sectionOk,
+      'guidance_source_ok': guidanceSourceOk,
       'checkpoint_review_ok': checkpointReviewOk,
       'checkpoint_review_path': checkpointReviewPath,
       'checkpoint_review_markdown_path': checkpointReviewMarkdownPath,

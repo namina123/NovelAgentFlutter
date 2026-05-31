@@ -73,6 +73,12 @@ class ProjectWorkspaceToolHostAdapter implements ProjectToolHostPort {
   }
 
   @override
+  Future<void> writeExternalTextFile(String absolutePath, String content) {
+    // 中文注释: 外部文本写出同样收口到宿主适配器，让目录包导出和后续 zip 导出共用一层文件出口。
+    return _fileMutationAdapter.writeExternalTextFile(absolutePath, content);
+  }
+
+  @override
   Future<void> copyExternalFile(
     String absolutePath,
     String rootPath,

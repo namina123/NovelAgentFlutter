@@ -12,6 +12,7 @@ Thumbs.db
 
 # Dart / Flutter
 **/.dart_tool/
+**/.android-sdk-local/
 **/.flutter-plugins
 **/.flutter-plugins-dependencies
 **/.pub/
@@ -30,6 +31,8 @@ artifacts/
 **/artifacts/
 test_api.txt
 references/MuMuAINovel-main/
+references/assets/
+references/files/
 
 # Python / node misc from references or helper scripts
 **/__pycache__/

@@ -72,6 +72,14 @@ class ProjectLongTaskChapterGateService {
         'ok': true,
         'action': ValueReaders.stringValue(decision['action'], 'pass_gate'),
         'gate_decision': decision,
+        'gate_disposition': ValueReaders.stringValue(decision['disposition']),
+        'gate_reason': ValueReaders.stringValue(decision['reason']),
+        'blocks_auto_advance': ValueReaders.boolValue(
+          decision['blocks_auto_advance'],
+        ),
+        'manual_attention_required': ValueReaders.boolValue(
+          decision['manual_attention_required'],
+        ),
         'review_report_path': ValueReaders.stringValue(loaded['markdown_path']),
         'changed_paths': const <Object?>[],
       };
@@ -114,6 +122,14 @@ class ProjectLongTaskChapterGateService {
       'ok': true,
       'action': 'create_repair_task',
       'gate_decision': decision,
+      'gate_disposition': ValueReaders.stringValue(decision['disposition']),
+      'gate_reason': ValueReaders.stringValue(decision['reason']),
+      'blocks_auto_advance': ValueReaders.boolValue(
+        decision['blocks_auto_advance'],
+      ),
+      'manual_attention_required': ValueReaders.boolValue(
+        decision['manual_attention_required'],
+      ),
       'review_report_path': ValueReaders.stringValue(loaded['markdown_path']),
       'repair_task': repairTask,
       'rewired_tasks': rewired,

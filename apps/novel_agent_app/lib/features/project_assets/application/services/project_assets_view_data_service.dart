@@ -2,34 +2,111 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../../presentation/models/project_assets_view_data.dart';
 import '../models/project_assets_snapshot.dart';
+import '../models/project_assets_tab_id.dart';
+import 'project_assets_expression_constraint_view_data_service.dart';
+import 'project_assets_graph_view_data_service.dart';
+import 'project_assets_timeline_view_data_service.dart';
 
 class ProjectAssetsViewDataService {
-  const ProjectAssetsViewDataService();
+  const ProjectAssetsViewDataService({
+    ProjectAssetsExpressionConstraintViewDataService?
+    expressionConstraintViewDataService,
+    ProjectAssetsGraphViewDataService? graphViewDataService,
+    ProjectAssetsTimelineViewDataService? timelineViewDataService,
+  }) : _expressionConstraintViewDataService =
+           expressionConstraintViewDataService ??
+           const ProjectAssetsExpressionConstraintViewDataService(),
+       _graphViewDataService =
+           graphViewDataService ?? const ProjectAssetsGraphViewDataService(),
+       _timelineViewDataService =
+           timelineViewDataService ??
+           const ProjectAssetsTimelineViewDataService();
+
+  final ProjectAssetsExpressionConstraintViewDataService
+  _expressionConstraintViewDataService;
+  final ProjectAssetsGraphViewDataService _graphViewDataService;
+  final ProjectAssetsTimelineViewDataService _timelineViewDataService;
 
   ProjectAssetsViewData build({
     required ProjectAssetsSnapshot snapshot,
     required String status,
   }) {
-    // 中文注释: 资产页视图投影统一收口，避免控制器自己组装列表标题、编辑器和选中态。
-    final activeTabId = snapshot.activeTabId;
-    final entries = activeTabId == 'foreshadows'
-        ? _foreshadowEntries(snapshot)
-        : _styleEntries(snapshot);
+    // 中文注释: 资产中心的投影统一在这里收口，控制器只保留原始资产与选择状态。
+    final activeTabId = snapshot.activeTabId.trim().isEmpty
+        ? ProjectAssetsTabId.styles
+        : snapshot.activeTabId;
+    final entries = _entriesForTab(snapshot, activeTabId);
     return ProjectAssetsViewData(
       title: ProjectAssetsViewData.initial().title,
-      description: ProjectAssetsViewData.initial().description,
+      description: _descriptionFor(snapshot, activeTabId),
       status: status,
       activeTabId: activeTabId,
+      entryAgentContextId: snapshot.entryAgentContextId,
       tabs: ProjectAssetsViewData.initial().tabs,
       entries: entries,
+      inspector: _inspector(snapshot, activeTabId),
+      timeline: _timelineViewDataService.build(snapshot),
+      graph: _graphViewDataService.build(snapshot),
       styleEditor: _styleEditor(snapshot),
+      expressionConstraintEditor: _expressionConstraintViewDataService
+          .buildEditor(snapshot),
       foreshadowEditor: _foreshadowEditor(snapshot),
+      isLoading: snapshot.isLoading,
     );
   }
 
-  List<ProjectAssetEntryViewData> _styleEntries(ProjectAssetsSnapshot snapshot) {
+  List<ExpressionConstraintSelectableOptionViewData>
+  buildExpressionConstraintAgentOptions(List<JsonMap> agents) {
+    return _expressionConstraintViewDataService.buildAgentOptions(agents);
+  }
+
+  List<ExpressionConstraintSelectableOptionViewData>
+  buildExpressionConstraintModeOptions() {
+    return _expressionConstraintViewDataService.buildModeOptions();
+  }
+
+  List<ExpressionConstraintSelectableOptionViewData>
+  buildExpressionConstraintStageOptions() {
+    return _expressionConstraintViewDataService.buildStageOptions();
+  }
+
+  String _descriptionFor(ProjectAssetsSnapshot snapshot, String activeTabId) {
+    if (activeTabId == ProjectAssetsTabId.expressionConstraints) {
+      final agentId = snapshot.entryAgentContextId.trim();
+      if (agentId.isNotEmpty) {
+        return '表达限制是项目级写作约束系统；当前正从智能体 $agentId 进入，可继续为它定向绑定内置或自定义预设。';
+      }
+      return '表达限制是项目级写作约束系统，可统一管理内置与项目自定义预设，并决定它们如何参与当前项目。';
+    }
+    return ProjectAssetsViewData.initial().description;
+  }
+
+  List<ProjectAssetEntryViewData> _entriesForTab(
+    ProjectAssetsSnapshot snapshot,
+    String activeTabId,
+  ) {
+    switch (activeTabId) {
+      case ProjectAssetsTabId.expressionConstraints:
+        return _expressionConstraintViewDataService.buildEntries(snapshot);
+      case ProjectAssetsTabId.foreshadows:
+        return _foreshadowEntries(snapshot);
+      case ProjectAssetsTabId.timelines:
+        return _timelineEntries(snapshot);
+      case ProjectAssetsTabId.relationships:
+        return _relationshipEntries(snapshot);
+      case ProjectAssetsTabId.graph:
+        return _graphEntries(snapshot);
+      case ProjectAssetsTabId.styles:
+      default:
+        return _styleEntries(snapshot);
+    }
+  }
+
+  List<ProjectAssetEntryViewData> _styleEntries(
+    ProjectAssetsSnapshot snapshot,
+  ) {
     final selectedId = _selectedStyleId(snapshot);
-    return snapshot.styles
+    return snapshot.catalog.styles
         .map(
           (item) => ProjectAssetEntryViewData(
             id: ValueReaders.stringValue(item['id']),
@@ -42,6 +119,7 @@ class ProjectAssetsViewDataService {
                 ? '默认'
                 : ValueReaders.stringValue(item['tone']),
             relativePath: ValueReaders.stringValue(item['relative_path']),
+            meta: ValueReaders.stringValue(item['audience']),
             isSelected: ValueReaders.stringValue(item['id']) == selectedId,
           ),
         )
@@ -52,18 +130,73 @@ class ProjectAssetsViewDataService {
     ProjectAssetsSnapshot snapshot,
   ) {
     final selectedId = _selectedForeshadowId(snapshot);
-    return snapshot.foreshadows
+    return snapshot.catalog.foreshadows
         .map(
           (item) => ProjectAssetEntryViewData(
-            id: ValueReaders.stringValue(item['id']),
-            title: ValueReaders.stringValue(
-              item['title'],
-              ValueReaders.stringValue(item['id']),
-            ),
-            subtitle: ValueReaders.stringValue(item['summary']),
-            badge: ValueReaders.stringValue(item['status'], 'planted'),
-            relativePath: ValueReaders.stringValue(item['relative_path']),
-            isSelected: ValueReaders.stringValue(item['id']) == selectedId,
+            id: item.id,
+            title: item.title,
+            subtitle: item.summary,
+            badge: item.status,
+            relativePath: item.sourcePath,
+            meta: item.targetPayoffPath,
+            isSelected: item.id == selectedId,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  List<ProjectAssetEntryViewData> _timelineEntries(
+    ProjectAssetsSnapshot snapshot,
+  ) {
+    final selectedId = _selectedTimelineId(snapshot);
+    return snapshot.catalog.timelines
+        .map(
+          (item) => ProjectAssetEntryViewData(
+            id: item.id,
+            title: item.displayName,
+            subtitle: item.summary,
+            badge: item.status,
+            relativePath: item.sourcePath,
+            meta: item.phaseLabel,
+            isSelected: item.id == selectedId,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  List<ProjectAssetEntryViewData> _relationshipEntries(
+    ProjectAssetsSnapshot snapshot,
+  ) {
+    final selectedId = _selectedRelationshipId(snapshot);
+    return snapshot.catalog.relationships
+        .map(
+          (item) => ProjectAssetEntryViewData(
+            id: item.id,
+            title: item.displayName,
+            subtitle: item.summary,
+            badge: item.relationshipType,
+            relativePath: item.sourcePath,
+            meta: '${item.leftEntityId} -> ${item.rightEntityId}',
+            isSelected: item.id == selectedId,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  List<ProjectAssetEntryViewData> _graphEntries(
+    ProjectAssetsSnapshot snapshot,
+  ) {
+    final selectedKey = _selectedGraphReferenceKey(snapshot);
+    return snapshot.catalog.referenceIndex.references
+        .map(
+          (item) => ProjectAssetEntryViewData(
+            id: item.referenceKey,
+            title: item.displayName,
+            subtitle: item.summary,
+            badge: _kindLabel(item.assetKind),
+            relativePath: item.sourcePath,
+            meta: '关联 ${item.relatedReferenceKeys.length}',
+            isSelected: item.referenceKey == selectedKey,
           ),
         )
         .toList(growable: false);
@@ -71,7 +204,7 @@ class ProjectAssetsViewDataService {
 
   StyleProfileEditorViewData _styleEditor(ProjectAssetsSnapshot snapshot) {
     final selectedId = _selectedStyleId(snapshot);
-    final selected = snapshot.styles.firstWhere(
+    final selected = snapshot.catalog.styles.firstWhere(
       (item) => ValueReaders.stringValue(item['id']) == selectedId,
       orElse: () => const <String, Object?>{},
     );
@@ -86,16 +219,18 @@ class ProjectAssetsViewDataService {
       tone: ValueReaders.stringValue(selected['tone']),
       audience: ValueReaders.stringValue(selected['audience']),
       tagsText: ValueReaders.stringList(selected['tags']).join(', '),
-      guardrailsText: ValueReaders.stringList(selected['guardrails']).join(
-        ', ',
-      ),
-      examplePathsText: ValueReaders.stringList(selected['example_paths']).join(
-        ', ',
-      ),
+      guardrailsText: ValueReaders.stringList(
+        selected['guardrails'],
+      ).join(', '),
+      examplePathsText: ValueReaders.stringList(
+        selected['example_paths'],
+      ).join(', '),
       inheritedIdsText: ValueReaders.stringList(
         selected['inherited_from_ids'],
       ).join(', '),
-      defaultForProject: ValueReaders.boolValue(selected['default_for_project']),
+      defaultForProject: ValueReaders.boolValue(
+        selected['default_for_project'],
+      ),
       relativePath: ValueReaders.stringValue(selected['relative_path']),
     );
   }
@@ -104,59 +239,332 @@ class ProjectAssetsViewDataService {
     ProjectAssetsSnapshot snapshot,
   ) {
     final selectedId = _selectedForeshadowId(snapshot);
-    final selected = snapshot.foreshadows.firstWhere(
-      (item) => ValueReaders.stringValue(item['id']) == selectedId,
-      orElse: () => const <String, Object?>{},
+    final selected = snapshot.catalog.foreshadows.where(
+      (item) => item.id == selectedId,
     );
     if (selected.isEmpty) {
       return ForeshadowRecordEditorViewData.empty();
     }
+    final record = selected.first;
     return ForeshadowRecordEditorViewData(
-      id: ValueReaders.stringValue(selected['id']),
-      title: ValueReaders.stringValue(selected['title']),
-      status: ValueReaders.stringValue(selected['status'], 'planted'),
-      summary: ValueReaders.stringValue(selected['summary']),
-      plantedChapterPath: ValueReaders.stringValue(
-        selected['planted_chapter_path'],
-      ),
-      targetPayoffPath: ValueReaders.stringValue(
-        selected['target_payoff_path'],
-      ),
-      relatedEntityIdsText: ValueReaders.stringList(
-        selected['related_entity_ids'],
-      ).join(', '),
-      relatedPathsText: ValueReaders.stringList(selected['related_paths']).join(
-        ', ',
-      ),
-      triggerConditionsText: ValueReaders.stringList(
-        selected['trigger_conditions'],
-      ).join(', '),
-      payoffExpectationsText: ValueReaders.stringList(
-        selected['payoff_expectations'],
-      ).join(', '),
-      tagsText: ValueReaders.stringList(selected['tags']).join(', '),
-      notes: ValueReaders.stringValue(selected['notes']),
-      relativePath: ValueReaders.stringValue(selected['relative_path']),
+      id: record.id,
+      title: record.title,
+      status: record.status,
+      summary: record.summary,
+      plantedChapterPath: record.plantedChapterPath,
+      targetPayoffPath: record.targetPayoffPath,
+      relatedEntityIdsText: record.relatedEntityIds.join(', '),
+      relatedPathsText: record.relatedPaths.join(', '),
+      triggerConditionsText: record.triggerConditions.join(', '),
+      payoffExpectationsText: record.payoffExpectations.join(', '),
+      tagsText: record.tags.join(', '),
+      notes: record.notes,
+      relativePath: record.sourcePath,
     );
+  }
+
+  ProjectAssetsInspectorViewData _inspector(
+    ProjectAssetsSnapshot snapshot,
+    String activeTabId,
+  ) {
+    switch (activeTabId) {
+      case ProjectAssetsTabId.expressionConstraints:
+        return ProjectAssetsInspectorViewData.empty();
+      case ProjectAssetsTabId.timelines:
+        return _timelineInspector(snapshot);
+      case ProjectAssetsTabId.relationships:
+        return _relationshipInspector(snapshot);
+      case ProjectAssetsTabId.graph:
+        return _graphInspector(snapshot);
+      case ProjectAssetsTabId.foreshadows:
+        return _foreshadowInspector(snapshot);
+      case ProjectAssetsTabId.styles:
+      default:
+        return _styleInspector(snapshot);
+    }
+  }
+
+  ProjectAssetsInspectorViewData _styleInspector(
+    ProjectAssetsSnapshot snapshot,
+  ) {
+    final selectedId = _selectedStyleId(snapshot);
+    final selected = snapshot.catalog.styles.firstWhere(
+      (item) => ValueReaders.stringValue(item['id']) == selectedId,
+      orElse: () => const <String, Object?>{},
+    );
+    if (selected.isEmpty) {
+      return ProjectAssetsInspectorViewData.empty();
+    }
+    return ProjectAssetsInspectorViewData(
+      title: ValueReaders.stringValue(selected['display_name'], selectedId),
+      subtitle: ValueReaders.stringValue(selected['summary']),
+      badge: ValueReaders.boolValue(selected['default_for_project'])
+          ? '默认风格'
+          : '风格',
+      sourcePath: ValueReaders.stringValue(selected['relative_path']),
+      sections: <ProjectAssetsInspectorSectionViewData>[
+        ProjectAssetsInspectorSectionViewData(
+          title: '定位',
+          lines: <String>[
+            '题材：${ValueReaders.stringValue(selected['genre'], '未填写')}',
+            '语气：${ValueReaders.stringValue(selected['tone'], '未填写')}',
+            '受众：${ValueReaders.stringValue(selected['audience'], '未填写')}',
+          ],
+        ),
+        ProjectAssetsInspectorSectionViewData(
+          title: '约束',
+          lines: ValueReaders.stringList(selected['guardrails']).isEmpty
+              ? const <String>['当前没有额外风格约束。']
+              : ValueReaders.stringList(selected['guardrails']),
+        ),
+      ],
+      relatedAssets: const <ProjectAssetsRelatedAssetViewData>[],
+      emptyMessage: '',
+    );
+  }
+
+  ProjectAssetsInspectorViewData _foreshadowInspector(
+    ProjectAssetsSnapshot snapshot,
+  ) {
+    final record = snapshot.catalog.foreshadows.firstWhere(
+      (item) => item.id == _selectedForeshadowId(snapshot),
+      orElse: () => const ForeshadowRecord(id: '', title: '', status: ''),
+    );
+    if (record.id.isEmpty) {
+      return ProjectAssetsInspectorViewData.empty();
+    }
+    return ProjectAssetsInspectorViewData(
+      title: record.title,
+      subtitle: record.summary,
+      badge: record.status,
+      sourcePath: record.sourcePath,
+      sections: <ProjectAssetsInspectorSectionViewData>[
+        ProjectAssetsInspectorSectionViewData(
+          title: '埋设与回收',
+          lines: <String>[
+            '埋设位置：${record.plantedChapterPath.isEmpty ? '未标记' : record.plantedChapterPath}',
+            '目标回收：${record.targetPayoffPath.isEmpty ? '未标记' : record.targetPayoffPath}',
+          ],
+        ),
+        ProjectAssetsInspectorSectionViewData(
+          title: '触发条件',
+          lines: record.triggerConditions.isEmpty
+              ? const <String>['当前没有触发条件。']
+              : record.triggerConditions,
+        ),
+      ],
+      relatedAssets: _relatedAssets(snapshot, 'foreshadow', record.id),
+      emptyMessage: '',
+    );
+  }
+
+  ProjectAssetsInspectorViewData _timelineInspector(
+    ProjectAssetsSnapshot snapshot,
+  ) {
+    final record = snapshot.catalog.timelines.firstWhere(
+      (item) => item.id == _selectedTimelineId(snapshot),
+      orElse: () => const TimelineRecord(id: '', displayName: ''),
+    );
+    if (record.id.isEmpty) {
+      return ProjectAssetsInspectorViewData.empty();
+    }
+    return ProjectAssetsInspectorViewData(
+      title: record.displayName,
+      subtitle: record.summary,
+      badge: record.status,
+      sourcePath: record.sourcePath,
+      sections: <ProjectAssetsInspectorSectionViewData>[
+        ProjectAssetsInspectorSectionViewData(
+          title: '阶段信息',
+          lines: <String>[
+            '阶段：${record.phaseLabel.isEmpty ? '未填写' : record.phaseLabel}',
+            '事件类型：${record.eventType.isEmpty ? '未填写' : record.eventType}',
+            '排序：${record.sequence}',
+          ],
+        ),
+      ],
+      relatedAssets: _relatedAssets(snapshot, 'timeline', record.id),
+      emptyMessage: '',
+    );
+  }
+
+  ProjectAssetsInspectorViewData _relationshipInspector(
+    ProjectAssetsSnapshot snapshot,
+  ) {
+    final record = snapshot.catalog.relationships.firstWhere(
+      (item) => item.id == _selectedRelationshipId(snapshot),
+      orElse: () => const RelationshipRecord(
+        id: '',
+        displayName: '',
+        leftEntityId: '',
+        rightEntityId: '',
+      ),
+    );
+    if (record.id.isEmpty) {
+      return ProjectAssetsInspectorViewData.empty();
+    }
+    return ProjectAssetsInspectorViewData(
+      title: record.displayName,
+      subtitle: record.summary,
+      badge: record.relationshipType.isEmpty
+          ? record.status
+          : record.relationshipType,
+      sourcePath: record.sourcePath,
+      sections: <ProjectAssetsInspectorSectionViewData>[
+        ProjectAssetsInspectorSectionViewData(
+          title: '关联实体',
+          lines: <String>[
+            '左侧：${record.leftEntityId}',
+            '右侧：${record.rightEntityId}',
+            '状态：${record.status}',
+          ],
+        ),
+      ],
+      relatedAssets: _relatedAssets(snapshot, 'relationship', record.id),
+      emptyMessage: '',
+    );
+  }
+
+  ProjectAssetsInspectorViewData _graphInspector(
+    ProjectAssetsSnapshot snapshot,
+  ) {
+    final selectedKey = _selectedGraphReferenceKey(snapshot);
+    final reference = snapshot.catalog.referenceIndex.references.firstWhere(
+      (item) => item.referenceKey == selectedKey,
+      orElse: () => const SharedNarrativeAssetReference(
+        referenceKey: '',
+        assetId: '',
+        assetKind: '',
+        displayName: '',
+      ),
+    );
+    if (reference.referenceKey.isEmpty) {
+      return ProjectAssetsInspectorViewData(
+        title: '共享资产图谱',
+        subtitle: '选择左侧节点查看关联。',
+        badge: '',
+        sourcePath: '',
+        sections: const <ProjectAssetsInspectorSectionViewData>[],
+        relatedAssets: const <ProjectAssetsRelatedAssetViewData>[],
+        emptyMessage: '',
+      );
+    }
+    return ProjectAssetsInspectorViewData(
+      title: reference.displayName,
+      subtitle: reference.summary,
+      badge: _kindLabel(reference.assetKind),
+      sourcePath: reference.sourcePath,
+      sections: <ProjectAssetsInspectorSectionViewData>[
+        ProjectAssetsInspectorSectionViewData(
+          title: '结构摘要',
+          lines: <String>[
+            '实体数：${reference.entityIds.length}',
+            '已知关联：${reference.relatedReferenceKeys.length}',
+            '缺失关联：${reference.missingReferenceKeys.length}',
+          ],
+        ),
+      ],
+      relatedAssets: _relatedAssetsByReference(snapshot, reference),
+      emptyMessage: '',
+    );
+  }
+
+  List<ProjectAssetsRelatedAssetViewData> _relatedAssets(
+    ProjectAssetsSnapshot snapshot,
+    String assetKind,
+    String assetId,
+  ) {
+    final reference = snapshot.catalog.referenceIndex.referenceOf(
+      assetKind,
+      assetId,
+    );
+    if (reference == null) {
+      return const <ProjectAssetsRelatedAssetViewData>[];
+    }
+    return _relatedAssetsByReference(snapshot, reference);
+  }
+
+  List<ProjectAssetsRelatedAssetViewData> _relatedAssetsByReference(
+    ProjectAssetsSnapshot snapshot,
+    SharedNarrativeAssetReference reference,
+  ) {
+    final neighbors = snapshot.catalog.referenceIndex.neighborsOf(
+      reference.assetKind,
+      reference.assetId,
+    );
+    return neighbors
+        .map(
+          (item) => ProjectAssetsRelatedAssetViewData(
+            referenceKey: item.referenceKey,
+            title: item.displayName,
+            badge: _kindLabel(item.assetKind),
+            subtitle: item.summary,
+            isSelected: item.referenceKey == reference.referenceKey,
+          ),
+        )
+        .toList(growable: false);
   }
 
   String _selectedStyleId(ProjectAssetsSnapshot snapshot) {
     if (snapshot.selectedStyleId.trim().isNotEmpty) {
       return snapshot.selectedStyleId.trim();
     }
-    if (snapshot.styles.isEmpty) {
+    if (snapshot.catalog.styles.isEmpty) {
       return '';
     }
-    return ValueReaders.stringValue(snapshot.styles.first['id']);
+    return ValueReaders.stringValue(snapshot.catalog.styles.first['id']);
   }
 
   String _selectedForeshadowId(ProjectAssetsSnapshot snapshot) {
     if (snapshot.selectedForeshadowId.trim().isNotEmpty) {
       return snapshot.selectedForeshadowId.trim();
     }
-    if (snapshot.foreshadows.isEmpty) {
+    if (snapshot.catalog.foreshadows.isEmpty) {
       return '';
     }
-    return ValueReaders.stringValue(snapshot.foreshadows.first['id']);
+    return snapshot.catalog.foreshadows.first.id;
+  }
+
+  String _selectedTimelineId(ProjectAssetsSnapshot snapshot) {
+    if (snapshot.selectedTimelineId.trim().isNotEmpty) {
+      return snapshot.selectedTimelineId.trim();
+    }
+    if (snapshot.catalog.timelines.isEmpty) {
+      return '';
+    }
+    return snapshot.catalog.timelines.first.id;
+  }
+
+  String _selectedRelationshipId(ProjectAssetsSnapshot snapshot) {
+    if (snapshot.selectedRelationshipId.trim().isNotEmpty) {
+      return snapshot.selectedRelationshipId.trim();
+    }
+    if (snapshot.catalog.relationships.isEmpty) {
+      return '';
+    }
+    return snapshot.catalog.relationships.first.id;
+  }
+
+  String _selectedGraphReferenceKey(ProjectAssetsSnapshot snapshot) {
+    if (snapshot.selectedGraphReferenceKey.trim().isNotEmpty) {
+      return snapshot.selectedGraphReferenceKey.trim();
+    }
+    if (snapshot.catalog.referenceIndex.references.isEmpty) {
+      return '';
+    }
+    return snapshot.catalog.referenceIndex.references.first.referenceKey;
+  }
+
+  String _kindLabel(String assetKind) {
+    switch (assetKind) {
+      case 'foreshadow':
+        return '伏笔';
+      case 'timeline':
+        return '时间线';
+      case 'relationship':
+        return '关系';
+      default:
+        return assetKind;
+    }
   }
 }

@@ -17,11 +17,11 @@ class DraftPromptBuilderService {
     required String title,
     required String intent,
   }) {
-    // 中文注释: 草稿总提示词在 core 统一拼装，确保 GUI 和 CLI 走到同一套创作约束与上下文协议。
+    // 中文注释: 内容生成总提示词在 core 统一拼装，确保 GUI 和 CLI 走到同一套创作约束与上下文协议。
     final resolvedTitle = title.trim();
     final outputInstruction = resolvedTitle.isEmpty
-        ? '请直接输出中文 Markdown 草稿正文，不要解释流程，不要输出多余前言。'
-        : '请围绕标题《$resolvedTitle》输出中文 Markdown 草稿正文，不要解释流程，不要输出多余前言。';
+        ? '请直接输出中文 Markdown 正文，不要解释流程，不要输出多余前言。'
+        : '请围绕标题《$resolvedTitle》输出中文 Markdown 正文，不要解释流程，不要输出多余前言。';
     return <String>[
       '# NOVEL Agent Draft Generation',
       '',

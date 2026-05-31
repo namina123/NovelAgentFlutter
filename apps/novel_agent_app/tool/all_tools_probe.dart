@@ -117,12 +117,12 @@ Future<void> _seedProbeFixtures(
   // 中文注释: 这里统一补齐探针所需的最小测试材料，避免不同工具各自隐式依赖用户现有文件。
   await workspacePort.writeTextFile(
     project.rootPath,
-    'drafts/probe_source.md',
+    'chapters/probe_source.md',
     '# Probe Source\n\nAlpha line.\nBeta line.\nGamma line.\n',
   );
   await workspacePort.writeTextFile(
     project.rootPath,
-    'drafts/probe_target.md',
+    'chapters/probe_target.md',
     'Existing target header.\n',
   );
   await workspacePort.writeTextFile(
@@ -217,7 +217,7 @@ Future<void> _runProjectToolProbes({
       toolPort,
       project,
       'read_project_file',
-      arguments: <String, Object?>{'relative_path': 'drafts/probe_source.md'},
+      arguments: <String, Object?>{'relative_path': 'chapters/probe_source.md'},
     );
     final content = ValueReaders.stringValue(result['content']);
     _ensure(content.contains('Alpha line.'), 'probe content missing');
@@ -229,7 +229,7 @@ Future<void> _runProjectToolProbes({
       project,
       'read_project_file',
       arguments: <String, Object?>{
-        'relative_path': 'drafts/probe_source.md',
+        'relative_path': 'chapters/probe_source.md',
         'start_line': 2,
         'limit': 2,
       },
@@ -251,7 +251,7 @@ Future<void> _runProjectToolProbes({
       project,
       'get_project_file_info',
       arguments: <String, Object?>{
-        'relative_path': 'drafts/probe_source.md',
+        'relative_path': 'chapters/probe_source.md',
         'start_line': 2,
         'end_line': 4,
       },
@@ -277,13 +277,16 @@ Future<void> _runProjectToolProbes({
       project,
       'write_project_file',
       arguments: <String, Object?>{
-        'relative_path': 'drafts/probe_written.md',
+        'relative_path': 'chapters/probe_written.md',
         'content': '# Written Probe\n\nBody 1\n',
         'overwrite': true,
       },
     );
     final path = ValueReaders.stringValue(result['relative_path']);
-    _ensure(path == 'drafts/probe_written.md', 'unexpected write path: $path');
+    _ensure(
+      path == 'chapters/probe_written.md',
+      'unexpected write path: $path',
+    );
     return path;
   });
   await recorder.capture('edit_project_file', () async {
@@ -292,7 +295,7 @@ Future<void> _runProjectToolProbes({
       project,
       'edit_project_file',
       arguments: <String, Object?>{
-        'relative_path': 'drafts/probe_written.md',
+        'relative_path': 'chapters/probe_written.md',
         'operation': 'replace',
         'old_text': 'Body 1',
         'content': 'Body 2',
@@ -310,7 +313,7 @@ Future<void> _runProjectToolProbes({
       project,
       'edit_project_file',
       arguments: <String, Object?>{
-        'relative_path': 'drafts/probe_source.md',
+        'relative_path': 'chapters/probe_source.md',
         'operation': 'replace',
         'pattern': r'Alpha|Beta',
         'content': 'Patched',
@@ -329,7 +332,7 @@ Future<void> _runProjectToolProbes({
       project,
       'write_project_file',
       arguments: <String, Object?>{
-        'relative_path': 'drafts/probe_range.md',
+        'relative_path': 'chapters/probe_range.md',
         'content': 'BEGIN\nold body\nEND\n',
         'overwrite': true,
       },
@@ -339,7 +342,7 @@ Future<void> _runProjectToolProbes({
       project,
       'edit_project_file',
       arguments: <String, Object?>{
-        'relative_path': 'drafts/probe_range.md',
+        'relative_path': 'chapters/probe_range.md',
         'operation': 'replace',
         'start_text': 'BEGIN\n',
         'end_text': '\nEND',
@@ -358,8 +361,8 @@ Future<void> _runProjectToolProbes({
       project,
       'manipulate_project_file_lines',
       arguments: <String, Object?>{
-        'relative_path': 'drafts/probe_source.md',
-        'target_relative_path': 'drafts/probe_target.md',
+        'relative_path': 'chapters/probe_source.md',
+        'target_relative_path': 'chapters/probe_target.md',
         'operation': 'copy',
         'start_line': 2,
         'end_line': 3,
@@ -367,7 +370,7 @@ Future<void> _runProjectToolProbes({
     );
     final changedPaths = ValueReaders.stringList(result['changed_paths']);
     _ensure(
-      changedPaths.contains('drafts/probe_target.md'),
+      changedPaths.contains('chapters/probe_target.md'),
       'target file should be changed',
     );
     return 'changed=${changedPaths.join(', ')}';
@@ -380,8 +383,8 @@ Future<void> _runProjectToolProbes({
         project,
         'manipulate_project_file_lines',
         arguments: <String, Object?>{
-          'sourceRelativePath': 'drafts/probe_source.md',
-          'target_relative_path': 'drafts/probe_target.md',
+          'sourceRelativePath': 'chapters/probe_source.md',
+          'target_relative_path': 'chapters/probe_target.md',
           'operation': 'copy',
           'start_line': -2,
           'end_line': -1,
@@ -401,7 +404,7 @@ Future<void> _runProjectToolProbes({
       project,
       'create_backup',
       arguments: <String, Object?>{
-        'relative_path': 'drafts/probe_written.md',
+        'relative_path': 'chapters/probe_written.md',
         'reason': 'tool probe backup',
       },
     );
@@ -418,7 +421,7 @@ Future<void> _runProjectToolProbes({
       project,
       'delete_project_file',
       arguments: <String, Object?>{
-        'relative_path': 'drafts/probe_written.md',
+        'relative_path': 'chapters/probe_written.md',
         'create_backup': false,
       },
     );
@@ -434,7 +437,7 @@ Future<void> _runProjectToolProbes({
     );
     final path = ValueReaders.stringValue(result['relative_path']);
     _ensure(
-      path == 'drafts/probe_written.md',
+      path == 'chapters/probe_written.md',
       'restore target mismatch: $path',
     );
     return path;
@@ -876,13 +879,11 @@ class _ProbeRecorder {
   }
 }
 
-class _FakeLlmGateway implements LlmGateway {
+class _FakeLlmGateway extends LlmGateway {
   @override
   Future<JsonMap> requestChat({
-    required List<JsonMap> messages,
-    required String modelId,
-    List<JsonMap> tools = const <JsonMap>[],
-    JsonMap options = const <String, Object?>{},
+    required ChatRequest request,
+    DraftGenerationCancellationToken? cancellationToken,
     void Function(LlmStreamUpdate update)? onStreamUpdate,
   }) async {
     return <String, Object?>{

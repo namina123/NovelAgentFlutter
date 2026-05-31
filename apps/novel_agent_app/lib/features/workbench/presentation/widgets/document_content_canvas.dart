@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../app/theme/app_chrome.dart';
-import '../../../../../app/theme/app_palette.dart';
+import '../../../../../shared/theme/novel_theme_context.dart';
+import 'document_workspace_canvas_frame.dart';
 
 class DocumentContentCanvas extends StatefulWidget {
   const DocumentContentCanvas({
@@ -11,6 +11,7 @@ class DocumentContentCanvas extends StatefulWidget {
     required this.content,
     required this.status,
     required this.onChanged,
+    this.isReadOnly = false,
   });
 
   final String title;
@@ -18,6 +19,7 @@ class DocumentContentCanvas extends StatefulWidget {
   final String content;
   final String status;
   final ValueChanged<String> onChanged;
+  final bool isReadOnly;
 
   @override
   State<DocumentContentCanvas> createState() => _DocumentContentCanvasState();
@@ -53,74 +55,24 @@ class _DocumentContentCanvasState extends State<DocumentContentCanvas> {
   @override
   Widget build(BuildContext context) {
     // 中文注释: 真实内容画布与空态画布分开，后续替换成编辑器时不会影响空态呈现逻辑。
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: isDark
-            ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.84)
-            : Colors.white.withValues(alpha: 0.8),
-        borderRadius: AppChrome.surfaceBorderRadius,
-        border: Border.all(
-          color: isDark ? theme.colorScheme.outline : AppPalette.line,
-          width: AppChrome.borderWidth,
+    final surface = context.novelThemeSurfaces.panel;
+    return DocumentWorkspaceCanvasFrame(
+      title: widget.title,
+      relativePath: widget.relativePath,
+      status: widget.status,
+      body: TextField(
+        controller: _controller,
+        expands: true,
+        maxLines: null,
+        minLines: null,
+        onChanged: widget.isReadOnly ? null : widget.onChanged,
+        readOnly: widget.isReadOnly,
+        style: TextStyle(
+          fontSize: 15,
+          height: 1.65,
+          color: surface.foregroundColor,
         ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.title.trim().isEmpty ? '未命名草稿' : widget.title,
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: isDark ? theme.colorScheme.onSurface : AppPalette.text,
-              ),
-            ),
-            if (widget.relativePath.trim().isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(
-                widget.relativePath,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: isDark
-                      ? theme.colorScheme.onSurface.withValues(alpha: 0.72)
-                      : AppPalette.mutedText,
-                ),
-              ),
-            ],
-            const SizedBox(height: 12),
-            Text(
-              widget.status,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: isDark
-                    ? theme.colorScheme.primary
-                    : AppPalette.lineStrong,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: TextField(
-                controller: _controller,
-                expands: true,
-                maxLines: null,
-                minLines: null,
-                onChanged: widget.onChanged,
-                style: TextStyle(
-                  fontSize: 15,
-                  height: 1.65,
-                  color: isDark ? theme.colorScheme.onSurface : AppPalette.text,
-                ),
-                decoration: const InputDecoration.collapsed(hintText: ''),
-              ),
-            ),
-          ],
-        ),
+        decoration: const InputDecoration.collapsed(hintText: ''),
       ),
     );
   }

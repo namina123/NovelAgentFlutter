@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../app/theme/app_palette.dart';
 import '../../../../../shared/widgets/action_button.dart';
 import 'settings_form_section.dart';
 import 'settings_labeled_dropdown_field.dart';
@@ -70,7 +71,7 @@ class _PermissionsSettingsPanelState extends State<PermissionsSettingsPanel> {
                 },
               ),
               const SizedBox(height: 12),
-              SettingsSwitchRow(
+              _permissionSwitch(
                 label: '允许读取文件',
                 value: _allowRead,
                 onChanged: (value) => setState(() {
@@ -79,7 +80,7 @@ class _PermissionsSettingsPanelState extends State<PermissionsSettingsPanel> {
                 }),
               ),
               const SizedBox(height: 10),
-              SettingsSwitchRow(
+              _permissionSwitch(
                 label: '允许写入文件',
                 value: _allowWrite,
                 onChanged: (value) => setState(() {
@@ -88,7 +89,7 @@ class _PermissionsSettingsPanelState extends State<PermissionsSettingsPanel> {
                 }),
               ),
               const SizedBox(height: 10),
-              SettingsSwitchRow(
+              _permissionSwitch(
                 label: '允许删除文件',
                 value: _allowDelete,
                 onChanged: (value) => setState(() {
@@ -97,7 +98,7 @@ class _PermissionsSettingsPanelState extends State<PermissionsSettingsPanel> {
                 }),
               ),
               const SizedBox(height: 10),
-              SettingsSwitchRow(
+              _permissionSwitch(
                 label: '允许联网调用',
                 value: _allowNetwork,
                 onChanged: (value) => setState(() {
@@ -106,7 +107,7 @@ class _PermissionsSettingsPanelState extends State<PermissionsSettingsPanel> {
                 }),
               ),
               const SizedBox(height: 10),
-              SettingsSwitchRow(
+              _permissionSwitch(
                 label: '允许宿主进程调用',
                 value: _allowProcess,
                 onChanged: (value) => setState(() {
@@ -171,5 +172,20 @@ class _PermissionsSettingsPanelState extends State<PermissionsSettingsPanel> {
       default:
         return;
     }
+  }
+
+  Widget _permissionSwitch({
+    required String label,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return DefaultTextStyle.merge(
+      style: const TextStyle(color: AppPalette.text),
+      child: SettingsSwitchRow(
+        label: label,
+        value: value,
+        onChanged: onChanged,
+      ),
+    );
   }
 }

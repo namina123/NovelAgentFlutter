@@ -1,5 +1,6 @@
 import 'ecosystem_import_command_view_data.dart';
 import 'ecosystem_editor_view_data.dart';
+import 'project_skill_loadout_view_data.dart';
 
 class AgentEcosystemViewData {
   const AgentEcosystemViewData({
@@ -9,6 +10,7 @@ class AgentEcosystemViewData {
     this.statusMessage = '',
     this.importCommand,
     this.editorViewData,
+    this.projectSkillLoadoutViewData,
   });
 
   final String activeTabId;
@@ -17,6 +19,7 @@ class AgentEcosystemViewData {
   final String statusMessage;
   final EcosystemImportCommandViewData? importCommand;
   final EcosystemEditorViewData? editorViewData;
+  final ProjectSkillLoadoutWorkspaceViewData? projectSkillLoadoutViewData;
 
   factory AgentEcosystemViewData.initial() {
     return const AgentEcosystemViewData(
@@ -26,11 +29,13 @@ class AgentEcosystemViewData {
         EcosystemTabViewData(id: 'skills', label: '技能'),
         EcosystemTabViewData(id: 'skill-groups', label: '技能组'),
         EcosystemTabViewData(id: 'agent-groups', label: '智能体组'),
+        EcosystemTabViewData(id: 'skill-loadouts', label: '技能装载'),
       ],
       entries: [],
       statusMessage: '',
       importCommand: null,
       editorViewData: null,
+      projectSkillLoadoutViewData: null,
     );
   }
 
@@ -45,6 +50,7 @@ class AgentEcosystemViewData {
     String? statusMessage,
     Object? importCommand = _importCommandSentinel,
     Object? editorViewData = _editorViewDataSentinel,
+    Object? projectSkillLoadoutViewData = _projectSkillLoadoutSentinel,
   }) {
     // 中文注释: 生态状态通过局部 copy 保持稳定边界，避免某个 tab 行为影响整个应用壳层。
     return AgentEcosystemViewData(
@@ -58,12 +64,18 @@ class AgentEcosystemViewData {
       editorViewData: identical(editorViewData, _editorViewDataSentinel)
           ? this.editorViewData
           : editorViewData as EcosystemEditorViewData?,
+      projectSkillLoadoutViewData:
+          identical(projectSkillLoadoutViewData, _projectSkillLoadoutSentinel)
+          ? this.projectSkillLoadoutViewData
+          : projectSkillLoadoutViewData
+                as ProjectSkillLoadoutWorkspaceViewData?,
     );
   }
 }
 
 const Object _importCommandSentinel = Object();
 const Object _editorViewDataSentinel = Object();
+const Object _projectSkillLoadoutSentinel = Object();
 
 class EcosystemTabViewData {
   const EcosystemTabViewData({required this.id, required this.label});
@@ -84,6 +96,8 @@ class EcosystemEntryViewData {
     required this.projectRelativePath,
     required this.isEditable,
     this.isSelected = false,
+    this.metadataRows = const <EcosystemMetadataRow>[],
+    this.memberLabels = const <String>[],
   });
 
   final String id;
@@ -96,4 +110,13 @@ class EcosystemEntryViewData {
   final String projectRelativePath;
   final bool isEditable;
   final bool isSelected;
+  final List<EcosystemMetadataRow> metadataRows;
+  final List<String> memberLabels;
+}
+
+class EcosystemMetadataRow {
+  const EcosystemMetadataRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
 }

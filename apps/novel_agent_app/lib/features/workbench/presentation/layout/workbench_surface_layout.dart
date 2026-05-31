@@ -1,5 +1,6 @@
 enum WorkbenchSurfaceMode {
   immersiveConversation,
+  compactWorkbench,
   singleConversation,
   documentsWorkspace,
   twoPane,

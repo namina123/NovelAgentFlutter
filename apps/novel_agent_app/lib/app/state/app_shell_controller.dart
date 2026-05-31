@@ -1,24 +1,35 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../theme/app_theme.dart';
+import '../theme/theme_preference_resolver.dart';
 import '../../features/agent_ecosystem/application/models/agent_ecosystem_snapshot.dart';
 import '../../features/agent_ecosystem/application/services/agent_ecosystem_view_data_service.dart';
 import '../../features/agent_ecosystem/application/services/customization_import_preview_text_service.dart';
 import '../../features/agent_ecosystem/application/services/ecosystem_entry_creation_plan_service.dart';
 import '../../features/agent_ecosystem/application/services/ecosystem_entry_editor_service.dart';
+import '../../features/agent_ecosystem/application/models/project_skill_loadout_workspace_snapshot.dart';
+import '../../features/agent_ecosystem/application/services/project_skill_loadout_view_data_service.dart';
+import '../../features/agent_ecosystem/application/services/project_skill_loadout_workspace_service.dart';
 import '../../features/agent_ecosystem/presentation/contracts/agent_ecosystem_action_handler.dart';
 import '../../features/agent_ecosystem/presentation/models/ecosystem_editor_view_data.dart';
 import '../../features/agent_ecosystem/presentation/models/ecosystem_import_command_view_data.dart';
-import '../../features/project_creation/application/controllers/project_creation_controller.dart';
+import '../../features/agent_ecosystem/presentation/models/agent_ecosystem_view_data.dart';
+import '../../features/agent_ecosystem/presentation/models/project_skill_loadout_view_data.dart';
+import '../../features/book_deconstruction/application/controllers/book_deconstruction_controller.dart';
+import '../../features/book_deconstruction/application/services/desktop_book_deconstruction_source_picker_service.dart';
+import '../../features/inspiration_workbench/application/controllers/inspiration_workbench_controller.dart';
 import '../../features/long_task_station/application/controllers/long_task_station_controller.dart';
-import '../../features/project_assets/application/models/project_assets_snapshot.dart';
-import '../../features/project_assets/application/services/project_assets_view_data_service.dart';
-import '../../features/project_assets/presentation/contracts/project_assets_action_handler.dart';
-import '../../features/project_assets/presentation/models/project_assets_view_data.dart';
+import '../../features/project_assets/application/controllers/project_assets_controller.dart';
+import '../../features/project_assets/application/services/project_assets_loader_service.dart';
+import '../../features/project_assets/application/services/project_expression_constraint_workspace_service.dart';
+import '../../features/project_creation/application/controllers/project_creation_controller.dart';
 import '../../features/prompt_templates/application/services/prompt_templates_view_data_service.dart';
 import '../../features/prompt_templates/presentation/contracts/prompt_templates_action_handler.dart';
 import '../../features/prompt_templates/presentation/models/prompt_templates_view_data.dart';
@@ -26,12 +37,22 @@ import '../../features/project_collection/application/models/project_collection_
 import '../../features/project_collection/application/services/project_collection_loader_service.dart';
 import '../../features/project_collection/presentation/contracts/project_collection_action_handler.dart';
 import '../../features/project_collection/presentation/models/project_collection_view_data.dart';
+import '../../features/project_open/application/services/project_open_view_data_service.dart';
+import '../../features/project_open/presentation/contracts/project_open_action_handler.dart';
+import '../../features/project_open/presentation/models/project_open_view_data.dart';
 import '../../features/review_center/application/services/review_center_view_data_service.dart';
+import '../../features/review_center/application/models/review_center_analysis_state.dart';
+import '../../features/review_center/application/services/review_center_analysis_state_service.dart';
+import '../../features/review_center/application/services/review_center_playback_preview_service.dart';
 import '../../features/review_center/presentation/contracts/review_center_action_handler.dart';
+import '../../features/review_center/presentation/models/review_center_view_data.dart';
 import '../../features/settings/application/services/model_settings_view_data_service.dart';
+import '../../features/settings/application/services/provider_settings_directory_service.dart';
+import '../../features/settings/application/services/theme_settings_view_data_service.dart';
 import '../../features/settings/presentation/contracts/settings_action_handler.dart';
 import '../../features/settings/presentation/models/settings_view_data.dart';
 import '../../features/task_center/application/services/task_center_view_data_service.dart';
+import '../../features/task_center/application/services/task_center_action_execution_outcome_service.dart';
 import '../../features/task_center/application/services/task_center_guidance_revisit_markdown_service.dart';
 import '../../features/task_center/presentation/contracts/task_center_action_handler.dart';
 import '../../features/task_center/presentation/models/task_center_contract_action_view_data.dart';
@@ -44,6 +65,12 @@ import '../../features/workbench/application/models/workbench_project_runtime_st
 import '../../features/workbench/application/services/conversation_session_state_service.dart';
 import '../../features/workbench/application/services/conversation_streaming_state_service.dart';
 import '../../features/workbench/application/services/conversation_guide_view_data_service.dart';
+import '../../features/workbench/application/services/conversation_opening_panel_view_data_service.dart';
+import '../../features/workbench/application/services/conversation_input_capability_context_builder_service.dart';
+import '../../features/workbench/application/services/conversation_group_selector_view_data_service.dart';
+import '../../features/workbench/application/services/project_agent_group_workspace_view_data_service.dart';
+import '../../features/workbench/application/services/project_opening_session_projection_service.dart';
+import '../../features/workbench/application/services/project_opening_agent_group_binding_service.dart';
 import '../../features/workbench/application/services/desktop_project_directory_picker_service.dart';
 import '../../features/workbench/application/services/project_launcher_view_data_service.dart';
 import '../../features/workbench/application/services/workbench_primary_action_service.dart';
@@ -51,13 +78,25 @@ import '../../features/workbench/application/services/conversation_user_visible_
 import '../../features/workbench/presentation/contracts/conversation_action_handler.dart';
 import '../../features/workbench/presentation/contracts/document_workspace_action_handler.dart';
 import '../../features/workbench/presentation/contracts/resource_manager_action_handler.dart';
+import '../../features/workbench/presentation/models/conversation_group_selector_view_data.dart';
 import '../../features/workbench/presentation/models/project_create_request_view_data.dart';
+import '../../features/workbench/presentation/models/conversation_input_capability_context.dart';
+import '../../features/workbench/presentation/models/project_agent_group_workspace_view_data.dart';
 import '../../features/workbench/presentation/models/selector_option_view_data.dart';
+import '../../features/workbench/presentation/models/tool_preview_mode.dart';
 import '../../features/workbench/presentation/models/user_option_view_data.dart';
+import '../../features/workbench/presentation/models/workbench_canvas_view_data.dart';
+import '../../features/workbench/presentation/models/workbench_conversation_view_data.dart';
+import '../../features/workbench/presentation/models/workbench_overlay_view_data.dart';
+import '../../features/workbench/presentation/models/workbench_resource_view_data.dart';
 import '../../features/workbench/presentation/models/workbench_view_data.dart';
+import '../navigation/app_shell_navigation_action_handler.dart';
 import '../../shared/view_models/app_shell_view_model.dart';
 import '../routing/app_destination.dart';
+import 'app_shell_auxiliary_controllers.dart';
 import 'app_shell_destination_controller.dart';
+import 'app_shell_listenable_state.dart';
+
 typedef LoadAgentPackages =
     Future<List<JsonMap>> Function(ProjectDescriptor project);
 typedef LoadAgentGroups =
@@ -66,16 +105,41 @@ typedef LoadSkillPackages =
     Future<List<JsonMap>> Function(ProjectDescriptor project);
 typedef LoadSkillGroups =
     Future<List<JsonMap>> Function(ProjectDescriptor project);
+typedef LoadProjectSkillLoadouts =
+    Future<List<AgentSkillLoadout>> Function(ProjectDescriptor project);
+typedef SaveProjectSkillLoadouts =
+    Future<void> Function(
+      ProjectDescriptor project,
+      List<AgentSkillLoadout> loadouts,
+    );
+typedef LoadProjectSkillLoadoutHistory =
+    Future<List<AgentSkillLoadoutHistoryEntry>> Function(
+      ProjectDescriptor project,
+    );
+typedef SaveProjectSkillLoadoutHistoryEntry =
+    Future<void> Function(
+      ProjectDescriptor project,
+      AgentSkillLoadoutHistoryEntry entry,
+    );
+typedef SaveProjectSkillLoadoutAsGroup =
+    Future<String> Function({
+      required ProjectDescriptor project,
+      required ResolvedAgentSkillLoadout loadout,
+      required String groupId,
+      required String displayName,
+      required String description,
+    });
 
 class AppShellController extends ChangeNotifier
     implements
+        AppShellNavigationActionHandler,
         SettingsActionHandler,
         AgentEcosystemActionHandler,
+        ProjectOpenActionHandler,
         ProjectCollectionActionHandler,
         TaskCenterActionHandler,
         ReviewCenterActionHandler,
-        PromptTemplatesActionHandler,
-        ProjectAssetsActionHandler {
+        PromptTemplatesActionHandler {
   AppShellController({
     required SettingsRepository settingsRepository,
     required LoadProjectWorkspaceUseCase loadProjectWorkspaceUseCase,
@@ -86,11 +150,13 @@ class AppShellController extends ChangeNotifier
     required ReadProjectFileUseCase readProjectFileUseCase,
     required SaveDraftUseCase saveDraftUseCase,
     required CreateProjectWorkspaceUseCase createProjectWorkspaceUseCase,
-    required DiscoverProjectsUseCase discoverProjectsUseCase,
     required CreateProjectEntryUseCase createProjectEntryUseCase,
     required ImportProjectFilesUseCase importProjectFilesUseCase,
     required UpdateProjectManifestUseCase updateProjectManifestUseCase,
     required ProjectToolHostPort projectToolHostPort,
+    required ProjectRuntimeProfileRepository projectRuntimeProfileRepository,
+    required ProjectAgentGroupBindingRepository
+    projectAgentGroupBindingRepository,
     required PreviewCustomizationBundleImportUseCase
     previewCustomizationBundleImportUseCase,
     required ImportCustomizationBundleUseCase importCustomizationBundleUseCase,
@@ -106,13 +172,29 @@ class AppShellController extends ChangeNotifier
     required LoadAgentGroups loadAgentGroups,
     required LoadSkillPackages loadSkillPackages,
     required LoadSkillGroups loadSkillGroups,
+    required LoadProjectSkillLoadouts loadProjectSkillLoadouts,
+    required SaveProjectSkillLoadouts saveProjectSkillLoadouts,
+    required LoadProjectSkillLoadoutHistory loadProjectSkillLoadoutHistory,
+    required SaveProjectSkillLoadoutHistoryEntry
+    saveProjectSkillLoadoutHistoryEntry,
+    required SaveProjectSkillLoadoutAsGroup saveProjectSkillLoadoutAsGroup,
     required WriteProjectTextFileUseCase writeProjectTextFileUseCase,
     required GenerateDraftUseCaseFactory generateDraftUseCaseFactory,
     required ProjectWorkflowRuntimeService workflowRuntimeService,
     required ProjectReviewReportService reviewReportService,
+    required ProjectChapterRewriteTaskService projectChapterRewriteTaskService,
     required ProjectPromptTemplateService promptTemplateService,
     required ProjectAssetLibraryService projectAssetLibraryService,
+    required ProjectTimelineRepository projectTimelineRepository,
+    required ProjectRelationshipRepository projectRelationshipRepository,
+    required ProjectExpressionConstraintWorkspaceService
+    projectExpressionConstraintWorkspaceService,
+    required ProjectGeneralContinuitySetupService
+    projectGeneralContinuitySetupService,
+    required LongTaskSupervisor longTaskSupervisor,
     required LongTaskStationController longTaskStationController,
+    DesktopBookDeconstructionSourcePickerService?
+    desktopBookDeconstructionSourcePickerService,
     ConversationSessionStateService? conversationSessionStateService,
     ConversationStreamingStateService? conversationStreamingStateService,
     ConversationGuideViewDataService? conversationGuideViewDataService,
@@ -124,18 +206,27 @@ class AppShellController extends ChangeNotifier
     AgentEcosystemViewDataService? agentEcosystemViewDataService,
     EcosystemEntryCreationPlanService? ecosystemEntryCreationPlanService,
     EcosystemEntryEditorService? ecosystemEntryEditorService,
+    ProjectSkillLoadoutWorkspaceService? projectSkillLoadoutWorkspaceService,
+    ProjectSkillLoadoutViewDataService? projectSkillLoadoutViewDataService,
     CustomizationImportPreviewTextService?
     customizationImportPreviewTextService,
+    ProjectOpenViewDataService? projectOpenViewDataService,
     ProjectCollectionLoaderService? projectCollectionLoaderService,
     TaskCenterViewDataService? taskCenterViewDataService,
+    TaskCenterActionExecutionOutcomeService?
+    taskCenterActionExecutionOutcomeService,
     TaskCenterGuidanceRevisitMarkdownService?
     taskCenterGuidanceRevisitMarkdownService,
     ReviewCenterViewDataService? reviewCenterViewDataService,
+    ReviewCenterAnalysisStateService? reviewCenterAnalysisStateService,
+    ReviewCenterPlaybackPreviewService? reviewCenterPlaybackPreviewService,
     PromptTemplatesViewDataService? promptTemplatesViewDataService,
-    ProjectAssetsViewDataService? projectAssetsViewDataService,
     PromptTemplatePreviewService? promptTemplatePreviewService,
     PromptTemplateNormalizerService? promptTemplateNormalizerService,
     ModelSettingsViewDataService? modelSettingsViewDataService,
+    ConversationInputCapabilityContextBuilderService?
+    conversationInputCapabilityContextBuilderService,
+    ThemeSettingsViewDataService? themeSettingsViewDataService,
     ModelExecutionProfileService? modelExecutionProfileService,
     ModeGuidanceTransitionService? modeGuidanceTransitionService,
   }) : _settingsRepository = settingsRepository,
@@ -146,7 +237,6 @@ class AppShellController extends ChangeNotifier
        _readProjectFileUseCase = readProjectFileUseCase,
        _saveDraftUseCase = saveDraftUseCase,
        _createProjectWorkspaceUseCase = createProjectWorkspaceUseCase,
-       _discoverProjectsUseCase = discoverProjectsUseCase,
        _createProjectEntryUseCase = createProjectEntryUseCase,
        _importProjectFilesUseCase = importProjectFilesUseCase,
        _updateProjectManifestUseCase = updateProjectManifestUseCase,
@@ -170,8 +260,15 @@ class AppShellController extends ChangeNotifier
        _generateDraftUseCaseFactory = generateDraftUseCaseFactory,
        _workflowRuntimeService = workflowRuntimeService,
        _reviewReportService = reviewReportService,
+       _projectChapterRewriteTaskService = projectChapterRewriteTaskService,
        _promptTemplateService = promptTemplateService,
        _projectAssetLibraryService = projectAssetLibraryService,
+       _projectTimelineRepository = projectTimelineRepository,
+       _projectRelationshipRepository = projectRelationshipRepository,
+       _projectExpressionConstraintWorkspaceService =
+           projectExpressionConstraintWorkspaceService,
+       _projectGeneralContinuitySetupService =
+           projectGeneralContinuitySetupService,
        _longTaskStationController = longTaskStationController,
        _conversationSessionStateService =
            conversationSessionStateService ?? ConversationSessionStateService(),
@@ -205,41 +302,71 @@ class AppShellController extends ChangeNotifier
            EcosystemEntryCreationPlanService(),
        _ecosystemEntryEditorService =
            ecosystemEntryEditorService ?? EcosystemEntryEditorService(),
+       _projectSkillLoadoutWorkspaceService =
+           projectSkillLoadoutWorkspaceService ??
+           ProjectSkillLoadoutWorkspaceService(
+             loadLoadouts: loadProjectSkillLoadouts,
+             saveLoadouts: saveProjectSkillLoadouts,
+             loadHistoryEntries: loadProjectSkillLoadoutHistory,
+             saveHistoryEntry: saveProjectSkillLoadoutHistoryEntry,
+             saveAsGroup: saveProjectSkillLoadoutAsGroup,
+           ),
+       _projectSkillLoadoutViewDataService =
+           projectSkillLoadoutViewDataService ??
+           ProjectSkillLoadoutViewDataService(),
        _customizationImportPreviewTextService =
            customizationImportPreviewTextService ??
            const CustomizationImportPreviewTextService(),
+       _projectOpenViewDataService =
+           projectOpenViewDataService ?? ProjectOpenViewDataService(),
        _projectCollectionLoaderService =
            projectCollectionLoaderService ?? ProjectCollectionLoaderService(),
        _taskCenterViewDataService =
            taskCenterViewDataService ?? const TaskCenterViewDataService(),
+       _taskCenterActionExecutionOutcomeService =
+           taskCenterActionExecutionOutcomeService ??
+           const TaskCenterActionExecutionOutcomeService(),
        _taskCenterGuidanceRevisitMarkdownService =
            taskCenterGuidanceRevisitMarkdownService ??
            const TaskCenterGuidanceRevisitMarkdownService(),
        _reviewCenterViewDataService =
            reviewCenterViewDataService ?? const ReviewCenterViewDataService(),
+       _reviewCenterAnalysisStateService =
+           reviewCenterAnalysisStateService ??
+           const ReviewCenterAnalysisStateService(),
+       _reviewCenterPlaybackPreviewService =
+           reviewCenterPlaybackPreviewService ??
+           const ReviewCenterPlaybackPreviewService(),
        _promptTemplatesViewDataService =
            promptTemplatesViewDataService ??
            const PromptTemplatesViewDataService(),
-       _projectAssetsViewDataService =
-           projectAssetsViewDataService ?? const ProjectAssetsViewDataService(),
        _promptTemplatePreviewService =
            promptTemplatePreviewService ?? PromptTemplatePreviewService(),
        _promptTemplateNormalizerService =
            promptTemplateNormalizerService ?? PromptTemplateNormalizerService(),
        _modelSettingsViewDataService =
            modelSettingsViewDataService ?? ModelSettingsViewDataService(),
+       _providerSettingsDirectoryService = ProviderSettingsDirectoryService(),
+       _conversationInputCapabilityContextBuilderService =
+           conversationInputCapabilityContextBuilderService ??
+           const ConversationInputCapabilityContextBuilderService(),
+       _themeSettingsViewDataService =
+           themeSettingsViewDataService ?? ThemeSettingsViewDataService(),
        _modelExecutionProfileService =
            modelExecutionProfileService ?? ModelExecutionProfileService(),
        _modeGuidanceTransitionService =
            modeGuidanceTransitionService ?? ModeGuidanceTransitionService(),
+       _desktopBookDeconstructionSourcePickerService =
+           desktopBookDeconstructionSourcePickerService ??
+           const DesktopBookDeconstructionSourcePickerService(),
        _viewModel = AppShellViewModel.initial() {
+    _listenableState = AppShellListenableState(
+      viewModel: _viewModel,
+      activeThemeId: _activeThemeId,
+    );
     _destinationController = AppShellDestinationController(
       changeDestination: _changeDestination,
-      refreshAgentEcosystem: _refreshAgentEcosystem,
-      refreshTaskCenter: _refreshTaskCenter,
-      refreshReviewCenter: _refreshReviewCenter,
-      refreshPromptTemplates: _refreshPromptTemplates,
-      refreshProjectAssets: _refreshProjectAssets,
+      refreshProjectOpen: _refreshProjectOpenView,
       longTaskStationController: _longTaskStationController,
     );
     _workbenchWorkspaceController = WorkbenchWorkspaceController(
@@ -249,7 +376,11 @@ class AppShellController extends ChangeNotifier
       createProjectEntryUseCase: _createProjectEntryUseCase,
       importProjectFilesUseCase: _importProjectFilesUseCase,
       updateProjectManifestUseCase: _updateProjectManifestUseCase,
+      projectToolHostPort: _projectToolHostPort,
+      writeProjectTextFileUseCase: _writeProjectTextFileUseCase,
+      longTaskSupervisor: longTaskSupervisor,
       reviewReportService: _reviewReportService,
+      projectRuntimeProfileRepository: projectRuntimeProfileRepository,
       readProjectState: () => _workbenchProjectRuntimeState,
       writeProjectState: (state) {
         _workbenchProjectRuntimeState = state;
@@ -269,18 +400,39 @@ class AppShellController extends ChangeNotifier
       refreshActiveDestinationAfterProjectLoad:
           _refreshActiveDestinationAfterProjectLoad,
       modelOptionsBuilder: _modelSelectorOptions,
-      agentOptionsBuilder: _agentSelectorOptions,
-      projectSubtitleFor: _projectSubtitleFor,
+      readProjectAgentGroupWorkspaceViewData:
+          _projectAgentGroupWorkspaceViewData,
+      selectProjectAgentGroup: _selectProjectAgentGroupFromWorkspace,
       showSettings: () async => _destinationController.showSettings(),
       showAgentEcosystem: _destinationController.showAgentEcosystem,
-      showTaskCenter: _destinationController.showTaskCenter,
       showLongTaskStation: _destinationController.showLongTaskStation,
-      showReviewCenter: _destinationController.showReviewCenter,
+      showInspirationWorkbench: _destinationController.showInspirationWorkbench,
       showPromptTemplates: _destinationController.showPromptTemplates,
       showProjectAssets: _destinationController.showProjectAssets,
+      showCurrentAgentSkillLoadout: _showCurrentAgentSkillLoadout,
+      showCurrentAgentExpressionConstraints:
+          _showCurrentAgentExpressionConstraints,
       announce: _announce,
     );
     _workbenchConversationController = WorkbenchConversationController(
+      openingSessionProjectionService: ProjectOpeningSessionProjectionService(
+        loadAgentPackages: _loadAgentPackages,
+        loadAgentGroups: _loadAgentGroups,
+        loadProjectAgentGroupSelections: (project) =>
+            projectAgentGroupBindingRepository.loadSelections(project),
+      ),
+      conversationOpeningPanelViewDataService:
+          const ConversationOpeningPanelViewDataService(),
+      projectOpeningAgentGroupBindingService:
+          ProjectOpeningAgentGroupBindingService(
+            loadSelections: (project) =>
+                projectAgentGroupBindingRepository.loadSelections(project),
+            saveSelections: (project, selections) =>
+                projectAgentGroupBindingRepository.saveSelections(
+                  project,
+                  selections,
+                ),
+          ),
       saveDraftUseCase: _saveDraftUseCase,
       generateDraftUseCaseFactory: _generateDraftUseCaseFactory,
       modelExecutionProfileService: _modelExecutionProfileService,
@@ -304,37 +456,81 @@ class AppShellController extends ChangeNotifier
       mutateWorkbench: _mutateWorkbench,
       readSettings: () => _settings,
       persistSettings: _persistSettings,
+      saveSettingsSilently: _saveSettingsSilently,
       refreshSettingsViewData: _refreshSettingsViewData,
-      readThemeMode: () => _themeMode,
-      writeThemeMode: (themeMode) {
-        _themeMode = themeMode;
-      },
+      readThemeId: () => _activeThemeId,
       notifyShell: _safeNotifyListeners,
       showSettings: () async => _destinationController.showSettings(),
       contextStrategySettingsOf: _contextStrategySettingsOf,
       selectedModelProvider: _selectedModelProvider,
-      agentLabel: _agentLabel,
       announce: _announce,
     );
     _projectCreationController = ProjectCreationController(
       loadProjectWorkspaceUseCase: _loadProjectWorkspaceUseCase,
       createProjectWorkspaceUseCase: _createProjectWorkspaceUseCase,
-      discoverProjectsUseCase: _discoverProjectsUseCase,
-      desktopProjectDirectoryPickerService: _desktopProjectDirectoryPickerService,
+      desktopProjectDirectoryPickerService:
+          _desktopProjectDirectoryPickerService,
       projectLauncherViewDataService: _projectLauncherViewDataService,
       readWorkbench: () => _viewModel.workbench,
       mutateWorkbench: _mutateWorkbench,
       readCurrentProject: () => _workbenchWorkspaceController.currentProject,
       loadProject: _workbenchWorkspaceController.loadProject,
-      resetToProjectlessWorkbench: _workbenchWorkspaceController.resetToProjectlessWorkbench,
+      resetToProjectlessWorkbench:
+          _workbenchWorkspaceController.resetToProjectlessWorkbench,
       announce: _announce,
       readSettings: () => _settings,
+      projectGeneralContinuitySetupService:
+          _projectGeneralContinuitySetupService,
       defaultProjectsRootPath: _defaultProjectsRootPath,
-      settingsSearchRoots: _settingsSearchRoots,
       isMobileProjectRootLocked: _isMobileProjectRootLocked,
     );
     _workbenchWorkspaceController.attachProjectCreationController(
       _projectCreationController,
+    );
+    _auxiliaryControllers = AppShellAuxiliaryControllers(
+      createProjectAssetsController: () => ProjectAssetsController(
+        projectAssetLibraryService: _projectAssetLibraryService,
+        expressionConstraintWorkspaceService:
+            _projectExpressionConstraintWorkspaceService,
+        loaderService: ProjectAssetsLoaderService(
+          projectAssetLibraryService: _projectAssetLibraryService,
+          timelineRepository: _projectTimelineRepository,
+          relationshipRepository: _projectRelationshipRepository,
+          expressionConstraintWorkspaceService:
+              _projectExpressionConstraintWorkspaceService,
+        ),
+        readCurrentProject: () => _currentProject,
+        readAvailableProjectAgents: () =>
+            List<JsonMap>.from(_agentEcosystemSnapshot.agents.map(_mapValue)),
+        syncWorkbenchResources: _syncWorkbenchResources,
+        onBackRequested: showWorkbench,
+      ),
+      createBookDeconstructionController: () => BookDeconstructionController(
+        projectToolHostPort: _projectToolHostPort,
+        writeProjectTextFileUseCase: _writeProjectTextFileUseCase,
+        readCurrentProject: () => _currentProject,
+        syncWorkbenchResources: _syncWorkbenchResources,
+        onBackRequested: showWorkbench,
+        sourcePickerService: _desktopBookDeconstructionSourcePickerService,
+      ),
+      createInspirationWorkbenchController: () =>
+          InspirationWorkbenchController(
+            loadModeGuidanceStateUseCase: _loadModeGuidanceStateUseCase,
+            answerModeGuidanceStageUseCase: _answerModeGuidanceStageUseCase,
+            buildModeGuidancePlanInputUseCase:
+                _buildModeGuidancePlanInputUseCase,
+            workflowRuntimeService: _workflowRuntimeService,
+            readCurrentProject: () => _currentProject,
+            readCurrentProjectTitle: () => _viewModel.workbench.projectName,
+            syncWorkbenchResources: _syncWorkbenchResources,
+            onBackRequested: showWorkbench,
+            showTaskCenterRequested: () async => showTaskCenter(),
+          ),
+    );
+    _longTaskStationController.attachNavigationCallbacks(
+      openProjectRequested: _openLongTaskStationProject,
+      openResourceRequested: _openLongTaskStationRunResource,
+      readCurrentProjectPathRequested: () => _currentProject?.rootPath ?? '',
     );
   }
 
@@ -346,7 +542,6 @@ class AppShellController extends ChangeNotifier
   final ReadProjectFileUseCase _readProjectFileUseCase;
   final SaveDraftUseCase _saveDraftUseCase;
   final CreateProjectWorkspaceUseCase _createProjectWorkspaceUseCase;
-  final DiscoverProjectsUseCase _discoverProjectsUseCase;
   final CreateProjectEntryUseCase _createProjectEntryUseCase;
   final ImportProjectFilesUseCase _importProjectFilesUseCase;
   final UpdateProjectManifestUseCase _updateProjectManifestUseCase;
@@ -370,8 +565,15 @@ class AppShellController extends ChangeNotifier
   final GenerateDraftUseCaseFactory _generateDraftUseCaseFactory;
   final ProjectWorkflowRuntimeService _workflowRuntimeService;
   final ProjectReviewReportService _reviewReportService;
+  final ProjectChapterRewriteTaskService _projectChapterRewriteTaskService;
   final ProjectPromptTemplateService _promptTemplateService;
   final ProjectAssetLibraryService _projectAssetLibraryService;
+  final ProjectTimelineRepository _projectTimelineRepository;
+  final ProjectRelationshipRepository _projectRelationshipRepository;
+  final ProjectExpressionConstraintWorkspaceService
+  _projectExpressionConstraintWorkspaceService;
+  final ProjectGeneralContinuitySetupService
+  _projectGeneralContinuitySetupService;
   final LongTaskStationController _longTaskStationController;
   final ConversationSessionStateService _conversationSessionStateService;
   final ConversationStreamingStateService _conversationStreamingStateService;
@@ -385,24 +587,48 @@ class AppShellController extends ChangeNotifier
   final AgentEcosystemViewDataService _agentEcosystemViewDataService;
   final EcosystemEntryCreationPlanService _ecosystemEntryCreationPlanService;
   final EcosystemEntryEditorService _ecosystemEntryEditorService;
+  final ProjectSkillLoadoutWorkspaceService
+  _projectSkillLoadoutWorkspaceService;
+  final ProjectSkillLoadoutViewDataService _projectSkillLoadoutViewDataService;
   final CustomizationImportPreviewTextService
   _customizationImportPreviewTextService;
+  final ProjectOpenViewDataService _projectOpenViewDataService;
   final ProjectCollectionLoaderService _projectCollectionLoaderService;
   final TaskCenterViewDataService _taskCenterViewDataService;
+  final TaskCenterActionExecutionOutcomeService
+  _taskCenterActionExecutionOutcomeService;
   final TaskCenterGuidanceRevisitMarkdownService
   _taskCenterGuidanceRevisitMarkdownService;
   final ReviewCenterViewDataService _reviewCenterViewDataService;
+  final ReviewCenterAnalysisStateService _reviewCenterAnalysisStateService;
+  final ReviewCenterPlaybackPreviewService _reviewCenterPlaybackPreviewService;
   final PromptTemplatesViewDataService _promptTemplatesViewDataService;
-  final ProjectAssetsViewDataService _projectAssetsViewDataService;
   final PromptTemplatePreviewService _promptTemplatePreviewService;
   final PromptTemplateNormalizerService _promptTemplateNormalizerService;
   final ModelSettingsViewDataService _modelSettingsViewDataService;
+  final ProviderSettingsDirectoryService _providerSettingsDirectoryService;
+  final ConversationInputCapabilityContextBuilderService
+  _conversationInputCapabilityContextBuilderService;
+  final ConversationGroupSelectorViewDataService
+  _conversationGroupSelectorViewDataService =
+      const ConversationGroupSelectorViewDataService();
+  final ProjectAgentGroupWorkspaceViewDataService
+  _projectAgentGroupWorkspaceViewDataService =
+      const ProjectAgentGroupWorkspaceViewDataService();
+  final ThemeSettingsViewDataService _themeSettingsViewDataService;
   final ModelExecutionProfileService _modelExecutionProfileService;
   final ModeGuidanceTransitionService _modeGuidanceTransitionService;
+  final DesktopBookDeconstructionSourcePickerService
+  _desktopBookDeconstructionSourcePickerService;
+  late final AppShellListenableState _listenableState;
   late final AppShellDestinationController _destinationController;
   late final WorkbenchWorkspaceController _workbenchWorkspaceController;
   late final WorkbenchConversationController _workbenchConversationController;
   late final ProjectCreationController _projectCreationController;
+  late final AppShellAuxiliaryControllers _auxiliaryControllers;
+  final ReviewReportChapterAnalysisProjectionService
+  _reviewReportChapterAnalysisProjectionService =
+      ReviewReportChapterAnalysisProjectionService();
 
   AppShellViewModel _viewModel;
   AppSettings? _settings;
@@ -410,13 +636,15 @@ class AppShellController extends ChangeNotifier
       const WorkbenchProjectRuntimeState();
   WorkbenchConversationRuntimeState _workbenchConversationRuntimeState =
       const WorkbenchConversationRuntimeState();
-  ThemeMode _themeMode = ThemeMode.light;
+  final ThemePreferenceResolver _themePreferenceResolver =
+      ThemePreferenceResolver();
+  String _activeThemeId = ThemePreferenceResolver.lightThemeId;
   bool _disposed = false;
   bool _initialized = false;
   AgentEcosystemSnapshot _agentEcosystemSnapshot =
       AgentEcosystemSnapshot.initial();
-  ProjectAssetsSnapshot _projectAssetsSnapshot =
-      ProjectAssetsSnapshot.initial();
+  ProjectSkillLoadoutWorkspaceSnapshot _projectSkillLoadoutWorkspaceSnapshot =
+      ProjectSkillLoadoutWorkspaceSnapshot.initial();
   ProjectCollectionSnapshot _projectCollectionSnapshot =
       ProjectCollectionSnapshot.initial();
   String _agentEcosystemStatusMessage = '';
@@ -433,24 +661,62 @@ class AppShellController extends ChangeNotifier
   String _reviewTypeFilter = '';
   String _reviewScopeFilter = '';
   String _reviewSourceFilter = '';
+  ReviewCenterAnalysisState _reviewCenterAnalysisState =
+      ReviewCenterAnalysisState.initial();
   List<JsonMap> _promptTemplates = const <JsonMap>[];
   JsonMap _selectedPromptTemplate = const <String, Object?>{};
   String _selectedPromptTemplateId = '';
   String _promptTemplatesStatusMessage = '';
   String _promptTemplatePreviewText = '';
-  String _projectAssetsStatusMessage = '';
-
   AppShellViewModel get viewModel => _viewModel;
-  ThemeMode get themeMode => _themeMode;
+  ThemeData get activeThemeData => AppTheme.themeDataFor(_activeThemeId);
+  String get activeThemeId => _activeThemeId;
+  ValueListenable<AppDestination> get destinationListenable =>
+      _listenableState.destinationListenable;
+  ValueListenable<String> get activeThemeIdListenable =>
+      _listenableState.activeThemeIdListenable;
+  ValueListenable<WorkbenchViewData> get workbenchPageListenable =>
+      _listenableState.workbenchListenable;
+  ValueListenable<WorkbenchResourceViewData> get workbenchResourceListenable =>
+      _listenableState.workbenchResourceListenable;
+  ValueListenable<WorkbenchCanvasViewData> get workbenchCanvasListenable =>
+      _listenableState.workbenchCanvasListenable;
+  ValueListenable<WorkbenchConversationViewData>
+  get workbenchConversationListenable =>
+      _listenableState.workbenchConversationListenable;
+  ValueListenable<WorkbenchOverlayViewData> get workbenchOverlayListenable =>
+      _listenableState.workbenchOverlayListenable;
+  ValueListenable<SettingsViewData> get settingsPageListenable =>
+      _listenableState.settingsListenable;
+  ValueListenable<AgentEcosystemViewData> get agentEcosystemPageListenable =>
+      _listenableState.agentEcosystemListenable;
+  ValueListenable<ProjectOpenViewData> get projectOpenPageListenable =>
+      _listenableState.projectOpenListenable;
+  ValueListenable<ProjectCollectionViewData>
+  get projectCollectionPageListenable =>
+      _listenableState.projectCollectionListenable;
+  ValueListenable<TaskCenterViewData> get taskCenterPageListenable =>
+      _listenableState.taskCenterListenable;
+  ValueListenable<ReviewCenterViewData> get reviewCenterPageListenable =>
+      _listenableState.reviewCenterListenable;
+  ValueListenable<PromptTemplatesViewData> get promptTemplatesPageListenable =>
+      _listenableState.promptTemplatesListenable;
   LongTaskStationController get longTaskStationController =>
       _longTaskStationController;
+  ProjectAssetsController get projectAssetsController =>
+      _auxiliaryControllers.projectAssetsController;
+  BookDeconstructionController get bookDeconstructionController =>
+      _auxiliaryControllers.bookDeconstructionController;
+  InspirationWorkbenchController get inspirationWorkbenchController =>
+      _auxiliaryControllers.inspirationWorkbenchController;
   ResourceManagerActionHandler get resourceManagerHandler =>
       _workbenchWorkspaceController;
   DocumentWorkspaceActionHandler get documentWorkspaceHandler =>
       _workbenchWorkspaceController;
   ConversationActionHandler get conversationHandler =>
       _workbenchConversationController;
-  ProjectDescriptor? get _currentProject => _workbenchWorkspaceController.currentProject;
+  ProjectDescriptor? get _currentProject =>
+      _workbenchWorkspaceController.currentProject;
 
   Future<void> initialize() async {
     // 中文注释: 控制器初始化负责加载默认设置和项目，但不会把适配器实例化逻辑带进状态层。
@@ -467,14 +733,15 @@ class AppShellController extends ChangeNotifier
     try {
       final settings = await _settingsRepository.load();
       _settings = settings;
-      _themeMode = _themeModeFromSettings(settings);
+      _activeThemeId = _themeIdFromSettings(settings);
       _viewModel = _viewModel.copyWith(
         settings: _settingsViewDataFrom(settings),
         workbench: _viewModel.workbench.copyWith(
           modelLabel: _defaultModelLabel(settings),
           modelOptions: _modelSelectorOptions(settings),
-          agentLabel: _agentLabel(settings),
-          agentOptions: _agentSelectorOptions(),
+          groupSelector: _fallbackGroupSelector(settings),
+          inputCapabilityContext: _conversationInputCapabilityContext(settings),
+          toolPreviewMode: _toolPreviewModeOf(settings),
           toolCoreStatus: '',
         ),
       );
@@ -493,6 +760,12 @@ class AppShellController extends ChangeNotifier
   void showWorkbench() {
     // 中文注释: 该方法统一负责切回主工作台，避免页面自己决定全局导航状态。
     _destinationController.showWorkbench();
+    unawaited(_workbenchWorkspaceController.refreshProjectLongTaskSummary());
+  }
+
+  void showBookDeconstructionWorkbench() {
+    // 中文注释: 拆书向导导航统一收口，工作台会话和其他页签只通过壳层入口跳转。
+    _destinationController.showBookDeconstructionWorkbench();
   }
 
   void showSettings() {
@@ -506,7 +779,7 @@ class AppShellController extends ChangeNotifier
   }
 
   void showTaskCenter() {
-    // 中文注释: 长任务中心导航和数据刷新统一收口，避免资源栏与会话动作各自重复读任务目录。
+    // 中文注释: 历史任务中心入口统一折返到长任务总站，避免用户在多个运行空间之间来回找。
     _destinationController.showTaskCenter();
   }
 
@@ -515,8 +788,13 @@ class AppShellController extends ChangeNotifier
     _destinationController.showLongTaskStation();
   }
 
+  void showInspirationWorkbench() {
+    // 中文注释: 灵感工作台导航统一收口，其他子域只通过壳层入口跳转过去。
+    _destinationController.showInspirationWorkbench();
+  }
+
   void showReviewCenter() {
-    // 中文注释: 审稿中心切换后立即刷新报告列表，让文档工具栏和左栏入口共用同一页面状态。
+    // 中文注释: 历史审稿中心入口统一折返到长任务总站，审稿结果查看回到工作台文件区。
     _destinationController.showReviewCenter();
   }
 
@@ -525,16 +803,185 @@ class AppShellController extends ChangeNotifier
     _destinationController.showPromptTemplates();
   }
 
+  void showProjectCollection() {
+    // 中文注释: 历史项目库入口现已收束到“打开项目”，避免继续暴露两个项目入口概念。
+    _destinationController.showProjectCollection();
+  }
+
   void showProjectAssets() {
     // 中文注释: 项目资产页统一负责风格、伏笔与资产包入口，不把资产逻辑散回工作台。
     _destinationController.showProjectAssets();
   }
 
-  void onModelSettingsRequested() => _workbenchWorkspaceController.onModelSettingsRequested();
+  Future<void> _showCurrentAgentSkillLoadout(String agentId) async {
+    // 中文注释: 工作台当前智能体跳转到技能装载时，预选逻辑统一收口在壳层，不让资源面板自己碰生态快照。
+    final cleanAgentId = agentId.trim();
+    if (cleanAgentId.isEmpty) {
+      return;
+    }
+    await _refreshAgentEcosystem(
+      selectedTabId: 'skill-loadouts',
+      selectedEntryId: cleanAgentId,
+    );
+    await _destinationController.showAgentEcosystem();
+  }
 
-  void onCreateProjectRequested() => _projectCreationController.onCreateProjectRequested();
+  Future<void> _showCurrentAgentExpressionConstraints(String agentId) async {
+    // 中文注释: 表达限制仍是项目级子域，但从当前智能体入口进入时会记住一个轻量上下文。
+    final cleanAgentId = agentId.trim();
+    if (cleanAgentId.isEmpty) {
+      return;
+    }
+    await projectAssetsController.refresh();
+    projectAssetsController.openExpressionConstraintsForAgent(cleanAgentId);
+    await _destinationController.showProjectAssets();
+  }
 
-  void onOpenProjectRequested() => _projectCreationController.onOpenProjectRequested();
+  @override
+  Future<void> onAppShellDestinationRequested(
+    AppDestination destination,
+  ) async {
+    await _destinationController.showDestination(destination);
+  }
+
+  @override
+  void onProjectOpenRefreshRequested() {
+    // 中文注释: 项目入口页刷新只重建项目发现结果，不切换当前全局目的地。
+    unawaited(_refreshProjectOpenView());
+  }
+
+  @override
+  void onProjectOpenCreateRequested() {
+    // 中文注释: 新建项目仍复用现有启动器，但入口语义已经收束到“打开项目”页。
+    showWorkbench();
+    unawaited(_projectCreationController.onCreateProjectRequested());
+  }
+
+  @override
+  void onProjectOpenImportRequested() {
+    // 中文注释: 本地导入属于宿主动作，统一在壳层完成目录选择与有效性检查。
+    unawaited(_importLocalProjectFromProjectOpen());
+  }
+
+  @override
+  void onProjectOpenEntrySelected(String entryId) {
+    // 中文注释: 条目选中只更新项目入口页的局部视图态，不触发项目加载。
+    _viewModel = _viewModel.copyWith(
+      projectOpen: _projectOpenViewDataService.selectEntry(
+        _viewModel.projectOpen,
+        entryId,
+      ),
+    );
+    _safeNotifyListeners();
+  }
+
+  @override
+  void onProjectOpenOpenRequested(String projectPath) {
+    // 中文注释: 打开动作由壳层负责跳工作台，避免顶层入口页停留在“已打开但仍是列表页”的过渡状态。
+    unawaited(_openProjectFromProjectOpen(projectPath));
+  }
+
+  Future<void> _openLongTaskStationProject(RunInstance run) async {
+    // 中文注释: 总站跳回工作台时，先保证对应项目已载入，再切回工作台主视图。
+    final loaded = await _ensureLongTaskStationProjectLoaded(run);
+    if (!loaded) {
+      return;
+    }
+    showWorkbench();
+  }
+
+  Future<void> _refreshProjectOpenView({String status = ''}) async {
+    final settings = _settings;
+    final viewData = await _projectOpenViewDataService.build(
+      projectsRootPath: _defaultProjectsRootPath,
+      recentProjectPath: settings?.defaultProjectPath ?? '',
+      currentProjectPath: _currentProject?.rootPath ?? '',
+      allowImportLocal: !_isMobileProjectRootLocked,
+      loadWorkspace: _loadProjectWorkspaceUseCase.execute,
+      selectedEntryId: _viewModel.projectOpen.selectedEntryId,
+      status: status,
+    );
+    _viewModel = _viewModel.copyWith(projectOpen: viewData);
+    _safeNotifyListeners();
+  }
+
+  Future<void> _openProjectFromProjectOpen(String projectPath) async {
+    final normalizedPath = projectPath.trim();
+    if (normalizedPath.isEmpty) {
+      await _refreshProjectOpenView(status: '未识别到有效项目目录。');
+      return;
+    }
+    _announce('正在打开项目...');
+    final loaded = await _workbenchWorkspaceController.loadProject(
+      normalizedPath,
+    );
+    if (!loaded) {
+      await _refreshProjectOpenView(status: '打开项目失败：$normalizedPath');
+      return;
+    }
+    showWorkbench();
+  }
+
+  Future<void> _importLocalProjectFromProjectOpen() async {
+    if (_isMobileProjectRootLocked) {
+      await _refreshProjectOpenView(status: '移动端暂不支持导入本地项目。');
+      return;
+    }
+    final selectedPath = await _desktopProjectDirectoryPickerService
+        .pickProjectDirectory();
+    if (selectedPath == null || selectedPath.trim().isEmpty) {
+      return;
+    }
+    final snapshot = await _loadProjectWorkspaceUseCase.execute(selectedPath);
+    if (snapshot == null) {
+      await _refreshProjectOpenView(status: '所选目录不是有效项目根目录。');
+      return;
+    }
+    await _openProjectFromProjectOpen(snapshot.project.rootPath);
+  }
+
+  Future<void> _openLongTaskStationRunResource(
+    RunInstance run,
+    String relativePath,
+  ) async {
+    // 中文注释: 总站里的任务节点、检查点、审稿结果统一回到工作台文件查看，不再切去独立中心页。
+    final loaded = await _ensureLongTaskStationProjectLoaded(run);
+    if (!loaded) {
+      return;
+    }
+    final cleanRelativePath = relativePath.trim();
+    if (cleanRelativePath.isNotEmpty) {
+      await _workbenchWorkspaceController.openResource(cleanRelativePath);
+    }
+    _destinationController.showWorkbench();
+  }
+
+  Future<bool> _ensureLongTaskStationProjectLoaded(RunInstance run) async {
+    // 中文注释: 总站联动始终以运行实例引用的项目为准，不假设当前工作台还停留在同一个项目。
+    final currentProject = _currentProject;
+    if (currentProject != null &&
+        _normalizePathForCompare(currentProject.rootPath) ==
+            _normalizePathForCompare(run.project.rootPath)) {
+      return true;
+    }
+    final loaded = await _workbenchWorkspaceController.loadProject(
+      run.project.rootPath,
+    );
+    if (!loaded) {
+      _announce('无法打开长任务对应项目：${run.project.rootPath}');
+      return false;
+    }
+    return true;
+  }
+
+  void onModelSettingsRequested() =>
+      _workbenchWorkspaceController.onModelSettingsRequested();
+
+  void onCreateProjectRequested() =>
+      _projectCreationController.onCreateProjectRequested();
+
+  void onOpenProjectRequested() =>
+      _projectCreationController.onOpenProjectRequested();
 
   void onProjectLauncherDismissed() =>
       _projectCreationController.onProjectLauncherDismissed();
@@ -544,6 +991,9 @@ class AppShellController extends ChangeNotifier
 
   void onProjectEntryOpened(String projectPath) =>
       _projectCreationController.onProjectEntryOpened(projectPath);
+
+  void onProjectCreationBackRequested() =>
+      _projectCreationController.onProjectCreationBackRequested();
 
   void onProjectCreationSubmitted(ProjectCreateRequestViewData request) =>
       _projectCreationController.onProjectCreationSubmitted(request);
@@ -571,12 +1021,16 @@ class AppShellController extends ChangeNotifier
   void onAgentEcosystemRequested() =>
       _workbenchWorkspaceController.onAgentEcosystemRequested();
 
+  void onCurrentAgentSkillLoadoutRequested() =>
+      _workbenchWorkspaceController.onCurrentAgentSkillLoadoutRequested();
+
   void onTasksRequested() => _workbenchWorkspaceController.onTasksRequested();
 
   void onLongTaskStationRequested() =>
       _workbenchWorkspaceController.onLongTaskStationRequested();
 
-  void onReviewsRequested() => _workbenchWorkspaceController.onReviewsRequested();
+  void onReviewsRequested() =>
+      _workbenchWorkspaceController.onReviewsRequested();
 
   void onTemplatesRequested() =>
       _workbenchWorkspaceController.onTemplatesRequested();
@@ -584,11 +1038,33 @@ class AppShellController extends ChangeNotifier
   void onProjectAssetsRequested() =>
       _workbenchWorkspaceController.onProjectAssetsRequested();
 
+  void onCurrentAgentExpressionConstraintsRequested() =>
+      _workbenchWorkspaceController
+          .onCurrentAgentExpressionConstraintsRequested();
+
+  @override
+  void onProjectExpressionConstraintsRequested() {
+    final currentAgentId = _viewModel.workbench.agentSelector.currentAgentId
+        .trim();
+    if (currentAgentId.isNotEmpty) {
+      unawaited(_showCurrentAgentExpressionConstraints(currentAgentId));
+      return;
+    }
+    projectAssetsController.openExpressionConstraintsForAgent('');
+    showProjectAssets();
+  }
+
   void onResourceEntrySelected(String entryId) =>
       _workbenchWorkspaceController.onResourceEntrySelected(entryId);
 
   void onWorkspaceCommandDismissed() =>
       _workbenchWorkspaceController.onWorkspaceCommandDismissed();
+
+  void onWorkspaceImportFilesPickRequested(
+    WorkspaceCommandRequestViewData request,
+  ) => _workbenchWorkspaceController.onWorkspaceImportFilesPickRequested(
+    request,
+  );
 
   void onWorkspaceCommandSubmitted(WorkspaceCommandRequestViewData request) =>
       _workbenchWorkspaceController.onWorkspaceCommandSubmitted(request);
@@ -608,8 +1084,10 @@ class AppShellController extends ChangeNotifier
   void onModelSelected(String modelId) =>
       _workbenchConversationController.onModelSelected(modelId);
 
-  void onAgentSelected(String agentId) =>
-      _workbenchConversationController.onAgentSelected(agentId);
+  void onAgentGroupSelected(String groupId) {
+    // 中文注释: 会话栏与 opening 面板的组切换统一转发给会话控制器，避免壳层直接碰项目默认组绑定。
+    _workbenchConversationController.onAgentGroupSelected(groupId);
+  }
 
   void onQuickThemeRequested() =>
       _workbenchConversationController.onQuickThemeRequested();
@@ -650,6 +1128,14 @@ class AppShellController extends ChangeNotifier
   void onToolOptionsRequested() =>
       _workbenchConversationController.onToolOptionsRequested();
 
+  void onReasoningToggleChanged(bool enabled) =>
+      _workbenchConversationController.onReasoningToggleChanged(enabled);
+
+  void onStopRequested() => _workbenchConversationController.onStopRequested();
+
+  void onAttachmentRequested() =>
+      _workbenchConversationController.onAttachmentRequested();
+
   void onSendRequested(String text) =>
       _workbenchConversationController.onSendRequested(text);
 
@@ -674,6 +1160,18 @@ class AppShellController extends ChangeNotifier
   }
 
   @override
+  void onProviderCreateRequested() {
+    _refreshSettingsViewData(selectedProviderId: '__new__');
+    _safeNotifyListeners();
+  }
+
+  @override
+  void onProviderDetailBackRequested() {
+    _refreshSettingsViewData(selectedProviderId: '');
+    _safeNotifyListeners();
+  }
+
+  @override
   void onProviderSaved(Map<String, Object?> payload) {
     // 中文注释: provider 保存统一落到控制器，保证默认接口、选中状态和磁盘写入使用同一条链路。
     final settings = _settings;
@@ -691,7 +1189,7 @@ class AppShellController extends ChangeNotifier
       protocol: _stringValue(payload['protocol'], 'openai_compatible'),
       baseUrl: _stringValue(payload['base_url']),
       apiKey: _stringValue(payload['api_key']),
-      modelId: '',
+      modelId: _stringValue(payload['model_id']),
       description: _stringValue(payload['description']),
       isDefault: false,
     );
@@ -795,6 +1293,9 @@ class AppShellController extends ChangeNotifier
       'temperature': _stringValue(payload['temperature']),
       'top_p': _stringValue(payload['top_p']),
       'top_k': _stringValue(payload['top_k']),
+      'custom_reasoning_override': ValueReaders.deepCopyMap(
+        ValueReaders.mapValue(payload['custom_reasoning_override']),
+      ),
       'custom_parameters': ValueReaders.deepCopyList(
         ValueReaders.objectList(payload['custom_parameters']),
       ),
@@ -834,9 +1335,21 @@ class AppShellController extends ChangeNotifier
     if (settings == null) {
       return;
     }
+    final nextToolStrategySettings = Map<String, Object?>.from(payload)
+      ..remove('tool_preview_mode');
+    final nextToolPreviewMode = ToolPreviewMode.normalize(
+      payload['tool_preview_mode'],
+    );
     _persistSettings(
       settings.copyWith(
-        toolStrategySettings: Map<String, Object?>.from(payload),
+        toolStrategySettings: nextToolStrategySettings,
+        extraSettings: <String, Object?>{
+          ...settings.extraSettings,
+          'workbench_ui': <String, Object?>{
+            ..._workbenchUiSettingsOf(settings),
+            'tool_preview_mode': nextToolPreviewMode,
+          },
+        },
       ),
       successMessage: '工具策略已保存。',
     );
@@ -884,10 +1397,16 @@ class AppShellController extends ChangeNotifier
     if (settings == null) {
       return;
     }
-    final updated = settings.copyWith(
-      themeSettings: Map<String, Object?>.from(payload),
+    final nextThemeId = _stringValue(
+      payload[ThemePreferenceResolver.selectedThemeIdKey],
+      _activeThemeId,
     );
-    _themeMode = _themeModeFromValue(_stringValue(payload['mode'], 'light'));
+    final updated = settings.copyWith(
+      themeSettings: _themePreferenceResolver.payloadForSelectedTheme(
+        selectedThemeId: nextThemeId,
+        base: settings.themeSettings,
+      ),
+    );
     _persistSettings(updated, successMessage: '主题设置已保存。');
   }
 
@@ -1115,6 +1634,158 @@ class AppShellController extends ChangeNotifier
   }
 
   @override
+  void onProjectSkillLoadoutSkillGroupToggled(
+    String agentId,
+    String groupId,
+    bool selected,
+  ) {
+    _projectSkillLoadoutWorkspaceSnapshot = _projectSkillLoadoutWorkspaceService
+        .toggleSkillGroup(
+          _projectSkillLoadoutWorkspaceSnapshot,
+          agentId: agentId,
+          groupId: groupId,
+          selected: selected,
+        );
+    _refreshAgentEcosystemView();
+  }
+
+  @override
+  void onProjectSkillLoadoutExtraSkillToggled(
+    String agentId,
+    String skillId,
+    bool selected,
+  ) {
+    _projectSkillLoadoutWorkspaceSnapshot = _projectSkillLoadoutWorkspaceService
+        .toggleExtraSkill(
+          _projectSkillLoadoutWorkspaceSnapshot,
+          agentId: agentId,
+          skillId: skillId,
+          selected: selected,
+        );
+    _refreshAgentEcosystemView();
+  }
+
+  @override
+  void onProjectSkillLoadoutDisabledSkillToggled(
+    String agentId,
+    String skillId,
+    bool disabled,
+  ) {
+    _projectSkillLoadoutWorkspaceSnapshot = _projectSkillLoadoutWorkspaceService
+        .toggleDisabledSkill(
+          _projectSkillLoadoutWorkspaceSnapshot,
+          agentId: agentId,
+          skillId: skillId,
+          disabled: disabled,
+        );
+    _refreshAgentEcosystemView();
+  }
+
+  @override
+  void onProjectSkillLoadoutApplyRequested(String agentId) async {
+    final project = _currentProject;
+    if (project == null) {
+      _setAgentEcosystemStatus('请先创建或打开项目，才能应用项目级技能装载。');
+      return;
+    }
+    _setAgentEcosystemStatus('正在应用项目技能装载...');
+    try {
+      _projectSkillLoadoutWorkspaceSnapshot =
+          await _projectSkillLoadoutWorkspaceService.applyDraft(
+            project,
+            _projectSkillLoadoutWorkspaceSnapshot,
+            agentId: agentId,
+          );
+      _setAgentEcosystemStatus('项目技能装载已应用。');
+    } catch (error) {
+      _setAgentEcosystemStatus('应用项目技能装载失败：$error');
+    }
+  }
+
+  @override
+  void onProjectSkillLoadoutResetRequested(String agentId) {
+    _projectSkillLoadoutWorkspaceSnapshot = _projectSkillLoadoutWorkspaceService
+        .resetDraft(_projectSkillLoadoutWorkspaceSnapshot, agentId);
+    _setAgentEcosystemStatus('已恢复到当前已保存的项目技能装载。');
+  }
+
+  @override
+  void onProjectSkillLoadoutHistoryRestoreRequested(
+    String agentId,
+    String historyEntryId,
+  ) {
+    _projectSkillLoadoutWorkspaceSnapshot = _projectSkillLoadoutWorkspaceService
+        .restoreHistoryEntry(
+          _projectSkillLoadoutWorkspaceSnapshot,
+          agentId: agentId,
+          historyEntryId: historyEntryId,
+        );
+    _setAgentEcosystemStatus('已把历史快照恢复到当前草稿，确认后再应用。');
+  }
+
+  @override
+  void onProjectSkillLoadoutHistoryCaptureRequested(
+    String agentId,
+    String title,
+  ) async {
+    final project = _currentProject;
+    if (project == null) {
+      _setAgentEcosystemStatus('请先创建或打开项目，才能保存技能装载历史。');
+      return;
+    }
+    _setAgentEcosystemStatus('正在保存技能装载历史快照...');
+    try {
+      _projectSkillLoadoutWorkspaceSnapshot =
+          await _projectSkillLoadoutWorkspaceService.saveHistorySnapshot(
+            project,
+            _projectSkillLoadoutWorkspaceSnapshot,
+            agentId: agentId,
+            title: title,
+          );
+      _setAgentEcosystemStatus('技能装载历史快照已保存。');
+    } catch (error) {
+      _setAgentEcosystemStatus('保存技能装载历史失败：$error');
+    }
+  }
+
+  @override
+  void onProjectSkillLoadoutSaveAsGroupRequested(
+    String agentId,
+    String groupId,
+    String displayName,
+    String description,
+  ) async {
+    final project = _currentProject;
+    if (project == null) {
+      _setAgentEcosystemStatus('请先创建或打开项目，才能另存为技能组。');
+      return;
+    }
+    final resolvedLoadout = _resolvedProjectSkillLoadoutForAgent(agentId);
+    if (resolvedLoadout == null) {
+      _setAgentEcosystemStatus('当前智能体不存在，无法另存为技能组。');
+      return;
+    }
+    _setAgentEcosystemStatus('正在另存为技能组...');
+    try {
+      final savedGroupId = await _projectSkillLoadoutWorkspaceService
+          .saveAsGroup(
+            project: project,
+            loadout: resolvedLoadout,
+            groupId: groupId,
+            displayName: displayName,
+            description: description,
+          );
+      await _refreshAgentEcosystem(
+        selectedTabId: 'skill-loadouts',
+        selectedEntryId: agentId,
+      );
+      _setAgentEcosystemStatus('已另存为技能组：$savedGroupId');
+    } catch (error) {
+      _setAgentEcosystemStatus('另存为技能组失败：$error');
+    }
+  }
+
+  @override
   void onOpenEcosystemEntrySourceRequested(String entryId) {
     // 中文注释: 生态页打开源文件只认项目内相对路径，避免 UI 直接碰宿主绝对路径。
     _openEcosystemEntrySource(entryId);
@@ -1160,6 +1831,8 @@ class AppShellController extends ChangeNotifier
     final builtinCollaboratorAgents = collaboratorCatalogService
         .optionalCollaboratorProfiles();
     if (project == null) {
+      _projectSkillLoadoutWorkspaceSnapshot =
+          ProjectSkillLoadoutWorkspaceSnapshot.initial();
       _agentEcosystemSnapshot = _agentEcosystemSnapshot.copyWith(
         activeTabId: selectedTabId ?? _agentEcosystemSnapshot.activeTabId,
         agents: builtinCollaboratorAgents,
@@ -1194,6 +1867,8 @@ class AppShellController extends ChangeNotifier
       await _loadAgentGroups(project),
       project,
     );
+    _projectSkillLoadoutWorkspaceSnapshot =
+        await _projectSkillLoadoutWorkspaceService.load(project);
     final agents = _mergeEntriesById(loadedAgents, builtinCollaboratorAgents);
     final skills = _mergeEntriesById(loadedSkills, const <JsonMap>[]);
     final skillGroups = _mergeEntriesById(
@@ -1224,8 +1899,12 @@ class AppShellController extends ChangeNotifier
   }
 
   void _refreshAgentEcosystemView() {
+    final projectSkillLoadoutViewData = _buildProjectSkillLoadoutViewData();
     final viewData = _agentEcosystemViewDataService
-        .build(_agentEcosystemSnapshot)
+        .build(
+          _agentEcosystemSnapshot,
+          projectSkillLoadoutViewData: projectSkillLoadoutViewData,
+        )
         .copyWith(
           statusMessage: _agentEcosystemStatusMessage,
           importCommand: _ecosystemImportCommand,
@@ -1237,8 +1916,8 @@ class AppShellController extends ChangeNotifier
       _viewModel = _viewModel.copyWith(
         workbench: _viewModel.workbench.copyWith(
           modelOptions: _modelSelectorOptions(settings),
-          agentLabel: _agentLabel(settings),
-          agentOptions: _agentSelectorOptions(),
+          groupSelector: _fallbackGroupSelector(settings),
+          inputCapabilityContext: _conversationInputCapabilityContext(settings),
         ),
       );
     }
@@ -1593,9 +2272,7 @@ class AppShellController extends ChangeNotifier
           : '',
     );
     _projectCollectionSnapshot = snapshot;
-    _viewModel = _viewModel.copyWith(
-      destination: AppDestination.projectCollection,
-    );
+    _viewModel = _viewModel.copyWith(destination: AppDestination.projectOpen);
     await _refreshProjectCollectionView();
   }
 
@@ -1691,12 +2368,26 @@ class AppShellController extends ChangeNotifier
     }
     _taskCenterStatusMessage = '正在生成长任务队列...';
     await _refreshTaskCenterView();
+    final runtimeProfile =
+        _workbenchWorkspaceController.currentProjectRuntimeProfile;
+    final initialRunOptions = runtimeProfile == null
+        ? const <String, Object?>{}
+        : ValueReaders.deepCopyMap(runtimeProfile.initialRunOptions);
+    final runtimeMode = request.mode.trim().isEmpty
+        ? (runtimeProfile?.runtimeMode.trim().isEmpty ?? true
+              ? TaskRuntimeConstants.modeHumanOutlineAiDraft
+              : runtimeProfile!.runtimeMode.trim())
+        : request.mode.trim();
     final result = await _workflowRuntimeService.createLongTaskWorkflow(
       project,
-      request.mode.trim().isEmpty
-          ? TaskRuntimeConstants.modeHumanOutlineAiDraft
-          : request.mode.trim(),
+      runtimeMode,
       options: <String, Object?>{
+        ...initialRunOptions,
+        'runtime_baseline_id': ValueReaders.stringValue(
+          initialRunOptions['runtime_baseline_id'],
+          runtimeProfile?.runtimeBaselineId ?? project.runtimeBaselineId,
+        ),
+        'runtime_mode': runtimeMode,
         'outline_path': request.outlinePath.trim(),
         'seed_prompt': request.seedPrompt.trim(),
         'chapter_count': request.chapterCount,
@@ -2072,12 +2763,92 @@ class AppShellController extends ChangeNotifier
     if (ValueReaders.boolValue(result['ok'])) {
       _selectedTaskId = ValueReaders.stringValue(result['relative_path']);
       await _refreshTaskCenter(status: '已从审稿报告生成修复任务。');
-      _viewModel = _viewModel.copyWith(destination: AppDestination.taskCenter);
+      _viewModel = _viewModel.copyWith(
+        destination: AppDestination.longTaskStation,
+      );
       _safeNotifyListeners();
       return;
     }
     await _refreshReviewCenter(
       status: _resultMessage(result, success: '已生成修复任务。'),
+    );
+  }
+
+  @override
+  void onReviewCenterRewriteModeSelected(String rewriteMode) {
+    _reviewCenterAnalysisState = _reviewCenterAnalysisStateService
+        .updateRewriteMode(_reviewCenterAnalysisState, rewriteMode);
+    _refreshReviewCenterView();
+  }
+
+  @override
+  void onReviewCenterSuggestionToggled(String suggestionId, bool selected) {
+    _reviewCenterAnalysisState = _reviewCenterAnalysisStateService
+        .toggleSuggestion(_reviewCenterAnalysisState, suggestionId, selected);
+    _refreshReviewCenterView();
+  }
+
+  @override
+  void onReviewCenterSegmentToggled(String segmentId, bool selected) {
+    _reviewCenterAnalysisState = _reviewCenterAnalysisStateService
+        .toggleSegment(_reviewCenterAnalysisState, segmentId, selected);
+    _refreshReviewCenterView();
+  }
+
+  @override
+  void onReviewCenterPlanRequested() {
+    _applyReviewCenterRewritePlan();
+    _refreshReviewCenterView();
+  }
+
+  @override
+  void onReviewCenterMaterializeRewriteRequested() async {
+    final project = _currentProject;
+    final analysisResult = _reviewCenterAnalysisState.analysisResult;
+    if (project == null) {
+      await _refreshReviewCenter(status: '请先创建或打开项目。');
+      return;
+    }
+    if (analysisResult == null) {
+      await _refreshReviewCenter(status: '当前报告还没有可用的分析结果。');
+      return;
+    }
+    _applyReviewCenterRewritePlan();
+    final plan = _reviewCenterAnalysisState.currentPlan;
+    if (plan == null) {
+      await _refreshReviewCenter(status: '请先生成重写计划。');
+      return;
+    }
+    if (plan.actionKind == ChapterRewriteActionKind.suggestionsOnly) {
+      _reviewCenterStatusMessage = '已整理建议与执行说明，本次不创建修订任务。';
+      await _refreshReviewCenterView();
+      return;
+    }
+    if (plan.actionKind == ChapterRewriteActionKind.rewritePartial &&
+        plan.targetSegments.isEmpty) {
+      await _refreshReviewCenter(status: '局部重写至少需要选中一个目标片段。');
+      return;
+    }
+    _reviewCenterStatusMessage = '正在创建修订任务...';
+    await _refreshReviewCenterView();
+    final result = await _projectChapterRewriteTaskService
+        .createRevisionTaskFromPlan(
+          project,
+          plan,
+          analysisPath: _reviewCenterAnalysisState.analysisPath,
+        );
+    await _syncWorkbenchResources();
+    if (ValueReaders.boolValue(result['ok'])) {
+      _selectedTaskId = ValueReaders.stringValue(result['relative_path']);
+      await _refreshTaskCenter(status: '已根据分析计划创建修订任务。');
+      _viewModel = _viewModel.copyWith(
+        destination: AppDestination.longTaskStation,
+      );
+      _safeNotifyListeners();
+      return;
+    }
+    await _refreshReviewCenter(
+      status: _resultMessage(result, success: '已创建修订任务。'),
     );
   }
 
@@ -2231,228 +3002,6 @@ class AppShellController extends ChangeNotifier
     );
   }
 
-  @override
-  void onProjectAssetsBackRequested() {
-    // 中文注释: 资产页返回只切回工作台，资产快照仍留在控制器里供下次直接恢复。
-    showWorkbench();
-  }
-
-  @override
-  void onProjectAssetsRefreshRequested() {
-    // 中文注释: 资产刷新统一重读 styles/ 与 world/foreshadows/，避免页面直接扫目录。
-    _refreshProjectAssets();
-  }
-
-  @override
-  void onProjectAssetsTabSelected(String tabId) {
-    _projectAssetsSnapshot = _projectAssetsSnapshot.copyWith(
-      activeTabId: tabId,
-    );
-    _refreshProjectAssetsView();
-  }
-
-  @override
-  void onProjectAssetsEntrySelected(String entryId) {
-    if (_projectAssetsSnapshot.activeTabId == 'foreshadows') {
-      _projectAssetsSnapshot = _projectAssetsSnapshot.copyWith(
-        selectedForeshadowId: entryId,
-      );
-    } else {
-      _projectAssetsSnapshot = _projectAssetsSnapshot.copyWith(
-        selectedStyleId: entryId,
-      );
-    }
-    _refreshProjectAssetsView();
-  }
-
-  @override
-  void onProjectAssetsNewRequested() {
-    if (_projectAssetsSnapshot.activeTabId == 'foreshadows') {
-      _projectAssetsSnapshot = _projectAssetsSnapshot.copyWith(
-        selectedForeshadowId: '',
-      );
-      _projectAssetsStatusMessage = '正在创建新的伏笔资产。';
-    } else {
-      _projectAssetsSnapshot = _projectAssetsSnapshot.copyWith(
-        selectedStyleId: '',
-      );
-      _projectAssetsStatusMessage = '正在创建新的风格资产。';
-    }
-    _refreshProjectAssetsView();
-  }
-
-  @override
-  void onProjectAssetsSaveStyleRequested(
-    StyleProfileEditorRequestViewData request,
-  ) async {
-    final project = _currentProject;
-    if (project == null) {
-      await _refreshProjectAssets(status: '请先创建或打开项目。');
-      return;
-    }
-    final result = await _projectAssetLibraryService
-        .saveStyle(project, <String, Object?>{
-          'id': request.id.trim(),
-          'display_name': request.displayName.trim(),
-          'summary': request.summary,
-          'genre': request.genre.trim(),
-          'tone': request.tone.trim(),
-          'audience': request.audience.trim(),
-          'tags': _csvList(request.tagsText),
-          'guardrails': _csvList(request.guardrailsText),
-          'example_paths': _csvList(request.examplePathsText),
-          'inherited_from_ids': _csvList(request.inheritedIdsText),
-          'default_for_project': request.defaultForProject,
-        });
-    await _syncWorkbenchResources();
-    if (ValueReaders.boolValue(result['ok'])) {
-      _projectAssetsSnapshot = _projectAssetsSnapshot.copyWith(
-        activeTabId: 'styles',
-        selectedStyleId: ValueReaders.stringValue(
-          ValueReaders.mapValue(result['asset'])['id'],
-        ),
-      );
-    }
-    await _refreshProjectAssets(
-      status: _resultMessage(result, success: '风格资产已保存。'),
-    );
-  }
-
-  @override
-  void onProjectAssetsSaveForeshadowRequested(
-    ForeshadowRecordEditorRequestViewData request,
-  ) async {
-    final project = _currentProject;
-    if (project == null) {
-      await _refreshProjectAssets(status: '请先创建或打开项目。');
-      return;
-    }
-    final result = await _projectAssetLibraryService
-        .saveForeshadow(project, <String, Object?>{
-          'id': request.id.trim(),
-          'title': request.title.trim(),
-          'status': request.status.trim(),
-          'summary': request.summary,
-          'planted_chapter_path': request.plantedChapterPath.trim(),
-          'target_payoff_path': request.targetPayoffPath.trim(),
-          'related_entity_ids': _csvList(request.relatedEntityIdsText),
-          'related_paths': _csvList(request.relatedPathsText),
-          'trigger_conditions': _csvList(request.triggerConditionsText),
-          'payoff_expectations': _csvList(request.payoffExpectationsText),
-          'tags': _csvList(request.tagsText),
-          'notes': request.notes,
-        });
-    await _syncWorkbenchResources();
-    if (ValueReaders.boolValue(result['ok'])) {
-      _projectAssetsSnapshot = _projectAssetsSnapshot.copyWith(
-        activeTabId: 'foreshadows',
-        selectedForeshadowId: ValueReaders.stringValue(
-          ValueReaders.mapValue(result['asset'])['id'],
-        ),
-      );
-    }
-    await _refreshProjectAssets(
-      status: _resultMessage(result, success: '伏笔资产已保存。'),
-    );
-  }
-
-  @override
-  void onProjectAssetsDeleteRequested({
-    required String kind,
-    required String id,
-  }) async {
-    final project = _currentProject;
-    if (project == null) {
-      await _refreshProjectAssets(status: '请先创建或打开项目。');
-      return;
-    }
-    if (id.trim().isEmpty) {
-      await _refreshProjectAssets(status: '请先选择一个资产。');
-      return;
-    }
-    final result = kind == 'foreshadow'
-        ? await _projectAssetLibraryService.deleteForeshadow(project, id.trim())
-        : await _projectAssetLibraryService.deleteStyle(project, id.trim());
-    await _syncWorkbenchResources();
-    if (ValueReaders.boolValue(result['ok'])) {
-      if (kind == 'foreshadow') {
-        _projectAssetsSnapshot = _projectAssetsSnapshot.copyWith(
-          selectedForeshadowId: '',
-        );
-      } else {
-        _projectAssetsSnapshot = _projectAssetsSnapshot.copyWith(
-          selectedStyleId: '',
-        );
-      }
-    }
-    await _refreshProjectAssets(
-      status: _resultMessage(result, success: '资产已删除。'),
-    );
-  }
-
-  @override
-  void onProjectAssetsImportBundleRequested(
-    ProjectAssetBundleImportRequestViewData request,
-  ) async {
-    final project = _currentProject;
-    if (project == null) {
-      await _refreshProjectAssets(status: '请先创建或打开项目。');
-      return;
-    }
-    if (request.absolutePath.trim().isEmpty) {
-      await _refreshProjectAssets(status: '请提供资产包绝对路径。');
-      return;
-    }
-    final bundleContent = await _projectAssetLibraryService.readExternalBundle(
-      request.absolutePath.trim(),
-    );
-    if ((bundleContent ?? '').trim().isEmpty) {
-      await _refreshProjectAssets(status: '资产包文件不存在或不可读。');
-      return;
-    }
-    final preview = _projectAssetLibraryService.previewImportBundle(
-      project,
-      bundleContent: bundleContent!,
-      currentStyles: _projectAssetsSnapshot.styles,
-      currentForeshadows: _projectAssetsSnapshot.foreshadows,
-      overwrite: request.overwrite,
-    );
-    if (!ValueReaders.boolValue(preview['ok'])) {
-      await _refreshProjectAssets(status: '资产包预检失败。');
-      return;
-    }
-    final result = await _projectAssetLibraryService.importBundle(
-      project,
-      bundleContent: bundleContent,
-      overwrite: request.overwrite,
-    );
-    await _syncWorkbenchResources();
-    await _refreshProjectAssets(
-      status:
-          '${_resultMessage(result, success: '资产包已导入。')} 预检条目 ${ValueReaders.objectList(preview['items']).length} 个。',
-    );
-  }
-
-  @override
-  void onProjectAssetsExportBundleRequested(
-    ProjectAssetBundleExportRequestViewData request,
-  ) async {
-    final project = _currentProject;
-    if (project == null) {
-      await _refreshProjectAssets(status: '请先创建或打开项目。');
-      return;
-    }
-    final result = await _projectAssetLibraryService.exportBundle(
-      project,
-      title: request.title.trim(),
-      description: request.description.trim(),
-    );
-    await _syncWorkbenchResources();
-    await _refreshProjectAssets(
-      status: _resultMessage(result, success: '资产包已导出。'),
-    );
-  }
-
   Future<void> _refreshTaskCenter({String? status}) async {
     // 中文注释: 任务中心刷新统一拉取任务列表、预检和调度摘要，保证多个按钮回到同一页面快照口径。
     final project = _currentProject;
@@ -2565,6 +3114,17 @@ class AppShellController extends ChangeNotifier
             project,
             _selectedLongTaskRunPath,
           );
+    final longTaskRunsForViewData = selectedLongRun.isEmpty
+        ? longTaskRuns
+        : longTaskRuns
+              .map(
+                (record) =>
+                    ValueReaders.stringValue(record['relative_path']) ==
+                        _selectedLongTaskRunPath
+                    ? selectedLongRun
+                    : record,
+              )
+              .toList(growable: false);
     final selectedQueueRun = _selectedTaskQueueRunPath.trim().isEmpty
         ? const <String, Object?>{}
         : await _workflowRuntimeService.loadTaskQueueRun(
@@ -2585,7 +3145,7 @@ class AppShellController extends ChangeNotifier
           scheduler,
         ),
         chainMarkdown: _taskCenterViewDataService.buildChainMarkdown(chainView),
-        longTaskRuns: longTaskRuns,
+        longTaskRuns: longTaskRunsForViewData,
         taskQueueRuns: taskQueueRuns,
         selectedLongTaskRunPath: _selectedLongTaskRunPath,
         selectedTaskQueueRunPath: _selectedTaskQueueRunPath,
@@ -2594,11 +3154,21 @@ class AppShellController extends ChangeNotifier
             : _workflowRuntimeService.renderLongTaskRunMarkdown(
                 selectedLongRun,
               ),
+        resumeBriefBody: selectedLongRun.isEmpty
+            ? ''
+            : _taskCenterViewDataService.buildResumeBriefBody(
+                selectedLongRun,
+                checkpointActionPackage: checkpointActionPackage,
+                revisionResolution: revisionResolution,
+              ),
         taskQueueRunLog: selectedQueueRun.isEmpty
             ? ''
             : _workflowRuntimeService.renderTaskQueueRunMarkdown(
                 selectedQueueRun,
               ),
+        runtimeProfile:
+            _workbenchWorkspaceController.currentProjectRuntimeProfile,
+        projectStorageStrategy: project.storageStrategy,
         nextTaskPath: ValueReaders.stringValue(
           ValueReaders.mapValue(chainView['next_task'])['relative_path'],
         ),
@@ -2624,6 +3194,7 @@ class AppShellController extends ChangeNotifier
     if (project == null) {
       _reviewCenterEntries = const <JsonMap>[];
       _selectedReviewEntryId = '';
+      _reviewCenterAnalysisState = ReviewCenterAnalysisState.initial();
       _viewModel = _viewModel.copyWith(
         reviewCenter: _reviewCenterViewDataService.build(
           entries: const <JsonMap>[],
@@ -2633,6 +3204,7 @@ class AppShellController extends ChangeNotifier
           reviewTypeFilter: _reviewTypeFilter,
           scopeFilter: _reviewScopeFilter,
           sourceFilter: _reviewSourceFilter,
+          analysisState: _reviewCenterAnalysisState,
           status: status ?? '请先创建或打开项目。',
         ),
       );
@@ -2655,6 +3227,24 @@ class AppShellController extends ChangeNotifier
         ValueReaders.stringValue(_reviewCenterEntries.first['relative_path']),
       );
     }
+    final selectedStillExists = _reviewCenterEntries.any(
+      (entry) =>
+          ValueReaders.stringValue(
+            entry['markdown_path'],
+            ValueReaders.stringValue(entry['relative_path']),
+          ) ==
+          _selectedReviewEntryId,
+    );
+    if (!selectedStillExists) {
+      _selectedReviewEntryId = _reviewCenterEntries.isEmpty
+          ? ''
+          : ValueReaders.stringValue(
+              _reviewCenterEntries.first['markdown_path'],
+              ValueReaders.stringValue(
+                _reviewCenterEntries.first['relative_path'],
+              ),
+            );
+    }
     _reviewCenterStatusMessage = status ?? _reviewCenterStatusMessage;
     await _refreshReviewCenterView();
   }
@@ -2666,13 +3256,43 @@ class AppShellController extends ChangeNotifier
       return;
     }
     var detailBody = '';
+    var nextAnalysisState = ReviewCenterAnalysisState.initial();
     if (_selectedReviewEntryId.trim().isNotEmpty) {
       final loaded = await _reviewReportService.loadReport(
         project,
         _selectedReviewEntryId,
       );
       detailBody = _reviewCenterViewDataService.fallbackDetailBody(loaded);
+      final report = ValueReaders.mapValue(loaded['report']);
+      if (ValueReaders.boolValue(loaded['ok']) && report.isNotEmpty) {
+        final analysisResult = _reviewReportChapterAnalysisProjectionService
+            .project(
+              report,
+              generatedId: ValueReaders.stringValue(
+                report['id'],
+                _selectedReviewEntryId,
+              ),
+              createdAt: ValueReaders.stringValue(report['created_at']),
+              reportPath: ValueReaders.stringValue(
+                loaded['markdown_path'],
+                _selectedReviewEntryId,
+              ),
+            );
+        nextAnalysisState = _syncReviewCenterAnalysisState(
+          currentState: _reviewCenterAnalysisState,
+          nextResult: analysisResult,
+          analysisPath: ValueReaders.stringValue(
+            loaded['markdown_path'],
+            _selectedReviewEntryId,
+          ),
+        );
+        nextAnalysisState = await _hydrateReviewCenterPlaybackState(
+          project,
+          nextAnalysisState,
+        );
+      }
     }
+    _reviewCenterAnalysisState = nextAnalysisState;
     _viewModel = _viewModel.copyWith(
       reviewCenter: _reviewCenterViewDataService.build(
         entries: _reviewCenterEntries,
@@ -2682,10 +3302,127 @@ class AppShellController extends ChangeNotifier
         reviewTypeFilter: _reviewTypeFilter,
         scopeFilter: _reviewScopeFilter,
         sourceFilter: _reviewSourceFilter,
+        analysisState: _reviewCenterAnalysisState,
         status: _reviewCenterStatusMessage,
       ),
     );
     _safeNotifyListeners();
+  }
+
+  ReviewCenterAnalysisState _syncReviewCenterAnalysisState({
+    required ReviewCenterAnalysisState currentState,
+    required ChapterAnalysisResult nextResult,
+    required String analysisPath,
+  }) {
+    final currentResult = currentState.analysisResult;
+    if (currentResult != null &&
+        currentResult.id == nextResult.id &&
+        currentState.analysisPath == analysisPath.trim()) {
+      return currentState;
+    }
+    return _reviewCenterAnalysisStateService.createInitialState(
+      nextResult,
+      analysisPath: analysisPath,
+    );
+  }
+
+  Future<ReviewCenterAnalysisState> _hydrateReviewCenterPlaybackState(
+    ProjectDescriptor project,
+    ReviewCenterAnalysisState state,
+  ) async {
+    final plannedState = _rebuildReviewCenterRewritePlan(state: state);
+    final plan = plannedState.currentPlan;
+    final result = plannedState.analysisResult;
+    if (plan == null || result == null) {
+      return plannedState.copyWith(playbackBody: '', playbackSourcePath: '');
+    }
+    final sourcePath = _playbackSourcePath(plan, result);
+    if (sourcePath.isEmpty) {
+      return plannedState.copyWith(playbackBody: '', playbackSourcePath: '');
+    }
+    final sourceBody =
+        await _projectToolHostPort.readTextFile(project.rootPath, sourcePath) ??
+        '';
+    return plannedState.copyWith(
+      playbackBody: _reviewCenterPlaybackPreviewService.build(
+        plan: plan,
+        sourceBody: sourceBody,
+      ),
+      playbackSourcePath: sourcePath,
+    );
+  }
+
+  void _applyReviewCenterRewritePlan() {
+    _reviewCenterAnalysisState = _rebuildReviewCenterRewritePlan(
+      state: _reviewCenterAnalysisState,
+    );
+  }
+
+  ReviewCenterAnalysisState _rebuildReviewCenterRewritePlan({
+    required ReviewCenterAnalysisState state,
+  }) {
+    final result = state.analysisResult;
+    if (result == null) {
+      return state.copyWith(clearCurrentPlan: true);
+    }
+    final selectedSuggestions = _reviewCenterAnalysisStateService
+        .selectedSuggestions(state);
+    final selectedSuggestionIds = selectedSuggestions
+        .map((item) => item.id)
+        .toList(growable: false);
+    final selectedIssueIds = selectedSuggestions
+        .expand((item) => item.issueIds)
+        .where((item) => item.trim().isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    final planBuilder = const ChapterRewritePlanBuilderService();
+    ChapterRewritePlan plan;
+    switch (state.rewriteMode) {
+      case ChapterRewriteActionKind.rewriteFull:
+        plan = planBuilder.buildFullChapterPlan(
+          result,
+          generatedId: 'plan_${result.id}_full',
+          selectedIssueIds: selectedIssueIds,
+          selectedSuggestionIds: selectedSuggestionIds,
+        );
+        break;
+      case ChapterRewriteActionKind.rewritePartial:
+        plan = planBuilder.buildPartialRewritePlan(
+          result,
+          generatedId: 'plan_${result.id}_partial',
+          targetSegments: _reviewCenterAnalysisStateService.selectedSegments(
+            state,
+          ),
+          selectedIssueIds: selectedIssueIds,
+          selectedSuggestionIds: selectedSuggestionIds,
+        );
+        break;
+      default:
+        plan = planBuilder.buildSuggestionsOnlyPlan(
+          result,
+          generatedId: 'plan_${result.id}_advice',
+          selectedIssueIds: selectedIssueIds,
+          selectedSuggestionIds: selectedSuggestionIds,
+        );
+        break;
+    }
+    return state.copyWith(currentPlan: plan);
+  }
+
+  String _playbackSourcePath(
+    ChapterRewritePlan plan,
+    ChapterAnalysisResult result,
+  ) {
+    if (plan.targetSegments.isNotEmpty) {
+      return plan.targetSegments.first.sourcePath.trim();
+    }
+    if (plan.outputPaths.isNotEmpty) {
+      return plan.outputPaths.first.trim();
+    }
+    if (result.sourcePaths.isNotEmpty) {
+      return result.sourcePaths.first.trim();
+    }
+    return result.chapterPath.trim();
   }
 
   Future<void> _refreshPromptTemplates({String? status}) async {
@@ -2737,46 +3474,6 @@ class AppShellController extends ChangeNotifier
         selectedTemplateId: _selectedPromptTemplateId,
         previewText: _promptTemplatePreviewText,
         status: _promptTemplatesStatusMessage,
-      ),
-    );
-    _safeNotifyListeners();
-  }
-
-  Future<void> _refreshProjectAssets({String? status}) async {
-    // 中文注释: 资产页刷新统一走资产服务，GUI 不直接操作 frontmatter 和项目目录规则。
-    final project = _currentProject;
-    if (project == null) {
-      _projectAssetsSnapshot = ProjectAssetsSnapshot.initial();
-      _projectAssetsStatusMessage = status ?? '请先创建或打开项目。';
-      _refreshProjectAssetsView();
-      return;
-    }
-    final styles = await _projectAssetLibraryService.listStyles(project);
-    final foreshadows = await _projectAssetLibraryService.listForeshadows(
-      project,
-    );
-    _projectAssetsSnapshot = _projectAssetsSnapshot.copyWith(
-      styles: styles,
-      foreshadows: foreshadows,
-      selectedStyleId: _selectedAssetIdOrFallback(
-        currentId: _projectAssetsSnapshot.selectedStyleId,
-        entries: styles,
-      ),
-      selectedForeshadowId: _selectedAssetIdOrFallback(
-        currentId: _projectAssetsSnapshot.selectedForeshadowId,
-        entries: foreshadows,
-      ),
-    );
-    _projectAssetsStatusMessage = status ?? _projectAssetsStatusMessage;
-    _refreshProjectAssetsView();
-  }
-
-  void _refreshProjectAssetsView() {
-    // 中文注释: 资产页视图重建只做快照到表单的投影，不在这里碰文件系统。
-    _viewModel = _viewModel.copyWith(
-      projectAssets: _projectAssetsViewDataService.build(
-        snapshot: _projectAssetsSnapshot,
-        status: _projectAssetsStatusMessage,
       ),
     );
     _safeNotifyListeners();
@@ -2932,7 +3629,9 @@ class AppShellController extends ChangeNotifier
         status:
             '已为当前文档创建${ReviewTypeCatalogService().reviewTypeLabel(reviewType)}任务。',
       );
-      _viewModel = _viewModel.copyWith(destination: AppDestination.taskCenter);
+      _viewModel = _viewModel.copyWith(
+        destination: AppDestination.longTaskStation,
+      );
       _safeNotifyListeners();
       return;
     }
@@ -3010,7 +3709,9 @@ class AppShellController extends ChangeNotifier
   String _taskCenterCheckpointReviewPath(JsonMap task, JsonMap execution) {
     // 中文注释: 旧记录可能只在 execution 上有检查点路径，因此这里做一次统一兜底。
     for (final candidate in <String>[
+      ValueReaders.stringValue(task['postprocess_checkpoint_review_path']),
       ValueReaders.stringValue(task['checkpoint_review_path']),
+      ValueReaders.stringValue(execution['postprocess_checkpoint_review_path']),
       ValueReaders.stringValue(execution['checkpoint_review_path']),
     ]) {
       final clean = candidate.trim();
@@ -3022,7 +3723,8 @@ class AppShellController extends ChangeNotifier
   }
 
   void _runTaskCenterCheckpointAction(TaskCenterContractActionViewData action) {
-    _runTaskCenterProjectCommand(
+    _runTaskCenterSharedActionCommand(
+      action: action,
       pendingMessage: action.id == 'revisit_mode_guidance'
           ? '正在载入长期约束回看...'
           : '正在执行${action.label}...',
@@ -3042,7 +3744,8 @@ class AppShellController extends ChangeNotifier
   void _runTaskCenterRevisionResolutionAction(
     TaskCenterContractActionViewData action,
   ) {
-    _runTaskCenterProjectCommand(
+    _runTaskCenterSharedActionCommand(
+      action: action,
       pendingMessage: '正在执行${action.label}...',
       successMessage: '${action.label}已完成。',
       operation: (project, settings) {
@@ -3053,6 +3756,42 @@ class AppShellController extends ChangeNotifier
         );
       },
     );
+  }
+
+  Future<void> _runTaskCenterSharedActionCommand({
+    required TaskCenterContractActionViewData action,
+    required String pendingMessage,
+    required String successMessage,
+    required Future<JsonMap> Function(
+      ProjectDescriptor project,
+      AppSettings? settings,
+    )
+    operation,
+    bool requireSettings = false,
+  }) async {
+    // 中文注释: 共享动作执行后会根据返回结构自动切换任务焦点，避免用户还要手动去找新生成的返工或审稿任务。
+    final project = _currentProject;
+    if (project == null) {
+      await _refreshTaskCenter(status: '请先创建或打开项目。');
+      return;
+    }
+    final settings = _settings;
+    if (requireSettings && settings == null) {
+      await _refreshTaskCenter(status: '设置尚未加载完成。');
+      return;
+    }
+    _taskCenterStatusMessage = pendingMessage;
+    await _refreshTaskCenterView();
+    final result = await operation(project, settings);
+    final outcome = _taskCenterActionExecutionOutcomeService.resolve(
+      action: action,
+      result: result,
+      defaultSuccessMessage: successMessage,
+      currentSelectedTaskId: _selectedTaskId,
+    );
+    _selectedTaskId = outcome.nextSelectedTaskId;
+    await _syncWorkbenchResources();
+    await _refreshTaskCenter(status: outcome.statusMessage);
   }
 
   JsonMap _taskSelector(JsonMap task) {
@@ -3118,15 +3857,6 @@ class AppShellController extends ChangeNotifier
     return null;
   }
 
-  List<String> _csvList(String rawText) {
-    // 中文注释: 资产编辑器里的轻量列表字段统一按逗号切分，避免每个保存动作重复做同样转换。
-    return rawText
-        .split(',')
-        .map((item) => item.trim())
-        .where((item) => item.isNotEmpty)
-        .toList(growable: false);
-  }
-
   String _resultMessage(JsonMap result, {required String success}) {
     // 中文注释: 共享服务返回仍是字典风格，这里统一提炼一条用户可读状态文案。
     if (ValueReaders.boolValue(result['ok'])) {
@@ -3135,23 +3865,6 @@ class AppShellController extends ChangeNotifier
     }
     final error = ValueReaders.stringValue(result['error']).trim();
     return error.isEmpty ? '操作失败。' : '操作失败：$error';
-  }
-
-  String _selectedAssetIdOrFallback({
-    required String currentId,
-    required List<JsonMap> entries,
-  }) {
-    // 中文注释: 资产刷新后统一修正选中态，避免新增、删除或导入后仍指向失效条目。
-    final cleanCurrentId = currentId.trim();
-    for (final entry in entries) {
-      if (_stringValue(entry['id']) == cleanCurrentId) {
-        return cleanCurrentId;
-      }
-    }
-    if (entries.isEmpty) {
-      return '';
-    }
-    return _stringValue(entries.first['id']);
   }
 
   Map<String, String> _nextEcosystemSelections({
@@ -3174,6 +3887,7 @@ class AppShellController extends ChangeNotifier
       'skills': skills,
       'skill-groups': skillGroups,
       'agent-groups': agentGroups,
+      'skill-loadouts': agents,
     };
     for (final record in entriesByTab.entries) {
       nextSelections[record.key] = _resolvedEcosystemSelection(
@@ -3268,6 +3982,65 @@ class AppShellController extends ChangeNotifier
     return null;
   }
 
+  ProjectSkillLoadoutWorkspaceViewData _buildProjectSkillLoadoutViewData() {
+    return _projectSkillLoadoutViewDataService.build(
+      projectAvailable: _currentProject != null,
+      snapshot: _projectSkillLoadoutWorkspaceSnapshot,
+      agents: _agentEcosystemSnapshot.agents,
+      skills: _agentEcosystemSnapshot.skills,
+      skillGroups: _agentEcosystemSnapshot.skillGroups,
+      selectedAgentId: _selectedProjectSkillLoadoutAgentId(),
+      statusMessage: _agentEcosystemStatusMessage,
+    );
+  }
+
+  String _selectedProjectSkillLoadoutAgentId() {
+    final selectedAgentId = _agentEcosystemSnapshot.selectedEntryIdForTab(
+      'skill-loadouts',
+    );
+    if (selectedAgentId.trim().isNotEmpty) {
+      return selectedAgentId;
+    }
+    if (_agentEcosystemSnapshot.agents.isEmpty) {
+      return '';
+    }
+    return _stringValue(_agentEcosystemSnapshot.agents.first['id']);
+  }
+
+  JsonMap? _agentDocumentById(String agentId) {
+    final cleanAgentId = agentId.trim();
+    for (final agent in _agentEcosystemSnapshot.agents) {
+      if (_stringValue(agent['id']) == cleanAgentId) {
+        return agent;
+      }
+    }
+    return null;
+  }
+
+  ResolvedAgentSkillLoadout? _resolvedProjectSkillLoadoutForAgent(
+    String agentId,
+  ) {
+    final agent = _agentDocumentById(agentId);
+    if (agent == null) {
+      return null;
+    }
+    final draft =
+        _projectSkillLoadoutWorkspaceSnapshot.draftLoadouts[agentId] ??
+        _projectSkillLoadoutWorkspaceSnapshot.savedLoadouts.firstWhere(
+          (item) => item.agentId == agentId,
+          orElse: () => AgentSkillLoadout(
+            agentId: agentId,
+            source: AgentSkillLoadoutSource.projectSelection,
+          ),
+        );
+    return AgentSkillLoadoutResolverService().resolveAgentDocument(
+      agent,
+      loadout: draft,
+      availableSkillGroups: _agentEcosystemSnapshot.skillGroups,
+      availableSkillIds: _idsOf(_agentEcosystemSnapshot.skills),
+    );
+  }
+
   String _ecosystemKindLabel(String kind) {
     // 中文注释: 创建成功提示统一使用中文名称，避免界面文案暴露内部 tab 标识。
     switch (kind) {
@@ -3287,6 +4060,8 @@ class AppShellController extends ChangeNotifier
   void dispose() {
     // 中文注释: 控制器销毁时标记生命周期状态，避免异步回调在组件已卸载后继续通知 UI。
     _disposed = true;
+    _listenableState.dispose();
+    _auxiliaryControllers.dispose();
     _longTaskStationController.dispose();
     super.dispose();
   }
@@ -3306,27 +4081,22 @@ class AppShellController extends ChangeNotifier
   }
 
   Future<void> _refreshActiveDestinationAfterProjectLoad() async {
-    // 中文注释: 切换项目后，如果当前正停留在任务/审稿/模板页，就把这些页面一并刷新到新项目上下文。
+    // 中文注释: 当前全局目的地已收束为四项，切换项目后只刷新仍可直达的主空间。
     switch (_viewModel.destination) {
+      case AppDestination.projectOpen:
+        await _refreshProjectOpenView();
+        return;
+      case AppDestination.agentEcosystem:
+        await _refreshAgentEcosystem();
+        return;
+      case AppDestination.projectAssets:
+        await projectAssetsController.refresh();
+        return;
       case AppDestination.longTaskStation:
         await _longTaskStationController.refresh();
         return;
-      case AppDestination.taskCenter:
-        await _refreshTaskCenter();
-        return;
-      case AppDestination.reviewCenter:
-        await _refreshReviewCenter();
-        return;
-      case AppDestination.promptTemplates:
-        await _refreshPromptTemplates();
-        return;
-      case AppDestination.projectAssets:
-        await _refreshProjectAssets();
-        return;
       case AppDestination.workbench:
       case AppDestination.settings:
-      case AppDestination.agentEcosystem:
-      case AppDestination.projectCollection:
         return;
     }
   }
@@ -3341,6 +4111,9 @@ class AppShellController extends ChangeNotifier
     final effectiveProviderId =
         selectedProviderId ?? _selectedProviderId(settings);
     final modelSettings = _modelSettingsOf(settings);
+    final providerDirectoryOptions = _providerSettingsDirectoryService
+        .providerOptions();
+    final allModelOptions = _providerSettingsDirectoryService.allModelOptions();
     final providers = settings.providers
         .map(
           (provider) => ProviderEndpointViewData(
@@ -3355,6 +4128,31 @@ class AppShellController extends ChangeNotifier
           ),
         )
         .toList(growable: false);
+    final effectiveProviders = effectiveProviderId == '__new__'
+        ? <ProviderEndpointViewData>[
+            for (final provider in providers)
+              ProviderEndpointViewData(
+                id: provider.id,
+                title: provider.title,
+                protocol: provider.protocol,
+                baseUrl: provider.baseUrl,
+                rawApiKey: provider.rawApiKey,
+                apiKeyState: provider.apiKeyState,
+                description: provider.description,
+                isSelected: false,
+              ),
+            const ProviderEndpointViewData(
+              id: '__new__',
+              title: '',
+              protocol: 'openai_compatible',
+              baseUrl: '',
+              rawApiKey: '',
+              apiKeyState: '未配置密钥',
+              description: '',
+              isSelected: true,
+            ),
+          ]
+        : providers;
     return SettingsViewData(
       activeTabId: resolvedActiveTabId,
       tabs: const [
@@ -3367,7 +4165,9 @@ class AppShellController extends ChangeNotifier
         SettingsTabViewData(id: 'theme', label: '主题'),
         SettingsTabViewData(id: 'dev', label: '开发'),
       ],
-      providers: providers,
+      providers: effectiveProviders,
+      providerDirectoryOptions: providerDirectoryOptions,
+      allModelOptions: allModelOptions,
       tabSections: _settingsSections(settings),
       defaultProviderId: settings.defaultProviderId,
       defaultModelId: settings.defaultModelId,
@@ -3375,10 +4175,14 @@ class AppShellController extends ChangeNotifier
       modelEditor: _modelSettingsViewDataService.build(settings, modelSettings),
       defaultProjectPath: settings.defaultProjectPath,
       permissionSettings: settings.permissionSettings,
-      toolStrategySettings: settings.toolStrategySettings,
+      toolStrategySettings: _toolStrategySettingsView(settings),
       networkSettings: settings.networkSettings,
       contextSettings: settings.contextSettings,
       themeSettings: settings.themeSettings,
+      themeViewData: _themeSettingsViewDataService.build(
+        themeSettings: settings.themeSettings,
+        activeThemeId: _activeThemeId,
+      ),
       settingsRootPath: _settingsRootPath,
       settingsSearchRoots: _settingsSearchRoots,
       defaultProjectsRootPath: _defaultProjectsRootPath,
@@ -3538,7 +4342,11 @@ class AppShellController extends ChangeNotifier
           title: '界面外观',
           description: '主题切换在应用层生效，但不改变 core 行为和项目数据。',
           items: [
-            SettingsItemViewData(label: '当前主题', value: _themeModeLabel()),
+            SettingsItemViewData(
+              label: '当前主题',
+              value: _themePreferenceResolver.labelOf(_activeThemeId),
+            ),
+            SettingsItemViewData(label: '主题来源', value: 'ThemeRegistry 内置主题'),
             SettingsItemViewData(label: '分栏风格', value: '直角面板 + 线性分割'),
             SettingsItemViewData(label: '窄屏入口', value: '会话栏额外暴露文档与设置入口'),
           ],
@@ -3570,14 +4378,17 @@ class AppShellController extends ChangeNotifier
     try {
       final savedSettings = await _settingsRepository.save(nextSettings);
       _settings = savedSettings;
-      _themeMode = _themeModeFromSettings(savedSettings);
+      _activeThemeId = _themeIdFromSettings(savedSettings);
       _refreshSettingsViewData(selectedProviderId: selectedProviderId);
       _viewModel = _viewModel.copyWith(
         workbench: _viewModel.workbench.copyWith(
           modelLabel: _defaultModelLabel(savedSettings),
           modelOptions: _modelSelectorOptions(savedSettings),
-          agentLabel: _agentLabel(savedSettings),
-          agentOptions: _agentSelectorOptions(),
+          groupSelector: _fallbackGroupSelector(savedSettings),
+          inputCapabilityContext: _conversationInputCapabilityContext(
+            savedSettings,
+          ),
+          toolPreviewMode: _toolPreviewModeOf(savedSettings),
         ),
       );
       _announce(successMessage);
@@ -3591,14 +4402,17 @@ class AppShellController extends ChangeNotifier
     try {
       final savedSettings = await _settingsRepository.save(nextSettings);
       _settings = savedSettings;
-      _themeMode = _themeModeFromSettings(savedSettings);
+      _activeThemeId = _themeIdFromSettings(savedSettings);
       _refreshSettingsViewData();
       _viewModel = _viewModel.copyWith(
         workbench: _viewModel.workbench.copyWith(
           modelLabel: _defaultModelLabel(savedSettings),
           modelOptions: _modelSelectorOptions(savedSettings),
-          agentLabel: _agentLabel(savedSettings),
-          agentOptions: _agentSelectorOptions(),
+          groupSelector: _fallbackGroupSelector(savedSettings),
+          inputCapabilityContext: _conversationInputCapabilityContext(
+            savedSettings,
+          ),
+          toolPreviewMode: _toolPreviewModeOf(savedSettings),
         ),
       );
     } catch (_) {
@@ -3606,39 +4420,11 @@ class AppShellController extends ChangeNotifier
     }
   }
 
-  ThemeMode _themeModeFromSettings(AppSettings settings) {
-    // 中文注释: 主题模式优先从设置文档读取，保证重启应用后仍能回到用户保存的模式。
-    return _themeModeFromValue(
-      _stringValue(settings.themeSettings['mode'], 'light'),
+  String _themeIdFromSettings(AppSettings settings) {
+    // 中文注释: 主题偏好解析统一委派给解析器，壳层只读取当前应启用的主题 ID。
+    return _themePreferenceResolver.resolveSelectedThemeId(
+      settings.themeSettings,
     );
-  }
-
-  ThemeMode _themeModeFromValue(String value) {
-    // 中文注释: 字符串主题值到 ThemeMode 的映射统一放在这里，避免保存和初始化各自维护判断分支。
-    switch (value.trim().toLowerCase()) {
-      case 'dark':
-      case 'night':
-        return ThemeMode.dark;
-      case 'system':
-        return ThemeMode.system;
-      case 'custom':
-      case 'light':
-      case 'day':
-      default:
-        return ThemeMode.light;
-    }
-  }
-
-  String _themeModeLabel() {
-    // 中文注释: 主题文案从当前 ThemeMode 推导，避免设置页和工作台各自维护两套状态字串。
-    switch (_themeMode) {
-      case ThemeMode.system:
-        return '跟随系统';
-      case ThemeMode.dark:
-        return '夜间';
-      case ThemeMode.light:
-        return '浅色';
-    }
   }
 
   List<SelectorOptionViewData> _modelSelectorOptions(AppSettings settings) {
@@ -3670,35 +4456,33 @@ class AppShellController extends ChangeNotifier
     return options;
   }
 
-  List<SelectorOptionViewData> _agentSelectorOptions() {
-    // 中文注释: 会话栏智能体下拉优先展示已加载生态条目，没有项目时仍保留内置默认智能体兜底。
-    final options = <SelectorOptionViewData>[
-      const SelectorOptionViewData(
-        id: 'default_generalist',
-        label: '综合创作智能体',
-        note: '内置',
-      ),
-    ];
-    final seen = <String>{'default_generalist'};
-    for (final agent in _agentEcosystemSnapshot.agents) {
-      final id = _stringValue(agent['id']);
-      if (id.trim().isEmpty || !seen.add(id)) {
-        continue;
-      }
-      options.add(
-        SelectorOptionViewData(
-          id: id,
-          label: _stringValue(agent['name'], id),
-          note: _stringValue(agent['source']),
-        ),
-      );
-    }
-    return options;
-  }
-
-  String _projectSubtitleFor(String projectType) {
-    // 中文注释: 项目副标题只显示类型语义，不再占位置解释运行链路状态。
-    return ProjectTypeCatalogService().definitionOf(projectType).name;
+  ConversationInputCapabilityContext _conversationInputCapabilityContext(
+    AppSettings settings,
+  ) {
+    // 中文注释: 工作台输入能力事实源统一在壳层收口，避免侧栏自己去碰设置、模型元能力和智能体生态快照。
+    final editor = _modelSettingsViewDataService.build(
+      settings,
+      _modelSettingsOf(settings),
+    );
+    final selectedAgent = _selectedAgentDocument(settings);
+    final projection = _workbenchConversationRuntimeState
+        .openingProjection
+        ?.currentPrimaryAgentSummary;
+    return _conversationInputCapabilityContextBuilderService.build(
+      modelEditor: editor,
+      hasActiveProject: _viewModel.workbench.projectPath.trim().isNotEmpty,
+      hostSupportsAttachmentPicking: _hostSupportsAttachmentPicking(),
+      collaborationSupportsReasoning:
+          projection?.thinkingSupported ??
+          _agentSupportsReasoning(selectedAgent),
+      collaborationSupportsAttachments: true,
+      collaborationSupportsToolOptions: true,
+      productExposesReasoningToggle: true,
+      productExposesAttachmentEntry: false,
+      productExposesStopAction: true,
+      productExposesToolOptionsAction: false,
+      productExposesOptimizeAction: false,
+    );
   }
 
   String _defaultModelLabel(AppSettings settings) {
@@ -3719,6 +4503,24 @@ class AppShellController extends ChangeNotifier
   JsonMap _modelSettingsOf(AppSettings settings) {
     // 中文注释: 模型运行参数从 extraSettings 中单独收口，避免继续污染 provider 和通用上下文字段。
     return _mapValue(settings.extraSettings['model_settings']);
+  }
+
+  JsonMap _workbenchUiSettingsOf(AppSettings settings) {
+    // 中文注释: 工作台 UI 偏好单独收口到 extraSettings.workbench_ui，避免散落在无关设置段里。
+    return _mapValue(settings.extraSettings['workbench_ui']);
+  }
+
+  String _toolPreviewModeOf(AppSettings settings) {
+    return ToolPreviewMode.normalize(
+      _workbenchUiSettingsOf(settings)['tool_preview_mode'],
+    );
+  }
+
+  Map<String, Object?> _toolStrategySettingsView(AppSettings settings) {
+    return <String, Object?>{
+      ...settings.toolStrategySettings,
+      'tool_preview_mode': _toolPreviewModeOf(settings),
+    };
   }
 
   ProviderEndpointSettings? _selectedModelProvider(AppSettings settings) {
@@ -3766,9 +4568,8 @@ class AppShellController extends ChangeNotifier
     return result.isEmpty ? 'interface' : result;
   }
 
-
-  String _agentLabel(AppSettings settings) {
-    // 中文注释: 默认智能体标签优先使用已加载生态名称，避免会话栏直接暴露内部 id。
+  String _fallbackPrimaryAgentLabel(AppSettings settings) {
+    // 中文注释: 当项目还没有解析出默认智能体组时，主智能体标签先回退到设置里的默认智能体名称。
     if (settings.defaultAgentId == 'default_generalist' ||
         settings.defaultAgentId.trim().isEmpty) {
       return '综合创作智能体';
@@ -3779,6 +4580,74 @@ class AppShellController extends ChangeNotifier
       }
     }
     return settings.defaultAgentId;
+  }
+
+  ConversationGroupSelectorViewData _fallbackGroupSelector(
+    AppSettings settings,
+  ) {
+    // 中文注释: 会话栏在 opening projection 尚未可用时先展示稳定回退值，避免出现空白或旧单智能体选择器。
+    return _conversationGroupSelectorViewDataService.build(
+      openingProjection: _workbenchConversationRuntimeState.openingProjection,
+      fallbackPrimaryAgentLabel: _fallbackPrimaryAgentLabel(settings),
+    );
+  }
+
+  ProjectAgentGroupWorkspaceViewData? _projectAgentGroupWorkspaceViewData() {
+    // 中文注释: 项目级组配置浮层只在当前项目已打开且 opening projection 已就绪时暴露正式配置数据。
+    if (_currentProject == null) {
+      return null;
+    }
+    final projection = _workbenchConversationRuntimeState.openingProjection;
+    if (projection == null) {
+      return null;
+    }
+    return _projectAgentGroupWorkspaceViewDataService.build(
+      projection: projection,
+    );
+  }
+
+  Future<ProjectAgentGroupWorkspaceViewData?>
+  _selectProjectAgentGroupFromWorkspace(String groupId) async {
+    // 中文注释: 项目面板发起的组切换统一回到会话控制器执行，再把最新 projection 重新投影回正式配置浮层。
+    await _workbenchConversationController.selectProjectAgentGroup(groupId);
+    return _projectAgentGroupWorkspaceViewData();
+  }
+
+  JsonMap _selectedAgentDocument(AppSettings settings) {
+    // 中文注释: 当前主智能体文档统一从已加载生态里解析，找不到时退回默认全能智能体兜底。
+    final selectedAgentId = settings.defaultAgentId.trim();
+    if (selectedAgentId.isEmpty || selectedAgentId == 'default_generalist') {
+      return AgentProfileCatalogService().fallbackDefaultAgent();
+    }
+    for (final agent in _agentEcosystemSnapshot.agents) {
+      if (_stringValue(agent['id']) == selectedAgentId) {
+        return _mapValue(agent);
+      }
+    }
+    return AgentProfileCatalogService().fallbackDefaultAgent();
+  }
+
+  bool _agentSupportsReasoning(JsonMap agent) {
+    // 中文注释: 协作能力目前先消费智能体自身是否允许思考，后续 group-first 会在这里接主成员/组级策略。
+    return !agent.containsKey('thinking_supported') ||
+        _boolValue(agent['thinking_supported']);
+  }
+
+  bool _hostSupportsAttachmentPicking() {
+    // 中文注释: 当前附件选择只为未来桌面端预留宿主事实源，移动端和 Web 继续保持关闭。
+    if (kIsWeb) {
+      return false;
+    }
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.windows:
+      case TargetPlatform.macOS:
+      case TargetPlatform.linux:
+        return true;
+      case TargetPlatform.android:
+      case TargetPlatform.iOS:
+      case TargetPlatform.fuchsia:
+        return false;
+    }
   }
 
   void _announce(String message) {
@@ -3805,6 +4674,9 @@ class AppShellController extends ChangeNotifier
   void _changeDestination(AppDestination destination) {
     // 中文注释: 壳层自己只保留全局路由切换，不把任何 feature 状态偷偷绑在目的地切换里。
     _viewModel = _viewModel.copyWith(destination: destination);
+    _longTaskStationController.setAutoRefreshEnabled(
+      destination == AppDestination.longTaskStation,
+    );
     _safeNotifyListeners();
   }
 
@@ -3826,6 +4698,10 @@ class AppShellController extends ChangeNotifier
     if (_disposed) {
       return;
     }
+    _listenableState.syncFrom(
+      viewModel: _viewModel,
+      activeThemeId: _activeThemeId,
+    );
     notifyListeners();
   }
 

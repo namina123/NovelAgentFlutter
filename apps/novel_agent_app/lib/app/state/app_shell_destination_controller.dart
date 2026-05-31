@@ -4,27 +4,21 @@ import '../routing/app_destination.dart';
 class AppShellDestinationController {
   AppShellDestinationController({
     required void Function(AppDestination destination) changeDestination,
-    required Future<void> Function() refreshAgentEcosystem,
-    required Future<void> Function() refreshTaskCenter,
-    required Future<void> Function() refreshReviewCenter,
-    required Future<void> Function() refreshPromptTemplates,
-    required Future<void> Function() refreshProjectAssets,
+    required Future<void> Function() refreshProjectOpen,
     required LongTaskStationController longTaskStationController,
   }) : _changeDestination = changeDestination,
-       _refreshAgentEcosystem = refreshAgentEcosystem,
-       _refreshTaskCenter = refreshTaskCenter,
-       _refreshReviewCenter = refreshReviewCenter,
-       _refreshPromptTemplates = refreshPromptTemplates,
-       _refreshProjectAssets = refreshProjectAssets,
+       _refreshProjectOpen = refreshProjectOpen,
        _longTaskStationController = longTaskStationController;
 
   final void Function(AppDestination destination) _changeDestination;
-  final Future<void> Function() _refreshAgentEcosystem;
-  final Future<void> Function() _refreshTaskCenter;
-  final Future<void> Function() _refreshReviewCenter;
-  final Future<void> Function() _refreshPromptTemplates;
-  final Future<void> Function() _refreshProjectAssets;
+  final Future<void> Function() _refreshProjectOpen;
   final LongTaskStationController _longTaskStationController;
+
+  Future<void> showProjectOpen() async {
+    // 中文注释: 打开项目页是唯一项目入口，壳层切页后只刷新项目浏览读态。
+    _changeDestination(AppDestination.projectOpen);
+    await _refreshProjectOpen();
+  }
 
   void showWorkbench() {
     // 中文注释: 壳层导航只负责切换全局目的地，不直接持有任何页面业务状态。
@@ -36,16 +30,29 @@ class AppShellDestinationController {
     _changeDestination(AppDestination.settings);
   }
 
+  Future<void> showBookDeconstructionWorkbench() async {
+    // 中文注释: 拆书不再作为独立全局目的地，旧入口暂时收束回工作台。
+    showWorkbench();
+  }
+
+  Future<void> showInspirationWorkbench() async {
+    // 中文注释: 灵感不再作为独立全局目的地，旧入口暂时收束回工作台。
+    showWorkbench();
+  }
+
   Future<void> showAgentEcosystem() async {
-    // 中文注释: 导航切换与页面数据刷新在壳层并排组织，子域不反向操作全局路由。
+    // 中文注释: 智能体生态页现在纳入主导航“工作”分组，切页仍只由壳层统一分发。
     _changeDestination(AppDestination.agentEcosystem);
-    await _refreshAgentEcosystem();
+  }
+
+  Future<void> showProjectCollection() async {
+    // 中文注释: 历史项目库入口统一并入“打开项目”。
+    await showProjectOpen();
   }
 
   Future<void> showTaskCenter() async {
-    // 中文注释: 任务中心属于壳层全局入口，切页后立即刷新当前项目上下文。
-    _changeDestination(AppDestination.taskCenter);
-    await _refreshTaskCenter();
+    // 中文注释: 任务中心已从主导航退役，旧入口先统一折返到长任务总站。
+    await showLongTaskStation();
   }
 
   Future<void> showLongTaskStation() async {
@@ -59,20 +66,41 @@ class AppShellDestinationController {
   }
 
   Future<void> showReviewCenter() async {
-    // 中文注释: 审稿中心切换后立刻同步当前项目的审稿列表，避免展示旧上下文。
-    _changeDestination(AppDestination.reviewCenter);
-    await _refreshReviewCenter();
+    // 中文注释: 审稿中心已从主导航退役，旧入口先统一折返到长任务总站。
+    await showLongTaskStation();
   }
 
   Future<void> showPromptTemplates() async {
-    // 中文注释: 模板中心导航只留在壳层，模板具体数据刷新仍由对应 feature 完成。
-    _changeDestination(AppDestination.promptTemplates);
-    await _refreshPromptTemplates();
+    // 中文注释: 模板能力后续并回项目面板，旧入口先统一回到工作台。
+    showWorkbench();
   }
 
   Future<void> showProjectAssets() async {
-    // 中文注释: 项目资产中心也是全局页签入口，刷新逻辑不再散落在工作台按钮里。
+    // 中文注释: 项目资产页不在主导航常驻，但仍保留为可直达的次级能力页。
     _changeDestination(AppDestination.projectAssets);
-    await _refreshProjectAssets();
+  }
+
+  Future<void> showDestination(AppDestination destination) async {
+    // 中文注释: 全局活动栏统一从这里分发目标页，避免根壳层直接拼子域刷新逻辑。
+    switch (destination) {
+      case AppDestination.projectOpen:
+        await showProjectOpen();
+        return;
+      case AppDestination.workbench:
+        showWorkbench();
+        return;
+      case AppDestination.agentEcosystem:
+        await showAgentEcosystem();
+        return;
+      case AppDestination.projectAssets:
+        await showProjectAssets();
+        return;
+      case AppDestination.longTaskStation:
+        await showLongTaskStation();
+        return;
+      case AppDestination.settings:
+        showSettings();
+        return;
+    }
   }
 }

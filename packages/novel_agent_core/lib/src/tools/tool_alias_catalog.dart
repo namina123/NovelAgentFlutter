@@ -1,5 +1,6 @@
 final class ToolAliasCatalog {
   static const Map<String, String> aliases = <String, String>{
+    'read': 'read_project_file',
     'read_file_content': 'read_project_file',
     'read_file': 'read_project_file',
     'write_file_content': 'write_project_file',

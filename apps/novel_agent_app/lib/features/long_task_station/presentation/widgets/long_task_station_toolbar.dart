@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../../shared/widgets/toolbar_icon_button.dart';
+import '../../../../shared/widgets/workspace_page_header.dart';
+
 class LongTaskStationToolbar extends StatelessWidget {
   const LongTaskStationToolbar({
     super.key,
@@ -18,30 +21,19 @@ class LongTaskStationToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        IconButton(
-          tooltip: '返回工作台',
-          onPressed: onBackRequested,
-          icon: const Icon(Icons.arrow_back),
-        ),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 2),
-              Text(
-                '$description  $supervisorStatusLabel',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-          ),
-        ),
-        IconButton(
+    return WorkspacePageHeader(
+      title: title,
+      subtitle: description,
+      trailing: Text(
+        supervisorStatusLabel,
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+      onBackRequested: onBackRequested,
+      actions: [
+        ToolbarIconButton(
+          icon: Icons.refresh_rounded,
           tooltip: '刷新',
           onPressed: onRefreshRequested,
-          icon: const Icon(Icons.refresh),
         ),
       ],
     );

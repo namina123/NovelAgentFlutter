@@ -111,10 +111,12 @@ class ModeGuidanceAssetBundleBuilderService {
   ) {
     for (var index = 0; index < entities.length; index++) {
       markdownPaths[entities[index].id] = switch (modeId) {
-        'seed_autopilot_novel' => 'characters/seed_autopilot_protagonist.md',
+        'seed_autopilot_novel' =>
+          'assets/characters/seed_autopilot_protagonist.md',
         'full_outline_consensus' =>
-          'characters/full_outline_consensus_core_roles.md',
-        _ => 'characters/${_safeModeId(modeId)}_character_${index + 1}.md',
+          'assets/characters/full_outline_consensus_core_roles.md',
+        _ =>
+          'assets/characters/${_safeModeId(modeId)}_character_${index + 1}.md',
       };
     }
   }

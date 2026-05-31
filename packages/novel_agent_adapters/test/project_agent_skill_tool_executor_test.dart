@@ -9,6 +9,9 @@ void main() {
     late Directory tempRoot;
     late Directory workspaceRoot;
     late ProjectDescriptor project;
+    late ProjectAgentSkillLoadoutRepository loadoutRepository;
+    late ProjectAgentSkillRuntimeLoadoutService runtimeLoadoutService;
+    late ProjectAgentSkillToolExecutor Function() buildExecutor;
 
     setUp(() async {
       tempRoot = await Directory.systemTemp.createTemp('novel-agent-skill-');
@@ -60,6 +63,22 @@ activation_hints:
         rootPath: projectRoot.path,
         projectType: 'novel',
       );
+      loadoutRepository = ProjectAgentSkillLoadoutRepository(
+        workspacePort: LocalProjectWorkspacePort(),
+      );
+      runtimeLoadoutService = ProjectAgentSkillRuntimeLoadoutService(
+        loadoutRepository: loadoutRepository,
+      );
+      buildExecutor = () {
+        return ProjectAgentSkillToolExecutor(
+          skillPackageCatalog: LocalSkillPackageCatalog(
+            packageRootPathResolver: PackageRootPathResolver(
+              workspaceRootPath: workspaceRoot.path,
+            ),
+          ),
+          runtimeLoadoutService: runtimeLoadoutService,
+        );
+      };
     });
 
     tearDown(() async {
@@ -70,13 +89,7 @@ activation_hints:
 
     test('loads allowed skill package and supports query fallback', () async {
       // 中文注释: 这里验证技能读取会合并内置与项目目录，并按当前智能体的声明范围过滤结果。
-      final executor = ProjectAgentSkillToolExecutor(
-        skillPackageCatalog: LocalSkillPackageCatalog(
-          packageRootPathResolver: PackageRootPathResolver(
-            workspaceRootPath: workspaceRoot.path,
-          ),
-        ),
-      );
+      final executor = buildExecutor();
 
       final result = await executor.loadAgentSkill(project, <String, Object?>{
         'query': '先搭好章纲结构',
@@ -97,13 +110,7 @@ activation_hints:
       'blocks skills outside current agent scope and returns summaries',
       () async {
         // 中文注释: 这里验证越权读取会以可恢复结果返回，并附带当前允许的技能摘要列表。
-        final executor = ProjectAgentSkillToolExecutor(
-          skillPackageCatalog: LocalSkillPackageCatalog(
-            packageRootPathResolver: PackageRootPathResolver(
-              workspaceRootPath: workspaceRoot.path,
-            ),
-          ),
-        );
+        final executor = buildExecutor();
 
         final result = await executor.loadAgentSkill(project, <String, Object?>{
           'skill_id': 'custom_style_review',
@@ -119,29 +126,106 @@ activation_hints:
       },
     );
 
-    test('supports explicit full skill loading for long instructions', () async {
-      // 中文注释: 默认摘要模式省上下文，但调用方仍可在确实需要时请求 full 版本正文。
-      final executor = ProjectAgentSkillToolExecutor(
-        skillPackageCatalog: LocalSkillPackageCatalog(
-          packageRootPathResolver: PackageRootPathResolver(
-            workspaceRootPath: workspaceRoot.path,
-          ),
-        ),
-      );
+    test(
+      'supports explicit full skill loading for long instructions',
+      () async {
+        // 中文注释: 默认摘要模式省上下文，但调用方仍可在确实需要时请求 full 版本正文。
+        final executor = buildExecutor();
+
+        final result = await executor.loadAgentSkill(project, <String, Object?>{
+          'skill_id': 'generate_outline',
+          'detail_level': 'full',
+          '_agent': <String, Object?>{
+            'id': 'default_generalist',
+            'skills': <String>['generate_outline'],
+          },
+        });
+
+        expect(result['ok'], isTrue);
+        expect(result['detail_level'], 'full');
+        expect(result['instruction_markdown'], contains('# 大纲生成'));
+        expect(
+          ValueReaders.intValue(result['instruction_character_count']),
+          greaterThan(10),
+        );
+      },
+    );
+
+    test('supports reading declared skill references on demand', () async {
+      // 中文注释: 这里验证 skill 的 reference 文件会按声明清单开放，而不是只能读摘要或整份正文。
+      final builtinSkillDir = Directory(
+        '${workspaceRoot.path}${Platform.pathSeparator}builtin_packages${Platform.pathSeparator}skills${Platform.pathSeparator}novel_control',
+      )..createSync(recursive: true);
+      File(
+        '${builtinSkillDir.path}${Platform.pathSeparator}SKILL.md',
+      ).writeAsStringSync('''---
+id: novel-control
+name: novel-control
+description: 长篇控制技能
+resource_hints:
+  references:
+    - references/method.md
+---
+
+# 控制技能
+
+摘要正文。
+''');
+      final referenceDir = Directory(
+        '${builtinSkillDir.path}${Platform.pathSeparator}references',
+      )..createSync(recursive: true);
+      File(
+        '${referenceDir.path}${Platform.pathSeparator}method.md',
+      ).writeAsStringSync('# 方法\n\n先检查结构，再修正文风。');
+      final executor = buildExecutor();
 
       final result = await executor.loadAgentSkill(project, <String, Object?>{
-        'skill_id': 'generate_outline',
-        'detail_level': 'full',
+        'skill_id': 'novel-control',
+        'reference_path': 'references/method.md',
         '_agent': <String, Object?>{
           'id': 'default_generalist',
-          'skills': <String>['generate_outline'],
+          'skills': <String>['novel-control'],
         },
       });
 
       expect(result['ok'], isTrue);
-      expect(result['detail_level'], 'full');
-      expect(result['instruction_markdown'], contains('# 大纲生成'));
-      expect(ValueReaders.intValue(result['instruction_character_count']), greaterThan(10));
+      expect(result['detail_level'], 'reference');
+      expect(result['reference_path'], 'references/method.md');
+      expect(result['reference_content'], contains('先检查结构'));
     });
+
+    test(
+      'uses project loadout to override agent default available skills',
+      () async {
+        await loadoutRepository.saveLoadouts(project, const <AgentSkillLoadout>[
+          AgentSkillLoadout(
+            agentId: 'default_generalist',
+            source: AgentSkillLoadoutSource.projectSelection,
+            extraSkillIds: <String>['custom_style_review'],
+            disabledSkillIds: <String>['generate_outline'],
+          ),
+        ]);
+        final executor = buildExecutor();
+
+        final preview = await executor.loadAgentSkill(
+          project,
+          <String, Object?>{
+            '_agent': <String, Object?>{
+              'id': 'default_generalist',
+              'skills': <String>['generate_outline'],
+            },
+          },
+        );
+        final availableSkills = (preview['available_skills'] as List<Object?>)
+            .map(ValueReaders.mapValue)
+            .toList(growable: false);
+
+        expect(preview['ok'], isFalse);
+        expect(preview['resolved_loadout_source'], 'project_selection');
+        expect(preview['resolved_skill_ids'], <String>['custom_style_review']);
+        expect(availableSkills, hasLength(1));
+        expect(availableSkills.single['id'], 'custom_style_review');
+      },
+    );
   });
 }

@@ -1,5 +1,6 @@
 import '../common/json_types.dart';
 import '../project/project_descriptor.dart';
+import 'draft_generation_stop_phase.dart';
 
 class DraftGenerationResult {
   const DraftGenerationResult({
@@ -19,6 +20,9 @@ class DraftGenerationResult {
     required this.reasoningContent,
     required this.stoppedByToolError,
     required this.toolErrorSummary,
+    this.cancelledByUser = false,
+    this.stopPhase = DraftGenerationStopPhase.none,
+    this.partialContentAccepted = false,
   });
 
   final ProjectDescriptor project;
@@ -37,4 +41,7 @@ class DraftGenerationResult {
   final String reasoningContent;
   final bool stoppedByToolError;
   final String toolErrorSummary;
+  final bool cancelledByUser;
+  final DraftGenerationStopPhase stopPhase;
+  final bool partialContentAccepted;
 }

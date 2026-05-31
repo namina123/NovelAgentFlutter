@@ -1,4 +1,5 @@
 import 'project_type_definition.dart';
+import 'project_trait.dart';
 
 class ProjectTypeCatalogService {
   const ProjectTypeCatalogService();
@@ -7,28 +8,40 @@ class ProjectTypeCatalogService {
       <ProjectTypeDefinition>[
         ProjectTypeDefinition(
           id: 'novel',
-          name: '新建小说',
-          description: '适合普通小说项目，先围绕开局、大纲、章节和续写逐步推进。',
+          name: '普通小说',
+          description: '适合常规小说创作，先围绕开局、章节续写、大纲和设定逐步推进。',
           defaultTitle: '未命名小说',
+          defaultTraits: <ProjectTrait>[ProjectTrait.openingGuided],
         ),
         ProjectTypeDefinition(
           id: 'long_novel',
-          name: '长任务开局',
-          description: '适合长篇或长任务项目，强调队列、检查点和可恢复推进。',
+          name: '长篇长任务',
+          description: '适合长篇推进和多步骤协作，强调队列、检查点与可恢复运行。',
           defaultTitle: '未命名长篇',
+          defaultTraits: <ProjectTrait>[
+            ProjectTrait.longTask,
+            ProjectTrait.openingGuided,
+          ],
           requiresRuntimeBaselineSelection: true,
         ),
         ProjectTypeDefinition(
           id: 'knowledge_base',
-          name: '生成知识库',
-          description: '适合导入、整理和检索资料，把材料沉淀为稳定知识库。',
+          name: '资料知识库',
+          description: '适合导入、整理和检索资料，把材料沉淀成可复用知识库。',
           defaultTitle: '未命名知识库',
         ),
         ProjectTypeDefinition(
           id: 'short_collection',
-          name: '创建短文集',
-          description: '适合短篇合集、专题短文和风格统一整理。',
+          name: '短篇/文集',
+          description: '适合短篇合集、专题短文和统一整理。',
           defaultTitle: '未命名短文集',
+        ),
+        ProjectTypeDefinition(
+          id: 'book_deconstruction',
+          name: '拆书承接',
+          description: '适合导入外部作品，抽取结构、角色和连续性信息，再衔接后续续写。',
+          defaultTitle: '未命名拆书项目',
+          defaultTraits: <ProjectTrait>[ProjectTrait.bookDeconstruction],
         ),
       ];
 

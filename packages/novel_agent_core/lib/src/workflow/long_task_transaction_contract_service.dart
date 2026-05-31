@@ -1,18 +1,22 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import '../agents/skill_routing_policy_service.dart';
 import 'long_task_mode_service.dart';
 import 'long_task_path_policy_service.dart';
-import 'task_runtime_constants.dart';
 
 class LongTaskTransactionContractService {
   LongTaskTransactionContractService({
     required LongTaskModeService modeService,
     required LongTaskPathPolicyService pathPolicyService,
+    SkillRoutingPolicyService? skillRoutingPolicyService,
   }) : _modeService = modeService,
-       _pathPolicyService = pathPolicyService;
+       _pathPolicyService = pathPolicyService,
+       _skillRoutingPolicyService =
+           skillRoutingPolicyService ?? const SkillRoutingPolicyService();
 
   final LongTaskModeService _modeService;
   final LongTaskPathPolicyService _pathPolicyService;
+  final SkillRoutingPolicyService _skillRoutingPolicyService;
 
   List<String> toolContractsForTask(JsonMap task) {
     // 中文注释: 工具契约把不同任务类型下允许或要求的动作明确写死，避免模型自由发挥越权。
@@ -44,7 +48,7 @@ class LongTaskTransactionContractService {
     } else {
       _addUnique(
         contracts,
-        '能产出章节正文时调用 write_project_file 自动保存；未确认草稿写 drafts/，确认或指定正文写 chapters/。',
+        '能产出章节正文时调用 write_project_file 自动保存；章节级正文、样章和连续正文写 chapters/，局部场景或片段写 scenes/。',
       );
       _addUnique(
         contracts,
@@ -60,9 +64,6 @@ class LongTaskTransactionContractService {
       task['task_type'],
       'chapter',
     ).trim();
-    final mode = _modeService.normalizeMode(
-      ValueReaders.stringValue(task['mode']),
-    );
     final instructions = <String>[];
     if (taskType == 'revision') {
       _addUnique(instructions, '这是修订任务：读取审稿报告和待修订文件，备份后做最小必要修改。');
@@ -84,14 +85,31 @@ class LongTaskTransactionContractService {
       _addUnique(instructions, '写作前先对齐项目规格、章纲、最近摘要、人物状态和风格边界。');
       _addUnique(instructions, '如果上下文不满足写作条件，先保存/呈现需要补齐的选择，而不是硬写。');
     }
-    if (mode == TaskRuntimeConstants.modeSeedToFullNovel ||
-        mode == TaskRuntimeConstants.modeHumanOutlineAiDraft) {
-      _addUnique(
-        instructions,
-        '这是长篇主链任务；本轮开始前优先调用 load_agent_skill 读取 novel-control-station，再按其中适合当前阶段的方法执行。',
-      );
-    }
     return instructions;
+  }
+
+  List<String> skillRoutingForTask(JsonMap task) {
+    // 中文注释: 长任务页和 CLI 共享同一套技能路由提示，避免每个入口各自硬编码 skill 名。
+    final metadata = ValueReaders.mapValue(task['metadata']);
+    final signal = _skillRoutingPolicyService.buildActivationSignal(
+      intent: 'workflow_task',
+      projectType: 'novel',
+      userPrompt: [
+        ValueReaders.stringValue(task['title']),
+        ValueReaders.stringValue(task['goal']),
+        ValueReaders.stringValue(task['brief']),
+      ].where((item) => item.trim().isNotEmpty).join('\n'),
+      routeContext: <String, Object?>{
+        'task_type': ValueReaders.stringValue(task['task_type']),
+        'mode': ValueReaders.stringValue(task['mode']),
+        'title': ValueReaders.stringValue(task['title']),
+        'goal': ValueReaders.stringValue(task['goal']),
+        'brief': ValueReaders.stringValue(task['brief']),
+        'review_type': ValueReaders.stringValue(metadata['review_type']),
+      },
+    );
+    final policy = _skillRoutingPolicyService.resolvePolicy(signal);
+    return _skillRoutingPolicyService.buildGuidanceLines(policy);
   }
 
   List<String> postprocessPlanForTask(JsonMap task) {
@@ -102,8 +120,11 @@ class LongTaskTransactionContractService {
     ).trim();
     final plan = <String>[];
     if (taskType == 'chapter') {
-      _addUnique(plan, '正文写入后，下一步应读取草稿并保存章节摘要。');
-      _addUnique(plan, '若出现明确设定事实，更新世界状态；若角色状态改变，更新角色状态。');
+      _addUnique(plan, '正文写入后，下一步应读取最新正文并保存章节摘要。');
+      _addUnique(
+        plan,
+        '若出现明确设定事实，更新世界状态；若角色状态改变，更新角色状态；若伏笔、时间线或关系发生推进，也要回填对应共享资产。',
+      );
       _addUnique(plan, '保存连续性、剧情或文风风险报告，供用户确认。');
     } else if (taskType == 'revision') {
       _addUnique(plan, '修订后需要复核目标文件、原审稿报告和 diff，保存修订检查报告。');

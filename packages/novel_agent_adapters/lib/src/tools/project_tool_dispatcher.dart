@@ -3,13 +3,16 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 import '../packages/local_skill_group_catalog.dart';
 import '../packages/local_skill_package_catalog.dart';
 import '../storage/project_tree_order_service.dart';
+import '../workflow/project_workflow_runtime_service.dart';
 import '../host/desktop_process_runner.dart';
 import 'project_file_edit_tool_executor.dart';
 import 'project_file_read_tool_executor.dart';
 import 'project_file_write_tool_executor.dart';
 import 'project_agent_skill_tool_executor.dart';
+import 'project_agent_skill_runtime_loadout_service.dart';
 import 'project_gateway_process_service.dart';
 import 'project_gateway_tool_executor.dart';
+import 'project_long_task_tool_executor.dart';
 import 'project_management_tool_executor.dart';
 import 'project_structured_memory_tool_executor.dart';
 import 'project_task_tool_executor.dart';
@@ -26,6 +29,10 @@ class ProjectToolDispatcher implements ToolExecutionPort {
     ProjectToolPathPolicy? pathPolicy,
     ProjectToolResultFactory? resultFactory,
     ProjectTreeOrderService? treeOrderService,
+    BuildModeGuidancePlanInputUseCase? buildModeGuidancePlanInputUseCase,
+    ProjectWorkflowRuntimeService? workflowRuntimeService,
+    ProjectLongTaskToolExecutor? longTaskToolExecutor,
+    ProjectAgentSkillRuntimeLoadoutService? agentSkillRuntimeLoadoutService,
   }) : _toolCallNormalizerService =
            toolCallNormalizerService ?? ToolCallNormalizerService(),
        _resultFactory = resultFactory ?? ProjectToolResultFactory(),
@@ -75,10 +82,22 @@ class ProjectToolDispatcher implements ToolExecutionPort {
            ),
          ),
        ),
+       _longTaskToolExecutor =
+           longTaskToolExecutor ??
+           (buildModeGuidancePlanInputUseCase != null &&
+                   workflowRuntimeService != null
+               ? ProjectLongTaskToolExecutor(
+                   loadPlanInput: buildModeGuidancePlanInputUseCase.execute,
+                   createLongTaskWorkflow:
+                       workflowRuntimeService.createLongTaskWorkflow,
+                   resultFactory: resultFactory,
+                 )
+               : null),
        _agentSkillToolExecutor = ProjectAgentSkillToolExecutor(
          skillPackageCatalog: skillPackageCatalog,
          skillGroupCatalog: skillGroupCatalog,
          resultFactory: resultFactory,
+         runtimeLoadoutService: agentSkillRuntimeLoadoutService,
        );
 
   final ToolCallNormalizerService _toolCallNormalizerService;
@@ -90,6 +109,7 @@ class ProjectToolDispatcher implements ToolExecutionPort {
   final ProjectStructuredMemoryToolExecutor _structuredMemoryToolExecutor;
   final ProjectTaskToolExecutor _taskToolExecutor;
   final ProjectManagementToolExecutor _managementToolExecutor;
+  final ProjectLongTaskToolExecutor? _longTaskToolExecutor;
   final ProjectAgentSkillToolExecutor _agentSkillToolExecutor;
 
   @override
@@ -144,6 +164,21 @@ class ProjectToolDispatcher implements ToolExecutionPort {
           project,
           arguments,
         );
+      case 'update_foreshadow_state':
+        return _structuredMemoryToolExecutor.updateForeshadowState(
+          project,
+          arguments,
+        );
+      case 'update_timeline_state':
+        return _structuredMemoryToolExecutor.updateTimelineState(
+          project,
+          arguments,
+        );
+      case 'update_relationship_state':
+        return _structuredMemoryToolExecutor.updateRelationshipState(
+          project,
+          arguments,
+        );
       case 'summarize_context':
         return _structuredMemoryToolExecutor.summarizeContext(
           project,
@@ -160,6 +195,11 @@ class ProjectToolDispatcher implements ToolExecutionPort {
         return _taskToolExecutor.markTaskStatus(project, arguments);
       case 'present_user_options':
         return _presentUserOptions(arguments);
+      case 'start_long_task_run':
+        if (_longTaskToolExecutor == null) {
+          return _resultFactory.notExecuted('当前宿主尚未接入长任务启动执行器。');
+        }
+        return _longTaskToolExecutor.startLongTaskRun(project, arguments);
       case 'set_agent_tasks':
         return _taskToolExecutor.setAgentTasks(project, arguments);
       case 'load_agent_skill':
@@ -288,10 +328,26 @@ class ProjectToolDispatcher implements ToolExecutionPort {
       arguments['options'] ??
           arguments['choices'] ??
           arguments['items'] ??
-          arguments['buttons'],
+          arguments['buttons'] ??
+          arguments['suggestions'] ??
+          arguments['entries'],
     );
     final result = <JsonMap>[];
     for (final rawEntry in rawOptions) {
+      if (rawEntry is String || rawEntry is num) {
+        final text = ValueReaders.stringValue(rawEntry).trim();
+        if (text.isEmpty) {
+          continue;
+        }
+        result.add(<String, Object?>{
+          'id': 'option_${result.length + 1}',
+          'label': text,
+          'title': text,
+          'description': '',
+          'prompt': text,
+        });
+        continue;
+      }
       final entry = ValueReaders.mapValue(rawEntry);
       if (entry.isEmpty) {
         continue;
@@ -300,21 +356,30 @@ class ProjectToolDispatcher implements ToolExecutionPort {
         entry['label'],
         ValueReaders.stringValue(
           entry['title'],
-          ValueReaders.stringValue(entry['name'], '选项'),
+          ValueReaders.stringValue(
+            entry['name'],
+            ValueReaders.stringValue(entry['text'], '选项'),
+          ),
         ),
       ).trim();
       final description = ValueReaders.stringValue(
         entry['description'],
         ValueReaders.stringValue(
           entry['detail'],
-          ValueReaders.stringValue(entry['summary']),
+          ValueReaders.stringValue(
+            entry['summary'],
+            ValueReaders.stringValue(entry['subtitle']),
+          ),
         ),
       ).trim();
       final prompt = ValueReaders.stringValue(
         entry['prompt'],
         ValueReaders.stringValue(
           entry['value'],
-          ValueReaders.stringValue(entry['title'], label),
+          ValueReaders.stringValue(
+            entry['title'],
+            ValueReaders.stringValue(entry['text'], label),
+          ),
         ),
       ).trim();
       final id = ValueReaders.stringValue(

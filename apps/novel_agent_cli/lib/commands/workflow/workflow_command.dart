@@ -4,6 +4,7 @@ import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../../output/terminal_printer.dart';
+import 'workflow_output_summary_service.dart';
 
 typedef CliGenerateDraftUseCaseFactory =
     GenerateDraftUseCase Function(
@@ -23,6 +24,7 @@ class WorkflowCommand {
     required ProjectWorkflowRuntimeService workflowRuntimeService,
     required TerminalPrinter printer,
     ModelExecutionProfileService? modelExecutionProfileService,
+    WorkflowOutputSummaryService? workflowOutputSummaryService,
   }) : _settingsRepository = settingsRepository,
        _projectRepository = projectRepository,
        _saveDraftUseCase = saveDraftUseCase,
@@ -32,7 +34,9 @@ class WorkflowCommand {
        _workflowRuntimeService = workflowRuntimeService,
        _printer = printer,
        _modelExecutionProfileService =
-           modelExecutionProfileService ?? ModelExecutionProfileService();
+           modelExecutionProfileService ?? ModelExecutionProfileService(),
+       _workflowOutputSummaryService =
+           workflowOutputSummaryService ?? const WorkflowOutputSummaryService();
 
   final SettingsRepository _settingsRepository;
   final ProjectRepository _projectRepository;
@@ -43,6 +47,7 @@ class WorkflowCommand {
   final ProjectWorkflowRuntimeService _workflowRuntimeService;
   final TerminalPrinter _printer;
   final ModelExecutionProfileService _modelExecutionProfileService;
+  final WorkflowOutputSummaryService _workflowOutputSummaryService;
 
   Future<int> run(List<String> args) async {
     // 中文注释: workflow 命令从这里统一分发，确保 GUI 与 CLI 共享同一套长任务运行时而不是两套逻辑。
@@ -169,7 +174,7 @@ class WorkflowCommand {
           title: title,
         );
       }
-      _printer.success('草稿生成完成');
+      _printer.success('内容生成完成');
       _printer.info('项目: ${project.name}');
       _printer.info('模型: ${result.modelId}');
       _printer.info('上下文文件: ${result.selectedPaths.length}');
@@ -177,10 +182,10 @@ class WorkflowCommand {
       if (savedPath.isNotEmpty) {
         _printer.info('已保存: $savedPath');
       }
-      _printer.block('草稿正文', result.draftMarkdown);
+      _printer.block('正文内容', result.draftMarkdown);
       return 0;
     } catch (error) {
-      _printer.error('草稿生成失败: $error');
+      _printer.error('内容生成失败: $error');
       return 1;
     }
   }
@@ -714,6 +719,16 @@ class WorkflowCommand {
         _printer.info('输出: $path');
       }
     }
+    final runCenterContract = _workflowOutputSummaryService
+        .extractRunCenterContract(result);
+    if (runCenterContract.isNotEmpty) {
+      final briefLines = _workflowOutputSummaryService.runCenterBriefLines(
+        runCenterContract,
+      );
+      if (briefLines.isNotEmpty) {
+        _printer.block('长任务现场摘要', briefLines.join('\n'));
+      }
+    }
     final response = ValueReaders.mapValue(result['response']);
     final content = ValueReaders.stringValue(response['content']).trim();
     if (content.isNotEmpty) {
@@ -793,10 +808,10 @@ class WorkflowCommand {
   }
 
   String _titleFromPrompt(String prompt) {
-    // 中文注释: CLI 自动标题规则与 GUI 保持一致，确保两端生成的 drafts/ 命名口径相同。
+    // 中文注释: CLI 自动标题规则与 GUI 保持一致，确保两端自动生成的正文标题口径相同。
     final firstLine = prompt.split('\n').first.trim();
     if (firstLine.isEmpty) {
-      return '新草稿';
+      return '新正文';
     }
     return firstLine.length > 24 ? firstLine.substring(0, 24) : firstLine;
   }

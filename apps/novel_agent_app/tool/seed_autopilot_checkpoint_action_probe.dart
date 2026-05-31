@@ -7,7 +7,7 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 import 'probe_support.dart';
 
 Future<void> main() async {
-  // 中文注释: 该探针验证 mode 1 执行后的 checkpoint review 会真实带出严重度与动作包，并能继续物化审稿任务。
+  // 中文注释: 该探针验证 mode 1 执行后的 checkpoint review 会真实带出严重度与动作包，并能继续物化返工跟进链。
   final apiConfig = await loadProbeApiConfig();
   final provider = ProviderEndpointSettings(
     id: 'seed_checkpoint_action_probe',
@@ -114,7 +114,7 @@ Future<void> main() async {
         'tracking/modes/seed_autopilot_novel/guidance.md',
         'styles/seed_autopilot_style.md',
       ],
-      'output_paths': <Object?>['drafts/第01章_seed_to_full.md'],
+      'output_paths': <Object?>['chapters/第01章_seed_to_full.md'],
       'metadata': <String, Object?>{
         'plan_id': 'plan_test',
         'workflow_mode': TaskRuntimeConstants.modeSeedToFullNovel,
@@ -152,7 +152,7 @@ Future<void> main() async {
     final followup = await workflowRuntimeService.applyCheckpointReviewAction(
       project,
       checkpointReviewPath,
-      'create_followup_review_tasks',
+      'request_revision_followup',
     );
 
     report.addAll(<String, Object?>{
@@ -164,11 +164,11 @@ Future<void> main() async {
           ValueReaders.mapList(actionPackage['actions']).any(
             (item) =>
                 ValueReaders.stringValue(item['id']) ==
-                    'create_followup_review_tasks' &&
+                    'request_revision_followup' &&
                 ValueReaders.boolValue(item['enabled']),
           ) &&
           ValueReaders.boolValue(followup['ok']) &&
-          ValueReaders.mapList(followup['tasks']).isNotEmpty,
+          ValueReaders.mapList(followup['review_tasks']).isNotEmpty,
       'checkpoint_review_path': checkpointReviewPath,
       'severity': ValueReaders.stringValue(actionPackage['severity']),
       'severity_label': ValueReaders.stringValue(
@@ -180,7 +180,9 @@ Future<void> main() async {
       'recommended_action_id': ValueReaders.stringValue(
         actionPackage['recommended_action_id'],
       ),
-      'followup_task_count': ValueReaders.mapList(followup['tasks']).length,
+      'followup_task_count': ValueReaders.mapList(
+        followup['review_tasks'],
+      ).length,
       'followup_changed_paths': ValueReaders.stringList(
         followup['changed_paths'],
       ),

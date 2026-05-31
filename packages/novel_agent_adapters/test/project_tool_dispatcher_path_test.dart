@@ -84,7 +84,7 @@ void main() {
       () async {
         // 中文注释: 局部读取要能返回稳定行窗，便于后续按行修订，不要求模型每次整篇回读。
         final hostPort = _FakeProjectToolHostPort(
-          files: <String, String>{'drafts/source.md': 'A\nB\nC\nD\n'},
+          files: <String, String>{'chapters/source.md': 'A\nB\nC\nD\n'},
         );
         final dispatcher = ProjectToolDispatcher(hostPort: hostPort);
         final result = await dispatcher.execute(
@@ -96,7 +96,7 @@ void main() {
           toolCall: const <String, Object?>{
             'name': 'read_project_file',
             'arguments': <String, Object?>{
-              'relative_path': 'drafts/source.md',
+              'relative_path': 'chapters/source.md',
               'start_line': 2,
               'limit': 2,
               'exclude_line_numbers': true,
@@ -149,6 +149,38 @@ void main() {
     );
 
     test(
+      'present_user_options accepts plain string suggestions',
+      () async {
+        // 中文注释: 即使模型只给出字符串数组，入口层也应尽量长出按钮而不是整轮失效。
+        final hostPort = _FakeProjectToolHostPort(
+          files: const <String, String>{},
+        );
+        final dispatcher = ProjectToolDispatcher(hostPort: hostPort);
+        final result = await dispatcher.execute(
+          project: const ProjectDescriptor(
+            id: 'demo',
+            name: '示例项目',
+            rootPath: 'D:/demo',
+          ),
+          toolCall: const <String, Object?>{
+            'name': 'present_user_options',
+            'arguments': <String, Object?>{
+              'question': '先选一个方向',
+              'suggestions': <Object?>['偏悬疑开局', '偏热血开局'],
+            },
+          },
+        );
+        expect(result['ok'], isTrue);
+        final options = ValueReaders.objectList(
+          result['options'],
+        ).map(ValueReaders.mapValue).toList(growable: false);
+        expect(options, hasLength(2));
+        expect(options.first['label'], '偏悬疑开局');
+        expect(options.last['prompt'], '偏热血开局');
+      },
+    );
+
+    test(
       'run_continuity_check returns markdown and json sibling paths',
       () async {
         // 中文注释: 连续性检查报告应同时落 markdown 与 json，且 json 路径必须保留正确扩展名。
@@ -187,7 +219,7 @@ void main() {
     test('edit_project_file supports regex replacement', () async {
       // 中文注释: 正则替换能减少大段 old_text 精确匹配失败的脆弱性。
       final hostPort = _FakeProjectToolHostPort(
-        files: <String, String>{'drafts/source.md': 'Alpha 01\nAlpha 02\n'},
+        files: <String, String>{'chapters/source.md': 'Alpha 01\nAlpha 02\n'},
       );
       final dispatcher = ProjectToolDispatcher(hostPort: hostPort);
       final result = await dispatcher.execute(
@@ -199,7 +231,7 @@ void main() {
         toolCall: const <String, Object?>{
           'name': 'edit_project_file',
           'arguments': <String, Object?>{
-            'relative_path': 'drafts/source.md',
+            'relative_path': 'chapters/source.md',
             'operation': 'replace',
             'pattern': r'Alpha \d+',
             'content': 'Beta',
@@ -208,13 +240,13 @@ void main() {
         },
       );
       expect(result['ok'], isTrue);
-      expect(hostPort.fileContent('drafts/source.md'), 'Beta\nBeta\n');
+      expect(hostPort.fileContent('chapters/source.md'), 'Beta\nBeta\n');
     });
 
     test('edit_project_file supports anchored range replacement', () async {
       // 中文注释: 锚点范围替换要能只换中间内容，保留前后边界不动。
       final hostPort = _FakeProjectToolHostPort(
-        files: <String, String>{'drafts/source.md': 'BEGIN\nold body\nEND\n'},
+        files: <String, String>{'chapters/source.md': 'BEGIN\nold body\nEND\n'},
       );
       final dispatcher = ProjectToolDispatcher(hostPort: hostPort);
       final result = await dispatcher.execute(
@@ -226,7 +258,7 @@ void main() {
         toolCall: const <String, Object?>{
           'name': 'edit_project_file',
           'arguments': <String, Object?>{
-            'relative_path': 'drafts/source.md',
+            'relative_path': 'chapters/source.md',
             'operation': 'replace',
             'start_text': 'BEGIN\n',
             'end_text': '\nEND',
@@ -236,7 +268,7 @@ void main() {
       );
       expect(result['ok'], isTrue);
       expect(
-        hostPort.fileContent('drafts/source.md'),
+        hostPort.fileContent('chapters/source.md'),
         'BEGIN\nnew body\nEND\n',
       );
     });
@@ -247,8 +279,8 @@ void main() {
         // 中文注释: 负数行号要能从文件尾部回数，方便快速抽取结尾段落。
         final hostPort = _FakeProjectToolHostPort(
           files: <String, String>{
-            'drafts/source.md': 'A\nB\nC\nD\n',
-            'drafts/target.md': 'HEAD\n',
+            'chapters/source.md': 'A\nB\nC\nD\n',
+            'chapters/target.md': 'HEAD\n',
           },
         );
         final dispatcher = ProjectToolDispatcher(hostPort: hostPort);
@@ -261,8 +293,8 @@ void main() {
           toolCall: const <String, Object?>{
             'name': 'manipulate_project_file_lines',
             'arguments': <String, Object?>{
-              'sourceRelativePath': 'drafts/source.md',
-              'target_relative_path': 'drafts/target.md',
+              'sourceRelativePath': 'chapters/source.md',
+              'target_relative_path': 'chapters/target.md',
               'operation': 'copy',
               'start_line': -2,
               'end_line': -1,
@@ -270,7 +302,7 @@ void main() {
           },
         );
         expect(result['ok'], isTrue);
-        expect(hostPort.fileContent('drafts/target.md'), 'HEAD\nD\n');
+        expect(hostPort.fileContent('chapters/target.md'), 'HEAD\nD\n');
       },
     );
   });
@@ -338,6 +370,9 @@ class _FakeProjectToolHostPort implements ProjectToolHostPort {
   }
 
   @override
+  Future<void> writeExternalTextFile(String absolutePath, String content) async {}
+
+  @override
   Future<String?> readTextFile(String rootPath, String relativePath) async {
     return _files[relativePath];
   }
@@ -351,3 +386,4 @@ class _FakeProjectToolHostPort implements ProjectToolHostPort {
     _files[relativePath] = content;
   }
 }
+

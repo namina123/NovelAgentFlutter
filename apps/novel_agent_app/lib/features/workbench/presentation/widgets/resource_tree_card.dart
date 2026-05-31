@@ -1,12 +1,95 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../app/theme/app_chrome.dart';
-import '../../../../../app/theme/app_palette.dart';
+import '../../../../../app/theme/theme_surface_spec.dart';
+import '../../../../../shared/theme/novel_theme_context.dart';
 import '../models/workbench_view_data.dart';
+import 'resource_tree_empty_state.dart';
+import 'resource_tree_entry_tile.dart';
 
 class ResourceTreeCard extends StatelessWidget {
   const ResourceTreeCard({
     super.key,
+    required this.entries,
+    required this.onEntrySelected,
+    this.embeddedInScrollView = false,
+  });
+
+  final List<ResourceEntryViewData> entries;
+  final ValueChanged<String> onEntrySelected;
+  final bool embeddedInScrollView;
+
+  @override
+  Widget build(BuildContext context) {
+    // 中文注释: 文件树列表单独封装后，后续切到树控件或虚拟滚动时不需要碰资源面板外层结构。
+    final surface = context.novelThemeSurfaces.panel;
+    final listChildren = _buildEntryChildren(surface);
+    final body = embeddedInScrollView
+        ? _EmbeddedTreeBody(children: listChildren)
+        : _ScrollableTreeBody(
+            entries: entries,
+            onEntrySelected: onEntrySelected,
+          );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                '项目目录',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: surface.mutedForegroundColor,
+                ),
+              ),
+            ),
+            Text(
+              '${entries.length} 项',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: surface.mutedForegroundColor,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (embeddedInScrollView) body else Expanded(child: body),
+      ],
+    );
+  }
+
+  List<Widget> _buildEntryChildren(ThemeSurfaceSpec surface) {
+    if (entries.isEmpty) {
+      return const <Widget>[ResourceTreeEmptyState()];
+    }
+    final widgets = <Widget>[];
+    for (var index = 0; index < entries.length; index += 1) {
+      final entry = entries[index];
+      widgets.add(
+        ResourceTreeEntryTile(
+          entry: entry,
+          onPressed: () => onEntrySelected(entry.id),
+        ),
+      );
+      if (index < entries.length - 1) {
+        widgets.add(
+          Divider(
+            height: 1,
+            indent: 10,
+            endIndent: 10,
+            color: surface.borderColor.withValues(alpha: 0.35),
+          ),
+        );
+      }
+    }
+    return widgets;
+  }
+}
+
+class _ScrollableTreeBody extends StatelessWidget {
+  const _ScrollableTreeBody({
     required this.entries,
     required this.onEntrySelected,
   });
@@ -16,111 +99,55 @@ class ResourceTreeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 中文注释: 文件树列表单独封装后，后续切到树控件或虚拟滚动时不需要碰资源面板外层结构。
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final surfaceColor = isDark
-        ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.82)
-        : Colors.white.withValues(alpha: 0.66);
-    final lineColor = isDark ? theme.colorScheme.outline : AppPalette.line;
-    final textColor = isDark ? theme.colorScheme.onSurface : AppPalette.text;
-    final mutedTextColor = isDark
-        ? theme.colorScheme.onSurface.withValues(alpha: 0.72)
-        : AppPalette.mutedText;
-    final accentColor = isDark
-        ? theme.colorScheme.primary
-        : AppPalette.lineStrong;
-    if (entries.isEmpty) {
-      return DecoratedBox(
-        decoration: BoxDecoration(
-          color: surfaceColor,
-          borderRadius: AppChrome.surfaceBorderRadius,
-          border: Border.all(color: lineColor, width: AppChrome.borderWidth),
-        ),
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Text(
-              '当前项目还没有目录内容。',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
-                height: 1.5,
-                fontWeight: FontWeight.w600,
-                color: mutedTextColor,
-              ),
-            ),
-          ),
-        ),
-      );
-    }
+    final surface = context.novelThemeSurfaces.panel;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: surfaceColor,
-        borderRadius: AppChrome.surfaceBorderRadius,
-        border: Border.all(color: lineColor, width: AppChrome.borderWidth),
+        color: surface.backgroundColor.withValues(alpha: 0.42),
+        borderRadius: BorderRadius.circular(surface.radius),
       ),
-      child: ListView.separated(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        itemCount: entries.length,
-        separatorBuilder: (_, index) => Divider(height: 1, color: lineColor),
-        itemBuilder: (context, index) {
-          final entry = entries[index];
-          return Material(
-            color: Colors.transparent,
-            child: ListTile(
-              dense: true,
-              minTileHeight: 34,
-              minLeadingWidth: 18,
-              visualDensity: const VisualDensity(horizontal: -2, vertical: -3),
-              contentPadding: EdgeInsets.only(
-                left: 10 + (entry.depth * 14),
-                right: 10,
+      child: entries.isEmpty
+          ? const ResourceTreeEmptyState()
+          : ListView.separated(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              itemCount: entries.length,
+              separatorBuilder: (_, index) => Divider(
+                height: 1,
+                indent: 10,
+                endIndent: 10,
+                color: surface.borderColor.withValues(alpha: 0.35),
               ),
-              leading: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (entry.isDirectory)
-                    Icon(
-                      entry.hasChildren
-                          ? (entry.isExpanded
-                                ? Icons.keyboard_arrow_down_rounded
-                                : Icons.keyboard_arrow_right_rounded)
-                          : Icons.chevron_right_rounded,
-                      size: 16,
-                      color: entry.isSelected ? accentColor : mutedTextColor,
-                    )
-                  else
-                    const SizedBox(width: 16),
-                  const SizedBox(width: 2),
-                  Icon(
-                    entry.isDirectory
-                        ? Icons.folder_outlined
-                        : Icons.description_outlined,
-                    size: 16,
-                    color: entry.isSelected ? accentColor : mutedTextColor,
-                  ),
-                ],
-              ),
-              title: Text(
-                entry.isDirectory
-                    ? '${entry.title}(${entry.childCount})'
-                    : entry.title,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: entry.isSelected
-                      ? FontWeight.w800
-                      : FontWeight.w600,
-                  color: entry.isSelected ? accentColor : textColor,
-                ),
-              ),
-              onTap: () {
-                // 中文注释: 条目点击只上报 id，让外层决定是展开目录还是打开文档。
-                onEntrySelected(entry.id);
+              itemBuilder: (context, index) {
+                final entry = entries[index];
+                return ResourceTreeEntryTile(
+                  entry: entry,
+                  onPressed: () => onEntrySelected(entry.id),
+                );
               },
             ),
-          );
-        },
+    );
+  }
+}
+
+class _EmbeddedTreeBody extends StatelessWidget {
+  const _EmbeddedTreeBody({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final surface = context.novelThemeSurfaces.panel;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: surface.backgroundColor.withValues(alpha: 0.42),
+        borderRadius: BorderRadius.circular(surface.radius),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 6),
+          ...children,
+          const SizedBox(height: 6),
+        ],
       ),
     );
   }

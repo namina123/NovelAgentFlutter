@@ -71,6 +71,12 @@ class ChapterAtomicExecutionBuilderService {
       'context_settings': ValueReaders.mapValue(input['context_settings']),
       'model_profile': ValueReaders.mapValue(input['model_profile']),
       'memory_sections': ValueReaders.objectList(input['memory_sections']),
+      'expression_constraint_profiles': ValueReaders.objectList(
+        input['expression_constraint_profiles'],
+      ),
+      'project_expression_constraint_bindings': ValueReaders.objectList(
+        input['project_expression_constraint_bindings'],
+      ),
       'project_file_section_plan': ValueReaders.objectList(
         input['project_file_section_plan'],
       ),

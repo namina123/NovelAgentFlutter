@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../app/layout/app_layout_metrics.dart';
 import '../../app/layout/app_layout_scope.dart';
+import '../../app/routing/app_destination.dart';
 import '../../app/routing/app_router.dart';
 import '../../app/state/app_shell_controller.dart';
+import 'app_shell_activity_rail.dart';
+import 'app_shell_compact_scaffold.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.controller});
@@ -35,25 +38,40 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
-    // 中文注释: 根壳层只监听当前页面切换，不把具体页面布局揉进一个大 build 方法里。
-    return AnimatedBuilder(
-      animation: widget.controller,
-      builder: (context, _) {
+    // 中文注释: 根壳层只监听目的地切换，把页面内部数据更新留给各自 page-scope listenable 处理。
+    return ValueListenableBuilder<AppDestination>(
+      valueListenable: widget.controller.destinationListenable,
+      builder: (context, destination, _) {
         final metrics = AppLayoutMetrics.fromMediaQuery(MediaQuery.of(context));
+        final page = AppLayoutScope(
+          metrics: metrics,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 180),
+            child: KeyedSubtree(
+              key: ValueKey(destination),
+              child: _router.buildPage(widget.controller),
+            ),
+          ),
+        );
 
         return Scaffold(
           resizeToAvoidBottomInset: false,
           body: SafeArea(
-            child: AppLayoutScope(
-              metrics: metrics,
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 180),
-                child: KeyedSubtree(
-                  key: ValueKey(widget.controller.viewModel.destination),
-                  child: _router.buildPage(widget.controller),
-                ),
-              ),
-            ),
+            child: metrics.isCompact
+                ? AppShellCompactScaffold(
+                    selectedDestination: destination,
+                    actionHandler: widget.controller,
+                    page: page,
+                  )
+                : Row(
+                    children: [
+                      AppShellActivityRail(
+                        selectedDestination: destination,
+                        actionHandler: widget.controller,
+                      ),
+                      Expanded(child: page),
+                    ],
+                  ),
           ),
         );
       },

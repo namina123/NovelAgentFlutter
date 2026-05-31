@@ -1,8 +1,15 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import 'long_task_chapter_gate_disposition_service.dart';
+import 'task_runtime_constants.dart';
 
 class LongTaskChapterGatePolicyService {
-  const LongTaskChapterGatePolicyService();
+  const LongTaskChapterGatePolicyService({
+    LongTaskChapterGateDispositionService? dispositionService,
+  }) : _dispositionService =
+           dispositionService ?? const LongTaskChapterGateDispositionService();
+
+  final LongTaskChapterGateDispositionService _dispositionService;
 
   String runtimeBaselineIdForTask(
     JsonMap task, {
@@ -64,30 +71,21 @@ class LongTaskChapterGatePolicyService {
     String runtimeBaselineId = '',
   }) {
     // 中文注释: 这里把审稿结果翻译成 gate 决策，后续 adapters 只需要按合同决定是否物化修复任务。
-    if (runtimeBaselineId.trim() != 'chapter_collaboration_autorun') {
-      return const <String, Object?>{
-        'action': 'pass_gate',
-        'reason': 'baseline_has_no_gate',
-        'blocks_auto_advance': false,
-      };
+    return _dispositionService.resolve(
+      reviewReport,
+      runtimeBaselineId: runtimeBaselineId,
+    );
+  }
+
+  String statusAfterReviewOutcome(JsonMap decision, String defaultStatus) {
+    // 中文注释: 章级 gate 只在明确阻塞用户或人工介入时拦下当前 review 任务，其他情况沿用默认完成策略。
+    final disposition = ValueReaders.stringValue(
+      decision['disposition'],
+    ).trim();
+    if (disposition == 'blocked_wait_user' ||
+        disposition == 'manual_attention') {
+      return TaskRuntimeConstants.statusWaitingUser;
     }
-    final issues = ValueReaders.mapList(reviewReport['issues']);
-    final suggestions = ValueReaders.stringList(reviewReport['suggestions']);
-    if (issues.isEmpty && suggestions.isEmpty) {
-      return const <String, Object?>{
-        'action': 'pass_gate',
-        'reason': 'review_clean',
-        'blocks_auto_advance': false,
-      };
-    }
-    return <String, Object?>{
-      'action': 'create_repair_task',
-      'reason': issues.isNotEmpty
-          ? 'review_has_issues'
-          : 'review_has_suggestions',
-      'blocks_auto_advance': true,
-      'issue_count': issues.length,
-      'suggestion_count': suggestions.length,
-    };
+    return defaultStatus;
   }
 }

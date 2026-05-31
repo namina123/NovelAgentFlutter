@@ -223,7 +223,10 @@ class ChapterAtomicResultRecorderService {
     final normalizedToolNames = ValueReaders.stringList(toolNames);
     final memoryUpdated =
         normalizedToolNames.contains('update_world_state') ||
-        normalizedToolNames.contains('update_character_state');
+        normalizedToolNames.contains('update_character_state') ||
+        normalizedToolNames.contains('update_foreshadow_state') ||
+        normalizedToolNames.contains('update_timeline_state') ||
+        normalizedToolNames.contains('update_relationship_state');
     if (isRevision) {
       stepUpdates['review_changes'] =
           normalizedToolNames.contains('run_continuity_check')

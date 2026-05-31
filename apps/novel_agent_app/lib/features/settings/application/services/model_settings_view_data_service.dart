@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../../presentation/models/custom_model_reasoning_override_view_data.dart';
 import '../../presentation/models/model_editor_view_data.dart';
 import '../../presentation/models/model_parameter_entry_view_data.dart';
 import '../../presentation/models/settings_search_option.dart';
@@ -10,7 +13,8 @@ class ModelSettingsViewDataService {
     ProviderProfileService? profileService,
   }) : _modelExecutionProfileService =
            modelExecutionProfileService ?? ModelExecutionProfileService(),
-       _catalogService = ProviderCatalogService.seeded(),
+       _legacyCatalogBridgeService = LegacyProviderCatalogBridgeService(),
+       _offeringCatalogService = WritingModelOfferingCatalogService(),
        _profileService =
            profileService ??
            ProviderProfileService(
@@ -19,7 +23,8 @@ class ModelSettingsViewDataService {
            );
 
   final ModelExecutionProfileService _modelExecutionProfileService;
-  final ProviderCatalogService _catalogService;
+  final LegacyProviderCatalogBridgeService _legacyCatalogBridgeService;
+  final WritingModelOfferingCatalogService _offeringCatalogService;
   final ProviderProfileService _profileService;
 
   ModelEditorViewData build(
@@ -27,21 +32,18 @@ class ModelSettingsViewDataService {
     Map<String, Object?> modelSettings,
   ) {
     // 中文注释: 这个服务只负责把设置持久化结构投影成模型编辑页可直接消费的数据。
-    final execution = _modelExecutionProfileService.resolve(settings: settings);
+    final modelSettingsDocument = ValueReaders.mapValue(modelSettings);
+    final execution = _modelExecutionProfileService.resolve(
+      settings: _settingsWithModelSettings(settings, modelSettingsDocument),
+    );
     final runtimeProfile = ValueReaders.mapValue(execution['runtime_profile']);
     final metadata = _profileService.metadata.buildEditorMetadata(
       runtimeProfile,
     );
-    final customParameters = <ModelParameterEntryViewData>[];
-    for (final entry in ValueReaders.mapList(
-      metadata['model_default_parameters'],
-    )) {
-      final key = ValueReaders.stringValue(entry['key']).trim();
-      if (_isStandardKey(key)) {
-        continue;
-      }
-      customParameters.add(ModelParameterEntryViewData.fromMap(entry));
-    }
+    final customParameters = _customParameters(
+      modelSettingsDocument,
+      metadata,
+    );
     return ModelEditorViewData(
       providerId: ValueReaders.stringValue(metadata['provider_id']),
       providerLabel: ValueReaders.stringValue(metadata['provider_label']),
@@ -52,6 +54,12 @@ class ModelSettingsViewDataService {
         ValueReaders.stringValue(execution['resolved_model_id']),
       ),
       supportsReasoning: ValueReaders.boolValue(metadata['supports_reasoning']),
+      reasoningCanToggle: ValueReaders.boolValue(
+        metadata['reasoning_can_toggle'],
+      ),
+      reasoningDefaultEnabled: ValueReaders.boolValue(
+        metadata['reasoning_default_enabled'],
+      ),
       supportsTemperature: ValueReaders.boolValue(
         metadata['supports_temperature'],
         true,
@@ -66,6 +74,18 @@ class ModelSettingsViewDataService {
       supportsToolChoice: ValueReaders.boolValue(
         metadata['supports_tool_choice'],
       ),
+      supportsFileAttachments: ValueReaders.boolValue(
+        metadata['supports_file_attachments'],
+      ),
+      supportsImageAttachments: ValueReaders.boolValue(
+        metadata['supports_image_attachments'],
+      ),
+      supportsAttachmentUrlsOnly: ValueReaders.boolValue(
+        metadata['supports_attachment_urls_only'],
+      ),
+      supportsMultiAttachments: ValueReaders.boolValue(
+        metadata['supports_multi_attachments'],
+      ),
       thinkingParameterFormat: ValueReaders.stringValue(
         metadata['thinking_parameter_format'],
         'none',
@@ -75,21 +95,31 @@ class ModelSettingsViewDataService {
         '深度思考',
       ),
       thinkingEnabled: ValueReaders.boolValue(
-        runtimeProfile['thinking_enabled'],
+        modelSettingsDocument['thinking_enabled'],
+        ValueReaders.boolValue(metadata['reasoning_default_enabled']),
       ),
       thinkingEffortSupported: ValueReaders.boolValue(
         metadata['thinking_effort_supported'],
       ),
       thinkingEffort: ValueReaders.stringValue(
-        runtimeProfile['thinking_effort'],
+        modelSettingsDocument['thinking_effort'],
         'high',
       ),
       thinkingEffortOptions: ValueReaders.stringList(
         metadata['thinking_effort_options'],
       ),
-      temperature: ValueReaders.doubleValue(runtimeProfile['temperature'], 0.8),
-      topP: ValueReaders.doubleValue(runtimeProfile['top_p'], 0.95),
-      topK: ValueReaders.intValue(runtimeProfile['top_k']),
+      temperature: ValueReaders.doubleValue(
+        modelSettingsDocument['temperature'],
+        ValueReaders.doubleValue(runtimeProfile['temperature'], 0.8),
+      ),
+      topP: ValueReaders.doubleValue(
+        modelSettingsDocument['top_p'],
+        ValueReaders.doubleValue(runtimeProfile['top_p'], 0.95),
+      ),
+      topK: ValueReaders.intValue(
+        modelSettingsDocument['top_k'],
+        ValueReaders.intValue(runtimeProfile['top_k']),
+      ),
       modelSuggestions: _modelSuggestions(
         ValueReaders.stringValue(metadata['provider_id']),
       ),
@@ -100,21 +130,52 @@ class ModelSettingsViewDataService {
       unsupportedParameters: ValueReaders.stringList(
         metadata['unsupported_parameters'],
       ),
+      customReasoningOverride: _customReasoningOverrideViewData(
+        modelSettingsDocument,
+        metadata,
+      ),
     );
   }
 
   List<SettingsSearchOption<String>> _modelSuggestions(String providerId) {
-    return _catalogService
-        .modelSuggestions(
-          providerId: providerId,
-          includeImage: false,
-          limit: 48,
-        )
+    final cleanProviderId = providerId.trim();
+    if (cleanProviderId.isEmpty) {
+      return const <SettingsSearchOption<String>>[];
+    }
+    final suggestions = _offeringCatalogService.offeringOptions(
+      providerId: cleanProviderId,
+      limit: 48,
+    );
+    if (suggestions.isEmpty) {
+      final legacySuggestions = _legacyCatalogBridgeService
+          .legacyModelSuggestions(
+        providerId: cleanProviderId,
+        includeImage: false,
+        limit: 48,
+      );
+      final filtered = legacySuggestions.where(
+        (entry) =>
+            ValueReaders.stringValue(entry['provider_id']) == cleanProviderId,
+      );
+      return filtered
+          .map(
+            (entry) => SettingsSearchOption<String>(
+              value: ValueReaders.stringValue(entry['id']),
+              label: ValueReaders.stringValue(entry['id']),
+              note: ValueReaders.stringValue(entry['provider_label']),
+            ),
+          )
+          .toList(growable: false);
+    }
+    return suggestions
         .map(
           (entry) => SettingsSearchOption<String>(
-            value: ValueReaders.stringValue(entry['id']),
-            label: ValueReaders.stringValue(entry['id']),
-            note: ValueReaders.stringValue(entry['provider_label']),
+            value: ValueReaders.stringValue(entry['model_id']),
+            label: ValueReaders.stringValue(entry['model_id']),
+            note: ValueReaders.stringValue(
+              entry['display_label'],
+              ValueReaders.stringValue(entry['provider_label']),
+            ),
           ),
         )
         .toList(growable: false);
@@ -128,5 +189,108 @@ class ModelSettingsViewDataService {
       'top_p',
       'top_k',
     }.contains(key);
+  }
+
+  List<ModelParameterEntryViewData> _customParameters(
+    Map<String, Object?> modelSettings,
+    Map<String, Object?> metadata,
+  ) {
+    final stored = ValueReaders.mapList(modelSettings['custom_parameters']);
+    if (stored.isNotEmpty) {
+      return stored
+          .map(ModelParameterEntryViewData.fromMap)
+          .toList(growable: false);
+    }
+
+    final result = <ModelParameterEntryViewData>[];
+    for (final entry in ValueReaders.mapList(
+      metadata['model_default_parameters'],
+    )) {
+      final key = ValueReaders.stringValue(entry['key']).trim();
+      if (_isStandardKey(key)) {
+        continue;
+      }
+      result.add(ModelParameterEntryViewData.fromMap(entry));
+    }
+    return result;
+  }
+
+  CustomModelReasoningOverrideViewData _customReasoningOverrideViewData(
+    Map<String, Object?> modelSettings,
+    Map<String, Object?> metadata,
+  ) {
+    final rawOverride = ValueReaders.mapValue(
+      modelSettings['custom_reasoning_override'],
+    );
+    final strategy = ValueReaders.mapValue(
+      rawOverride['reasoning_toggle_parameter_strategy'],
+    );
+    final effortStrategy = ValueReaders.mapValue(
+      rawOverride['reasoning_effort_parameter_strategy'],
+    );
+    final rawEffortValues = ValueReaders.mapValue(effortStrategy['values']);
+    final effortValues = <String, String>{};
+    for (final option in const ['auto', 'low', 'medium', 'high', 'max']) {
+      effortValues[option] = ValueReaders.stringValue(
+        rawEffortValues[option],
+        option,
+      );
+    }
+    return CustomModelReasoningOverrideViewData(
+      isKnownWritingModel: ValueReaders.stringValue(
+        metadata['matched_writing_model_canonical_id'],
+      ).trim().isNotEmpty,
+      supportsReasoning: ValueReaders.boolValue(
+        rawOverride['supports_reasoning'],
+      ),
+      reasoningCanToggle: ValueReaders.boolValue(
+        rawOverride['reasoning_can_toggle'],
+        true,
+      ),
+      reasoningDefaultEnabled: ValueReaders.boolValue(
+        rawOverride['reasoning_default_enabled'],
+      ),
+      reasoningSupportsEffort: ValueReaders.boolValue(
+        rawOverride['reasoning_supports_effort'],
+      ),
+      toggleStrategyKind: ValueReaders.stringValue(strategy['kind'], 'boolean'),
+      toggleKey: ValueReaders.stringValue(strategy['key'], 'enable_thinking'),
+      toggleEnabledValue: _stringifyOverrideValue(
+        strategy['enabled_value'],
+        fallback: 'true',
+      ),
+      toggleDisabledValue: _stringifyOverrideValue(
+        strategy['disabled_value'],
+        fallback: 'false',
+      ),
+      effortKey: ValueReaders.stringValue(
+        effortStrategy['key'],
+        'reasoning_effort',
+      ),
+      effortValues: effortValues,
+    );
+  }
+
+  AppSettings _settingsWithModelSettings(
+    AppSettings settings,
+    Map<String, Object?> modelSettings,
+  ) {
+    return settings.copyWith(
+      extraSettings: <String, Object?>{
+        ...settings.extraSettings,
+        'model_settings': ValueReaders.deepCopyMap(modelSettings),
+      },
+    );
+  }
+
+  String _stringifyOverrideValue(Object? value, {required String fallback}) {
+    if (value == null) {
+      return fallback;
+    }
+    if (value is Map) {
+      return jsonEncode(value);
+    }
+    final text = value.toString().trim();
+    return text.isEmpty ? fallback : text;
   }
 }

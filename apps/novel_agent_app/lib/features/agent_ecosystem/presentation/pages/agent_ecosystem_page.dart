@@ -8,6 +8,7 @@ import '../widgets/ecosystem_browser_panel.dart';
 import '../widgets/ecosystem_detail_panel.dart';
 import '../widgets/ecosystem_editor_overlay.dart';
 import '../widgets/ecosystem_import_overlay.dart';
+import '../widgets/project_skill_loadout_detail_panel.dart';
 
 class AgentEcosystemPage extends StatelessWidget {
   const AgentEcosystemPage({
@@ -121,6 +122,14 @@ class AgentEcosystemPage extends StatelessWidget {
 
   Widget _buildDetail(EcosystemEntryViewData? entry) {
     // 中文注释: 详情区在没有条目时显示空态，保持页面结构稳定并保留创建入口。
+    if (viewData.activeTabId == 'skill-loadouts') {
+      return ProjectSkillLoadoutDetailPanel(
+        viewData: viewData.projectSkillLoadoutViewData?.detail,
+        actionHandler: actionHandler,
+        projectAvailable:
+            viewData.projectSkillLoadoutViewData?.projectAvailable ?? false,
+      );
+    }
     if (entry == null) {
       return EcosystemDetailPanel.empty(
         onCreateAgentRequested: actionHandler.onCreateAgentRequested,

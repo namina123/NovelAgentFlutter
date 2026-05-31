@@ -49,7 +49,7 @@ This builtin skill is adapted from an MIT-licensed upstream package and must obe
 Compatibility rules inside NovelAgent:
 
 - treat this skill as a strategy and reference package, not as a second workspace specification
-- prefer the current NovelAgent workspace directories such as `specs/`, `styles/`, `outline/`, `volume_outlines/`, `chapter_outlines/`, `world/`, `characters/`, `drafts/`, `chapters/`, `summaries/`, `tasks/`, and `reviews/`
+- prefer the current NovelAgent workspace directories such as `specs/`, `styles/`, `outline/`, `volume_outlines/`, `chapter_outlines/`, `world/`, `characters/`, `scenes/`, `chapters/`, `summaries/`, `tasks/`, and `reviews/`
 - map the logical control files from this skill into the current project structure when equivalent directories already exist
 - only create root-level numbered control files when the user explicitly wants this upstream file layout
 - do not create or depend on desktop-only runner scripts on Android or iOS

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../app/theme/app_palette.dart';
+import '../../../../../shared/theme/novel_theme_context.dart';
 import '../../../../../shared/widgets/action_button.dart';
 import '../../../../../shared/widgets/panel_surface.dart';
 import '../models/agent_ecosystem_view_data.dart';
@@ -31,6 +31,8 @@ class EcosystemBrowserPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final surface = context.novelThemeSurfaces.optionTile;
+    final colors = context.novelThemeColors;
     // 中文注释: 生态浏览面板集中承接顶部动作、tab 和条目列表，但不把详情和新建入口也揉进来。
     return PanelSurface(
       child: Column(
@@ -63,10 +65,10 @@ class EcosystemBrowserPanel extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               statusMessage,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
-                color: AppPalette.mutedText,
+                color: colors.mutedTextColor,
               ),
             ),
           ],
@@ -94,9 +96,9 @@ class EcosystemBrowserPanel extends StatelessWidget {
           Expanded(
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.72),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppPalette.line, width: 1),
+                color: surface.backgroundColor.withValues(alpha: 0.42),
+                borderRadius: BorderRadius.circular(surface.radius),
+                border: Border.all(color: surface.borderColor, width: 1),
               ),
               child: ListView.separated(
                 padding: const EdgeInsets.all(12),
@@ -106,29 +108,34 @@ class EcosystemBrowserPanel extends StatelessWidget {
                   final entry = entries[index];
                   return Material(
                     color: entry.isSelected
-                        ? AppPalette.accentSoft
-                        : AppPalette.panel,
+                        ? colors.accentSoftColor.withValues(alpha: 0.72)
+                        : surface.backgroundColor.withValues(alpha: 0.72),
                     borderRadius: BorderRadius.circular(14),
                     child: Container(
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: AppPalette.line, width: 1),
+                        border: Border.all(
+                          color: entry.isSelected
+                              ? colors.lineStrongColor
+                              : surface.borderColor,
+                          width: 1,
+                        ),
                       ),
                       child: ListTile(
                         title: Text(
                           entry.title,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w800,
-                            color: AppPalette.text,
+                            color: colors.textColor,
                           ),
                         ),
                         subtitle: Text(
                           '[${entry.badge}] ${entry.subtitle}',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: AppPalette.mutedText,
+                            color: colors.mutedTextColor,
                           ),
                         ),
                         onTap: () {

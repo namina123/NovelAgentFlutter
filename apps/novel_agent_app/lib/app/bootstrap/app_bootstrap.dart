@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../../features/project_assets/application/services/project_expression_constraint_workspace_service.dart';
 import '../../features/long_task_station/application/controllers/long_task_station_controller.dart';
 import '../app.dart';
 import '../state/app_shell_controller.dart';
@@ -35,6 +36,9 @@ class AppBootstrap {
     final projectTaskRepository = ProjectTaskRepository(
       workspacePort: bundle.projectWorkspacePort,
     );
+    final projectChapterRewriteTaskService = ProjectChapterRewriteTaskService(
+      taskRepository: projectTaskRepository,
+    );
     final promptTemplateService = ProjectPromptTemplateService(
       workspacePort: bundle.projectWorkspacePort,
     );
@@ -42,9 +46,59 @@ class AppBootstrap {
       workspacePort: bundle.projectWorkspacePort,
       projectToolHostPort: bundle.projectToolHostPort,
     );
+    final projectContinuityRepository = ProjectContinuityRepository(
+      workspacePort: bundle.projectWorkspacePort,
+    );
+    final projectContinuityInputRepository = ProjectContinuityInputRepository(
+      workspacePort: bundle.projectWorkspacePort,
+    );
+    final projectGeneralContinuitySetupService =
+        ProjectGeneralContinuitySetupService(
+          continuityRepository: projectContinuityRepository,
+          inputRepository: projectContinuityInputRepository,
+        );
+    final projectAgentSkillLoadoutRepository =
+        ProjectAgentSkillLoadoutRepository(
+          workspacePort: bundle.projectWorkspacePort,
+        );
+    final projectAgentSkillLoadoutHistoryRepository =
+        ProjectAgentSkillLoadoutHistoryRepository(
+          workspacePort: bundle.projectWorkspacePort,
+        );
+    final expressionConstraintProfileRepository =
+        ExpressionConstraintProfileRepository(
+          workspacePort: bundle.projectWorkspacePort,
+        );
+    final projectExpressionConstraintBindingRepository =
+        ProjectExpressionConstraintBindingRepository(
+          workspacePort: bundle.projectWorkspacePort,
+        );
+    final projectExpressionConstraintWorkspaceService =
+        ProjectExpressionConstraintWorkspaceService(
+          loadProfiles: (project) => expressionConstraintProfileRepository
+              .loadProfiles(project, includeBuiltins: true),
+          loadBindings:
+              projectExpressionConstraintBindingRepository.loadBindings,
+          saveBindings:
+              projectExpressionConstraintBindingRepository.saveBindings,
+        );
+    final projectSkillLoadoutSaveAsGroupService =
+        ProjectSkillLoadoutSaveAsGroupService(
+          workspacePort: bundle.projectWorkspacePort,
+        );
+    final projectTimelineRepository = ProjectTimelineRepository(
+      hostPort: bundle.projectToolHostPort,
+    );
+    final projectRelationshipRepository = ProjectRelationshipRepository(
+      hostPort: bundle.projectToolHostPort,
+    );
     final reviewReportService = ProjectReviewReportService(
       workspacePort: bundle.projectWorkspacePort,
       taskRepository: projectTaskRepository,
+    );
+    final longTaskStationDetailService = ProjectLongTaskStationDetailService(
+      taskRepository: projectTaskRepository,
+      reviewReportService: reviewReportService,
     );
     final workflowRuntimeService = ProjectWorkflowRuntimeService(
       taskRepository: projectTaskRepository,
@@ -69,6 +123,7 @@ class AppBootstrap {
     );
     final longTaskStationController = LongTaskStationController(
       longTaskSupervisor: bundle.longTaskSupervisor,
+      detailService: longTaskStationDetailService,
     );
     final controller = AppShellController(
       settingsRepository: bundle.settingsRepository,
@@ -98,10 +153,6 @@ class AppBootstrap {
             bundle.projectReadableProjectionService,
         projectWorkspacePort: bundle.projectWorkspacePort,
       ),
-      discoverProjectsUseCase: DiscoverProjectsUseCase(
-        projectRepository: bundle.projectRepository,
-        projectWorkspacePort: bundle.projectWorkspacePort,
-      ),
       createProjectEntryUseCase: CreateProjectEntryUseCase(
         projectToolHostPort: bundle.projectToolHostPort,
       ),
@@ -112,6 +163,11 @@ class AppBootstrap {
         writeProjectTextFileUseCase: writeProjectTextFileUseCase,
       ),
       projectToolHostPort: bundle.projectToolHostPort,
+      projectRuntimeProfileRepository: ProjectRuntimeProfileRepository(
+        workspacePort: bundle.projectWorkspacePort,
+      ),
+      projectAgentGroupBindingRepository:
+          bundle.projectAgentGroupBindingRepository,
       previewCustomizationBundleImportUseCase:
           PreviewCustomizationBundleImportUseCase(),
       importCustomizationBundleUseCase: ImportCustomizationBundleUseCase(
@@ -136,11 +192,41 @@ class AppBootstrap {
           bundle.skillPackageCatalog.loadSkillPackages(project),
       loadSkillGroups: (project) =>
           bundle.skillGroupCatalog.loadSkillGroups(project),
+      loadProjectSkillLoadouts: (project) =>
+          projectAgentSkillLoadoutRepository.loadLoadouts(project),
+      saveProjectSkillLoadouts: (project, loadouts) =>
+          projectAgentSkillLoadoutRepository.saveLoadouts(project, loadouts),
+      loadProjectSkillLoadoutHistory: (project) =>
+          projectAgentSkillLoadoutHistoryRepository.listEntries(project),
+      saveProjectSkillLoadoutHistoryEntry: (project, entry) =>
+          projectAgentSkillLoadoutHistoryRepository.saveEntry(project, entry),
+      saveProjectSkillLoadoutAsGroup:
+          ({
+            required project,
+            required loadout,
+            required groupId,
+            required displayName,
+            required description,
+          }) => projectSkillLoadoutSaveAsGroupService.saveAsGroup(
+            project: project,
+            loadout: loadout,
+            groupId: groupId,
+            displayName: displayName,
+            description: description,
+          ),
       writeProjectTextFileUseCase: writeProjectTextFileUseCase,
       workflowRuntimeService: workflowRuntimeService,
       reviewReportService: reviewReportService,
+      projectChapterRewriteTaskService: projectChapterRewriteTaskService,
       promptTemplateService: promptTemplateService,
       projectAssetLibraryService: projectAssetLibraryService,
+      projectTimelineRepository: projectTimelineRepository,
+      projectRelationshipRepository: projectRelationshipRepository,
+      projectExpressionConstraintWorkspaceService:
+          projectExpressionConstraintWorkspaceService,
+      projectGeneralContinuitySetupService:
+          projectGeneralContinuitySetupService,
+      longTaskSupervisor: bundle.longTaskSupervisor,
       longTaskStationController: longTaskStationController,
       generateDraftUseCaseFactory: (provider, networkSettings) {
         // 中文注释: 草稿生成用例按当前 provider 动态创建，避免控制器直接依赖具体 HTTP 实现。

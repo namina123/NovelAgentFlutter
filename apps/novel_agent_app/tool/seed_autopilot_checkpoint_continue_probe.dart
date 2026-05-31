@@ -114,7 +114,7 @@ Future<void> main() async {
         'tracking/modes/seed_autopilot_novel/guidance.md',
         'styles/seed_autopilot_style.md',
       ],
-      'output_paths': <Object?>['drafts/第01章_seed_to_full.md'],
+      'output_paths': <Object?>['chapters/第01章_seed_to_full.md'],
       'metadata': <String, Object?>{
         'plan_id': 'plan_test',
         'workflow_mode': TaskRuntimeConstants.modeSeedToFullNovel,
@@ -186,7 +186,7 @@ Future<void> main() async {
       'depends_on': <Object?>['task_001'],
       'source_paths': <Object?>[
         'tracking/modes/seed_autopilot_novel/guidance.md',
-        'drafts/第01章_seed_to_full.md',
+        'chapters/第01章_seed_to_full.md',
       ],
       'output_paths': <Object?>['tracking/checkpoints/ch01.md'],
       'metadata': <String, Object?>{
@@ -356,3 +356,4 @@ Future<void> _seedReadyState({
   }
   await repository.save(project, state);
 }
+

@@ -1,6 +1,1175 @@
 # NovelAgent Flutter 迁移进度文档
 
-最后更新：2026-05-25
+最后更新：2026-05-28
+
+## Expression Constraint EC-06 收口
+
+- 已完成 `docs/expression-constraint-session-order.md` 的 `Session EC-06`
+- 本轮新增并已验证的 app 最小入口层：
+  - `ProjectExpressionConstraintWorkspaceService`
+  - `ProjectExpressionConstraintBindingActionService`
+  - `ProjectAssetsExpressionConstraintViewDataService`
+  - `ExpressionConstraintBindingEditorPanel`
+- 当前行为已经固定：
+  - 项目资产中心现已正式新增 `表达限制` 页签
+  - 用户现已可查看全部 builtin preset，并直接看到当前项目是否已绑定、是否启用、作用域是否只限 agent / mode / stage
+  - 用户现已可对单个 preset 保存或移除项目级 binding：
+    - `enabled`
+    - `default_for_project`
+    - `target_agent_ids`
+    - `target_mode_ids`
+    - `target_stage_ids`
+    - `weight`
+  - `de_ai` 现已只作为普通内置 preset 暴露在同一页签下，不再保留特殊入口
+  - app 读写链当前已确认不会串项目：
+    - 项目 A 的 binding 不会漏到项目 B
+    - 项目 B 的自定义 preset 视图不会反向污染项目 A
+- 本轮刻意未做：
+  - preset 本体编辑
+  - 自定义 DSL 编辑器
+  - 复杂筛选器或独立设置页
+- 已通过验证：
+  - `apps/novel_agent_app`
+    - `dart analyze lib/app/bootstrap/app_bootstrap.dart lib/app/state/app_shell_controller.dart lib/features/project_assets`
+  - `apps/novel_agent_app`
+    - `flutter test test/project_assets_view_data_service_test.dart test/project_expression_constraint_binding_action_service_test.dart test/project_expression_constraint_workspace_service_test.dart`
+
+## Expression Constraint EC-05 收口
+
+- 已完成 `docs/expression-constraint-session-order.md` 的 `Session EC-05`
+- 本轮新增并已验证的 review / authenticity / continuity 联动层：
+  - `ExpressionConstraintReviewProjection`
+  - `ExpressionConstraintReviewProjectionService`
+- 当前行为已经固定：
+  - 表达限制现已正式影响 review task 的：
+    - `goal / brief / tool_hint`
+    - 以及结构化 metadata 中的 `review_focuses / authenticity_pass_level / mini_recheck_items`
+  - 长任务 review prompt 现已能显式展示：
+    - `审稿重点`
+    - `真实性复核强度`
+    - `Mini Recheck`
+  - checkpoint review 现已会从 execution context pack 中提取表达限制投影，并正式落盘：
+    - `expression_constraint_review`
+    - `mini_recheck_items`
+    - 增强后的 `drift_watch_items / confirmation_focus / next_actions`
+  - checkpoint review 建议生成现在已会识别：
+    - `de_ai / natural_expression / low_jargon_narration` 带来的真实性复核压力
+    - `strict_pov_boundary / narrative_boundary / continuity_guard` 带来的 continuity pressure
+  - 后处理 / 修订复核 prompt 现已显式带出表达限制复核重点与 mini recheck，而不再只剩创作约束摘要
+  - “视角泄漏 / 信息边界混用 / 说话风格漂移 / 设定状态漂移” 现在会被明确提升为 continuity / structural review 重点，不再被默认压成普通文风问题
+  - 去 AI / 自然表达清理现在带有正式保真护栏：
+    - 不洗平人物声音
+    - 不误删必要术语
+    - 不改坏连续性
+- 本轮刻意未做：
+  - app / UI 编辑入口
+  - 新 builtin preset
+  - 独立 authenticity center
+- 已通过验证：
+  - `packages/novel_agent_core`
+    - `dart analyze lib/novel_agent_core.dart lib/src/creative/expression_constraint_review_projection.dart lib/src/creative/expression_constraint_review_projection_service.dart lib/src/review/review_prompt_variable_service.dart lib/src/review/review_task_factory_service.dart lib/src/workflow/long_task_task_transaction_service.dart lib/src/workflow/long_task_task_prompt_renderer.dart lib/src/workflow/long_task_checkpoint_review_service.dart lib/src/workflow/long_task_checkpoint_review_markdown_renderer.dart lib/src/workflow/long_task_checkpoint_review_task_suggestion_service.dart lib/src/workflow/long_task_postprocess_transaction_service.dart lib/src/workflow/long_task_postprocess_prompt_renderer.dart test/review_report_services_test.dart test/long_task_checkpoint_review_service_test.dart test/long_task_checkpoint_review_task_suggestion_service_test.dart test/long_task_runtime_services_test.dart`
+  - `packages/novel_agent_core`
+    - `dart test test/review_report_services_test.dart test/long_task_checkpoint_review_service_test.dart test/long_task_checkpoint_review_task_suggestion_service_test.dart test/long_task_runtime_services_test.dart`
+  - `packages/novel_agent_adapters`
+    - `dart test test/project_long_task_checkpoint_review_service_test.dart`
+
+## Expression Constraint EC-04 收口
+
+- 已完成 `docs/expression-constraint-session-order.md` 的 `Session EC-04`
+- 本轮新增并已验证的运行时策略层：
+  - `ExpressionConstraintInjectionMode`
+  - `ExpressionConstraintInjectionPolicyService`
+- 当前行为已经固定：
+  - `ContextAssemblerService` 现已按 intent 对表达限制做 runtime gating，不再所有轮次都默认注入长限制文本
+  - `GenerateDraftUseCase` 与 `ChapterAtomicExecutionBuilderService` 现已支持把 expression constraint profiles / bindings 正式送入 prompt-facing context chain
+  - `LongTaskTaskTransactionService` 现已对真正的创作写作任务输出：
+    - 创作约束摘要
+    - 以及在需要时追加 `表达限制细则`
+  - `LongTaskPostprocessTransactionService` 现已只默认消费表达限制短摘要，避免把长细则误注入后处理审阅轮次
+  - 非创作 intent 下，旧的 `creative_layer=expression_constraint` 记忆片段也已被主动抑制，不再因为 legacy memory section 漏进 prompt
+- 本轮刻意未做：
+  - review / authenticity / continuity 规则扩张
+  - UI 层开关与编辑入口
+  - 新 builtin preset
+- 已通过验证：
+  - `packages/novel_agent_core`
+    - `dart analyze lib/novel_agent_core.dart lib/src/creative lib/src/context/context_assembler_service.dart lib/src/use_cases/generate_draft_use_case.dart lib/src/workflow/chapter_atomic_execution_builder_service.dart lib/src/workflow/long_task_task_transaction_service.dart lib/src/workflow/long_task_postprocess_transaction_service.dart lib/src/workflow/long_task_task_prompt_renderer.dart test/expression_constraint_injection_policy_service_test.dart test/context_assembler_service_test.dart test/draft_generation_use_case_test.dart test/long_task_runtime_services_test.dart`
+  - `packages/novel_agent_core`
+    - `dart test test/expression_constraint_injection_policy_service_test.dart test/context_assembler_service_test.dart test/draft_generation_use_case_test.dart test/long_task_runtime_services_test.dart`
+
+## Expression Constraint EC-03 收口
+
+- 已完成 `docs/expression-constraint-session-order.md` 的 `Session EC-03`
+- 本轮新增并已验证的 adapters 持久化与 builtin 注册层：
+  - `ExpressionConstraintProfileDocumentCodecService`
+  - `ExpressionConstraintProfilePathService`
+  - `ExpressionConstraintProfileRepository`
+  - `ProjectExpressionConstraintBindingDocumentCodecService`
+  - `ProjectExpressionConstraintBindingPathService`
+  - `ProjectExpressionConstraintBindingRepository`
+  - `BuiltinExpressionConstraintProfileRegistrationService`
+- 当前行为已经固定：
+  - 项目自定义表达限制 profile 现已正式写入 `.novel_agent/settings/expression_constraint_profiles.json`
+  - 当前项目表达限制 binding 现已正式写入 `.novel_agent/settings/expression_constraint_bindings.json`
+  - builtin preset 现已通过 registry service 提供，不会被反写回项目文档
+  - `ExpressionConstraintProfileRepository` 现已支持 builtin + project merge，且项目同 id profile 会覆盖 builtin 版本
+  - 当前首批 builtin preset 已固定为：
+    - `de_ai`
+    - `strict_pov_boundary`
+    - `low_jargon_narration`
+- 本轮刻意未做：
+  - runtime prompt 注入与 creative-turn gating
+  - UI 编辑入口
+  - profile 资产化 / bundle 化
+- 已通过验证：
+  - `packages/novel_agent_adapters`
+    - `dart analyze lib/novel_agent_adapters.dart lib/src/storage/expression_constraint_profile_document_codec_service.dart lib/src/storage/expression_constraint_profile_path_service.dart lib/src/storage/expression_constraint_profile_repository.dart lib/src/storage/project_expression_constraint_binding_document_codec_service.dart lib/src/storage/project_expression_constraint_binding_path_service.dart lib/src/storage/project_expression_constraint_binding_repository.dart lib/src/packages/builtin_expression_constraint_profile_registration_service.dart test/expression_constraint_profile_repository_test.dart test/project_expression_constraint_binding_repository_test.dart test/builtin_expression_constraint_profile_registration_service_test.dart`
+  - `packages/novel_agent_adapters`
+    - `dart test test/expression_constraint_profile_repository_test.dart test/project_expression_constraint_binding_repository_test.dart test/builtin_expression_constraint_profile_registration_service_test.dart`
+
+## Expression Constraint EC-02 收口
+
+- 已完成 `docs/expression-constraint-session-order.md` 的 `Session EC-02`
+- 本轮新增并已验证的 core 接线层：
+  - `ExpressionConstraintScopeNormalizerService`
+  - `ExpressionConstraintProfileNormalizerService`
+  - `ProjectExpressionConstraintBindingNormalizerService`
+  - `ProjectExpressionConstraintBindingResolverService`
+  - `ExpressionConstraintBriefRenderer`
+  - `ExpressionConstraintContextSectionService`
+- 当前行为已经固定：
+  - `CreativeRuleStack` 现已正式收纳表达限制 profile 与项目级 binding
+  - `CreativeRuleStackResolverService` 现已能基于 `agent / mode / stage` 收束生效表达限制
+  - `CreativeRuleBriefRenderer` 与 `CreativeRuleContextSectionService` 现已把表达限制纳入共享摘要与上下文片段
+  - `ContextAssemblerService` 现已能稳定消费表达限制投影，不再需要调用方自行拼接
+  - 长任务事务构建链已补齐表达限制字段透传，避免运行态后续继续出现“creative stack 能看见，事务包看不见”的分叉
+- 本轮刻意未做：
+  - adapters repository / path / codec
+  - builtin preset 注册
+  - runtime prompt 注入策略
+  - app / UI
+- 已通过验证：
+  - `packages/novel_agent_core`
+    - `dart analyze lib/novel_agent_core.dart lib/src/creative lib/src/context/context_assembler_service.dart lib/src/workflow/long_task_task_transaction_service.dart lib/src/workflow/long_task_postprocess_transaction_service.dart test/expression_constraint_contracts_test.dart test/expression_constraint_services_test.dart test/creative_rule_stack_resolver_service_test.dart test/context_assembler_service_test.dart`
+  - `packages/novel_agent_core`
+    - `dart test test/expression_constraint_contracts_test.dart test/expression_constraint_services_test.dart test/creative_rule_stack_resolver_service_test.dart test/context_assembler_service_test.dart`
+  - `packages/novel_agent_core`
+    - `dart test test/long_task_runtime_services_test.dart`
+
+## Expression Constraint EC-01 收口
+
+- 已完成 `docs/expression-constraint-session-order.md` 的 `Session EC-01`
+- 本轮新增并已验证的 core 合同：
+  - `ExpressionConstraintKind`
+  - `ExpressionConstraintScope`
+  - `ExpressionConstraintProfile`
+  - `ProjectExpressionConstraintBinding`
+- 当前行为已经固定：
+  - 表达限制系统现在已有正式领域对象，可独立表达“限制 preset”与“项目内启用绑定”
+  - `de_ai` 现已被明确收束为普通内置 preset，而不是系统唯一主语义
+  - `ProjectExpressionConstraintBinding` 与现有 `ProjectStyleBinding` 保持近似字段语义，降低后续 resolver / app 接线时的认知落差
+  - `ExpressionConstraintScope` 已能独立表达全局 / 定向约束范围，为后续 project type / agent / mode / stage 维度接线打底
+- 本轮刻意未做：
+  - repository / builtin registry
+  - creative stack 接线
+  - runtime prompt 注入
+  - app / UI
+- 已通过验证：
+  - `packages/novel_agent_core`
+    - `dart analyze lib/novel_agent_core.dart lib/src/creative/expression_constraint_kind.dart lib/src/creative/expression_constraint_scope.dart lib/src/creative/expression_constraint_profile.dart lib/src/creative/project_expression_constraint_binding.dart test/expression_constraint_contracts_test.dart`
+  - `packages/novel_agent_core`
+    - `dart test test/expression_constraint_contracts_test.dart`
+
+## Skill Loadout SL-06 收口
+
+- 已完成 `docs/skill-loadout-redesign-session-order.md` 的 `Session SL-06`
+- 本轮新增并已验证的收口验证层：
+  - `apps/novel_agent_app/tool/skill_loadout_probe.dart`
+  - `packages/novel_agent_adapters/test/project_agent_skill_runtime_loadout_service_test.dart`
+    - 已补跨项目隔离回归
+- 本轮已真实确认通过：
+  - 单智能体默认技能声明
+  - 只选 `skill group`
+  - `skill group + extra skills`
+  - `skill group + disabled skills`
+  - 从历史恢复
+  - 显式保存为 `skill group`
+  - 切项目后不串当前 `loadout`
+- 当前结论已经固定：
+  - `skill / skill_group / skill_loadout` 三层语义已完成本轮计划中的全部闭环
+  - 当前没有探针暴露出的新增联调问题，因此这一轮没有继续扩业务功能
+- 已通过验证：
+  - `packages/novel_agent_core`
+    - `dart test test/agent_skill_loadout_contracts_test.dart test/agent_skill_loadout_selection_service_test.dart test/agent_skill_services_test.dart`
+  - `packages/novel_agent_adapters`
+    - `dart test test/project_agent_skill_runtime_loadout_service_test.dart test/project_agent_skill_tool_executor_test.dart test/project_agent_skill_loadout_repository_test.dart test/project_agent_skill_loadout_history_repository_test.dart test/project_skill_loadout_save_as_group_service_test.dart`
+  - `apps/novel_agent_app`
+    - `flutter test test/project_skill_loadout_workspace_service_test.dart test/project_skill_loadout_view_data_service_test.dart`
+  - `apps/novel_agent_app`
+    - `dart analyze tool/skill_loadout_probe.dart`
+  - `apps/novel_agent_app`
+    - `dart run tool/skill_loadout_probe.dart` -> `PASS`
+- 新增报告：
+  - `apps/novel_agent_app/artifacts/skill_loadout_probe_report.json`
+
+## Skill Loadout SL-05 收口
+
+- 已完成 `docs/skill-loadout-redesign-session-order.md` 的 `Session SL-05`
+- 当前新增并已验证的 app 装载编辑基座：
+  - `ProjectSkillLoadoutWorkspaceService`
+  - `ProjectSkillLoadoutViewDataService`
+  - `ProjectSkillLoadoutDetailPanel`
+- 当前行为已经固定：
+  - 生态页正式新增 `技能装载` tab
+  - 用户现已可在项目内：
+    - 选择技能组
+    - 追加额外技能
+    - 禁用 resolved skill
+    - 保存历史快照
+    - 从历史恢复到当前 draft
+    - 显式另存为技能组
+  - `AppShellController` 只负责装载 workspace snapshot、分发 action 和刷新 view data，不再把 resolver/冲突逻辑塞进页面层
+  - `save as skill group` 完成后会回刷当前生态快照，保证新 group 即刻可见
+- 已通过验证：
+  - `apps/novel_agent_app`
+    - `dart analyze lib/app/state/app_shell_controller.dart lib/app/bootstrap/app_bootstrap.dart lib/features/agent_ecosystem/application/models/project_skill_loadout_workspace_snapshot.dart lib/features/agent_ecosystem/application/services/project_skill_loadout_workspace_service.dart lib/features/agent_ecosystem/application/services/project_skill_loadout_view_data_service.dart lib/features/agent_ecosystem/presentation/models/project_skill_loadout_view_data.dart lib/features/agent_ecosystem/presentation/widgets/project_skill_loadout_detail_panel.dart lib/features/agent_ecosystem/presentation/pages/agent_ecosystem_page.dart test/project_skill_loadout_workspace_service_test.dart test/project_skill_loadout_view_data_service_test.dart`
+  - `apps/novel_agent_app`
+    - `flutter test test/project_skill_loadout_workspace_service_test.dart test/project_skill_loadout_view_data_service_test.dart`
+
+## Skill Loadout SL-04 收口
+
+- 已完成 `docs/skill-loadout-redesign-session-order.md` 的 `Session SL-04`
+- 当前新增并已验证的运行链接线基座：
+  - `AgentSkillLoadoutSelectionService`
+  - `ProjectAgentSkillRuntimeLoadoutService`
+- 当前行为已经固定：
+  - `load_agent_skill` 现在已优先消费当前项目的 `skill loadout`
+  - 若项目存在命中的 loadout：
+    - `available_skills` 会按 resolved loadout 过滤
+    - project extra skills 可以正式覆盖进当前可用技能集合
+    - disabled skills 会真实从当前运行集合中剔除
+  - 若项目不存在命中的 loadout：
+    - 自动退回 `AgentProfile.skills / skillGroups`
+  - tool 结果现已补带最小运行投影：
+    - `resolved_skill_ids`
+    - `resolved_loadout_source`
+    - `resolved_loadout_has_explicit_selection`
+    - `resolved_loadout_issues`
+  - 当前选择策略先保持保守：
+    - 优先命中 `project_type`
+    - 其次命中 global loadout
+    - 含 `agent_group / mode / stage` 约束的 loadout 暂不自动套用，等待后续运行链提供完整上下文
+- 已通过验证：
+  - `packages/novel_agent_core`
+    - `dart analyze lib/novel_agent_core.dart lib/src/agents/agent_skill_loadout_selection_service.dart lib/src/agents/agent_skill_summary_service.dart test/agent_skill_loadout_selection_service_test.dart test/agent_skill_services_test.dart`
+  - `packages/novel_agent_core`
+    - `dart test test/agent_skill_loadout_selection_service_test.dart test/agent_skill_services_test.dart`
+  - `packages/novel_agent_adapters`
+    - `dart analyze lib/novel_agent_adapters.dart lib/src/tools/project_agent_skill_runtime_loadout_service.dart lib/src/tools/project_agent_skill_tool_executor.dart lib/src/tools/project_tool_dispatcher.dart lib/src/bootstrap/adapter_bundle.dart test/project_agent_skill_runtime_loadout_service_test.dart test/project_agent_skill_tool_executor_test.dart test/project_agent_skill_loadout_repository_test.dart test/project_agent_skill_loadout_history_repository_test.dart test/project_skill_loadout_save_as_group_service_test.dart`
+  - `packages/novel_agent_adapters`
+    - `dart test test/project_agent_skill_runtime_loadout_service_test.dart test/project_agent_skill_tool_executor_test.dart test/project_agent_skill_loadout_repository_test.dart test/project_agent_skill_loadout_history_repository_test.dart test/project_skill_loadout_save_as_group_service_test.dart`
+
+## Skill Loadout SL-03 收口
+
+- 已完成 `docs/skill-loadout-redesign-session-order.md` 的 `Session SL-03`
+- 当前新增并已验证的 adapters 持久化骨架：
+  - `ProjectAgentSkillLoadoutRepository`
+  - `ProjectAgentSkillLoadoutHistoryRepository`
+  - `ProjectSkillLoadoutSaveAsGroupService`
+- 当前行为已经固定：
+  - 当前项目技能装载正式写入 `.novel_agent/settings/agent_skill_loadouts.json`
+  - 历史快照正式写入 `.novel_agent/history/agent_skill_loadouts/`
+  - 显式 save-as-group 正式写入 `skill_groups/<group_id>/skill_group.json`
+  - 当前装载、历史快照、显式保存为技能组三条路径已经拆开，不再混用
+- 已通过验证：
+  - `packages/novel_agent_adapters`
+    - `dart analyze lib/src/storage/project_agent_skill_loadout_document_codec_service.dart lib/src/storage/project_agent_skill_loadout_history_document_codec_service.dart lib/src/storage/project_agent_skill_loadout_history_path_service.dart lib/src/storage/project_agent_skill_loadout_history_repository.dart lib/src/storage/project_agent_skill_loadout_path_service.dart lib/src/storage/project_agent_skill_loadout_repository.dart lib/src/storage/project_skill_loadout_save_as_group_service.dart test/project_agent_skill_loadout_repository_test.dart test/project_agent_skill_loadout_history_repository_test.dart test/project_skill_loadout_save_as_group_service_test.dart`
+  - `packages/novel_agent_adapters`
+    - `dart test test/project_agent_skill_loadout_repository_test.dart test/project_agent_skill_loadout_history_repository_test.dart test/project_skill_loadout_save_as_group_service_test.dart`
+
+## Skill Loadout SL-02 收口
+
+- 已完成 `docs/skill-loadout-redesign-session-order.md` 的 `Session SL-02`
+- 当前新增并已验证的 core 解析层：
+  - `AgentSkillLoadoutResolverService`
+  - `SkillLoadoutExpansionService`
+  - `SkillLoadoutConflictPolicyService`
+  - `ResolvedAgentSkillLoadoutEntry`
+  - `ResolvedAgentSkillLoadoutEntrySource`
+  - `AgentSkillLoadoutIssue`
+- 当前行为已经固定：
+  - skill loadout 现在已能正式输出最终技能集合和结构化诊断，而不只是保留原始 group / extra / disabled 字段
+  - `ResolvedAgentSkillLoadoutBuilderService` 已不再提前把 profile 默认技能和 loadout 显式选择混成一个列表，避免来源信息丢失
+  - `AgentSkillScopeService` 现已退回兼容 facade，真正的展开、builtin tool 过滤、可加载交集和 disabled 裁剪已下沉到 resolver 链
+  - 当前已支持的诊断问题：
+    - 缺失 skill group
+    - 不可加载 skill
+    - 被 builtin tool 过滤
+    - disabled skill 没有命中任何实际目标
+- 本轮刻意未做：
+  - repository / history / save-as-group
+  - app / UI 接线
+- 已通过验证：
+  - `packages/novel_agent_core`
+    - `dart analyze lib/novel_agent_core.dart lib/src/agents/agent_skill_loadout_issue.dart lib/src/agents/agent_skill_loadout_issue_code.dart lib/src/agents/agent_skill_loadout_resolver_service.dart lib/src/agents/agent_skill_scope_service.dart lib/src/agents/resolved_agent_skill_loadout.dart lib/src/agents/resolved_agent_skill_loadout_builder_service.dart lib/src/agents/resolved_agent_skill_loadout_entry.dart lib/src/agents/resolved_agent_skill_loadout_entry_source.dart lib/src/agents/resolved_agent_skill_loadout_entry_source_kind.dart lib/src/agents/skill_loadout_expansion.dart lib/src/agents/skill_loadout_expansion_service.dart lib/src/agents/skill_loadout_conflict_result.dart lib/src/agents/skill_loadout_conflict_policy_service.dart test/agent_skill_loadout_contracts_test.dart test/agent_skill_services_test.dart`
+  - `packages/novel_agent_core`
+    - `dart test test/agent_skill_loadout_contracts_test.dart test/agent_skill_services_test.dart`
+
+## Skill Loadout SL-01 收口
+
+- 已完成 `docs/skill-loadout-redesign-session-order.md` 的 `Session SL-01`
+- 当前新增并已验证的 core 合同：
+  - `AgentSkillLoadout`
+  - `AgentSkillLoadoutSource`
+  - `AgentSkillLoadoutScope`
+  - `ResolvedAgentSkillLoadout`
+  - `ResolvedAgentSkillLoadoutBuilderService`
+- 当前行为已经固定：
+  - `AgentProfile.skills / skillGroups` 继续作为静态默认声明保留
+  - 当前项目 / 当前智能体的实际技能装载，已不需要再塞回 `AgentProfile`
+  - `ResolvedAgentSkillLoadoutBuilderService` 现已能把：
+    - profile 默认技能
+    - profile 默认技能组
+    - loadout 选中的 skill groups
+    - loadout 追加的 extra skills
+    - loadout 标记的 disabled skills
+    收束成稳定的 resolved contract
+- 本轮刻意未做：
+  - skill group 展开
+  - disabled skill 最终裁剪
+  - 缺失技能 / 组诊断
+  - repository / UI / 运行链接线
+- 已通过验证：
+  - `packages/novel_agent_core`
+    - `dart analyze lib/novel_agent_core.dart lib/src/agents/agent_skill_loadout.dart lib/src/agents/agent_skill_loadout_scope.dart lib/src/agents/agent_skill_loadout_source.dart lib/src/agents/resolved_agent_skill_loadout.dart lib/src/agents/resolved_agent_skill_loadout_builder_service.dart test/agent_skill_loadout_contracts_test.dart test/agent_skill_services_test.dart`
+  - `packages/novel_agent_core`
+    - `dart test test/agent_skill_loadout_contracts_test.dart test/agent_skill_services_test.dart`
+
+## Agent Group Opening AG-08 收口
+
+- 已完成 `docs/agent-group-opening-redesign-session-order.md` 的 `Session AG-08`
+- 当前新增并已验证的 starter group / opening probe 收口：
+  - `starter_long_novel_seed_generalist`
+  - `starter_long_novel_full_outline_generalist`
+  - `apps/novel_agent_app/tool/agent_group_opening_probe.dart`
+- 当前行为已经固定：
+  - 长任务 starter group 现已正式按 baseline / traits 分路：
+    - `continuous_autonomous -> starter_long_novel_seed_generalist`
+    - `chapter_collaboration_autorun -> starter_long_novel_full_outline_generalist`
+  - 普通小说、长任务 seed-driven、长任务 full-outline、拆书项目四类 opening 都已进入正式回归覆盖
+  - `start_long_task_run` 已通过 opening ready -> tool executor -> workflow create 的真实 adapter 闭环探针确认可触发
+  - 项目级 group binding 已确认只写入当前项目，不会串到其他项目
+- 本轮只修了一个联调暴露问题，没有开新主线：
+  - `AgentGroupCatalogOverlayDocumentCodecService`
+    - 现在不会再因为局部 overlay 而把空 `applicability_scope` / 默认 `recommended_by_default=false` 写回，误覆盖 starter group 原始适用范围
+- 已通过验证：
+  - `packages/novel_agent_core`
+    - `dart test test/opening_orchestration_service_test.dart`
+  - `packages/novel_agent_adapters`
+    - `dart test test/local_agent_catalogs_test.dart test/agent_group_catalog_overlay_repository_test.dart test/project_long_task_tool_executor_test.dart`
+  - `apps/novel_agent_app`
+    - `flutter test test/project_opening_session_projection_service_test.dart`
+  - `apps/novel_agent_app`
+    - `dart analyze tool/agent_group_opening_probe.dart`
+  - `apps/novel_agent_app`
+    - `dart run tool/agent_group_opening_probe.dart` -> `PASS`
+    - `dart run tool/seed_autopilot_mode_probe.dart` -> `gap_probe PASS`, `plan_probe PASS`
+    - `dart run tool/full_outline_mode_probe.dart` -> `gap_probe PASS`, `plan_probe PASS`
+- 新增报告：
+  - `apps/novel_agent_app/artifacts/agent_group_opening_probe_report.json`
+  - `apps/novel_agent_app/artifacts/seed_autopilot_mode_probe_report.json`
+  - `apps/novel_agent_app/artifacts/full_outline_mode_probe_report.json`
+
+## Agent Group Opening AG-07 收口
+
+- 已完成 `docs/agent-group-opening-redesign-session-order.md` 的 `Session AG-07`
+- 当前新增并已验证的 opening UI / app bridge：
+  - `ConversationOpeningPanelViewDataService`
+  - `OpeningUnsupportedReasonTextService`
+  - `ProjectOpeningAgentGroupBindingService`
+  - `OpeningPanelViewData`
+  - `OpeningSessionPanel`
+  - `OpeningAgentGroupPicker`
+  - `OpeningUnsupportedGroupPanel`
+- 当前行为已经固定：
+  - 会话空态与轻引导态现在都能显示项目级智能体组入口
+  - 默认只展示当前项目支持的智能体组
+  - 不支持的 group 被收进折叠高级入口，并显示原因摘要
+  - 项目内切换智能体组会正式写回项目隐藏设置，不再只是临时 UI 状态
+  - opening 区现在保持轻量：
+    - 一句状态摘要
+    - 项目级 group picker
+    - 少量 starter actions
+    - 其余继续交给对话
+- 这一轮仍刻意未做：
+  - opening 状态持久化
+  - group editor / ecosystem 大改
+  - starter groups 的进一步扩充与真实探针总回归
+- 已通过验证：
+  - `apps/novel_agent_app`
+    - `dart analyze lib/app/state/app_shell_controller.dart lib/features/workbench/application/controllers/workbench_conversation_controller.dart lib/features/workbench/application/services/conversation_opening_panel_view_data_service.dart lib/features/workbench/application/services/opening_unsupported_reason_text_service.dart lib/features/workbench/application/services/project_opening_agent_group_binding_service.dart lib/features/workbench/presentation/widgets/conversation_sidebar.dart lib/features/workbench/presentation/widgets/conversation_empty_state_panel.dart lib/features/workbench/presentation/widgets/workflow_guide_card.dart lib/features/workbench/presentation/widgets/opening_session_panel.dart lib/features/workbench/presentation/widgets/opening_agent_group_picker.dart lib/features/workbench/presentation/widgets/opening_unsupported_group_panel.dart lib/features/workbench/presentation/models/workbench_view_data.dart lib/features/workbench/presentation/models/workbench_conversation_view_data.dart`
+  - `apps/novel_agent_app`
+    - `flutter test test/conversation_opening_panel_view_data_service_test.dart test/project_opening_agent_group_binding_service_test.dart test/conversation_sidebar_test.dart test/conversation_input_dock_test.dart test/workbench_navigation_sidebar_test.dart test/workbench_canvas_workspace_shell_test.dart`
+
+## Agent Group Opening AG-06 收口
+
+- 已完成 `docs/agent-group-opening-redesign-session-order.md` 的 `Session AG-06`
+- 当前新增并已验证的 app opening 接线基座：
+  - `ProjectOpeningSessionProjectionService`
+  - `OpeningSessionProjection`
+  - `OpeningAgentGroupSummary`
+  - `ConversationOpeningGuideViewDataService`
+- 当前行为已经固定：
+  - workbench 当前项目进入会话后，会异步解析：
+    - 当前有效智能体组
+    - 当前项目可用智能体组
+    - opening readiness
+    - starter actions
+  - 长任务默认会尝试按运行基准恢复最可能的 mode guidance 状态
+  - `opening.start_long_task_run` 已正式桥接到现有 `start_long_task_run` 工具链
+  - 普通项目继续复用原会话目标入口，但会叠加 opening 状态摘要
+- 这一轮仍刻意未做：
+  - 正式 group picker UI
+  - opening 状态持久化
+  - unsupported reason 专门展示页
+- 已通过验证：
+  - `apps/novel_agent_app`
+    - `flutter test test/project_opening_session_projection_service_test.dart test/conversation_guide_view_data_service_test.dart`
+  - `apps/novel_agent_app`
+    - `dart analyze lib/features/workbench/application/controllers/workbench_conversation_controller.dart lib/features/workbench/application/models/opening_agent_group_summary.dart lib/features/workbench/application/models/opening_session_projection.dart lib/features/workbench/application/models/workbench_conversation_runtime_state.dart lib/features/workbench/application/services/conversation_guide_view_data_service.dart lib/features/workbench/application/services/conversation_opening_guide_view_data_service.dart lib/features/workbench/application/services/project_opening_session_projection_service.dart lib/app/state/app_shell_controller.dart lib/app/bootstrap/app_bootstrap.dart test/widget_test.dart`
+
+## Agent Group Opening AG-05 收口
+
+- 已完成 `docs/agent-group-opening-redesign-session-order.md` 的 `Session AG-05`
+- 当前新增并已验证的 core opening 基座：
+  - `OpeningIntentSnapshot`
+  - `OpeningStageRecord`
+  - `OpeningMissingRequirement`
+  - `OpeningReadinessAssessment`
+  - `OpeningSuggestedAction`
+  - `OpeningSessionState`
+  - `OpeningOrchestrationResult`
+  - `OpeningStageRecordBuilderService`
+  - `OpeningReadinessEvaluator`
+  - `OpeningNextActionResolver`
+  - `OpeningOrchestrationService`
+- 当前行为已经固定：
+  - 长任务项目会按：
+    - 智能体组
+    - 运行基准
+    - 模式选择
+    - mode guidance 阶段
+    - 启动动作
+    收束 opening 状态
+  - 普通小说项目会按：
+    - 智能体组
+    - 会话目标 / 自由输入
+    - 启动普通协作会话
+    收束 opening 状态
+  - readiness 已能明确告诉上层：
+    - 缺什么
+    - 是否可启动长任务
+    - 是否可启动普通会话
+    - 当前最推荐的下一步动作
+- 这一轮仍刻意未做：
+  - UI 接线
+  - opening 持久化
+  - `start_long_task_run` 在 app 层的真正桥接
+- 已通过验证：
+  - `packages/novel_agent_core`
+    - `dart test test/opening_orchestration_service_test.dart`
+  - `packages/novel_agent_core`
+    - `dart test test/mode_guidance_transition_service_test.dart test/mode_guidance_plan_input_builder_service_test.dart test/mode_guidance_full_outline_builder_service_test.dart`
+  - `packages/novel_agent_core`
+    - `dart test test/project_agent_group_candidate_resolver_service_test.dart test/agent_availability_resolver_service_test.dart test/agent_group_availability_resolver_service_test.dart`
+
+## Agent Group Opening AG-04 收口
+
+- 已完成 `docs/agent-group-opening-redesign-session-order.md` 的 `Session AG-04`
+- 当前新增并已验证的 adapter 基座：
+  - `AgentCatalogOverlayRepository`
+  - `AgentGroupCatalogOverlayRepository`
+  - `ProjectAgentGroupBindingRepository`
+  - `BuiltinStarterAgentGroupRegistrationService`
+- 当前目录与职责已固定：
+  - 全局产品侧 overlay：
+    - `catalog_overlays/agents/*.json`
+    - `catalog_overlays/agent_groups/*.json`
+  - 项目级智能体组绑定：
+    - `.novel_agent/settings/project_agent_groups.json`
+  - `LocalAgentPackageCatalog / LocalAgentGroupCatalog`
+    - 现已正式接入 overlay 合并
+    - group 侧已接入内置 starter group 注册入口
+- 这一轮仍刻意未做：
+  - UI 编辑器
+  - app 绑定消费
+  - import/export 收敛
+  - 多成员 starter groups 内容扩充
+- 已通过验证：
+  - `packages/novel_agent_adapters`
+    - `dart test test/agent_catalog_overlay_repository_test.dart test/agent_group_catalog_overlay_repository_test.dart test/project_agent_group_binding_repository_test.dart test/local_agent_catalogs_test.dart`
+  - `packages/novel_agent_core`
+    - `dart test test/project_agent_group_candidate_resolver_service_test.dart test/agent_availability_resolver_service_test.dart test/agent_group_availability_resolver_service_test.dart`
+
+## 本轮 Session 31 收口
+
+- 已按 `docs/remaining-implementation-session-order.md` 的 Session 31 完成总回归、探针修复、Windows 打包与文档回填
+- 这一轮刻意没有再开新功能主线，只处理联调暴露的问题
+- 本轮修复的真实回归：
+  - `apps/novel_agent_cli/tool/workflow_resolution_cli_probe.dart`
+    - CLI workflow 收口探针不再写死 checkpoint / revision 命令
+    - 现在会读取共享动作包，优先执行 `recommended_action_id`，否则执行第一条 `enabled` 动作
+  - `apps/novel_agent_app/tool/real_long_task_probe.dart`
+    - 已接回统一探针配置读取逻辑
+    - 真实长任务探针现在和其他探针一样，优先读取 `test_api.txt`，必要时回退到 `temp/novel_agent_settings.json`
+- 本轮确认通过的关键链：
+  - 技能路由 / 草稿生成 / 分析投影：
+    - `packages/novel_agent_core`
+    - `dart test test/skill_routing_policy_service_test.dart test/draft_generation_use_case_test.dart test/review_report_chapter_analysis_projection_service_test.dart test/chapter_analysis_services_test.dart`
+  - 资产导入导出 / review->repair / rewrite 任务：
+    - `packages/novel_agent_adapters`
+    - `dart test test/project_bundle_library_services_test.dart test/project_long_task_review_repair_task_service_test.dart test/project_chapter_rewrite_task_service_test.dart`
+  - 全工具探针：
+    - `apps/novel_agent_app`
+    - `dart run tool/all_tools_probe.dart`
+    - `35/35`
+  - review / repair 真实链：
+    - `dart run tool/seed_autopilot_review_repair_probe.dart`
+    - `PASS`
+  - revision resolution 真实链：
+    - `dart run tool/seed_autopilot_revision_resolution_probe.dart`
+    - `PASS`
+  - CLI workflow resolution 真实链：
+    - `apps/novel_agent_cli`
+    - `dart run tool/workflow_resolution_cli_probe.dart`
+    - `PASS`
+  - 长任务真实链：
+    - `apps/novel_agent_app`
+    - `dart run tool/real_long_task_probe.dart`
+    - `PASS`
+- Windows 打包结果：
+  - `apps/novel_agent_app/build/windows/x64/runner/Release/novel_agent_app.exe`
+  - `flutter build windows --release` 已通过
+- 本轮新增报告：
+  - `apps/novel_agent_cli/artifacts/workflow_resolution_cli_probe_report.json`
+  - `artifacts/real_long_task_probe_report.json`
+- 当前状态：
+  - `docs/remaining-implementation-session-order.md` 中 Session 17 ~ 31 已全部完成
+  - 后续若继续推进，应新建下一份剩余实现顺序文档承接，而不是回头重开旧 session
+
+## 本轮 Session 30 收口
+
+- 已按 `docs/remaining-implementation-session-order.md` 的 Session 30 落地“统一工作台 / 中心页 UI 规划与分层改造”
+- app 壳层已新增独立导航与页面骨架层：
+  - `app/navigation/AppShellNavigationActionHandler`
+  - `AppShellNavigationCatalog / Item / Section`
+  - `shared/widgets/AppShellActivityRail`
+  - `shared/widgets/WorkspacePageHeader`
+  - `shared/widgets/WorkspacePageScaffold`
+  - `shared/widgets/WorkspacePaneLayout`
+- 当前已经明确：
+  - 桌面与宽屏场景现在拥有统一活动栏入口，而不是各页面自己藏返回或跳转按钮
+  - 全局入口已按：
+    - 项目
+    - 创作
+    - 运行
+    - 资产
+    - 系统
+    收束成稳定导航分区
+  - 壳层导航分发统一经由 `AppShellDestinationController.showDestination(...)`
+  - `AppShellController` 只承担导航委派和现有子域装配，没有重新长回新的“大总控”
+- 已接入统一页面骨架的主要工作域：
+  - 长任务总站
+  - 项目资产中心
+  - 灵感工作台
+  - 拆书导入向导
+  - 审稿中心
+  - 任务中心
+  - 模板中心
+- 这一轮的 UI 收束重点不是视觉花样，而是：
+  - 页面头部一致
+  - 状态与加载条一致
+  - 两栏/三栏布局策略一致
+  - 工作域入口清晰
+
+本轮验证结果：
+
+- `apps/novel_agent_app`
+  - `dart analyze lib/app/navigation lib/shared/widgets/app_shell.dart lib/shared/widgets/app_shell_activity_rail.dart lib/shared/widgets/workspace_page_header.dart lib/shared/widgets/workspace_page_scaffold.dart lib/shared/widgets/workspace_pane_layout.dart lib/app/state/app_shell_destination_controller.dart lib/app/state/app_shell_controller.dart lib/features/long_task_station/presentation/pages/long_task_station_page.dart lib/features/long_task_station/presentation/widgets/long_task_station_toolbar.dart lib/features/project_assets/presentation/pages/project_assets_page.dart lib/features/project_assets/presentation/widgets/project_assets_toolbar.dart lib/features/inspiration_workbench/presentation/pages/inspiration_workbench_page.dart lib/features/inspiration_workbench/presentation/widgets/inspiration_workbench_toolbar.dart lib/features/book_deconstruction/presentation/pages/book_deconstruction_page.dart lib/features/book_deconstruction/presentation/widgets/book_deconstruction_toolbar.dart lib/features/review_center/presentation/pages/review_center_page.dart lib/features/task_center/presentation/pages/task_center_page.dart lib/features/prompt_templates/presentation/pages/prompt_templates_page.dart`
+  - 通过
+- `apps/novel_agent_app`
+  - `flutter test test/widget_test.dart test/book_deconstruction_controller_test.dart test/inspiration_workbench_controller_test.dart`
+  - 通过
+
+## 本轮 Session 29 收口
+
+- 已按 `docs/remaining-implementation-session-order.md` 的 Session 29 落地“拆书导入向导与结构化预览 UI”
+- app 已新增独立 `book_deconstruction` 子域：
+  - `BookDeconstructionController`
+  - `BookDeconstructionDraftBuilderService`
+  - `BookDeconstructionPreviewMarkdownService`
+  - `BookDeconstructionViewDataService`
+  - `DesktopBookDeconstructionSourcePickerService`
+  - 独立 page / widgets / presentation models / action contract
+- 当前已经明确：
+  - 拆书导入、结构化预览、应用条目勾选、应用前确认四步已接成最小可用 GUI 流程
+  - 页面层不再直接消费提取结果原始对象，而是统一走 `BookDeconstructionViewData`
+  - 桌面端已支持原生文件选择导入，移动端保持“手动粘贴源文稿”的轻量入口
+  - 结构化预览已按前提、总纲、章节骨架与共享资产分区展示
+  - 当前确认动作会先把选择结果写成：
+    - `analysis/book_deconstruction_preview.md`
+    作为稳定预演纪要，而不是在 UI 层伪造真实 apply
+  - 中文角色名、组织名对应的应用路径已纠正为保留可读 ID，不再被错误收束成 `_`
+
+本轮验证结果：
+
+- `apps/novel_agent_app`
+  - `flutter test test/book_deconstruction_draft_builder_service_test.dart test/book_deconstruction_controller_test.dart test/inspiration_workbench_controller_test.dart`
+  - 通过
+- `apps/novel_agent_app`
+  - `dart analyze lib/features/book_deconstruction lib/app/routing lib/app/state/app_shell_destination_controller.dart lib/app/state/app_shell_controller.dart lib/features/workbench/application/controllers/workbench_conversation_controller.dart test/book_deconstruction_draft_builder_service_test.dart test/book_deconstruction_controller_test.dart`
+  - 通过
+- `packages/novel_agent_core`
+  - `dart analyze lib/src/deconstruction lib/src/session/session_guide_profile_service.dart`
+  - 通过
+
+## 本轮 Session 28 收口
+
+- 已按 `docs/remaining-implementation-session-order.md` 的 Session 28 落地“拆书模式 core 入口”
+- core 已新增独立 `deconstruction` 子域：
+  - `BookDeconstructionInput`
+  - `BookDeconstructionSourceDocument`
+  - `BookDeconstructionExtractionResult`
+  - `BookDeconstructionChapterOutline`
+  - `BookDeconstructionApplicationItem`
+  - `BookDeconstructionApplicationPlan`
+  - `BookDeconstructionTargetPathService`
+  - `BookDeconstructionAssetMappingService`
+  - `BookDeconstructionApplicationPlanBuilderService`
+- 已新增 GUI / CLI 共用正式用例入口：
+  - `BuildBookDeconstructionApplicationPlanUseCase`
+- 当前已经明确：
+  - 拆书输入、提取结果、应用计划三层已经正式分家
+  - 应用计划不会直接绑定任何供应商响应格式
+  - 结构化结果不会另起一套资产协议，而是统一映射回：
+    - `premise/`
+    - `outlines/story/`
+    - `outlines/chapters/`
+    - `assets/styles/`
+    - `assets/world/`
+    - `assets/characters/`
+    - `assets/organizations/`
+    - `assets/foreshadows/`
+    - `assets/timeline/`
+    - `assets/relationships/`
+  - `ProjectTypeCatalogService` 已正式登记 `book_deconstruction`
+  - `StrategyCatalogService` 已正式登记：
+    - `book_deconstruction` project strategy
+    - `book_asset_extraction` mode definition
+  - 拆书项目是平行项目策略，不会误要求长任务运行基准
+
+本轮验证结果：
+
+- `packages/novel_agent_core`
+  - `dart test test/book_deconstruction_application_plan_builder_service_test.dart test/create_project_workspace_use_case_test.dart`
+  - 通过
+- `packages/novel_agent_core`
+  - `dart analyze lib/novel_agent_core.dart lib/src/project/project_type_catalog_service.dart lib/src/strategy/strategy_catalog_service.dart lib/src/use_cases/update_project_manifest_use_case.dart test/book_deconstruction_application_plan_builder_service_test.dart test/create_project_workspace_use_case_test.dart`
+  - 通过
+- `packages/novel_agent_core`
+  - `dart analyze lib/src/deconstruction lib/src/use_cases/build_book_deconstruction_application_plan_use_case.dart`
+  - 通过
+
+## 本轮 Session 27 收口
+
+- 已按 `docs/remaining-implementation-session-order.md` 的 Session 27 落地“灵感工作台共享能力”
+- app 已新增独立子域：
+  - `features/inspiration_workbench/application/controllers/InspirationWorkbenchController`
+  - `features/inspiration_workbench/application/services/InspirationWorkbenchLoaderService`
+  - `features/inspiration_workbench/application/services/InspirationWorkbenchViewDataService`
+  - 独立 page / widgets / presentation models / action contract
+- 当前已经明确：
+  - 灵感整理不再只是长任务会话里的前置引导状态
+  - 现在会作为独立工作台能力，从资源区快捷入口进入
+  - 一般小说项目和长任务项目都可使用同一入口
+  - 当前共享页不再自造存储格式，而是直接复用：
+    - `LoadModeGuidanceStateUseCase`
+    - `AnswerModeGuidanceStageUseCase`
+    - `ModeGuidanceAssetBundleBuilderService`
+    - `ModeGuidanceProjectionDocumentService`
+  - GUI 中现在可真实完成：
+    - 模式切换
+    - 阶段切换
+    - 选项作答
+    - 自由文本补充
+    - `故事前提 / 风格约束 / 世界锚点 / 角色锚点` 四类共享预览
+  - 每次保存阶段答案后，工作区资源树会同步刷新，确保投影文档立刻进入项目可见资源
+
+本轮验证结果：
+
+- `apps/novel_agent_app`
+  - `flutter test`
+  - 通过
+- 全量静态检查：
+  - `dart analyze packages/novel_agent_core packages/novel_agent_adapters apps/novel_agent_app`
+  - 通过（保留 `apps/novel_agent_app/tool/gateway_connect_probe.dart` 的既有 `avoid_print` info，不属于本轮回归）
+
+## 本轮 Session 26 收口
+
+- 已按 `docs/remaining-implementation-session-order.md` 的 Session 26 落地“长任务总站与工作台联动深化”
+- adapters 已新增总站只读详情基座：
+  - `ProjectLongTaskStationDetailService`
+  - `ProjectLongTaskStationDetail`
+  - `ProjectLongTaskStationChainSummary`
+  - `ProjectLongTaskStationChainItem`
+  - `ProjectLongTaskStationItemSummary`
+  - `ProjectLongTaskStationBlockerSummary`
+- 当前已经明确：
+  - 长任务总站不再只显示 `RunInstance` 基础字段
+  - 现在会真实读取对应项目里的：
+    - 活动任务
+    - 当前任务链
+    - 最近 checkpoint 复盘
+    - 最近审稿报告
+    - 最近返工任务
+    - 当前阻塞摘要
+  - 总站跳转链也已正式收口：
+    - `打开项目` -> 工作台
+    - `任务中心` -> 当前项目任务中心并预选相关任务
+    - `审稿中心` -> 当前项目审稿中心并预选相关报告
+  - 工作台与总站之间的联动现在通过总站控制器回调委派，不再让 widget 或壳层直接解析 registry / task JSON
+- app 侧同步收口：
+  - `LongTaskStationSnapshot` 新增详情态与详情加载态
+  - `LongTaskStationViewDataService` 现已投影链路节点、阻塞摘要和关联条目
+  - `LongTaskRunDetailPanel` 现已展示链路、阻塞和最近关联结果
+
+本轮验证结果：
+
+- `packages/novel_agent_adapters`
+  - `dart test test/project_long_task_station_detail_service_test.dart`
+  - 通过
+- `apps/novel_agent_app`
+  - `flutter test`
+  - 通过
+- 全量静态检查：
+  - `dart analyze packages/novel_agent_core packages/novel_agent_adapters apps/novel_agent_app`
+  - 通过（保留 `apps/novel_agent_app/tool/gateway_connect_probe.dart` 的既有 `avoid_print` info，不属于本轮回归）
+
+## 本轮 Session 23 收口
+
+- 已按 `docs/remaining-implementation-session-order.md` 的 Session 23 落地“项目包 / 资产包导入导出真实 adapter 流程”
+- adapters 已新增公共 bundle 执行基座：
+  - `ProjectBundleDirectoryLayoutService`
+  - `ProjectBundleFileAccessService`
+  - `ProjectBundlePreviewMapperService`
+  - `ProjectBundleWriteFile`
+  - `ProjectBundleWritePlan`
+  - `ProjectBundleApplyService`
+- 当前已经明确：
+  - 导入流程不再只有“预检结果”或“单步直接写盘”
+  - 现在正式拆成：
+    - `preview`
+    - `write plan`
+    - `apply`
+  - 目录导出不再停留在项目内 `exports/*.json`
+  - 现在已经可以真正写到用户指定的外部目录
+  - 目录包中的规范事实来源固定为：
+    - `bundle.json`
+  - 同目录还会同时落可读快照文件，供用户检查和未来 zip 打包复用
+- 已落地的目录型 bundle 服务：
+  - `ProjectStyleBundleLibraryService`
+  - `ProjectCharacterBundleLibraryService`
+  - `ProjectAssetBundleLibraryService`
+  - `ProjectPackageLibraryService`
+- 当前项目包已真实覆盖：
+  - `project_manifest`
+  - `runtime_profile`
+  - `characters`
+  - `organizations`
+  - `styles`
+  - `foreshadows`
+  - `relationships`
+  - `timelines`
+  - `prompt_templates`
+- 角色/组织支撑已补齐：
+  - core：
+    - `OrganizationProfileMarkdownCodecService`
+    - `OrganizationProfileMarkdownParserService`
+  - adapters：
+    - `ProjectOrganizationProfileRepository`
+    - `ProjectCharacterProfileRepository.listProfiles(...)`
+- 旧项目资产包路径也已同步纠偏：
+  - `PreviewProjectAssetBundleImportUseCase`
+  - `ImportProjectAssetBundleUseCase`
+  - `ProjectAssetLibraryService`
+  - 现在统一落到：
+    - `assets/styles/`
+    - `assets/foreshadows/`
+- CLI 正式入口已补齐并装配：
+  - `project preview-package / import-package / export-package`
+  - `asset preview-style-bundle / import-style-bundle / export-style-bundle`
+  - `asset preview-character-bundle / import-character-bundle / export-character-bundle`
+  - `asset preview-project-asset-bundle / import-project-asset-bundle / export-project-asset-bundle`
+
+本轮验证结果：
+
+- `packages/novel_agent_core`
+  - `dart test test/bundle_contract_services_test.dart test/customization_use_cases_test.dart`
+  - 全部通过
+- `packages/novel_agent_adapters`
+  - `dart test test/project_bundle_library_services_test.dart test/project_tool_dispatcher_path_test.dart`
+  - 全部通过
+- 静态检查：
+  - `dart analyze apps/novel_agent_cli packages/novel_agent_adapters packages/novel_agent_core`
+  - 通过
+- CLI help 烟测：
+  - `dart run bin/novel_agent.dart asset help`
+  - `dart run bin/novel_agent.dart project help`
+  - 通过，且新 bundle 入口已可见
+
+## 本轮 Session 22 收口
+
+- 已按 `docs/remaining-implementation-session-order.md` 的 Session 22 落地“漂移控制与 review -> repair -> continue 放行器”
+- core 已新增：
+  - `LongTaskNarrativeDriftSignalService`
+  - `LongTaskCheckpointDispositionService`
+  - `LongTaskChapterGateDispositionService`
+- 当前已经明确：
+  - checkpoint 漂移检测已不再只有：
+    - `style`
+    - `world`
+    - `entity`
+  - 现已正式补入第四类共享叙事漂移：
+    - `narrative`
+    - 统一覆盖 `伏笔 / 时间线 / 关系`
+  - checkpoint 动作合同现在先解析 `disposition`，再决定动作可用性与推荐动作：
+    - `auto_continue`
+    - `blocked_wait_user`
+    - `manual_attention`
+  - 高风险 chapter/planning/checkpoint 节点默认优先推荐：
+    - `request_revision_followup`
+  - 中风险节点默认优先推荐：
+    - `create_followup_review_tasks`
+  - 章级 gate 现在不再把“有 issue / suggestion”粗暴混成同一种结果
+    - `issues` -> `auto_create_repair_task`
+    - `suggestions only` -> `blocked_wait_user`
+    - `critical issues` -> `manual_attention`
+- adapters 已同步收口：
+  - `ProjectLongTaskCheckpointReviewService`
+    - review 落盘时额外写入：
+      - `disposition`
+      - `continuation_disposition`
+      - `continuation_reason`
+  - `ProjectLongTaskChapterGateService`
+    - gate 结果会真实带出：
+      - `gate_disposition`
+      - `gate_reason`
+      - `blocks_auto_advance`
+      - `manual_attention_required`
+  - `ProjectWorkflowRuntimeService`
+    - gate 不再只是留下 `chapter_gate_action`
+    - 对 `blocked_wait_user / manual_attention`，当前 review 任务会真实转成 `waiting_user`
+    - 从而把下游章节继续阻塞在依赖层，而不是报告里说阻塞、队列里却继续跑
+- 相关共享链也已同步提升：
+  - `LongTaskCheckpointReviewMarkdownRenderer` 已开始直接展示放行判断
+  - `LongTaskCheckpointReviewTaskSuggestionService` 已把 `assets/foreshadows/ / assets/timeline/ / assets/relationships/` 纳入 continuity 压力判断
+
+本轮验证结果：
+
+- `packages/novel_agent_core`
+  - `dart test test/long_task_checkpoint_drift_signal_service_test.dart test/long_task_checkpoint_disposition_service_test.dart test/long_task_chapter_gate_disposition_service_test.dart test/long_task_checkpoint_action_contract_service_test.dart test/long_task_chapter_gate_policy_service_test.dart test/long_task_checkpoint_review_service_test.dart test/long_task_checkpoint_review_task_suggestion_service_test.dart`
+  - `dart analyze lib/src/review/review_issue_normalizer_service.dart lib/src/workflow/long_task_narrative_drift_signal_service.dart lib/src/workflow/long_task_checkpoint_disposition_service.dart lib/src/workflow/long_task_chapter_gate_disposition_service.dart lib/src/workflow/long_task_checkpoint_drift_signal_service.dart lib/src/workflow/long_task_checkpoint_action_contract_service.dart lib/src/workflow/long_task_chapter_gate_policy_service.dart lib/src/workflow/long_task_checkpoint_review_task_suggestion_service.dart lib/src/workflow/long_task_checkpoint_review_markdown_renderer.dart test/long_task_checkpoint_drift_signal_service_test.dart test/long_task_checkpoint_disposition_service_test.dart test/long_task_chapter_gate_disposition_service_test.dart test/long_task_checkpoint_action_contract_service_test.dart test/long_task_chapter_gate_policy_service_test.dart`
+  - 全部通过
+- `packages/novel_agent_adapters`
+  - `dart test test/project_long_task_checkpoint_review_service_test.dart test/project_long_task_chapter_gate_service_test.dart test/project_long_task_checkpoint_action_service_test.dart test/project_long_task_review_repair_task_service_test.dart`
+  - `dart analyze lib/src/workflow/project_long_task_checkpoint_review_service.dart lib/src/workflow/project_long_task_chapter_gate_service.dart lib/src/workflow/project_workflow_runtime_service.dart test/project_long_task_checkpoint_review_service_test.dart test/project_long_task_chapter_gate_service_test.dart test/project_long_task_checkpoint_action_service_test.dart`
+  - 全部通过
+- `apps/novel_agent_app`
+  - `dart run tool/seed_autopilot_checkpoint_action_probe.dart`
+  - `PASS`
+
+## 本轮 Session 21 收口
+
+- 已按 `docs/remaining-implementation-session-order.md` 的 Session 21 落地“伏笔 / 时间线 / 关系回填主链”
+- core 已新增共享叙事资产回填基座：
+  - `ForeshadowStatusCatalogService`
+  - `ForeshadowStateUpdateRequest / Mapper / Planner`
+  - `TimelineStateUpdateRequest / Mapper / Planner`
+  - `RelationshipStateUpdateRequest / Mapper / Planner`
+  - `ForeshadowFeedbackSignal / Extractor / Planner`
+  - `SharedNarrativeAssetContextSectionService`
+  - `SharedNarrativeAssetContextProjectionService`
+- 当前已经明确：
+  - 伏笔主档固定写到 `assets/foreshadows/<id>.foreshadow.md`
+  - 时间线主档固定写到 `assets/timeline/<id>.timeline.md`
+  - 关系主档固定写到 `assets/relationships/<id>.relationship.md`
+  - `run_continuity_check` 不再只是保存 report；review 中的 `related_foreshadow_ids / related_timeline_ids / related_relationship_ids` 会被保留并进入反馈链
+  - 伏笔反馈现在会真实推进状态，而不是只把备注写回资产
+  - “兑现阶段”已不再被误判成“已兑现”，避免伏笔在 review 中过早被判为已回收
+- adapters 已新增：
+  - `ProjectForeshadowPathPolicy / Repository / StateUpdateService`
+  - `ProjectTimelinePathPolicy / Repository / StateUpdateService`
+  - `ProjectRelationshipPathPolicy / Repository / StateUpdateService`
+  - `ProjectForeshadowFeedbackUpdateService`
+- 运行链联动已同步收口：
+  - `ProjectStructuredMemoryToolExecutor` 已新增：
+    - `updateForeshadowState(...)`
+    - `updateTimelineState(...)`
+    - `updateRelationshipState(...)`
+  - `ProjectToolDispatcher`、`BuiltinToolCatalog`、`ToolSchemaBuilderService` 已正式接通三类工具
+  - `ToolExecutionService` 已把三类工具纳入 `writtenPaths` 回收
+  - `ChapterAtomicResultRecorderService` 已把三类工具纳入后处理 memory 更新判定
+  - `LongTaskPostprocessPromptRenderer` 与 `LongTaskTransactionContractService` 已开始明确要求后处理回填伏笔 / 时间线 / 关系
+  - `ContextAssemblerService` 已开始从已加载资产中构建：
+    - `待回收伏笔`
+    - `最近时间线`
+    - `关键关系变化`
+  - `ProjectContextFileSelectionService` 已提升三类共享资产目录的上下文优先级
+
+本轮验证结果：
+
+- `packages/novel_agent_core`
+  - `dart test test/foreshadow_feedback_signal_extractor_service_test.dart test/shared_narrative_asset_context_projection_service_test.dart test/context_assembler_service_test.dart test/tool_execution_service_test.dart`
+  - `dart analyze lib/src/assets lib/src/context/context_assembler_service.dart lib/src/runtime/project_context_file_selection_service.dart lib/src/runtime/tool_execution_service.dart lib/src/review/review_issue_normalizer_service.dart lib/src/tools/builtin_tool_catalog.dart lib/src/tools/tool_event_presenter_service.dart lib/src/tools/tool_schema_builder_service.dart lib/src/tools/tool_strategy_prompt_builder.dart lib/src/project/project_prompt_contract.dart lib/src/workflow/chapter_atomic_result_recorder_service.dart lib/src/workflow/long_task_postprocess_prompt_renderer.dart lib/src/workflow/long_task_transaction_contract_service.dart test/foreshadow_feedback_signal_extractor_service_test.dart test/shared_narrative_asset_context_projection_service_test.dart test/context_assembler_service_test.dart`
+  - 全部通过
+- `packages/novel_agent_adapters`
+  - `dart test test/project_foreshadow_state_update_service_test.dart test/project_timeline_state_update_service_test.dart test/project_relationship_state_update_service_test.dart test/project_foreshadow_feedback_update_service_test.dart`
+  - `dart analyze lib/src/storage/project_foreshadow_feedback_update_service.dart lib/src/storage/project_foreshadow_path_policy.dart lib/src/storage/project_foreshadow_repository.dart lib/src/storage/project_foreshadow_state_update_service.dart lib/src/storage/project_relationship_path_policy.dart lib/src/storage/project_relationship_repository.dart lib/src/storage/project_relationship_state_update_service.dart lib/src/storage/project_timeline_path_policy.dart lib/src/storage/project_timeline_repository.dart lib/src/storage/project_timeline_state_update_service.dart lib/src/tools/project_structured_memory_tool_executor.dart lib/src/tools/project_tool_dispatcher.dart test/project_foreshadow_state_update_service_test.dart test/project_timeline_state_update_service_test.dart test/project_relationship_state_update_service_test.dart test/project_foreshadow_feedback_update_service_test.dart`
+  - 全部通过
+
+当前为后续保留的明确扩展点：
+
+- `packages/novel_agent_core/lib/src/assets/shared_narrative_asset_context_projection_service.dart`
+  - 后续可继续接更强的焦点路径、实体匹配和图谱读侧投影，而不只依赖当前已加载文本
+- `packages/novel_agent_adapters/lib/src/storage/project_foreshadow_feedback_update_service.dart`
+  - 后续可继续接章节分析对象写回，而不只先走 review report 主链
+- `packages/novel_agent_core/lib/src/assets/foreshadow_feedback_planner_service.dart`
+  - 后续可继续细化“风险状态 / 推进状态 / 终局状态”的优先级策略
+
+## 本轮 Session 20 收口
+
+- 已按 `docs/remaining-implementation-session-order.md` 的 Session 20 收束角色卡运行主链
+- core 已新增角色运行态共享基座：
+  - `CharacterProfileMarkdownCodecService`
+  - `CharacterProfileMarkdownParserService`
+  - `CharacterStageStateRecord`
+  - `CharacterStageStateRecordNormalizerService`
+  - `CharacterStageStateRecordMarkdownCodecService`
+  - `CharacterStateUpdateRequest`
+  - `CharacterStateUpdateRequestMapperService`
+  - `CharacterStateUpdatePlan`
+  - `CharacterStateUpdatePlannerService`
+  - `CharacterStateHistoryMarkdownRenderer`
+- 当前已经明确：
+  - 角色主档唯一权威原件固定在 `assets/characters/`
+  - `update_character_state` 不再通过 `write_project_file` 走“同名冲突自动 `_2/_3`”路径
+  - 运行链正式拆成三层：
+    - 可见主档：`assets/characters/<character_id>.md`
+    - 隐藏 latest 状态：`.novel_agent/state/characters/<character_id>/latest.md`
+    - 隐藏历史附录：`.novel_agent/state/characters/<character_id>/history.md`
+  - 普通项目与长任务项目现已共用同一入口：
+    - `ProjectCharacterStateUpdateService.updateCharacterState(...)`
+  - legacy `characters/<name>.md` 仍可读，但正式写回已收束到新主路径
+- adapters 已新增：
+  - `ProjectCharacterPathPolicy`
+  - `ProjectCharacterProfileRepository`
+  - `ProjectCharacterRuntimeStateRepository`
+  - `ProjectCharacterStateUpdateService`
+- 运行侧联动已同步收口：
+  - `ProjectStructuredMemoryToolExecutor.updateCharacterState(...)` 已改为只转发到共享角色状态服务
+  - `ProjectContextFileSelectionService` 已降低 legacy `characters/` 的优先级
+  - `ContextProjectFileSectionService` / `ContextSectionCatalog` 已支持 `assets/characters/` 前缀
+  - `LongTaskEntityDriftSignalService` 与 checkpoint review suggestion 已兼容 `assets/characters/`
+  - mode guidance 角色资产投影路径已切到 `assets/characters/`
+
+本轮验证结果：
+
+- `packages/novel_agent_core`
+  - `dart test test/character_state_update_planner_service_test.dart test/character_profile_markdown_codec_service_test.dart test/mode_guidance_asset_context_section_service_test.dart`
+  - `dart analyze lib/src/assets lib/src/context/context_project_file_section_service.dart lib/src/context/context_section_catalog.dart lib/src/modes/mode_guidance_asset_bundle_builder_service.dart lib/src/modes/mode_guidance_projection_document_service.dart lib/src/project/project_prompt_contract.dart lib/src/runtime/project_context_file_selection_service.dart lib/src/tools/builtin_tool_catalog.dart lib/src/tools/tool_schema_builder_service.dart lib/src/tools/tool_strategy_prompt_builder.dart lib/src/workflow/long_task_checkpoint_review_task_suggestion_service.dart lib/src/workflow/long_task_entity_drift_signal_service.dart lib/src/workflow/task_execution_plan_service.dart test/character_state_update_planner_service_test.dart test/character_profile_markdown_codec_service_test.dart`
+  - 全部通过
+- `packages/novel_agent_adapters`
+  - `dart test test/project_character_state_update_service_test.dart`
+  - `dart analyze lib/src/storage/project_character_path_policy.dart lib/src/storage/project_character_profile_repository.dart lib/src/storage/project_character_runtime_state_repository.dart lib/src/storage/project_character_state_update_service.dart lib/src/tools/project_structured_memory_tool_executor.dart lib/src/tools/project_tool_path_policy.dart lib/src/tools/project_tool_relative_path_resolver.dart test/project_character_state_update_service_test.dart`
+  - 全部通过
+
+当前为后续保留的明确扩展点：
+
+- `packages/novel_agent_core/lib/src/assets/character_state_update_planner_service.dart`
+  - 后续可继续接“角色改名但身份不变”的更强 alias/rename 迁移规则
+- `packages/novel_agent_adapters/lib/src/storage/project_character_profile_repository.dart`
+  - 后续可继续接 SQLite 主存储读写，而不只走 Markdown 主档
+- `packages/novel_agent_adapters/lib/src/storage/project_character_runtime_state_repository.dart`
+  - 后续可继续把历史附录联动到时间线资产，而不只保留隐藏 history 文档
+
+## 本轮 Session 19 收口
+
+- 已按 `docs/remaining-implementation-session-order.md` 的 Session 19 收束 `constitution / guidance / style` 三层
+- core 已新增创作约束共享子域：
+  - `ProjectConstitution`
+  - `ModeGuidance`
+  - `CreativeRuleStack`
+  - `CreativeRuleStackResolverService`
+  - `CreativeRuleContextSectionService`
+  - `CreativeRuleBriefRenderer`
+- 当前已经明确：
+  - `ProjectConstitution` 负责长期创作宪法、禁止事项与自然表达约束
+  - `ModeGuidance` 负责模式当前收束结果与推进边界
+  - `StyleProfile / ProjectStyleBinding` 负责语言风格与作用域绑定
+  - 三层统一优先级固定为：
+    - 用户当前明确指令
+    - `ProjectConstitution`
+    - `ModeGuidance`
+    - `StyleProfile / ProjectStyleBinding`
+    - 其他上下文与即时发挥
+- `ContextAssemblerService` 已接入正式创作约束栈：
+  - 现在上下文包会显式产出：
+    - `creative_rule_stack`
+    - `creative_rule_summary`
+  - 正式上下文片段标题已固定为：
+    - `项目创作宪法`
+    - `模式引导约束`
+    - `项目风格规范`
+- `ContextStaticSectionService` 不再自己私塞一段“project spec 原文”
+  - 改为由共享创作约束层统一决定宪法、模式引导、风格如何进入上下文
+- `ProjectContextFileSelectionService` 已同步适配新的目录语义：
+  - `premise/`
+  - `assets/styles/`
+  - `outlines/story|volumes|chapters/`
+  - 并继续兼容旧的 `specs/ / styles/ / outline/` 路径
+- 长任务共享链已开始复用同一套解析结果：
+  - `LongTaskTaskTransactionService`
+  - `LongTaskTaskPromptRenderer`
+  - `LongTaskPostprocessTransactionService`
+  - `LongTaskPostprocessPromptRenderer`
+  - `ProjectWorkflowRuntimeService` 的相关 adapter 接线
+
+本轮验证结果：
+
+- `packages/novel_agent_core`
+  - `dart test test/creative_rule_stack_resolver_service_test.dart test/context_assembler_service_test.dart test/long_task_runtime_services_test.dart`
+  - `dart analyze lib/src/creative lib/src/context/context_assembler_service.dart lib/src/context/context_static_section_service.dart lib/src/workflow/long_task_task_transaction_service.dart lib/src/workflow/long_task_task_prompt_renderer.dart lib/src/workflow/long_task_postprocess_transaction_service.dart lib/src/workflow/long_task_postprocess_prompt_renderer.dart lib/src/runtime/project_context_file_selection_service.dart test/creative_rule_stack_resolver_service_test.dart test/context_assembler_service_test.dart test/long_task_runtime_services_test.dart`
+  - 全部通过
+- `packages/novel_agent_adapters`
+  - `dart test test/project_workflow_runtime_service_test.dart test/project_long_task_postprocess_result_service_test.dart`
+  - `dart analyze lib/src/workflow/project_workflow_runtime_service.dart test/project_workflow_runtime_service_test.dart`
+  - 全部通过
+
+当前为后续保留的明确扩展点：
+
+- `packages/novel_agent_core/lib/src/creative/creative_rule_stack_resolver_service.dart`
+  - 后续可继续接全局标准域与更多项目级来源，而不只解析项目内文件与模式投影
+- `packages/novel_agent_core/lib/src/creative/project_constitution_markdown_parser_service.dart`
+  - 后续可继续增强对更细分宪法章节的结构化识别
+- `packages/novel_agent_core/lib/src/creative/mode_guidance_markdown_parser_service.dart`
+  - 后续可继续接更精细的阶段事实抽取
+
+## 本轮 Session 18 收口
+
+- 已按 `docs/remaining-implementation-session-order.md` 的 Session 18 落地“章节字数分布策略”
+- core 已新增字数分布基座：
+  - `ChapterLengthProfile`
+  - `ChapterLengthDistributionPolicy`
+  - `ChapterLengthRecord`
+  - `ChapterLengthEvaluation`
+  - `ChapterLengthMeasurementService`
+  - `ChapterLengthProfileResolverService`
+  - `ChapterLengthDistributionService`
+- 当前已经明确：
+  - 项目中的“字数限制”不再只是一条固定阈值
+  - 它现在可表达：
+    - 项目级目标字数基准
+    - 柔性参考区间
+    - 分布评估策略
+  - 并继续兼容现有 prompt 级字段：
+    - `chapter_word_target`
+    - `chapter_word_min`
+    - `chapter_word_max`
+- `LongTaskTaskFactoryService`、`LongTaskDynamicTaskFactoryService`、`LongTaskTaskTransactionService` 已正式改为通过 `ChapterLengthProfileResolverService` 解析和传递统一字数元数据，而不是继续散写旧字段
+- adapters 已新增：
+  - `ProjectChapterLengthEvaluationService`
+- 当前后处理链已经可以在真实章节结果上统计：
+  - 当前章字数
+  - 与上一章的字数差
+  - 最近若干章滚动均值
+  - 相对目标的偏离等级
+  - 建议动作：
+    - `pass`
+    - `remind`
+    - `adjust_next_chapter`
+    - `review_or_repair`
+- `LongTaskCheckpointReviewService` 与 markdown renderer 已开始把这部分评估写入 checkpoint review：
+  - 现在探针与后续 GUI/CLI 都可以看到“章节字数评价”
+  - 不再只能在 prompt 文案里看到“目标约 xxx 字”
+
+本轮验证结果：
+
+- `packages/novel_agent_core`
+  - `dart test test/chapter_length_distribution_service_test.dart test/long_task_word_constraint_toggle_test.dart test/long_task_checkpoint_review_service_test.dart test/long_task_runtime_services_test.dart`
+  - `dart analyze lib/src/workflow test/chapter_length_distribution_service_test.dart test/long_task_checkpoint_review_service_test.dart`
+  - 全部通过
+- `packages/novel_agent_adapters`
+  - `dart test test/project_chapter_length_evaluation_service_test.dart test/project_long_task_postprocess_result_service_test.dart`
+  - `dart analyze lib/src/workflow/project_chapter_length_evaluation_service.dart lib/src/workflow/project_long_task_postprocess_result_service.dart test/project_chapter_length_evaluation_service_test.dart test/project_long_task_postprocess_result_service_test.dart`
+  - 全部通过
+
+当前为后续保留的明确扩展点：
+
+- `packages/novel_agent_core/lib/src/workflow/chapter_length_profile_resolver_service.dart`
+  - 后续可继续接项目类型默认档位、平台投放档位和模式级 override
+- `packages/novel_agent_core/lib/src/workflow/chapter_length_distribution_service.dart`
+  - 后续可继续接更细的“阶段性章节弧线”或不同模式下的分布权重
+- `packages/novel_agent_adapters/lib/src/workflow/project_chapter_length_evaluation_service.dart`
+  - 后续可继续接 SQLite 主存储读侧，而不只读当前 Markdown/任务输出
+
+## 本轮 Session 17 收口
+
+- 已按 `docs/remaining-implementation-session-order.md` 的 Session 17 落地“技能路由策略正式化”
+- core 已新增技能路由基座：
+  - `SkillActivationSignal`
+  - `StageSkillPreset`
+  - `SkillRoutingPolicy`
+  - `SkillLoadMemory`
+  - `SkillLoadMemoryService`
+  - `SkillRoutingPolicyService`
+- `GenerateDraftUseCase` 已接入：
+  - 按任务阶段自动识别技能路由信号
+  - 预加载摘要级技能，而不是完全依赖模型自己想起 `load_agent_skill`
+  - 当前任务内的技能读取记忆，避免重复读取同一 skill / reference
+- `ToolExecutionService` 已接入技能读取去重：
+  - 重复的 `load_agent_skill` 不再重复打到宿主
+  - 返回可恢复的 `already_loaded / not_executed` 结果
+- `load_agent_skill` 已从“摘要 / full 二选一”推进到：
+  - `summary`
+  - `full`
+  - `reference_path` 定点读取 skill 内部 reference
+- 长任务事务提示已正式展示技能路由策略：
+  - 不再硬编码一条“先读 novel-control-station”
+  - 改为按 `planning / chapter / review / revision` 阶段生成不同策略
+- `AgentRunCompactorService` 已补技能文本裁剪：
+  - `instructions`
+  - `instruction_markdown`
+  - `reference_content`
+  - skill 结果默认放宽到更适合技能说明的截断长度
+
+本轮验证结果：
+
+- `packages/novel_agent_core`
+  - `test/skill_routing_policy_service_test.dart`
+  - `test/tool_execution_service_test.dart`
+  - `test/draft_generation_use_case_test.dart`
+  - `test/long_task_runtime_services_test.dart`
+  - 全部通过
+- `packages/novel_agent_adapters`
+  - `test/project_agent_skill_tool_executor_test.dart`
+  - 通过
+- 定向 `dart analyze` 通过
+
+本轮后明确进入下一阶段的内容：
+
+- Session 18：章节字数分布策略
+- Session 19：`constitution / guidance / style` 三层正式收束
+- Session 20：角色卡运行主链收束
 
 ## 本轮长任务收口补丁
 
@@ -1833,6 +3002,44 @@
 - 已新增项目资产中心 GUI 入口：风格中心、伏笔中心、资产包导入/导出
 - 已新增 CLI `asset` 命令组，直接复用同一套项目资产服务
 - 已补 style / foreshadow Markdown 解析器，项目资产现在可以从标准 Markdown 真实回读
+- Session 24 已完成 app 侧资产中心读侧拆分：
+  - `ProjectAssetsController` 已独立承接资产页刷新、选择、导入导出、风格/伏笔保存
+  - `AppShellController` 不再保存资产页快照与资产编辑动作
+  - 资产页现已分拆为：
+    - 列表面板
+    - 详情面板
+    - 图谱 / 时间线侧栏
+  - GUI 现已真实浏览四类资产：
+    - 风格
+    - 伏笔
+    - 时间线
+    - 关系
+  - 已补基础读侧壳：
+    - 共享资产图谱节点浏览
+    - 时间线概览列表
+    - 关联资产跳转检视
+  - 本轮仍刻意未做复杂拖拽与时间线 / 关系写侧闭环，以保持 Session 24 的边界干净
+- Session 25 已完成“分析 -> 建议 -> 重写 GUI 闭环”第一轮接线：
+  - core 已新增 `ReviewReportChapterAnalysisProjectionService`
+    - 把结构化审稿报告投影成 `ChapterAnalysisResult`
+    - 不再让 GUI 暴露 provider 原始响应或临时字段
+  - adapters 已新增 `ProjectChapterRewriteTaskService`
+    - 负责把 `ChapterRewritePlan` 真正物化成 `revision` 任务文件
+  - 审稿中心现已直接展示：
+    - 分析结果摘要
+    - 问题对象
+    - 建议对象
+    - 目标片段对象
+    - 重写计划对象
+    - 最小回放 / 原文片段预览
+  - GUI 已能直接走三条路径：
+    - 整章重写 -> 创建 revision 任务 -> 跳转任务中心
+    - 局部重写 -> 勾选片段 -> 创建 revision 任务 -> 跳转任务中心
+    - 只生成建议 -> 仅刷新计划与说明，不创建任务
+  - 这一轮仍刻意未做：
+    - 高级 diff UI
+    - 独立分析中心页面
+    - `analysis/` 目录下独立分析文档的完整读写闭环
 
 ### 本轮已补
 
@@ -1853,6 +3060,11 @@
 - Session 14 已完成第一批 core 落地：新增共享 `inspiration` 子域，正式定义灵感记录、收束阶段目录与从灵感到 `premise/style/world/characters` 的共享映射入口
 - `ModeGuidanceState` 到共享灵感记录的转换已抽成独立 mapper，现有长任务开局链开始复用共享灵感域，而不再把“灵感收束”写死在长任务私有 builder 里
 - `ModeGuidanceAssetBundle` 已补 premise / character profile 视角，现有上下文注入现在可以直接带入“故事前提”而不只有风格、世界与实体摘要
+- 项目工作台现已真正读取并缓存 `runtime_profile.json`；GUI 打开项目后会把运行基准 / 运行模式 / 存储策略收束到项目副标题，而不是只显示项目类型
+- 任务中心现已接入项目级 runtime profile：长任务开局表单默认运行模式改为读取项目 runtime profile，并在创建队列时把 `runtime_baseline_id / runtime_mode / unattended / auto_advance_chapters / keep_alive_across_project_switch` 一并传回共享 workflow 入口
+- 长任务总站与任务中心已补统一运行标签映射：`waiting_gate / failed_manual_attention / stopped / blocked_dependencies / max_steps` 等状态不再裸露原始字段，且会显示运行基准、运行模式、保活/自动推进等策略摘要
+- 任务详情已开始显式展示 `chapter_gate_review / review_report / persistent_context_paths / runtime_baseline_id` 等共享元信息，方便直接看出“为什么卡住、卡在哪一层、是否已进入 repair 链”
+- 任务中心共享动作现已补齐结果闭环：`checkpoint action / revision resolution` 执行后会根据返回结果自动跳转到新建任务或更新后的宿主任务，并给出数量化状态文案，而不是停留在泛化“已完成”
 
 ### 生态系统
 
@@ -1880,18 +3092,19 @@
 
 恢复时从这里继续：
 
-1. 把“传输层有限内置重试”的设置真正接到 GUI 可见文案与 CLI 配置说明
-2. 把风格 / 伏笔 / 资产包接进真实 GUI/CLI 入口，而不是只停在 core
-3. 把资产中心继续细化成图谱/时间线/默认风格切换，而不只停在表单中心
+0. 先阅读：
+   - `docs/remaining-implementation-session-order.md`
+   - 这份文档把 Session 16 之后尚未实现完的内容，重新拆成了可直接执行的一轮一轮任务
+   - 当前推荐起点已前进到：
+     - Session 31：总回归、探针、Windows 打包与文档回填
+1. 继续按 `docs/remaining-implementation-session-order.md` 执行 Session 31，而不是回头重开 Session 30
+2. 在 Session 24 已完成读侧浏览后，继续推进资产中心的写侧闭环与更细图谱交互
+3. 在 Session 25 已完成报告投影式分析 GUI 后，再补独立分析资产落盘与分析页
 4. 补生态页生态包导出 UI 入口
 5. 做独立 prompt debug 组合页
 6. 补 `Responses API` 的真实 HTTP 分流，而不是只保留设置项
 7. 继续把图片类 gateway 做成更完整的供应商 / 输出文件闭环
 8. 做 Android 打包回归
-9. 继续推进第一种长任务模式的“执行后漂移控制 / 检查点复盘 / 风格守恒”节点
-10. 在已有复盘包与 review task 物化之上，继续补“review report -> repair task / 返工建议”这一层共享规则
-11. 给第一种长任务模式补更细的风格 / 世界 / 角色漂移严重度判断
-12. 把 checkpoint action package 与 revision resolution package 接到 Flutter 任务中心的真实用户入口
 
 ## 恢复注意事项
 

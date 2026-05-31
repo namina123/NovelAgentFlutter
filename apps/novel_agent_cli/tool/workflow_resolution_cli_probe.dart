@@ -114,7 +114,7 @@ Future<void> main() async {
         'tracking/modes/seed_autopilot_novel/guidance.md',
         'styles/seed_autopilot_style.md',
       ],
-      'output_paths': <Object?>['drafts/第01章_seed_to_full.md'],
+      'output_paths': <Object?>['chapters/第01章_seed_to_full.md'],
       'metadata': <String, Object?>{
         'plan_id': 'plan_test',
         'workflow_mode': TaskRuntimeConstants.modeSeedToFullNovel,
@@ -142,6 +142,11 @@ Future<void> main() async {
     final checkpointReviewPath = ValueReaders.stringValue(
       ValueReaders.mapValue(runChapter['checkpoint_review'])['relative_path'],
     );
+    final checkpointActionPackage = await workflowRuntimeService
+        .buildCheckpointReviewActionPackage(project, checkpointReviewPath);
+    final checkpointCommand = _resolveEnabledActionCommand(
+      checkpointActionPackage,
+    );
     final checkpointActionsExit = await bootstrap.run(<String>[
       'workflow',
       'checkpoint-actions',
@@ -156,7 +161,7 @@ Future<void> main() async {
       '--review',
       checkpointReviewPath,
       '--command',
-      'create_followup_review_tasks',
+      checkpointCommand,
       '--project',
       project.rootPath,
     ]);
@@ -252,6 +257,14 @@ Future<void> main() async {
         <String, Object?>{'relative_path': revisionTaskPath},
       );
     });
+    final revisionResolutionPackage = await workflowRuntimeService
+        .buildRevisionResolution(
+          project,
+          <String, Object?>{'relative_path': revisionTaskPath},
+        );
+    final revisionCommand = _resolveEnabledActionCommand(
+      revisionResolutionPackage,
+    );
     final revisionResolutionExit = await bootstrap.run(<String>[
       'workflow',
       'revision-resolution',
@@ -266,7 +279,7 @@ Future<void> main() async {
       '--task',
       revisionTaskPath,
       '--command',
-      'create_followup_review_tasks',
+      revisionCommand,
       '--project',
       project.rootPath,
     ]);
@@ -283,7 +296,9 @@ Future<void> main() async {
           applyRevisionResolutionExit == 0 &&
           reviewTaskCount >= 2,
       'checkpoint_review_path': checkpointReviewPath,
+      'checkpoint_action_command': checkpointCommand,
       'revision_task_path': revisionTaskPath,
+      'revision_resolution_command': revisionCommand,
       'checkpoint_actions_exit': checkpointActionsExit,
       'apply_checkpoint_exit': applyCheckpointExit,
       'revision_resolution_exit': revisionResolutionExit,
@@ -308,6 +323,33 @@ Future<void> main() async {
       await projectRoot.delete(recursive: true);
     }
   }
+}
+
+String _resolveEnabledActionCommand(JsonMap actionPackage) {
+  // 中文注释: 探针只应用运行时明确允许的动作，优先走推荐动作，其次回退到第一条可用动作。
+  final actions = ValueReaders.objectList(actionPackage['actions']);
+  final recommendedActionId = ValueReaders.stringValue(
+    actionPackage['recommended_action_id'],
+  );
+  if (recommendedActionId.isNotEmpty) {
+    for (final item in actions) {
+      final action = ValueReaders.mapValue(item);
+      if (ValueReaders.stringValue(action['id']) == recommendedActionId &&
+          ValueReaders.boolValue(action['enabled'], true)) {
+        return recommendedActionId;
+      }
+    }
+  }
+  for (final item in actions) {
+    final action = ValueReaders.mapValue(item);
+    if (ValueReaders.boolValue(action['enabled'], true)) {
+      final actionId = ValueReaders.stringValue(action['id']);
+      if (actionId.isNotEmpty) {
+        return actionId;
+      }
+    }
+  }
+  throw StateError('当前动作包没有可执行动作。');
 }
 
 Future<_ProbeApiConfig> _loadProbeApiConfig() async {
@@ -424,3 +466,4 @@ class _ProbeApiConfig {
   final String apiKey;
   final String modelId;
 }
+

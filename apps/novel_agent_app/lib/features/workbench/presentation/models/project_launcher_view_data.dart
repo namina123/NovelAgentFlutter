@@ -1,14 +1,18 @@
+import 'package:novel_agent_core/novel_agent_core.dart';
+
 import 'project_entry_view_data.dart';
 import 'project_creation_phase.dart';
 import 'project_runtime_baseline_option_view_data.dart';
 import 'project_storage_strategy_option_view_data.dart';
 import 'project_type_option_view_data.dart';
 
-enum ProjectLauncherMode { open, create }
+enum ProjectLauncherMode { guard, create }
 
 class ProjectLauncherViewData {
   const ProjectLauncherViewData({
     required this.mode,
+    required this.title,
+    required this.description,
     required this.projectsRootPath,
     required this.entries,
     required this.status,
@@ -21,11 +25,14 @@ class ProjectLauncherViewData {
     required this.runtimeBaselineOptions,
     required this.selectedRuntimeBaselineId,
     required this.selectedProjectTypeRequiresRuntimeBaseline,
+    required this.continuityInput,
     required this.canDismiss,
     required this.allowOpenExisting,
   });
 
   final ProjectLauncherMode mode;
+  final String title;
+  final String description;
   final String projectsRootPath;
   final List<ProjectEntryViewData> entries;
   final String status;
@@ -38,6 +45,7 @@ class ProjectLauncherViewData {
   final List<ProjectRuntimeBaselineOptionViewData> runtimeBaselineOptions;
   final String selectedRuntimeBaselineId;
   final bool selectedProjectTypeRequiresRuntimeBaseline;
+  final ProjectContinuityInputProfile continuityInput;
   final bool canDismiss;
   final bool allowOpenExisting;
 }

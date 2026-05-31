@@ -275,7 +275,7 @@ class ProjectAssetLibraryService {
 
   bool _isStylePath(String relativePath) {
     final lower = relativePath.toLowerCase();
-    if (!lower.startsWith('styles/')) {
+    if (!lower.startsWith('assets/styles/') && !lower.startsWith('styles/')) {
       return false;
     }
     return lower.endsWith('.style.md') || lower.endsWith('.md');
@@ -283,16 +283,17 @@ class ProjectAssetLibraryService {
 
   bool _isForeshadowPath(String relativePath) {
     final lower = relativePath.toLowerCase();
-    if (!lower.startsWith('world/foreshadows/')) {
+    if (!lower.startsWith('assets/foreshadows/') &&
+        !lower.startsWith('world/foreshadows/')) {
       return false;
     }
     return lower.endsWith('.foreshadow.md') || lower.endsWith('.md');
   }
 
-  String _stylePath(String styleId) => 'styles/$styleId.style.md';
+  String _stylePath(String styleId) => 'assets/styles/$styleId.style.md';
 
   String _foreshadowPath(String recordId) =>
-      'world/foreshadows/$recordId.foreshadow.md';
+      'assets/foreshadows/$recordId.foreshadow.md';
 
   String _fallbackIdFromPath(String relativePath) {
     var name = relativePath.split('/').last;

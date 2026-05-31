@@ -3,7 +3,9 @@ import '../models/user_option_view_data.dart';
 abstract class ConversationActionHandler {
   void onModelSelected(String modelId);
 
-  void onAgentSelected(String agentId);
+  void onAgentGroupSelected(String groupId);
+
+  void onConversationAgentSelected(String agentId);
 
   void onQuickThemeRequested();
 
@@ -30,6 +32,12 @@ abstract class ConversationActionHandler {
   void onOptimizeRequested();
 
   void onToolOptionsRequested();
+
+  void onReasoningToggleChanged(bool enabled);
+
+  void onStopRequested();
+
+  void onAttachmentRequested();
 
   void onSendRequested(String text);
 }

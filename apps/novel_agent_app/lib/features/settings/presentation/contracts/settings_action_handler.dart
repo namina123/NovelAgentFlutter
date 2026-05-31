@@ -5,6 +5,10 @@ abstract class SettingsActionHandler {
 
   void onProviderSelected(String providerId);
 
+  void onProviderCreateRequested();
+
+  void onProviderDetailBackRequested();
+
   void onProviderSaved(Map<String, Object?> payload);
 
   void onProviderDeleted(String providerId);

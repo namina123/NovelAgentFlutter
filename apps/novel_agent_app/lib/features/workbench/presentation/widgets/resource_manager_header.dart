@@ -1,32 +1,54 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../shared/widgets/section_heading.dart';
-import '../../../../../shared/widgets/toolbar_icon_button.dart';
+import '../../../../../shared/theme/novel_theme_context.dart';
+import 'workbench_desktop_style.dart';
+import 'workbench_visual_style.dart';
 
 class ResourceManagerHeader extends StatelessWidget {
   const ResourceManagerHeader({
     super.key,
     required this.title,
     required this.subtitle,
-    required this.onSettingsPressed,
   });
 
   final String title;
   final String subtitle;
-  final VoidCallback onSettingsPressed;
 
   @override
   Widget build(BuildContext context) {
-    // 中文注释: 资源面板头部独立出来，后续即使项目状态区变动也不会挤进整块资源面板文件。
-    return SectionHeading(
-      title: title,
-      subtitle: subtitle,
-      trailing: ToolbarIconButton(
-        icon: Icons.tune_rounded,
-        tooltip: '模型与接口设置',
-        tone: ToolbarIconTone.accent,
-        onPressed: onSettingsPressed,
-      ),
+    // 中文注释: 文件面板头部只保留项目识别信息，不再混入错误的模型设置入口。
+    final style = WorkbenchDesktopStyle.of(context);
+    final surface = context.novelThemeSurfaces.sidebar;
+    final visual = WorkbenchVisualStyle.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: visual.titleFontSize,
+            height: visual.titleLineHeight,
+            fontWeight: FontWeight.w800,
+            color: style.foregroundColor,
+          ),
+        ),
+        if (subtitle.trim().isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: visual.bodyFontSize,
+              height: visual.bodyLineHeight,
+              fontWeight: FontWeight.w600,
+              color: surface.mutedForegroundColor,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

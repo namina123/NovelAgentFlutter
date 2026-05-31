@@ -48,7 +48,7 @@ void main() {
             'premise.main': 'premise/seed_autopilot_premise.md',
             'style.main': 'styles/seed_autopilot_style.md',
             'world.main': 'world/seed_autopilot_world_anchor.md',
-            'entity.hero': 'characters/seed_autopilot_protagonist.md',
+            'entity.hero': 'assets/characters/seed_autopilot_protagonist.md',
           },
         ),
       );
@@ -83,7 +83,7 @@ void main() {
           (section) =>
               section['title'] == '角色/身份锚点' &&
               '${section['source']}' ==
-                  'characters/seed_autopilot_protagonist.md',
+                  'assets/characters/seed_autopilot_protagonist.md',
         ),
         isTrue,
       );

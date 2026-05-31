@@ -1,5 +1,6 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import '../creative/expression_constraint_review_projection.dart';
 import '../review/review_type_catalog_service.dart';
 import '../review/review_type_constants.dart';
 
@@ -48,9 +49,13 @@ class LongTaskCheckpointReviewTaskSuggestionService {
     final driftWatchItems = ValueReaders.stringList(
       checkpointReview['drift_watch_items'],
     );
+    final expressionConstraintReview = ValueReaders.mapValue(
+      checkpointReview['expression_constraint_review'],
+    );
     final driftProfile = _driftProfile(
       checkpointReview,
       driftWatchItems: driftWatchItems,
+      expressionConstraintReview: expressionConstraintReview,
     );
     final result = <JsonMap>[];
     final seenKeys = <String>{};
@@ -108,6 +113,26 @@ class LongTaskCheckpointReviewTaskSuggestionService {
             'priority_score': priorityScore,
             'priority_reason': priorityReason,
             'drift_focus': _driftFocus(reviewType, driftProfile),
+            if (expressionConstraintReview.isNotEmpty)
+              'expression_constraint_review': expressionConstraintReview,
+            if (ValueReaders.stringList(
+              expressionConstraintReview['review_focuses'],
+            ).isNotEmpty)
+              'review_focuses': ValueReaders.stringList(
+                expressionConstraintReview['review_focuses'],
+              ),
+            if (ValueReaders.stringList(
+              expressionConstraintReview['mini_recheck_items'],
+            ).isNotEmpty)
+              'mini_recheck_items': ValueReaders.stringList(
+                expressionConstraintReview['mini_recheck_items'],
+              ),
+            if (ValueReaders.stringValue(
+              expressionConstraintReview['authenticity_pass_level'],
+            ).trim().isNotEmpty)
+              'authenticity_pass_level': ValueReaders.stringValue(
+                expressionConstraintReview['authenticity_pass_level'],
+              ),
           },
         });
       }
@@ -168,15 +193,16 @@ class LongTaskCheckpointReviewTaskSuggestionService {
     final lowerPath = sourcePath.toLowerCase();
     final types = <String>[];
     if (_startsWithAny(lowerPath, const <String>[
-      'drafts/',
       'chapters/',
+      'scenes/',
       'chapter_outlines/',
     ])) {
       _addType(types, ReviewTypeConstants.continuity);
       _addType(types, ReviewTypeConstants.plot);
       if (stage == 'sample' ||
           _mentionsStyleRisk(driftWatchItems) ||
-          driftProfile.styleSeverity > 0) {
+          driftProfile.styleSeverity > 0 ||
+          driftProfile.authenticitySeverity > 0) {
         _addType(types, ReviewTypeConstants.style);
       }
       return types;
@@ -196,11 +222,19 @@ class LongTaskCheckpointReviewTaskSuggestionService {
       _addType(types, ReviewTypeConstants.continuity);
       return types;
     }
-    if (lowerPath.startsWith('styles/')) {
+    if (_startsWithAny(lowerPath, const <String>[
+      'assets/styles/',
+      'styles/',
+    ])) {
       _addType(types, ReviewTypeConstants.style);
       return types;
     }
     if (_startsWithAny(lowerPath, const <String>[
+      'assets/world/',
+      'assets/characters/',
+      'assets/foreshadows/',
+      'assets/timeline/',
+      'assets/relationships/',
       'world/',
       'characters/',
       'knowledge/',
@@ -229,13 +263,24 @@ class LongTaskCheckpointReviewTaskSuggestionService {
     if (reviewType == ReviewTypeConstants.style) {
       return 60 +
           driftProfile.styleSeverity * 20 +
+          driftProfile.authenticitySeverity * 12 +
           (stage == 'sample' ? 12 : 0) +
-          (lowerPath.startsWith('styles/') ? 8 : 0);
+          (_startsWithAny(lowerPath, const <String>[
+                'assets/styles/',
+                'styles/',
+              ])
+              ? 8
+              : 0);
     }
     if (reviewType == ReviewTypeConstants.continuity) {
       return 58 +
           driftProfile.continuityPressure * 20 +
           (_startsWithAny(lowerPath, const <String>[
+                'assets/world/',
+                'assets/characters/',
+                'assets/foreshadows/',
+                'assets/timeline/',
+                'assets/relationships/',
                 'world/',
                 'characters/',
                 'knowledge/',
@@ -267,6 +312,10 @@ class LongTaskCheckpointReviewTaskSuggestionService {
         driftProfile.styleSeverity >= 1) {
       return '检查点已出现文风漂移信号，文风审稿应前置。';
     }
+    if (reviewType == ReviewTypeConstants.style &&
+        driftProfile.authenticitySeverity >= 1) {
+      return '当前表达限制要求额外做真实性 / 去模板复核，文风审稿应前置。';
+    }
     if (reviewType == ReviewTypeConstants.continuity &&
         driftProfile.continuityPressure >= 2) {
       return '检查点已出现世界规则或角色状态漂移信号，连续性审稿应前置。';
@@ -279,6 +328,11 @@ class LongTaskCheckpointReviewTaskSuggestionService {
     }
     if (reviewType == ReviewTypeConstants.continuity &&
         _startsWithAny(sourcePath.toLowerCase(), const <String>[
+          'assets/world/',
+          'assets/characters/',
+          'assets/foreshadows/',
+          'assets/timeline/',
+          'assets/relationships/',
           'world/',
           'characters/',
           'knowledge/',
@@ -293,9 +347,16 @@ class LongTaskCheckpointReviewTaskSuggestionService {
     _CheckpointDriftProfile driftProfile,
   ) {
     if (reviewType == ReviewTypeConstants.style) {
-      return driftProfile.styleSeverity > 0
-          ? const <String>['style']
-          : const <String>[];
+      if (driftProfile.styleSeverity > 0) {
+        return <String>[
+          'style',
+          if (driftProfile.authenticitySeverity > 0) 'authenticity',
+        ];
+      }
+      if (driftProfile.authenticitySeverity > 0) {
+        return const <String>['authenticity'];
+      }
+      return const <String>[];
     }
     if (reviewType == ReviewTypeConstants.continuity) {
       final result = <String>[];
@@ -304,6 +365,9 @@ class LongTaskCheckpointReviewTaskSuggestionService {
       }
       if (driftProfile.entitySeverity > 0) {
         result.add('entity');
+      }
+      if (driftProfile.narrativeSeverity > 0) {
+        result.add('narrative');
       }
       return result;
     }
@@ -377,10 +441,21 @@ class LongTaskCheckpointReviewTaskSuggestionService {
   _CheckpointDriftProfile _driftProfile(
     JsonMap checkpointReview, {
     required List<String> driftWatchItems,
+    required JsonMap expressionConstraintReview,
   }) {
     var styleSeverity = _mentionsStyleRisk(driftWatchItems) ? 1 : 0;
     var worldSeverity = 0;
     var entitySeverity = 0;
+    var narrativeSeverity = 0;
+    final authenticitySeverity = _authenticitySeverity(
+      expressionConstraintReview,
+    );
+    if (ValueReaders.stringList(
+          expressionConstraintReview['continuity_watch_items'],
+        ).isNotEmpty &&
+        narrativeSeverity < 2) {
+      narrativeSeverity = 2;
+    }
     for (final rawSignal in ValueReaders.mapList(
       checkpointReview['drift_signals'],
     )) {
@@ -404,13 +479,35 @@ class LongTaskCheckpointReviewTaskSuggestionService {
             entitySeverity = severity;
           }
           break;
+        case 'narrative':
+          if (severity > narrativeSeverity) {
+            narrativeSeverity = severity;
+          }
+          break;
       }
     }
     return _CheckpointDriftProfile(
       styleSeverity: styleSeverity,
       worldSeverity: worldSeverity,
       entitySeverity: entitySeverity,
+      narrativeSeverity: narrativeSeverity,
+      authenticitySeverity: authenticitySeverity,
     );
+  }
+
+  int _authenticitySeverity(JsonMap expressionConstraintReview) {
+    switch (ValueReaders.stringValue(
+      expressionConstraintReview['authenticity_pass_level'],
+    ).trim()) {
+      case ExpressionConstraintReviewProjection.authenticityAggressive:
+        return 3;
+      case ExpressionConstraintReviewProjection.authenticityMedium:
+        return 2;
+      case ExpressionConstraintReviewProjection.authenticityLight:
+        return 1;
+      default:
+        return 0;
+    }
   }
 
   int _severityScore(String severity) {
@@ -434,22 +531,38 @@ class _CheckpointDriftProfile {
     required this.styleSeverity,
     required this.worldSeverity,
     required this.entitySeverity,
+    required this.narrativeSeverity,
+    required this.authenticitySeverity,
   });
 
   final int styleSeverity;
   final int worldSeverity;
   final int entitySeverity;
+  final int narrativeSeverity;
+  final int authenticitySeverity;
 
-  int get continuityPressure =>
-      worldSeverity > entitySeverity ? worldSeverity : entitySeverity;
+  int get continuityPressure {
+    var result = worldSeverity > entitySeverity
+        ? worldSeverity
+        : entitySeverity;
+    if (narrativeSeverity > result) {
+      result = narrativeSeverity;
+    }
+    return result;
+  }
 
   int get overallSeverity {
-    var result = styleSeverity;
+    var result = styleSeverity > authenticitySeverity
+        ? styleSeverity
+        : authenticitySeverity;
     if (worldSeverity > result) {
       result = worldSeverity;
     }
     if (entitySeverity > result) {
       result = entitySeverity;
+    }
+    if (narrativeSeverity > result) {
+      result = narrativeSeverity;
     }
     return result;
   }

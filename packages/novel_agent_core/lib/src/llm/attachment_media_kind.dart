@@ -1,0 +1,1 @@
+enum AttachmentMediaKind { file, image }

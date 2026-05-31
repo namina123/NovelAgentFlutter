@@ -24,7 +24,7 @@ class ProjectFileWriteToolExecutor {
   ) async {
     // 中文注释: 写入正式产物时由宿主落盘，但目标目录和命名策略仍遵循核心工作空间约定。
     final contentType = _pathPolicy.normalizeContentType(
-      ValueReaders.stringValue(arguments['content_type'], 'draft'),
+      ValueReaders.stringValue(arguments['content_type'], 'chapter'),
     );
     final title = ValueReaders.stringValue(arguments['title']).trim();
     final content = ValueReaders.stringValue(arguments['content']);

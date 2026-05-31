@@ -1,50 +1,15 @@
-import '../models/project_create_request_view_data.dart';
-import '../models/workspace_command_request_view_data.dart';
+import 'workbench_file_panel_action_handler.dart';
+import 'workbench_project_panel_action_handler.dart';
 
-abstract class ResourceManagerActionHandler {
-  void onModelSettingsRequested();
+abstract class ResourceManagerActionHandler
+    implements
+        WorkbenchFilePanelActionHandler,
+        WorkbenchProjectPanelActionHandler {
+  void onProjectAgentGroupDismissed();
 
-  void onCreateProjectRequested();
-
-  void onOpenProjectRequested();
-
-  void onProjectLauncherDismissed();
-
-  void onProjectLauncherRefreshRequested();
-
-  void onProjectEntryOpened(String projectPath);
-
-  void onProjectCreationSubmitted(ProjectCreateRequestViewData request);
-
-  void onEditProjectInfoRequested();
-
-  void onRefreshFilesRequested();
-
-  void onCreateFileRequested();
-
-  void onCreateFolderRequested();
-
-  void onImportRequested();
-
-  void onCreateChapterRequested();
-
-  void onSaveCurrentRequested();
-
-  void onAgentEcosystemRequested();
+  void onProjectAgentGroupSelected(String groupId);
 
   void onTasksRequested();
 
-  void onLongTaskStationRequested();
-
   void onReviewsRequested();
-
-  void onTemplatesRequested();
-
-  void onProjectAssetsRequested();
-
-  void onResourceEntrySelected(String entryId);
-
-  void onWorkspaceCommandDismissed();
-
-  void onWorkspaceCommandSubmitted(WorkspaceCommandRequestViewData request);
 }

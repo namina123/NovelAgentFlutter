@@ -10,15 +10,25 @@ class AssetCommand {
     required SettingsRepository settingsRepository,
     required ProjectRepository projectRepository,
     required ProjectAssetLibraryService assetLibraryService,
+    required ProjectStyleBundleLibraryService styleBundleLibraryService,
+    required ProjectCharacterBundleLibraryService
+    characterBundleLibraryService,
+    required ProjectAssetBundleLibraryService assetBundleLibraryService,
     required TerminalPrinter printer,
   }) : _settingsRepository = settingsRepository,
        _projectRepository = projectRepository,
        _assetLibraryService = assetLibraryService,
+       _styleBundleLibraryService = styleBundleLibraryService,
+       _characterBundleLibraryService = characterBundleLibraryService,
+       _assetBundleLibraryService = assetBundleLibraryService,
        _printer = printer;
 
   final SettingsRepository _settingsRepository;
   final ProjectRepository _projectRepository;
   final ProjectAssetLibraryService _assetLibraryService;
+  final ProjectStyleBundleLibraryService _styleBundleLibraryService;
+  final ProjectCharacterBundleLibraryService _characterBundleLibraryService;
+  final ProjectAssetBundleLibraryService _assetBundleLibraryService;
   final TerminalPrinter _printer;
 
   Future<int> run(List<String> args) async {
@@ -44,6 +54,24 @@ class AssetCommand {
         return _runImportBundle(rest);
       case 'export-bundle':
         return _runExportBundle(rest);
+      case 'preview-style-bundle':
+        return _runPreviewStyleBundle(rest);
+      case 'import-style-bundle':
+        return _runImportStyleBundle(rest);
+      case 'export-style-bundle':
+        return _runExportStyleBundle(rest);
+      case 'preview-character-bundle':
+        return _runPreviewCharacterBundle(rest);
+      case 'import-character-bundle':
+        return _runImportCharacterBundle(rest);
+      case 'export-character-bundle':
+        return _runExportCharacterBundle(rest);
+      case 'preview-project-asset-bundle':
+        return _runPreviewProjectAssetBundle(rest);
+      case 'import-project-asset-bundle':
+        return _runImportProjectAssetBundle(rest);
+      case 'export-project-asset-bundle':
+        return _runExportProjectAssetBundle(rest);
       case 'help':
       case '--help':
       case '-h':
@@ -246,6 +274,204 @@ class AssetCommand {
     return _printResult(result, success: '资产包已导出。');
   }
 
+  Future<int> _runPreviewStyleBundle(List<String> args) async {
+    final context = await _projectContext(args);
+    if (context == null) {
+      return 2;
+    }
+    final sourcePath = _requiredSourcePath(args);
+    if (sourcePath == null) {
+      return 2;
+    }
+    final preview = await _styleBundleLibraryService.previewImport(
+      context.project,
+      sourcePath: sourcePath,
+      overwrite: _boolOption(args, '--overwrite', false),
+    );
+    return _printBundlePreview(preview, title: '风格包预检');
+  }
+
+  Future<int> _runImportStyleBundle(List<String> args) async {
+    final context = await _projectContext(args);
+    if (context == null) {
+      return 2;
+    }
+    final sourcePath = _requiredSourcePath(args);
+    if (sourcePath == null) {
+      return 2;
+    }
+    return _runBundleImportFlow(
+      preview: await _styleBundleLibraryService.previewImport(
+        context.project,
+        sourcePath: sourcePath,
+        overwrite: _boolOption(args, '--overwrite', false),
+      ),
+      plan: await _styleBundleLibraryService.buildImportWritePlan(
+        context.project,
+        sourcePath: sourcePath,
+        overwrite: _boolOption(args, '--overwrite', false),
+      ),
+      result: await _styleBundleLibraryService.importBundle(
+        context.project,
+        sourcePath: sourcePath,
+        overwrite: _boolOption(args, '--overwrite', false),
+      ),
+      previewTitle: '风格包预检',
+      planTitle: '风格包写入计划',
+      success: '风格包已导入。',
+    );
+  }
+
+  Future<int> _runExportStyleBundle(List<String> args) async {
+    final context = await _projectContext(args);
+    if (context == null) {
+      return 2;
+    }
+    final targetPath = _requiredTargetPath(args);
+    if (targetPath == null) {
+      return 2;
+    }
+    final result = await _styleBundleLibraryService.exportBundle(
+      context.project,
+      targetDirectoryPath: targetPath,
+      title: _optionValue(args, '--title') ?? '',
+      description: _optionValue(args, '--description') ?? '',
+    );
+    return _printExportResult(result, success: '风格包目录已导出。');
+  }
+
+  Future<int> _runPreviewCharacterBundle(List<String> args) async {
+    final context = await _projectContext(args);
+    if (context == null) {
+      return 2;
+    }
+    final sourcePath = _requiredSourcePath(args);
+    if (sourcePath == null) {
+      return 2;
+    }
+    final preview = await _characterBundleLibraryService.previewImport(
+      context.project,
+      sourcePath: sourcePath,
+      overwrite: _boolOption(args, '--overwrite', false),
+    );
+    return _printBundlePreview(preview, title: '角色卡包预检');
+  }
+
+  Future<int> _runImportCharacterBundle(List<String> args) async {
+    final context = await _projectContext(args);
+    if (context == null) {
+      return 2;
+    }
+    final sourcePath = _requiredSourcePath(args);
+    if (sourcePath == null) {
+      return 2;
+    }
+    return _runBundleImportFlow(
+      preview: await _characterBundleLibraryService.previewImport(
+        context.project,
+        sourcePath: sourcePath,
+        overwrite: _boolOption(args, '--overwrite', false),
+      ),
+      plan: await _characterBundleLibraryService.buildImportWritePlan(
+        context.project,
+        sourcePath: sourcePath,
+        overwrite: _boolOption(args, '--overwrite', false),
+      ),
+      result: await _characterBundleLibraryService.importBundle(
+        context.project,
+        sourcePath: sourcePath,
+        overwrite: _boolOption(args, '--overwrite', false),
+      ),
+      previewTitle: '角色卡包预检',
+      planTitle: '角色卡包写入计划',
+      success: '角色卡包已导入。',
+    );
+  }
+
+  Future<int> _runExportCharacterBundle(List<String> args) async {
+    final context = await _projectContext(args);
+    if (context == null) {
+      return 2;
+    }
+    final targetPath = _requiredTargetPath(args);
+    if (targetPath == null) {
+      return 2;
+    }
+    final result = await _characterBundleLibraryService.exportBundle(
+      context.project,
+      targetDirectoryPath: targetPath,
+      title: _optionValue(args, '--title') ?? '',
+      description: _optionValue(args, '--description') ?? '',
+    );
+    return _printExportResult(result, success: '角色卡包目录已导出。');
+  }
+
+  Future<int> _runPreviewProjectAssetBundle(List<String> args) async {
+    final context = await _projectContext(args);
+    if (context == null) {
+      return 2;
+    }
+    final sourcePath = _requiredSourcePath(args);
+    if (sourcePath == null) {
+      return 2;
+    }
+    final preview = await _assetBundleLibraryService.previewImport(
+      context.project,
+      sourcePath: sourcePath,
+      overwrite: _boolOption(args, '--overwrite', false),
+    );
+    return _printBundlePreview(preview, title: '项目资产包预检');
+  }
+
+  Future<int> _runImportProjectAssetBundle(List<String> args) async {
+    final context = await _projectContext(args);
+    if (context == null) {
+      return 2;
+    }
+    final sourcePath = _requiredSourcePath(args);
+    if (sourcePath == null) {
+      return 2;
+    }
+    return _runBundleImportFlow(
+      preview: await _assetBundleLibraryService.previewImport(
+        context.project,
+        sourcePath: sourcePath,
+        overwrite: _boolOption(args, '--overwrite', false),
+      ),
+      plan: await _assetBundleLibraryService.buildImportWritePlan(
+        context.project,
+        sourcePath: sourcePath,
+        overwrite: _boolOption(args, '--overwrite', false),
+      ),
+      result: await _assetBundleLibraryService.importBundle(
+        context.project,
+        sourcePath: sourcePath,
+        overwrite: _boolOption(args, '--overwrite', false),
+      ),
+      previewTitle: '项目资产包预检',
+      planTitle: '项目资产包写入计划',
+      success: '项目资产包已导入。',
+    );
+  }
+
+  Future<int> _runExportProjectAssetBundle(List<String> args) async {
+    final context = await _projectContext(args);
+    if (context == null) {
+      return 2;
+    }
+    final targetPath = _requiredTargetPath(args);
+    if (targetPath == null) {
+      return 2;
+    }
+    final result = await _assetBundleLibraryService.exportBundle(
+      context.project,
+      targetDirectoryPath: targetPath,
+      title: _optionValue(args, '--title') ?? '',
+      description: _optionValue(args, '--description') ?? '',
+    );
+    return _printExportResult(result, success: '项目资产包目录已导出。');
+  }
+
   Future<_ProjectContext?> _projectContext(List<String> args) async {
     final settings = await _settingsRepository.load();
     final projectPath =
@@ -276,6 +502,70 @@ class AssetCommand {
       _printer.info(path);
     }
     return 0;
+  }
+
+  Future<int> _runBundleImportFlow({
+    required JsonMap preview,
+    required JsonMap plan,
+    required JsonMap result,
+    required String previewTitle,
+    required String planTitle,
+    required String success,
+  }) async {
+    final previewCode = _printBundlePreview(preview, title: previewTitle);
+    if (previewCode != 0) {
+      return previewCode;
+    }
+    if (!ValueReaders.boolValue(plan['ok'])) {
+      _printer.error(ValueReaders.stringValue(plan['error'], '写入计划生成失败。'));
+      return 1;
+    }
+    _printer.block(planTitle, _prettyJson(ValueReaders.mapValue(plan['write_plan'])));
+    return _printResult(result, success: success);
+  }
+
+  int _printBundlePreview(JsonMap response, {required String title}) {
+    if (!ValueReaders.boolValue(response['ok'])) {
+      _printer.error(ValueReaders.stringValue(response['error'], '导入预检失败。'));
+      return 1;
+    }
+    _printer.block(title, _prettyJson(ValueReaders.mapValue(response['preview'])));
+    return 0;
+  }
+
+  int _printExportResult(JsonMap result, {required String success}) {
+    if (!ValueReaders.boolValue(result['ok'])) {
+      _printer.error(ValueReaders.stringValue(result['error'], '导出失败。'));
+      return 1;
+    }
+    _printer.success(success);
+    _printer.info(
+      ValueReaders.stringValue(
+        result['export_directory_path'],
+        ValueReaders.stringValue(result['bundle_file_path']),
+      ),
+    );
+    return 0;
+  }
+
+  String? _requiredSourcePath(List<String> args) {
+    final sourcePath =
+        _optionValue(args, '--source') ?? _optionValue(args, '--path') ?? '';
+    if (sourcePath.trim().isEmpty) {
+      _printer.error('请通过 --source 指定 bundle 目录或 bundle.json 路径。');
+      return null;
+    }
+    return sourcePath;
+  }
+
+  String? _requiredTargetPath(List<String> args) {
+    final targetPath =
+        _optionValue(args, '--target') ?? _optionValue(args, '--dir') ?? '';
+    if (targetPath.trim().isEmpty) {
+      _printer.error('请通过 --target 指定导出根目录。');
+      return null;
+    }
+    return targetPath;
   }
 
   List<String> _commaList(String? value) {
@@ -326,6 +616,15 @@ class AssetCommand {
         'asset delete-foreshadow --id tower_secret [--project 路径]',
         'asset import-bundle --source C:\\bundle.asset_bundle.json [--overwrite true|false] [--project 路径]',
         'asset export-bundle [--title 资产包标题] [--description 描述] [--project 路径]',
+        'asset preview-style-bundle --source C:\\bundle_dir [--overwrite true|false] [--project 路径]',
+        'asset import-style-bundle --source C:\\bundle_dir [--overwrite true|false] [--project 路径]',
+        'asset export-style-bundle --target C:\\exports [--title 标题] [--description 描述] [--project 路径]',
+        'asset preview-character-bundle --source C:\\bundle_dir [--overwrite true|false] [--project 路径]',
+        'asset import-character-bundle --source C:\\bundle_dir [--overwrite true|false] [--project 路径]',
+        'asset export-character-bundle --target C:\\exports [--title 标题] [--description 描述] [--project 路径]',
+        'asset preview-project-asset-bundle --source C:\\bundle_dir [--overwrite true|false] [--project 路径]',
+        'asset import-project-asset-bundle --source C:\\bundle_dir [--overwrite true|false] [--project 路径]',
+        'asset export-project-asset-bundle --target C:\\exports [--title 标题] [--description 描述] [--project 路径]',
       ].join('\n'),
     );
   }

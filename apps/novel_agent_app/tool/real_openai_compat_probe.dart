@@ -98,13 +98,13 @@ Future<void> main(List<String> arguments) async {
     _ProbeCase(
       id: 'options_chain',
       prompt:
-          '你必须先调用 read_project_file 读取 drafts/compat_probe_source.md，再基于其中的世界观和基调给我 3 个不同方向的可点击选项。不要直接写正文，必须调用 present_user_options。',
+          '你必须先调用 read_project_file 读取 chapters/compat_probe_source.md，再基于其中的世界观和基调给我 3 个不同方向的可点击选项。不要直接写正文，必须调用 present_user_options。',
       validate: _validateOptionsProbe,
     ),
     _ProbeCase(
       id: 'edit_chain',
       prompt:
-          '你必须先读取 drafts/compat_probe_edit.md，然后把其中的 OLD_TOKEN 替换为 NEW_TOKEN_314，优先使用 edit_project_file。完成后只回复 EDIT_OK。',
+          '你必须先读取 chapters/compat_probe_edit.md，然后把其中的 OLD_TOKEN 替换为 NEW_TOKEN_314，优先使用 edit_project_file。完成后只回复 EDIT_OK。',
       validate: _validateEditProbe,
     ),
   ];
@@ -323,7 +323,7 @@ Future<void> _seedFixtures(
   // 中文注释: 真实模型探针统一补齐可预测的夹具文件，减少结果受用户项目当前内容漂移影响。
   await workspacePort.writeTextFile(
     project.rootPath,
-    'drafts/compat_probe_source.md',
+    'chapters/compat_probe_source.md',
     [
       '# Compat Probe Source',
       '世界基调：冷色科幻悬疑。',
@@ -335,7 +335,7 @@ Future<void> _seedFixtures(
   );
   await workspacePort.writeTextFile(
     project.rootPath,
-    'drafts/compat_probe_edit.md',
+    'chapters/compat_probe_edit.md',
     [
       '# Compat Edit File',
       'PLACEHOLDER=OLD_TOKEN',
@@ -420,3 +420,4 @@ class _ProbeCase {
   )
   validate;
 }
+

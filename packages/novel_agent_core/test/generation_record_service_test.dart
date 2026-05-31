@@ -25,7 +25,7 @@ void main() {
           ],
           'omitted_sections': <Object?>[],
         },
-        'output_paths': <Object?>['drafts/ch1.md'],
+        'output_paths': <Object?>['chapters/ch1.md'],
       }, createdAt: '2026-05-23T00:00:00Z');
 
       expect((record['provider'] as Map<String, Object?>)['api_key'], '***');
@@ -43,3 +43,4 @@ void main() {
     });
   });
 }
+

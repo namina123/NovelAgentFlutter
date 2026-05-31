@@ -17,8 +17,9 @@ void main() {
     });
 
     test('rejects invalid paths outside reviews root', () {
-      expect(service.reviewJsonPath('drafts/ch01.md'), isEmpty);
+      expect(service.reviewJsonPath('chapters/ch01.md'), isEmpty);
       expect(service.reviewMarkdownPath('../reviews/ch01.json'), isEmpty);
     });
   });
 }
+

@@ -1,11 +1,17 @@
 import 'long_task_mode_service.dart';
 import 'task_runtime_constants.dart';
+import '../project/project_content_path_policy_service.dart';
 
 class LongTaskChapterOutputPolicyService {
-  LongTaskChapterOutputPolicyService({required LongTaskModeService modeService})
-    : _modeService = modeService;
+  LongTaskChapterOutputPolicyService({
+    required LongTaskModeService modeService,
+    ProjectContentPathPolicyService? contentPathPolicyService,
+  }) : _modeService = modeService,
+       _contentPathPolicyService =
+           contentPathPolicyService ?? const ProjectContentPathPolicyService();
 
   final LongTaskModeService _modeService;
+  final ProjectContentPathPolicyService _contentPathPolicyService;
 
   String defaultOutputPath({
     required String mode,
@@ -23,14 +29,18 @@ class LongTaskChapterOutputPolicyService {
   }
 
   String _directoryFor(String mode, String stage) {
-    // 中文注释: 目前只有“种子到长篇”的常规章节默认进入 chapters/，其余模式继续保持草稿导向。
-    if (mode == TaskRuntimeConstants.modeSeedToFullNovel &&
-        stage.isNotEmpty &&
-        stage != 'sample' &&
-        stage != 'planning' &&
-        stage != 'checkpoint') {
-      return 'chapters';
+    // 中文注释: 项目已不再保留 chapters/；章节类内容统一进 chapters/，仅场景级任务才进入 scenes/。
+    if (stage == 'scene' || stage == 'scenes') {
+      return _contentPathPolicyService.directoryForContentType('scene');
     }
-    return 'drafts';
+    if (mode == TaskRuntimeConstants.modeSeedToFullNovel &&
+        stage == 'planning') {
+      return _contentPathPolicyService.directoryForContentType('chapter');
+    }
+    if (stage.isNotEmpty && stage != 'checkpoint') {
+      return _contentPathPolicyService.directoryForContentType('chapter');
+    }
+    return _contentPathPolicyService.directoryForContentType('chapter');
   }
 }
+

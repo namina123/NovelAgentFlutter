@@ -1,5 +1,9 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import '../creative/creative_rule_brief_renderer.dart';
+import '../creative/expression_constraint_injection_policy_service.dart';
+import '../creative/expression_constraint_review_projection_service.dart';
+import '../creative/creative_rule_stack_resolver_service.dart';
 import 'long_task_mode_service.dart';
 import 'long_task_path_policy_service.dart';
 import 'long_task_transaction_context_service.dart';
@@ -9,13 +13,36 @@ class LongTaskPostprocessTransactionService {
     required LongTaskModeService modeService,
     required LongTaskPathPolicyService pathPolicyService,
     required LongTaskTransactionContextService contextService,
+    CreativeRuleStackResolverService? creativeRuleStackResolverService,
+    CreativeRuleBriefRenderer? creativeRuleBriefRenderer,
+    ExpressionConstraintInjectionPolicyService?
+    expressionConstraintInjectionPolicyService,
+    ExpressionConstraintReviewProjectionService?
+    expressionConstraintReviewProjectionService,
   }) : _modeService = modeService,
        _pathPolicyService = pathPolicyService,
-       _contextService = contextService;
+       _contextService = contextService,
+       _creativeRuleStackResolverService =
+           creativeRuleStackResolverService ??
+           CreativeRuleStackResolverService(),
+       _creativeRuleBriefRenderer =
+           creativeRuleBriefRenderer ?? const CreativeRuleBriefRenderer(),
+       _expressionConstraintInjectionPolicyService =
+           expressionConstraintInjectionPolicyService ??
+           const ExpressionConstraintInjectionPolicyService(),
+       _expressionConstraintReviewProjectionService =
+           expressionConstraintReviewProjectionService ??
+           const ExpressionConstraintReviewProjectionService();
 
   final LongTaskModeService _modeService;
   final LongTaskPathPolicyService _pathPolicyService;
   final LongTaskTransactionContextService _contextService;
+  final CreativeRuleStackResolverService _creativeRuleStackResolverService;
+  final CreativeRuleBriefRenderer _creativeRuleBriefRenderer;
+  final ExpressionConstraintInjectionPolicyService
+  _expressionConstraintInjectionPolicyService;
+  final ExpressionConstraintReviewProjectionService
+  _expressionConstraintReviewProjectionService;
 
   JsonMap buildPostprocessTransaction(
     JsonMap task,
@@ -29,6 +56,59 @@ class LongTaskPostprocessTransactionService {
       'chapter',
     ).trim();
     final cleanDraftPaths = _pathPolicyService.stringList(draftPaths);
+    final fallbackCreativeRuleStack = _fallbackCreativeRuleStack(
+      options,
+      execution: execution,
+    );
+    final creativeRuleStack = _creativeRuleStackResolverService.resolve(
+      rawStack: fallbackCreativeRuleStack,
+      rawConstitution: ValueReaders.mapValue(options['project_constitution']),
+      projectConstitutionMarkdown: ValueReaders.stringValue(
+        options['project_constitution_markdown'],
+        ValueReaders.stringValue(options['project_spec_markdown']),
+      ),
+      expressionConstraintProfiles: ValueReaders.objectList(
+        options['expression_constraint_profiles'],
+      ),
+      projectExpressionConstraintBindings: ValueReaders.objectList(
+        options['project_expression_constraint_bindings'],
+      ),
+      memorySections: ValueReaders.objectList(options['memory_sections']),
+      projectFileContents: ValueReaders.mapValue(
+        options['project_file_contents'],
+      ),
+      modeId: ValueReaders.stringValue(task['mode']),
+      stageId: ValueReaders.stringValue(
+        ValueReaders.mapValue(task['metadata'])['stage'],
+      ),
+    );
+    final expressionConstraintMode = _expressionConstraintInjectionPolicyService
+        .resolveMode(
+          intent: 'review',
+          taskType: taskType,
+          phase: taskType == 'revision'
+              ? 'revision_review'
+              : 'chapter_postprocess',
+          overrideModeId: ValueReaders.stringValue(
+            options['expression_constraint_injection_mode'],
+          ),
+        );
+    final briefCreativeRuleStack = _expressionConstraintInjectionPolicyService
+        .projectBriefStack(
+          creativeRuleStack,
+          intent: 'review',
+          taskType: taskType,
+          phase: taskType == 'revision'
+              ? 'revision_review'
+              : 'chapter_postprocess',
+          overrideModeId: ValueReaders.stringValue(
+            options['expression_constraint_injection_mode'],
+          ),
+        );
+    final expressionConstraintReview =
+        _expressionConstraintReviewProjectionService.build(
+          creativeRuleStack.expressionConstraints,
+        );
     final transaction = <String, Object?>{
       'ok': true,
       'transaction_type': 'long_task_postprocess_step',
@@ -49,6 +129,19 @@ class LongTaskPostprocessTransactionService {
       'draft_paths': cleanDraftPaths,
       'execution_path': ValueReaders.stringValue(execution['relative_path']),
       'project_templates': ValueReaders.mapValue(options['project_templates']),
+      'creative_rule_stack': briefCreativeRuleStack.toJson(),
+      'creative_rule_summary': _creativeRuleBriefRenderer.render(
+        briefCreativeRuleStack,
+      ),
+      'review_focuses': expressionConstraintReview.reviewFocuses,
+      'mini_recheck_items': expressionConstraintReview.miniRecheckItems,
+      'expression_constraint_review': expressionConstraintReview.toJson(),
+      'authenticity_pass_level':
+          expressionConstraintReview.authenticityPassLevel,
+      'expression_constraint_injection_mode':
+          _expressionConstraintInjectionPolicyService.modeId(
+            expressionConstraintMode,
+          ),
     };
     if (taskType == 'revision') {
       final diffPath = _pathPolicyService.safeProjectPath(
@@ -68,5 +161,26 @@ class LongTaskPostprocessTransactionService {
       );
     }
     return transaction;
+  }
+
+  JsonMap _fallbackCreativeRuleStack(
+    JsonMap options, {
+    required JsonMap execution,
+  }) {
+    final rawStack = ValueReaders.mapValue(options['creative_rule_stack']);
+    final contextPack = ValueReaders.mapValue(execution['context_pack']);
+    final contextStack = ValueReaders.mapValue(
+      contextPack['creative_rule_stack'],
+    );
+    final executionStack = contextStack.isNotEmpty
+        ? contextStack
+        : ValueReaders.mapValue(execution['creative_rule_stack']);
+    if (rawStack.isEmpty) {
+      return executionStack;
+    }
+    if (executionStack.isEmpty) {
+      return rawStack;
+    }
+    return <String, Object?>{...executionStack, ...rawStack};
   }
 }

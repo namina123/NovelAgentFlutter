@@ -32,7 +32,7 @@ class WorkbenchPrimaryActionService {
       case 'draft_again':
         return const WorkbenchPrimaryActionPlan(
           kind: WorkbenchPrimaryActionPlanKind.announce,
-          message: '继续在输入框描述下一段需求即可发起新一轮草稿生成。',
+          message: '继续在输入框描述下一段需求即可发起新一轮内容生成。',
         );
       case 'session.goal':
         final mode = ValueReaders.stringValue(

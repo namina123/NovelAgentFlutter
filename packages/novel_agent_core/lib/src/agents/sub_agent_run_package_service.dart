@@ -180,7 +180,7 @@ class SubAgentRunPackageService {
         ),
         'visibility': 'internal_runtime_only',
       },
-      'response_contract': '返回给主智能体的内容应是可合并结论、风险、建议或草稿片段；不要要求用户直接回答子智能体。',
+      'response_contract': '返回给主智能体的内容应是可合并结论、风险、建议或正文片段；不要要求用户直接回答子智能体。',
       'created_at': createdAt ?? DateTime.now().toIso8601String(),
     };
   }

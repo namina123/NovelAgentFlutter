@@ -163,7 +163,7 @@ void main() {
         },
         const <String, Object?>{
           'ok': true,
-          'output_paths': <Object?>['drafts/第01章.md'],
+          'output_paths': <Object?>['chapters/第01章.md'],
           'response': <String, Object?>{},
         },
         options: const <String, Object?>{
@@ -224,3 +224,4 @@ void main() {
     });
   });
 }
+

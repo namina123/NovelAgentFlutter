@@ -212,6 +212,18 @@ class ProviderCatalogService implements ProviderCatalogPort {
         modelEntry['supports_image_generation'],
         modelType == 'image',
       ),
+      'supports_file_attachments': ValueReaders.boolValue(
+        modelEntry['supports_file_attachments'],
+      ),
+      'supports_image_attachments': ValueReaders.boolValue(
+        modelEntry['supports_image_attachments'],
+      ),
+      'supports_attachment_urls_only': ValueReaders.boolValue(
+        modelEntry['supports_attachment_urls_only'],
+      ),
+      'supports_multi_attachments': ValueReaders.boolValue(
+        modelEntry['supports_multi_attachments'],
+      ),
     };
   }
 

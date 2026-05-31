@@ -5,7 +5,10 @@ import '../agents/project_agent_model_override_normalizer_service.dart';
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
 import '../llm/capabilities/provider_capability_resolver.dart';
+import '../llm/catalog/legacy_provider_catalog_bridge_service.dart';
 import '../llm/catalog/provider_catalog_service.dart';
+import '../llm/catalog/writing_model_offering_catalog_service.dart';
+import '../llm/catalog/writing_model_runtime_defaults_service.dart';
 import '../llm/profile/provider_profile_constants.dart';
 import '../llm/profile/provider_profile_service.dart';
 import '../llm/profile/provider_request_options_service.dart';
@@ -15,12 +18,22 @@ import 'provider_endpoint_settings.dart';
 class ModelExecutionProfileService {
   ModelExecutionProfileService({
     ProviderCatalogService? catalogService,
+    LegacyProviderCatalogBridgeService? legacyProviderCatalogBridgeService,
+    WritingModelOfferingCatalogService? offeringCatalogService,
+    WritingModelRuntimeDefaultsService? writingModelRuntimeDefaultsService,
     ProviderProfileService? profileService,
     AgentModelOverrideService? agentModelOverrideService,
     ProjectAgentModelOverrideNormalizerService?
     projectAgentModelOverrideNormalizerService,
     ProviderRequestOptionsService? requestOptionsService,
-  }) : _catalogService = catalogService ?? ProviderCatalogService.seeded(),
+  }) : _legacyProviderCatalogBridgeService =
+           legacyProviderCatalogBridgeService ??
+           LegacyProviderCatalogBridgeService(catalogService: catalogService),
+       _offeringCatalogService =
+           offeringCatalogService ?? WritingModelOfferingCatalogService(),
+       _writingModelRuntimeDefaultsService =
+           writingModelRuntimeDefaultsService ??
+           WritingModelRuntimeDefaultsService(),
        _profileService =
            profileService ??
            ProviderProfileService(
@@ -35,7 +48,9 @@ class ModelExecutionProfileService {
        _requestOptionsService =
            requestOptionsService ?? ProviderRequestOptionsService();
 
-  final ProviderCatalogService _catalogService;
+  final LegacyProviderCatalogBridgeService _legacyProviderCatalogBridgeService;
+  final WritingModelOfferingCatalogService _offeringCatalogService;
+  final WritingModelRuntimeDefaultsService _writingModelRuntimeDefaultsService;
   final ProviderProfileService _profileService;
   final AgentModelOverrideService _agentModelOverrideService;
   final ProjectAgentModelOverrideNormalizerService
@@ -71,38 +86,93 @@ class ModelExecutionProfileService {
           'base_url': resolvedProvider?.baseUrl ?? '',
           'api_key': resolvedProvider?.apiKey ?? '',
         });
-    final matchedModel = _catalogService.matchModel(
-      resolvedModelId,
+    final matchedOffering = _offeringCatalogService.bestMatch(
+      modelId: resolvedModelId,
       providerId: resolvedProvider?.id ?? '',
     );
-    final defaults = _catalogService.modelProfileDefaults(
-      matchedModel,
+    final writingDefaults = _writingModelRuntimeDefaultsService.resolveDefaults(
+      providerId: resolvedProvider?.id ?? '',
+      modelId: resolvedModelId,
       credentialId: ValueReaders.stringValue(credential['id']),
+    );
+    final defaults = _resolveModelDefaults(
+      providerId: resolvedProvider?.id ?? '',
+      modelId: resolvedModelId,
+      credentialId: ValueReaders.stringValue(credential['id']),
+      writingDefaults: writingDefaults,
+      matchedOffering: matchedOffering,
     );
     final modelProfile = <String, Object?>{
       ...defaults,
+      ...writingDefaults,
       'credential_id': credential['id'],
       'kind': resolvedProvider?.protocol ?? defaults['kind'],
       'name': _stringValue(
-        defaults['name'],
+        ValueReaders.stringValue(
+          writingDefaults['name'],
+          matchedOffering == null
+              ? ValueReaders.stringValue(defaults['name'])
+              : ValueReaders.stringValue(
+                  matchedOffering['display_label'],
+                  ValueReaders.stringValue(defaults['name']),
+                ),
+        ),
         resolvedModelId.isEmpty ? '未命名模型' : resolvedModelId,
       ),
       'model': resolvedModelId,
       'context_length': _intOrDefault(
         modelSettings['compatible_context_window'],
-        fallback: ValueReaders.intValue(defaults['context_length'], 100000),
+        fallback: ValueReaders.intValue(
+          writingDefaults['context_length'],
+          ValueReaders.intValue(defaults['context_length'], 100000),
+        ),
       ),
       'compression_context_length': _intOrDefault(
         modelSettings['app_context_window'],
         fallback: ValueReaders.intValue(
-          defaults['compression_context_length'],
-          80000,
+          writingDefaults['compression_context_length'],
+          ValueReaders.intValue(defaults['compression_context_length'], 80000),
         ),
+      ),
+      'max_output_tokens': ValueReaders.intValue(
+        writingDefaults['max_output_tokens'],
+        ValueReaders.intValue(defaults['max_output_tokens'], 65536),
+      ),
+      'supports_streaming': ValueReaders.boolValue(
+        writingDefaults['supports_streaming'],
+        ValueReaders.boolValue(defaults['supports_streaming'], true),
+      ),
+      'supports_tools': ValueReaders.boolValue(
+        writingDefaults['supports_tools'],
+        ValueReaders.boolValue(defaults['supports_tools'], true),
+      ),
+      'supports_tool_choice': ValueReaders.boolValue(
+        writingDefaults['supports_tool_choice'],
+        ValueReaders.boolValue(defaults['supports_tool_choice']),
+      ),
+      'supports_file_attachments': ValueReaders.boolValue(
+        writingDefaults['supports_file_attachments'],
+        ValueReaders.boolValue(defaults['supports_file_attachments']),
+      ),
+      'supports_image_attachments': ValueReaders.boolValue(
+        writingDefaults['supports_image_attachments'],
+        ValueReaders.boolValue(defaults['supports_image_attachments']),
+      ),
+      'supports_attachment_urls_only': ValueReaders.boolValue(
+        writingDefaults['supports_attachment_urls_only'],
+        ValueReaders.boolValue(defaults['supports_attachment_urls_only']),
+      ),
+      'supports_multi_attachments': ValueReaders.boolValue(
+        writingDefaults['supports_multi_attachments'],
+        ValueReaders.boolValue(defaults['supports_multi_attachments']),
       ),
       'thinking_enabled': ValueReaders.boolValue(
         modelSettings['thinking_enabled'],
       ),
       'thinking_effort': _stringValue(modelSettings['thinking_effort'], 'high'),
+      'custom_reasoning_override': ValueReaders.deepCopyMap(
+        ValueReaders.mapValue(modelSettings['custom_reasoning_override']),
+      ),
       'temperature': _doubleOrDefault(
         modelSettings['temperature'],
         fallback: ValueReaders.doubleValue(
@@ -161,6 +231,73 @@ class ModelExecutionProfileService {
     };
   }
 
+  JsonMap _resolveModelDefaults({
+    required String providerId,
+    required String modelId,
+    required String credentialId,
+    required JsonMap writingDefaults,
+    required JsonMap? matchedOffering,
+  }) {
+    if (writingDefaults.isNotEmpty || matchedOffering != null) {
+      return <String, Object?>{
+        'name': ValueReaders.stringValue(
+          writingDefaults['name'],
+          ValueReaders.stringValue(matchedOffering?['display_label'], modelId),
+        ),
+        'purpose': ValueReaders.stringValue(writingDefaults['purpose'], '通用创作'),
+        'credential_id': credentialId,
+        'kind': ValueReaders.stringValue(
+          writingDefaults['kind'],
+          ProviderProfileConstants.kindOpenAiCompatible,
+        ),
+        'model': modelId,
+        'context_length': ValueReaders.intValue(
+          writingDefaults['context_length'],
+          ProviderProfileConstants.defaultContextLength,
+        ),
+        'compression_context_length': ValueReaders.intValue(
+          writingDefaults['compression_context_length'],
+          ProviderProfileConstants.defaultCompressionContextLength,
+        ),
+        'max_output_tokens': ValueReaders.intValue(
+          writingDefaults['max_output_tokens'],
+          ProviderProfileConstants.defaultMaxOutputTokens,
+        ),
+        'supports_streaming': ValueReaders.boolValue(
+          writingDefaults['supports_streaming'],
+          true,
+        ),
+        'supports_tools': ValueReaders.boolValue(
+          writingDefaults['supports_tools'],
+          true,
+        ),
+        'supports_tool_choice': ValueReaders.boolValue(
+          writingDefaults['supports_tool_choice'],
+        ),
+        'supports_file_attachments': ValueReaders.boolValue(
+          writingDefaults['supports_file_attachments'],
+        ),
+        'supports_image_attachments': ValueReaders.boolValue(
+          writingDefaults['supports_image_attachments'],
+        ),
+        'supports_attachment_urls_only': ValueReaders.boolValue(
+          writingDefaults['supports_attachment_urls_only'],
+        ),
+        'supports_multi_attachments': ValueReaders.boolValue(
+          writingDefaults['supports_multi_attachments'],
+        ),
+      };
+    }
+    final legacyModel = _legacyProviderCatalogBridgeService.legacyMatchModel(
+      modelId,
+      providerId: providerId,
+    );
+    return _legacyProviderCatalogBridgeService.legacyModelProfileDefaults(
+      legacyModel,
+      credentialId: credentialId,
+    );
+  }
+
   JsonMap _applyProjectAgentOverride(
     JsonMap runtimeProfile,
     ProjectAgentModelOverride projectOverride,
@@ -184,7 +321,10 @@ class ModelExecutionProfileService {
   ) {
     final providerId = _stringValue(
       modelSettings['provider_id'],
-      settings.defaultProviderId,
+      _stringValue(
+        modelSettings['default_provider_id'],
+        settings.defaultProviderId,
+      ),
     );
     if (providerId.isNotEmpty) {
       for (final provider in settings.providers) {

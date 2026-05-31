@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:novel_agent_app/app/app.dart';
 import 'package:novel_agent_app/app/state/app_shell_controller.dart';
 import 'package:novel_agent_app/features/long_task_station/application/controllers/long_task_station_controller.dart';
+import 'package:novel_agent_app/features/project_assets/application/services/project_expression_constraint_workspace_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -39,6 +40,35 @@ void main() {
         GenerateCustomizationIndexesUseCase(
           writeProjectTextFileUseCase: writeProjectTextFileUseCase,
         );
+    final projectAgentSkillLoadoutRepository =
+        ProjectAgentSkillLoadoutRepository(
+          workspacePort: bundle.projectWorkspacePort,
+        );
+    final projectAgentSkillLoadoutHistoryRepository =
+        ProjectAgentSkillLoadoutHistoryRepository(
+          workspacePort: bundle.projectWorkspacePort,
+        );
+    final expressionConstraintProfileRepository =
+        ExpressionConstraintProfileRepository(
+          workspacePort: bundle.projectWorkspacePort,
+        );
+    final projectExpressionConstraintBindingRepository =
+        ProjectExpressionConstraintBindingRepository(
+          workspacePort: bundle.projectWorkspacePort,
+        );
+    final projectExpressionConstraintWorkspaceService =
+        ProjectExpressionConstraintWorkspaceService(
+          loadProfiles: (project) => expressionConstraintProfileRepository
+              .loadProfiles(project, includeBuiltins: true),
+          loadBindings:
+              projectExpressionConstraintBindingRepository.loadBindings,
+          saveBindings:
+              projectExpressionConstraintBindingRepository.saveBindings,
+        );
+    final projectSkillLoadoutSaveAsGroupService =
+        ProjectSkillLoadoutSaveAsGroupService(
+          workspacePort: bundle.projectWorkspacePort,
+        );
     final projectTaskRepository = ProjectTaskRepository(
       workspacePort: bundle.projectWorkspacePort,
     );
@@ -49,9 +79,31 @@ void main() {
       workspacePort: bundle.projectWorkspacePort,
       projectToolHostPort: bundle.projectToolHostPort,
     );
+    final projectGeneralContinuitySetupService =
+        ProjectGeneralContinuitySetupService(
+          continuityRepository: ProjectContinuityRepository(
+            workspacePort: bundle.projectWorkspacePort,
+          ),
+          inputRepository: ProjectContinuityInputRepository(
+            workspacePort: bundle.projectWorkspacePort,
+          ),
+        );
+    final projectTimelineRepository = ProjectTimelineRepository(
+      hostPort: bundle.projectToolHostPort,
+    );
+    final projectRelationshipRepository = ProjectRelationshipRepository(
+      hostPort: bundle.projectToolHostPort,
+    );
+    final projectChapterRewriteTaskService = ProjectChapterRewriteTaskService(
+      taskRepository: projectTaskRepository,
+    );
     final reviewReportService = ProjectReviewReportService(
       workspacePort: bundle.projectWorkspacePort,
       taskRepository: projectTaskRepository,
+    );
+    final longTaskStationDetailService = ProjectLongTaskStationDetailService(
+      taskRepository: projectTaskRepository,
+      reviewReportService: reviewReportService,
     );
     final workflowRuntimeService = ProjectWorkflowRuntimeService(
       taskRepository: projectTaskRepository,
@@ -66,11 +118,17 @@ void main() {
           toolExecutionPort: bundle.projectToolExecutionPort,
           contextAssemblerService: contextAssemblerService,
           projectPromptContract: ProjectPromptContract(),
+          hostPlatform: HostPlatform.windows,
+          loadAvailableAgents: (project) =>
+              bundle.agentPackageCatalog.loadAgentPackages(project),
+          loadAvailableAgentGroups: (project) =>
+              bundle.agentGroupCatalog.loadAgentGroups(project),
         );
       },
     );
     final longTaskStationController = LongTaskStationController(
       longTaskSupervisor: bundle.longTaskSupervisor,
+      detailService: longTaskStationDetailService,
     );
     final controller = AppShellController(
       settingsRepository: bundle.settingsRepository,
@@ -100,10 +158,6 @@ void main() {
         projectReadableProjectionService:
             bundle.projectReadableProjectionService,
       ),
-      discoverProjectsUseCase: DiscoverProjectsUseCase(
-        projectRepository: bundle.projectRepository,
-        projectWorkspacePort: bundle.projectWorkspacePort,
-      ),
       createProjectEntryUseCase: CreateProjectEntryUseCase(
         projectToolHostPort: bundle.projectToolHostPort,
       ),
@@ -114,6 +168,11 @@ void main() {
         writeProjectTextFileUseCase: writeProjectTextFileUseCase,
       ),
       projectToolHostPort: bundle.projectToolHostPort,
+      projectRuntimeProfileRepository: ProjectRuntimeProfileRepository(
+        workspacePort: bundle.projectWorkspacePort,
+      ),
+      projectAgentGroupBindingRepository:
+          bundle.projectAgentGroupBindingRepository,
       previewCustomizationBundleImportUseCase:
           PreviewCustomizationBundleImportUseCase(),
       importCustomizationBundleUseCase: ImportCustomizationBundleUseCase(
@@ -138,11 +197,41 @@ void main() {
           bundle.skillPackageCatalog.loadSkillPackages(project),
       loadSkillGroups: (project) =>
           bundle.skillGroupCatalog.loadSkillGroups(project),
+      loadProjectSkillLoadouts: (project) =>
+          projectAgentSkillLoadoutRepository.loadLoadouts(project),
+      saveProjectSkillLoadouts: (project, loadouts) =>
+          projectAgentSkillLoadoutRepository.saveLoadouts(project, loadouts),
+      loadProjectSkillLoadoutHistory: (project) =>
+          projectAgentSkillLoadoutHistoryRepository.listEntries(project),
+      saveProjectSkillLoadoutHistoryEntry: (project, entry) =>
+          projectAgentSkillLoadoutHistoryRepository.saveEntry(project, entry),
+      saveProjectSkillLoadoutAsGroup:
+          ({
+            required project,
+            required loadout,
+            required groupId,
+            required displayName,
+            required description,
+          }) => projectSkillLoadoutSaveAsGroupService.saveAsGroup(
+            project: project,
+            loadout: loadout,
+            groupId: groupId,
+            displayName: displayName,
+            description: description,
+          ),
       writeProjectTextFileUseCase: writeProjectTextFileUseCase,
       workflowRuntimeService: workflowRuntimeService,
       reviewReportService: reviewReportService,
+      projectChapterRewriteTaskService: projectChapterRewriteTaskService,
       promptTemplateService: promptTemplateService,
       projectAssetLibraryService: projectAssetLibraryService,
+      projectTimelineRepository: projectTimelineRepository,
+      projectRelationshipRepository: projectRelationshipRepository,
+      projectExpressionConstraintWorkspaceService:
+          projectExpressionConstraintWorkspaceService,
+      projectGeneralContinuitySetupService:
+          projectGeneralContinuitySetupService,
+      longTaskSupervisor: bundle.longTaskSupervisor,
       longTaskStationController: longTaskStationController,
       generateDraftUseCaseFactory: (provider, networkSettings) {
         // 中文注释: widget 测试沿用真实装配，确保最小可用链路至少能在界面层成功挂载。
@@ -155,6 +244,11 @@ void main() {
           toolExecutionPort: bundle.projectToolExecutionPort,
           contextAssemblerService: contextAssemblerService,
           projectPromptContract: ProjectPromptContract(),
+          hostPlatform: HostPlatform.windows,
+          loadAvailableAgents: (project) =>
+              bundle.agentPackageCatalog.loadAgentPackages(project),
+          loadAvailableAgentGroups: (project) =>
+              bundle.agentGroupCatalog.loadAgentGroups(project),
         );
       },
     );

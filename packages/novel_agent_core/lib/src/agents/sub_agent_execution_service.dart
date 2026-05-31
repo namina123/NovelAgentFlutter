@@ -1,6 +1,7 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
 import '../common/host_platform.dart';
+import '../llm/chat_request.dart';
 import '../ports/llm_gateway.dart';
 import '../ports/tool_execution_port.dart';
 import '../project/project_descriptor.dart';
@@ -158,6 +159,8 @@ class SubAgentExecutionService {
     final exposedChildToolIds = _toolExposurePolicyService.filterExposedToolIds(
       childToolIds,
       hostPlatform: _hostPlatform,
+      projectType: project.projectType,
+      isSubAgent: true,
     );
     final toolSchemas = _toolSchemaBuilderService.buildOpenAiSchemas(
       exposedChildToolIds,
@@ -178,13 +181,15 @@ class SubAgentExecutionService {
 
     for (var roundIndex = 0; roundIndex < maxRounds; roundIndex += 1) {
       final llmResult = await _llmGateway.requestChat(
-        messages: messages,
-        modelId: modelId,
-        tools: toolSchemas,
-        options: <String, Object?>{
-          'stream_scope': 'sub_agent',
-          'sub_session_id': subSessionId,
-        },
+        request: ChatRequest(
+          modelId: modelId,
+          messages: messages,
+          tools: toolSchemas,
+          options: <String, Object?>{
+            'stream_scope': 'sub_agent',
+            'sub_session_id': subSessionId,
+          },
+        ),
       );
       final toolCalls = _toolCallParserService.parseToolCalls(
         llmResult,
@@ -217,9 +222,10 @@ class SubAgentExecutionService {
           final toolName = ValueReaders.stringValue(call['name']);
           final result = blockedTools.contains(toolName)
               ? _blockedToolResult(toolName)
-              : await _toolExecutionPort.execute(
+              : await _executeChildTool(
                   project: project,
                   toolCall: call,
+                  childAgent: ValueReaders.mapValue(package['agent']),
                 );
           final executedTool = <String, Object?>{
             'id': call['id'],
@@ -361,6 +367,23 @@ class SubAgentExecutionService {
       'error': 'Blocked sub-agent tool: $toolName',
       'not_executed': false,
     };
+  }
+
+  Future<JsonMap> _executeChildTool({
+    required ProjectDescriptor project,
+    required JsonMap toolCall,
+    required JsonMap childAgent,
+  }) {
+    // 中文注释: 子智能体读取技能时也要带上当前子智能体上下文，避免执行器回退到默认智能体。
+    if (ValueReaders.stringValue(toolCall['name']) != 'load_agent_skill') {
+      return _toolExecutionPort.execute(project: project, toolCall: toolCall);
+    }
+    final enrichedArguments = ValueReaders.deepCopyMap(
+      ValueReaders.mapValue(toolCall['arguments']),
+    )..['_agent'] = ValueReaders.deepCopyMap(childAgent);
+    final enrichedCall = ValueReaders.deepCopyMap(toolCall)
+      ..['arguments'] = enrichedArguments;
+    return _toolExecutionPort.execute(project: project, toolCall: enrichedCall);
   }
 
   Future<List<JsonMap>> _loadAvailableAgentsSafe(

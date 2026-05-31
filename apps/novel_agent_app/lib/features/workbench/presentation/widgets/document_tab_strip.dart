@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../app/theme/app_chrome.dart';
-import '../../../../../app/theme/app_palette.dart';
+import '../../../../../shared/theme/novel_theme_context.dart';
 import '../models/workbench_view_data.dart';
 
 class DocumentTabStrip extends StatelessWidget {
@@ -19,8 +18,10 @@ class DocumentTabStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 中文注释: 文档标签独立成组件，后续如果切换为可关闭标签或滚动标签条时不动外层页面。
+    final panelSurface = context.novelThemeSurfaces.panel;
+    final optionSurface = context.novelThemeSurfaces.optionTile;
     return SizedBox(
-      height: 38,
+      height: 40,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: documents.length,
@@ -28,11 +29,11 @@ class DocumentTabStrip extends StatelessWidget {
         itemBuilder: (context, index) {
           final document = documents[index];
           final background = document.isActive
-              ? AppPalette.accentSoft
-              : Colors.white.withValues(alpha: 0.72);
+              ? optionSurface.highlightBackgroundColor
+              : panelSurface.backgroundColor.withValues(alpha: 0.72);
           final foreground = document.isActive
-              ? AppPalette.lineStrong
-              : AppPalette.text;
+              ? optionSurface.highlightForegroundColor
+              : panelSurface.foregroundColor;
           return Material(
             color: Colors.transparent,
             child: InkWell(
@@ -40,11 +41,10 @@ class DocumentTabStrip extends StatelessWidget {
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: background,
-                  borderRadius: AppChrome.surfaceBorderRadius,
-                  border: Border.all(
-                    color: AppPalette.line,
-                    width: AppChrome.borderWidth,
-                  ),
+                  borderRadius: BorderRadius.circular(optionSurface.radius),
+                  border: document.isActive
+                      ? Border.all(color: optionSurface.highlightBorderColor)
+                      : null,
                 ),
                 child: Padding(
                   padding: const EdgeInsets.only(left: 12, right: 6),

@@ -22,10 +22,12 @@ class ContextProjectFileSectionService {
     for (final rootEntry in ContextSectionCatalog.kindRoots.entries) {
       final root = rootEntry.key;
       final info = ValueReaders.mapValue(rootEntry.value);
+      final prefixes = ValueReaders.stringList(info['prefixes']);
       final snippets = _readSnippets(
         projectFiles: projectFiles,
         projectFileContents: projectFileContents,
         root: root,
+        prefixes: prefixes,
         maxCount: maxCount,
         maxChars: maxChars,
       );
@@ -79,6 +81,7 @@ class ContextProjectFileSectionService {
     required List<Object?> projectFiles,
     required JsonMap projectFileContents,
     required String root,
+    required List<String> prefixes,
     required int maxCount,
     required int maxChars,
   }) {
@@ -88,8 +91,10 @@ class ContextProjectFileSectionService {
     for (final rawEntry in projectFiles) {
       final item = ValueReaders.mapValue(rawEntry);
       final path = ValueReaders.stringValue(item['relative_path']).trim();
-      if (ValueReaders.boolValue(item['is_dir']) ||
-          !path.startsWith('$root/')) {
+      final matchesRoot = prefixes.isEmpty
+          ? path.startsWith('$root/')
+          : prefixes.any((prefix) => path.startsWith(prefix));
+      if (ValueReaders.boolValue(item['is_dir']) || !matchesRoot) {
         continue;
       }
       final extension = path.contains('.')

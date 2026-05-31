@@ -1,13 +1,14 @@
 import '../../../../app/layout/app_layout_metrics.dart';
 
 class WorkbenchPaneLayoutPolicy {
-  static const double dividerWidth = 10;
+  static const double dividerWidth = 1;
+  static const double dividerHitWidth = 12;
 
-  static const double _desktopMinLeftWidth = 236;
-  static const double _desktopMinDocumentWidth = 520;
-  static const double _desktopMinConversationWidth = 380;
-  static const double _desktopMaxConversationWidth = 480;
-  static const double _desktopMaxConversationRatio = 0.34;
+  static const double _desktopMinLeftWidth = 252;
+  static const double _desktopMinDocumentWidth = 560;
+  static const double _desktopMinConversationWidth = 360;
+  static const double _desktopMaxConversationWidth = 456;
+  static const double _desktopMaxConversationRatio = 0.31;
 
   static const double _compactWideMinLeftWidth = 272;
   static const double _compactWideMaxLeftWidth = 336;
@@ -39,7 +40,7 @@ class WorkbenchPaneLayoutPolicy {
         _compactWideMaxLeftWidth,
       );
     }
-    return _clamp(totalWidth * 0.28, _desktopMinLeftWidth, totalWidth);
+    return _clamp(totalWidth * 0.24, _desktopMinLeftWidth, 312);
   }
 
   static double minDocumentWidth(AppLayoutMetrics metrics) {
@@ -77,7 +78,7 @@ class WorkbenchPaneLayoutPolicy {
 
   static double defaultLeftWidth(double totalWidth, AppLayoutMetrics metrics) {
     // 中文注释: 默认左栏宽度取旧项目理念里的“可扫读但不喧宾夺主”区间，用来初始化和重置布局。
-    final target = useCompactWideLayout(metrics) ? 296.0 : 252.0;
+    final target = useCompactWideLayout(metrics) ? 296.0 : 278.0;
     return _clamp(
       target,
       minLeftWidth(metrics),
@@ -90,7 +91,7 @@ class WorkbenchPaneLayoutPolicy {
     AppLayoutMetrics metrics,
   ) {
     // 中文注释: 默认右栏宽度优先保证会话与输入舒适，再由正文区吃掉剩余空间。
-    final target = useCompactWideLayout(metrics) ? 500.0 : 420.0;
+    final target = useCompactWideLayout(metrics) ? 500.0 : 396.0;
     return _clamp(
       target,
       minConversationWidth(metrics),

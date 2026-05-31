@@ -1,5 +1,6 @@
 import '../../common/json_types.dart';
 import '../../common/value_readers.dart';
+import 'custom_model_reasoning_override_service.dart';
 import 'provider_custom_parameter_service.dart';
 import 'provider_model_metadata_service.dart';
 import 'provider_thinking_parameter_service.dart';
@@ -9,14 +10,19 @@ class ProviderRequestOptionsService {
     ProviderModelMetadataService? metadataService,
     ProviderThinkingParameterService? thinkingService,
     ProviderCustomParameterService? customParameterService,
+    CustomModelReasoningOverrideService? customReasoningOverrideService,
   }) : _metadataService = metadataService ?? ProviderModelMetadataService(),
        _thinkingService = thinkingService ?? ProviderThinkingParameterService(),
        _customParameterService =
-           customParameterService ?? ProviderCustomParameterService();
+           customParameterService ?? ProviderCustomParameterService(),
+       _customReasoningOverrideService =
+           customReasoningOverrideService ??
+           CustomModelReasoningOverrideService();
 
   final ProviderModelMetadataService _metadataService;
   final ProviderThinkingParameterService _thinkingService;
   final ProviderCustomParameterService _customParameterService;
+  final CustomModelReasoningOverrideService _customReasoningOverrideService;
 
   JsonMap buildRequestOptions(
     JsonMap runtimeProfile, {
@@ -42,13 +48,32 @@ class ProviderRequestOptionsService {
     if (ValueReaders.boolValue(metadata['supports_top_k'])) {
       result['top_k'] = ValueReaders.intValue(runtimeProfile['top_k']);
     }
-    result.addAll(
-      _thinkingService.thinkingRequestParameters(
-        ValueReaders.boolValue(runtimeProfile['thinking_enabled']),
-        ValueReaders.stringValue(runtimeProfile['thinking_effort'], 'high'),
-        ValueReaders.stringValue(runtimeProfile['thinking_parameter_format']),
-      ),
+    final customReasoning = _customReasoningOverrideService.normalize(
+      runtimeProfile['custom_reasoning_override'],
     );
+    final effectiveReasoningProfile = customReasoning.isNotEmpty
+        ? customReasoning
+        : _runtimeReasoningProfile(runtimeProfile);
+    if (effectiveReasoningProfile.isNotEmpty) {
+      result.addAll(
+        _customReasoningOverrideService.buildRequestParameters(
+          effectiveReasoningProfile,
+          enabled: ValueReaders.boolValue(runtimeProfile['thinking_enabled']),
+          effort: ValueReaders.stringValue(
+            runtimeProfile['thinking_effort'],
+            'high',
+          ),
+        ),
+      );
+    } else {
+      result.addAll(
+        _thinkingService.thinkingRequestParameters(
+          ValueReaders.boolValue(runtimeProfile['thinking_enabled']),
+          ValueReaders.stringValue(runtimeProfile['thinking_effort'], 'high'),
+          ValueReaders.stringValue(runtimeProfile['thinking_parameter_format']),
+        ),
+      );
+    }
     for (final rawEntry in _customParameterService.normalizeCustomParameters(
       runtimeProfile['custom_parameters'],
     )) {
@@ -64,6 +89,36 @@ class ProviderRequestOptionsService {
       result[key] = value;
     }
     return result;
+  }
+
+  JsonMap _runtimeReasoningProfile(JsonMap runtimeProfile) {
+    if (!ValueReaders.boolValue(runtimeProfile['supports_reasoning'])) {
+      return <String, Object?>{};
+    }
+    final toggleStrategy = ValueReaders.mapValue(
+      runtimeProfile['reasoning_toggle_parameter_strategy'],
+    );
+    final effortStrategy = ValueReaders.mapValue(
+      runtimeProfile['reasoning_effort_parameter_strategy'],
+    );
+    if (toggleStrategy.isEmpty && effortStrategy.isEmpty) {
+      return <String, Object?>{};
+    }
+    return <String, Object?>{
+      'supports_reasoning': true,
+      'reasoning_can_toggle': ValueReaders.boolValue(
+        runtimeProfile['reasoning_can_toggle'],
+        true,
+      ),
+      'reasoning_default_enabled': ValueReaders.boolValue(
+        runtimeProfile['reasoning_default_enabled'],
+      ),
+      'reasoning_supports_effort': ValueReaders.boolValue(
+        runtimeProfile['reasoning_supports_effort'],
+      ),
+      'reasoning_toggle_parameter_strategy': toggleStrategy,
+      'reasoning_effort_parameter_strategy': effortStrategy,
+    };
   }
 
   bool _shouldSkipValue(Object? value) {

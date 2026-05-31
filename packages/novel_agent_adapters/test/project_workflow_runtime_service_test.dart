@@ -128,7 +128,7 @@ void main() {
             'tracking/modes/seed_autopilot_novel/guidance.md',
             'styles/seed_autopilot_style.md',
           ],
-          'output_paths': <Object?>['drafts/第01章_seed_to_full.md'],
+          'output_paths': <Object?>['chapters/第01章_seed_to_full.md'],
           'metadata': <String, Object?>{
             'plan_id': 'plan_test',
             'workflow_mode': TaskRuntimeConstants.modeSeedToFullNovel,
@@ -189,20 +189,13 @@ void main() {
         );
         expect(
           sections.any(
-            (section) => ValueReaders.stringValue(section['title']) == '风格锚点',
+            (section) => ValueReaders.stringValue(section['title']) == '模式引导约束',
           ),
           isTrue,
         );
         expect(
           sections.any(
-            (section) => ValueReaders.stringValue(section['title']) == '世界硬约束',
-          ),
-          isTrue,
-        );
-        expect(
-          sections.any(
-            (section) =>
-                ValueReaders.stringValue(section['title']) == '角色/身份锚点',
+            (section) => ValueReaders.stringValue(section['title']) == '项目风格规范',
           ),
           isTrue,
         );
@@ -214,7 +207,7 @@ void main() {
       () async {
         await taskRepository.writeTextFile(
           project,
-          'drafts/ch01.md',
+          'chapters/ch01.md',
           '# 第01章\n\n样章正文',
         );
         await taskRepository.saveRecord(
@@ -224,7 +217,7 @@ void main() {
             'id': 'checkpoint_review_1',
             'task_type': 'chapter',
             'stage': 'sample',
-            'output_paths': <Object?>['drafts/ch01.md'],
+            'output_paths': <Object?>['chapters/ch01.md'],
             'drift_watch_items': <Object?>['检查文风是否仍符合已确认风格锚点，避免语言质地突然漂移。'],
           },
         );
@@ -263,7 +256,7 @@ void main() {
             'task_type': 'chapter',
             'stage': 'sample',
             'result_ok': true,
-            'output_paths': <Object?>['drafts/第01章_seed_to_full.md'],
+            'output_paths': <Object?>['chapters/第01章_seed_to_full.md'],
             'confirmation_focus': <Object?>['样章入口是否成立。', '主角体验是否成立。'],
             'drift_watch_items': <Object?>[
               '检查文风是否漂移。',
@@ -288,7 +281,7 @@ void main() {
           ValueReaders.mapList(result['actions']).any(
             (item) =>
                 ValueReaders.stringValue(item['id']) ==
-                    'create_followup_review_tasks' &&
+                    'request_revision_followup' &&
                 ValueReaders.boolValue(item['enabled']),
           ),
           isTrue,
@@ -375,7 +368,7 @@ void main() {
           const <String, Object?>{
             'id': 'checkpoint_revision_task_001',
             'summary': '建议确认是否继续返工。',
-            'output_paths': <Object?>['drafts/第01章_seed_to_full.md'],
+            'output_paths': <Object?>['chapters/第01章_seed_to_full.md'],
           },
         );
 
@@ -472,6 +465,99 @@ void main() {
             )['max_steps'],
           ),
           2,
+        );
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(
+              result['long_task_run_center_contract'],
+            )['run_id'],
+          ),
+          isNotEmpty,
+        );
+        expect(
+          ValueReaders.mapValue(
+            result['long_task_run_center_contract'],
+          ).containsKey('phase'),
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'loadLongTaskRun appends scheduler snapshot and run center contract',
+      () async {
+        await taskRepository.saveRecord(
+          project,
+          'tracking/long_task_runs/run_load_test.json',
+          const <String, Object?>{
+            'id': 'run_load_test',
+            'mode': 'human_outline_ai_draft',
+            'status': 'running',
+            'options': <String, Object?>{
+              'mode': 'human_outline_ai_draft',
+              'max_steps': 2,
+            },
+            'updated_at': '2026-05-31T12:00:00Z',
+            'relative_path': 'tracking/long_task_runs/run_load_test.json',
+          },
+        );
+
+        final result = await workflowRuntimeService.loadLongTaskRun(
+          project,
+          'tracking/long_task_runs/run_load_test.json',
+        );
+
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(result['run_center_contract'])['run_id'],
+          ),
+          'run_load_test',
+        );
+        expect(
+          ValueReaders.mapValue(
+            result['scheduler_snapshot'],
+          ).containsKey('run_center_contract'),
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'pauseLongTaskRun returns run center contract for paused record',
+      () async {
+        await taskRepository.saveRecord(
+          project,
+          'tracking/long_task_runs/run_pause_test.json',
+          const <String, Object?>{
+            'id': 'run_pause_test',
+            'mode': 'human_outline_ai_draft',
+            'status': 'running',
+            'options': <String, Object?>{
+              'mode': 'human_outline_ai_draft',
+              'max_steps': 2,
+            },
+            'updated_at': '2026-05-31T12:00:00Z',
+            'relative_path': 'tracking/long_task_runs/run_pause_test.json',
+          },
+        );
+
+        final result = await workflowRuntimeService.pauseLongTaskRun(
+          project,
+          'tracking/long_task_runs/run_pause_test.json',
+        );
+
+        expect(ValueReaders.boolValue(result['ok']), isTrue);
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(result['run_center_contract'])['phase'],
+          ),
+          'paused',
+        );
+        expect(
+          ValueReaders.mapValue(
+            result['scheduler_snapshot'],
+          ).containsKey('run_center_contract'),
+          isTrue,
         );
       },
     );

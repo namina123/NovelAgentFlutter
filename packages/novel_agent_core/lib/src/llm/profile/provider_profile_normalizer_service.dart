@@ -92,6 +92,14 @@ class ProviderProfileNormalizerService {
       'supports_tool_choice':
           ProviderProfileConstants.defaultSupportsToolChoice,
       'supports_image_generation': false,
+      'supports_file_attachments':
+          ProviderProfileConstants.defaultSupportsFileAttachments,
+      'supports_image_attachments':
+          ProviderProfileConstants.defaultSupportsImageAttachments,
+      'supports_attachment_urls_only':
+          ProviderProfileConstants.defaultSupportsAttachmentUrlsOnly,
+      'supports_multi_attachments':
+          ProviderProfileConstants.defaultSupportsMultiAttachments,
       'created_at': now,
       'updated_at': now,
     };
@@ -205,6 +213,22 @@ class ProviderProfileNormalizerService {
     result['supports_image_generation'] = ValueReaders.boolValue(
       result['supports_image_generation'],
       false,
+    );
+    result['supports_file_attachments'] = ValueReaders.boolValue(
+      result['supports_file_attachments'],
+      ProviderProfileConstants.defaultSupportsFileAttachments,
+    );
+    result['supports_image_attachments'] = ValueReaders.boolValue(
+      result['supports_image_attachments'],
+      ProviderProfileConstants.defaultSupportsImageAttachments,
+    );
+    result['supports_attachment_urls_only'] = ValueReaders.boolValue(
+      result['supports_attachment_urls_only'],
+      ProviderProfileConstants.defaultSupportsAttachmentUrlsOnly,
+    );
+    result['supports_multi_attachments'] = ValueReaders.boolValue(
+      result['supports_multi_attachments'],
+      ProviderProfileConstants.defaultSupportsMultiAttachments,
     );
     result['updated_at'] = _now();
     return result;

@@ -3,11 +3,15 @@ import 'dart:io';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../config/local_settings_repository.dart';
+import '../packages/agent_catalog_overlay_repository.dart';
+import '../packages/agent_group_catalog_overlay_repository.dart';
+import '../packages/builtin_starter_agent_group_registration_service.dart';
 import '../packages/local_agent_group_catalog.dart';
 import '../packages/local_agent_package_catalog.dart';
 import '../packages/local_skill_group_catalog.dart';
 import '../packages/local_skill_package_catalog.dart';
 import '../packages/package_root_path_resolver.dart';
+import '../providers/anthropic_llm_gateway.dart';
 import '../providers/openai_llm_gateway.dart';
 import '../runtime/local_long_task_run_registry.dart';
 import '../runtime/long_task_heartbeat_scheduler.dart';
@@ -21,9 +25,16 @@ import '../storage/markdown_project_content_repository.dart';
 import '../storage/markdown_project_readable_projection_service.dart';
 import '../storage/project_tree_order_service.dart';
 import '../storage/project_workspace_tool_host_adapter.dart';
+import '../storage/project_mode_guidance_repository.dart';
+import '../storage/project_agent_group_binding_repository.dart';
+import '../storage/project_agent_skill_loadout_repository.dart';
+import '../storage/project_prompt_template_service.dart';
+import '../storage/project_task_repository.dart';
 import '../storage/sqlite_project_content_repository.dart';
 import '../storage/sqlite_project_readable_projection_service.dart';
+import '../tools/project_agent_skill_runtime_loadout_service.dart';
 import '../tools/project_tool_dispatcher.dart';
+import '../workflow/project_workflow_runtime_service.dart';
 import 'desktop_app_paths_provider.dart';
 import 'workspace_root_locator.dart';
 
@@ -41,6 +52,9 @@ class AdapterBundle {
     required this.projectToolExecutionPort,
     required this.longTaskRunRegistry,
     required this.longTaskSupervisor,
+    required this.agentCatalogOverlayRepository,
+    required this.agentGroupCatalogOverlayRepository,
+    required this.projectAgentGroupBindingRepository,
     required this.agentGroupCatalog,
     required this.agentPackageCatalog,
     required this.skillGroupCatalog,
@@ -113,11 +127,24 @@ class AdapterBundle {
     final packageRootPathResolver = PackageRootPathResolver(
       workspaceRootPath: workspaceRootPath,
     );
+    final agentCatalogOverlayRepository = AgentCatalogOverlayRepository(
+      settingsRootPath: resolvedSettingsRootPath,
+    );
+    final agentGroupCatalogOverlayRepository =
+        AgentGroupCatalogOverlayRepository(
+          settingsRootPath: resolvedSettingsRootPath,
+        );
+    final projectAgentGroupBindingRepository =
+        ProjectAgentGroupBindingRepository(workspacePort: projectWorkspacePort);
     final agentPackageCatalog = LocalAgentPackageCatalog(
       packageRootPathResolver: packageRootPathResolver,
+      overlayRepository: agentCatalogOverlayRepository,
     );
     final agentGroupCatalog = LocalAgentGroupCatalog(
       packageRootPathResolver: packageRootPathResolver,
+      overlayRepository: agentGroupCatalogOverlayRepository,
+      starterGroupRegistrationService:
+          BuiltinStarterAgentGroupRegistrationService(),
     );
     final skillGroupCatalog = LocalSkillGroupCatalog(
       packageRootPathResolver: packageRootPathResolver,
@@ -125,6 +152,27 @@ class AdapterBundle {
     final skillPackageCatalog = LocalSkillPackageCatalog(
       packageRootPathResolver: packageRootPathResolver,
     );
+    final modeGuidanceRepository = ProjectModeGuidanceRepository(
+      workspacePort: projectWorkspacePort,
+    );
+    final buildModeGuidancePlanInputUseCase = BuildModeGuidancePlanInputUseCase(
+      statePort: modeGuidanceRepository,
+    );
+    final workflowRuntimeService = ProjectWorkflowRuntimeService(
+      taskRepository: ProjectTaskRepository(
+        workspacePort: projectWorkspacePort,
+      ),
+      promptTemplateService: ProjectPromptTemplateService(
+        workspacePort: projectWorkspacePort,
+      ),
+      generateDraftUseCaseFactory: (_, __) {
+        throw UnsupportedError(
+          'AdapterBundle internal workflow runtime service is only used for start_long_task_run tool creation.',
+        );
+      },
+    );
+    final projectAgentSkillLoadoutRepository =
+        ProjectAgentSkillLoadoutRepository(workspacePort: projectWorkspacePort);
     final resolvedSettingsSearchRoots = <String>[
       resolvedSettingsRootPath,
       ...desktopAppPaths.settingsSearchRoots,
@@ -147,6 +195,9 @@ class AdapterBundle {
       projectToolHostPort: toolHostPort,
       longTaskRunRegistry: longTaskRunRegistry,
       longTaskSupervisor: longTaskSupervisor,
+      agentCatalogOverlayRepository: agentCatalogOverlayRepository,
+      agentGroupCatalogOverlayRepository: agentGroupCatalogOverlayRepository,
+      projectAgentGroupBindingRepository: projectAgentGroupBindingRepository,
       agentGroupCatalog: agentGroupCatalog,
       agentPackageCatalog: agentPackageCatalog,
       skillGroupCatalog: skillGroupCatalog,
@@ -156,6 +207,11 @@ class AdapterBundle {
         skillGroupCatalog: skillGroupCatalog,
         skillPackageCatalog: skillPackageCatalog,
         treeOrderService: treeOrderService,
+        buildModeGuidancePlanInputUseCase: buildModeGuidancePlanInputUseCase,
+        workflowRuntimeService: workflowRuntimeService,
+        agentSkillRuntimeLoadoutService: ProjectAgentSkillRuntimeLoadoutService(
+          loadoutRepository: projectAgentSkillLoadoutRepository,
+        ),
       ),
     );
   }
@@ -172,6 +228,9 @@ class AdapterBundle {
   final ToolExecutionPort projectToolExecutionPort;
   final LongTaskRunRegistry longTaskRunRegistry;
   final LongTaskSupervisor longTaskSupervisor;
+  final AgentCatalogOverlayRepository agentCatalogOverlayRepository;
+  final AgentGroupCatalogOverlayRepository agentGroupCatalogOverlayRepository;
+  final ProjectAgentGroupBindingRepository projectAgentGroupBindingRepository;
   final LocalAgentGroupCatalog agentGroupCatalog;
   final LocalAgentPackageCatalog agentPackageCatalog;
   final LocalSkillGroupCatalog skillGroupCatalog;
@@ -182,6 +241,13 @@ class AdapterBundle {
     JsonMap networkSettings = const <String, Object?>{},
   }) {
     // 中文注释: provider 到具体网关实现的映射由 adapter bundle 承担，宿主层只依赖核心协议。
+    if (provider.protocol.trim() ==
+        ProviderProfileConstants.kindAnthropicCompatible) {
+      return AnthropicLlmGateway.fromProviderSettings(
+        provider,
+        networkSettings: networkSettings,
+      );
+    }
     return OpenAiLlmGateway.fromProviderSettings(
       provider,
       networkSettings: networkSettings,

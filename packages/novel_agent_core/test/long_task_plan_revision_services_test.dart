@@ -61,7 +61,7 @@ void main() {
           'task_type': 'checkpoint',
           'mode': TaskRuntimeConstants.modeHumanOutlineAiDraft,
           'status': TaskRuntimeConstants.statusWaitingUser,
-          'output_paths': <Object?>['drafts/第01章.md'],
+          'output_paths': <Object?>['chapters/第01章.md'],
           'metadata': <String, Object?>{
             'sort_order': 1,
             'stage': 'checkpoint',
@@ -114,7 +114,7 @@ void main() {
       expect(newTask['depends_on'], contains('checkpoint_001'));
       expect(
         (newTask['output_paths'] as List<Object?>).first,
-        contains('drafts/'),
+        contains('chapters/'),
       );
       final sourcePaths = ValueReaders.stringList(newTask['source_paths']);
       expect(sourcePaths, contains('styles/full_outline_consensus_style.md'));
@@ -126,3 +126,4 @@ void main() {
     });
   });
 }
+

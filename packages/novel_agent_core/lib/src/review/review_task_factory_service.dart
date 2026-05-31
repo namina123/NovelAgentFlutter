@@ -1,5 +1,7 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import '../creative/expression_constraint_review_projection.dart';
+import '../creative/expression_constraint_review_projection_service.dart';
 import '../workflow/task_runtime_constants.dart';
 import 'review_path_policy_service.dart';
 import 'review_report_normalizer_service.dart';
@@ -10,14 +12,21 @@ class ReviewTaskFactoryService {
     ReviewReportNormalizerService? normalizerService,
     ReviewPathPolicyService? pathPolicyService,
     ReviewTypeCatalogService? typeCatalogService,
+    ExpressionConstraintReviewProjectionService?
+    expressionConstraintReviewProjectionService,
   }) : _normalizerService =
            normalizerService ?? ReviewReportNormalizerService(),
        _pathPolicyService = pathPolicyService ?? ReviewPathPolicyService(),
-       _typeCatalogService = typeCatalogService ?? ReviewTypeCatalogService();
+       _typeCatalogService = typeCatalogService ?? ReviewTypeCatalogService(),
+       _expressionConstraintReviewProjectionService =
+           expressionConstraintReviewProjectionService ??
+           const ExpressionConstraintReviewProjectionService();
 
   final ReviewReportNormalizerService _normalizerService;
   final ReviewPathPolicyService _pathPolicyService;
   final ReviewTypeCatalogService _typeCatalogService;
+  final ExpressionConstraintReviewProjectionService
+  _expressionConstraintReviewProjectionService;
 
   JsonMap repairTaskFromReport(JsonMap report, {String reportPath = ''}) {
     // 中文注释: 这里把审稿报告转换成 revision 任务参数，不直接写文件，让宿主决定何时执行。
@@ -66,12 +75,23 @@ class ReviewTaskFactoryService {
       title = '${_typeCatalogService.reviewTypeLabel(reviewType)}：$baseName';
     }
     final reportPaths = _reviewReportPaths(reviewType, title, sourcePath);
+    final incomingMetadata = ValueReaders.mapValue(arguments['metadata']);
+    final projection = _projection(arguments, metadata: incomingMetadata);
+    final reviewFocuses = projection.reviewFocuses;
+    final miniRecheckItems = projection.miniRecheckItems;
     final metadata = <String, Object?>{
       'origin': 'one_click_review',
       'review_type': reviewType,
       'source_path': sourcePath,
       'review_report_path': reportPaths.first,
-      ...ValueReaders.mapValue(arguments['metadata']),
+      ...incomingMetadata,
+      if (!projection.isEmpty)
+        'expression_constraint_review': projection.toJson(),
+      if (reviewFocuses.isNotEmpty) 'review_focuses': reviewFocuses,
+      if (miniRecheckItems.isNotEmpty) 'mini_recheck_items': miniRecheckItems,
+      if (projection.authenticityPassLevel !=
+          ExpressionConstraintReviewProjection.authenticityDisabled)
+        'authenticity_pass_level': projection.authenticityPassLevel,
     };
     final inheritedMode = ValueReaders.stringValue(
       arguments['mode'],
@@ -87,15 +107,21 @@ class ReviewTaskFactoryService {
       'title': title,
       'task_type': 'review',
       'chapter': sourcePath,
-      'goal': _typeCatalogService.reviewGoal(reviewType),
-      'brief':
-          '读取来源文件并保存${_typeCatalogService.reviewTypeLabel(reviewType)}报告；不要修改原文，也不要只返回口头分析。',
+      'goal': _reviewGoal(reviewType, reviewFocuses),
+      'brief': _reviewBrief(
+        reviewType,
+        reviewFocuses: reviewFocuses,
+        authenticityPassLevel: projection.authenticityPassLevel,
+      ),
       'mode': inheritedMode,
       'source_paths': sourcePaths,
       'output_paths': reportPaths,
       'metadata': metadata,
-      'tool_hint':
-          '先 read_project_file 读取来源，再调用 run_continuity_check，并把 review_type 设为当前任务类型，把报告保存到约定的 reviews/ 路径。',
+      'tool_hint': _reviewToolHint(
+        reviewFocuses: reviewFocuses,
+        miniRecheckItems: miniRecheckItems,
+        authenticityPassLevel: projection.authenticityPassLevel,
+      ),
     };
   }
 
@@ -151,6 +177,81 @@ class ReviewTaskFactoryService {
       }
     }
     return result;
+  }
+
+  ExpressionConstraintReviewProjection _projection(
+    JsonMap arguments, {
+    required JsonMap metadata,
+  }) {
+    final rawProjection = ValueReaders.mapValue(
+      arguments['expression_constraint_review'],
+    );
+    if (rawProjection.isNotEmpty) {
+      return ExpressionConstraintReviewProjection.fromJson(rawProjection);
+    }
+    final metadataProjection = ValueReaders.mapValue(
+      metadata['expression_constraint_review'],
+    );
+    if (metadataProjection.isNotEmpty) {
+      return ExpressionConstraintReviewProjection.fromJson(metadataProjection);
+    }
+    final rawProfiles = ValueReaders.objectList(
+      arguments['expression_constraint_profiles'],
+    );
+    if (rawProfiles.isEmpty) {
+      return const ExpressionConstraintReviewProjection();
+    }
+    return _expressionConstraintReviewProjectionService
+        .buildFromCreativeRuleStack(<String, Object?>{
+          'expression_constraints': rawProfiles,
+        });
+  }
+
+  String _reviewGoal(String reviewType, List<String> reviewFocuses) {
+    final lines = <String>[_typeCatalogService.reviewGoal(reviewType)];
+    if (reviewFocuses.isNotEmpty) {
+      lines.add('额外重点：${reviewFocuses.join('；')}');
+    }
+    return lines.join('\n');
+  }
+
+  String _reviewBrief(
+    String reviewType, {
+    required List<String> reviewFocuses,
+    required String authenticityPassLevel,
+  }) {
+    final parts = <String>[
+      '读取来源文件并保存${_typeCatalogService.reviewTypeLabel(reviewType)}报告；不要修改原文，也不要只返回口头分析。',
+    ];
+    if (reviewFocuses.isNotEmpty) {
+      parts.add('本轮要显式覆盖：${reviewFocuses.take(3).join('；')}。');
+    }
+    if (authenticityPassLevel !=
+        ExpressionConstraintReviewProjection.authenticityDisabled) {
+      parts.add('如涉及真实性/去 AI 复核，请按 $authenticityPassLevel 强度执行。');
+    }
+    return parts.join('');
+  }
+
+  String _reviewToolHint({
+    required List<String> reviewFocuses,
+    required List<String> miniRecheckItems,
+    required String authenticityPassLevel,
+  }) {
+    final lines = <String>[
+      '先 read_project_file 读取来源，再调用 run_continuity_check，并把 review_type 设为当前任务类型，把报告保存到约定的 reviews/ 路径。',
+    ];
+    if (reviewFocuses.isNotEmpty) {
+      lines.add('报告里要显式回答：${reviewFocuses.join('；')}。');
+    }
+    if (authenticityPassLevel !=
+        ExpressionConstraintReviewProjection.authenticityDisabled) {
+      lines.add('若触发真实性/去 AI 复核，强度按 $authenticityPassLevel 执行。');
+    }
+    if (miniRecheckItems.isNotEmpty) {
+      lines.add('结尾追加 mini recheck：${miniRecheckItems.join('；')}。');
+    }
+    return lines.join(' ');
   }
 
   String _repairGoal(JsonMap report) {

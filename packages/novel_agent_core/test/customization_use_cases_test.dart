@@ -164,11 +164,13 @@ void main() {
         expect(result['ok'], isTrue);
         expect(ValueReaders.stringList(result['changed_paths']), hasLength(2));
         expect(
-          hostPort.readStored('styles/serial-style.style.md'),
+          hostPort.readStored('assets/styles/serial-style.style.md'),
           allOf(contains('display_name:'), contains('连载风格')),
         );
         expect(
-          hostPort.readStored('world/foreshadows/tower-secret.foreshadow.md'),
+          hostPort.readStored(
+            'assets/foreshadows/tower-secret.foreshadow.md',
+          ),
           contains('## 备注'),
         );
       },
@@ -238,6 +240,9 @@ class _FakeProjectToolHostPort implements ProjectToolHostPort {
   Future<String?> readExternalTextFile(String absolutePath) async {
     return null;
   }
+
+  @override
+  Future<void> writeExternalTextFile(String absolutePath, String content) async {}
 
   @override
   Future<String?> readTextFile(String rootPath, String relativePath) async {

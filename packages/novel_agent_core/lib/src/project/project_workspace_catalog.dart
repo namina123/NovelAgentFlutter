@@ -14,9 +14,14 @@ final class ProjectWorkspaceCatalog {
           purpose: '总纲、分卷纲、章纲等结构化创作规划。',
         ),
         WorkspaceDirectoryDescriptor(
-          path: 'drafts/',
-          name: '草稿',
-          purpose: '章节草稿、场景稿和待确认正文内容。',
+          path: 'chapters/',
+          name: '正文',
+          purpose: '章节正文、样章与章节级可交付内容。',
+        ),
+        WorkspaceDirectoryDescriptor(
+          path: 'scenes/',
+          name: '场景',
+          purpose: '独立场景、片段补写与局部正文内容。',
         ),
         WorkspaceDirectoryDescriptor(
           path: 'assets/',
@@ -68,19 +73,14 @@ final class ProjectWorkspaceCatalog {
           purpose: '章节任务、场景目标、关键事件与卡点。',
         ),
         WorkspaceDirectoryDescriptor(
-          path: 'drafts/',
-          name: '草稿',
-          purpose: '章节草稿、场景稿和待确认正文内容。',
+          path: 'chapters/',
+          name: '正文',
+          purpose: '章节正文、样章与章节级可交付内容。',
         ),
         WorkspaceDirectoryDescriptor(
-          path: 'drafts/chapters/',
-          name: '章节草稿',
-          purpose: '正式章节级草稿、待确认正文和样章。',
-        ),
-        WorkspaceDirectoryDescriptor(
-          path: 'drafts/scenes/',
-          name: '场景草稿',
-          purpose: '局部场景、片段补写和实验性片段。',
+          path: 'scenes/',
+          name: '场景',
+          purpose: '独立场景、片段补写与局部正文内容。',
         ),
         WorkspaceDirectoryDescriptor(
           path: 'assets/',
@@ -177,6 +177,50 @@ final class ProjectWorkspaceCatalog {
       ];
 
   static const List<WorkspaceDirectoryDescriptor>
+  legacyResourceCompatibilityDirs = <WorkspaceDirectoryDescriptor>[
+    WorkspaceDirectoryDescriptor(
+      path: 'outline/',
+      name: '大纲',
+      purpose: '旧项目中的总纲目录，兼容映射到当前大纲展示语义。',
+    ),
+    WorkspaceDirectoryDescriptor(
+      path: 'volume_outlines/',
+      name: '卷纲',
+      purpose: '旧项目中的分卷大纲目录，兼容映射到当前卷纲展示语义。',
+    ),
+    WorkspaceDirectoryDescriptor(
+      path: 'chapter_outlines/',
+      name: '章纲',
+      purpose: '旧项目中的章节任务目录，兼容映射到当前章纲展示语义。',
+    ),
+    WorkspaceDirectoryDescriptor(
+      path: 'styles/',
+      name: '风格',
+      purpose: '旧项目中的风格目录，兼容映射到当前风格资产展示语义。',
+    ),
+    WorkspaceDirectoryDescriptor(
+      path: 'world/',
+      name: '世界',
+      purpose: '旧项目中的世界设定目录，兼容映射到当前世界资产展示语义。',
+    ),
+    WorkspaceDirectoryDescriptor(
+      path: 'knowledge/',
+      name: '知识',
+      purpose: '旧项目中的知识材料目录，兼容保留为可读资源。',
+    ),
+    WorkspaceDirectoryDescriptor(
+      path: 'summaries/',
+      name: '摘要',
+      purpose: '旧项目中的章节摘要目录，兼容保留为可读资源。',
+    ),
+    WorkspaceDirectoryDescriptor(
+      path: 'reviews/',
+      name: '审稿',
+      purpose: '旧项目中的审稿报告目录，兼容保留为可读资源。',
+    ),
+  ];
+
+  static const List<WorkspaceDirectoryDescriptor>
   internalWorkspaceDirs = <WorkspaceDirectoryDescriptor>[
     WorkspaceDirectoryDescriptor(path: '.novel_agent/', name: '内部状态'),
     WorkspaceDirectoryDescriptor(path: '.novel_agent/state/', name: '状态'),
@@ -200,8 +244,53 @@ final class ProjectWorkspaceCatalog {
   ];
 
   static List<WorkspaceDirectoryDescriptor>
+  get defaultResourceTreeDirectoryDescriptors => visibleWorkspaceSkeletonDirs;
+
+  static List<WorkspaceDirectoryDescriptor>
   get resourceTreeDirectoryDescriptors => <WorkspaceDirectoryDescriptor>[
-    ...visibleWorkspaceSkeletonDirs,
-    ...advancedWorkspaceDirs,
+    ...defaultResourceTreeDirectoryDescriptors,
+    ...legacyResourceCompatibilityDirs,
   ];
+
+  static bool isAdvancedWorkspacePath(String relativePath) {
+    return _matchesAnyDescriptor(relativePath, advancedWorkspaceDirs);
+  }
+
+  static bool isInternalWorkspacePath(String relativePath) {
+    return _matchesAnyDescriptor(relativePath, internalWorkspaceDirs);
+  }
+
+  static bool isDefaultResourceTreePath(String relativePath) {
+    return _matchesAnyDescriptor(
+      relativePath,
+      defaultResourceTreeDirectoryDescriptors,
+    );
+  }
+
+  static bool _matchesAnyDescriptor(
+    String relativePath,
+    List<WorkspaceDirectoryDescriptor> descriptors,
+  ) {
+    final cleanPath = _normalize(relativePath);
+    if (cleanPath.isEmpty) {
+      return false;
+    }
+    for (final descriptor in descriptors) {
+      final basePath = _normalize(descriptor.path);
+      if (basePath.isEmpty) {
+        continue;
+      }
+      if (cleanPath == basePath || cleanPath.startsWith('$basePath/')) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static String _normalize(String relativePath) {
+    return relativePath
+        .trim()
+        .replaceAll('\\', '/')
+        .replaceAll(RegExp(r'/+$'), '');
+  }
 }

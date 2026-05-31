@@ -74,7 +74,7 @@ class PromptTemplateCatalogService {
         'locked_core': false,
         'description': '执行单章/场景任务时的提示骨架。',
         'content':
-            '任务目标：{{task_goal}}\n章节：{{chapter}}\n约束：{{constraints}}\n请输出正文草稿，并标注需要更新的设定和角色状态。',
+            '任务目标：{{task_goal}}\n章节：{{chapter}}\n约束：{{constraints}}\n请输出章节正文，并标注需要更新的设定和角色状态。',
       }),
       _normalizerService.normalizeTemplate(<String, Object?>{
         'id': 'review_report',

@@ -1,5 +1,7 @@
 import '../agents/agent_tool_message_service.dart';
 import '../agents/agent_tool_round_state_service.dart';
+import '../agents/skill_load_memory.dart';
+import '../agents/skill_load_memory_service.dart';
 import '../agents/sub_agent_execution_service.dart';
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
@@ -12,17 +14,21 @@ class ToolExecutionService {
     required ToolExecutionPort toolExecutionPort,
     AgentToolMessageService? agentToolMessageService,
     AgentToolRoundStateService? agentToolRoundStateService,
+    SkillLoadMemoryService? skillLoadMemoryService,
     SubAgentExecutionService? subAgentExecutionService,
   }) : _toolExecutionPort = toolExecutionPort,
        _agentToolMessageService =
            agentToolMessageService ?? AgentToolMessageService(),
        _agentToolRoundStateService =
            agentToolRoundStateService ?? AgentToolRoundStateService(),
+       _skillLoadMemoryService =
+           skillLoadMemoryService ?? const SkillLoadMemoryService(),
        _subAgentExecutionService = subAgentExecutionService;
 
   final ToolExecutionPort _toolExecutionPort;
   final AgentToolMessageService _agentToolMessageService;
   final AgentToolRoundStateService _agentToolRoundStateService;
+  final SkillLoadMemoryService _skillLoadMemoryService;
   final SubAgentExecutionService? _subAgentExecutionService;
 
   Future<ToolExecutionRoundResult> executeRound({
@@ -32,6 +38,7 @@ class ToolExecutionService {
     JsonMap agent = const <String, Object?>{},
     String modelId = '',
     JsonMap mainContext = const <String, Object?>{},
+    SkillLoadMemory? skillLoadMemory,
   }) async {
     // 中文注释: 工具轮执行服务统一收口一轮工具调用的执行、副作用回收和转录消息拼装。
     final toolRoundState = _agentToolRoundStateService.toolRoundState(
@@ -48,13 +55,18 @@ class ToolExecutionService {
         ValueReaders.mapValue(rawCall),
         mainContext,
       );
-      final result = await _executeToolCall(
-        project: project,
-        call: call,
-        agent: agent,
-        modelId: modelId,
-        mainContext: mainContext,
-      );
+      final result =
+          _duplicateSkillLoadResult(call, skillLoadMemory) ??
+          await _executeToolCall(
+            project: project,
+            call: call,
+            agent: agent,
+            modelId: modelId,
+            mainContext: mainContext,
+          );
+      if (skillLoadMemory != null) {
+        _skillLoadMemoryService.recordCallResult(call, result, skillLoadMemory);
+      }
       executedTools.add(<String, Object?>{
         'id': call['id'],
         'name': call['name'],
@@ -99,6 +111,20 @@ class ToolExecutionService {
       stoppedByToolError: stoppedByToolError,
       hadPlanTool: ValueReaders.boolValue(toolRoundState['has_plan_tool']),
     );
+  }
+
+  JsonMap? _duplicateSkillLoadResult(
+    JsonMap call,
+    SkillLoadMemory? skillLoadMemory,
+  ) {
+    // 中文注释: 技能读取去重放在执行层统一判断，避免调用方自己维护一套重复加载规则。
+    if (skillLoadMemory == null) {
+      return null;
+    }
+    if (!_skillLoadMemoryService.isDuplicateCall(call, skillLoadMemory)) {
+      return null;
+    }
+    return _skillLoadMemoryService.duplicateResult(call, skillLoadMemory);
   }
 
   JsonMap _enrichToolCallWithContext(JsonMap call, JsonMap mainContext) {
@@ -154,6 +180,9 @@ class ToolExecutionService {
       'manipulate_project_file_lines',
       'update_world_state',
       'update_character_state',
+      'update_foreshadow_state',
+      'update_timeline_state',
+      'update_relationship_state',
       'summarize_context',
       'run_continuity_check',
       'create_chapter_task',

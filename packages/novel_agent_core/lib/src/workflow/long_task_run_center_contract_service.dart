@@ -1,6 +1,7 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
 import 'long_task_next_batch_plan_service.dart';
+import 'long_task_progress_snapshot_service.dart';
 import 'long_task_task_summary_service.dart';
 import 'task_runtime_constants.dart';
 
@@ -8,11 +9,17 @@ class LongTaskRunCenterContractService {
   LongTaskRunCenterContractService({
     required LongTaskNextBatchPlanService nextBatchPlanService,
     required LongTaskTaskSummaryService taskSummaryService,
+    LongTaskProgressSnapshotService? progressSnapshotService,
   }) : _nextBatchPlanService = nextBatchPlanService,
-       _taskSummaryService = taskSummaryService;
+       _progressSnapshotService =
+           progressSnapshotService ??
+           LongTaskProgressSnapshotService(
+             nextBatchPlanService: nextBatchPlanService,
+             taskSummaryService: taskSummaryService,
+           );
 
   final LongTaskNextBatchPlanService _nextBatchPlanService;
-  final LongTaskTaskSummaryService _taskSummaryService;
+  final LongTaskProgressSnapshotService _progressSnapshotService;
 
   JsonMap runCenterContract(
     JsonMap record,
@@ -33,8 +40,20 @@ class LongTaskRunCenterContractService {
       batchPlan['reason'],
       ValueReaders.stringValue(record['stop_reason']),
     ).trim();
-    final activeTask = _activeTaskFromBatchOrTasks(batchPlan, tasks);
+    final snapshot = _progressSnapshotService.build(
+      record,
+      tasks,
+      options: options,
+    );
+    final activeTask = ValueReaders.mapValue(snapshot['active_task']);
     final controls = _controlsForState(status, reason, activeTask, options);
+    final resumeBrief = _resumeBrief(
+      status: status,
+      reason: reason,
+      snapshot: snapshot,
+      activeTask: activeTask,
+      controls: controls,
+    );
     return <String, Object?>{
       'ok': true,
       'schema_version': 1,
@@ -49,11 +68,23 @@ class LongTaskRunCenterContractService {
       'tone': _toneForStatus(status, reason),
       'reason': reason,
       'note': _noteFromBatch(batchPlan, status),
-      'progress': _progressFromRecordTasks(record, tasks),
+      'snapshot': snapshot,
+      'progress': _progressFromSnapshot(snapshot, record, tasks),
       'active_task': activeTask,
+      'phase': ValueReaders.stringValue(snapshot['phase']),
+      'phase_label': ValueReaders.stringValue(snapshot['phase_label']),
+      'message': ValueReaders.stringValue(snapshot['message']),
+      'waiting_user': ValueReaders.boolValue(snapshot['waiting_user']),
+      'blocked': ValueReaders.boolValue(snapshot['blocked']),
+      'blocker': ValueReaders.stringValue(snapshot['blocker']),
+      'recommended_action_label': ValueReaders.stringValue(
+        snapshot['recommended_action_label'],
+      ),
+      'heartbeat_at': ValueReaders.stringValue(snapshot['heartbeat_at']),
       'batch_plan': batchPlan,
       'controls': controls,
       'control_summary': _controlSummary(controls),
+      'resume_brief': resumeBrief,
       'updated_at': ValueReaders.stringValue(record['updated_at']),
     };
   }
@@ -97,8 +128,12 @@ class LongTaskRunCenterContractService {
     return 'muted';
   }
 
-  JsonMap _progressFromRecordTasks(JsonMap record, List<Object?> tasks) {
-    // 中文注释: 进度统计聚合成单一对象，供桌面和移动端运行中心共用。
+  JsonMap _progressFromSnapshot(
+    JsonMap snapshot,
+    JsonMap record,
+    List<Object?> tasks,
+  ) {
+    // 中文注释: 运行中心继续保留旧 progress 结构兼容，同时补出 overall/runtime/phase 分层。
     final counts = _statusCounts(tasks);
     final total = tasks.length;
     final succeeded = ValueReaders.intValue(
@@ -118,7 +153,13 @@ class LongTaskRunCenterContractService {
       'waiting_user': waiting,
       'runnable': runnable,
       'completed_steps': ValueReaders.intValue(record['completed_steps']),
-      'percent': total > 0 ? ((succeeded * 100) ~/ total) : 0,
+      'percent': ValueReaders.intValue(snapshot['overall_percent']),
+      'overall_percent': ValueReaders.intValue(snapshot['overall_percent']),
+      'runtime_percent': ValueReaders.intValue(
+        snapshot['runtime_percent'],
+        ValueReaders.intValue(snapshot['overall_percent']),
+      ),
+      'phase_percent': snapshot['phase_percent'],
     };
   }
 
@@ -148,45 +189,6 @@ class LongTaskRunCenterContractService {
       }
     }
     return count;
-  }
-
-  JsonMap _activeTaskFromBatchOrTasks(JsonMap batchPlan, List<Object?> tasks) {
-    // 中文注释: 活跃任务优先显示本批首任务，否则回退到失败、等待或下一个可运行任务。
-    final batchTasks = ValueReaders.mapList(batchPlan['tasks']);
-    if (batchTasks.isNotEmpty) {
-      return batchTasks.first;
-    }
-    final failed = _firstTaskByStatus(tasks, TaskRuntimeConstants.statusFailed);
-    if (failed.isNotEmpty) {
-      return _taskSummaryService.taskSummary(failed);
-    }
-    final waiting = _firstTaskByStatus(
-      tasks,
-      TaskRuntimeConstants.statusWaitingUser,
-    );
-    if (waiting.isNotEmpty) {
-      return _taskSummaryService.taskSummary(waiting);
-    }
-    for (final rawTask in tasks) {
-      final task = ValueReaders.mapValue(rawTask);
-      if (TaskRuntimeConstants.runnableStatuses.contains(
-        ValueReaders.stringValue(task['status']),
-      )) {
-        return _taskSummaryService.taskSummary(task);
-      }
-    }
-    return <String, Object?>{};
-  }
-
-  JsonMap _firstTaskByStatus(List<Object?> tasks, String status) {
-    // 中文注释: 运行中心只关心首个命中任务即可，不需要完整过滤列表。
-    for (final rawTask in tasks) {
-      final task = ValueReaders.mapValue(rawTask);
-      if (ValueReaders.stringValue(task['status']) == status) {
-        return task;
-      }
-    }
-    return <String, Object?>{};
   }
 
   List<JsonMap> _controlsForState(
@@ -339,5 +341,149 @@ class LongTaskRunCenterContractService {
       }
     }
     return enabled.isEmpty ? '暂无可用操作' : '可操作：${enabled.join('、')}';
+  }
+
+  JsonMap _resumeBrief({
+    required String status,
+    required String reason,
+    required JsonMap snapshot,
+    required JsonMap activeTask,
+    required List<JsonMap> controls,
+  }) {
+    // 中文注释: 恢复摘要只解释“做到哪、为何停、接下来怎么做”，不替代动作合同本身。
+    final activeTaskTitle = ValueReaders.stringValue(
+      activeTask['title'],
+      ValueReaders.stringValue(snapshot['active_task_title']),
+    ).trim();
+    final activeTaskPath = ValueReaders.stringValue(
+      activeTask['relative_path'],
+      ValueReaders.stringValue(snapshot['active_task_path']),
+    ).trim();
+    final message = ValueReaders.stringValue(snapshot['message']).trim();
+    final blocker = ValueReaders.stringValue(snapshot['blocker']).trim();
+    final recommendedActionLabel = ValueReaders.stringValue(
+      snapshot['recommended_action_label'],
+    ).trim();
+    final waitingUser = ValueReaders.boolValue(snapshot['waiting_user']);
+    final blocked = ValueReaders.boolValue(snapshot['blocked']);
+    final enabledControls = <String>[];
+    for (final rawControl in controls) {
+      if (ValueReaders.boolValue(rawControl['enabled'])) {
+        final label = ValueReaders.stringValue(rawControl['label']).trim();
+        if (label.isNotEmpty) {
+          enabledControls.add(label);
+        }
+      }
+    }
+    return <String, Object?>{
+      'resume_title': _resumeTitle(status, reason, waitingUser: waitingUser),
+      'resume_summary': _resumeSummary(
+        status: status,
+        reason: reason,
+        message: message,
+        blocker: blocker,
+      ),
+      'last_step_summary': _lastStepSummary(
+        activeTaskTitle: activeTaskTitle,
+        activeTaskPath: activeTaskPath,
+      ),
+      'next_action_summary': _nextActionSummary(
+        waitingUser: waitingUser,
+        blocked: blocked,
+        recommendedActionLabel: recommendedActionLabel,
+        enabledControls: enabledControls,
+      ),
+      'requires_user_action':
+          waitingUser || blocked || status == TaskRuntimeConstants.statusPaused,
+      'action_package_available': waitingUser,
+      'revision_resolution_available':
+          ValueReaders.stringValue(activeTask['task_type']) == 'revision',
+    };
+  }
+
+  String _resumeTitle(
+    String status,
+    String reason, {
+    required bool waitingUser,
+  }) {
+    if (waitingUser || reason.startsWith('waiting_user')) {
+      return '当前停在用户确认点';
+    }
+    if (status == TaskRuntimeConstants.statusPaused ||
+        reason == 'manual_pause') {
+      return '长任务已暂停';
+    }
+    if (status == TaskRuntimeConstants.statusFailed ||
+        reason == 'failed_task' ||
+        reason == 'step_failed') {
+      return '长任务停在失败节点';
+    }
+    if (status == TaskRuntimeConstants.statusSucceeded) {
+      return '长任务已完成';
+    }
+    return '长任务现场摘要';
+  }
+
+  String _resumeSummary({
+    required String status,
+    required String reason,
+    required String message,
+    required String blocker,
+  }) {
+    if (message.isNotEmpty) {
+      return message;
+    }
+    if (reason.startsWith('waiting_user')) {
+      return '当前运行已经停下，等待你确认检查点或阶段结果后再继续。';
+    }
+    if (status == TaskRuntimeConstants.statusPaused ||
+        reason == 'manual_pause') {
+      return '当前运行被手动暂停，主链不会继续推进，直到你主动恢复。';
+    }
+    if (status == TaskRuntimeConstants.statusFailed ||
+        reason == 'failed_task' ||
+        reason == 'step_failed') {
+      return '当前运行在最近一步失败，需要先决定重试、跳过或转人工处理。';
+    }
+    if (blocker.isNotEmpty) {
+      return blocker;
+    }
+    return '当前没有额外恢复说明。';
+  }
+
+  String _lastStepSummary({
+    required String activeTaskTitle,
+    required String activeTaskPath,
+  }) {
+    if (activeTaskTitle.isEmpty && activeTaskPath.isEmpty) {
+      return '';
+    }
+    if (activeTaskTitle.isNotEmpty && activeTaskPath.isNotEmpty) {
+      return '最近停在：$activeTaskTitle（$activeTaskPath）';
+    }
+    return activeTaskTitle.isNotEmpty
+        ? '最近停在：$activeTaskTitle'
+        : '最近停在：$activeTaskPath';
+  }
+
+  String _nextActionSummary({
+    required bool waitingUser,
+    required bool blocked,
+    required String recommendedActionLabel,
+    required List<String> enabledControls,
+  }) {
+    if (recommendedActionLabel.isNotEmpty) {
+      return '建议下一步：$recommendedActionLabel';
+    }
+    if (waitingUser) {
+      return '建议下一步：先处理当前确认点，再决定是否继续运行。';
+    }
+    if (blocked) {
+      return '建议下一步：先处理阻塞原因，再恢复主链。';
+    }
+    if (enabledControls.isNotEmpty) {
+      return '建议下一步：${enabledControls.join('、')}';
+    }
+    return '当前暂无明确的下一步建议。';
   }
 }

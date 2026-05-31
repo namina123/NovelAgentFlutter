@@ -209,6 +209,9 @@ void main() {
           existingStyles: const <JsonMap>[
             <String, Object?>{'id': 'serial_style', 'display_name': '旧风格'},
           ],
+          existingForeshadows: const <JsonMap>[],
+          existingRelationships: const <JsonMap>[],
+          existingTimelines: const <JsonMap>[],
           existingTemplates: const <JsonMap>[
             <String, Object?>{'id': 'chapter_atomic_plus', 'name': '旧模板'},
           ],

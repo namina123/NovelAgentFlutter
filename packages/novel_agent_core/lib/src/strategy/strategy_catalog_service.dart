@@ -1,5 +1,6 @@
 import 'autonomy_policy.dart';
 import 'checkpoint_policy.dart';
+import '../deconstruction/book_deconstruction_constants.dart';
 import 'mode_definition.dart';
 import 'mode_stage_definition.dart';
 import 'mode_stage_option.dart';
@@ -40,6 +41,9 @@ class StrategyCatalogService {
         id: 'book_deconstruction',
         title: '拆书',
         description: '以拆解外部作品结构、抽取资产和重建方法为主。',
+        supportedModeIds: <String>[
+          BookDeconstructionConstants.modeAssetExtraction,
+        ],
       ),
     ];
   }
@@ -101,7 +105,33 @@ class StrategyCatalogService {
       defaultChapterInterval: 4,
       requireOutlineConfirmation: true,
     );
+    const deconstructionAutonomy = AutonomyPolicy(
+      id: 'deconstruction_assisted',
+      title: '结构化提取辅助',
+      description: '以人工确认提取结果为主，允许智能体辅助归纳与整理，但不自动推进长链运行。',
+      allowAutonomousPlanning: false,
+      allowAutonomousDrafting: false,
+      allowAutonomousRevision: false,
+    );
+    const deconstructionCheckpointPolicy = CheckpointPolicy(
+      id: 'deconstruction_apply_confirm',
+      title: '应用前确认',
+      description: '拆书结果先进入结构化预览，再由用户选择如何应用到项目资产。',
+      defaultChapterInterval: 0,
+      requireOutlineConfirmation: false,
+      requireVolumeConfirmation: false,
+    );
     return const <ModeDefinition>[
+      ModeDefinition(
+        id: BookDeconstructionConstants.modeAssetExtraction,
+        projectStrategyId: BookDeconstructionConstants.projectStrategyId,
+        workflowStrategyId:
+            BookDeconstructionConstants.workflowInteractiveSession,
+        title: '拆书资产提取',
+        description: '导入外部作品并抽取前提、结构和共享资产，再生成可确认的应用计划。',
+        defaultAutonomyPolicy: deconstructionAutonomy,
+        defaultCheckpointPolicy: deconstructionCheckpointPolicy,
+      ),
       ModeDefinition(
         id: 'seed_autopilot_novel',
         projectStrategyId: longTaskNovelStrategyId,

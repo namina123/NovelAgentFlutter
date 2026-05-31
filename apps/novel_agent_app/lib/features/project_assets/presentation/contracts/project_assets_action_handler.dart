@@ -9,9 +9,21 @@ abstract class ProjectAssetsActionHandler {
 
   void onProjectAssetsEntrySelected(String entryId);
 
+  void onProjectAssetsReferenceSelected(String referenceKey);
+
   void onProjectAssetsNewRequested();
 
-  void onProjectAssetsSaveStyleRequested(StyleProfileEditorRequestViewData request);
+  void onProjectAssetsSaveStyleRequested(
+    StyleProfileEditorRequestViewData request,
+  );
+
+  void onProjectAssetsSaveExpressionConstraintBindingRequested(
+    ExpressionConstraintBindingEditorRequestViewData request,
+  );
+
+  void onProjectAssetsRemoveExpressionConstraintBindingRequested(
+    String profileId,
+  );
 
   void onProjectAssetsSaveForeshadowRequested(
     ForeshadowRecordEditorRequestViewData request,

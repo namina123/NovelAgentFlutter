@@ -6,7 +6,7 @@ void main() {
     test(
       'expands direct skills and skill groups while filtering builtin tools',
       () {
-        // 中文注释: 这里验证智能体技能作用域会展开技能组，但不会把工具 ID 混成技能。
+        // 中文注释: 这里验证兼容入口仍会返回最终技能集合，并把工具 ID 过滤掉。
         final scopeService = AgentSkillScopeService();
         final declared = scopeService.declaredSkillIds(<String, Object?>{
           'skills': <String>['chapter_drafting_method', 'read_project_file'],
@@ -21,6 +21,26 @@ void main() {
         ]);
       },
     );
+
+    test('filters unavailable skills through resolver-backed facade', () {
+      final scopeService = AgentSkillScopeService();
+      final enabled = scopeService.enabledSkillIds(
+        <String, Object?>{
+          'skills': <String>['chapter_drafting_method', 'generate_outline'],
+          'skill_groups': <String>['memory_tools'],
+        },
+        availableSkillIds: const <String>[
+          'generate_outline',
+          'memory_maintenance',
+          'check_continuity',
+        ],
+      );
+
+      expect(
+        enabled,
+        <String>['generate_outline', 'memory_maintenance', 'check_continuity'],
+      );
+    });
 
     test('builds available summaries and matches query in Chinese', () {
       // 中文注释: 这里验证摘要列表与查询匹配都能在中文任务描述下选中最合适的技能。

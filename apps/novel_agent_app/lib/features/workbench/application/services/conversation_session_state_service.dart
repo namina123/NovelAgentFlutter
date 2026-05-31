@@ -1,11 +1,13 @@
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../models/conversation_attachment_draft.dart';
 import '../models/conversation_retry_request.dart';
 import '../models/conversation_session_state.dart';
 import '../../presentation/models/conversation_entry_view_data.dart';
 import '../../presentation/models/session_history_entry_view_data.dart';
 import '../../presentation/models/sub_agent_run_view_data.dart';
 import '../../presentation/models/user_option_view_data.dart';
+import 'conversation_tool_entry_projection_service.dart';
 
 class ConversationSessionStateService {
   ConversationSessionStateService({
@@ -16,6 +18,7 @@ class ConversationSessionStateService {
     SessionHistoryService? historyService,
     SessionContextRendererService? contextRendererService,
     ToolEventPresenterService? toolEventPresenterService,
+    ConversationToolEntryProjectionService? toolEntryProjectionService,
     SessionMessageInclusionStrategy? messageInclusionStrategy,
     SessionCompressionStrategyService? compressionStrategyService,
   }) : _normalizerService =
@@ -53,8 +56,12 @@ class ConversationSessionStateService {
              messageService: messageService ?? SessionMessageService(),
              modeService: modeService ?? SessionModeService(),
            ),
-       _toolEventPresenterService =
-           toolEventPresenterService ?? ToolEventPresenterService(),
+       _toolEntryProjectionService =
+           toolEntryProjectionService ??
+           ConversationToolEntryProjectionService(
+             toolEventPresenterService:
+                 toolEventPresenterService ?? ToolEventPresenterService(),
+           ),
        _messageInclusionStrategy =
            messageInclusionStrategy ?? DefaultSessionMessageInclusionStrategy(),
        _compressionStrategyService =
@@ -64,7 +71,7 @@ class ConversationSessionStateService {
   final SessionRecordMutationService _mutationService;
   final SessionHistoryService _historyService;
   final SessionContextRendererService _contextRendererService;
-  final ToolEventPresenterService _toolEventPresenterService;
+  final ConversationToolEntryProjectionService _toolEntryProjectionService;
   final SessionMessageInclusionStrategy _messageInclusionStrategy;
   final SessionCompressionStrategyService _compressionStrategyService;
 
@@ -104,6 +111,7 @@ class ConversationSessionStateService {
       entries: const <ConversationEntryViewData>[],
       pendingOptions: const <UserOptionViewData>[],
       subAgentRuns: const <SubAgentRunViewData>[],
+      attachmentDrafts: const <ConversationAttachmentDraft>[],
       retryRequest: null,
     );
   }
@@ -122,11 +130,7 @@ class ConversationSessionStateService {
       modelProfile: modelProfile,
     );
     return state.copyWith(
-      sessionRecord: _mutationService.sessionWithGoal(
-        prepared,
-        mode,
-        now: now,
-      ),
+      sessionRecord: _mutationService.sessionWithGoal(prepared, mode, now: now),
     );
   }
 
@@ -158,14 +162,25 @@ class ConversationSessionStateService {
       id: 'user_${DateTime.now().microsecondsSinceEpoch}',
       kind: ConversationEntryKind.user,
       title: '你',
-      body: displayContent.trim().isEmpty ? prompt.trim() : displayContent.trim(),
+      body: displayContent.trim().isEmpty
+          ? prompt.trim()
+          : displayContent.trim(),
     );
     return state.copyWith(
       sessionRecord: record,
       entries: <ConversationEntryViewData>[...cleanedState.entries, entry],
       pendingOptions: const <UserOptionViewData>[],
+      attachmentDrafts: const <ConversationAttachmentDraft>[],
       retryRequest: null,
     );
+  }
+
+  ConversationSessionState stateWithAttachmentDrafts(
+    ConversationSessionState state,
+    List<ConversationAttachmentDraft> attachmentDrafts,
+  ) {
+    // 中文注释: 会话附件暂存独立挂在 session state 上，避免和项目导入文件或文本框局部状态混在一起。
+    return state.copyWith(attachmentDrafts: attachmentDrafts);
   }
 
   ConversationSessionState stateWithAssistantResult(
@@ -190,10 +205,12 @@ class ConversationSessionStateService {
         createdAt: now,
       );
     }
+    final stableEntries = _entriesWithoutCurrentRoundAppendix(state.entries);
     final nextEntries = <ConversationEntryViewData>[
-      ...state.entries,
+      ...stableEntries,
       ..._toolEntriesFrom(result.executedTools),
       ..._assistantEntriesFrom(result),
+      ..._runtimeNoticeEntriesFrom(result),
     ];
     return state.copyWith(
       sessionRecord: record,
@@ -203,8 +220,28 @@ class ConversationSessionStateService {
         state.subAgentRuns,
         result.executedTools,
       ),
-      retryRequest: null,
+      retryRequest: _retryRequestFromCancelledResult(
+        baseState: state,
+        result: result,
+      ),
     );
+  }
+
+  List<ConversationEntryViewData> _entriesWithoutCurrentRoundAppendix(
+    List<ConversationEntryViewData> entries,
+  ) {
+    // 中文注释: 最终结果落地时，先剥掉当前轮流式过程的临时助手条目和尾部工具区，避免完成瞬间整块时间线抖动。
+    var end = entries.length;
+    while (end > 0) {
+      final entry = entries[end - 1];
+      if (entry.id == 'assistant_streaming' ||
+          entry.kind == ConversationEntryKind.tool) {
+        end -= 1;
+        continue;
+      }
+      break;
+    }
+    return entries.take(end).toList(growable: false);
   }
 
   ConversationSessionState stateWithAssistantFailure(
@@ -260,10 +297,7 @@ class ConversationSessionStateService {
       return state;
     }
     final nextEntries = _entriesWithoutTrailingRetryableFailure(state.entries);
-    return state.copyWith(
-      entries: nextEntries,
-      retryRequest: null,
-    );
+    return state.copyWith(entries: nextEntries, retryRequest: null);
   }
 
   String sessionContextMarkdown(
@@ -309,24 +343,14 @@ class ConversationSessionStateService {
   }
 
   List<ConversationEntryViewData> _toolEntriesFrom(
-    List<Object?> executedTools,
-  ) {
-    // 中文注释: 工具执行记录单独投影成时间线条目，方便用户理解 AI 实际做了哪些事。
-    return executedTools
-        .map(ValueReaders.mapValue)
-        .where((entry) => entry.isNotEmpty)
-        .map(
-          (entry) => ConversationEntryViewData(
-            id: 'tool_${ValueReaders.stringValue(entry['id'], ValueReaders.stringValue(entry['name']))}',
-            kind: ConversationEntryKind.tool,
-            title: ValueReaders.stringValue(entry['name'], '工具'),
-            body: _toolEventPresenterService.textForExecutedTool(entry),
-            isError:
-                !ValueReaders.boolValue(entry['ok'], true) &&
-                !ValueReaders.boolValue(entry['not_executed']),
-          ),
-        )
-        .toList(growable: false);
+    List<Object?> executedTools, {
+    bool includeDetailBodies = true,
+  }) {
+    // 中文注释: 工具执行记录交给独立投影服务处理，以便继续压缩重复调用并保持时间线轻量。
+    return _toolEntryProjectionService.buildWithOptions(
+      executedTools,
+      includeDetailBodies: includeDetailBodies,
+    );
   }
 
   List<ConversationEntryViewData> _assistantEntriesFrom(
@@ -341,6 +365,60 @@ class ConversationSessionStateService {
       return const <ConversationEntryViewData>[];
     }
     return <ConversationEntryViewData>[entry];
+  }
+
+  List<ConversationEntryViewData> _runtimeNoticeEntriesFrom(
+    DraftGenerationResult result,
+  ) {
+    // 中文注释: 取消等运行期状态以 system notice 单独落入时间线，避免把“停止”伪装成正文或失败消息。
+    if (!result.cancelledByUser) {
+      return const <ConversationEntryViewData>[];
+    }
+    final body = result.partialContentAccepted
+        ? '已停止当前生成，并保留已完成的阶段内容。'
+        : '已停止当前生成，本轮未保留可用内容。';
+    return <ConversationEntryViewData>[
+      ConversationEntryViewData(
+        id: 'assistant_cancelled_${DateTime.now().microsecondsSinceEpoch}',
+        kind: ConversationEntryKind.system,
+        title: '本轮已停止',
+        body: body,
+      ),
+    ];
+  }
+
+  ConversationRetryRequest? _retryRequestFromCancelledResult({
+    required ConversationSessionState baseState,
+    required DraftGenerationResult result,
+  }) {
+    // 中文注释: 用户主动停止且没有保留内容时，给出“重试这次已停止请求”的入口；保留内容时不再额外弹重试横幅。
+    if (!result.cancelledByUser || result.partialContentAccepted) {
+      return null;
+    }
+    final prompt = result.userPrompt.trim();
+    if (prompt.isEmpty) {
+      return null;
+    }
+    return ConversationRetryRequest(
+      prompt: prompt,
+      visibleText: () {
+        final visibleText = _latestUserVisibleText(baseState);
+        return visibleText.isEmpty ? prompt : visibleText;
+      }(),
+      label: '重试这次已停止请求',
+    );
+  }
+
+  String _latestUserVisibleText(ConversationSessionState state) {
+    for (final entry in state.entries.reversed) {
+      if (entry.kind == ConversationEntryKind.user) {
+        final body = entry.body.trim();
+        if (body.isNotEmpty) {
+          return body;
+        }
+      }
+    }
+    return '';
   }
 
   String _reasoningSummary(String reasoning) {
@@ -360,10 +438,22 @@ class ConversationSessionStateService {
   }
 
   List<ConversationEntryViewData> toolEntriesFromExecutedTools(
+    List<Object?> executedTools, {
+    bool includeDetailBodies = true,
+  }) {
+    // 中文注释: 已执行工具的时间线投影对最终结果和流式过程复用同一规则，避免两套展示口径。
+    return _toolEntriesFrom(
+      executedTools,
+      includeDetailBodies: includeDetailBodies,
+    );
+  }
+
+  List<SubAgentRunViewData> mergeSubAgentRunsFromExecutedTools(
+    List<SubAgentRunViewData> currentRuns,
     List<Object?> executedTools,
   ) {
-    // 中文注释: 已执行工具的时间线投影对最终结果和流式过程复用同一规则，避免两套展示口径。
-    return _toolEntriesFrom(executedTools);
+    // 中文注释: 流式过程也复用同一子智能体投影，保证缩略卡在工具结果落地后立即可见。
+    return _mergeSubAgentRuns(currentRuns, executedTools);
   }
 
   ConversationEntryViewData? assistantEntryFromContent({
@@ -497,8 +587,8 @@ class ConversationSessionStateService {
   }) {
     // 中文注释: 会话服务只应用策略产出的阈值，不在这里固化阈值计算规则。
     final next = ValueReaders.deepCopyMap(sessionRecord);
-    next['compression_threshold_chars'] =
-        _compressionStrategyService.thresholdChars(
+    next['compression_threshold_chars'] = _compressionStrategyService
+        .thresholdChars(
           strategySettings: strategySettings,
           modelProfile: modelProfile,
           fallbackThresholdChars: ValueReaders.intValue(

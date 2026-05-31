@@ -11,32 +11,20 @@ class AgentEcosystemHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     // 中文注释: 生态页头部拆开后，后续增加搜索、帮助或导出也不会把整页文件继续撑大。
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         ActionButton(
           label: '返回工作台',
           icon: Icons.arrow_back_rounded,
           tone: ActionButtonTone.neutral,
+          compact: true,
           onPressed: onBackRequested,
         ),
-        const SizedBox(width: 14),
+        const SizedBox(width: 12),
         const Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '智能体生态',
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
-              ),
-              SizedBox(height: 4),
-              Text(
-                '生态页只负责浏览、导入和新建入口，编辑细节后续按独立表单面板接入。',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: Color(0xFF5E6E74),
-                ),
-              ),
-            ],
+          child: Text(
+            '智能体生态',
+            style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800),
           ),
         ),
       ],

@@ -1,16 +1,21 @@
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../storage/project_task_repository.dart';
+import 'project_chapter_length_evaluation_service.dart';
 import 'project_long_task_checkpoint_review_service.dart';
 
 class ProjectLongTaskPostprocessResultService {
   ProjectLongTaskPostprocessResultService({
     required ProjectTaskRepository taskRepository,
     required ProjectLongTaskCheckpointReviewService checkpointReviewService,
+    ProjectChapterLengthEvaluationService? chapterLengthEvaluationService,
     ChapterAtomicResultRecorderService? resultRecorderService,
     ReviewPathPolicyService? reviewPathPolicyService,
   }) : _taskRepository = taskRepository,
        _checkpointReviewService = checkpointReviewService,
+       _chapterLengthEvaluationService =
+           chapterLengthEvaluationService ??
+           ProjectChapterLengthEvaluationService(taskRepository: taskRepository),
        _resultRecorderService =
            resultRecorderService ??
            ChapterAtomicResultRecorderService(
@@ -22,6 +27,7 @@ class ProjectLongTaskPostprocessResultService {
 
   final ProjectTaskRepository _taskRepository;
   final ProjectLongTaskCheckpointReviewService _checkpointReviewService;
+  final ProjectChapterLengthEvaluationService _chapterLengthEvaluationService;
   final ChapterAtomicResultRecorderService _resultRecorderService;
   final ReviewPathPolicyService _reviewPathPolicyService;
 
@@ -46,6 +52,15 @@ class ProjectLongTaskPostprocessResultService {
     final updatedExecution = ValueReaders.mapValue(
       executionUpdate['execution'],
     );
+    final chapterLengthEvaluation =
+        await _chapterLengthEvaluationService.evaluate(
+          project: project,
+          task: task,
+          result: result,
+        );
+    if (chapterLengthEvaluation.isNotEmpty) {
+      updatedExecution['chapter_length_evaluation'] = chapterLengthEvaluation;
+    }
     final executionPath = ValueReaders.stringValue(
       updatedExecution['relative_path'],
       ValueReaders.stringValue(execution['relative_path']),
@@ -71,6 +86,7 @@ class ProjectLongTaskPostprocessResultService {
           'output_paths': result.writtenPaths,
           'changed_paths': result.changedPaths,
           'executed_tools': result.executedTools,
+          'chapter_length_evaluation': chapterLengthEvaluation,
           'response': <String, Object?>{
             'content': result.draftMarkdown,
             'tool_calls': ValueReaders.deepCopyList(result.executedTools),
@@ -95,6 +111,7 @@ class ProjectLongTaskPostprocessResultService {
       'postprocess_review_report_json_path': _firstReviewJsonPath(
         result.writtenPaths,
       ),
+      'chapter_length_evaluation': chapterLengthEvaluation,
       'checkpoint_review': checkpointReview,
       'changed_paths': changedPaths,
     };

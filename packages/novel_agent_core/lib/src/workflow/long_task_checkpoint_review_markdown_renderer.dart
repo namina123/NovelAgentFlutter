@@ -40,11 +40,24 @@ class LongTaskCheckpointReviewMarkdownRenderer {
       '漂移警戒',
       ValueReaders.stringList(review['drift_watch_items']),
     );
+    _appendExpressionConstraintReview(
+      lines,
+      ValueReaders.mapValue(review['expression_constraint_review']),
+    );
+    _appendList(
+      lines,
+      'Mini Recheck',
+      ValueReaders.stringList(review['mini_recheck_items']),
+    );
     _appendDriftSignals(lines, ValueReaders.mapList(review['drift_signals']));
     _appendList(
       lines,
       '风险依据',
       ValueReaders.stringList(review['severity_reasons']),
+    );
+    _appendChapterLengthEvaluation(
+      lines,
+      ValueReaders.mapValue(review['chapter_length_evaluation']),
     );
     _appendList(
       lines,
@@ -56,6 +69,7 @@ class LongTaskCheckpointReviewMarkdownRenderer {
       '建议动作',
       ValueReaders.mapList(review['suggested_actions']),
     );
+    _appendDisposition(lines, ValueReaders.mapValue(review['disposition']));
     _appendList(lines, '本轮工具', ValueReaders.stringList(review['tool_names']));
     final preview = ValueReaders.stringValue(review['response_preview']).trim();
     if (preview.isNotEmpty) {
@@ -133,6 +147,110 @@ class LongTaskCheckpointReviewMarkdownRenderer {
         '${severity.isEmpty ? '' : ' [$severity]'}'
         '${note.isEmpty ? '' : '：$note'}',
       );
+    }
+  }
+
+  void _appendDisposition(List<String> lines, JsonMap disposition) {
+    if (disposition.isEmpty) {
+      return;
+    }
+    final type = ValueReaders.stringValue(disposition['disposition']).trim();
+    final summary = ValueReaders.stringValue(disposition['summary']).trim();
+    if (type.isEmpty && summary.isEmpty) {
+      return;
+    }
+    lines
+      ..add('')
+      ..add('## 放行判断');
+    if (type.isNotEmpty) {
+      lines.add('- 类型：$type');
+    }
+    final reason = ValueReaders.stringValue(disposition['reason']).trim();
+    if (reason.isNotEmpty) {
+      lines.add('- 原因：$reason');
+    }
+    if (summary.isNotEmpty) {
+      lines.add('- 说明：$summary');
+    }
+  }
+
+  void _appendChapterLengthEvaluation(List<String> lines, JsonMap evaluation) {
+    if (evaluation.isEmpty) {
+      return;
+    }
+    final current = ValueReaders.intValue(evaluation['current_length']);
+    final target = ValueReaders.intValue(evaluation['target_length']);
+    if (current <= 0 || target <= 0) {
+      return;
+    }
+    lines
+      ..add('')
+      ..add('## 字数评价')
+      ..add('- 当前章：约 $current 字')
+      ..add('- 目标基准：约 $target 字');
+    final min = ValueReaders.intValue(evaluation['preferred_min']);
+    final max = ValueReaders.intValue(evaluation['preferred_max']);
+    if (min > 0 || max > 0) {
+      lines.add(
+        '- 柔性区间：${min > 0 ? min : '未设下限'} ~ ${max > 0 ? max : '未设上限'} 字',
+      );
+    }
+    final rollingAverage = ValueReaders.intValue(
+      evaluation['rolling_average_length'],
+    );
+    if (rollingAverage > 0) {
+      lines.add('- 最近滚动均值：约 $rollingAverage 字');
+    }
+    final previous = ValueReaders.intValue(evaluation['previous_length']);
+    final delta = ValueReaders.intValue(evaluation['adjacent_delta']);
+    if (previous > 0 && delta > 0) {
+      lines.add('- 与上一章差值：约 $delta 字');
+    }
+    final level = ValueReaders.stringValue(evaluation['level']).trim();
+    if (level.isNotEmpty) {
+      lines.add('- 评价等级：$level');
+    }
+    final action = ValueReaders.stringValue(
+      evaluation['recommended_action'],
+    ).trim();
+    if (action.isNotEmpty) {
+      lines.add('- 建议动作：$action');
+    }
+    _appendList(lines, '字数说明', ValueReaders.stringList(evaluation['notes']));
+  }
+
+  void _appendExpressionConstraintReview(List<String> lines, JsonMap raw) {
+    if (raw.isEmpty) {
+      return;
+    }
+    final authenticityPassLevel = ValueReaders.stringValue(
+      raw['authenticity_pass_level'],
+    ).trim();
+    final reviewFocuses = ValueReaders.stringList(raw['review_focuses']);
+    final voiceNotes = ValueReaders.stringList(raw['voice_protection_notes']);
+    if (authenticityPassLevel.isEmpty &&
+        reviewFocuses.isEmpty &&
+        voiceNotes.isEmpty) {
+      return;
+    }
+    lines
+      ..add('')
+      ..add('## 表达限制联动');
+    if (authenticityPassLevel.isNotEmpty &&
+        authenticityPassLevel != 'disabled') {
+      lines.add('- 真实性复核强度：$authenticityPassLevel');
+    }
+    for (final item in reviewFocuses) {
+      final text = item.trim();
+      if (text.isNotEmpty) {
+        lines.add('- 审稿重点：$text');
+      }
+    }
+    for (final item in voiceNotes) {
+      final text = item.trim();
+      if (text.isNotEmpty) {
+        lines.add('- 保真提醒：$text');
+      }
     }
   }
 }

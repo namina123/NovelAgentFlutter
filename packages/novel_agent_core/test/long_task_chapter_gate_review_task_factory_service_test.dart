@@ -12,7 +12,7 @@ void main() {
           'title': '第01章：回京',
           'task_type': 'chapter',
           'mode': TaskRuntimeConstants.modeHumanOutlineAiDraft,
-          'output_paths': <Object?>['drafts/chapters/第01章_回京.md'],
+          'output_paths': <Object?>['chapters/第01章_回京.md'],
           'metadata': <String, Object?>{
             'plan_id': 'plan_a',
             'persistent_context_paths': <Object?>['styles/default.md'],
@@ -39,3 +39,4 @@ void main() {
     });
   });
 }
+

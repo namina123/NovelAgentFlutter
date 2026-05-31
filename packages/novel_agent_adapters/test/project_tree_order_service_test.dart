@@ -12,9 +12,9 @@ void main() {
         'novel_agent_tree_order_test_',
       );
       try {
-        await Directory('${root.path}\\drafts').create(recursive: true);
-        await File('${root.path}\\drafts\\a.md').writeAsString('A');
-        await File('${root.path}\\drafts\\b.md').writeAsString('B');
+        await Directory('${root.path}\\chapters').create(recursive: true);
+        await File('${root.path}\\chapters\\a.md').writeAsString('A');
+        await File('${root.path}\\chapters\\b.md').writeAsString('B');
         final treeOrderService = ProjectTreeOrderService();
         final workspacePort = LocalProjectWorkspacePort(
           treeOrderService: treeOrderService,
@@ -23,7 +23,7 @@ void main() {
 
         await treeOrderService.reorderEntry(
           rootPath: root.path,
-          relativePath: 'drafts/b.md',
+          relativePath: 'chapters/b.md',
           targetIndex: 0,
           existingEntries: initialEntries,
         );
@@ -33,11 +33,11 @@ void main() {
             .where(
               (entry) =>
                   ValueReaders.stringValue(entry['relative_path'])
-                      .startsWith('drafts/'),
+                      .startsWith('chapters/'),
             )
             .map((entry) => ValueReaders.stringValue(entry['relative_path']))
             .toList(growable: false);
-        expect(draftChildren, <String>['drafts/b.md', 'drafts/a.md']);
+        expect(draftChildren, <String>['chapters/b.md', 'chapters/a.md']);
         expect(
           reorderedEntries.any(
             (entry) => ValueReaders.stringValue(
@@ -54,3 +54,4 @@ void main() {
     });
   });
 }
+

@@ -23,13 +23,38 @@ void main() {
         },
       );
 
-      expect(runtime['name'], '未命名模型');
+      expect(runtime['name'], 'DeepSeek V4 Flash');
       expect(runtime['supports_tool_choice'], isFalse);
       expect(
         (runtime['provider_model_capability']
             as Map<String, Object?>)['excluded_parameters'],
         contains('tool_choice'),
       );
+      expect(runtime['supports_file_attachments'], isFalse);
+      expect(runtime['supports_image_attachments'], isFalse);
+      expect(runtime['supports_attachment_urls_only'], isFalse);
+      expect(runtime['supports_multi_attachments'], isFalse);
+    });
+
+    test('maps attachment capabilities from provider capability rules', () {
+      // 中文注释: 这里验证输入模态能力能从能力规则稳定落到运行态配置，供后续输入能力合同复用。
+      final runtime = service.runtimeProfiles.composeRuntimeProfile(
+        <String, Object?>{
+          'name': 'Claude Sonnet',
+          'model': 'claude-3-5-sonnet-20241022',
+        },
+        <String, Object?>{
+          'name': 'Anthropic 主接口',
+          'provider_id': 'anthropic',
+          'kind': 'anthropic_compatible',
+          'base_url': 'https://api.anthropic.com/v1',
+        },
+      );
+
+      expect(runtime['supports_file_attachments'], isTrue);
+      expect(runtime['supports_image_attachments'], isTrue);
+      expect(runtime['supports_attachment_urls_only'], isFalse);
+      expect(runtime['supports_multi_attachments'], isTrue);
     });
 
     test('builds reasoning parameters for deepseek format', () {

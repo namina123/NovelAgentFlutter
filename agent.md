@@ -487,6 +487,54 @@ SQLite 表设计优先：
 策略层负责决定何时使用这些资产；
 资产层负责稳定表达这些对象本身。
 
+### 创作约束三层基线
+
+从现在开始，项目级创作约束正式固定为三层，不允许再混成一段散 prompt：
+
+1. `ProjectConstitution`
+2. `ModeGuidance`
+3. `StyleProfile / ProjectStyleBinding`
+
+它们的职责边界必须始终明确：
+
+- `ProjectConstitution`
+  - 表达项目长期创作宪法、质量底线、禁止事项、自然表达约束
+  - 这是长期上位约束，不能被 mode guidance 冒充
+- `ModeGuidance`
+  - 表达某个模式当前已经收束的目标、边界、已确认事实
+  - 它只约束当前模式推进，不应反向改写项目宪法
+- `StyleProfile / ProjectStyleBinding`
+  - 表达语言风格、叙事声音、风格护栏与作用域绑定
+  - 风格不是宪法，也不是模式流程
+
+统一优先级：
+
+- 用户当前明确指令
+- `ProjectConstitution`
+- `ModeGuidance`
+- `StyleProfile / ProjectStyleBinding`
+- 其他上下文与即时发挥
+
+统一读取规则：
+
+- 宪法优先读取：
+  - `specs/project_spec.md`
+  - `specs/constitution.md`
+  - `premise/project_constitution.md`
+  - `premise/constitution.md`
+- 模式引导优先读取：
+  - `tracking/modes/<mode_id>/guidance.md`
+  - 或内部状态映射出的正式 guidance 投影
+- 风格优先读取：
+  - `styles/*.md`
+  - `assets/styles/*.md`
+
+禁止事项：
+
+- 不要把 `constitution` 写成 `style` 的一部分
+- 不要让 `mode guidance` 冒充长期项目宪法
+- 不要把三层优先级散落在多个 prompt builder、controller 或 adapter 里
+
 ### 新增功能的判断顺序
 
 以后新增任意能力时，按下面顺序判断：

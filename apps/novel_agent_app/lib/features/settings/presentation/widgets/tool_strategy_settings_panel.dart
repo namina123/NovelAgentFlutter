@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../shared/widgets/action_button.dart';
+import '../../../workbench/presentation/models/tool_preview_mode.dart';
 import 'settings_form_section.dart';
 import 'settings_labeled_dropdown_field.dart';
 import 'settings_switch_row.dart';
@@ -29,6 +30,7 @@ class _ToolStrategySettingsPanelState extends State<ToolStrategySettingsPanel> {
   late bool _allowWrite;
   late bool _allowEdit;
   late bool _allowBackup;
+  late String _toolPreviewMode;
 
   @override
   void initState() {
@@ -51,7 +53,7 @@ class _ToolStrategySettingsPanelState extends State<ToolStrategySettingsPanel> {
       children: [
         SettingsFormSection(
           title: '工具策略',
-          description: '这里控制模型看见哪些工具，以及在草稿生成链中默认偏向哪种执行方式。',
+          description: '这里控制模型看见哪些工具，以及在内容生成链中默认偏向哪种执行方式。',
           child: Column(
             children: [
               SettingsLabeledDropdownField<String>(
@@ -138,6 +140,33 @@ class _ToolStrategySettingsPanelState extends State<ToolStrategySettingsPanel> {
           ),
         ),
         const SizedBox(height: 16),
+        SettingsFormSection(
+          title: '工具展示',
+          description: '这里控制工作台会话区对工具调用的默认展示方式，不再在主界面临时切换。',
+          child: SettingsLabeledDropdownField<String>(
+            label: '会话区工具预览',
+            value: _toolPreviewMode,
+            options: const [
+              SettingsDropdownOption(
+                value: ToolPreviewMode.compact,
+                label: '紧凑',
+              ),
+              SettingsDropdownOption(
+                value: ToolPreviewMode.detail,
+                label: '细节',
+              ),
+            ],
+            onChanged: (value) {
+              if (value == null) {
+                return;
+              }
+              setState(() {
+                _toolPreviewMode = ToolPreviewMode.normalize(value);
+              });
+            },
+          ),
+        ),
+        const SizedBox(height: 16),
         ActionButton(
           label: '保存工具策略',
           expanded: true,
@@ -152,6 +181,7 @@ class _ToolStrategySettingsPanelState extends State<ToolStrategySettingsPanel> {
               'allow_write': _allowWrite,
               'allow_edit': _allowEdit,
               'allow_backup': _allowBackup,
+              'tool_preview_mode': _toolPreviewMode,
             });
           },
         ),
@@ -168,6 +198,9 @@ class _ToolStrategySettingsPanelState extends State<ToolStrategySettingsPanel> {
     _allowWrite = widget.settings['allow_write'] != false;
     _allowEdit = widget.settings['allow_edit'] != false;
     _allowBackup = widget.settings['allow_backup'] != false;
+    _toolPreviewMode = ToolPreviewMode.normalize(
+      widget.settings['tool_preview_mode'],
+    );
     if (_mode != 'custom') {
       _applyMode(_mode);
     }

@@ -52,6 +52,55 @@ class CliBootstrap {
       workspacePort: bundle.projectWorkspacePort,
       projectToolHostPort: bundle.projectToolHostPort,
     );
+    final characterRepository = ProjectCharacterProfileRepository(
+      hostPort: bundle.projectToolHostPort,
+    );
+    final organizationRepository = ProjectOrganizationProfileRepository(
+      hostPort: bundle.projectToolHostPort,
+    );
+    final relationshipRepository = ProjectRelationshipRepository(
+      hostPort: bundle.projectToolHostPort,
+    );
+    final timelineRepository = ProjectTimelineRepository(
+      hostPort: bundle.projectToolHostPort,
+    );
+    final runtimeProfileRepository = ProjectRuntimeProfileRepository(
+      workspacePort: bundle.projectWorkspacePort,
+    );
+    final bundleFileAccessService = ProjectBundleFileAccessService(
+      hostPort: bundle.projectToolHostPort,
+    );
+    final bundleApplyService = ProjectBundleApplyService(
+      hostPort: bundle.projectToolHostPort,
+    );
+    final styleBundleLibraryService = ProjectStyleBundleLibraryService(
+      assetLibraryService: projectAssetLibraryService,
+      fileAccessService: bundleFileAccessService,
+      applyService: bundleApplyService,
+    );
+    final characterBundleLibraryService = ProjectCharacterBundleLibraryService(
+      characterRepository: characterRepository,
+      organizationRepository: organizationRepository,
+      fileAccessService: bundleFileAccessService,
+      applyService: bundleApplyService,
+    );
+    final assetBundleLibraryService = ProjectAssetBundleLibraryService(
+      assetLibraryService: projectAssetLibraryService,
+      fileAccessService: bundleFileAccessService,
+      applyService: bundleApplyService,
+    );
+    final projectPackageLibraryService = ProjectPackageLibraryService(
+      workspacePort: bundle.projectWorkspacePort,
+      runtimeProfileRepository: runtimeProfileRepository,
+      promptTemplateService: promptTemplateService,
+      characterRepository: characterRepository,
+      organizationRepository: organizationRepository,
+      assetLibraryService: projectAssetLibraryService,
+      relationshipRepository: relationshipRepository,
+      timelineRepository: timelineRepository,
+      fileAccessService: bundleFileAccessService,
+      applyService: bundleApplyService,
+    );
     final reviewReportService = ProjectReviewReportService(
       workspacePort: bundle.projectWorkspacePort,
       taskRepository: projectTaskRepository,
@@ -141,6 +190,7 @@ class CliBootstrap {
       loadSkillGroups: (project) =>
           bundle.skillGroupCatalog.loadSkillGroups(project),
       projectRepository: bundle.projectRepository,
+      projectPackageLibraryService: projectPackageLibraryService,
       printer: printer,
     );
     final sessionCommand = SessionCommand(printer: printer);
@@ -154,6 +204,9 @@ class CliBootstrap {
       settingsRepository: bundle.settingsRepository,
       projectRepository: bundle.projectRepository,
       assetLibraryService: projectAssetLibraryService,
+      styleBundleLibraryService: styleBundleLibraryService,
+      characterBundleLibraryService: characterBundleLibraryService,
+      assetBundleLibraryService: assetBundleLibraryService,
       printer: printer,
     );
     final templateCommand = TemplateCommand(

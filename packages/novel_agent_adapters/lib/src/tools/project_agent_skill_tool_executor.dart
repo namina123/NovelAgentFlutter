@@ -1,7 +1,9 @@
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../packages/local_skill_group_catalog.dart';
+import '../packages/local_package_resource_reader.dart';
 import '../packages/local_skill_package_catalog.dart';
+import 'project_agent_skill_runtime_loadout_service.dart';
 import 'project_tool_result_factory.dart';
 
 class ProjectAgentSkillToolExecutor {
@@ -12,6 +14,8 @@ class ProjectAgentSkillToolExecutor {
     AgentSkillSummaryService? skillSummaryService,
     AgentProfileCatalogService? agentProfileCatalogService,
     SkillInstructionDigestService? skillInstructionDigestService,
+    LocalPackageResourceReader? packageResourceReader,
+    ProjectAgentSkillRuntimeLoadoutService? runtimeLoadoutService,
   }) : _skillPackageCatalog = skillPackageCatalog ?? LocalSkillPackageCatalog(),
        _skillGroupCatalog = skillGroupCatalog ?? LocalSkillGroupCatalog(),
        _resultFactory = resultFactory ?? ProjectToolResultFactory(),
@@ -20,7 +24,10 @@ class ProjectAgentSkillToolExecutor {
            agentProfileCatalogService ?? AgentProfileCatalogService(),
        _skillInstructionDigestService =
            skillInstructionDigestService ??
-           const SkillInstructionDigestService();
+           const SkillInstructionDigestService(),
+       _packageResourceReader =
+           packageResourceReader ?? const LocalPackageResourceReader(),
+       _runtimeLoadoutService = runtimeLoadoutService;
 
   final LocalSkillPackageCatalog _skillPackageCatalog;
   final LocalSkillGroupCatalog _skillGroupCatalog;
@@ -28,6 +35,8 @@ class ProjectAgentSkillToolExecutor {
   final AgentSkillSummaryService _skillSummaryService;
   final AgentProfileCatalogService _agentProfileCatalogService;
   final SkillInstructionDigestService _skillInstructionDigestService;
+  final LocalPackageResourceReader _packageResourceReader;
+  final ProjectAgentSkillRuntimeLoadoutService? _runtimeLoadoutService;
 
   Future<JsonMap> loadAgentSkill(
     ProjectDescriptor project,
@@ -39,11 +48,26 @@ class ProjectAgentSkillToolExecutor {
     final projectSkillGroups = await _skillGroupCatalog.loadSkillGroups(
       project,
     );
+    final resolvedLoadout = await _resolveRuntimeLoadout(
+      project: project,
+      agent: agent,
+      availableSkillGroups: projectSkillGroups,
+      availableSkillIds: allSkills
+          .map(
+            (item) => ValueReaders.stringValue(
+              ValueReaders.mapValue(item)['id'],
+            ).trim(),
+          )
+          .where((id) => id.isNotEmpty)
+          .toList(growable: false),
+    );
     final availableSkills = _skillSummaryService.buildAvailableSkillSummaries(
       agent: agent,
       allSkills: allSkills,
       availableSkillGroups: projectSkillGroups,
+      resolvedLoadout: resolvedLoadout,
     );
+    final runtimeLoadoutData = _runtimeLoadoutData(resolvedLoadout);
     var skillId = ValueReaders.stringValue(arguments['skill_id']).trim();
     final query = ValueReaders.stringValue(arguments['query']).trim();
     if (skillId.isEmpty && query.isNotEmpty) {
@@ -59,6 +83,7 @@ class ProjectAgentSkillToolExecutor {
         data: <String, Object?>{
           'agent_id': agentId,
           'available_skills': availableSkills,
+          ...runtimeLoadoutData,
         },
       );
     }
@@ -72,6 +97,7 @@ class ProjectAgentSkillToolExecutor {
         data: <String, Object?>{
           'agent_id': agentId,
           'available_skills': availableSkills,
+          ...runtimeLoadoutData,
         },
       );
     }
@@ -89,12 +115,26 @@ class ProjectAgentSkillToolExecutor {
         data: <String, Object?>{
           'agent_id': agentId,
           'available_skills': availableSkills,
+          ...runtimeLoadoutData,
         },
       );
     }
     final instructionMarkdown = ValueReaders.stringValue(
       skillPackage['instruction_markdown'],
     ).trim();
+    final referencePath = _packageResourceReader.normalizeResourcePath(
+      ValueReaders.stringValue(arguments['reference_path']),
+    );
+    if (referencePath.isNotEmpty) {
+      return _loadReference(
+        agentId: agentId,
+        availableSkills: availableSkills,
+        skillId: skillId,
+        skillPackage: skillPackage,
+        referencePath: referencePath,
+        runtimeLoadoutData: runtimeLoadoutData,
+      );
+    }
     final detailLevel = ValueReaders.stringValue(
       arguments['detail_level'],
       'summary',
@@ -116,6 +156,7 @@ class ProjectAgentSkillToolExecutor {
         'detail_level': useFullText ? 'full' : 'summary',
         'instruction_character_count': instructionMarkdown.length,
         'full_instruction_available': instructionMarkdown.isNotEmpty,
+        'content': instructionText,
         if (useFullText) 'instruction_markdown': instructionMarkdown,
         'activation_hints': ValueReaders.stringList(
           skillPackage['activation_hints'],
@@ -146,8 +187,115 @@ class ProjectAgentSkillToolExecutor {
         'entry_file_path': ValueReaders.stringValue(
           skillPackage['entry_file_path'],
         ),
+        ...runtimeLoadoutData,
       },
     );
+  }
+
+  Future<JsonMap> _loadReference({
+    required String agentId,
+    required List<JsonMap> availableSkills,
+    required String skillId,
+    required JsonMap skillPackage,
+    required String referencePath,
+    required JsonMap runtimeLoadoutData,
+  }) async {
+    // 中文注释: reference 读取只开放技能元数据中显式声明的 reference 列表，避免模型越界扫包目录。
+    final allowedReferences = ValueReaders.stringList(
+      ValueReaders.mapValue(skillPackage['resource_hints'])['references'],
+    ).map(_packageResourceReader.normalizeResourcePath).toSet();
+    if (!allowedReferences.contains(referencePath)) {
+      return _resultFactory.notExecuted(
+        '当前技能没有开放这个 reference_path：$referencePath',
+        data: <String, Object?>{
+          'agent_id': agentId,
+          'skill_id': skillId,
+          'available_reference_paths': allowedReferences.toList(
+            growable: false,
+          ),
+          'available_skills': availableSkills,
+          ...runtimeLoadoutData,
+        },
+      );
+    }
+    final entryFilePath = ValueReaders.stringValue(
+      skillPackage['entry_file_path'],
+    ).trim();
+    final referenceContent = await _packageResourceReader.readTextResource(
+      entryFilePath,
+      referencePath,
+    );
+    if (referenceContent == null || referenceContent.trim().isEmpty) {
+      return _resultFactory.notExecuted(
+        '该 reference 文件为空或不存在：$referencePath',
+        data: <String, Object?>{
+          'agent_id': agentId,
+          'skill_id': skillId,
+          'reference_path': referencePath,
+          ...runtimeLoadoutData,
+        },
+      );
+    }
+    return _resultFactory.success(
+      '已读取技能参考：${ValueReaders.stringValue(skillPackage['name'], skillId)} / $referencePath',
+      data: <String, Object?>{
+        'agent_id': agentId,
+        'skill_id': skillId,
+        'name': ValueReaders.stringValue(skillPackage['name'], skillId),
+        'detail_level': 'reference',
+        'reference_path': referencePath,
+        'reference_content': referenceContent,
+        'content': referenceContent,
+        'reference_character_count': referenceContent.length,
+        'available_reference_paths': allowedReferences.toList(growable: false),
+        'resource_hints': ValueReaders.deepCopyMap(
+          ValueReaders.mapValue(skillPackage['resource_hints']),
+        ),
+        ...runtimeLoadoutData,
+      },
+    );
+  }
+
+  Future<ResolvedAgentSkillLoadout> _resolveRuntimeLoadout({
+    required ProjectDescriptor project,
+    required JsonMap agent,
+    required List<Object?> availableSkillGroups,
+    required List<String> availableSkillIds,
+  }) async {
+    // 中文注释: 没有项目级 runtime loadout 服务时，保持兼容回退到 agent 默认声明，不在执行器里自己拼规则。
+    final service = _runtimeLoadoutService;
+    if (service == null) {
+      return AgentSkillLoadoutResolverService().resolveAgentDocument(
+        agent,
+        availableSkillGroups: availableSkillGroups,
+        availableSkillIds: availableSkillIds,
+      );
+    }
+    return service.resolveForAgent(
+      project: project,
+      agent: agent,
+      availableSkillGroups: availableSkillGroups,
+      availableSkillIds: availableSkillIds,
+    );
+  }
+
+  JsonMap _runtimeLoadoutData(ResolvedAgentSkillLoadout loadout) {
+    // 中文注释: 这里把运行时装载结果投影成轻量调试数据，供 probe/UI 后续复用，而不是暴露内部对象结构。
+    return <String, Object?>{
+      'resolved_skill_ids': loadout.finalSkillIds,
+      'resolved_loadout_source': loadout.source.id,
+      'resolved_loadout_has_explicit_selection': loadout.hasExplicitLoadout,
+      'resolved_loadout_issues': loadout.issues
+          .map(
+            (issue) => <String, Object?>{
+              'code': issue.code.name,
+              'subject_id': issue.subjectId,
+              'detail_ids': issue.detailIds,
+            },
+          )
+          .cast<Object?>()
+          .toList(growable: false),
+    };
   }
 
   JsonMap _resolvedAgent(JsonMap arguments) {

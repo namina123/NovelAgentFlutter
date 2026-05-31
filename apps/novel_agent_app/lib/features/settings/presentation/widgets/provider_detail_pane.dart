@@ -4,8 +4,10 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 import '../../../../../shared/widgets/action_button.dart';
 import '../../../../../shared/widgets/section_heading.dart';
 import '../models/settings_view_data.dart';
+import '../models/settings_search_option.dart';
 import 'settings_form_section.dart';
 import 'settings_labeled_dropdown_field.dart';
+import 'settings_labeled_search_dropdown_field.dart';
 import 'settings_labeled_text_field.dart';
 import 'settings_switch_row.dart';
 
@@ -13,13 +15,19 @@ class ProviderDetailPane extends StatefulWidget {
   const ProviderDetailPane({
     super.key,
     this.provider,
+    required this.providerDirectoryOptions,
+    required this.modelOptions,
     required this.onProviderSaved,
     required this.onProviderDeleted,
+    this.onBackRequested,
   });
 
   final ProviderEndpointViewData? provider;
+  final List<ProviderDirectoryOptionViewData> providerDirectoryOptions;
+  final List<SettingsSearchOptionViewData> modelOptions;
   final ValueChanged<Map<String, Object?>> onProviderSaved;
   final ValueChanged<String> onProviderDeleted;
+  final VoidCallback? onBackRequested;
 
   @override
   State<ProviderDetailPane> createState() => _ProviderDetailPaneState();
@@ -31,8 +39,11 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
   late final TextEditingController _baseUrlController;
   late final TextEditingController _apiKeyController;
   late final TextEditingController _descriptionController;
+  late final TextEditingController _modelIdController;
   late String _protocol;
+  String? _selectedDirectoryProviderId;
   bool _revealApiKey = false;
+  String? _loadedProviderId;
 
   @override
   void initState() {
@@ -42,6 +53,7 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
     _baseUrlController = TextEditingController();
     _apiKeyController = TextEditingController();
     _descriptionController = TextEditingController();
+    _modelIdController = TextEditingController();
     _syncFromProvider(widget.provider);
   }
 
@@ -64,6 +76,7 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
     _baseUrlController.dispose();
     _apiKeyController.dispose();
     _descriptionController.dispose();
+    _modelIdController.dispose();
     super.dispose();
   }
 
@@ -80,22 +93,55 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
           ),
         )
         .toList(growable: false);
+    final providerOptions = widget.providerDirectoryOptions
+        .map(
+          (option) => SettingsSearchOption<String>(
+            value: option.id,
+            label: option.label,
+          ),
+        )
+        .toList(growable: false);
+    final modelOptions = widget.modelOptions
+        .map(
+          (option) => SettingsSearchOption<String>(
+            value: option.value,
+            label: option.label,
+            note: option.note,
+          ),
+        )
+        .toList(growable: false);
     return ListView(
       children: [
+        if (widget.onBackRequested != null) ...[
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: widget.onBackRequested,
+              icon: const Icon(Icons.arrow_back_rounded),
+              label: const Text('返回接口列表'),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
         SectionHeading(
           title: provider?.title.trim().isNotEmpty == true
               ? provider!.title
               : '新接口',
-          subtitle: '这里只编辑接口名称、协议、地址和密钥；内部 ID 会自动生成。',
+          subtitle: '这里只编辑接口/厂商、协议、地址、模型与密钥；内部 ID 会自动生成。',
         ),
         const SizedBox(height: 18),
         SettingsFormSection(
           title: '基础信息',
           child: Column(
             children: [
-              SettingsLabeledTextField(
-                label: '接口名称',
+              SettingsLabeledSearchDropdownField<String>(
+                key: const ValueKey('provider-directory-field'),
+                label: '接口/厂商名称',
                 controller: _titleController,
+                selectedValue: _selectedDirectoryProviderId,
+                options: providerOptions,
+                hintText: '输入厂商名称筛选，例如 OpenAI / DeepSeek',
+                onSelected: _onProviderDirectorySelected,
               ),
               const SizedBox(height: 12),
               SettingsLabeledDropdownField<String>(
@@ -116,6 +162,21 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
                 label: 'Base URL',
                 controller: _baseUrlController,
                 hintText: '例如 https://api.deepseek.com',
+              ),
+              const SizedBox(height: 12),
+              SettingsLabeledSearchDropdownField<String>(
+                key: const ValueKey('provider-model-field'),
+                label: '模型 ID',
+                controller: _modelIdController,
+                selectedValue: null,
+                options: modelOptions,
+                hintText: '输入模型 ID 筛选，也可从全部模型里选择',
+                onSelected: (value) {
+                  if (value == null) {
+                    return;
+                  }
+                  _modelIdController.text = value;
+                },
               ),
             ],
           ),
@@ -155,16 +216,6 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
           children: [
             Expanded(
               child: ActionButton(
-                label: '新建接口',
-                icon: Icons.add_rounded,
-                tone: ActionButtonTone.neutral,
-                compact: true,
-                onPressed: _createNew,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: ActionButton(
                 label: '保存接口',
                 icon: Icons.save_outlined,
                 compact: true,
@@ -191,25 +242,19 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
 
   void _syncFromProvider(ProviderEndpointViewData? provider) {
     // 中文注释: 切换 provider 时统一刷新编辑草稿，避免多个面板各自同步字段而出现旧值残留。
+    final nextProviderId = provider?.id ?? '__new__';
+    if (_loadedProviderId == nextProviderId) {
+      return;
+    }
+    _loadedProviderId = nextProviderId;
     _titleController.text = provider?.title ?? '';
     _protocol = provider?.protocol ?? 'openai_compatible';
     _baseUrlController.text = provider?.baseUrl ?? '';
     _apiKeyController.text = provider?.rawApiKey ?? '';
     _descriptionController.text = provider?.description ?? '';
+    _modelIdController.text = '';
+    _selectedDirectoryProviderId = _directoryProviderIdFor(provider);
     _revealApiKey = false;
-  }
-
-  void _createNew() {
-    // 中文注释: 新建接口直接提交一份空草稿，让控制器统一决定默认值与选中状态。
-    widget.onProviderSaved(<String, Object?>{
-      'source_id': '',
-      'title': '新接口',
-      'protocol': 'openai_compatible',
-      'base_url': '',
-      'api_key': '',
-      'description': '',
-      'is_new': true,
-    });
   }
 
   void _save() {
@@ -220,8 +265,48 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
       'protocol': _protocol,
       'base_url': _baseUrlController.text.trim(),
       'api_key': _apiKeyController.text,
+      'model_id': _modelIdController.text.trim(),
       'description': _descriptionController.text.trim(),
       'is_new': false,
     });
   }
+
+  void _onProviderDirectorySelected(String? providerId) {
+    if (providerId == null) {
+      return;
+    }
+    final matched = widget.providerDirectoryOptions.where(
+      (option) => option.id == providerId,
+    );
+    if (matched.isEmpty) {
+      return;
+    }
+    final option = matched.first;
+    setState(() {
+      _selectedDirectoryProviderId = option.id;
+      _titleController.text = option.label;
+      _protocol = option.protocol;
+      if (_baseUrlController.text.trim().isEmpty ||
+          widget.provider?.baseUrl.trim() == _baseUrlController.text.trim()) {
+        _baseUrlController.text = option.defaultBaseUrl;
+      }
+    });
+  }
+
+  String? _directoryProviderIdFor(ProviderEndpointViewData? provider) {
+    if (provider == null) {
+      return null;
+    }
+    for (final option in widget.providerDirectoryOptions) {
+      if (option.id == provider.id) {
+        return option.id;
+      }
+      if (option.label.trim().toLowerCase() ==
+          provider.title.trim().toLowerCase()) {
+        return option.id;
+      }
+    }
+    return null;
+  }
+
 }

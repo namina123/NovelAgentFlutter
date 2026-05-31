@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../app/theme/app_palette.dart';
+import '../../../../../shared/theme/novel_theme_context.dart';
 import '../models/project_entry_view_data.dart';
 import 'project_entry_tile.dart';
 
@@ -23,6 +23,7 @@ class ProjectOpenPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 中文注释: 打开项目面板只承接默认目录扫描结果和打开动作，不处理新建项目表单。
+    final colors = context.novelThemeColors;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -34,14 +35,14 @@ class ProjectOpenPanel extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           '扫描位置：$projectsRootPath',
-          style: const TextStyle(color: AppPalette.mutedText, fontSize: 12),
+          style: TextStyle(color: colors.mutedTextColor, fontSize: 12),
         ),
         if (status.trim().isNotEmpty) ...[
           const SizedBox(height: 8),
           Text(
             status,
-            style: const TextStyle(
-              color: AppPalette.lineStrong,
+            style: TextStyle(
+              color: colors.lineStrongColor,
               fontSize: 12,
               fontWeight: FontWeight.w700,
             ),
@@ -50,10 +51,13 @@ class ProjectOpenPanel extends StatelessWidget {
         const SizedBox(height: 14),
         Expanded(
           child: entries.isEmpty
-              ? const Center(
+              ? Center(
                   child: Text(
                     '默认项目目录下还没有可打开的项目。',
-                    style: TextStyle(color: AppPalette.mutedText, fontSize: 13),
+                    style: TextStyle(
+                      color: colors.mutedTextColor,
+                      fontSize: 13,
+                    ),
                   ),
                 )
               : ListView.separated(
@@ -86,13 +90,14 @@ class _PanelHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 中文注释: 项目弹层头部抽成小部件，避免打开/创建两个面板重复堆标题和辅助按钮。
+    final colors = context.novelThemeColors;
     return Row(
       children: [
         Expanded(
           child: Text(
             title,
-            style: const TextStyle(
-              color: AppPalette.text,
+            style: TextStyle(
+              color: colors.textColor,
               fontSize: 18,
               fontWeight: FontWeight.w800,
             ),

@@ -1,11 +1,8 @@
 enum AppDestination {
+  projectOpen,
   workbench,
+  agentEcosystem,
+  projectAssets,
   longTaskStation,
   settings,
-  agentEcosystem,
-  projectCollection,
-  taskCenter,
-  reviewCenter,
-  promptTemplates,
-  projectAssets,
 }

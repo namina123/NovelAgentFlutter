@@ -25,6 +25,8 @@ abstract class ProjectToolHostPort {
 
   Future<String?> readExternalTextFile(String absolutePath);
 
+  Future<void> writeExternalTextFile(String absolutePath, String content);
+
   Future<void> copyExternalFile(
     String absolutePath,
     String rootPath,

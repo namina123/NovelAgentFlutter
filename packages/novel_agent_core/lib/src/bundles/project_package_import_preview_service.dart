@@ -28,6 +28,9 @@ class ProjectPackageImportPreviewService {
     required List<JsonMap> existingCharacters,
     required List<JsonMap> existingOrganizations,
     required List<JsonMap> existingStyles,
+    required List<JsonMap> existingForeshadows,
+    required List<JsonMap> existingRelationships,
+    required List<JsonMap> existingTimelines,
     required List<JsonMap> existingTemplates,
     bool overwrite = false,
   }) {
@@ -81,6 +84,45 @@ class ProjectPackageImportPreviewService {
             overwrite: overwrite,
             targetPathBuilder: (entry) =>
                 'assets/styles/${entry['id']}.style.md',
+          )
+          .items,
+      ..._conflictPreviewService
+          .previewEntries(
+            bundleKind: BundleKind.projectPackage,
+            title: title,
+            description: description,
+            entryKind: 'foreshadow',
+            incomingEntries: ValueReaders.mapList(bundle['foreshadows']),
+            existingEntries: existingForeshadows,
+            overwrite: overwrite,
+            targetPathBuilder: (entry) =>
+                'assets/foreshadows/${entry['id']}.foreshadow.md',
+          )
+          .items,
+      ..._conflictPreviewService
+          .previewEntries(
+            bundleKind: BundleKind.projectPackage,
+            title: title,
+            description: description,
+            entryKind: 'relationship',
+            incomingEntries: ValueReaders.mapList(bundle['relationships']),
+            existingEntries: existingRelationships,
+            overwrite: overwrite,
+            targetPathBuilder: (entry) =>
+                'assets/relationships/${entry['id']}.relationship.md',
+          )
+          .items,
+      ..._conflictPreviewService
+          .previewEntries(
+            bundleKind: BundleKind.projectPackage,
+            title: title,
+            description: description,
+            entryKind: 'timeline',
+            incomingEntries: ValueReaders.mapList(bundle['timelines']),
+            existingEntries: existingTimelines,
+            overwrite: overwrite,
+            targetPathBuilder: (entry) =>
+                'assets/timeline/${entry['id']}.timeline.md',
           )
           .items,
       ..._conflictPreviewService

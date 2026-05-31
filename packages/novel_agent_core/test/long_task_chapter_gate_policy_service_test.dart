@@ -21,13 +21,22 @@ void main() {
     test('requests repair when review report has issues', () {
       final decision = service.reviewOutcomeDecision(const <String, Object?>{
         'issues': <Object?>[
-          <String, Object?>{'title': '连续性问题'},
+          <String, Object?>{'title': '连续性问题', 'severity': 'high'},
         ],
         'suggestions': <Object?>[],
       }, runtimeBaselineId: 'chapter_collaboration_autorun');
 
       expect(decision['action'], 'create_repair_task');
       expect(decision['blocks_auto_advance'], isTrue);
+    });
+
+    test('uses waiting user status when gate decision blocks advance', () {
+      final nextStatus = service.statusAfterReviewOutcome(
+        const <String, Object?>{'disposition': 'blocked_wait_user'},
+        TaskRuntimeConstants.statusSucceeded,
+      );
+
+      expect(nextStatus, TaskRuntimeConstants.statusWaitingUser);
     });
   });
 }

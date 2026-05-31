@@ -85,7 +85,7 @@ Future<void> main() async {
     );
     await bundle.projectWorkspacePort.writeTextFile(
       project.rootPath,
-      'drafts/ch01.md',
+      'chapters/ch01.md',
       '''
 # 第01章 归来者
 
@@ -96,7 +96,7 @@ Future<void> main() async {
     );
     final reviewTaskCreated = await reviewReportService
         .createReviewTask(project, const <String, Object?>{
-          'source_path': 'drafts/ch01.md',
+          'source_path': 'chapters/ch01.md',
           'review_type': 'continuity',
           'title': '连续性检查：第01章归来者',
         });
@@ -147,3 +147,4 @@ Future<void> main() async {
     }
   }
 }
+

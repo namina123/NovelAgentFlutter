@@ -1,10 +1,13 @@
 import 'model_editor_view_data.dart';
+import 'theme_settings_view_data.dart';
 
 class SettingsViewData {
   const SettingsViewData({
     required this.activeTabId,
     required this.tabs,
     required this.providers,
+    required this.providerDirectoryOptions,
+    required this.allModelOptions,
     required this.tabSections,
     required this.defaultProviderId,
     required this.defaultModelId,
@@ -16,6 +19,7 @@ class SettingsViewData {
     required this.networkSettings,
     required this.contextSettings,
     required this.themeSettings,
+    required this.themeViewData,
     required this.settingsRootPath,
     required this.settingsSearchRoots,
     required this.defaultProjectsRootPath,
@@ -25,6 +29,8 @@ class SettingsViewData {
   final String activeTabId;
   final List<SettingsTabViewData> tabs;
   final List<ProviderEndpointViewData> providers;
+  final List<ProviderDirectoryOptionViewData> providerDirectoryOptions;
+  final List<SettingsSearchOptionViewData> allModelOptions;
   final Map<String, List<SettingsSectionViewData>> tabSections;
   final String defaultProviderId;
   final String defaultModelId;
@@ -36,13 +42,14 @@ class SettingsViewData {
   final Map<String, Object?> networkSettings;
   final Map<String, Object?> contextSettings;
   final Map<String, Object?> themeSettings;
+  final ThemeSettingsViewData themeViewData;
   final String settingsRootPath;
   final List<String> settingsSearchRoots;
   final String defaultProjectsRootPath;
   final bool isMobileProjectRootLocked;
 
   factory SettingsViewData.initial() {
-    return const SettingsViewData(
+    return SettingsViewData(
       activeTabId: 'interfaces',
       tabs: [
         SettingsTabViewData(id: 'interfaces', label: '接口'),
@@ -55,6 +62,8 @@ class SettingsViewData {
         SettingsTabViewData(id: 'dev', label: '开发'),
       ],
       providers: [],
+      providerDirectoryOptions: [],
+      allModelOptions: [],
       tabSections: <String, List<SettingsSectionViewData>>{},
       defaultProviderId: '',
       defaultModelId: '',
@@ -66,6 +75,7 @@ class SettingsViewData {
       networkSettings: <String, Object?>{},
       contextSettings: <String, Object?>{},
       themeSettings: <String, Object?>{},
+      themeViewData: ThemeSettingsViewData.initial(),
       settingsRootPath: '',
       settingsSearchRoots: <String>[],
       defaultProjectsRootPath: '',
@@ -81,6 +91,8 @@ class SettingsViewData {
     String? activeTabId,
     List<SettingsTabViewData>? tabs,
     List<ProviderEndpointViewData>? providers,
+    List<ProviderDirectoryOptionViewData>? providerDirectoryOptions,
+    List<SettingsSearchOptionViewData>? allModelOptions,
     Map<String, List<SettingsSectionViewData>>? tabSections,
     String? defaultProviderId,
     String? defaultModelId,
@@ -92,6 +104,7 @@ class SettingsViewData {
     Map<String, Object?>? networkSettings,
     Map<String, Object?>? contextSettings,
     Map<String, Object?>? themeSettings,
+    ThemeSettingsViewData? themeViewData,
     String? settingsRootPath,
     List<String>? settingsSearchRoots,
     String? defaultProjectsRootPath,
@@ -102,6 +115,9 @@ class SettingsViewData {
       activeTabId: activeTabId ?? this.activeTabId,
       tabs: tabs ?? this.tabs,
       providers: providers ?? this.providers,
+      providerDirectoryOptions:
+          providerDirectoryOptions ?? this.providerDirectoryOptions,
+      allModelOptions: allModelOptions ?? this.allModelOptions,
       tabSections: tabSections ?? this.tabSections,
       defaultProviderId: defaultProviderId ?? this.defaultProviderId,
       defaultModelId: defaultModelId ?? this.defaultModelId,
@@ -113,6 +129,7 @@ class SettingsViewData {
       networkSettings: networkSettings ?? this.networkSettings,
       contextSettings: contextSettings ?? this.contextSettings,
       themeSettings: themeSettings ?? this.themeSettings,
+      themeViewData: themeViewData ?? this.themeViewData,
       settingsRootPath: settingsRootPath ?? this.settingsRootPath,
       settingsSearchRoots: settingsSearchRoots ?? this.settingsSearchRoots,
       defaultProjectsRootPath:
@@ -150,6 +167,52 @@ class ProviderEndpointViewData {
   final String apiKeyState;
   final String description;
   final bool isSelected;
+}
+
+class ProviderDraftViewData {
+  const ProviderDraftViewData({
+    required this.title,
+    required this.protocol,
+    required this.baseUrl,
+    required this.apiKey,
+    required this.description,
+    required this.modelId,
+    this.selectedDirectoryProviderId,
+  });
+
+  final String title;
+  final String protocol;
+  final String baseUrl;
+  final String apiKey;
+  final String description;
+  final String modelId;
+  final String? selectedDirectoryProviderId;
+}
+
+class ProviderDirectoryOptionViewData {
+  const ProviderDirectoryOptionViewData({
+    required this.id,
+    required this.label,
+    required this.protocol,
+    required this.defaultBaseUrl,
+  });
+
+  final String id;
+  final String label;
+  final String protocol;
+  final String defaultBaseUrl;
+}
+
+class SettingsSearchOptionViewData {
+  const SettingsSearchOptionViewData({
+    required this.value,
+    required this.label,
+    this.note = '',
+  });
+
+  final String value;
+  final String label;
+  final String note;
 }
 
 class SettingsSectionViewData {

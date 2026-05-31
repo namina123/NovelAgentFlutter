@@ -132,5 +132,93 @@ void main() {
       expect(toolCalls, hasLength(1));
       expect(toolCalls.single['name'], 'list_project_files');
     });
+
+    test('parses anthropic compatibility text functioncall fallbacks', () {
+      final toolCalls = toolCallParserService.parseToolCalls(<String, Object?>{
+        'content':
+            '<functioncall> {"name": "read_project_file", "arguments": {"relative_path": "chapters/demo.md"}} </functioncall>',
+      });
+
+      expect(toolCalls, hasLength(1));
+      expect(toolCalls.single['name'], 'read_project_file');
+      expect(
+        ValueReaders.mapValue(toolCalls.single['arguments'])['relative_path'],
+        'chapters/demo.md',
+      );
+    });
+
+    test('parses anthropic compatibility invoke parameter fallbacks', () {
+      final toolCalls = toolCallParserService.parseToolCalls(<String, Object?>{
+        'content':
+            '<functioncall> <invoke name="read_project_file"> <parameter name="relative_path" string="true">chapters/demo.md</parameter> </invoke>',
+      });
+
+      expect(toolCalls, hasLength(1));
+      expect(toolCalls.single['name'], 'read_project_file');
+      expect(
+        ValueReaders.mapValue(toolCalls.single['arguments'])['relative_path'],
+        'chapters/demo.md',
+      );
+    });
+
+    test('parses anthropic compatibility function invocation fallback', () {
+      final toolCalls = toolCallParserService.parseToolCalls(<String, Object?>{
+        'content':
+            '<functioncall>read_project_file({"relative_path": "chapters/demo.md"})</functioncall>',
+      });
+
+      expect(toolCalls, hasLength(1));
+      expect(toolCalls.single['name'], 'read_project_file');
+      expect(
+        ValueReaders.mapValue(toolCalls.single['arguments'])['relative_path'],
+        'chapters/demo.md',
+      );
+    });
+
+    test(
+      'parses anthropic compatibility named argument invocation fallback',
+      () {
+        final toolCalls = toolCallParserService.parseToolCalls(
+          <String, Object?>{
+            'content': 'read_project_file(relative_path="chapters/demo.md")',
+          },
+        );
+
+        expect(toolCalls, hasLength(1));
+        expect(toolCalls.single['name'], 'read_project_file');
+        expect(
+          ValueReaders.mapValue(toolCalls.single['arguments'])['relative_path'],
+          'chapters/demo.md',
+        );
+      },
+    );
+
+    test('parses anthropic compatibility wrapped tool_call fallback', () {
+      final toolCalls = toolCallParserService.parseToolCalls(<String, Object?>{
+        'content':
+            '```python\ntool_call(\n  name="read_file",\n  arguments={\n    "path": "chapters/demo.md"\n  }\n)\n```',
+      });
+
+      expect(toolCalls, hasLength(1));
+      expect(toolCalls.single['name'], 'read_project_file');
+      expect(
+        ValueReaders.mapValue(toolCalls.single['arguments'])['relative_path'],
+        'chapters/demo.md',
+      );
+    });
+
+    test('parses anthropic compatibility simple tool tag fallback', () {
+      final toolCalls = toolCallParserService.parseToolCalls(<String, Object?>{
+        'content':
+            'I will read the file as requested.\n\n<read_file>chapters/demo.md</read_file>',
+      });
+
+      expect(toolCalls, hasLength(1));
+      expect(toolCalls.single['name'], 'read_project_file');
+      expect(
+        ValueReaders.mapValue(toolCalls.single['arguments'])['relative_path'],
+        'chapters/demo.md',
+      );
+    });
   });
 }

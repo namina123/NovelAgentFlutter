@@ -1,6 +1,8 @@
 import 'conversation_session_state.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import 'opening_session_projection.dart';
+
 class WorkbenchConversationRuntimeState {
   const WorkbenchConversationRuntimeState({
     this.sessions = const <ConversationSessionState>[],
@@ -8,6 +10,8 @@ class WorkbenchConversationRuntimeState {
     this.showSessionHistory = false,
     this.guideScope = '',
     this.activeModeGuidanceState,
+    this.openingProjection,
+    this.isOpeningProjectionRefreshing = false,
   });
 
   final List<ConversationSessionState> sessions;
@@ -15,6 +19,8 @@ class WorkbenchConversationRuntimeState {
   final bool showSessionHistory;
   final String guideScope;
   final ModeGuidanceState? activeModeGuidanceState;
+  final OpeningSessionProjection? openingProjection;
+  final bool isOpeningProjectionRefreshing;
 
   WorkbenchConversationRuntimeState copyWith({
     List<ConversationSessionState>? sessions,
@@ -22,6 +28,8 @@ class WorkbenchConversationRuntimeState {
     bool? showSessionHistory,
     String? guideScope,
     Object? activeModeGuidanceState = _modeStateSentinel,
+    Object? openingProjection = _openingProjectionSentinel,
+    bool? isOpeningProjectionRefreshing,
   }) {
     // 中文注释: 会话运行时状态独立持有，保证项目工作区和会话链能各自演化。
     return WorkbenchConversationRuntimeState(
@@ -33,8 +41,15 @@ class WorkbenchConversationRuntimeState {
           identical(activeModeGuidanceState, _modeStateSentinel)
           ? this.activeModeGuidanceState
           : activeModeGuidanceState as ModeGuidanceState?,
+      openingProjection:
+          identical(openingProjection, _openingProjectionSentinel)
+          ? this.openingProjection
+          : openingProjection as OpeningSessionProjection?,
+      isOpeningProjectionRefreshing:
+          isOpeningProjectionRefreshing ?? this.isOpeningProjectionRefreshing,
     );
   }
 }
 
 const Object _modeStateSentinel = Object();
+const Object _openingProjectionSentinel = Object();

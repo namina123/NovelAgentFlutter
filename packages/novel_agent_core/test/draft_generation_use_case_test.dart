@@ -125,8 +125,57 @@ void main() {
       },
     );
 
-    test('save draft writes into drafts directory by default', () async {
-      // 中文注释: 这里验证草稿保存用例会复用 core 路径规则，而不是让宿主层自己拼接 drafts 路径。
+    test(
+      'generate draft injects expression constraint sections for creative turns',
+      () async {
+        final workspacePort = _FakeProjectWorkspacePort(entries: [], files: {});
+        final gateway = _FakeLlmGateway();
+        final useCase = GenerateDraftUseCase(
+          projectWorkspacePort: workspacePort,
+          llmGateway: gateway,
+          toolExecutionPort: _FakeToolExecutionPort(),
+          contextAssemblerService: ContextAssemblerService(
+            budgetService: ContextBudgetService(),
+            staticSectionService: ContextStaticSectionService(
+              projectPromptContract: ProjectPromptContract(),
+            ),
+            projectFileSectionService: ContextProjectFileSectionService(),
+          ),
+          projectPromptContract: ProjectPromptContract(),
+        );
+
+        await useCase.execute(
+          project: const ProjectDescriptor(
+            id: 'demo',
+            name: '示例项目',
+            rootPath: 'D:/demo',
+          ),
+          userPrompt: '继续写这一章。',
+          modelId: 'test-model',
+          expressionConstraintProfiles: const <Object?>[
+            <String, Object?>{
+              'id': 'de_ai',
+              'display_name': '去 AI 风',
+              'summary': '降低模板化表达和解释腔。',
+              'kind': 'natural_expression',
+              'rules': <Object?>['减少工整排比和空心总结。'],
+            },
+          ],
+          projectExpressionConstraintBindings: const <Object?>[
+            <String, Object?>{
+              'profile_id': 'de_ai',
+              'default_for_project': true,
+            },
+          ],
+        );
+
+        expect(gateway.lastPrompt, contains('表达限制规范'));
+        expect(gateway.lastPrompt, contains('减少工整排比和空心总结'));
+      },
+    );
+
+    test('save draft writes into chapters directory by default', () async {
+      // 中文注释: 这里验证草稿保存用例会复用 core 的正式章节目录规则，不会回落到旧 drafts 语义。
       final workspacePort = _FakeProjectWorkspacePort(entries: [], files: {});
       final useCase = SaveDraftUseCase(
         projectWorkspacePort: workspacePort,
@@ -143,7 +192,7 @@ void main() {
         title: '第一章 开场',
       );
 
-      expect(savedPath, startsWith('drafts/'));
+      expect(savedPath, startsWith('chapters/'));
       expect(workspacePort.writtenFiles[savedPath], '# 草稿\n内容');
     });
 
@@ -188,8 +237,8 @@ void main() {
           resultByToolName: <String, JsonMap>{
             'write_project_file': <String, Object?>{
               'ok': true,
-              'relative_path': 'drafts/chapter_01.md',
-              'changed_paths': <Object?>['drafts/chapter_01.md'],
+              'relative_path': 'chapters/chapter_01.md',
+              'changed_paths': <Object?>['chapters/chapter_01.md'],
             },
           },
         );
@@ -218,12 +267,87 @@ void main() {
           title: '第一章 开场',
         );
 
-        expect(result.executedTools, hasLength(1));
-        expect(result.writtenPaths, contains('drafts/chapter_01.md'));
+        expect(
+          result.executedTools
+              .map(ValueReaders.mapValue)
+              .map((tool) => ValueReaders.stringValue(tool['name'])),
+          contains('write_project_file'),
+        );
+        expect(result.writtenPaths, contains('chapters/chapter_01.md'));
         expect(result.draftMarkdown, contains('草稿已经写入项目'));
         expect(
           toolExecutionPort.executedToolNames,
           contains('write_project_file'),
+        );
+      },
+    );
+
+    test(
+      'generate draft preloads routed skills before model response',
+      () async {
+        // 中文注释: 这里验证长任务阶段会先按策略读取技能摘要，而不是完全等模型自己想起来。
+        final workspacePort = _FakeProjectWorkspacePort(entries: [], files: {});
+        final gateway = _FakeLlmGateway(
+          scriptedResults: [
+            <String, Object?>{
+              'ok': true,
+              'content': '已按策略继续生成。',
+              'tool_calls': const <Object?>[],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '已按策略继续生成。',
+              },
+            },
+          ],
+        );
+        final toolExecutionPort = _FakeToolExecutionPort(
+          resultByToolName: <String, JsonMap>{
+            'load_agent_skill': <String, Object?>{
+              'ok': true,
+              'skill_id': 'chapter_drafting_method',
+              'detail_level': 'summary',
+              'content': '章节起草摘要',
+              'changed_paths': const <Object?>[],
+            },
+          },
+        );
+        final useCase = GenerateDraftUseCase(
+          projectWorkspacePort: workspacePort,
+          llmGateway: gateway,
+          toolExecutionPort: toolExecutionPort,
+          contextAssemblerService: ContextAssemblerService(
+            budgetService: ContextBudgetService(),
+            staticSectionService: ContextStaticSectionService(
+              projectPromptContract: ProjectPromptContract(),
+            ),
+            projectFileSectionService: ContextProjectFileSectionService(),
+          ),
+          projectPromptContract: ProjectPromptContract(),
+        );
+
+        final result = await useCase.execute(
+          project: const ProjectDescriptor(
+            id: 'demo',
+            name: '示例项目',
+            rootPath: 'D:/demo',
+            projectType: 'novel',
+          ),
+          userPrompt: '请继续当前章节写作。',
+          modelId: 'test-model',
+          intent: 'workflow_task',
+          skillRoutingContext: const <String, Object?>{
+            'task_type': 'chapter',
+            'mode': 'seed_to_full_novel',
+          },
+        );
+
+        expect(toolExecutionPort.executedToolNames.first, 'load_agent_skill');
+        expect(gateway.lastPrompt, contains('请继续当前章节写作'));
+        expect(
+          result.executedTools
+              .map(ValueReaders.mapValue)
+              .map((tool) => ValueReaders.stringValue(tool['name'])),
+          contains('load_agent_skill'),
         );
       },
     );
@@ -278,6 +402,142 @@ void main() {
         contains('llm_completed'),
       );
     });
+
+    test(
+      'generate draft returns cancelled result after cooperative stop',
+      () async {
+        // 中文注释: 这里验证合作式取消不会伪装成异常，而是返回正式 cancelled result。
+        final workspacePort = _FakeProjectWorkspacePort(entries: [], files: {});
+        final cancellationToken = DraftGenerationCancellationToken();
+        final gateway = _FakeLlmGateway(
+          scriptedResults: [
+            <String, Object?>{
+              'ok': true,
+              'content': '最终正文',
+              'reasoning_content': '最终思考',
+              'tool_calls': const <Object?>[],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '最终正文',
+              },
+            },
+          ],
+          beforeReturningResult: (onStreamUpdate) {
+            onStreamUpdate?.call(
+              const LlmStreamUpdate(
+                content: '流式正文片段',
+                reasoningContent: '流式思考',
+              ),
+            );
+            cancellationToken.cancel();
+          },
+        );
+        final useCase = GenerateDraftUseCase(
+          projectWorkspacePort: workspacePort,
+          llmGateway: gateway,
+          toolExecutionPort: _FakeToolExecutionPort(),
+          contextAssemblerService: ContextAssemblerService(
+            budgetService: ContextBudgetService(),
+            staticSectionService: ContextStaticSectionService(
+              projectPromptContract: ProjectPromptContract(),
+            ),
+            projectFileSectionService: ContextProjectFileSectionService(),
+          ),
+          projectPromptContract: ProjectPromptContract(),
+        );
+        final progressEvents = <DraftGenerationProgress>[];
+
+        final result = await useCase.execute(
+          project: const ProjectDescriptor(
+            id: 'demo',
+            name: '示例项目',
+            rootPath: 'D:/demo',
+          ),
+          userPrompt: '继续写',
+          modelId: 'test-model',
+          cancellationToken: cancellationToken,
+          onProgress: progressEvents.add,
+        );
+
+        expect(result.cancelledByUser, isTrue);
+        expect(result.stopPhase, DraftGenerationStopPhase.llmRound);
+        expect(result.partialContentAccepted, isTrue);
+        expect(result.draftMarkdown, '流式正文片段');
+        expect(progressEvents.last.phase, 'cancelled');
+        expect(progressEvents.last.cancelledByUser, isTrue);
+      },
+    );
+
+    test('generate draft can cancel before first llm round', () async {
+      // 中文注释: 这里验证在真正请求模型前的取消会被 core 接住，并返回空的正式取消结果。
+      final workspacePort = _FakeProjectWorkspacePort(entries: [], files: {});
+      final cancellationToken = DraftGenerationCancellationToken()..cancel();
+      final gateway = _FakeLlmGateway();
+      final useCase = GenerateDraftUseCase(
+        projectWorkspacePort: workspacePort,
+        llmGateway: gateway,
+        toolExecutionPort: _FakeToolExecutionPort(),
+        contextAssemblerService: ContextAssemblerService(
+          budgetService: ContextBudgetService(),
+          staticSectionService: ContextStaticSectionService(
+            projectPromptContract: ProjectPromptContract(),
+          ),
+          projectFileSectionService: ContextProjectFileSectionService(),
+        ),
+        projectPromptContract: ProjectPromptContract(),
+      );
+
+      final result = await useCase.execute(
+        project: const ProjectDescriptor(
+          id: 'demo',
+          name: '示例项目',
+          rootPath: 'D:/demo',
+        ),
+        userPrompt: '继续写',
+        modelId: 'test-model',
+        cancellationToken: cancellationToken,
+      );
+
+      expect(result.cancelledByUser, isTrue);
+      expect(result.stopPhase, DraftGenerationStopPhase.preparingContext);
+      expect(result.partialContentAccepted, isFalse);
+      expect(gateway.lastModelId, isEmpty);
+    });
+
+    test(
+      'generate draft failure still throws instead of becoming cancelled',
+      () async {
+        // 中文注释: 这里验证失败与取消继续分流，合作式取消合同不会吞掉真实异常。
+        final workspacePort = _FakeProjectWorkspacePort(entries: [], files: {});
+        final gateway = _FakeLlmGateway(errorToThrow: StateError('boom'));
+        final useCase = GenerateDraftUseCase(
+          projectWorkspacePort: workspacePort,
+          llmGateway: gateway,
+          toolExecutionPort: _FakeToolExecutionPort(),
+          contextAssemblerService: ContextAssemblerService(
+            budgetService: ContextBudgetService(),
+            staticSectionService: ContextStaticSectionService(
+              projectPromptContract: ProjectPromptContract(),
+            ),
+            projectFileSectionService: ContextProjectFileSectionService(),
+          ),
+          projectPromptContract: ProjectPromptContract(),
+        );
+
+        await expectLater(
+          useCase.execute(
+            project: const ProjectDescriptor(
+              id: 'demo',
+              name: '示例项目',
+              rootPath: 'D:/demo',
+            ),
+            userPrompt: '继续写',
+            modelId: 'test-model',
+          ),
+          throwsA(isA<StateError>()),
+        );
+      },
+    );
 
     test(
       'generate draft forwards active document path into tool fallback context',
@@ -403,15 +663,21 @@ class _FakeProjectWorkspacePort implements ProjectWorkspacePort {
   }
 }
 
-class _FakeLlmGateway implements LlmGateway {
-  _FakeLlmGateway({List<JsonMap> scriptedResults = const <JsonMap>[]})
-    : _scriptedResults = List<JsonMap>.from(scriptedResults);
+class _FakeLlmGateway extends LlmGateway {
+  _FakeLlmGateway({
+    List<JsonMap> scriptedResults = const <JsonMap>[],
+    this.beforeReturningResult,
+    this.errorToThrow,
+  }) : _scriptedResults = List<JsonMap>.from(scriptedResults);
 
   String lastPrompt = '';
   String lastModelId = '';
   JsonMap lastOptions = const <String, Object?>{};
   List<String> lastToolNames = const <String>[];
   final List<JsonMap> _scriptedResults;
+  final void Function(void Function(LlmStreamUpdate update)? onStreamUpdate)?
+  beforeReturningResult;
+  final Object? errorToThrow;
 
   @override
   Future<String> requestText({
@@ -420,30 +686,29 @@ class _FakeLlmGateway implements LlmGateway {
   }) async {
     // 中文注释: 旧接口也保持可用，便于其他轻量测试继续直接复用这个替身。
     final result = await requestChat(
-      messages: const <JsonMap>[],
-      modelId: modelId,
-      options: <String, Object?>{'prompt': prompt},
+      request: ChatRequest.textPrompt(prompt: prompt, modelId: modelId),
     );
     return result['content']?.toString() ?? '';
   }
 
   @override
   Future<JsonMap> requestChat({
-    required List<JsonMap> messages,
-    required String modelId,
-    List<JsonMap> tools = const <JsonMap>[],
-    JsonMap options = const <String, Object?>{},
+    required ChatRequest request,
+    DraftGenerationCancellationToken? cancellationToken,
     void Function(LlmStreamUpdate update)? onStreamUpdate,
   }) async {
     // 中文注释: 模型网关替身记录本轮用户提示，验证用例是否把上下文正确送入模型层。
-    final promptMessage = messages.lastWhere(
+    if (errorToThrow != null) {
+      throw errorToThrow!;
+    }
+    final promptMessage = request.messages.lastWhere(
       (message) => message['role'] == 'user',
-      orElse: () => <String, Object?>{'content': options['prompt'] ?? ''},
+      orElse: () => const <String, Object?>{'content': ''},
     );
     lastPrompt = promptMessage['content']?.toString() ?? '';
-    lastModelId = modelId;
-    lastOptions = ValueReaders.deepCopyMap(options);
-    lastToolNames = tools
+    lastModelId = request.modelId;
+    lastOptions = ValueReaders.deepCopyMap(request.options);
+    lastToolNames = request.tools
         .map(ValueReaders.mapValue)
         .map(
           (tool) => ValueReaders.stringValue(
@@ -453,7 +718,9 @@ class _FakeLlmGateway implements LlmGateway {
         .where((name) => name.trim().isNotEmpty)
         .toList(growable: false);
     if (_scriptedResults.isNotEmpty) {
-      if (onStreamUpdate != null) {
+      if (beforeReturningResult != null) {
+        beforeReturningResult!(onStreamUpdate);
+      } else if (onStreamUpdate != null) {
         onStreamUpdate(
           const LlmStreamUpdate(content: '流式正文', reasoningContent: '流式思考'),
         );

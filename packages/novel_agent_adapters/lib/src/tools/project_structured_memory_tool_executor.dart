@@ -2,6 +2,12 @@ import 'dart:convert';
 
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../storage/project_character_path_policy.dart';
+import '../storage/project_character_state_update_service.dart';
+import '../storage/project_foreshadow_feedback_update_service.dart';
+import '../storage/project_foreshadow_state_update_service.dart';
+import '../storage/project_relationship_state_update_service.dart';
+import '../storage/project_timeline_state_update_service.dart';
 import 'project_file_write_tool_executor.dart';
 import 'project_tool_path_policy.dart';
 
@@ -10,11 +16,34 @@ class ProjectStructuredMemoryToolExecutor {
     required ProjectToolHostPort hostPort,
     required ProjectFileWriteToolExecutor writeToolExecutor,
     ProjectToolPathPolicy? pathPolicy,
+    ProjectCharacterStateUpdateService? characterStateUpdateService,
+    ProjectForeshadowStateUpdateService? foreshadowStateUpdateService,
+    ProjectTimelineStateUpdateService? timelineStateUpdateService,
+    ProjectRelationshipStateUpdateService? relationshipStateUpdateService,
+    ProjectForeshadowFeedbackUpdateService? foreshadowFeedbackUpdateService,
     ReviewReportNormalizerService? reviewReportNormalizerService,
     ReviewReportMarkdownRenderer? reviewReportMarkdownRenderer,
   }) : _writeToolExecutor = writeToolExecutor,
        _hostPort = hostPort,
        _pathPolicy = pathPolicy ?? ProjectToolPathPolicy(),
+       _characterStateUpdateService =
+           characterStateUpdateService ??
+           ProjectCharacterStateUpdateService(
+             hostPort: hostPort,
+             pathPolicy: ProjectCharacterPathPolicy(toolPathPolicy: pathPolicy),
+           ),
+       _foreshadowStateUpdateService =
+           foreshadowStateUpdateService ??
+           ProjectForeshadowStateUpdateService(hostPort: hostPort),
+       _timelineStateUpdateService =
+           timelineStateUpdateService ??
+           ProjectTimelineStateUpdateService(hostPort: hostPort),
+       _relationshipStateUpdateService =
+           relationshipStateUpdateService ??
+           ProjectRelationshipStateUpdateService(hostPort: hostPort),
+       _foreshadowFeedbackUpdateService =
+           foreshadowFeedbackUpdateService ??
+           ProjectForeshadowFeedbackUpdateService(hostPort: hostPort),
        _reviewReportNormalizerService =
            reviewReportNormalizerService ?? ReviewReportNormalizerService(),
        _reviewReportMarkdownRenderer =
@@ -23,6 +52,11 @@ class ProjectStructuredMemoryToolExecutor {
   final ProjectFileWriteToolExecutor _writeToolExecutor;
   final ProjectToolHostPort _hostPort;
   final ProjectToolPathPolicy _pathPolicy;
+  final ProjectCharacterStateUpdateService _characterStateUpdateService;
+  final ProjectForeshadowStateUpdateService _foreshadowStateUpdateService;
+  final ProjectTimelineStateUpdateService _timelineStateUpdateService;
+  final ProjectRelationshipStateUpdateService _relationshipStateUpdateService;
+  final ProjectForeshadowFeedbackUpdateService _foreshadowFeedbackUpdateService;
   final ReviewReportNormalizerService _reviewReportNormalizerService;
   final ReviewReportMarkdownRenderer _reviewReportMarkdownRenderer;
 
@@ -54,25 +88,41 @@ class ProjectStructuredMemoryToolExecutor {
     ProjectDescriptor project,
     JsonMap arguments,
   ) {
-    // 中文注释: 角色状态同样写成标准 Markdown，后续可自然过渡到角色包或更细粒度索引。
-    final name = ValueReaders.stringValue(arguments['name'], '未命名角色');
-    final content = ValueReaders.stringValue(arguments['content']).trim();
-    final lines = <String>[
-      '# $name',
-      '',
-      if (ValueReaders.stringValue(arguments['role']).trim().isNotEmpty)
-        '- 角色定位：${ValueReaders.stringValue(arguments['role'])}',
-      if (ValueReaders.stringValue(arguments['status']).trim().isNotEmpty)
-        '- 当前状态：${ValueReaders.stringValue(arguments['status'])}',
-      '',
-      if (content.isNotEmpty) content,
-    ];
-    return _writeToolExecutor.writeProjectFile(project, <String, Object?>{
-      'content_type': 'character',
-      'title': name,
-      'relative_path': 'characters/${_pathPolicy.safeFileName(name)}.md',
-      'content': lines.join('\n').trim(),
-    });
+    // 中文注释: 角色更新现在统一走共享角色状态服务，由它负责主档、latest 状态与历史附录三层写盘。
+    return _characterStateUpdateService.updateCharacterState(
+      project,
+      arguments,
+    );
+  }
+
+  Future<JsonMap> updateForeshadowState(
+    ProjectDescriptor project,
+    JsonMap arguments,
+  ) {
+    // 中文注释: 伏笔更新走独立资产服务，避免继续把伏笔混成世界书或摘要文本。
+    return _foreshadowStateUpdateService.updateForeshadowState(
+      project,
+      arguments,
+    );
+  }
+
+  Future<JsonMap> updateTimelineState(
+    ProjectDescriptor project,
+    JsonMap arguments,
+  ) {
+    // 中文注释: 时间线更新必须进入共享 timeline 资产层，便于后续上下文与图谱共用。
+    return _timelineStateUpdateService.updateTimelineState(project, arguments);
+  }
+
+  Future<JsonMap> updateRelationshipState(
+    ProjectDescriptor project,
+    JsonMap arguments,
+  ) {
+    // 中文注释: 关系更新只做结构化关系资产写盘，不把关系变化塞回角色主档正文里。
+    return _relationshipStateUpdateService.updateRelationshipState(
+      project,
+      arguments,
+    );
   }
 
   Future<JsonMap> summarizeContext(
@@ -182,6 +232,8 @@ class ProjectStructuredMemoryToolExecutor {
     if (!ValueReaders.boolValue(markdownResult['ok'])) {
       return markdownResult;
     }
+    final feedbackChangedPaths = await _foreshadowFeedbackUpdateService
+        .applyReviewReport(project, report);
     return <String, Object?>{
       'ok': true,
       'relative_path': markdownPath,
@@ -189,7 +241,11 @@ class ProjectStructuredMemoryToolExecutor {
       'json_path': jsonPath,
       'review_type': reviewType,
       'source_paths': sourcePaths,
-      'changed_paths': <Object?>[jsonPath, markdownPath],
+      'changed_paths': <Object?>[
+        jsonPath,
+        markdownPath,
+        ...feedbackChangedPaths,
+      ],
       'summary': '已保存审稿报告：$markdownPath',
     };
   }

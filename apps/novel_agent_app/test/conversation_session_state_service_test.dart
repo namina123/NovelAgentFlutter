@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import 'package:novel_agent_app/features/workbench/application/models/conversation_attachment_draft.dart';
 import 'package:novel_agent_app/features/workbench/application/models/conversation_retry_request.dart';
 import 'package:novel_agent_app/features/workbench/application/services/conversation_session_state_service.dart';
 import 'package:novel_agent_app/features/workbench/application/services/conversation_streaming_state_service.dart';
@@ -8,72 +9,106 @@ import 'package:novel_agent_app/features/workbench/presentation/models/conversat
 
 void main() {
   group('ConversationSessionStateService', () {
-    test('failed assistant message stays out of session context by default', () {
-      // 中文注释: 这里验证失败提示只进入时间线展示，不会污染后续发给模型的会话上下文。
+    test('user prompt clears staged attachments for the current round', () {
       final service = ConversationSessionStateService();
       final created = service.createSession(
-        sessionId: 's1',
+        sessionId: 's_attachment_round',
         needsGoalSelection: false,
       );
-      final userState = service.stateWithUserPrompt(created, '先写开场');
-      final failedState = service.stateWithAssistantFailure(
-        userState,
-        '生成失败：网络异常',
-      );
-
-      final markdown = service.sessionContextMarkdown(failedState);
-      expect(markdown, contains('user: 先写开场'));
-      expect(markdown, isNot(contains('网络异常')));
-      expect(failedState.entries.last.isError, isTrue);
-    });
-
-    test('retry cleanup removes retryable failure entry without removing user turn', () {
-      // 中文注释: 重试应复用上一轮用户请求，只清掉失败展示和重试态，不制造重复用户消息。
-      final service = ConversationSessionStateService();
-      final created = service.createSession(
-        sessionId: 's_retry',
-        needsGoalSelection: false,
-      );
-      final userState = service.stateWithUserPrompt(created, '继续写开局');
-      final failedState = service.stateWithAssistantFailure(
-        userState,
-        '生成失败：网络超时',
-        retryRequest: const ConversationRetryRequest(
-          prompt: '继续写开局',
-          visibleText: '继续写开局',
-          errorMessage: '生成失败：网络超时',
+      final staged = service.stateWithAttachmentDrafts(created, const [
+        ConversationAttachmentDraft(
+          id: 'a1',
+          fileName: 'brief.md',
+          localPath: 'D:/demo/brief.md',
+          mediaKind: AttachmentMediaKind.file,
+          mimeType: 'text/markdown',
+          sizeBytes: 128,
+          isReady: true,
         ),
-      );
+      ]);
 
-      final retriedBase = service.stateAfterRetryCleanup(failedState);
-      expect(retriedBase.retryRequest, isNull);
-      expect(retriedBase.entries, hasLength(1));
-      expect(retriedBase.entries.single.kind, ConversationEntryKind.user);
-      expect(
-        service.sessionContextMarkdown(
-          retriedBase,
-          excludeLatestUserContent: '继续写开局',
-        ),
-        isNot(contains('网络超时')),
-      );
+      expect(staged.attachmentDrafts, hasLength(1));
+
+      final next = service.stateWithUserPrompt(staged, '继续写这一章');
+
+      expect(next.attachmentDrafts, isEmpty);
     });
 
-    test('user prompt can use dedicated visible text without changing context payload', () {
-      // 中文注释: 用户可见文本与真实上下文消息应拆开，避免工作流入口把内部 prompt 暴露给用户。
-      final service = ConversationSessionStateService();
-      final created = service.createSession(
-        sessionId: 's_visible',
-        needsGoalSelection: false,
-      );
-      final next = service.stateWithUserPrompt(
-        created,
-        '这是送给模型的长提示词',
-        displayContent: '我选择了“智能开局”',
-      );
+    test(
+      'failed assistant message stays out of session context by default',
+      () {
+        // 中文注释: 这里验证失败提示只进入时间线展示，不会污染后续发给模型的会话上下文。
+        final service = ConversationSessionStateService();
+        final created = service.createSession(
+          sessionId: 's1',
+          needsGoalSelection: false,
+        );
+        final userState = service.stateWithUserPrompt(created, '先写开场');
+        final failedState = service.stateWithAssistantFailure(
+          userState,
+          '生成失败：网络异常',
+        );
 
-      expect(next.entries.single.body, '我选择了“智能开局”');
-      expect(service.sessionContextMarkdown(next), contains('这是送给模型的长提示词'));
-    });
+        final markdown = service.sessionContextMarkdown(failedState);
+        expect(markdown, contains('user: 先写开场'));
+        expect(markdown, isNot(contains('网络异常')));
+        expect(failedState.entries.last.isError, isTrue);
+      },
+    );
+
+    test(
+      'retry cleanup removes retryable failure entry without removing user turn',
+      () {
+        // 中文注释: 重试应复用上一轮用户请求，只清掉失败展示和重试态，不制造重复用户消息。
+        final service = ConversationSessionStateService();
+        final created = service.createSession(
+          sessionId: 's_retry',
+          needsGoalSelection: false,
+        );
+        final userState = service.stateWithUserPrompt(created, '继续写开局');
+        final failedState = service.stateWithAssistantFailure(
+          userState,
+          '生成失败：网络超时',
+          retryRequest: const ConversationRetryRequest(
+            prompt: '继续写开局',
+            visibleText: '继续写开局',
+            errorMessage: '生成失败：网络超时',
+          ),
+        );
+
+        final retriedBase = service.stateAfterRetryCleanup(failedState);
+        expect(retriedBase.retryRequest, isNull);
+        expect(retriedBase.entries, hasLength(1));
+        expect(retriedBase.entries.single.kind, ConversationEntryKind.user);
+        expect(
+          service.sessionContextMarkdown(
+            retriedBase,
+            excludeLatestUserContent: '继续写开局',
+          ),
+          isNot(contains('网络超时')),
+        );
+      },
+    );
+
+    test(
+      'user prompt can use dedicated visible text without changing context payload',
+      () {
+        // 中文注释: 用户可见文本与真实上下文消息应拆开，避免工作流入口把内部 prompt 暴露给用户。
+        final service = ConversationSessionStateService();
+        final created = service.createSession(
+          sessionId: 's_visible',
+          needsGoalSelection: false,
+        );
+        final next = service.stateWithUserPrompt(
+          created,
+          '这是送给模型的长提示词',
+          displayContent: '我选择了“智能开局”',
+        );
+
+        expect(next.entries.single.body, '我选择了“智能开局”');
+        expect(service.sessionContextMarkdown(next), contains('这是送给模型的长提示词'));
+      },
+    );
 
     test('assistant result exposes reasoning as collapsed detail payload', () {
       // 中文注释: 助手正文与思考信息需要分栏投影，便于 UI 做折叠展示。
@@ -255,44 +290,226 @@ void main() {
       expect(next.pendingOptions.first.prompt, '我选择稳妥开局');
     });
 
-    test('streaming progress updates live assistant and pending tool entries', () {
-      // 中文注释: 这里验证流式过程会把正文、思考和待执行工具即时投影到会话栏。
-      final sessionService = ConversationSessionStateService();
-      final streamingService = ConversationStreamingStateService(
-        sessionStateService: sessionService,
-      );
-      final created = sessionService.createSession(
-        sessionId: 's_streaming',
-        needsGoalSelection: false,
-      );
-      final userState = sessionService.stateWithUserPrompt(created, '继续写');
+    test(
+      'streaming progress keeps live assistant visible during tool phase',
+      () {
+        // 中文注释: 工具调用期间即使当前分片没有正文增量，也要保住已经出现的出字内容。
+        final sessionService = ConversationSessionStateService();
+        final streamingService = ConversationStreamingStateService(
+          sessionStateService: sessionService,
+        );
+        final created = sessionService.createSession(
+          sessionId: 's_streaming',
+          needsGoalSelection: false,
+        );
+        final userState = sessionService.stateWithUserPrompt(created, '继续写');
 
-      final next = streamingService.stateWithProgress(
-        userState,
-        const DraftGenerationProgress(
-          phase: 'llm_streaming',
-          roundIndex: 0,
-          draftMarkdown: '正在出现的正文',
-          reasoningContent: '先看规格',
-          pendingToolCalls: <JsonMap>[
-            <String, Object?>{
-              'id': 'tool_1',
-              'name': 'read_project_file',
-              'arguments': <String, Object?>{
-                'relative_path': 'specs/project_brief.md',
+        final first = streamingService.stateWithProgress(
+          userState,
+          const DraftGenerationProgress(
+            phase: 'llm_streaming',
+            roundIndex: 0,
+            draftMarkdown: '正在出现的正文',
+            reasoningContent: '先看规格',
+            pendingToolCalls: <JsonMap>[
+              <String, Object?>{
+                'id': 'tool_1',
+                'name': 'read_project_file',
+                'arguments': <String, Object?>{
+                  'relative_path': 'specs/project_brief.md',
+                },
               },
-            },
-          ],
-        ),
-      );
+            ],
+          ),
+        );
 
-      expect(next.entries, hasLength(3));
-      expect(next.entries.last.kind, ConversationEntryKind.assistant);
-      expect(next.entries.last.body, contains('正在出现'));
-      expect(
-        next.entries[1].body,
-        contains('读取文件'),
-      );
-    });
+        final second = streamingService.stateWithProgress(
+          first,
+          const DraftGenerationProgress(
+            phase: 'tool_calls_ready',
+            roundIndex: 0,
+            draftMarkdown: '',
+            reasoningContent: '',
+            pendingToolCalls: <JsonMap>[
+              <String, Object?>{
+                'id': 'tool_1',
+                'name': 'read_project_file',
+                'arguments': <String, Object?>{
+                  'relative_path': 'specs/project_brief.md',
+                },
+              },
+            ],
+          ),
+        );
+
+        expect(first.entries, hasLength(2));
+        expect(first.entries.last.kind, ConversationEntryKind.assistant);
+        expect(first.entries.last.body, contains('正在出现'));
+        expect(second.entries, hasLength(2));
+        expect(second.entries.last.kind, ConversationEntryKind.assistant);
+        expect(second.entries.last.body, contains('正在出现'));
+      },
+    );
+
+    test(
+      'streaming progress does not duplicate current round tool entries',
+      () {
+        final sessionService = ConversationSessionStateService();
+        final streamingService = ConversationStreamingStateService(
+          sessionStateService: sessionService,
+        );
+        final created = sessionService.createSession(
+          sessionId: 's_streaming_tools',
+          needsGoalSelection: false,
+        );
+        final userState = sessionService.stateWithUserPrompt(created, '继续写');
+        const executedTools = <Object?>[
+          <String, Object?>{
+            'id': 'tool_1',
+            'name': 'read_project_file',
+            'ok': true,
+            'arguments': <String, Object?>{
+              'relative_path': 'premise/project_brief.md',
+            },
+            'result': <String, Object?>{
+              'ok': true,
+              'relative_path': 'premise/project_brief.md',
+            },
+          },
+        ];
+
+        final first = streamingService.stateWithProgress(
+          userState,
+          const DraftGenerationProgress(
+            phase: 'tool_round_completed',
+            roundIndex: 0,
+            draftMarkdown: '',
+            reasoningContent: '',
+            executedTools: executedTools,
+          ),
+        );
+        final second = streamingService.stateWithProgress(
+          first,
+          const DraftGenerationProgress(
+            phase: 'llm_completed',
+            roundIndex: 0,
+            draftMarkdown: '已经有了正文。',
+            reasoningContent: '',
+            executedTools: executedTools,
+          ),
+        );
+
+        expect(
+          first.entries.where(
+            (entry) => entry.kind == ConversationEntryKind.tool,
+          ),
+          hasLength(1),
+        );
+        expect(
+          second.entries.where(
+            (entry) => entry.kind == ConversationEntryKind.tool,
+          ),
+          hasLength(1),
+        );
+      },
+    );
+
+    test(
+      'cancelled result with partial content keeps assistant entry and adds runtime notice',
+      () {
+        final service = ConversationSessionStateService();
+        final created = service.createSession(
+          sessionId: 's_cancelled_partial',
+          needsGoalSelection: false,
+        );
+        final userState = service.stateWithUserPrompt(created, '继续写这一段');
+        final result = DraftGenerationResult(
+          project: const ProjectDescriptor(
+            id: 'demo',
+            name: '示例项目',
+            rootPath: 'D:/demo',
+          ),
+          projectInfo: const <String, Object?>{},
+          userPrompt: '继续写这一段',
+          prompt: 'prompt',
+          modelId: 'test-model',
+          draftMarkdown: '保留下来的半段正文。',
+          contextPack: const <String, Object?>{},
+          selectedPaths: const <String>[],
+          executedTools: const <Object?>[],
+          writtenPaths: const <String>[],
+          changedPaths: const <String>[],
+          transcriptMessages: const <JsonMap>[],
+          waitingForUserChoice: false,
+          reasoningContent: '',
+          stoppedByToolError: false,
+          toolErrorSummary: '',
+          cancelledByUser: true,
+          stopPhase: DraftGenerationStopPhase.llmRound,
+          partialContentAccepted: true,
+        );
+
+        final next = service.stateWithAssistantResult(userState, result);
+
+        expect(next.entries, hasLength(3));
+        expect(next.entries[1].kind, ConversationEntryKind.assistant);
+        expect(next.entries[1].body, '保留下来的半段正文。');
+        expect(next.entries[2].kind, ConversationEntryKind.system);
+        expect(next.entries[2].title, '本轮已停止');
+        expect(next.entries[2].body, contains('保留已完成的阶段内容'));
+        expect(next.retryRequest, isNull);
+      },
+    );
+
+    test(
+      'cancelled result without partial content offers retry without failure styling',
+      () {
+        final service = ConversationSessionStateService();
+        final created = service.createSession(
+          sessionId: 's_cancelled_empty',
+          needsGoalSelection: false,
+        );
+        final userState = service.stateWithUserPrompt(
+          created,
+          '送给模型的真实提示词',
+          displayContent: '用户看到的入口文案',
+        );
+        final result = DraftGenerationResult(
+          project: const ProjectDescriptor(
+            id: 'demo',
+            name: '示例项目',
+            rootPath: 'D:/demo',
+          ),
+          projectInfo: const <String, Object?>{},
+          userPrompt: '送给模型的真实提示词',
+          prompt: 'prompt',
+          modelId: 'test-model',
+          draftMarkdown: '',
+          contextPack: const <String, Object?>{},
+          selectedPaths: const <String>[],
+          executedTools: const <Object?>[],
+          writtenPaths: const <String>[],
+          changedPaths: const <String>[],
+          transcriptMessages: const <JsonMap>[],
+          waitingForUserChoice: false,
+          reasoningContent: '',
+          stoppedByToolError: false,
+          toolErrorSummary: '',
+          cancelledByUser: true,
+          stopPhase: DraftGenerationStopPhase.preparingContext,
+          partialContentAccepted: false,
+        );
+
+        final next = service.stateWithAssistantResult(userState, result);
+
+        expect(next.entries, hasLength(2));
+        expect(next.entries.last.kind, ConversationEntryKind.system);
+        expect(next.entries.last.isError, isFalse);
+        expect(next.retryRequest, isNotNull);
+        expect(next.retryRequest!.label, '重试这次已停止请求');
+        expect(next.retryRequest!.visibleText, '用户看到的入口文案');
+        expect(next.retryRequest!.errorMessage, isEmpty);
+      },
+    );
   });
 }

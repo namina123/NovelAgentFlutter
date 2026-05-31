@@ -4,7 +4,7 @@ import '../../../../../shared/widgets/panel_surface.dart';
 import '../contracts/resource_manager_action_handler.dart';
 import '../models/project_launcher_view_data.dart';
 import 'project_create_panel.dart';
-import 'project_open_panel.dart';
+import 'project_guard_panel.dart';
 
 class ProjectLauncherOverlay extends StatelessWidget {
   const ProjectLauncherOverlay({
@@ -22,28 +22,30 @@ class ProjectLauncherOverlay extends StatelessWidget {
     return Positioned.fill(
       child: ColoredBox(
         color: Colors.black.withValues(alpha: 0.24),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: 720,
-              maxHeight: 560,
-              minWidth: 320,
-            ),
-            child: PanelSurface(
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      const Spacer(),
-                      if (viewData.canDismiss)
-                        IconButton(
-                          onPressed: actionHandler.onProjectLauncherDismissed,
-                          icon: const Icon(Icons.close_rounded),
-                        ),
-                    ],
-                  ),
-                  Expanded(child: _buildBody()),
-                ],
+        child: LayoutBuilder(
+          builder: (context, constraints) => Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: constraints.maxWidth >= 1200 ? 860 : 780,
+                maxHeight: constraints.maxHeight * 0.9,
+                minWidth: 320,
+              ),
+              child: PanelSurface(
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        const Spacer(),
+                        if (viewData.canDismiss)
+                          IconButton(
+                            onPressed: actionHandler.onProjectLauncherDismissed,
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                      ],
+                    ),
+                    Expanded(child: _buildBody()),
+                  ],
+                ),
               ),
             ),
           ),
@@ -55,16 +57,19 @@ class ProjectLauncherOverlay extends StatelessWidget {
   Widget _buildBody() {
     // 中文注释: 打开和创建在这里按模式切换，但各自的面板布局继续拆开保持单一职责。
     switch (viewData.mode) {
-      case ProjectLauncherMode.open:
-        return ProjectOpenPanel(
-          projectsRootPath: viewData.projectsRootPath,
-          entries: viewData.entries,
+      case ProjectLauncherMode.guard:
+        return ProjectGuardPanel(
+          title: viewData.title,
+          description: viewData.description,
           status: viewData.status,
-          onRefreshRequested: actionHandler.onProjectLauncherRefreshRequested,
-          onProjectOpened: actionHandler.onProjectEntryOpened,
+          allowOpenExisting: viewData.allowOpenExisting,
+          onCreateRequested: actionHandler.onCreateProjectRequested,
+          onOpenExistingRequested: actionHandler.onOpenProjectRequested,
         );
       case ProjectLauncherMode.create:
         return ProjectCreatePanel(
+          title: viewData.title,
+          description: viewData.description,
           projectsRootPath: viewData.projectsRootPath,
           status: viewData.status,
           draftTitle: viewData.draftTitle,
@@ -77,8 +82,10 @@ class ProjectLauncherOverlay extends StatelessWidget {
           selectedRuntimeBaselineId: viewData.selectedRuntimeBaselineId,
           selectedProjectTypeRequiresRuntimeBaseline:
               viewData.selectedProjectTypeRequiresRuntimeBaseline,
+          continuityInput: viewData.continuityInput,
           allowOpenExisting: viewData.allowOpenExisting,
           onOpenExistingRequested: actionHandler.onOpenProjectRequested,
+          onBackRequested: actionHandler.onProjectCreationBackRequested,
           onCreateSubmitted: actionHandler.onProjectCreationSubmitted,
         );
     }

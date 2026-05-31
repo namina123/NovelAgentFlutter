@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../app/theme/app_chrome.dart';
-import '../../../../../app/theme/app_palette.dart';
+import '../../../../../shared/theme/novel_theme_context.dart';
 import '../models/selector_option_view_data.dart';
 
 class SelectorField extends StatelessWidget {
@@ -11,20 +11,28 @@ class SelectorField extends StatelessWidget {
     required this.value,
     required this.options,
     required this.onSelected,
+    this.enabled = true,
   });
 
   final String label;
   final String value;
   final List<SelectorOptionViewData> options;
   final ValueChanged<String> onSelected;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
     // 中文注释: 右栏选择器拆成独立控件，后续替换成真正下拉或搜索选择器时不动侧栏布局。
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final colors = context.novelThemeColors;
+    final surface = context.novelThemeSurfaces.inputDock;
+    final labelStyle = TextStyle(
+      fontSize: 10,
+      fontWeight: FontWeight.w700,
+      color: colors.mutedTextColor,
+    );
+    final labelWidth = _labelWidth(context, label, labelStyle);
     return PopupMenuButton<String>(
-      enabled: options.isNotEmpty,
+      enabled: enabled && options.isNotEmpty,
       tooltip: label,
       onSelected: onSelected,
       itemBuilder: (context) {
@@ -53,61 +61,60 @@ class SelectorField extends StatelessWidget {
       },
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: isDark
-              ? theme.colorScheme.surfaceContainerHighest.withValues(
-                  alpha: 0.84,
-                )
-              : Colors.white.withValues(alpha: 0.72),
-          borderRadius: AppChrome.surfaceBorderRadius,
+          color: surface.backgroundColor.withValues(alpha: 0.84),
           border: Border.all(
-            color: isDark ? theme.colorScheme.outline : AppPalette.line,
+            color: surface.borderColor,
             width: AppChrome.borderWidth,
           ),
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               SizedBox(
-                width: 34,
+                width: labelWidth,
                 child: Text(
                   label,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: isDark
-                        ? theme.colorScheme.onSurface.withValues(alpha: 0.72)
-                        : AppPalette.mutedText,
-                  ),
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.visible,
+                  style: labelStyle,
                 ),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 5),
               Expanded(
                 child: Text(
                   value,
-                  maxLines: 2,
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: isDark
-                        ? theme.colorScheme.onSurface
-                        : AppPalette.text,
+                    color: colors.textColor,
                   ),
                 ),
               ),
               Icon(
                 Icons.keyboard_arrow_down_rounded,
                 size: 16,
-                color: isDark
-                    ? theme.colorScheme.primary
-                    : AppPalette.lineStrong,
+                color: enabled && options.isNotEmpty
+                    ? colors.lineStrongColor
+                    : colors.mutedTextColor,
               ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  double _labelWidth(BuildContext context, String text, TextStyle style) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: Directionality.of(context),
+      maxLines: 1,
+    )..layout();
+    return painter.width.ceilToDouble() + 2;
   }
 }

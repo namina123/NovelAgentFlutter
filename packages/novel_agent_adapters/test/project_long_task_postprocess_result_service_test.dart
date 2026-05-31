@@ -42,14 +42,19 @@ void main() {
       () async {
         final execution = await taskRepository.saveRecord(
           project,
-          'tracking/chapter_atomic/revision.execution.json',
+          'tracking/chapter_atomic/chapter.execution.json',
           const <String, Object?>{
-            'relative_path': 'tracking/chapter_atomic/revision.execution.json',
-            'task_type': 'revision',
+            'relative_path': 'tracking/chapter_atomic/chapter.execution.json',
+            'task_type': 'chapter',
             'steps': <Object?>[],
             'events': <Object?>[],
             'output_paths': <Object?>['chapters/ch01.md'],
           },
+        );
+        await taskRepository.writeTextFile(
+          project,
+          'chapters/ch01.md',
+          '章' * 3000,
         );
         await taskRepository.writeTextFile(
           project,
@@ -65,12 +70,22 @@ void main() {
         final saved = await service.saveResult(
           project: project,
           task: const <String, Object?>{
-            'id': 'revision_001',
-            'title': '修复第01章',
-            'task_type': 'revision',
+            'id': 'chapter_003',
+            'title': '第03章',
+            'task_type': 'chapter',
             'output_paths': <Object?>['chapters/ch01.md'],
             'metadata': <String, Object?>{
               'review_report_path': 'reviews/continuity/ch01.md',
+              'sort_order': 3,
+              'stage': 'draft',
+              'chapter_length_profile': <String, Object?>{
+                'enabled': true,
+                'target_length': 2200,
+                'preferred_min': 1800,
+                'preferred_max': 2600,
+                'stage': 'draft',
+                'metric_unit': 'visible_characters',
+              },
             },
           },
           execution: execution,
@@ -121,6 +136,10 @@ void main() {
             ValueReaders.mapValue(saved['checkpoint_review'])['relative_path'],
           ),
           startsWith('tracking/checkpoint_reviews/'),
+        );
+        expect(
+          ValueReaders.mapValue(saved['chapter_length_evaluation']),
+          isNotEmpty,
         );
         final updatedExecution = ValueReaders.mapValue(saved['execution']);
         expect(

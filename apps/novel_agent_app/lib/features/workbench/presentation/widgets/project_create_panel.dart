@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:novel_agent_core/novel_agent_core.dart';
 
-import '../../../../../app/theme/app_palette.dart';
+import '../../../../../shared/theme/novel_theme_context.dart';
 import '../../../../../shared/widgets/action_button.dart';
 import '../models/project_create_request_view_data.dart';
 import '../models/project_creation_phase.dart';
 import '../models/project_runtime_baseline_option_view_data.dart';
 import '../models/project_storage_strategy_option_view_data.dart';
 import '../models/project_type_option_view_data.dart';
+import 'project_continuity_input_panel.dart';
 import 'project_runtime_baseline_option_tile.dart';
 import 'project_storage_strategy_option_tile.dart';
 import 'project_type_option_tile.dart';
@@ -14,6 +16,8 @@ import 'project_type_option_tile.dart';
 class ProjectCreatePanel extends StatefulWidget {
   const ProjectCreatePanel({
     super.key,
+    required this.title,
+    required this.description,
     required this.projectsRootPath,
     required this.status,
     required this.draftTitle,
@@ -25,11 +29,15 @@ class ProjectCreatePanel extends StatefulWidget {
     required this.runtimeBaselineOptions,
     required this.selectedRuntimeBaselineId,
     required this.selectedProjectTypeRequiresRuntimeBaseline,
+    this.continuityInput = const ProjectContinuityInputProfile(),
     required this.allowOpenExisting,
     required this.onOpenExistingRequested,
+    required this.onBackRequested,
     required this.onCreateSubmitted,
   });
 
+  final String title;
+  final String description;
   final String projectsRootPath;
   final String status;
   final String draftTitle;
@@ -41,8 +49,10 @@ class ProjectCreatePanel extends StatefulWidget {
   final List<ProjectRuntimeBaselineOptionViewData> runtimeBaselineOptions;
   final String selectedRuntimeBaselineId;
   final bool selectedProjectTypeRequiresRuntimeBaseline;
+  final ProjectContinuityInputProfile continuityInput;
   final bool allowOpenExisting;
   final VoidCallback onOpenExistingRequested;
+  final VoidCallback onBackRequested;
   final ValueChanged<ProjectCreateRequestViewData> onCreateSubmitted;
 
   @override
@@ -51,9 +61,11 @@ class ProjectCreatePanel extends StatefulWidget {
 
 class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
   late final TextEditingController _controller;
+  late final ScrollController _scrollController;
   late String _selectedProjectTypeId;
   late String _selectedStorageStrategyId;
   late String _selectedRuntimeBaselineId;
+  late ProjectContinuityInputProfile _continuityInput;
   String _lastDefaultTitle = '';
 
   @override
@@ -62,7 +74,9 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
     _selectedProjectTypeId = _resolvedSelectedTypeId();
     _selectedStorageStrategyId = _resolvedSelectedStorageStrategyId();
     _selectedRuntimeBaselineId = _resolvedSelectedRuntimeBaselineId();
+    _continuityInput = widget.continuityInput;
     _lastDefaultTitle = _defaultTitleOf(_selectedProjectTypeId);
+    _scrollController = ScrollController();
     _controller = TextEditingController(
       text: widget.draftTitle.trim().isEmpty
           ? _lastDefaultTitle
@@ -77,6 +91,7 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
     _selectedProjectTypeId = _resolvedSelectedTypeId();
     _selectedStorageStrategyId = _resolvedSelectedStorageStrategyId();
     _selectedRuntimeBaselineId = _resolvedSelectedRuntimeBaselineId();
+    _continuityInput = widget.continuityInput;
     _lastDefaultTitle = _defaultTitleOf(_selectedProjectTypeId);
     if (widget.draftTitle != oldWidget.draftTitle &&
         widget.draftTitle.trim().isNotEmpty &&
@@ -91,6 +106,7 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
   @override
   void dispose() {
     // 中文注释: 创建表单自己持有输入控制器，因此由表单自身负责释放。
+    _scrollController.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -98,144 +114,126 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
   @override
   Widget build(BuildContext context) {
     // 中文注释: 这里统一承接“基础信息”和“运行基准补选”两阶段，但字段职责仍然按区块拆开。
+    final colors = context.novelThemeColors;
     final selectedOption = _selectedOption();
+    final phaseTitle = _phaseLabel(widget.creationPhase);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          widget.creationPhase == ProjectCreationPhase.runtimeBaseline
-              ? '选择长任务运行基准'
-              : '创建项目',
-          style: const TextStyle(
-            color: AppPalette.text,
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          widget.creationPhase == ProjectCreationPhase.runtimeBaseline
-              ? '先确定长任务要按哪种运行基准推进，再正式创建项目。'
-              : '先创建项目，再进入文件、会话和模型调用。',
-          style: const TextStyle(color: AppPalette.mutedText, fontSize: 12),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          '创建位置：${widget.projectsRootPath}',
-          style: const TextStyle(color: AppPalette.mutedText, fontSize: 12),
-        ),
-        const SizedBox(height: 14),
-        TextField(
-          controller: _controller,
-          decoration: const InputDecoration(
-            labelText: '项目名',
-            hintText: '输入要创建的小说项目名称',
-          ),
-          onSubmitted: _submit,
-        ),
-        const SizedBox(height: 12),
-        const Text(
-          '项目类型',
-          style: TextStyle(
-            color: AppPalette.text,
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 8),
-        SizedBox(
-          height: 144,
-          child: ListView.separated(
-            itemCount: widget.projectTypeOptions.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 8),
-            itemBuilder: (context, index) {
-              final option = widget.projectTypeOptions[index];
-              return ProjectTypeOptionTile(
-                option: option,
-                isSelected: option.id == _selectedProjectTypeId,
-                onTap: () => _handleProjectTypeChanged(option.id),
-              );
-            },
-          ),
-        ),
-        const SizedBox(height: 12),
-        const Text(
-          '主存储策略',
-          style: TextStyle(
-            color: AppPalette.text,
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 8),
-        SizedBox(
-          height: 116,
-          child: ListView.separated(
-            itemCount: widget.storageStrategyOptions.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 8),
-            itemBuilder: (context, index) {
-              final option = widget.storageStrategyOptions[index];
-              return ProjectStorageStrategyOptionTile(
-                option: option,
-                isSelected: option.id == _selectedStorageStrategyId,
-                onTap: () => _handleStorageStrategyChanged(option.id),
-              );
-            },
-          ),
-        ),
-        if ((selectedOption?.description ?? '').trim().isNotEmpty) ...[
-          const SizedBox(height: 10),
-          Text(
-            selectedOption!.description,
-            style: const TextStyle(
-              color: AppPalette.mutedText,
-              fontSize: 12,
-              height: 1.45,
+        Expanded(
+          child: Scrollbar(
+            controller: _scrollController,
+            thumbVisibility: true,
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              primary: false,
+              padding: const EdgeInsets.only(right: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.title,
+                    style: TextStyle(
+                      color: colors.textColor,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    widget.description,
+                    style: TextStyle(
+                      color: colors.mutedTextColor,
+                      fontSize: 12,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    '创建位置：${widget.projectsRootPath}',
+                    style: TextStyle(
+                      color: colors.mutedTextColor,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _StepStrip(
+                    currentPhase: widget.creationPhase,
+                    projectTypeRequiresRuntimeBaseline:
+                        _selectedTypeRequiresRuntimeBaseline(),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: _controller,
+                    decoration: const InputDecoration(
+                      labelText: '项目名',
+                      hintText: '输入要创建的小说项目名称',
+                    ),
+                    onSubmitted: _submit,
+                  ),
+                  const SizedBox(height: 12),
+                  _SectionLabel(title: phaseTitle),
+                  const SizedBox(height: 8),
+                  ..._buildPhaseContent(selectedOption),
+                  if (_supportsContinuityInput()) ...[
+                    const SizedBox(height: 12),
+                    if (widget.creationPhase ==
+                        ProjectCreationPhase.projectType)
+                      ProjectContinuityInputPanel(
+                        input: _continuityInput,
+                        onChanged: _handleContinuityInputChanged,
+                      )
+                    else
+                      ProjectContinuityInputPanel(
+                        input: _continuityInput,
+                        onChanged: _handleContinuityInputChanged,
+                        compact: true,
+                      ),
+                  ],
+                  if ((selectedOption?.description ?? '').trim().isNotEmpty &&
+                      widget.creationPhase ==
+                          ProjectCreationPhase.projectType) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      selectedOption!.description,
+                      style: TextStyle(
+                        color: colors.mutedTextColor,
+                        fontSize: 12,
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                  if (widget.status.trim().isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      widget.status,
+                      style: TextStyle(
+                        color: colors.lineStrongColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
-        ],
-        if (widget.creationPhase == ProjectCreationPhase.runtimeBaseline) ...[
-          const SizedBox(height: 12),
-          const Text(
-            '长任务运行基准',
-            style: TextStyle(
-              color: AppPalette.text,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: ListView.separated(
-              itemCount: widget.runtimeBaselineOptions.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 8),
-              itemBuilder: (context, index) {
-                final option = widget.runtimeBaselineOptions[index];
-                return ProjectRuntimeBaselineOptionTile(
-                  option: option,
-                  isSelected: option.id == _selectedRuntimeBaselineId,
-                  onTap: () => _handleRuntimeBaselineChanged(option.id),
-                );
-              },
-            ),
-          ),
-        ] else
-          const Spacer(),
-        if (widget.status.trim().isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Text(
-            widget.status,
-            style: const TextStyle(
-              color: AppPalette.lineStrong,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
+        ),
         const SizedBox(height: 16),
         Row(
           children: [
-            if (widget.allowOpenExisting) ...[
+            if (_showBackButton()) ...[
+              Expanded(
+                child: ActionButton(
+                  label: '上一步',
+                  icon: Icons.arrow_back_rounded,
+                  expanded: true,
+                  tone: ActionButtonTone.neutral,
+                  onPressed: widget.onBackRequested,
+                ),
+              ),
+              const SizedBox(width: 10),
+            ] else if (widget.allowOpenExisting) ...[
               Expanded(
                 child: ActionButton(
                   label: '打开已有项目',
@@ -262,6 +260,91 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
     );
   }
 
+  List<Widget> _buildPhaseContent(ProjectTypeOptionViewData? selectedOption) {
+    switch (widget.creationPhase) {
+      case ProjectCreationPhase.projectType:
+        return _buildProjectTypeTiles();
+      case ProjectCreationPhase.storageStrategy:
+        final title = selectedOption?.title ?? '当前项目';
+        return [
+          ..._buildStorageStrategyTiles(),
+          const SizedBox(height: 10),
+          Text(
+            '$title 将按这里选择的主存储策略创建项目骨架。',
+            style: TextStyle(
+              color: context.novelThemeColors.mutedTextColor,
+              fontSize: 12,
+              height: 1.45,
+            ),
+          ),
+        ];
+      case ProjectCreationPhase.runtimeBaseline:
+        return _buildRuntimeBaselineTiles();
+    }
+  }
+
+  List<Widget> _buildProjectTypeTiles() {
+    final children = <Widget>[];
+    for (var index = 0; index < widget.projectTypeOptions.length; index += 1) {
+      final option = widget.projectTypeOptions[index];
+      children.add(
+        ProjectTypeOptionTile(
+          option: option,
+          isSelected: option.id == _selectedProjectTypeId,
+          onTap: () => _handleProjectTypeChanged(option.id),
+        ),
+      );
+      if (index != widget.projectTypeOptions.length - 1) {
+        children.add(const SizedBox(height: 8));
+      }
+    }
+    return children;
+  }
+
+  List<Widget> _buildStorageStrategyTiles() {
+    final children = <Widget>[];
+    for (
+      var index = 0;
+      index < widget.storageStrategyOptions.length;
+      index += 1
+    ) {
+      final option = widget.storageStrategyOptions[index];
+      children.add(
+        ProjectStorageStrategyOptionTile(
+          option: option,
+          isSelected: option.id == _selectedStorageStrategyId,
+          onTap: () => _handleStorageStrategyChanged(option.id),
+        ),
+      );
+      if (index != widget.storageStrategyOptions.length - 1) {
+        children.add(const SizedBox(height: 8));
+      }
+    }
+    return children;
+  }
+
+  List<Widget> _buildRuntimeBaselineTiles() {
+    final children = <Widget>[];
+    for (
+      var index = 0;
+      index < widget.runtimeBaselineOptions.length;
+      index += 1
+    ) {
+      final option = widget.runtimeBaselineOptions[index];
+      children.add(
+        ProjectRuntimeBaselineOptionTile(
+          option: option,
+          isSelected: option.id == _selectedRuntimeBaselineId,
+          onTap: () => _handleRuntimeBaselineChanged(option.id),
+        ),
+      );
+      if (index != widget.runtimeBaselineOptions.length - 1) {
+        children.add(const SizedBox(height: 8));
+      }
+    }
+    return children;
+  }
+
   void _submit(String text) {
     // 中文注释: 表单只回传当前阶段已选的领域输入，真正的流程判断仍交给 core 创建用例。
     widget.onCreateSubmitted(
@@ -270,6 +353,7 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
         projectTypeId: _selectedProjectTypeId,
         storageStrategyId: _selectedStorageStrategyId,
         runtimeBaselineId: _selectedRuntimeBaselineId,
+        continuityInput: _continuityInput,
       ),
     );
   }
@@ -304,6 +388,27 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
     setState(() {
       _selectedRuntimeBaselineId = runtimeBaselineId;
     });
+  }
+
+  void _handleContinuityInputChanged(ProjectContinuityInputProfile input) {
+    setState(() {
+      _continuityInput = input;
+    });
+  }
+
+  bool _showBackButton() {
+    return widget.creationPhase != ProjectCreationPhase.projectType;
+  }
+
+  String _phaseLabel(ProjectCreationPhase phase) {
+    switch (phase) {
+      case ProjectCreationPhase.projectType:
+        return '项目类型';
+      case ProjectCreationPhase.storageStrategy:
+        return '主存储策略';
+      case ProjectCreationPhase.runtimeBaseline:
+        return '长任务运行基准';
+    }
   }
 
   String _resolvedSelectedTypeId() {
@@ -362,10 +467,14 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
   }
 
   String _submitButtonLabel() {
-    if (widget.creationPhase == ProjectCreationPhase.runtimeBaseline) {
-      return '创建并打开';
+    switch (widget.creationPhase) {
+      case ProjectCreationPhase.projectType:
+        return '下一步';
+      case ProjectCreationPhase.storageStrategy:
+        return _selectedTypeRequiresRuntimeBaseline() ? '下一步' : '创建并打开';
+      case ProjectCreationPhase.runtimeBaseline:
+        return '创建并打开';
     }
-    return _selectedTypeRequiresRuntimeBaseline() ? '下一步' : '创建并打开';
   }
 
   bool _selectedTypeRequiresRuntimeBaseline() {
@@ -375,5 +484,107 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
       }
     }
     return false;
+  }
+
+  bool _supportsContinuityInput() {
+    return _selectedProjectTypeId == 'novel' ||
+        _selectedProjectTypeId == 'long_novel';
+  }
+}
+
+class _StepStrip extends StatelessWidget {
+  const _StepStrip({
+    required this.currentPhase,
+    required this.projectTypeRequiresRuntimeBaseline,
+  });
+
+  final ProjectCreationPhase currentPhase;
+  final bool projectTypeRequiresRuntimeBaseline;
+
+  @override
+  Widget build(BuildContext context) {
+    final phases = <ProjectCreationPhase>[
+      ProjectCreationPhase.projectType,
+      ProjectCreationPhase.storageStrategy,
+      if (projectTypeRequiresRuntimeBaseline)
+        ProjectCreationPhase.runtimeBaseline,
+    ];
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (var index = 0; index < phases.length; index += 1)
+          _StepChip(
+            index: index + 1,
+            label: _stepLabel(phases[index]),
+            active: phases[index] == currentPhase,
+          ),
+      ],
+    );
+  }
+
+  String _stepLabel(ProjectCreationPhase phase) {
+    switch (phase) {
+      case ProjectCreationPhase.projectType:
+        return '类型';
+      case ProjectCreationPhase.storageStrategy:
+        return '存储';
+      case ProjectCreationPhase.runtimeBaseline:
+        return '运行基准';
+    }
+  }
+}
+
+class _StepChip extends StatelessWidget {
+  const _StepChip({
+    required this.index,
+    required this.label,
+    required this.active,
+  });
+
+  final int index;
+  final String label;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.novelThemeColors;
+    final borderColor = active ? colors.accentColor : colors.lineColor;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        border: Border.all(color: borderColor, width: 1),
+        color: active
+            ? colors.accentSoftColor.withValues(alpha: 0.92)
+            : colors.panelBackground,
+      ),
+      child: Text(
+        '$index. $label',
+        style: TextStyle(
+          color: active ? colors.lineStrongColor : colors.mutedTextColor,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.novelThemeColors;
+    return Text(
+      title,
+      style: TextStyle(
+        color: colors.textColor,
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+      ),
+    );
   }
 }

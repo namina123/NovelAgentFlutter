@@ -13,6 +13,21 @@ class CharacterProfileNormalizerService {
         raw['display_name'] ?? raw['name'],
       ).trim(),
       summary: ValueReaders.stringValue(raw['summary']).trim(),
+      currentStatus: ValueReaders.stringValue(
+        raw['current_status'] ?? raw['status'],
+      ).trim(),
+      currentStateSummary: ValueReaders.stringValue(
+        raw['current_state_summary'] ?? raw['state_summary'],
+      ).trim(),
+      latestStageLabel: ValueReaders.stringValue(
+        raw['latest_stage_label'] ?? raw['stage_label'],
+      ).trim(),
+      latestUpdatedAt: ValueReaders.stringValue(
+        raw['latest_updated_at'] ?? raw['updated_at'],
+      ).trim(),
+      latestSourcePaths: ValueReaders.stringList(
+        raw['latest_source_paths'] ?? raw['source_paths'],
+      ),
       aliases: ValueReaders.stringList(raw['aliases']),
       nameHistory: ValueReaders.stringList(
         raw['name_history'] ?? raw['historical_names'],
@@ -36,6 +51,13 @@ class CharacterProfileNormalizerService {
       'id': profile.id,
       'display_name': profile.displayName,
       'summary': profile.summary,
+      'current_status': profile.currentStatus,
+      'current_state_summary': profile.currentStateSummary,
+      'latest_stage_label': profile.latestStageLabel,
+      'latest_updated_at': profile.latestUpdatedAt,
+      'latest_source_paths': ValueReaders.deepCopyList(
+        profile.latestSourcePaths.cast<Object?>(),
+      ),
       'aliases': ValueReaders.deepCopyList(profile.aliases.cast<Object?>()),
       'name_history': ValueReaders.deepCopyList(
         profile.nameHistory.cast<Object?>(),

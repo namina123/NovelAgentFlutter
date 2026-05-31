@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../app/theme/app_palette.dart';
+import '../../../../../shared/theme/novel_theme_context.dart';
 import '../models/session_history_entry_view_data.dart';
 import 'session_history_entry_tile.dart';
 
@@ -20,13 +20,14 @@ class SessionHistoryPanel extends StatelessWidget {
     if (entries.isEmpty) {
       return const SizedBox.shrink();
     }
+    final colors = context.novelThemeColors;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           '会话历史',
           style: TextStyle(
-            color: AppPalette.text,
+            color: colors.textColor,
             fontSize: 15,
             fontWeight: FontWeight.w700,
           ),

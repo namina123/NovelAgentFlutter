@@ -1,6 +1,14 @@
 import 'conversation_entry_view_data.dart';
+import 'conversation_agent_selector_view_data.dart';
+import 'conversation_group_selector_view_data.dart';
+import 'conversation_input_capability_context.dart';
+import 'conversation_opening_state_view_data.dart';
+import 'tool_preview_mode.dart';
 import 'document_tab_view_data.dart';
+import 'opening_panel_view_data.dart';
 import 'primary_action_view_data.dart';
+import 'project_agent_group_workspace_view_data.dart';
+import 'project_long_task_summary_view_data.dart';
 import 'project_launcher_view_data.dart';
 import 'resource_entry_view_data.dart';
 import 'retry_request_view_data.dart';
@@ -21,16 +29,21 @@ class WorkbenchViewData {
     required this.projectSubtitle,
     required this.projectPath,
     required this.toolCoreStatus,
+    this.toolPreviewMode = ToolPreviewMode.compact,
+    required this.projectLongTaskSummary,
     required this.documents,
     required this.resourceEntries,
     required this.modelLabel,
     required this.modelOptions,
-    required this.agentLabel,
-    required this.agentOptions,
+    required this.groupSelector,
+    this.agentSelector = const ConversationAgentSelectorViewData.initial(),
+    required this.inputCapabilityContext,
     required this.contextSummary,
     required this.workflowTitle,
     required this.workflowDescription,
     required this.primaryActions,
+    required this.openingPanel,
+    this.openingState,
     required this.composerHint,
     required this.activeDocumentTitle,
     required this.activeDocumentPath,
@@ -47,6 +60,7 @@ class WorkbenchViewData {
     required this.showSessionHistory,
     required this.isDocumentsWorkspaceVisible,
     required this.projectLauncher,
+    required this.projectAgentGroupWorkspace,
     required this.workspaceCommand,
     required this.generationStatus,
     required this.isGenerating,
@@ -56,16 +70,21 @@ class WorkbenchViewData {
   final String projectSubtitle;
   final String projectPath;
   final String toolCoreStatus;
+  final String toolPreviewMode;
+  final ProjectLongTaskSummaryViewData? projectLongTaskSummary;
   final List<DocumentTabViewData> documents;
   final List<ResourceEntryViewData> resourceEntries;
   final String modelLabel;
   final List<SelectorOptionViewData> modelOptions;
-  final String agentLabel;
-  final List<SelectorOptionViewData> agentOptions;
+  final ConversationGroupSelectorViewData groupSelector;
+  final ConversationAgentSelectorViewData agentSelector;
+  final ConversationInputCapabilityContext inputCapabilityContext;
   final String contextSummary;
   final String workflowTitle;
   final String workflowDescription;
   final List<PrimaryActionViewData> primaryActions;
+  final OpeningPanelViewData? openingPanel;
+  final ConversationOpeningStateViewData? openingState;
   final String composerHint;
   final String activeDocumentTitle;
   final String activeDocumentPath;
@@ -82,6 +101,7 @@ class WorkbenchViewData {
   final bool showSessionHistory;
   final bool isDocumentsWorkspaceVisible;
   final ProjectLauncherViewData? projectLauncher;
+  final ProjectAgentGroupWorkspaceViewData? projectAgentGroupWorkspace;
   final WorkspaceCommandViewData? workspaceCommand;
   final String generationStatus;
   final bool isGenerating;
@@ -92,12 +112,15 @@ class WorkbenchViewData {
       projectSubtitle: '',
       projectPath: '',
       toolCoreStatus: '',
+      toolPreviewMode: ToolPreviewMode.compact,
+      projectLongTaskSummary: null,
       documents: [],
       resourceEntries: [],
       modelLabel: '未加载模型',
       modelOptions: [],
-      agentLabel: '综合创作智能体',
-      agentOptions: [],
+      groupSelector: ConversationGroupSelectorViewData.initial(),
+      agentSelector: ConversationAgentSelectorViewData.initial(),
+      inputCapabilityContext: ConversationInputCapabilityContext.initial(),
       contextSummary: '未开始会话',
       workflowTitle: '开始会话',
       workflowDescription: '先创建或打开项目。',
@@ -111,10 +134,12 @@ class WorkbenchViewData {
         PrimaryActionViewData(
           id: 'draft_again',
           title: '继续生成',
-          description: '对当前项目再次发起草稿生成。',
+          description: '对当前项目再次发起内容生成。',
           commandId: 'draft_again',
         ),
       ],
+      openingPanel: null,
+      openingState: null,
       composerHint: '输入你的需求。',
       activeDocumentTitle: '',
       activeDocumentPath: '',
@@ -131,6 +156,7 @@ class WorkbenchViewData {
       showSessionHistory: false,
       isDocumentsWorkspaceVisible: false,
       projectLauncher: null,
+      projectAgentGroupWorkspace: null,
       workspaceCommand: null,
       generationStatus: '',
       isGenerating: false,
@@ -146,16 +172,21 @@ class WorkbenchViewData {
     String? projectSubtitle,
     String? projectPath,
     String? toolCoreStatus,
+    String? toolPreviewMode,
+    Object? projectLongTaskSummary = _projectLongTaskSummarySentinel,
     List<DocumentTabViewData>? documents,
     List<ResourceEntryViewData>? resourceEntries,
     String? modelLabel,
     List<SelectorOptionViewData>? modelOptions,
-    String? agentLabel,
-    List<SelectorOptionViewData>? agentOptions,
+    ConversationGroupSelectorViewData? groupSelector,
+    ConversationAgentSelectorViewData? agentSelector,
+    ConversationInputCapabilityContext? inputCapabilityContext,
     String? contextSummary,
     String? workflowTitle,
     String? workflowDescription,
     List<PrimaryActionViewData>? primaryActions,
+    Object? openingPanel = _openingPanelSentinel,
+    Object? openingState = _conversationOpeningStateSentinel,
     String? composerHint,
     String? activeDocumentTitle,
     String? activeDocumentPath,
@@ -172,6 +203,7 @@ class WorkbenchViewData {
     bool? showSessionHistory,
     bool? isDocumentsWorkspaceVisible,
     Object? projectLauncher = _projectLauncherSentinel,
+    Object? projectAgentGroupWorkspace = _projectAgentGroupWorkspaceSentinel,
     Object? workspaceCommand = _workspaceCommandSentinel,
     String? generationStatus,
     bool? isGenerating,
@@ -182,16 +214,31 @@ class WorkbenchViewData {
       projectSubtitle: projectSubtitle ?? this.projectSubtitle,
       projectPath: projectPath ?? this.projectPath,
       toolCoreStatus: toolCoreStatus ?? this.toolCoreStatus,
+      toolPreviewMode: ToolPreviewMode.normalize(
+        toolPreviewMode ?? this.toolPreviewMode,
+      ),
+      projectLongTaskSummary:
+          identical(projectLongTaskSummary, _projectLongTaskSummarySentinel)
+          ? this.projectLongTaskSummary
+          : projectLongTaskSummary as ProjectLongTaskSummaryViewData?,
       documents: documents ?? this.documents,
       resourceEntries: resourceEntries ?? this.resourceEntries,
       modelLabel: modelLabel ?? this.modelLabel,
       modelOptions: modelOptions ?? this.modelOptions,
-      agentLabel: agentLabel ?? this.agentLabel,
-      agentOptions: agentOptions ?? this.agentOptions,
+      groupSelector: groupSelector ?? this.groupSelector,
+      agentSelector: agentSelector ?? this.agentSelector,
+      inputCapabilityContext:
+          inputCapabilityContext ?? this.inputCapabilityContext,
       contextSummary: contextSummary ?? this.contextSummary,
       workflowTitle: workflowTitle ?? this.workflowTitle,
       workflowDescription: workflowDescription ?? this.workflowDescription,
       primaryActions: primaryActions ?? this.primaryActions,
+      openingPanel: identical(openingPanel, _openingPanelSentinel)
+          ? this.openingPanel
+          : openingPanel as OpeningPanelViewData?,
+      openingState: identical(openingState, _conversationOpeningStateSentinel)
+          ? this.openingState
+          : openingState as ConversationOpeningStateViewData?,
       composerHint: composerHint ?? this.composerHint,
       activeDocumentTitle: activeDocumentTitle ?? this.activeDocumentTitle,
       activeDocumentPath: activeDocumentPath ?? this.activeDocumentPath,
@@ -216,6 +263,13 @@ class WorkbenchViewData {
       projectLauncher: identical(projectLauncher, _projectLauncherSentinel)
           ? this.projectLauncher
           : projectLauncher as ProjectLauncherViewData?,
+      projectAgentGroupWorkspace:
+          identical(
+            projectAgentGroupWorkspace,
+            _projectAgentGroupWorkspaceSentinel,
+          )
+          ? this.projectAgentGroupWorkspace
+          : projectAgentGroupWorkspace as ProjectAgentGroupWorkspaceViewData?,
       workspaceCommand: identical(workspaceCommand, _workspaceCommandSentinel)
           ? this.workspaceCommand
           : workspaceCommand as WorkspaceCommandViewData?,
@@ -226,5 +280,9 @@ class WorkbenchViewData {
 }
 
 const Object _projectLauncherSentinel = Object();
+const Object _projectAgentGroupWorkspaceSentinel = Object();
 const Object _workspaceCommandSentinel = Object();
 const Object _retryRequestViewSentinel = Object();
+const Object _projectLongTaskSummarySentinel = Object();
+const Object _openingPanelSentinel = Object();
+const Object _conversationOpeningStateSentinel = Object();

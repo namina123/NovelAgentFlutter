@@ -1,16 +1,26 @@
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../../../../shared/services/runtime_label_service.dart';
 import 'task_center_contract_action_view_data_service.dart';
 import '../../presentation/models/task_center_view_data.dart';
 
 class TaskCenterViewDataService {
   const TaskCenterViewDataService({
     TaskCenterContractActionViewDataService? contractActionViewDataService,
+    RuntimeBaselineCatalogService? runtimeBaselineCatalogService,
+    RuntimeLabelService? runtimeLabelService,
   }) : _contractActionViewDataService =
            contractActionViewDataService ??
-           const TaskCenterContractActionViewDataService();
+           const TaskCenterContractActionViewDataService(),
+       _runtimeBaselineCatalogService =
+           runtimeBaselineCatalogService ??
+           const RuntimeBaselineCatalogService(),
+       _runtimeLabelService =
+           runtimeLabelService ?? const RuntimeLabelService();
 
   final TaskCenterContractActionViewDataService _contractActionViewDataService;
+  final RuntimeBaselineCatalogService _runtimeBaselineCatalogService;
+  final RuntimeLabelService _runtimeLabelService;
 
   TaskCenterViewData build({
     required List<JsonMap> tasks,
@@ -26,6 +36,9 @@ class TaskCenterViewDataService {
     required String selectedTaskQueueRunPath,
     required String longTaskRunLog,
     required String taskQueueRunLog,
+    String resumeBriefBody = '',
+    ProjectRuntimeProfile? runtimeProfile,
+    ProjectStorageStrategy? projectStorageStrategy,
     JsonMap checkpointActionPackage = const <String, Object?>{},
     JsonMap revisionResolution = const <String, Object?>{},
     String guidanceRevisitBody = '',
@@ -48,7 +61,9 @@ class TaskCenterViewDataService {
               nextPostprocessPath: nextPostprocessPath,
             ),
             subtitle: _taskSubtitle(task),
-            badge: _statusLabel(ValueReaders.stringValue(task['status'])),
+            badge: _runtimeLabelService.taskStatusLabel(
+              ValueReaders.stringValue(task['status']),
+            ),
             relativePath: ValueReaders.stringValue(task['relative_path']),
             isSelected:
                 ValueReaders.stringValue(task['relative_path']) ==
@@ -56,6 +71,9 @@ class TaskCenterViewDataService {
           ),
         )
         .toList(growable: false);
+    final baseline = runtimeProfile == null
+        ? null
+        : _runtimeBaselineCatalogService.byId(runtimeProfile.runtimeBaselineId);
     return TaskCenterViewData(
       title: '长篇自动化队列',
       intro:
@@ -67,6 +85,14 @@ class TaskCenterViewDataService {
           '- “运行下一步”只推进一个可执行任务；“受控连续运行”也会在少量步骤、错误、无输出或等待确认时停下。\n'
           '- 如果你只是想问问题或写一小段，不需要来这里；直接在会话栏和智能体对话即可。',
       status: status,
+      runtimeBaselineTitle: baseline?.title ?? '',
+      runtimeModeLabel: runtimeProfile == null
+          ? ''
+          : _runtimeLabelService.runtimeModeLabel(runtimeProfile.runtimeMode),
+      runtimePolicyBadges: _runtimePolicyBadges(
+        runtimeProfile,
+        projectStorageStrategy,
+      ),
       tasks: entries,
       selectedTaskId: resolvedSelectedTaskId,
       detailBody: detailBody.trim().isEmpty
@@ -79,6 +105,7 @@ class TaskCenterViewDataService {
         longTaskRuns,
         selectedPath: selectedLongTaskRunPath,
         kindLabel: '长任务',
+        usesRunCenterContract: true,
       ),
       taskQueueRuns: _runItems(
         taskQueueRuns,
@@ -89,6 +116,7 @@ class TaskCenterViewDataService {
       selectedTaskQueueRunPath: selectedTaskQueueRunPath,
       longTaskRunLog: longTaskRunLog,
       taskQueueRunLog: taskQueueRunLog,
+      resumeBriefBody: resumeBriefBody,
       modeOptions: modeDefinitions
           .map(
             (item) => TaskRuntimeModeOptionViewData(
@@ -98,7 +126,9 @@ class TaskCenterViewDataService {
             ),
           )
           .toList(growable: false),
-      defaultMode: TaskRuntimeConstants.modeHumanOutlineAiDraft,
+      defaultMode: runtimeProfile?.runtimeMode.trim().isEmpty ?? true
+          ? TaskRuntimeConstants.modeHumanOutlineAiDraft
+          : runtimeProfile!.runtimeMode.trim(),
       defaultOutlinePath: 'outline/outline.md',
       defaultSeedPrompt: '',
       defaultChapterCount: 12,
@@ -123,7 +153,7 @@ class TaskCenterViewDataService {
       ..writeln('# ${ValueReaders.stringValue(task['title'], '未命名任务')}')
       ..writeln()
       ..writeln(
-        '- 状态：${_statusLabel(ValueReaders.stringValue(task['status']))}',
+        '- 状态：${_runtimeLabelService.taskStatusLabel(ValueReaders.stringValue(task['status']))}',
       )
       ..writeln(
         '- 类型：${ValueReaders.stringValue(task['task_type'], 'chapter')}',
@@ -143,6 +173,42 @@ class TaskCenterViewDataService {
     final outputPaths = ValueReaders.stringList(task['output_paths']);
     if (outputPaths.isNotEmpty) {
       buffer.writeln('- 输出文件：${outputPaths.join('、')}');
+    }
+    final metadata = ValueReaders.mapValue(task['metadata']);
+    final runtimeBaselineId = ValueReaders.stringValue(
+      metadata['runtime_baseline_id'],
+    ).trim();
+    if (runtimeBaselineId.isNotEmpty) {
+      final baseline = _runtimeBaselineCatalogService.byId(runtimeBaselineId);
+      buffer.writeln('- 运行基准：${baseline?.title ?? runtimeBaselineId}');
+    }
+    final persistentContextPaths = ValueReaders.stringList(
+      metadata['persistent_context_paths'],
+    );
+    if (persistentContextPaths.isNotEmpty) {
+      buffer.writeln('- 持久上下文：${persistentContextPaths.join('、')}');
+    }
+    final origin = ValueReaders.stringValue(metadata['origin']).trim();
+    if (origin == 'chapter_gate_review') {
+      buffer.writeln('- 关口类型：章级闸门审稿');
+      final gateScope = ValueReaders.stringValue(metadata['gate_scope']).trim();
+      if (gateScope.isNotEmpty) {
+        buffer.writeln('- 关口范围：$gateScope');
+      }
+      final gateSourceTaskPath = ValueReaders.stringValue(
+        metadata['gate_source_task_path'],
+      ).trim();
+      if (gateSourceTaskPath.isNotEmpty) {
+        buffer.writeln('- 关口来源任务：$gateSourceTaskPath');
+      }
+    }
+    if (origin == 'review_report') {
+      final reviewReportPath = ValueReaders.stringValue(
+        metadata['review_report_path'],
+      ).trim();
+      if (reviewReportPath.isNotEmpty) {
+        buffer.writeln('- 审稿报告：$reviewReportPath');
+      }
     }
     final goal = ValueReaders.stringValue(task['goal']).trim();
     if (goal.isNotEmpty) {
@@ -212,7 +278,7 @@ class TaskCenterViewDataService {
     ];
     final blocker = ValueReaders.stringValue(preflight['blocker']).trim();
     if (blocker.isNotEmpty) {
-      lines.add('阻塞原因：${_blockerLabel(blocker)}');
+      lines.add('阻塞原因：${_runtimeLabelService.blockerLabel(blocker)}');
     }
     final nextTask = ValueReaders.mapValue(preflight['next_task']);
     if (nextTask.isNotEmpty) {
@@ -235,8 +301,8 @@ class TaskCenterViewDataService {
       return error.isEmpty ? '' : '调度计划不可用：$error';
     }
     final lines = <String>[
-      '调度动作：${_schedulerActionLabel(ValueReaders.stringValue(scheduler['action']))}',
-      '执行器状态：${_workerStateLabel(ValueReaders.stringValue(scheduler['worker_state']))}',
+      '调度动作：${_runtimeLabelService.schedulerActionLabel(ValueReaders.stringValue(scheduler['action']))}',
+      '执行器状态：${_runtimeLabelService.workerStateLabel(ValueReaders.stringValue(scheduler['worker_state']))}',
     ];
     final runPath = ValueReaders.stringValue(scheduler['relative_path']).trim();
     if (runPath.isNotEmpty) {
@@ -246,7 +312,7 @@ class TaskCenterViewDataService {
       scheduler['stop_reason'],
     ).trim();
     if (stopReason.isNotEmpty) {
-      lines.add('停止原因：${_blockerLabel(stopReason)}');
+      lines.add('停止原因：${_runtimeLabelService.blockerLabel(stopReason)}');
     }
     final plan = ValueReaders.mapValue(scheduler['next_batch_plan']);
     if (plan.isNotEmpty) {
@@ -280,7 +346,7 @@ class TaskCenterViewDataService {
         lines.add(
           '- ${_chainMarker(node, ValueReaders.stringValue(chain['next_runnable_id']))}'
           '｜${ValueReaders.intValue(node['sort_order']).toString().padLeft(3, '0')}'
-          '｜${_statusLabel(ValueReaders.stringValue(node['status']))}'
+          '｜${_runtimeLabelService.taskStatusLabel(ValueReaders.stringValue(node['status']))}'
           '｜${ValueReaders.stringValue(node['task_type'])}'
           '｜${ValueReaders.stringValue(node['title'])}',
         );
@@ -290,24 +356,95 @@ class TaskCenterViewDataService {
     return lines.join('\n').trim();
   }
 
+  String buildResumeBriefBody(
+    JsonMap longTaskRun, {
+    JsonMap checkpointActionPackage = const <String, Object?>{},
+    JsonMap revisionResolution = const <String, Object?>{},
+  }) {
+    final contract = _runCenterContract(longTaskRun);
+    final brief = ValueReaders.mapValue(contract['resume_brief']);
+    if (brief.isEmpty) {
+      return '';
+    }
+    final lines = <String>[
+      '## 恢复现场',
+      ValueReaders.stringValue(brief['resume_title']).trim(),
+    ];
+    final resumeSummary = ValueReaders.stringValue(
+      brief['resume_summary'],
+    ).trim();
+    if (resumeSummary.isNotEmpty) {
+      lines.add('');
+      lines.add(resumeSummary);
+    }
+    final lastStepSummary = ValueReaders.stringValue(
+      brief['last_step_summary'],
+    ).trim();
+    if (lastStepSummary.isNotEmpty) {
+      lines.add('');
+      lines.add(lastStepSummary);
+    }
+    final nextActionSummary = ValueReaders.stringValue(
+      brief['next_action_summary'],
+    ).trim();
+    if (nextActionSummary.isNotEmpty) {
+      lines.add('');
+      lines.add(nextActionSummary);
+    }
+    if (ValueReaders.boolValue(brief['action_package_available']) &&
+        ValueReaders.boolValue(checkpointActionPackage['ok'])) {
+      lines.add('');
+      lines.add('当前已有检查点动作包，可直接在右侧上下文动作区处理。');
+    }
+    if (ValueReaders.boolValue(brief['revision_resolution_available']) &&
+        ValueReaders.boolValue(revisionResolution['ok'])) {
+      lines.add('');
+      lines.add('当前已有修订收口动作，可直接在右侧上下文动作区处理。');
+    }
+    return lines.join('\n').trim();
+  }
+
   List<TaskCenterRunItemViewData> _runItems(
     List<JsonMap> records, {
     required String selectedPath,
     required String kindLabel,
+    bool usesRunCenterContract = false,
   }) {
     return records
-        .map(
-          (record) => TaskCenterRunItemViewData(
+        .map((record) {
+          final contract = usesRunCenterContract
+              ? _runCenterContract(record)
+              : const <String, Object?>{};
+          final statusLabel = _runItemStatusLabel(record, contract);
+          final phaseLabel = ValueReaders.stringValue(
+            contract['phase_label'],
+          ).trim();
+          final progressPercent = _runItemProgressPercent(contract);
+          final activeTaskTitle = _runItemActiveTaskTitle(contract);
+          final updatedAt = _runItemUpdatedAt(record, contract);
+          final controlSummary = _runItemControlSummary(contract);
+          return TaskCenterRunItemViewData(
             relativePath: ValueReaders.stringValue(record['relative_path']),
-            title:
-                '$kindLabel｜${_statusLabel(ValueReaders.stringValue(record['status']))}',
-            subtitle:
-                '${ValueReaders.stringValue(record['stop_reason'], '进行中')}｜${ValueReaders.stringValue(record['updated_at'])}',
+            title: '$kindLabel｜$statusLabel',
+            subtitle: _runRecordSubtitle(
+              record,
+              contract: contract,
+              phaseLabel: phaseLabel,
+              activeTaskTitle: activeTaskTitle,
+              progressPercent: progressPercent,
+            ),
+            statusLabel: statusLabel,
+            phaseLabel: phaseLabel,
+            progressPercent: progressPercent,
+            activeTaskTitle: activeTaskTitle,
+            updatedAt: updatedAt,
+            isWaitingUser: ValueReaders.boolValue(contract['waiting_user']),
+            controlSummary: controlSummary,
             isSelected:
                 ValueReaders.stringValue(record['relative_path']) ==
                 selectedPath,
-          ),
-        )
+          );
+        })
         .toList(growable: false);
   }
 
@@ -357,28 +494,7 @@ class TaskCenterViewDataService {
   }
 
   String _statusLabel(String status) {
-    switch (status.trim()) {
-      case 'queued':
-        return '排队';
-      case 'planning':
-        return '规划';
-      case 'running':
-        return '运行中';
-      case 'waiting_user':
-        return '等你确认';
-      case 'paused':
-        return '暂停';
-      case 'retrying':
-        return '重试';
-      case 'succeeded':
-        return '完成';
-      case 'failed':
-        return '失败';
-      case 'cancelled':
-        return '取消';
-      default:
-        return status.trim().isEmpty ? '待办' : status.trim();
-    }
+    return _runtimeLabelService.taskStatusLabel(status);
   }
 
   String _modeLabel(String mode) {
@@ -393,54 +509,6 @@ class TaskCenterViewDataService {
         return '长任务开局';
       default:
         return mode.trim().isEmpty ? '任务' : mode.trim();
-    }
-  }
-
-  String _blockerLabel(String reason) {
-    switch (reason.trim()) {
-      case 'no_tasks':
-        return '没有任务';
-      case 'waiting_user':
-        return '等待用户确认';
-      case 'paused':
-        return '任务已暂停';
-      case 'failed':
-        return '存在失败任务';
-      case 'blocked_dependencies':
-        return '依赖任务尚未完成';
-      case 'no_runnable_task':
-        return '没有可运行任务';
-      default:
-        return reason.trim().isEmpty ? '无' : reason.trim();
-    }
-  }
-
-  String _schedulerActionLabel(String action) {
-    switch (action.trim()) {
-      case 'dispatch_batch':
-        return '可继续运行';
-      case 'await_user':
-        return '等待你处理';
-      case 'await_user_resume':
-        return '等待点击继续';
-      case 'pause_for_review':
-        return '需复核后继续';
-      case 'pause_for_failure':
-        return '需处理失败任务';
-      case 'resume_run':
-        return '可恢复运行';
-      case 'start_new_run':
-        return '可新建运行';
-      case 'finish_run':
-        return '可收尾';
-      case 'stop_run':
-        return '将停止';
-      case 'read_only':
-        return '只读查看';
-      case 'disabled':
-        return '未启用后台';
-      default:
-        return action.trim().isEmpty ? '空闲' : action.trim();
     }
   }
 
@@ -468,22 +536,164 @@ class TaskCenterViewDataService {
     }
   }
 
-  String _workerStateLabel(String state) {
-    switch (state.trim()) {
-      case 'ready':
-        return '可运行';
-      case 'blocked':
-        return '受阻';
-      case 'paused':
-        return '已暂停';
-      case 'finished':
-        return '已结束';
-      case 'disabled':
-        return '未启用';
-      case 'stopped':
-        return '已停止';
-      default:
-        return state.trim().isEmpty ? '空闲' : state.trim();
+  List<String> _runtimePolicyBadges(
+    ProjectRuntimeProfile? runtimeProfile,
+    ProjectStorageStrategy? projectStorageStrategy,
+  ) {
+    if (runtimeProfile == null) {
+      return const <String>[];
     }
+    final options = runtimeProfile.initialRunOptions;
+    final badges = <String>[];
+    if (projectStorageStrategy != null) {
+      badges.add(
+        _runtimeLabelService.storageStrategyLabel(projectStorageStrategy),
+      );
+    }
+    if (ValueReaders.boolValue(options['unattended'])) {
+      badges.add('托管运行');
+    }
+    if (ValueReaders.boolValue(options['auto_advance_chapters'])) {
+      badges.add('自动推进');
+    }
+    if (ValueReaders.boolValue(options['keep_alive_across_project_switch'])) {
+      badges.add('跨项目保活');
+    }
+    return badges;
+  }
+
+  String _runRecordStatusLabel(JsonMap record) {
+    final status = ValueReaders.stringValue(record['status']).trim();
+    if (status == LongTaskRunStatus.waitingGate.id ||
+        status == LongTaskRunStatus.paused.id ||
+        status == LongTaskRunStatus.recovering.id ||
+        status == LongTaskRunStatus.failedManualAttention.id ||
+        status == LongTaskRunStatus.stopped.id ||
+        status == LongTaskRunStatus.running.id ||
+        status == LongTaskRunStatus.readyToStart.id ||
+        status == LongTaskRunStatus.draftingGuidance.id) {
+      return _runtimeLabelService.longTaskRunStatusLabelById(status);
+    }
+    return _runtimeLabelService.taskStatusLabel(status);
+  }
+
+  JsonMap _runCenterContract(JsonMap record) {
+    final direct = ValueReaders.mapValue(record['run_center_contract']);
+    if (direct.isNotEmpty) {
+      return direct;
+    }
+    final schedulerSnapshot = ValueReaders.mapValue(
+      record['scheduler_snapshot'],
+    );
+    final fromSnapshot = ValueReaders.mapValue(
+      schedulerSnapshot['run_center_contract'],
+    );
+    if (fromSnapshot.isNotEmpty) {
+      return fromSnapshot;
+    }
+    return ValueReaders.mapValue(
+      ValueReaders.mapValue(
+        schedulerSnapshot['scheduler_plan'],
+      )['run_center_contract'],
+    );
+  }
+
+  String _runItemStatusLabel(JsonMap record, JsonMap contract) {
+    final statusLabel = ValueReaders.stringValue(
+      contract['status_label'],
+    ).trim();
+    if (statusLabel.isNotEmpty) {
+      return statusLabel;
+    }
+    return _runRecordStatusLabel(record);
+  }
+
+  int _runItemProgressPercent(JsonMap contract) {
+    final progress = ValueReaders.mapValue(contract['progress']);
+    final raw = progress.containsKey('overall_percent')
+        ? progress['overall_percent']
+        : progress['percent'];
+    final percent = ValueReaders.intValue(raw);
+    if (percent < 0) {
+      return 0;
+    }
+    if (percent > 100) {
+      return 100;
+    }
+    return percent;
+  }
+
+  String _runItemActiveTaskTitle(JsonMap contract) {
+    final activeTask = ValueReaders.mapValue(contract['active_task']);
+    return ValueReaders.stringValue(
+      activeTask['title'],
+      ValueReaders.stringValue(contract['active_task_title']),
+    ).trim();
+  }
+
+  String _runItemUpdatedAt(JsonMap record, JsonMap contract) {
+    return ValueReaders.stringValue(
+      contract['updated_at'],
+      ValueReaders.stringValue(record['updated_at']),
+    ).trim();
+  }
+
+  String _runItemControlSummary(JsonMap contract) {
+    final direct = ValueReaders.stringValue(contract['control_summary']).trim();
+    if (direct.isNotEmpty) {
+      return direct;
+    }
+    final labels = <String>[];
+    for (final action in ValueReaders.mapList(contract['controls'])) {
+      if (ValueReaders.boolValue(action['enabled'])) {
+        final label = ValueReaders.stringValue(action['label']).trim();
+        if (label.isNotEmpty) {
+          labels.add(label);
+        }
+      }
+    }
+    return labels.isEmpty ? '' : '可操作：${labels.join('、')}';
+  }
+
+  String _runRecordSubtitle(
+    JsonMap record, {
+    JsonMap contract = const <String, Object?>{},
+    String phaseLabel = '',
+    String activeTaskTitle = '',
+    int progressPercent = 0,
+  }) {
+    final parts = <String>[];
+    if (phaseLabel.trim().isNotEmpty) {
+      parts.add(phaseLabel.trim());
+    }
+    if (progressPercent > 0) {
+      parts.add('$progressPercent%');
+    }
+    if (activeTaskTitle.trim().isNotEmpty) {
+      parts.add(activeTaskTitle.trim());
+    }
+    if (ValueReaders.boolValue(contract['waiting_user'])) {
+      parts.add('等待确认');
+    }
+    final baselineId = ValueReaders.stringValue(
+      record['runtime_baseline_id'],
+    ).trim();
+    if (baselineId.isNotEmpty) {
+      final baseline = _runtimeBaselineCatalogService.byId(baselineId);
+      parts.add(baseline?.title ?? baselineId);
+    }
+    final mode = ValueReaders.stringValue(record['mode']).trim();
+    if (mode.isNotEmpty) {
+      parts.add(_runtimeLabelService.runtimeModeLabel(mode));
+    }
+    final stopReason = ValueReaders.stringValue(record['stop_reason']).trim();
+    if (stopReason.isNotEmpty) {
+      parts.add(_runtimeLabelService.blockerLabel(stopReason));
+    }
+    final updatedAt = _runItemUpdatedAt(record, contract);
+    if (updatedAt.isNotEmpty) {
+      parts.add(updatedAt);
+    }
+    return parts.join('｜');
   }
 }

@@ -1,0 +1,90 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:novel_agent_app/features/workbench/application/services/workbench_workspace_shell_view_data_service.dart';
+import 'package:novel_agent_app/features/workbench/presentation/models/conversation_agent_selector_view_data.dart';
+import 'package:novel_agent_app/features/workbench/presentation/models/conversation_group_selector_view_data.dart';
+import 'package:novel_agent_app/features/workbench/presentation/models/conversation_input_capability_context.dart';
+import 'package:novel_agent_app/features/workbench/presentation/models/conversation_transcript_lane_view_data.dart';
+import 'package:novel_agent_app/features/workbench/presentation/models/selector_option_view_data.dart';
+import 'package:novel_agent_app/features/workbench/presentation/models/workbench_canvas_view_data.dart';
+import 'package:novel_agent_app/features/workbench/presentation/models/workbench_conversation_view_data.dart';
+import 'package:novel_agent_app/features/workbench/presentation/models/workbench_resource_view_data.dart';
+
+void main() {
+  const service = WorkbenchWorkspaceShellViewDataService();
+
+  test(
+    'keeps project group summary sourced from project-level group selector',
+    () {
+      final viewData = service.build(
+        resource: const WorkbenchResourceViewData(
+          projectName: '星港档案',
+          projectSubtitle: '长篇科幻项目',
+          resourceEntries: [],
+        ),
+        canvas: const WorkbenchCanvasViewData(
+          documents: [],
+          activeDocumentTitle: '',
+          activeDocumentPath: '',
+          activeDocumentBody: '',
+          activeDocumentDirty: false,
+          activeDocumentCanRender: false,
+          isActiveDocumentRendered: false,
+          isDocumentsWorkspaceVisible: false,
+          generationStatus: '',
+        ),
+        conversation: const WorkbenchConversationViewData(
+          hasActiveProject: true,
+          toolCoreStatus: '',
+          modelLabel: 'GPT-4.1',
+          modelOptions: <SelectorOptionViewData>[],
+          groupSelector: ConversationGroupSelectorViewData(
+            currentGroupLabel: '长篇总控组',
+            groupOptions: <SelectorOptionViewData>[],
+            primaryAgentLabel: '综合创作智能体',
+            primaryAgentDescription: '负责统筹当前长篇协作。',
+            canSwitchGroup: true,
+          ),
+          agentSelector: ConversationAgentSelectorViewData(
+            currentAgentLabel: '审阅智能体',
+            currentAgentId: 'reviewer',
+            currentAgentDescription: '负责当前会话的审阅与修订建议',
+            agentOptions: <SelectorOptionViewData>[],
+            canSwitchAgent: true,
+          ),
+          inputCapabilityContext: ConversationInputCapabilityContext.initial(),
+          contextSummary: '当前会话摘要',
+          workflowTitle: '继续创作',
+          workflowDescription: '围绕当前会话推进正文。',
+          primaryActions: [],
+          openingPanel: null,
+          composerHint: '输入需求',
+          conversationEntries: [],
+          transcriptBlocks: [],
+          transcriptLanes: ConversationTranscriptLaneViewData(
+            stableHistoryBlocks: [],
+            currentRoundToolBlocks: [],
+            streamingAppendixBlocks: [],
+            footerBlocks: [],
+          ),
+          pendingOptions: [],
+          subAgentRuns: [],
+          retryRequest: null,
+          sessionHistoryEntries: [],
+          activeSessionId: 'session-1',
+          showSessionHistory: false,
+          generationStatus: '',
+          isGenerating: false,
+        ),
+      );
+
+      expect(viewData.agentGroupLabel, '长篇总控组');
+      expect(viewData.primaryAgentLabel, '综合创作智能体');
+      expect(viewData.projectAgentGroupPanel.currentGroupLabel, '长篇总控组');
+      expect(viewData.projectAgentGroupPanel.primaryAgentLabel, '综合创作智能体');
+      expect(
+        viewData.projectAgentGroupPanel.actionDescription,
+        '查看当前项目支持的智能体组，并调整默认协作基线。',
+      );
+    },
+  );
+}

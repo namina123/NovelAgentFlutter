@@ -86,10 +86,75 @@ class LongTaskTaskPromptRenderer {
       ..add('')
       ..add('## 工具契约');
     _appendLines(lines, ValueReaders.stringList(transaction['tool_contracts']));
+    final skillRouting = ValueReaders.stringList(transaction['skill_routing']);
+    if (skillRouting.isNotEmpty) {
+      lines
+        ..add('')
+        ..add('## 技能路由策略');
+      _appendLines(lines, skillRouting);
+    }
 
     final toolHint = ValueReaders.stringValue(transaction['tool_hint']).trim();
     if (toolHint.isNotEmpty) {
       lines.add('- 任务工具提示：$toolHint');
+    }
+    final reviewFocuses = ValueReaders.stringList(
+      transaction['review_focuses'],
+    );
+    if (reviewFocuses.isNotEmpty) {
+      lines
+        ..add('')
+        ..add('## 审稿重点');
+      _appendLines(lines, reviewFocuses);
+    }
+    final authenticityPassLevel = ValueReaders.stringValue(
+      transaction['authenticity_pass_level'],
+    ).trim();
+    if (authenticityPassLevel.isNotEmpty) {
+      lines
+        ..add('')
+        ..add('## 真实性复核强度')
+        ..add('- 当前表达限制要求按 $authenticityPassLevel 强度执行真实性 / 去模板复核。');
+    }
+    final miniRecheckItems = ValueReaders.stringList(
+      transaction['mini_recheck_items'],
+    );
+    if (miniRecheckItems.isNotEmpty) {
+      lines
+        ..add('')
+        ..add('## Mini Recheck');
+      _appendLines(lines, miniRecheckItems);
+    }
+
+    final creativeRuleSummary = ValueReaders.stringValue(
+      transaction['creative_rule_summary'],
+    ).trim();
+    if (creativeRuleSummary.isNotEmpty) {
+      lines
+        ..add('')
+        ..add('## 创作约束栈')
+        ..add(creativeRuleSummary);
+    }
+    final expressionConstraintSections = ValueReaders.mapList(
+      transaction['expression_constraint_prompt_sections'],
+    );
+    if (expressionConstraintSections.isNotEmpty) {
+      lines
+        ..add('')
+        ..add('## 表达限制细则');
+      for (final section in expressionConstraintSections) {
+        final title = ValueReaders.stringValue(
+          section['title'],
+          '表达限制规范',
+        ).trim();
+        final content = ValueReaders.stringValue(section['content']).trim();
+        if (content.isEmpty) {
+          continue;
+        }
+        lines
+          ..add('### $title')
+          ..add(content);
+      }
     }
 
     final postprocess = ValueReaders.stringList(

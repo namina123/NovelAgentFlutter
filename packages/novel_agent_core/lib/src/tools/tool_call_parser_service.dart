@@ -28,6 +28,7 @@ class ToolCallParserService {
     final content = ValueReaders.stringValue(llmResult['content']);
     calls.addAll(_parseTaggedToolCalls(content));
     calls.addAll(_parsePipedToolCalls(content));
+    calls.addAll(_parseFunctionCallLikeToolCalls(content));
     calls.addAll(_parseJsonToolCalls(content));
     return _dedupeCalls(calls);
   }
@@ -118,6 +119,9 @@ class ToolCallParserService {
     if (map.containsKey('tool_call')) {
       return _normalizerService.normalizeToolCalls(<Object?>[map['tool_call']]);
     }
+    if (ValueReaders.mapValue(map['function']).isNotEmpty) {
+      return <JsonMap>[_normalizerService.normalizeToolCall(map)];
+    }
     if (ValueReaders.stringValue(map['name']).trim().isNotEmpty ||
         ValueReaders.stringValue(map['tool_name']).trim().isNotEmpty ||
         ValueReaders.stringValue(map['recipient_name']).trim().isNotEmpty) {
@@ -150,5 +154,230 @@ class ToolCallParserService {
       result.add(call);
     }
     return result;
+  }
+
+  List<JsonMap> _parseFunctionCallLikeToolCalls(String content) {
+    // 中文注释: 部分 Anthropic 兼容中转会把工具调用降级成文本标签，这里把几种稳定变体补回正式调用。
+    final result = <JsonMap>[];
+    result.addAll(_parseFunctionCallJsonTags(content));
+    result.addAll(_parseInvokeParameterTags(content));
+    result.addAll(_parseFunctionInvocationText(content));
+    result.addAll(_parseNamedArgumentInvocationText(content));
+    result.addAll(_parseWrappedToolCallInvocationText(content));
+    result.addAll(_parseSimpleToolTags(content));
+    return result;
+  }
+
+  List<JsonMap> _parseFunctionCallJsonTags(String content) {
+    final result = <JsonMap>[];
+    final pattern = RegExp(
+      r'<functioncall>\s*([\s\S]*?)\s*</functioncall>',
+      caseSensitive: false,
+      multiLine: true,
+    );
+    for (final match in pattern.allMatches(content)) {
+      final rawText = match.group(1)?.trim() ?? '';
+      final parsed = _decodeToolLikeValue(rawText);
+      result.addAll(_callsFromDecoded(parsed));
+    }
+    return result;
+  }
+
+  List<JsonMap> _parseInvokeParameterTags(String content) {
+    final result = <JsonMap>[];
+    final pattern = RegExp(
+      r'<invoke\s+name="([^"]+)">([\s\S]*?)</invoke>',
+      caseSensitive: false,
+      multiLine: true,
+    );
+    final parameterPattern = RegExp(
+      r'<parameter\s+name="([^"]+)"(?:\s+string="true")?>([\s\S]*?)</parameter>',
+      caseSensitive: false,
+      multiLine: true,
+    );
+    for (final match in pattern.allMatches(content)) {
+      final name = match.group(1)?.trim() ?? '';
+      final body = match.group(2)?.trim() ?? '';
+      if (name.isEmpty || body.isEmpty) {
+        continue;
+      }
+      final arguments = <String, Object?>{};
+      for (final parameter in parameterPattern.allMatches(body)) {
+        final key = parameter.group(1)?.trim() ?? '';
+        final value = parameter.group(2)?.trim() ?? '';
+        if (key.isEmpty) {
+          continue;
+        }
+        arguments[key] = value;
+      }
+      if (arguments.isEmpty) {
+        continue;
+      }
+      result.add(
+        _normalizerService.normalizeToolCall(<String, Object?>{
+          'name': name,
+          'arguments': arguments,
+        }),
+      );
+    }
+    return result;
+  }
+
+  List<JsonMap> _parseFunctionInvocationText(String content) {
+    final result = <JsonMap>[];
+    final pattern = RegExp(
+      r'([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*(\{[\s\S]*\})\s*\)',
+      caseSensitive: false,
+      multiLine: true,
+    );
+    for (final match in pattern.allMatches(content)) {
+      final name = match.group(1)?.trim() ?? '';
+      final rawArguments = match.group(2)?.trim() ?? '';
+      if (name.isEmpty || rawArguments.isEmpty) {
+        continue;
+      }
+      final decoded = _decodeToolLikeValue(rawArguments);
+      final arguments = ValueReaders.mapValue(decoded);
+      if (arguments.isEmpty) {
+        continue;
+      }
+      result.add(
+        _normalizerService.normalizeToolCall(<String, Object?>{
+          'name': name,
+          'arguments': arguments,
+        }),
+      );
+    }
+    return result;
+  }
+
+  List<JsonMap> _parseNamedArgumentInvocationText(String content) {
+    final result = <JsonMap>[];
+    final pattern = RegExp(
+      r'([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*([A-Za-z_][A-Za-z0-9_]*\s*=\s*"[^"]*"(?:\s*,\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*"[^"]*")*)\s*\)',
+      caseSensitive: false,
+      multiLine: true,
+    );
+    final argumentPattern = RegExp(
+      r'([A-Za-z_][A-Za-z0-9_]*)\s*=\s*"([^"]*)"',
+      caseSensitive: false,
+    );
+    for (final match in pattern.allMatches(content)) {
+      final name = match.group(1)?.trim() ?? '';
+      final rawArguments = match.group(2)?.trim() ?? '';
+      if (name.isEmpty || rawArguments.isEmpty) {
+        continue;
+      }
+      final arguments = <String, Object?>{};
+      for (final argMatch in argumentPattern.allMatches(rawArguments)) {
+        final key = argMatch.group(1)?.trim() ?? '';
+        if (key.isEmpty) {
+          continue;
+        }
+        arguments[key] = argMatch.group(2) ?? '';
+      }
+      if (arguments.isEmpty) {
+        continue;
+      }
+      result.add(
+        _normalizerService.normalizeToolCall(<String, Object?>{
+          'name': name,
+          'arguments': arguments,
+        }),
+      );
+    }
+    return result;
+  }
+
+  List<JsonMap> _parseWrappedToolCallInvocationText(String content) {
+    // 中文注释: 某些兼容层会输出 tool_call(name="...", arguments={...}) 包装，这里拆回标准调用。
+    final result = <JsonMap>[];
+    final pattern = RegExp(
+      r'tool_call\s*\(\s*name\s*=\s*"([^"]+)"\s*,\s*arguments\s*=\s*(\{[\s\S]*?\})\s*\)',
+      caseSensitive: false,
+      multiLine: true,
+    );
+    for (final match in pattern.allMatches(content)) {
+      final name = match.group(1)?.trim() ?? '';
+      final rawArguments = match.group(2)?.trim() ?? '';
+      if (name.isEmpty || rawArguments.isEmpty) {
+        continue;
+      }
+      final decoded = _decodeToolLikeValue(rawArguments);
+      final arguments = ValueReaders.mapValue(decoded);
+      if (arguments.isEmpty) {
+        continue;
+      }
+      result.add(
+        _normalizerService.normalizeToolCall(<String, Object?>{
+          'name': name,
+          'arguments': arguments,
+        }),
+      );
+    }
+    return result;
+  }
+
+  List<JsonMap> _parseSimpleToolTags(String content) {
+    // 中文注释: 某些上游会直接输出 <read_file>path</read_file> 这类极简标签，这里按工具语义补回参数。
+    final result = <JsonMap>[];
+    final pattern = RegExp(
+      r'<([A-Za-z_][A-Za-z0-9_]*)>([\s\S]*?)</\1>',
+      caseSensitive: false,
+      multiLine: true,
+    );
+    for (final match in pattern.allMatches(content)) {
+      final name = match.group(1)?.trim() ?? '';
+      final body = match.group(2)?.trim() ?? '';
+      if (name.isEmpty || body.isEmpty) {
+        continue;
+      }
+      final loweredName = name.toLowerCase();
+      if (loweredName == 'functioncall' ||
+          loweredName == 'tool_call' ||
+          loweredName == 'invoke') {
+        continue;
+      }
+      final decoded = _decodeToolLikeValue(body);
+      if (decoded != null) {
+        final parsed = _callsFromDecoded(<String, Object?>{
+          'name': name,
+          'arguments': decoded,
+        });
+        if (parsed.isNotEmpty) {
+          result.addAll(parsed);
+          continue;
+        }
+      }
+      final arguments = _stringBodyArgumentsFor(name, body);
+      if (arguments.isEmpty) {
+        continue;
+      }
+      result.add(
+        _normalizerService.normalizeToolCall(<String, Object?>{
+          'name': name,
+          'arguments': arguments,
+        }),
+      );
+    }
+    return result;
+  }
+
+  JsonMap _stringBodyArgumentsFor(String toolName, String body) {
+    final normalizedName = toolName.trim().toLowerCase();
+    switch (normalizedName) {
+      case 'read_file':
+      case 'read_project_file':
+      case 'list_directory':
+      case 'list_project_files':
+      case 'get_file_info':
+      case 'get_project_file_info':
+      case 'delete_file':
+      case 'delete_project_file':
+      case 'create_backup':
+        return <String, Object?>{'relative_path': body};
+      default:
+        return <String, Object?>{};
+    }
   }
 }

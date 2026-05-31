@@ -1,3 +1,4 @@
+import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../../../workbench/application/services/desktop_project_directory_picker_service.dart';
@@ -11,24 +12,26 @@ class ProjectCreationController {
   ProjectCreationController({
     required LoadProjectWorkspaceUseCase loadProjectWorkspaceUseCase,
     required CreateProjectWorkspaceUseCase createProjectWorkspaceUseCase,
-    required DiscoverProjectsUseCase discoverProjectsUseCase,
     required DesktopProjectDirectoryPickerService
     desktopProjectDirectoryPickerService,
     required ProjectLauncherViewDataService projectLauncherViewDataService,
     required WorkbenchViewData Function() readWorkbench,
-    required void Function(WorkbenchViewData Function(WorkbenchViewData current))
+    required void Function(
+      WorkbenchViewData Function(WorkbenchViewData current),
+    )
     mutateWorkbench,
     required ProjectDescriptor? Function() readCurrentProject,
     required Future<bool> Function(String rootPath) loadProject,
-    required void Function({required String status}) resetToProjectlessWorkbench,
+    required void Function({required String status})
+    resetToProjectlessWorkbench,
     required void Function(String message) announce,
     required AppSettings? Function() readSettings,
+    required ProjectGeneralContinuitySetupService
+    projectGeneralContinuitySetupService,
     required String defaultProjectsRootPath,
-    required List<String> settingsSearchRoots,
     required bool isMobileProjectRootLocked,
   }) : _loadProjectWorkspaceUseCase = loadProjectWorkspaceUseCase,
        _createProjectWorkspaceUseCase = createProjectWorkspaceUseCase,
-       _discoverProjectsUseCase = discoverProjectsUseCase,
        _desktopProjectDirectoryPickerService =
            desktopProjectDirectoryPickerService,
        _projectLauncherViewDataService = projectLauncherViewDataService,
@@ -39,14 +42,15 @@ class ProjectCreationController {
        _resetToProjectlessWorkbench = resetToProjectlessWorkbench,
        _announce = announce,
        _readSettings = readSettings,
+       _projectGeneralContinuitySetupService =
+           projectGeneralContinuitySetupService,
        _defaultProjectsRootPath = defaultProjectsRootPath,
-       _settingsSearchRoots = settingsSearchRoots,
        _isMobileProjectRootLocked = isMobileProjectRootLocked;
 
   final LoadProjectWorkspaceUseCase _loadProjectWorkspaceUseCase;
   final CreateProjectWorkspaceUseCase _createProjectWorkspaceUseCase;
-  final DiscoverProjectsUseCase _discoverProjectsUseCase;
-  final DesktopProjectDirectoryPickerService _desktopProjectDirectoryPickerService;
+  final DesktopProjectDirectoryPickerService
+  _desktopProjectDirectoryPickerService;
   final ProjectLauncherViewDataService _projectLauncherViewDataService;
   final WorkbenchViewData Function() _readWorkbench;
   final void Function(WorkbenchViewData Function(WorkbenchViewData current))
@@ -56,23 +60,28 @@ class ProjectCreationController {
   final void Function({required String status}) _resetToProjectlessWorkbench;
   final void Function(String message) _announce;
   final AppSettings? Function() _readSettings;
+  final ProjectGeneralContinuitySetupService
+  _projectGeneralContinuitySetupService;
   final String _defaultProjectsRootPath;
-  final List<String> _settingsSearchRoots;
   final bool _isMobileProjectRootLocked;
 
   Future<void> loadDefaultProject() async {
     // 中文注释: 默认项目恢复属于项目创建域入口，避免壳层自己理解“无项目时该怎么办”。
     final settings = _readSettings();
     if (settings == null) {
+      _resetToProjectlessWorkbench(status: '请先创建项目，或在桌面端打开一个已有项目。');
+      await showLauncher(
+        ProjectLauncherMode.guard,
+        status: '当前还没有可恢复的有效项目。请先创建项目，或打开已有项目。',
+        canDismiss: false,
+      );
       return;
     }
     final defaultPath = settings.defaultProjectPath.trim();
     if (defaultPath.isEmpty) {
-      _resetToProjectlessWorkbench(
-        status: '请先创建项目，或在桌面端打开一个已有项目。',
-      );
+      _resetToProjectlessWorkbench(status: '请先创建项目，或在桌面端打开一个已有项目。');
       await showLauncher(
-        ProjectLauncherMode.create,
+        ProjectLauncherMode.guard,
         status: '当前还没有有效项目。请先创建项目，或打开已有项目。',
         canDismiss: false,
       );
@@ -80,11 +89,9 @@ class ProjectCreationController {
     }
     final loaded = await _loadProject(defaultPath);
     if (!loaded) {
-      _resetToProjectlessWorkbench(
-        status: '当前没有有效项目。请先创建项目，或打开已有项目。',
-      );
+      _resetToProjectlessWorkbench(status: '当前没有有效项目。请先创建项目，或打开已有项目。');
       await showLauncher(
-        ProjectLauncherMode.create,
+        ProjectLauncherMode.guard,
         status: '未识别到有效项目：$defaultPath',
         canDismiss: false,
       );
@@ -110,7 +117,7 @@ class ProjectCreationController {
     if (selectedPath == null || selectedPath.trim().isEmpty) {
       if (_readCurrentProject() == null) {
         await showLauncher(
-          ProjectLauncherMode.create,
+          ProjectLauncherMode.guard,
           status: '未选择目录。请创建项目，或重新选择已有项目目录。',
           canDismiss: false,
         );
@@ -122,7 +129,7 @@ class ProjectCreationController {
     if (snapshot == null) {
       if (_readCurrentProject() == null) {
         await showLauncher(
-          ProjectLauncherMode.create,
+          ProjectLauncherMode.guard,
           status: '所选目录不是有效项目。请选择项目根目录，或直接创建新项目。',
           canDismiss: false,
         );
@@ -145,22 +152,36 @@ class ProjectCreationController {
     if (_readCurrentProject() == null) {
       return;
     }
-    _mutateWorkbench(
-      (current) => current.copyWith(projectLauncher: null),
-    );
+    _mutateWorkbench((current) => current.copyWith(projectLauncher: null));
   }
 
   Future<void> onProjectLauncherRefreshRequested() async {
-    // 中文注释: 刷新项目列表时重新跑发现逻辑，但保留当前创建向导上下文。
+    // 中文注释: 启动器刷新沿用当前模式与阶段，避免刷新后把用户带回错误步骤。
     final launcher = _readWorkbench().projectLauncher;
     if (launcher == null) {
       return;
     }
     await showLauncher(
       launcher.mode,
-      status: launcher.mode == ProjectLauncherMode.open
-          ? '项目列表已刷新。'
-          : launcher.status,
+      status: launcher.status,
+      draftTitle: launcher.draftTitle,
+      selectedProjectTypeId: launcher.selectedProjectTypeId,
+      selectedStorageStrategy: ProjectStorageStrategy.fromId(
+        launcher.selectedStorageStrategyId,
+      ),
+      creationPhase: launcher.creationPhase,
+      runtimeBaselineOptions: launcher.runtimeBaselineOptions
+          .map(
+            (option) => ProjectRuntimeBaselineDefinition(
+              id: option.id,
+              title: option.title,
+              description: option.description,
+            ),
+          )
+          .toList(growable: false),
+      selectedRuntimeBaselineId: launcher.selectedRuntimeBaselineId,
+      continuityInput: launcher.continuityInput,
+      canDismiss: launcher.canDismiss,
     );
   }
 
@@ -178,7 +199,10 @@ class ProjectCreationController {
   Future<void> onProjectCreationSubmitted(
     ProjectCreateRequestViewData request,
   ) async {
-    // 中文注释: 项目创建先走 core 三段式 prepare，再决定是否需要补长任务运行基准。
+    // 中文注释: 前端创建向导严格按“类型 -> 存储 -> 运行基准”三段式推进，真正落盘前再交给 core 计划确认。
+    final launcher = _readWorkbench().projectLauncher;
+    final currentPhase =
+        launcher?.creationPhase ?? ProjectCreationPhase.projectType;
     final cleanTitle = request.title.trim();
     final projectTypeId = request.projectTypeId.trim().isEmpty
         ? 'novel'
@@ -186,6 +210,19 @@ class ProjectCreationController {
     final storageStrategy = ProjectStorageStrategy.fromId(
       request.storageStrategyId,
     );
+    if (currentPhase == ProjectCreationPhase.projectType) {
+      await showLauncher(
+        ProjectLauncherMode.create,
+        status: '已选择项目类型，继续确定主存储策略。',
+        draftTitle: cleanTitle,
+        selectedProjectTypeId: projectTypeId,
+        selectedStorageStrategy: storageStrategy,
+        continuityInput: request.continuityInput,
+        creationPhase: ProjectCreationPhase.storageStrategy,
+        canDismiss: _readCurrentProject() != null,
+      );
+      return;
+    }
     final creationPlan = _createProjectWorkspaceUseCase.prepare(
       ProjectCreateRequest(
         title: cleanTitle,
@@ -195,23 +232,17 @@ class ProjectCreationController {
       ),
     );
     if (!creationPlan.canCreate) {
-      _mutateWorkbench(
-        (current) => current.copyWith(
-          projectLauncher: _projectLauncherViewDataService.build(
-            mode: ProjectLauncherMode.create,
-            projectsRootPath: _defaultProjectsRootPath,
-            projects: const <JsonMap>[],
-            status: '当前项目类型需要先选择长任务运行基准。',
-            draftTitle: creationPlan.request.title,
-            selectedProjectTypeId: creationPlan.request.projectTypeId,
-            selectedStorageStrategy: creationPlan.request.storageStrategy,
-            creationPhase: ProjectCreationPhase.runtimeBaseline,
-            runtimeBaselineOptions: creationPlan.runtimeBaselineOptions,
-            selectedRuntimeBaselineId: creationPlan.request.runtimeBaselineId,
-            canDismiss: _readCurrentProject() != null,
-            allowOpenExisting: !_isMobileProjectRootLocked,
-          ),
-        ),
+      await showLauncher(
+        ProjectLauncherMode.create,
+        status: '当前项目类型需要先选择长任务运行基准。',
+        draftTitle: creationPlan.request.title,
+        selectedProjectTypeId: creationPlan.request.projectTypeId,
+        selectedStorageStrategy: creationPlan.request.storageStrategy,
+        continuityInput: request.continuityInput,
+        creationPhase: ProjectCreationPhase.runtimeBaseline,
+        runtimeBaselineOptions: creationPlan.runtimeBaselineOptions,
+        selectedRuntimeBaselineId: creationPlan.request.runtimeBaselineId,
+        canDismiss: _readCurrentProject() != null,
       );
       return;
     }
@@ -225,7 +256,10 @@ class ProjectCreationController {
           draftTitle: creationPlan.request.title,
           selectedProjectTypeId: creationPlan.request.projectTypeId,
           selectedStorageStrategy: creationPlan.request.storageStrategy,
-          creationPhase: ProjectCreationPhase.basics,
+          continuityInput: request.continuityInput,
+          creationPhase: currentPhase,
+          runtimeBaselineOptions: creationPlan.runtimeBaselineOptions,
+          selectedRuntimeBaselineId: creationPlan.request.runtimeBaselineId,
           canDismiss: _readCurrentProject() != null,
           allowOpenExisting: !_isMobileProjectRootLocked,
         ),
@@ -236,6 +270,7 @@ class ProjectCreationController {
         projectsRootPath: _defaultProjectsRootPath,
         plan: creationPlan,
       );
+      await _applyContinuityInputIfNeeded(project, request.continuityInput);
       _mutateWorkbench((current) => current.copyWith(projectLauncher: null));
       await _loadProject(project.rootPath);
       _announce('已创建并打开新项目：${project.name}');
@@ -243,7 +278,73 @@ class ProjectCreationController {
       await showLauncher(
         ProjectLauncherMode.create,
         status: '创建项目失败：$error',
+        draftTitle: creationPlan.request.title,
+        selectedProjectTypeId: creationPlan.request.projectTypeId,
+        selectedStorageStrategy: creationPlan.request.storageStrategy,
+        continuityInput: request.continuityInput,
+        creationPhase: creationPlan.request.runtimeBaselineId.trim().isNotEmpty
+            ? ProjectCreationPhase.runtimeBaseline
+            : ProjectCreationPhase.storageStrategy,
+        runtimeBaselineOptions: creationPlan.runtimeBaselineOptions,
+        selectedRuntimeBaselineId: creationPlan.request.runtimeBaselineId,
       );
+    }
+  }
+
+  Future<void> onProjectCreationBackRequested() async {
+    // 中文注释: 返回动作只回退创建阶段，不关闭当前项目，也不在这里重置已选领域输入。
+    final launcher = _readWorkbench().projectLauncher;
+    if (launcher == null || launcher.mode != ProjectLauncherMode.create) {
+      return;
+    }
+    switch (launcher.creationPhase) {
+      case ProjectCreationPhase.projectType:
+        if (_readCurrentProject() == null) {
+          await showLauncher(
+            ProjectLauncherMode.guard,
+            status: '当前没有有效项目。请先创建项目，或打开已有项目。',
+            canDismiss: false,
+          );
+        }
+        return;
+      case ProjectCreationPhase.storageStrategy:
+        await showLauncher(
+          ProjectLauncherMode.create,
+          status: '返回项目类型选择。',
+          draftTitle: launcher.draftTitle,
+          selectedProjectTypeId: launcher.selectedProjectTypeId,
+          selectedStorageStrategy: ProjectStorageStrategy.fromId(
+            launcher.selectedStorageStrategyId,
+          ),
+          continuityInput: launcher.continuityInput,
+          creationPhase: ProjectCreationPhase.projectType,
+          canDismiss: launcher.canDismiss,
+        );
+        return;
+      case ProjectCreationPhase.runtimeBaseline:
+        await showLauncher(
+          ProjectLauncherMode.create,
+          status: '返回主存储策略选择。',
+          draftTitle: launcher.draftTitle,
+          selectedProjectTypeId: launcher.selectedProjectTypeId,
+          selectedStorageStrategy: ProjectStorageStrategy.fromId(
+            launcher.selectedStorageStrategyId,
+          ),
+          continuityInput: launcher.continuityInput,
+          creationPhase: ProjectCreationPhase.storageStrategy,
+          runtimeBaselineOptions: launcher.runtimeBaselineOptions
+              .map(
+                (option) => ProjectRuntimeBaselineDefinition(
+                  id: option.id,
+                  title: option.title,
+                  description: option.description,
+                ),
+              )
+              .toList(growable: false),
+          selectedRuntimeBaselineId: launcher.selectedRuntimeBaselineId,
+          canDismiss: launcher.canDismiss,
+        );
+        return;
     }
   }
 
@@ -254,22 +355,21 @@ class ProjectCreationController {
     String selectedProjectTypeId = 'novel',
     ProjectStorageStrategy selectedStorageStrategy =
         ProjectStorageStrategy.markdownProjectStore,
-    ProjectCreationPhase creationPhase = ProjectCreationPhase.basics,
+    ProjectCreationPhase creationPhase = ProjectCreationPhase.projectType,
     List<ProjectRuntimeBaselineDefinition> runtimeBaselineOptions =
         const <ProjectRuntimeBaselineDefinition>[],
     String selectedRuntimeBaselineId = '',
+    ProjectContinuityInputProfile continuityInput =
+        const ProjectContinuityInputProfile(),
     bool? canDismiss,
   }) async {
     // 中文注释: 项目创建与打开共用同一启动器数据源，避免两个入口各自拼装弹层。
-    final projects = mode == ProjectLauncherMode.open
-        ? await _discoverProjectsAcrossRoots()
-        : const <JsonMap>[];
     _mutateWorkbench(
       (current) => current.copyWith(
         projectLauncher: _projectLauncherViewDataService.build(
           mode: mode,
           projectsRootPath: _defaultProjectsRootPath,
-          projects: projects,
+          projects: const <JsonMap>[],
           status: status,
           draftTitle: draftTitle,
           selectedProjectTypeId: selectedProjectTypeId,
@@ -277,6 +377,7 @@ class ProjectCreationController {
           creationPhase: creationPhase,
           runtimeBaselineOptions: runtimeBaselineOptions,
           selectedRuntimeBaselineId: selectedRuntimeBaselineId,
+          continuityInput: continuityInput,
           canDismiss: canDismiss ?? _readCurrentProject() != null,
           allowOpenExisting: !_isMobileProjectRootLocked,
         ),
@@ -284,61 +385,22 @@ class ProjectCreationController {
     );
   }
 
-  Future<List<JsonMap>> _discoverProjectsAcrossRoots() async {
-    // 中文注释: 项目发现按搜索根去重聚合，保留“默认目录外也可打开项目”的桌面能力。
-    final roots = <String>[];
-    void addRoot(String value) {
-      final clean = value.trim();
-      if (clean.isEmpty) {
-        return;
-      }
-      final normalized = _normalizePathForCompare(clean);
-      final exists = roots.any(
-        (entry) => _normalizePathForCompare(entry) == normalized,
-      );
-      if (!exists) {
-        roots.add(clean);
-      }
+  Future<void> _applyContinuityInputIfNeeded(
+    ProjectDescriptor project,
+    ProjectContinuityInputProfile input,
+  ) async {
+    if (!_supportsContinuityInput(project.projectType)) {
+      return;
     }
-
-    addRoot(_defaultProjectsRootPath);
-    for (final root in _settingsSearchRoots) {
-      addRoot(root);
+    try {
+      await _projectGeneralContinuitySetupService.applyInput(project, input);
+    } catch (error) {
+      _announce('项目已创建，但连续性默认设置写入失败：$error');
     }
-
-    final projects = <JsonMap>[];
-    final seenPaths = <String>{};
-    for (final root in roots) {
-      final discovered = await _discoverProjectsUseCase.execute(root);
-      for (final project in discovered) {
-        final path = _stringValue(project['path']);
-        final normalized = _normalizePathForCompare(path);
-        if (normalized.isEmpty || seenPaths.contains(normalized)) {
-          continue;
-        }
-        seenPaths.add(normalized);
-        projects.add(ValueReaders.deepCopyMap(project));
-      }
-    }
-    projects.sort((left, right) {
-      final leftTitle = _stringValue(left['title']);
-      final rightTitle = _stringValue(right['title']);
-      return leftTitle.compareTo(rightTitle);
-    });
-    return projects;
   }
 
-  String _stringValue(Object? value, [String fallback = '']) {
-    // 中文注释: 项目创建层只需要轻量文本归一化，避免把简单投影工具散落到调用方。
-    if (value == null) {
-      return fallback;
-    }
-    final text = value.toString().trim();
-    return text.isEmpty ? fallback : text;
-  }
-
-  String _normalizePathForCompare(String value) {
-    // 中文注释: 项目去重按统一大小写与分隔符规则比较，避免同一路径被重复列出。
-    return value.trim().replaceAll('\\', '/').toLowerCase();
+  bool _supportsContinuityInput(String projectTypeId) {
+    final cleanType = projectTypeId.trim();
+    return cleanType == 'novel' || cleanType == 'long_novel';
   }
 }

@@ -10,6 +10,7 @@ class TaskCenterDetailPanel extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.detailBody,
+    required this.resumeBriefBody,
     required this.queueSummary,
     required this.schedulerSummary,
     required this.guidanceRevisitBody,
@@ -18,6 +19,7 @@ class TaskCenterDetailPanel extends StatelessWidget {
   final String title;
   final String subtitle;
   final String detailBody;
+  final String resumeBriefBody;
   final String queueSummary;
   final String schedulerSummary;
   final String guidanceRevisitBody;
@@ -36,6 +38,7 @@ class TaskCenterDetailPanel extends StatelessWidget {
               child: SelectableText(
                 [
                   detailBody.trim(),
+                  if (resumeBriefBody.trim().isNotEmpty) '\n\n$resumeBriefBody',
                   if (queueSummary.trim().isNotEmpty)
                     '\n\n## 队列预检\n$queueSummary',
                   if (schedulerSummary.trim().isNotEmpty)

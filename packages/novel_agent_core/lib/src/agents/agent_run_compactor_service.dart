@@ -11,6 +11,9 @@ class AgentRunCompactorService {
   }) {
     // 中文注释: 这里把大结果压缩成下一轮模型还能吃下的摘要，避免把全文和 raw 响应重新灌回上下文。
     final compact = ValueReaders.deepCopyMap(result);
+    final textLimit = ValueReaders.stringValue(compact['skill_id']).trim().isNotEmpty
+        ? 3200
+        : maxTextChars;
     if (ValueReaders.stringValue(compact['interaction_type']).trim() ==
         'agent_tasks') {
       compact['continue_required'] = true;
@@ -28,15 +31,18 @@ class AgentRunCompactorService {
       'raw',
       'raw_text',
       'message',
+      'instructions',
+      'instruction_markdown',
+      'reference_content',
     ]) {
       if (!compact.containsKey(key)) {
         continue;
       }
       final value = compact[key];
       if (value is String) {
-        compact[key] = _clipText(value, maxTextChars);
+        compact[key] = _clipText(value, textLimit);
       } else if (value is List || value is Map) {
-        compact[key] = _clipText(jsonEncode(value), maxTextChars);
+        compact[key] = _clipText(jsonEncode(value), textLimit);
       }
     }
 

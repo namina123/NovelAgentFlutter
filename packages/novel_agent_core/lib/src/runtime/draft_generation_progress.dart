@@ -1,4 +1,5 @@
 import '../common/json_types.dart';
+import 'draft_generation_stop_phase.dart';
 
 class DraftGenerationProgress {
   const DraftGenerationProgress({
@@ -8,6 +9,9 @@ class DraftGenerationProgress {
     this.reasoningContent = '',
     this.pendingToolCalls = const <JsonMap>[],
     this.executedTools = const <Object?>[],
+    this.cancelledByUser = false,
+    this.stopPhase = DraftGenerationStopPhase.none,
+    this.partialContentAccepted = false,
   });
 
   final String phase;
@@ -16,4 +20,7 @@ class DraftGenerationProgress {
   final String reasoningContent;
   final List<JsonMap> pendingToolCalls;
   final List<Object?> executedTools;
+  final bool cancelledByUser;
+  final DraftGenerationStopPhase stopPhase;
+  final bool partialContentAccepted;
 }

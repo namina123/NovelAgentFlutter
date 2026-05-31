@@ -196,9 +196,92 @@ void main() {
       );
 
       expect(contract['reason'], 'waiting_user_checkpoint');
+      expect(contract['phase'], 'waiting_checkpoint');
+      expect(contract['waiting_user'], isTrue);
+      expect(
+        ValueReaders.stringValue(
+          ValueReaders.mapValue(contract['resume_brief'])['resume_title'],
+        ),
+        '当前停在用户确认点',
+      );
+      expect(
+        ValueReaders.stringValue(
+          ValueReaders.mapValue(
+            contract['resume_brief'],
+          )['next_action_summary'],
+        ),
+        contains('处理检查点'),
+      );
       expect(confirm['enabled'], isTrue);
       expect(markdown, contains('长任务运行中心'));
+      expect(markdown, contains('阶段：等待检查点'));
       expect(markdown, contains('可操作：'));
+    });
+
+    test('builds resume brief for paused and failed states', () {
+      final pausedContract = runCenterContractService.runCenterContract(
+        <String, Object?>{
+          'id': 'run_pause',
+          'mode': TaskRuntimeConstants.modeHumanOutlineAiDraft,
+          'status': TaskRuntimeConstants.statusPaused,
+          'stop_reason': 'manual_pause',
+        },
+        <Object?>[
+          <String, Object?>{
+            'id': 'chapter_002',
+            'title': '第二章',
+            'task_type': 'chapter',
+            'mode': TaskRuntimeConstants.modeHumanOutlineAiDraft,
+            'status': TaskRuntimeConstants.statusQueued,
+            'relative_path': 'tasks/chapter_002.json',
+            'depends_on': <Object?>[],
+            'metadata': <String, Object?>{'sort_order': 1},
+          },
+        ],
+      );
+      final pausedBrief = ValueReaders.mapValue(pausedContract['resume_brief']);
+      expect(ValueReaders.stringValue(pausedBrief['resume_title']), '长任务已暂停');
+      expect(
+        ValueReaders.stringValue(pausedBrief['resume_summary']),
+        contains('暂停'),
+      );
+      expect(
+        ValueReaders.boolValue(pausedBrief['requires_user_action']),
+        isTrue,
+      );
+
+      final failedContract = runCenterContractService.runCenterContract(
+        <String, Object?>{
+          'id': 'run_failed',
+          'mode': TaskRuntimeConstants.modeHumanOutlineAiDraft,
+          'status': TaskRuntimeConstants.statusRunning,
+        },
+        <Object?>[
+          <String, Object?>{
+            'id': 'chapter_fail',
+            'title': '失败章节',
+            'task_type': 'chapter',
+            'mode': TaskRuntimeConstants.modeHumanOutlineAiDraft,
+            'status': TaskRuntimeConstants.statusFailed,
+            'relative_path': 'tasks/chapter_fail.json',
+            'depends_on': <Object?>[],
+            'metadata': <String, Object?>{'sort_order': 1},
+          },
+        ],
+      );
+      final failedBrief = ValueReaders.mapValue(failedContract['resume_brief']);
+      expect(
+        ValueReaders.stringValue(failedBrief['resume_title']),
+        '长任务停在失败节点',
+      );
+      expect(
+        ValueReaders.stringValue(failedBrief['last_step_summary']),
+        contains('失败章节'),
+      );
+      expect(
+        ValueReaders.stringValue(failedBrief['next_action_summary']),
+        contains('处理失败任务'),
+      );
     });
 
     test('builds scheduler tick plan for dispatch and recovery branches', () {

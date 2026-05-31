@@ -86,6 +86,11 @@ class TaskSelectionService {
       ).trim().isEmpty) {
         continue;
       }
+      if (ValueReaders.stringValue(
+        task['postprocess_ran_at'],
+      ).trim().isNotEmpty) {
+        continue;
+      }
       final outputs = _taskDefinitionService.stringList(task['output_paths']);
       if (outputs.isEmpty) {
         continue;

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../app/theme/app_chrome.dart';
-import '../../app/theme/app_palette.dart';
+import '../../app/theme/theme_color_tokens.dart';
+import '../theme/novel_theme_context.dart';
 
 class ActionButton extends StatelessWidget {
   const ActionButton({
@@ -26,22 +26,25 @@ class ActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 中文注释: 统一业务按钮的视觉层级，让不同页面的动作密度一致，而不是每页自造按钮风格。
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final foreground = _foregroundColor(isDark);
-    final border = _borderColor(isDark);
+    final colors = context.novelThemeColors;
+    final chrome = context.novelButtonChrome;
+    final foreground = _foregroundColor(colors);
+    final border = _borderColor(colors);
     final button = OutlinedButton(
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
-        minimumSize: Size(0, compact ? 34 : 42),
-        padding: EdgeInsets.symmetric(
-          horizontal: compact ? 8 : 12,
-          vertical: compact ? 6 : 9,
+        minimumSize: Size(
+          0,
+          compact ? chrome.compactMinHeight : chrome.regularMinHeight,
         ),
+        padding: compact ? chrome.compactPadding : chrome.regularPadding,
         foregroundColor: foreground,
-        side: BorderSide(color: border, width: AppChrome.borderWidth),
-        backgroundColor: _backgroundColor(isDark),
-        shape: AppChrome.controlShape(sideColor: border),
+        side: BorderSide(color: border, width: chrome.borderWidth),
+        backgroundColor: _backgroundColor(colors),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(chrome.radius),
+          side: BorderSide(color: border, width: chrome.borderWidth),
+        ),
         textStyle: TextStyle(
           fontSize: compact ? 12 : 14,
           fontWeight: FontWeight.w700,
@@ -50,20 +53,22 @@ class ActionButton extends StatelessWidget {
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
-        mainAxisSize: MainAxisSize.max,
+        mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: compact ? 14 : 18, color: foreground),
+            Icon(
+              icon,
+              size: compact ? chrome.compactIconSize : chrome.regularIconSize,
+              color: foreground,
+            ),
             SizedBox(width: compact ? 4 : 8),
           ],
-          Flexible(
-            child: Text(
-              label,
-              maxLines: labelMaxLines,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              softWrap: labelMaxLines > 1,
-            ),
+          Text(
+            label,
+            maxLines: labelMaxLines,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            softWrap: labelMaxLines > 1,
           ),
         ],
       ),
@@ -76,45 +81,45 @@ class ActionButton extends StatelessWidget {
     return button;
   }
 
-  Color _backgroundColor(bool isDark) {
+  Color _backgroundColor(ThemeColorTokens themeColors) {
     // 中文注释: 按钮底色按语义分层，保证工具型按钮和重点动作按钮有清晰区分。
     switch (tone) {
       case ActionButtonTone.accent:
-        return isDark ? const Color(0xFF173844) : AppPalette.accentSoft;
+        return themeColors.accentSoftColor;
       case ActionButtonTone.warm:
-        return isDark ? const Color(0xFF4A3620) : AppPalette.warm;
+        return themeColors.warmColor;
       case ActionButtonTone.neutral:
-        return isDark ? const Color(0xFF1E252B) : Colors.transparent;
+        return Colors.transparent;
       case ActionButtonTone.danger:
-        return isDark ? const Color(0xFF4A2622) : AppPalette.dangerSoft;
+        return themeColors.dangerSoftColor;
     }
   }
 
-  Color _foregroundColor(bool isDark) {
+  Color _foregroundColor(ThemeColorTokens themeColors) {
     // 中文注释: 文字和图标颜色与按钮语义保持一致，避免用同一套颜色覆盖所有状态。
     switch (tone) {
       case ActionButtonTone.accent:
-        return isDark ? const Color(0xFF8DD0E2) : AppPalette.lineStrong;
+        return themeColors.lineStrongColor;
       case ActionButtonTone.warm:
-        return isDark ? const Color(0xFFF0C27B) : AppPalette.warmStrong;
+        return themeColors.warmStrongColor;
       case ActionButtonTone.neutral:
-        return isDark ? const Color(0xFFF1EFE8) : AppPalette.text;
+        return themeColors.textColor;
       case ActionButtonTone.danger:
-        return isDark ? const Color(0xFFFFB7AE) : const Color(0xFFAF3E30);
+        return themeColors.dangerStrongColor;
     }
   }
 
-  Color _borderColor(bool isDark) {
+  Color _borderColor(ThemeColorTokens themeColors) {
     // 中文注释: 边框颜色跟随按钮语义变化，用来提升大面积浅色界面中的层次感。
     switch (tone) {
       case ActionButtonTone.accent:
-        return isDark ? const Color(0xFF4E6972) : AppPalette.line;
+        return themeColors.lineColor;
       case ActionButtonTone.warm:
-        return isDark ? const Color(0xFF8A6640) : const Color(0xFFD9A15A);
+        return themeColors.warmStrongColor.withValues(alpha: 0.7);
       case ActionButtonTone.neutral:
-        return isDark ? const Color(0xFF4E6972) : AppPalette.line;
+        return themeColors.lineColor;
       case ActionButtonTone.danger:
-        return isDark ? const Color(0xFF8E5751) : const Color(0xFFE19B92);
+        return themeColors.dangerStrongColor.withValues(alpha: 0.62);
     }
   }
 }

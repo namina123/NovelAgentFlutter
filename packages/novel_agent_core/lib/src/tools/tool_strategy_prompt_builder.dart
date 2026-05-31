@@ -40,8 +40,11 @@ class ToolStrategyPromptBuilder {
     final delegationRule = enabledTools.contains('call_sub_agent')
         ? '当任务明显需要不同视角（资料、剧情结构、正文写作、润色、审核、读者反馈）时，可调用 call_sub_agent；必须从协作视角清单选择 agent_id，并只传任务摘录、约束和期望产物，不传完整主会话。'
         : '当前没有开放子智能体委派工具；如需多视角，请在主回复中自行综合。';
+    final longTaskLaunchRule = enabledTools.contains('start_long_task_run')
+        ? '如果当前项目是长任务项目，且用户明确表达“开始长任务/直接跑/按当前灵感开跑”，优先调用 start_long_task_run；不要自己假装已经建好长任务队列。'
+        : '当前没有开放长任务启动工具；如需长任务，只能说明下一步建议。';
     final writeRule = normalized['auto_write_artifacts'] == true
-        ? '用户明确要求生成章节草稿、样章、场景正文或长任务正文时，完成后应自动调用 write_project_file 保存为草稿 content_type=draft；用户确认可交付或明确要求正式正文时，才保存为 content_type=chapter。不确定是否该正式保存时，先用 present_user_options 询问。章节完成或重要设定确定后，可用 summarize_context、update_world_state、update_character_state 保存长期记忆。'
+        ? '用户明确要求生成章节、样章、场景正文或长任务正文时，完成后应自动调用 write_project_file 保存；章节级内容默认使用 content_type=chapter 写入 chapters/，局部片段或独立场景使用 content_type=scene 写入 scenes/。如果不确定是完整章节还是局部场景，先用 present_user_options 询问。章节完成或重要设定确定后，可用 summarize_context、update_world_state、update_character_state、update_foreshadow_state、update_timeline_state、update_relationship_state 保存长期记忆；其中角色、伏笔、时间线、关系都应优先回填到 assets/ 对应子目录。'
         : '默认不要自动写入文件；除非用户明确要求保存、写入或更新项目文件。';
     final listRule = normalized['require_list_before_read'] == true
         ? '需要项目上下文时，先 list_project_files，再只读取本轮必要的风格、设定、大纲、摘要或正文；不要一次性读取无关文件。'
@@ -54,7 +57,7 @@ class ToolStrategyPromptBuilder {
         : '当前工具调用策略关闭。不要声称已经读取、写入、修改或删除项目文件；只能给出文本建议。';
 
     return '''你是 NOVEL Agent 的综合创作智能体，服务中文小说创作。
-你需要区分自己正在创作的是：大纲 outline、卷纲 volume_outline、章纲 chapter_outline、草稿 draft、正式正文 chapter、设定 setting、角色 character、风格 style、摘要 summary、知识库 knowledge。
+你需要区分自己正在创作的是：大纲 outline、卷纲 volume_outline、章纲 chapter_outline、章节正文 chapter、场景片段 scene、设定 setting、角色 character、风格 style、摘要 summary、知识库 knowledge。
 $toolIntro
 $fallbackNote
 当前工具策略：${_toolStrategyService.modeLabel(mode)}。$modeNote
@@ -68,12 +71,13 @@ ${_projectPromptContract.toolDecisionContract()}
 4. $optionRule
 5. $writeRule
 6. $delegationRule
-7. 长任务、连续创作或章节队列应使用 create_chapter_task/mark_task_status 记录任务状态；重要覆盖或恢复前先 create_backup，restore_backup 只在用户明确要求回滚时使用。
-8. $editRule
+7. $longTaskLaunchRule
+8. 长任务、连续创作或章节队列应使用 create_chapter_task/mark_task_status 记录任务状态；重要覆盖或恢复前先 create_backup，restore_backup 只在用户明确要求回滚时使用。
+9. $editRule
 ${_projectPromptContract.directoryMappingLine()}
-未确认的小说正文、样章和局部补写先写入 drafts/；用户确认后的正式正文才写入 chapters/；大纲写入 outline/，卷纲写入 volume_outlines/，章纲写入 chapter_outlines/，设定写入 world/ 或 characters/，风格写入 styles/，总结写入 summaries/，知识库写入 knowledge/。
+章节正文、样章和连续正文写入 chapters/；局部片段、独立场景和实验段落写入 scenes/；大纲写入 outline/，卷纲写入 volume_outlines/，章纲写入 chapter_outlines/，设定写入 world/ 或 assets/characters/，风格写入 styles/，总结写入 summaries/，知识库写入 knowledge/。
 所有读写改删都只能操作当前项目内的相对路径。桌面端和 Android/iOS 均按应用项目目录执行，不要请求终端命令或外部绝对路径权限。
-如果用户要求创作章节草稿或样章，content_type 使用 draft；如果用户明确要求保存正式正文或确认草稿入正文，content_type 使用 chapter。如果用户要求风格规范或文风模仿，content_type 使用 style。
+如果用户要求创作章节、样章或连续正文，content_type 使用 chapter；如果用户要求局部片段、场景补写或实验段落，content_type 使用 scene。如果用户要求风格规范或文风模仿，content_type 使用 style。
 子智能体由主智能体按需调用，不需要用户手动选择。调用 call_sub_agent 时必须传 agent_id 和 task；agent_id 只能来自下方协作视角素材。子智能体只接收你传递的任务、摘录和约束，不享有主会话完整上下文；工具返回后你要综合结果再回复用户。
 当前判断内容类型：$intent
 

@@ -64,7 +64,7 @@ $worldAnchor
 这份文档描述长期规划不可随意违背的世界边界。  
 后续总纲、卷纲、章纲与正文都应优先服从这里。
 ''',
-      'characters/seed_autopilot_protagonist.md':
+      'assets/characters/seed_autopilot_protagonist.md':
           '''
 # 主角驱动力
 
@@ -114,7 +114,7 @@ $styleTarget
 这份文档代表全书共拟模式当前已经确认的主线共识。  
 后续正式总纲、卷纲和章纲都应从这里展开，而不是重新发散。
 ''',
-      'characters/full_outline_consensus_core_roles.md':
+      'assets/characters/full_outline_consensus_core_roles.md':
           '''
 # 核心角色关注点
 

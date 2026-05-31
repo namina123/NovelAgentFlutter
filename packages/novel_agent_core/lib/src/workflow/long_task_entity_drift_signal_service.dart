@@ -9,9 +9,11 @@ class LongTaskEntityDriftSignalService {
   }) {
     // 中文注释: 角色锚点漂移信号只关心身份、动机、称谓和关系的一致性。
     final hasEntityAnchor = memorySectionTitles.contains('角色/身份锚点');
-    final touchesEntityFile = outputPaths.any(
-      (path) => path.trim().toLowerCase().startsWith('characters/'),
-    );
+    final touchesEntityFile = outputPaths.any((path) {
+      final normalized = path.trim().toLowerCase();
+      return normalized.startsWith('assets/characters/') ||
+          normalized.startsWith('characters/');
+    });
     if (!hasEntityAnchor && !touchesEntityFile && taskType != 'chapter') {
       return const <JsonMap>[];
     }

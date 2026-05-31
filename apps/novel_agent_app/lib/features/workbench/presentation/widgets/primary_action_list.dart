@@ -17,6 +17,9 @@ class PrimaryActionList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 中文注释: 主操作列表只管渲染右侧工作流入口，不承接模型配置和发送区逻辑。
+    if (actions.isEmpty) {
+      return const SizedBox.shrink();
+    }
     return Column(
       children: actions.map((action) {
         return Padding(
@@ -28,6 +31,7 @@ class PrimaryActionList extends StatelessWidget {
                 label: action.title,
                 expanded: true,
                 compact: true,
+                labelMaxLines: 2,
                 onPressed: () {
                   // 中文注释: 主动作按钮只上传动作 id，工作流编排后续仍由外层控制器决定。
                   actionHandler.onPrimaryActionRequested(action.id);

@@ -77,6 +77,13 @@ class ProjectLongTaskCheckpointReviewService {
     review['recommended_action_id'] = ValueReaders.stringValue(
       actionPackage['recommended_action_id'],
     );
+    review['disposition'] = ValueReaders.mapValue(actionPackage['disposition']);
+    review['continuation_disposition'] = ValueReaders.stringValue(
+      ValueReaders.mapValue(actionPackage['disposition'])['disposition'],
+    );
+    review['continuation_reason'] = ValueReaders.stringValue(
+      ValueReaders.mapValue(actionPackage['disposition'])['reason'],
+    );
     await _taskRepository.saveRecord(project, jsonPath, review);
     await _taskRepository.writeTextFile(
       project,

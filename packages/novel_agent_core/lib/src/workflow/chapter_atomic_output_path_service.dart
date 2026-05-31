@@ -15,7 +15,7 @@ class ChapterAtomicOutputPathService {
         return <String, Object?>{
           'target': _firstOrDefault(
             ValueReaders.stringList(task['output_paths']),
-            'drafts/$title.md',
+            'chapters/$title.md',
           ),
           'backup': 'backups/<target>.<timestamp>.bak',
           'review': 'reviews/general/${title}_revision.md',
@@ -51,9 +51,9 @@ class ChapterAtomicOutputPathService {
         };
       default:
         return <String, Object?>{
-          'draft': _firstOrDefault(
+          'chapter': _firstOrDefault(
             ValueReaders.stringList(task['output_paths']),
-            'drafts/$title.md',
+            'chapters/$title.md',
           ),
           'summary': 'summaries/$title.summary.md',
           'memory_note': 'tracking/memory_updates/$title.md',
@@ -104,7 +104,7 @@ class ChapterAtomicOutputPathService {
     // 中文注释: 这个入口给后处理或宿主层拿默认目标路径时复用，不必重复推导。
     return _firstOrDefault(
       ValueReaders.stringList(task['output_paths']),
-      'drafts/${artifactTitle(task)}.md',
+      'chapters/${artifactTitle(task)}.md',
     );
   }
 

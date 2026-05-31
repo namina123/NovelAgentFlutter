@@ -4,18 +4,22 @@ import 'dart:io';
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import 'probe_support.dart';
+
 Future<void> main() async {
-  // 中文注释: 该探针用 temp/novel_agent_settings.json 的自定义提供商真实跑一段 mode 1 长任务主链，重点核对样章门槛、正文落盘、角色状态与技能调用。
+  // 中文注释: 该探针使用统一探针配置源真实跑一段 mode 1 长任务主链，重点核对样章门槛、正文落盘、角色状态与技能调用。
   final repoRoot = _resolveRepoRoot();
-  final settingsFile = File(
-    '$repoRoot${Platform.pathSeparator}temp${Platform.pathSeparator}novel_agent_settings.json',
+  final apiConfig = await loadProbeApiConfig();
+  final provider = ProviderEndpointSettings(
+    id: 'real_long_task_probe',
+    title: 'Real Long Task Probe',
+    protocol: 'openai_compatible',
+    baseUrl: apiConfig.baseUrl,
+    apiKey: apiConfig.apiKey,
+    modelId: apiConfig.modelId,
+    description: 'Real long task probe provider',
+    isDefault: true,
   );
-  if (!await settingsFile.exists()) {
-    stderr.writeln('缺少 temp/novel_agent_settings.json');
-    exitCode = 2;
-    return;
-  }
-  final provider = await _loadProvider(settingsFile);
   final settings = AppSettings(
     defaultProviderId: provider.id,
     defaultAgentId: 'default_generalist',
@@ -329,11 +333,12 @@ Future<void> main() async {
         ),
         'postprocess_tools': _resultToolNames(chapterTwoPostprocess),
       },
-      'character_state_written': projectFiles.any(
-        (entry) => ValueReaders.stringValue(
-          entry['relative_path'],
-        ).startsWith('characters/'),
-      ),
+      'character_state_written': projectFiles.any((entry) {
+        final path = ValueReaders.stringValue(entry['relative_path']);
+        final lower = path.toLowerCase();
+        return lower.startsWith('assets/characters/') ||
+            lower.startsWith('characters/');
+      }),
       'chapter_file_written': projectFiles.any(
         (entry) => ValueReaders.stringValue(
           entry['relative_path'],
@@ -373,10 +378,13 @@ String _resolveRepoRoot() {
   // 中文注释: 真实探针既可能从 apps/novel_agent_app 执行，也可能从仓库根执行，这里统一向上定位仓库根。
   var current = Directory.current.absolute;
   for (var depth = 0; depth < 6; depth += 1) {
-    final candidate = File(
+    final settingsCandidate = File(
       '${current.path}${Platform.pathSeparator}temp${Platform.pathSeparator}novel_agent_settings.json',
     );
-    if (candidate.existsSync()) {
+    final testApiCandidate = File(
+      '${current.path}${Platform.pathSeparator}test_api.txt',
+    );
+    if (settingsCandidate.existsSync() || testApiCandidate.existsSync()) {
       return current.path;
     }
     final parent = current.parent;
@@ -473,39 +481,6 @@ Future<JsonMap> _findTask(
     }
   }
   throw StateError('未找到符合条件的任务。');
-}
-
-Future<ProviderEndpointSettings> _loadProvider(File settingsFile) async {
-  // 中文注释: 这里直接读取 temp 设置中的默认 provider，避免把用户主配置和临时探针配置混在一起。
-  final root = ValueReaders.mapValue(
-    jsonDecode(await settingsFile.readAsString()),
-  );
-  final rawProviders = ValueReaders.objectList(
-    root['providers'],
-  ).map(ValueReaders.mapValue).toList(growable: false);
-  if (rawProviders.isEmpty) {
-    throw StateError('temp/novel_agent_settings.json 缺少 providers。');
-  }
-  final selected = rawProviders.firstWhere(
-    (provider) => ValueReaders.boolValue(provider['is_default']),
-    orElse: () => rawProviders.first,
-  );
-  return ProviderEndpointSettings(
-    id: ValueReaders.stringValue(selected['id'], 'local-openai'),
-    title: ValueReaders.stringValue(selected['title'], '本地 OpenAI Compatible'),
-    protocol: ValueReaders.stringValue(
-      selected['protocol'],
-      'openai_compatible',
-    ),
-    baseUrl: ValueReaders.stringValue(selected['base_url']),
-    apiKey: ValueReaders.stringValue(selected['api_key']),
-    modelId: ValueReaders.stringValue(
-      selected['model_id'],
-      'deepseek-v4-flash',
-    ),
-    description: ValueReaders.stringValue(selected['description']),
-    isDefault: true,
-  );
 }
 
 Future<void> _seedReadyState({

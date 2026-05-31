@@ -11,10 +11,15 @@ class LongTaskRunCenterMarkdownRenderer {
       '',
       '- 运行 ID：${ValueReaders.stringValue(contract['run_id'])}',
       '- 状态：${ValueReaders.stringValue(contract['status_label'])}',
+      '- 阶段：${ValueReaders.stringValue(contract['phase_label'])}',
       '- 原因：${ValueReaders.stringValue(contract['reason'])}',
       '- 说明：${ValueReaders.stringValue(contract['note'])}',
       '- 进度：${ValueReaders.intValue(progress['succeeded'])}/${ValueReaders.intValue(progress['task_count'])} 个任务',
     ];
+    final message = ValueReaders.stringValue(contract['message']).trim();
+    if (message.isNotEmpty) {
+      lines.add('- 现场：$message');
+    }
     if (activeTask.isNotEmpty) {
       lines.add(
         '- 当前任务：${ValueReaders.stringValue(activeTask['title'], ValueReaders.stringValue(activeTask['id']))}',

@@ -10,7 +10,7 @@ void main() {
         task: const <String, Object?>{
           'id': 'chapter_001',
           'task_type': 'chapter',
-          'output_paths': <Object?>['drafts/ch01.md'],
+          'output_paths': <Object?>['chapters/ch01.md'],
           'metadata': <String, Object?>{'stage': 'sample'},
         },
         checkpointReview: const <String, Object?>{
@@ -18,8 +18,13 @@ void main() {
           'relative_path': 'tracking/checkpoint_reviews/rev_001.json',
           'task_type': 'chapter',
           'stage': 'sample',
-          'output_paths': <Object?>['drafts/ch01.md'],
+          'output_paths': <Object?>['chapters/ch01.md'],
           'drift_watch_items': <Object?>['检查文风是否仍符合已确认风格锚点，避免语言质地突然漂移。'],
+          'expression_constraint_review': <String, Object?>{
+            'authenticity_pass_level': 'aggressive',
+            'review_focuses': <Object?>['重点清理 AI 味、假深刻句、总结腔与解释腔，但不能洗平人物声音。'],
+            'mini_recheck_items': <Object?>['确认真实性清理后主角与关键说话者仍然保留各自声音。'],
+          },
         },
       );
 
@@ -50,6 +55,14 @@ void main() {
           )['priority_reason'],
         ),
         contains('文风漂移'),
+      );
+      expect(
+        ValueReaders.stringValue(
+          ValueReaders.mapValue(
+            suggestions.first['metadata'],
+          )['authenticity_pass_level'],
+        ),
+        'aggressive',
       );
     });
 
@@ -95,14 +108,9 @@ void main() {
             'id': 'checkpoint_review_003',
             'task_type': 'planning',
             'output_paths': <Object?>['outline/main.md'],
-            'drift_signals': <Object?>[
-              <String, Object?>{
-                'domain': 'entity',
-                'severity': 'high',
-                'title': '角色状态可能漂移',
-                'note': '主角当前能力边界与前文锚点不稳。',
-              },
-            ],
+            'expression_constraint_review': <String, Object?>{
+              'continuity_watch_items': <Object?>['视角泄漏', '设定状态漂移'],
+            },
           },
         );
 

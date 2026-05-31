@@ -18,7 +18,6 @@ class ContextStaticSectionService {
     required String intent,
     required JsonMap agent,
     required List<Object?> optionalAgents,
-    required String projectSpecMarkdown,
   }) {
     // 中文注释: 静态片段只负责项目概况、边界和当前打开文件等高优先信息，不碰动态检索。
     final sections = <JsonMap>[
@@ -30,16 +29,6 @@ class ContextStaticSectionService {
         'content': projectOverview(project, intent),
       },
     ];
-    if (projectSpecMarkdown.trim().isNotEmpty) {
-      sections.add(<String, Object?>{
-        'id': 'project_spec',
-        'title': '项目规格 / 创作宪法',
-        'source': 'specs/project_spec.md',
-        'priority': 98,
-        'pinned': true,
-        'content': projectSpecMarkdown,
-      });
-    }
     sections.add(<String, Object?>{
       'id': 'agent_boundary',
       'title': '智能体边界',

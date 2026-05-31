@@ -65,7 +65,7 @@ void main() {
       final afterModel = recorder.recordModelResult(
         execution,
         <String, Object?>{'id': 'resp_1', 'result_markdown': '正文结果'},
-        <Object?>['drafts/第01章_第一章.md'],
+        <Object?>['chapters/第01章_第一章.md'],
       );
       final afterPostprocess = recorder.recordPostprocessResult(
         afterModel['execution'] as Map<String, Object?>,
@@ -89,3 +89,4 @@ void main() {
     });
   });
 }
+

@@ -18,7 +18,8 @@ class SessionGoalPromptBuilderService {
       '',
       '请先判断当前项目是否满足这个流程的前置条件；不要为了完成按钮动作而硬写、硬总结或伪造不存在的资料。',
       '如果资料不足，请用面向普通作者的方式说明缺口，并给出下一步可执行引导；如果资料足够，再推进真正产物。',
-      '优先按需读取项目文件、摘要、设定、大纲、草稿和正文；需要真实读写时必须调用工具。',
+      '优先按需读取项目文件、摘要、设定、大纲、场景片段和正文；需要真实读写时必须调用工具。',
+      '如果你需要给用户几个方向、开局、题材、补充路径或下一步选择，必须调用 present_user_options；不要把这些选项只写成普通正文列表。',
       '',
       '当前项目线索：',
       _projectLine(project),
@@ -38,7 +39,7 @@ class SessionGoalPromptBuilderService {
     lines.add('');
     lines.add('回复方式：');
     lines.add('- 先判断当前项目是适合直接推进、需要补资料，还是建议切换流程。');
-    lines.add('- 如果需要用户补充，不要甩长表单；给出 2-4 个清晰选项或一个最小输入请求。');
+    lines.add('- 如果需要用户补充，不要甩长表单；给出 2-4 个清晰选项或一个最小输入请求。给出选项时使用 present_user_options。');
     lines.add('- 如果已经可以推进，请直接产出当前阶段最有价值的内容，并说明建议保存到哪个中文目录。');
     return lines.join('\n');
   }
@@ -77,13 +78,13 @@ class SessionGoalPromptBuilderService {
   String _openingLine(String mode) {
     switch (mode) {
       case SessionRecordConstants.modeSummarizeBook:
-        return '请启动“总结全书”流程，先判断项目里是否已有足够正文、草稿、导入材料或章节摘要。';
+        return '请启动“总结全书”流程，先判断项目里是否已有足够正文、场景片段、导入材料或章节摘要。';
       case SessionRecordConstants.modeChapterDraft:
         return '请启动“单章创作”流程，先判断当前是否具备写一章所需的大纲、目标、角色状态和风格约束。';
       case SessionRecordConstants.modeImportArticle:
         return '请启动“导入文章”流程，先判断用户是否已经提供或导入了需要整理的文章材料。';
       case SessionRecordConstants.modeContinueWriting:
-        return '请启动“继续创作”流程，先判断项目里是否有可续写的最近章节、摘要、草稿或当前打开片段。';
+        return '请启动“继续创作”流程，先判断项目里是否有可续写的最近章节、摘要、场景片段或当前打开片段。';
       case SessionRecordConstants.modeSmartOpening:
       default:
         return '请启动“智能开局”流程，帮助我把这个小说项目从零推进到真正可写的状态。';
@@ -94,7 +95,7 @@ class SessionGoalPromptBuilderService {
     switch (mode) {
       case SessionRecordConstants.modeSummarizeBook:
         return const <String>[
-          '检查 chapters/、drafts/、summaries/、outline/ 等目录是否有可总结材料。',
+          '检查 chapters/、scenes/、summaries/、outline/ 等目录是否有可总结材料。',
           '材料不足时，引导我先导入文章、写首章或建立大纲，不要编造全书内容。',
           '材料足够时，输出分层摘要：一句话定位、主线、角色状态、世界规则、伏笔和待续写问题。',
         ];
@@ -102,17 +103,17 @@ class SessionGoalPromptBuilderService {
         return const <String>[
           '判断是否有明确章节目标、前情、角色状态、场景约束和输出目录。',
           '信息不足时，先给出最小补全问题或可选章节方向。',
-          '信息足够时，优先写 drafts/ 草稿；只有我明确要求正式章节时再建议 chapters/。',
+          '信息足够时，优先判断应写完整章节还是局部场景；完整章节建议写入 chapters/，局部片段建议写入 scenes/。',
         ];
       case SessionRecordConstants.modeImportArticle:
         return const <String>[
           '判断当前是否已有打开文件、导入文件或我直接粘贴的内容。',
-          '没有材料时，说明可以使用导入入口或直接粘贴文本，并建议归档到 knowledge/、drafts/ 或 chapters/。',
+          '没有材料时，说明可以使用导入入口或直接粘贴文本，并建议归档到 knowledge/、scenes/ 或 chapters/。',
           '有材料时，先分类、摘要、抽取可复用设定，再询问是否保存结构化结果。',
         ];
       case SessionRecordConstants.modeContinueWriting:
         return const <String>[
-          '查找最近可续写的正文、草稿、摘要和当前打开文件。',
+          '查找最近可续写的正文、场景片段、摘要和当前打开文件。',
           '没有前文时，不要假装续写；建议改走智能开局或单章创作。',
           '有前文时，先概括当前承接点，再给出续写方向，必要时直接续写一个短段落或场景。',
         ];

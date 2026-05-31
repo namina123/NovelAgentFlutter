@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../app/theme/app_chrome.dart';
-import '../../../../../app/theme/app_palette.dart';
+import '../../../../../shared/theme/novel_theme_context.dart';
 import '../models/settings_view_data.dart';
 
 class ProviderListPane extends StatelessWidget {
@@ -9,33 +9,44 @@ class ProviderListPane extends StatelessWidget {
     super.key,
     required this.providers,
     required this.onProviderSelected,
+    required this.onProviderCreateRequested,
   });
 
   final List<ProviderEndpointViewData> providers;
   final ValueChanged<String> onProviderSelected;
+  final VoidCallback onProviderCreateRequested;
 
   @override
   Widget build(BuildContext context) {
     // 中文注释: 接口列表独立成 pane，后续加入搜索、排序和筛选时不影响详情和页头。
+    final panel = context.novelThemeSurfaces.panel;
+    final optionTile = context.novelThemeSurfaces.optionTile;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.72),
+        color: panel.backgroundColor.withValues(alpha: 0.8),
         borderRadius: AppChrome.surfaceBorderRadius,
         border: Border.all(
-          color: AppPalette.line,
+          color: panel.borderColor,
           width: AppChrome.borderWidth,
         ),
       ),
       child: ListView.separated(
         padding: const EdgeInsets.all(12),
-        itemCount: providers.length,
+        itemCount: providers.length + 1,
         separatorBuilder: (_, index) => const SizedBox(height: 10),
         itemBuilder: (context, index) {
+          if (index == providers.length) {
+            return OutlinedButton.icon(
+              onPressed: onProviderCreateRequested,
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('添加接口'),
+            );
+          }
           final provider = providers[index];
           return Material(
             color: provider.isSelected
-                ? AppPalette.accentSoft
-                : AppPalette.panel,
+                ? optionTile.highlightBackgroundColor
+                : optionTile.backgroundColor,
             borderRadius: AppChrome.surfaceBorderRadius,
             child: InkWell(
               borderRadius: AppChrome.surfaceBorderRadius,
@@ -44,7 +55,9 @@ class ProviderListPane extends StatelessWidget {
                 decoration: BoxDecoration(
                   borderRadius: AppChrome.surfaceBorderRadius,
                   border: Border.all(
-                    color: AppPalette.line,
+                    color: provider.isSelected
+                        ? optionTile.highlightBorderColor
+                        : optionTile.borderColor,
                     width: AppChrome.borderWidth,
                   ),
                 ),
@@ -54,28 +67,28 @@ class ProviderListPane extends StatelessWidget {
                   children: [
                     Text(
                       provider.title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
-                        color: AppPalette.text,
+                        color: optionTile.foregroundColor,
                       ),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       '${provider.protocol} · ${provider.baseUrl}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: AppPalette.mutedText,
+                        color: optionTile.mutedForegroundColor,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       provider.apiKeyState,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: AppPalette.mutedText,
+                        color: optionTile.mutedForegroundColor,
                       ),
                     ),
                   ],

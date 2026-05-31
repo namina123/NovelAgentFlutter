@@ -68,7 +68,7 @@ void main() {
         'task_type': 'chapter',
         'mode': TaskRuntimeConstants.modeHumanOutlineAiDraft,
         'status': TaskRuntimeConstants.statusSucceeded,
-        'output_paths': <Object?>['drafts/ch01.md'],
+        'output_paths': <Object?>['chapters/ch01.md'],
         'metadata': <String, Object?>{
           'runtime_baseline_id': 'chapter_collaboration_autorun',
           'sort_order': 1,
@@ -105,7 +105,7 @@ void main() {
         'mode': TaskRuntimeConstants.modeHumanOutlineAiDraft,
         'status': TaskRuntimeConstants.statusQueued,
         'depends_on': <Object?>['gate_review_task_001'],
-        'output_paths': <Object?>['drafts/ch02.md'],
+        'output_paths': <Object?>['chapters/ch02.md'],
         'metadata': <String, Object?>{
           'runtime_baseline_id': 'chapter_collaboration_autorun',
           'sort_order': 3,
@@ -163,6 +163,42 @@ void main() {
           ValueReaders.stringList(chapterTwo['depends_on']),
           isNot(contains('gate_review_task_001')),
         );
+      },
+    );
+
+    test(
+      'blocks gate without creating repair task when report has suggestions only',
+      () async {
+        await workspacePort.writeTextFile(
+          project.rootPath,
+          'reviews/general/ch01_gate.json',
+          '''
+{
+  "id": "gate_review_001",
+  "title": "章级审稿：第01章",
+  "review_type": "general",
+  "scope": "第01章",
+  "summary": "只有轻微建议。",
+  "issues": [],
+  "suggestions": ["收紧本章结尾节奏。"]
+}
+''',
+        );
+
+        final result = await service.applyReviewOutcome(
+          project: project,
+          task: await taskRepository.loadTask(project, const <String, Object?>{
+            'id': 'gate_review_task_001',
+          }),
+        );
+
+        expect(ValueReaders.boolValue(result['ok']), isTrue);
+        expect(ValueReaders.stringValue(result['action']), 'block_gate');
+        expect(
+          ValueReaders.stringValue(result['gate_disposition']),
+          'blocked_wait_user',
+        );
+        expect(ValueReaders.mapValue(result['repair_task']), isEmpty);
       },
     );
   });

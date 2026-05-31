@@ -6,6 +6,9 @@ class TaskCenterViewData {
     required this.intro,
     required this.help,
     required this.status,
+    required this.runtimeBaselineTitle,
+    required this.runtimeModeLabel,
+    required this.runtimePolicyBadges,
     required this.tasks,
     required this.selectedTaskId,
     required this.detailBody,
@@ -18,6 +21,7 @@ class TaskCenterViewData {
     required this.selectedTaskQueueRunPath,
     required this.longTaskRunLog,
     required this.taskQueueRunLog,
+    required this.resumeBriefBody,
     required this.modeOptions,
     required this.defaultMode,
     required this.defaultOutlinePath,
@@ -32,6 +36,9 @@ class TaskCenterViewData {
   final String intro;
   final String help;
   final String status;
+  final String runtimeBaselineTitle;
+  final String runtimeModeLabel;
+  final List<String> runtimePolicyBadges;
   final List<TaskCenterTaskItemViewData> tasks;
   final String selectedTaskId;
   final String detailBody;
@@ -44,6 +51,7 @@ class TaskCenterViewData {
   final String selectedTaskQueueRunPath;
   final String longTaskRunLog;
   final String taskQueueRunLog;
+  final String resumeBriefBody;
   final List<TaskRuntimeModeOptionViewData> modeOptions;
   final String defaultMode;
   final String defaultOutlinePath;
@@ -59,6 +67,9 @@ class TaskCenterViewData {
       intro: '',
       help: '',
       status: '',
+      runtimeBaselineTitle: '',
+      runtimeModeLabel: '',
+      runtimePolicyBadges: <String>[],
       tasks: <TaskCenterTaskItemViewData>[],
       selectedTaskId: '',
       detailBody: '',
@@ -71,6 +82,7 @@ class TaskCenterViewData {
       selectedTaskQueueRunPath: '',
       longTaskRunLog: '',
       taskQueueRunLog: '',
+      resumeBriefBody: '',
       modeOptions: <TaskRuntimeModeOptionViewData>[],
       defaultMode: '',
       defaultOutlinePath: '',
@@ -88,12 +100,26 @@ class TaskCenterRunItemViewData {
     required this.relativePath,
     required this.title,
     required this.subtitle,
+    this.statusLabel = '',
+    this.phaseLabel = '',
+    this.progressPercent = 0,
+    this.activeTaskTitle = '',
+    this.updatedAt = '',
+    this.isWaitingUser = false,
+    this.controlSummary = '',
     this.isSelected = false,
   });
 
   final String relativePath;
   final String title;
   final String subtitle;
+  final String statusLabel;
+  final String phaseLabel;
+  final int progressPercent;
+  final String activeTaskTitle;
+  final String updatedAt;
+  final bool isWaitingUser;
+  final String controlSummary;
   final bool isSelected;
 }
 

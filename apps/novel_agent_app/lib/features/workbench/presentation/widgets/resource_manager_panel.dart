@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
-import '../contracts/resource_manager_action_handler.dart';
-import '../models/workbench_view_data.dart';
+import '../contracts/workbench_file_panel_action_handler.dart';
+import '../models/workbench_resource_view_data.dart';
 import 'file_tool_group.dart';
-import 'project_action_group.dart';
 import 'resource_manager_header.dart';
+import 'resource_panel_section.dart';
 import 'resource_tree_card.dart';
-import 'resource_utility_strip.dart';
+import 'workbench_visual_style.dart';
 
 class ResourceManagerPanel extends StatelessWidget {
   const ResourceManagerPanel({
@@ -15,60 +15,56 @@ class ResourceManagerPanel extends StatelessWidget {
     required this.actionHandler,
   });
 
-  final WorkbenchViewData viewData;
-  final ResourceManagerActionHandler actionHandler;
+  final WorkbenchResourceViewData viewData;
+  final WorkbenchFilePanelActionHandler actionHandler;
 
   @override
   Widget build(BuildContext context) {
-    // 中文注释: 资源面板只处理项目入口、文件树和工作区快捷入口，不承接文档和会话逻辑。
+    // 中文注释: 文件面板统一改成单一 CustomScrollView，让高度收缩时不再切换滚动语义。
+    final visual = WorkbenchVisualStyle.of(context);
     return LayoutBuilder(
       builder: (context, constraints) {
+        final horizontalPadding = constraints.maxWidth < 300 ? 8.0 : 12.0;
         return Padding(
-          padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ResourceManagerHeader(
-                title: viewData.projectName,
-                subtitle: viewData.projectSubtitle,
-                onSettingsPressed: actionHandler.onModelSettingsRequested,
+          padding: EdgeInsets.fromLTRB(
+            horizontalPadding,
+            12,
+            horizontalPadding,
+            10,
+          ),
+          child: CustomScrollView(
+            key: const ValueKey<String>('resource_manager_scroll_view'),
+            slivers: [
+              SliverToBoxAdapter(
+                child: ResourceManagerHeader(
+                  title: viewData.projectName,
+                  subtitle: viewData.projectSubtitle,
+                ),
               ),
-              const SizedBox(height: 8),
-              ProjectActionGroup(
-                onCreateProjectRequested:
-                    actionHandler.onCreateProjectRequested,
-                onOpenProjectRequested: actionHandler.onOpenProjectRequested,
-                onEditProjectInfoRequested:
-                    actionHandler.onEditProjectInfoRequested,
-                onRefreshRequested: actionHandler.onRefreshFilesRequested,
+              SliverToBoxAdapter(child: SizedBox(height: visual.headerGap)),
+              SliverToBoxAdapter(
+                child: ResourcePanelSection(
+                  title: '文件',
+                  emphasized: true,
+                  child: FileToolGroup(
+                    onCreateFileRequested: actionHandler.onCreateFileRequested,
+                    onCreateFolderRequested:
+                        actionHandler.onCreateFolderRequested,
+                    onImportRequested: actionHandler.onImportRequested,
+                    onCreateChapterRequested:
+                        actionHandler.onCreateChapterRequested,
+                    onSaveCurrentRequested:
+                        actionHandler.onSaveCurrentRequested,
+                  ),
+                ),
               ),
-              const SizedBox(height: 6),
-              FileToolGroup(
-                onCreateFileRequested: actionHandler.onCreateFileRequested,
-                onCreateFolderRequested: actionHandler.onCreateFolderRequested,
-                onImportRequested: actionHandler.onImportRequested,
-                onCreateChapterRequested:
-                    actionHandler.onCreateChapterRequested,
-                onSaveCurrentRequested: actionHandler.onSaveCurrentRequested,
-              ),
-              const SizedBox(height: 8),
-              Expanded(
+              SliverToBoxAdapter(child: SizedBox(height: visual.sectionGap)),
+              SliverToBoxAdapter(
                 child: ResourceTreeCard(
                   entries: viewData.resourceEntries,
                   onEntrySelected: actionHandler.onResourceEntrySelected,
+                  embeddedInScrollView: true,
                 ),
-              ),
-              const SizedBox(height: 6),
-              ResourceUtilityStrip(
-                onAgentEcosystemRequested:
-                    actionHandler.onAgentEcosystemRequested,
-                onProjectAssetsRequested:
-                    actionHandler.onProjectAssetsRequested,
-                onLongTaskStationRequested:
-                    actionHandler.onLongTaskStationRequested,
-                onTasksRequested: actionHandler.onTasksRequested,
-                onReviewsRequested: actionHandler.onReviewsRequested,
-                onTemplatesRequested: actionHandler.onTemplatesRequested,
               ),
             ],
           ),

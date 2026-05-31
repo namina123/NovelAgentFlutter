@@ -111,6 +111,7 @@ lib/src/
 
 当前已经开始承接旧项目纯逻辑迁移的子域:
 
+- `creative`
 - `context`
 - `llm/catalog`
 - `llm/capabilities`
@@ -123,6 +124,31 @@ lib/src/
 - `workflow`
 
 旧项目模块的去向判定详见 `docs/legacy-migration-boundary.md`。
+
+### 创作约束共享子域
+
+`novel_agent_core/lib/src/creative/` 负责项目级创作约束三层：
+
+- `ProjectConstitution`
+- `ModeGuidance`
+- `StyleProfile / ProjectStyleBinding` 的运行期收束
+
+这个子域只负责：
+
+- 三层正式模型
+- 解析优先级
+- 上下文注入摘要
+- 供 review / revision / long task / 普通生成共用的稳定合同
+
+它不负责：
+
+- 文件系统读取实现
+- Flutter 页面状态
+- provider 私有提示词拼接
+
+统一优先级固定为：
+
+`用户当前明确指令 > ProjectConstitution > ModeGuidance > StyleProfile / ProjectStyleBinding > 其他上下文`
 
 ### `packages/novel_agent_adapters`
 

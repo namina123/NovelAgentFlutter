@@ -121,6 +121,15 @@ class ToolSchemaBuilderService {
             },
           },
         );
+      case 'start_long_task_run':
+        return _objectSchema(
+          properties: <String, Object?>{
+            'mode_id': _stringSchema(
+              '可选模式引导 ID，例如 seed_autopilot_novel 或 full_outline_consensus；未提供时会尝试按项目运行基准推断。',
+            ),
+            'mode': _stringSchema('mode_id 的兼容别名。'),
+          },
+        );
       case 'set_agent_tasks':
         return _objectSchema(
           required: const <String>['goal', 'tasks'],
@@ -177,7 +186,10 @@ class ToolSchemaBuilderService {
             'skill_id': _stringSchema('要读取的技能 ID。'),
             'query': _stringSchema('当尚未确定 skill_id 时，用任务描述匹配最合适的技能。'),
             'detail_level': _stringSchema(
-              'summary 或 full。默认 summary，只返回压缩后的技能执行摘要。',
+              'summary、full 或 reference。默认 summary，只返回压缩后的技能执行摘要。',
+            ),
+            'reference_path': _stringSchema(
+              '可选，读取技能包内某个 reference 文件时使用，路径必须来自上次 load_agent_skill 返回的 resource_hints.references。',
             ),
           },
         );
@@ -210,10 +222,133 @@ class ToolSchemaBuilderService {
         return _objectSchema(
           required: const <String>['name'],
           properties: <String, Object?>{
+            'character_id': _stringSchema('可选稳定角色 ID；未提供时会按当前角色名生成稳定路径。'),
             'name': _stringSchema('角色名。'),
             'status': _stringSchema('角色当前状态。'),
             'role': _stringSchema('角色定位或职责。'),
-            'content': _stringSchema('完整角色卡正文；未提供时可根据其他字段自动生成。'),
+            'content': _stringSchema('角色本轮阶段状态说明或主档补充说明。'),
+            'stage_id': _stringSchema('可选阶段 ID，例如 chapter_03、checkpoint_02。'),
+            'stage_label': _stringSchema('可选阶段展示名，例如 第3章后、卷一收束。'),
+            'source_paths': <String, Object?>{
+              'type': 'array',
+              'items': _stringSchema('触发本次状态更新的相关项目路径。'),
+            },
+            'related_timeline_ids': <String, Object?>{
+              'type': 'array',
+              'items': _stringSchema('可选关联时间线 ID。'),
+            },
+          },
+        );
+      case 'update_foreshadow_state':
+        return _objectSchema(
+          required: const <String>['title'],
+          properties: <String, Object?>{
+            'foreshadow_id': _stringSchema('可选稳定伏笔 ID；未提供时会按标题生成稳定路径。'),
+            'title': _stringSchema('伏笔标题。'),
+            'status': _stringSchema(
+              'planted、pending_payoff、partial_payoff、resolved、abandoned、at_risk。',
+            ),
+            'summary': _stringSchema('伏笔概述。'),
+            'content': _stringSchema('可选摘要正文；未传 summary 时可用它兜底。'),
+            'planted_chapter_path': _stringSchema('可选埋设章节路径。'),
+            'target_payoff_path': _stringSchema('可选目标回收路径。'),
+            'related_entity_ids': <String, Object?>{
+              'type': 'array',
+              'items': _stringSchema('关联角色或组织 ID。'),
+            },
+            'related_timeline_ids': <String, Object?>{
+              'type': 'array',
+              'items': _stringSchema('关联时间线 ID。'),
+            },
+            'related_relationship_ids': <String, Object?>{
+              'type': 'array',
+              'items': _stringSchema('关联关系 ID。'),
+            },
+            'related_paths': <String, Object?>{
+              'type': 'array',
+              'items': _stringSchema('触发本次更新的相关项目路径。'),
+            },
+            'trigger_conditions': <String, Object?>{
+              'type': 'array',
+              'items': _stringSchema('触发条件。'),
+            },
+            'payoff_expectations': <String, Object?>{
+              'type': 'array',
+              'items': _stringSchema('回收预期。'),
+            },
+            'tags': <String, Object?>{
+              'type': 'array',
+              'items': _stringSchema('标签。'),
+            },
+            'notes': _stringSchema('备注。'),
+          },
+        );
+      case 'update_timeline_state':
+        return _objectSchema(
+          required: const <String>['title'],
+          properties: <String, Object?>{
+            'timeline_id': _stringSchema('可选稳定时间线 ID。'),
+            'title': _stringSchema('时间线事件标题。'),
+            'display_name': _stringSchema('可选显示名；未提供时使用 title。'),
+            'summary': _stringSchema('时间线事件概述。'),
+            'content': _stringSchema('可选事件正文；未传 summary 时可用它兜底。'),
+            'event_type': _stringSchema(
+              'event、turning_point、setup、payoff 等事件类型。',
+            ),
+            'status': _stringSchema('planned、active、done 等状态。'),
+            'phase_label': _stringSchema('阶段标签，例如 第三章后、卷一尾声。'),
+            'sequence': _intSchema('可选顺序号。'),
+            'related_entity_ids': <String, Object?>{
+              'type': 'array',
+              'items': _stringSchema('关联角色或组织 ID。'),
+            },
+            'related_foreshadow_ids': <String, Object?>{
+              'type': 'array',
+              'items': _stringSchema('关联伏笔 ID。'),
+            },
+            'related_relationship_ids': <String, Object?>{
+              'type': 'array',
+              'items': _stringSchema('关联关系 ID。'),
+            },
+            'related_paths': <String, Object?>{
+              'type': 'array',
+              'items': _stringSchema('触发本次更新的相关项目路径。'),
+            },
+            'notes': _stringSchema('备注。'),
+          },
+        );
+      case 'update_relationship_state':
+        return _objectSchema(
+          required: const <String>[
+            'title',
+            'left_entity_id',
+            'right_entity_id',
+          ],
+          properties: <String, Object?>{
+            'relationship_id': _stringSchema('可选稳定关系 ID。'),
+            'title': _stringSchema('关系标题。'),
+            'display_name': _stringSchema('可选显示名；未提供时使用 title。'),
+            'left_entity_id': _stringSchema('左侧实体 ID。'),
+            'right_entity_id': _stringSchema('右侧实体 ID。'),
+            'summary': _stringSchema('关系变化概述。'),
+            'content': _stringSchema('可选正文；未传 summary 时可用它兜底。'),
+            'relationship_type': _stringSchema(
+              'alliance、hostility、mentor 等关系类型。',
+            ),
+            'status': _stringSchema('active、broken、hidden 等状态。'),
+            'related_foreshadow_ids': <String, Object?>{
+              'type': 'array',
+              'items': _stringSchema('关联伏笔 ID。'),
+            },
+            'related_timeline_ids': <String, Object?>{
+              'type': 'array',
+              'items': _stringSchema('关联时间线 ID。'),
+            },
+            'tags': <String, Object?>{
+              'type': 'array',
+              'items': _stringSchema('标签。'),
+            },
+            'notes': _stringSchema('备注。'),
           },
         );
       case 'create_chapter_task':

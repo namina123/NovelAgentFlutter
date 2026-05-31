@@ -30,4 +30,45 @@ abstract class AgentEcosystemActionHandler
   void onCreateSkillGroupRequested();
 
   void onCreateAgentGroupRequested();
+
+  void onProjectExpressionConstraintsRequested();
+
+  void onProjectSkillLoadoutSkillGroupToggled(
+    String agentId,
+    String groupId,
+    bool selected,
+  );
+
+  void onProjectSkillLoadoutExtraSkillToggled(
+    String agentId,
+    String skillId,
+    bool selected,
+  );
+
+  void onProjectSkillLoadoutDisabledSkillToggled(
+    String agentId,
+    String skillId,
+    bool disabled,
+  );
+
+  void onProjectSkillLoadoutApplyRequested(String agentId);
+
+  void onProjectSkillLoadoutResetRequested(String agentId);
+
+  void onProjectSkillLoadoutHistoryRestoreRequested(
+    String agentId,
+    String historyEntryId,
+  );
+
+  void onProjectSkillLoadoutHistoryCaptureRequested(
+    String agentId,
+    String title,
+  );
+
+  void onProjectSkillLoadoutSaveAsGroupRequested(
+    String agentId,
+    String groupId,
+    String displayName,
+    String description,
+  );
 }

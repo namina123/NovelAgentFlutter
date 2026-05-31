@@ -3,7 +3,7 @@ import '../common/value_readers.dart';
 
 class ProjectContextFileSelectionService {
   List<String> select(List<JsonMap> entries, {int maxFiles = 12}) {
-    // 中文注释: 这里统一决定草稿生成优先读取哪些项目文件，避免宿主层自己散写目录优先级。
+    // 中文注释: 这里统一决定内容生成优先读取哪些项目文件，避免宿主层自己散写目录优先级。
     final candidates = entries.where(_isTextFile).toList(growable: false);
     final sorted = candidates.toList()
       ..sort((left, right) => _compare(left, right));
@@ -48,18 +48,29 @@ class ProjectContextFileSelectionService {
     // 中文注释: 优先级规则沿着旧项目创作价值排序，让规格、风格和大纲先于杂项文件进入上下文。
     final normalized = relativePath.replaceAll('\\', '/').toLowerCase();
     const weights = <String, int>{
+      'premise/': 0,
       'specs/': 0,
+      'assets/styles/': 1,
       'styles/': 1,
+      'outlines/story/': 2,
       'outline/': 2,
+      'outlines/volumes/': 3,
       'volume_outlines/': 3,
+      'outlines/chapters/': 4,
       'chapter_outlines/': 4,
+      'assets/world/': 5,
       'world/': 5,
-      'characters/': 6,
-      'summaries/': 7,
-      'drafts/': 8,
-      'chapters/': 9,
-      'knowledge/': 10,
-      'inspiration/': 11,
+      'assets/characters/': 6,
+      'assets/foreshadows/': 7,
+      'world/foreshadows/': 7,
+      'assets/timeline/': 8,
+      'assets/relationships/': 9,
+      'characters/': 18,
+      'summaries/': 10,
+      'chapters/': 11,
+      'scenes/': 12,
+      'knowledge/': 13,
+      'inspiration/': 14,
     };
     for (final entry in weights.entries) {
       if (normalized.startsWith(entry.key)) {

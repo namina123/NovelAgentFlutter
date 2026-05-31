@@ -1,6 +1,13 @@
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 class ProjectToolPathPolicy {
+  ProjectToolPathPolicy({
+    ProjectContentPathPolicyService? contentPathPolicyService,
+  }) : _contentPathPolicyService =
+           contentPathPolicyService ?? const ProjectContentPathPolicyService();
+
+  final ProjectContentPathPolicyService _contentPathPolicyService;
+
   List<String> allowedRoots() {
     // 中文注释: 可访问根目录统一来自核心工作空间目录约定，避免宿主自己发明另一套规则。
     return <String>[
@@ -10,6 +17,7 @@ class ProjectToolPathPolicy {
       ...ProjectWorkspaceCatalog.advancedWorkspaceDirs.map(
         (item) => item.path.replaceAll(RegExp(r'/$'), ''),
       ),
+      ..._compatibilityRoots,
       'sessions',
       'backups',
     ].toSet().toList(growable: false);
@@ -89,93 +97,20 @@ class ProjectToolPathPolicy {
   }
 
   String normalizeContentType(String value) {
-    // 中文注释: 内容类型归一化统一在这里完成，保证写入工具和结构化记忆工具口径一致。
-    final clean = value.trim().toLowerCase();
-    switch (clean) {
-      case '大纲':
-        return 'outline';
-      case '卷纲':
-      case '卷钢':
-        return 'volume_outline';
-      case '章纲':
-        return 'chapter_outline';
-      case '草稿':
-      case '正文草稿':
-      case 'working_draft':
-        return 'draft';
-      case '正文':
-      case '正式正文':
-      case 'final_chapter':
-        return 'chapter';
-      case '设定':
-      case 'world':
-        return 'setting';
-      case '角色':
-        return 'character';
-      case '风格':
-        return 'style';
-      case '摘要':
-      case '概括':
-        return 'summary';
-      case '知识库':
-        return 'knowledge';
-      default:
-        return clean.isEmpty ? 'draft' : clean;
-    }
+    // 中文注释: 内容类型正式归一化委托给 core，避免适配器层长期维护一份几乎重复的映射表。
+    return _contentPathPolicyService.normalizeContentType(value);
   }
 
   String contentTypeDir(String contentType) {
-    // 中文注释: 内容类型到目录的映射只保留一份，避免写入工具和结构化工具逐渐分叉。
-    switch (normalizeContentType(contentType)) {
-      case 'outline':
-        return 'outline';
-      case 'volume_outline':
-        return 'volume_outlines';
-      case 'chapter_outline':
-        return 'chapter_outlines';
-      case 'chapter':
-        return 'chapters';
-      case 'setting':
-        return 'world';
-      case 'character':
-        return 'characters';
-      case 'style':
-        return 'styles';
-      case 'summary':
-        return 'summaries';
-      case 'knowledge':
-        return 'knowledge';
-      default:
-        return 'drafts';
-    }
+    // 中文注释: 正式目录映射以 core 为唯一事实源，适配器这里只做工具层转发。
+    return _contentPathPolicyService.directoryForContentType(contentType);
   }
 
   String inferContentTypeFromPath(String relativePath) {
-    // 中文注释: 从相对路径推断内容类型，方便编辑类工具补足权限语义和展示文案。
-    final clean = cleanRelativePath(relativePath);
-    final root = clean.split('/').first;
-    switch (root) {
-      case 'outline':
-        return 'outline';
-      case 'volume_outlines':
-        return 'volume_outline';
-      case 'chapter_outlines':
-        return 'chapter_outline';
-      case 'chapters':
-        return 'chapter';
-      case 'world':
-        return 'setting';
-      case 'characters':
-        return 'character';
-      case 'styles':
-        return 'style';
-      case 'summaries':
-        return 'summary';
-      case 'knowledge':
-        return 'knowledge';
-      default:
-        return 'draft';
-    }
+    // 中文注释: 路径反推内容类型也统一复用 core，保持工具展示与宿主默认目录语义一致。
+    return _contentPathPolicyService.inferContentTypeFromPath(
+      cleanRelativePath(relativePath),
+    );
   }
 
   String safeFileName(
@@ -258,4 +193,20 @@ class ProjectToolPathPolicy {
     }
     return directory.isEmpty ? fileName : '$directory/$fileName';
   }
+
+  static const List<String> _compatibilityRoots = <String>[
+    'specs',
+    'outline',
+    'volume_outlines',
+    'chapter_outlines',
+    'world',
+    'characters',
+    'styles',
+    'summaries',
+    'knowledge',
+    'inspiration',
+    'reviews',
+    'tracking',
+    'runs',
+  ];
 }

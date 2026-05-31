@@ -6,7 +6,11 @@ const String providerModelCapabilitiesSeed = r'''
       "supports_streaming": true,
       "supports_tools": true,
       "supports_tool_choice": false,
-      "supports_image_generation": false
+      "supports_image_generation": false,
+      "supports_file_attachments": false,
+      "supports_image_attachments": false,
+      "supports_attachment_urls_only": false,
+      "supports_multi_attachments": false
     }
   },
   "providers": [
@@ -62,7 +66,11 @@ const String providerModelCapabilitiesSeed = r'''
       "capabilities": {
         "supports_streaming": false,
         "supports_tools": true,
-        "supports_tool_choice": true
+        "supports_tool_choice": true,
+        "supports_file_attachments": true,
+        "supports_image_attachments": true,
+        "supports_attachment_urls_only": false,
+        "supports_multi_attachments": true
       },
       "parameter_definitions": [
         {

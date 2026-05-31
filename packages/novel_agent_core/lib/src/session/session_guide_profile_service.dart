@@ -12,6 +12,8 @@ class SessionGuideProfileService {
   }) {
     // 中文注释: 会话引导 profile 只负责项目类型对应的入口文案和动作，不直接触发任何宿主行为。
     switch (projectType.trim()) {
+      case 'book_deconstruction':
+        return _bookDeconstructionProfile(isRunning: isRunning);
       case 'long_novel':
         return _longNovelProfile(isRunning: isRunning);
       case 'knowledge_base':
@@ -55,7 +57,7 @@ class SessionGuideProfileService {
           id: 'session.goal.summarize_book',
           commandId: 'session.goal',
           title: '总结全书',
-          description: '整理已有正文、草稿、摘要和设定，判断当前脉络与风险。',
+          description: '整理已有正文、场景片段、摘要和设定，判断当前脉络与风险。',
           payload: <String, Object?>{
             'mode': SessionRecordConstants.modeSummarizeBook,
           },
@@ -63,7 +65,7 @@ class SessionGuideProfileService {
         SessionGuideAction(
           id: 'session.goal.chapter_draft',
           commandId: 'session.goal',
-          title: '草稿章节',
+          title: '创作章节',
           description: '围绕当前上下文推进一章正文或一个可写场景。',
           payload: <String, Object?>{
             'mode': SessionRecordConstants.modeChapterDraft,
@@ -82,7 +84,7 @@ class SessionGuideProfileService {
           id: 'session.goal.continue_writing',
           commandId: 'session.goal',
           title: '继续创作',
-          description: '基于最近章节、草稿或当前打开内容继续向前写。',
+          description: '基于最近章节、场景片段或当前打开内容继续向前写。',
           payload: <String, Object?>{
             'mode': SessionRecordConstants.modeContinueWriting,
           },
@@ -168,11 +170,31 @@ class SessionGuideProfileService {
     );
   }
 
+  SessionGuideProfile _bookDeconstructionProfile({required bool isRunning}) {
+    return SessionGuideProfile(
+      profileId: 'book_deconstruction',
+      title: '导入源文稿',
+      description: '拆书项目优先通过导入文件进入；导入后可以直接生成自动拆书预演纪要。',
+      composerHint: isRunning
+          ? '整理中：可以继续补充角色、组织、世界规则和风格提要。'
+          : '先用导入文件选择源文稿；如果是单个文本或 Markdown 文件，可以直接启用自动拆书。',
+      statusHint: '自动拆书会先把结果写成项目内预演纪要，再进入后续真实应用链。',
+      primaryActions: const <SessionGuideAction>[
+        SessionGuideAction(
+          id: 'workspace.open_import_command',
+          commandId: 'workspace.open_import_command',
+          title: '导入文件',
+          description: '选择源文稿并决定是否自动拆书；导入与预演纪要会统一回写当前项目。',
+        ),
+      ],
+    );
+  }
+
   SessionGuideProfile _shortCollectionProfile({required bool isRunning}) {
     return SessionGuideProfile(
       profileId: 'short_collection',
       title: '短文集工作台',
-      description: '短文集项目更适合选题、单篇草稿、风格统一和合集整理。',
+      description: '短文集项目更适合选题、单篇内容创作、风格统一和合集整理。',
       composerHint: isRunning
           ? '运行中：补充风格、篇幅或合集约束，会在下一轮工具调用前送达。'
           : '输入短篇选题、风格要求、合集整理或续写目标。',
@@ -181,8 +203,8 @@ class SessionGuideProfileService {
         SessionGuideAction(
           id: 'session.goal.chapter_draft.short_collection',
           commandId: 'session.goal',
-          title: '生成草稿',
-          description: '围绕一个短篇目标生成草稿。',
+          title: '生成内容',
+          description: '围绕一个短篇目标生成正文或场景。',
           payload: <String, Object?>{
             'mode': SessionRecordConstants.modeChapterDraft,
           },

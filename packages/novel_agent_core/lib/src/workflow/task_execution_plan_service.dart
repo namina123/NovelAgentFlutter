@@ -131,20 +131,20 @@ class TaskExecutionPlanService {
           _step(
             'update_memory',
             '更新长期记忆',
-            '写入 world/、characters/ 或 tracking/。',
+            '写入 world/、assets/characters/ 或 tracking/。',
           ),
         ];
       default:
         return <JsonMap>[
           _step('read_task', '读取任务', '读取章节目标、依赖、章纲和来源路径。'),
           _step('assemble_context', '组装上下文', '按任务目标生成 context pack。'),
-          _step('draft_chapter', '生成正文草稿', '调用模型生成章节或场景正文。'),
-          _step('save_draft', '保存草稿', '未确认正文写入 drafts/；确认后的正式正文再进入 chapters/。'),
+          _step('draft_chapter', '生成正文', '调用模型生成章节或场景正文。'),
+          _step('save_chapter', '保存正文', '完整章节写入 chapters/；局部场景或片段写入 scenes/。'),
           _step('summarize_chapter', '保存章节摘要', '写入 summaries/。'),
           _step(
             'update_memory',
             '更新世界书与角色',
-            '更新 world/、characters/ 和 tracking/。',
+            '更新 world/、assets/characters/ 和 tracking/。',
           ),
           _step('continuity_check', '连续性检查', '保存验证报告。'),
           _step('mark_done', '标记完成', '更新任务状态与输出路径。'),

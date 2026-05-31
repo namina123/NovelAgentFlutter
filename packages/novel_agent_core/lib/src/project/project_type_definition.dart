@@ -1,4 +1,5 @@
 import 'project_storage_strategy.dart';
+import 'project_trait.dart';
 
 class ProjectTypeDefinition {
   const ProjectTypeDefinition({
@@ -10,6 +11,7 @@ class ProjectTypeDefinition {
       ProjectStorageStrategy.markdownProjectStore,
       ProjectStorageStrategy.sqliteProjectStore,
     ],
+    this.defaultTraits = const <ProjectTrait>[],
     this.requiresRuntimeBaselineSelection = false,
     this.enabled = true,
   });
@@ -19,6 +21,7 @@ class ProjectTypeDefinition {
   final String description;
   final String defaultTitle;
   final List<ProjectStorageStrategy> supportedStorageStrategies;
+  final List<ProjectTrait> defaultTraits;
   final bool requiresRuntimeBaselineSelection;
   final bool enabled;
 }

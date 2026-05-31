@@ -77,7 +77,7 @@ class BuiltinCollaboratorCatalogService {
       'id': 'writer',
       'name': '作者',
       'role': '负责正文生成、续写、改写和局部润色，优先维护叙事声音、场景节拍和阅读节奏。',
-      'description': '用于章节草稿、场景扩写和文本改写的创作视角。',
+      'description': '用于章节正文、场景扩写和文本改写的创作视角。',
       'source': 'builtin',
       'source_scope': 'builtin',
       'enabled_by_default': false,
@@ -93,7 +93,7 @@ class BuiltinCollaboratorCatalogService {
       'temperature': 0.95,
       'top_p': 0.97,
       'top_k': 0,
-      'system_prompt': '你是 NOVEL Agent 的作者视角，专注中文小说正文。你只返回可供主智能体合并的草稿片段、建议或风险。',
+      'system_prompt': '你是 NOVEL Agent 的作者视角，专注中文小说正文。你只返回可供主智能体合并的正文片段、建议或风险。',
     },
     <String, Object?>{
       'id': 'plot_architect',

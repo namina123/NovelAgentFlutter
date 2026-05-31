@@ -53,7 +53,12 @@ class SettingsPage extends StatelessWidget {
     if (viewData.activeTabId == 'interfaces') {
       return ProviderSettingsPanel(
         providers: viewData.providers,
+        providerDirectoryOptions: viewData.providerDirectoryOptions,
+        allModelOptions: viewData.allModelOptions,
         onProviderSelected: actionHandler.onProviderSelected,
+        onProviderCreateRequested: actionHandler.onProviderCreateRequested,
+        onProviderDetailBackRequested:
+            actionHandler.onProviderDetailBackRequested,
         onProviderSaved: actionHandler.onProviderSaved,
         onProviderDeleted: actionHandler.onProviderDeleted,
       );
@@ -92,7 +97,7 @@ class SettingsPage extends StatelessWidget {
     }
     if (viewData.activeTabId == 'theme') {
       return ThemeSettingsPanel(
-        settings: viewData.themeSettings,
+        viewData: viewData.themeViewData,
         onSaved: actionHandler.onThemeSettingsSaved,
       );
     }

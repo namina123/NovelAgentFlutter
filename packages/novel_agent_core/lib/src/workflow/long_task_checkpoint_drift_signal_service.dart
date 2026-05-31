@@ -1,6 +1,7 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
 import 'long_task_entity_drift_signal_service.dart';
+import 'long_task_narrative_drift_signal_service.dart';
 import 'long_task_style_drift_signal_service.dart';
 import 'long_task_world_drift_signal_service.dart';
 
@@ -9,13 +10,17 @@ class LongTaskCheckpointDriftSignalService {
     LongTaskStyleDriftSignalService? styleService,
     LongTaskWorldDriftSignalService? worldService,
     LongTaskEntityDriftSignalService? entityService,
+    LongTaskNarrativeDriftSignalService? narrativeService,
   }) : _styleService = styleService ?? LongTaskStyleDriftSignalService(),
        _worldService = worldService ?? LongTaskWorldDriftSignalService(),
-       _entityService = entityService ?? LongTaskEntityDriftSignalService();
+       _entityService = entityService ?? LongTaskEntityDriftSignalService(),
+       _narrativeService =
+           narrativeService ?? LongTaskNarrativeDriftSignalService();
 
   final LongTaskStyleDriftSignalService _styleService;
   final LongTaskWorldDriftSignalService _worldService;
   final LongTaskEntityDriftSignalService _entityService;
+  final LongTaskNarrativeDriftSignalService _narrativeService;
 
   List<JsonMap> buildSignals({
     required String taskType,
@@ -42,6 +47,12 @@ class LongTaskCheckpointDriftSignalService {
         outputPaths: outputPaths,
       ),
       ..._entityService.buildSignals(
+        taskType: taskType,
+        stage: stage,
+        memorySectionTitles: memorySectionTitles,
+        outputPaths: outputPaths,
+      ),
+      ..._narrativeService.buildSignals(
         taskType: taskType,
         stage: stage,
         memorySectionTitles: memorySectionTitles,

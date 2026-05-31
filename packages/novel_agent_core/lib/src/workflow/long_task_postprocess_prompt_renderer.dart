@@ -47,7 +47,7 @@ class LongTaskPostprocessPromptRenderer {
     } else {
       lines
         ..add(
-          '- 已写入正文/草稿路径：${_contractService.joinOrNone(ValueReaders.objectList(transaction['draft_paths']))}',
+          '- 已写入正文/场景路径：${_contractService.joinOrNone(ValueReaders.objectList(transaction['draft_paths']))}',
         )
         ..add('')
         ..add('## 后处理要求')
@@ -56,8 +56,58 @@ class LongTaskPostprocessPromptRenderer {
         ..add(
           '3. 如果发现明确设定事实，调用 update_world_state；如果发现角色状态变化，调用 update_character_state。',
         )
-        ..add('4. 调用 run_continuity_check 保存连续性、剧情或文风风险报告。')
-        ..add('5. 最终用简短 Markdown 告诉用户保存了哪些后处理产物，以及哪些内容需要人工确认。');
+        ..add(
+          '4. 如果出现新的伏笔、伏笔推进/回收、明确时间顺序节点或关键关系变化，分别调用 update_foreshadow_state、update_timeline_state、update_relationship_state。',
+        )
+        ..add('5. 调用 run_continuity_check 保存连续性、剧情或文风风险报告。')
+        ..add('6. 最终用简短 Markdown 告诉用户保存了哪些后处理产物，以及哪些内容需要人工确认。');
+    }
+    final creativeRuleSummary = ValueReaders.stringValue(
+      transaction['creative_rule_summary'],
+    ).trim();
+    if (creativeRuleSummary.isNotEmpty) {
+      lines
+        ..add('')
+        ..add('## 创作约束栈')
+        ..add(creativeRuleSummary);
+    }
+    final reviewFocuses = ValueReaders.stringList(
+      transaction['review_focuses'],
+    );
+    if (reviewFocuses.isNotEmpty) {
+      lines
+        ..add('')
+        ..add('## 表达限制复核重点');
+      for (final item in reviewFocuses) {
+        final text = item.trim();
+        if (text.isNotEmpty) {
+          lines.add('- $text');
+        }
+      }
+    }
+    final authenticityPassLevel = ValueReaders.stringValue(
+      transaction['authenticity_pass_level'],
+    ).trim();
+    if (authenticityPassLevel.isNotEmpty &&
+        authenticityPassLevel != 'disabled') {
+      lines
+        ..add('')
+        ..add('## 真实性复核强度')
+        ..add('- 当前表达限制要求按 $authenticityPassLevel 强度执行真实性 / 去模板清理。');
+    }
+    final miniRecheckItems = ValueReaders.stringList(
+      transaction['mini_recheck_items'],
+    );
+    if (miniRecheckItems.isNotEmpty) {
+      lines
+        ..add('')
+        ..add('## Mini Recheck');
+      for (final item in miniRecheckItems) {
+        final text = item.trim();
+        if (text.isNotEmpty) {
+          lines.add('- $text');
+        }
+      }
     }
     final templates = ValueReaders.mapValue(transaction['project_templates']);
     final templateText = ValueReaders.stringValue(

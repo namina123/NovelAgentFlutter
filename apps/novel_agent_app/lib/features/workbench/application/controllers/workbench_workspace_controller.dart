@@ -1,14 +1,26 @@
+import 'dart:async';
+
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../../../project_creation/application/controllers/project_creation_controller.dart';
 import '../../presentation/contracts/document_workspace_action_handler.dart';
 import '../../presentation/contracts/resource_manager_action_handler.dart';
+import '../../presentation/models/conversation_agent_selector_view_data.dart';
 import '../../presentation/models/project_create_request_view_data.dart';
+import '../../presentation/models/conversation_group_selector_view_data.dart';
+import '../../presentation/models/project_agent_group_workspace_view_data.dart';
 import '../../presentation/models/selector_option_view_data.dart';
 import '../../presentation/models/workbench_view_data.dart';
 import '../models/open_document_state.dart';
+import '../models/project_import_request.dart';
 import '../models/workbench_project_runtime_state.dart';
+import '../services/desktop_project_import_file_picker_service.dart';
+import '../services/project_import_execution_service.dart';
+import '../services/project_import_workspace_command_view_data_service.dart';
+import '../services/project_long_task_summary_view_data_service.dart';
+import '../services/project_subtitle_view_data_service.dart';
+import '../services/workspace_command_default_target_service.dart';
 import '../services/workspace_resource_display_service.dart';
 
 class WorkbenchWorkspaceController
@@ -20,12 +32,19 @@ class WorkbenchWorkspaceController
     required CreateProjectEntryUseCase createProjectEntryUseCase,
     required ImportProjectFilesUseCase importProjectFilesUseCase,
     required UpdateProjectManifestUseCase updateProjectManifestUseCase,
+    required ProjectToolHostPort projectToolHostPort,
+    required WriteProjectTextFileUseCase writeProjectTextFileUseCase,
+    required LongTaskSupervisor longTaskSupervisor,
     required ProjectReviewReportService reviewReportService,
+    required ProjectRuntimeProfileRepository projectRuntimeProfileRepository,
     required WorkbenchProjectRuntimeState Function() readProjectState,
-    required void Function(WorkbenchProjectRuntimeState state) writeProjectState,
+    required void Function(WorkbenchProjectRuntimeState state)
+    writeProjectState,
     required void Function() resetConversationRuntimeState,
     required WorkbenchViewData Function() readWorkbench,
-    required void Function(WorkbenchViewData Function(WorkbenchViewData current))
+    required void Function(
+      WorkbenchViewData Function(WorkbenchViewData current),
+    )
     mutateWorkbench,
     required WorkbenchViewData Function(WorkbenchViewData base)
     applyConversationState,
@@ -37,23 +56,39 @@ class WorkbenchWorkspaceController
     required Future<void> Function() refreshActiveDestinationAfterProjectLoad,
     required List<SelectorOptionViewData> Function(AppSettings settings)
     modelOptionsBuilder,
-    required List<SelectorOptionViewData> Function() agentOptionsBuilder,
-    required String Function(String projectType) projectSubtitleFor,
+    required ProjectAgentGroupWorkspaceViewData? Function()
+    readProjectAgentGroupWorkspaceViewData,
+    required Future<ProjectAgentGroupWorkspaceViewData?> Function(
+      String groupId,
+    )
+    selectProjectAgentGroup,
     required Future<void> Function() showSettings,
     required Future<void> Function() showAgentEcosystem,
-    required Future<void> Function() showTaskCenter,
     required Future<void> Function() showLongTaskStation,
-    required Future<void> Function() showReviewCenter,
+    required Future<void> Function() showInspirationWorkbench,
     required Future<void> Function() showPromptTemplates,
     required Future<void> Function() showProjectAssets,
+    required Future<void> Function(String agentId) showCurrentAgentSkillLoadout,
+    required Future<void> Function(String agentId)
+    showCurrentAgentExpressionConstraints,
     required void Function(String message) announce,
+    ProjectSubtitleViewDataService? projectSubtitleViewDataService,
+    ProjectLongTaskSummaryViewDataService?
+    projectLongTaskSummaryViewDataService,
+    WorkspaceCommandDefaultTargetService? workspaceCommandDefaultTargetService,
+    DesktopProjectImportFilePickerService?
+    desktopProjectImportFilePickerService,
+    ProjectImportWorkspaceCommandViewDataService?
+    projectImportWorkspaceCommandViewDataService,
+    ProjectImportExecutionService? projectImportExecutionService,
   }) : _loadProjectWorkspaceUseCase = loadProjectWorkspaceUseCase,
        _readProjectFileUseCase = readProjectFileUseCase,
        _saveDraftUseCase = saveDraftUseCase,
        _createProjectEntryUseCase = createProjectEntryUseCase,
-       _importProjectFilesUseCase = importProjectFilesUseCase,
        _updateProjectManifestUseCase = updateProjectManifestUseCase,
+       _longTaskSupervisor = longTaskSupervisor,
        _reviewReportService = reviewReportService,
+       _projectRuntimeProfileRepository = projectRuntimeProfileRepository,
        _readProjectState = readProjectState,
        _writeProjectState = writeProjectState,
        _resetConversationRuntimeState = resetConversationRuntimeState,
@@ -67,24 +102,49 @@ class WorkbenchWorkspaceController
        _refreshActiveDestinationAfterProjectLoad =
            refreshActiveDestinationAfterProjectLoad,
        _modelOptionsBuilder = modelOptionsBuilder,
-       _agentOptionsBuilder = agentOptionsBuilder,
-       _projectSubtitleFor = projectSubtitleFor,
+       _readProjectAgentGroupWorkspaceViewData =
+           readProjectAgentGroupWorkspaceViewData,
+       _selectProjectAgentGroup = selectProjectAgentGroup,
        _showSettings = showSettings,
        _showAgentEcosystem = showAgentEcosystem,
-       _showTaskCenter = showTaskCenter,
        _showLongTaskStation = showLongTaskStation,
-       _showReviewCenter = showReviewCenter,
+       _showInspirationWorkbench = showInspirationWorkbench,
        _showPromptTemplates = showPromptTemplates,
        _showProjectAssets = showProjectAssets,
-       _announce = announce;
+       _showCurrentAgentSkillLoadout = showCurrentAgentSkillLoadout,
+       _showCurrentAgentExpressionConstraints =
+           showCurrentAgentExpressionConstraints,
+       _announce = announce,
+       _projectSubtitleViewDataService =
+           projectSubtitleViewDataService ?? ProjectSubtitleViewDataService(),
+       _projectLongTaskSummaryViewDataService =
+           projectLongTaskSummaryViewDataService ??
+           const ProjectLongTaskSummaryViewDataService(),
+       _workspaceCommandDefaultTargetService =
+           workspaceCommandDefaultTargetService ??
+           WorkspaceCommandDefaultTargetService(),
+       _desktopProjectImportFilePickerService =
+           desktopProjectImportFilePickerService ??
+           const DesktopProjectImportFilePickerService(),
+       _projectImportWorkspaceCommandViewDataService =
+           projectImportWorkspaceCommandViewDataService ??
+           ProjectImportWorkspaceCommandViewDataService(),
+       _projectImportExecutionService =
+           projectImportExecutionService ??
+           ProjectImportExecutionService(
+             importProjectFilesUseCase: importProjectFilesUseCase,
+             projectToolHostPort: projectToolHostPort,
+             writeProjectTextFileUseCase: writeProjectTextFileUseCase,
+           );
 
   final LoadProjectWorkspaceUseCase _loadProjectWorkspaceUseCase;
   final ReadProjectFileUseCase _readProjectFileUseCase;
   final SaveDraftUseCase _saveDraftUseCase;
   final CreateProjectEntryUseCase _createProjectEntryUseCase;
-  final ImportProjectFilesUseCase _importProjectFilesUseCase;
   final UpdateProjectManifestUseCase _updateProjectManifestUseCase;
+  final LongTaskSupervisor _longTaskSupervisor;
   final ProjectReviewReportService _reviewReportService;
+  final ProjectRuntimeProfileRepository _projectRuntimeProfileRepository;
   final WorkbenchProjectRuntimeState Function() _readProjectState;
   final void Function(WorkbenchProjectRuntimeState state) _writeProjectState;
   final void Function() _resetConversationRuntimeState;
@@ -100,16 +160,30 @@ class WorkbenchWorkspaceController
   final Future<void> Function() _refreshActiveDestinationAfterProjectLoad;
   final List<SelectorOptionViewData> Function(AppSettings settings)
   _modelOptionsBuilder;
-  final List<SelectorOptionViewData> Function() _agentOptionsBuilder;
-  final String Function(String projectType) _projectSubtitleFor;
+  final ProjectAgentGroupWorkspaceViewData? Function()
+  _readProjectAgentGroupWorkspaceViewData;
+  final Future<ProjectAgentGroupWorkspaceViewData?> Function(String groupId)
+  _selectProjectAgentGroup;
   final Future<void> Function() _showSettings;
   final Future<void> Function() _showAgentEcosystem;
-  final Future<void> Function() _showTaskCenter;
   final Future<void> Function() _showLongTaskStation;
-  final Future<void> Function() _showReviewCenter;
+  final Future<void> Function() _showInspirationWorkbench;
   final Future<void> Function() _showPromptTemplates;
   final Future<void> Function() _showProjectAssets;
+  final Future<void> Function(String agentId) _showCurrentAgentSkillLoadout;
+  final Future<void> Function(String agentId)
+  _showCurrentAgentExpressionConstraints;
   final void Function(String message) _announce;
+  final ProjectSubtitleViewDataService _projectSubtitleViewDataService;
+  final ProjectLongTaskSummaryViewDataService
+  _projectLongTaskSummaryViewDataService;
+  final WorkspaceCommandDefaultTargetService
+  _workspaceCommandDefaultTargetService;
+  final DesktopProjectImportFilePickerService
+  _desktopProjectImportFilePickerService;
+  final ProjectImportWorkspaceCommandViewDataService
+  _projectImportWorkspaceCommandViewDataService;
+  final ProjectImportExecutionService _projectImportExecutionService;
   final WorkspaceResourceDisplayService _workspaceResourceDisplayService =
       const WorkspaceResourceDisplayService();
 
@@ -121,6 +195,9 @@ class WorkbenchWorkspaceController
   }
 
   ProjectDescriptor? get currentProject => _readProjectState().currentProject;
+
+  ProjectRuntimeProfile? get currentProjectRuntimeProfile =>
+      _readProjectState().currentRuntimeProfile;
 
   JsonMap currentProjectInfo() {
     // 中文注释: 会话与主动作需要轻量项目摘要，这里只返回运行时真正需要的字段。
@@ -157,6 +234,11 @@ class WorkbenchWorkspaceController
     final active = _activeOpenDocument();
     final state = _readProjectState();
     return base.copyWith(
+      projectLongTaskSummary: _projectLongTaskSummaryViewDataService.build(
+        project: state.currentProject,
+        runs: state.currentProjectLongTaskRuns,
+        isLoading: state.isProjectLongTaskSummaryLoading,
+      ),
       documents: state.openDocuments
           .map(
             (document) => DocumentTabViewData(
@@ -180,20 +262,21 @@ class WorkbenchWorkspaceController
   Future<bool> loadProject(String rootPath) async {
     // 中文注释: 工作区项目加载只负责把有效快照转成工作台运行时状态，不再决定是否弹创建向导。
     _mutateWorkbench(
-      (current) => current.copyWith(
-        generationStatus: '正在加载项目...',
-        toolCoreStatus: '',
-      ),
+      (current) =>
+          current.copyWith(generationStatus: '正在加载项目...', toolCoreStatus: ''),
     );
     final snapshot = await _loadProjectWorkspaceUseCase.execute(rootPath);
     if (snapshot == null) {
       _writeProjectState(
         _readProjectState().copyWith(
           currentProject: null,
+          currentRuntimeProfile: null,
           resourceSnapshotEntries: const <JsonMap>[],
           expandedResourceDirectories: <String>{},
           openDocuments: const <OpenDocumentState>[],
           activeOpenDocumentId: '',
+          currentProjectLongTaskRuns: const <RunInstance>[],
+          isProjectLongTaskSummaryLoading: false,
         ),
       );
       _resetConversationRuntimeState();
@@ -201,25 +284,38 @@ class WorkbenchWorkspaceController
       return false;
     }
 
+    final runtimeProfile = await _projectRuntimeProfileRepository.load(
+      snapshot.project,
+    );
+
     _writeProjectState(
       _readProjectState().copyWith(
         currentProject: snapshot.project,
+        currentRuntimeProfile: runtimeProfile,
         resourceSnapshotEntries: snapshot.entries,
-        expandedResourceDirectories: _defaultExpandedDirectories(snapshot.entries),
+        expandedResourceDirectories: _defaultExpandedDirectories(
+          snapshot.entries,
+        ),
         openDocuments: const <OpenDocumentState>[],
         activeOpenDocumentId: '',
+        currentProjectLongTaskRuns: const <RunInstance>[],
+        isProjectLongTaskSummaryLoading: true,
       ),
     );
     _resetConversationRuntimeState();
     var workbench = _readWorkbench().copyWith(
       projectName: snapshot.project.name,
-      projectSubtitle: _projectSubtitleFor(snapshot.project.projectType),
+      projectSubtitle: _projectSubtitleViewDataService.build(
+        snapshot.project,
+        runtimeProfile: runtimeProfile,
+      ),
       projectPath: snapshot.project.rootPath,
       toolCoreStatus: '',
       modelOptions: _readSettings() == null
           ? _readWorkbench().modelOptions
           : _modelOptionsBuilder(_readSettings()!),
-      agentOptions: _agentOptionsBuilder(),
+      groupSelector: const ConversationGroupSelectorViewData.initial(),
+      agentSelector: const ConversationAgentSelectorViewData.initial(),
       resourceEntries: _markResourceSelection(
         _resourceEntriesFrom(snapshot.entries),
         selectedId: '',
@@ -232,6 +328,7 @@ class WorkbenchWorkspaceController
       activeDocumentBody: '',
       activeDocumentDirty: false,
       projectLauncher: null,
+      projectAgentGroupWorkspace: null,
       workspaceCommand: null,
       isGenerating: false,
       isDocumentsWorkspaceVisible: false,
@@ -265,8 +362,41 @@ class WorkbenchWorkspaceController
     await _persistLastProjectPath(snapshot.project.rootPath);
     await _refreshAgentEcosystem();
     await restoreWorkbenchSnapshot(snapshot.project);
+    await refreshProjectLongTaskSummary();
     await _refreshActiveDestinationAfterProjectLoad();
     return true;
+  }
+
+  Future<void> refreshProjectLongTaskSummary() async {
+    final project = currentProject;
+    if (project == null) {
+      _writeProjectState(
+        _readProjectState().copyWith(
+          currentProjectLongTaskRuns: const <RunInstance>[],
+          isProjectLongTaskSummaryLoading: false,
+        ),
+      );
+      _mutateWorkbench((current) => applyWorkbenchState(current));
+      return;
+    }
+    _writeProjectState(
+      _readProjectState().copyWith(isProjectLongTaskSummaryLoading: true),
+    );
+    _mutateWorkbench((current) => applyWorkbenchState(current));
+    try {
+      final runs = await _longTaskSupervisor.listProjectRuns(project.rootPath);
+      _writeProjectState(
+        _readProjectState().copyWith(
+          currentProjectLongTaskRuns: runs,
+          isProjectLongTaskSummaryLoading: false,
+        ),
+      );
+    } catch (_) {
+      _writeProjectState(
+        _readProjectState().copyWith(isProjectLongTaskSummaryLoading: false),
+      );
+    }
+    _mutateWorkbench((current) => applyWorkbenchState(current));
   }
 
   void resetToProjectlessWorkbench({required String status}) {
@@ -274,10 +404,13 @@ class WorkbenchWorkspaceController
     _writeProjectState(
       _readProjectState().copyWith(
         currentProject: null,
+        currentRuntimeProfile: null,
         resourceSnapshotEntries: const <JsonMap>[],
         expandedResourceDirectories: <String>{},
         openDocuments: const <OpenDocumentState>[],
         activeOpenDocumentId: '',
+        currentProjectLongTaskRuns: const <RunInstance>[],
+        isProjectLongTaskSummaryLoading: false,
       ),
     );
     _resetConversationRuntimeState();
@@ -296,6 +429,10 @@ class WorkbenchWorkspaceController
           generationStatus: status,
           contextSummary: '尚未打开项目',
           toolCoreStatus: '',
+          projectLongTaskSummary: null,
+          projectAgentGroupWorkspace: null,
+          groupSelector: const ConversationGroupSelectorViewData.initial(),
+          agentSelector: const ConversationAgentSelectorViewData.initial(),
           isGenerating: false,
           workspaceCommand: null,
           isDocumentsWorkspaceVisible: false,
@@ -312,7 +449,9 @@ class WorkbenchWorkspaceController
     if (project == null) {
       return _readWorkbench().resourceEntries;
     }
-    final snapshot = await _loadProjectWorkspaceUseCase.execute(project.rootPath);
+    final snapshot = await _loadProjectWorkspaceUseCase.execute(
+      project.rootPath,
+    );
     if (snapshot == null) {
       return _readWorkbench().resourceEntries;
     }
@@ -343,7 +482,10 @@ class WorkbenchWorkspaceController
     if (relativePath.trim().isEmpty) {
       return '';
     }
-    final content = await _readProjectFileUseCase.execute(project, relativePath);
+    final content = await _readProjectFileUseCase.execute(
+      project,
+      relativePath,
+    );
     return content ?? '';
   }
 
@@ -413,13 +555,21 @@ class WorkbenchWorkspaceController
           _resourceEntriesFrom(_readProjectState().resourceSnapshotEntries),
           selectedId: '',
         ),
+        agentSelector: current.agentSelector.copyWith(
+          currentAgentId: _stringValue(
+            snapshot['selected_conversation_agent_id'],
+          ),
+        ),
       ),
     );
     final activeDocumentPath = _stringValue(snapshot['active_document_path']);
     if (activeDocumentPath.trim().isEmpty) {
       return;
     }
-    final content = await _readProjectFileUseCase.execute(project, activeDocumentPath);
+    final content = await _readProjectFileUseCase.execute(
+      project,
+      activeDocumentPath,
+    );
     if (content == null) {
       return;
     }
@@ -477,6 +627,12 @@ class WorkbenchWorkspaceController
   }
 
   @override
+  void onProjectCreationBackRequested() {
+    // 中文注释: 创建向导的返回动作继续委派给项目创建控制器，工作区不介入阶段状态机。
+    _projectCreationController?.onProjectCreationBackRequested();
+  }
+
+  @override
   void onProjectCreationSubmitted(ProjectCreateRequestViewData request) {
     // 中文注释: 项目创建表单提交继续由创建控制器处理，工作区层不再理解运行基准判断。
     _projectCreationController?.onProjectCreationSubmitted(request);
@@ -522,7 +678,7 @@ class WorkbenchWorkspaceController
   void onCreateFileRequested() {
     // 中文注释: 文件创建继续统一落到工作区命令表单，后续 CLI 也能共用同一用例。
     _showWorkspaceCommand(
-      const WorkspaceCommandViewData(
+      WorkspaceCommandViewData(
         mode: WorkspaceCommandMode.createFile,
         title: '新建文件',
         description: '在项目目录下创建一个新文件。',
@@ -533,7 +689,8 @@ class WorkbenchWorkspaceController
         genre: '',
         premise: '',
         notes: '',
-        relativePath: 'drafts',
+        relativePath: _workspaceCommandDefaultTargetService
+            .createFileDirectory(),
         entryName: 'new_file.md',
         content: '',
         sourcePathsText: '',
@@ -546,7 +703,7 @@ class WorkbenchWorkspaceController
   void onCreateFolderRequested() {
     // 中文注释: 新建文件夹与新建文件共用命令面板，减少壳层表单散落。
     _showWorkspaceCommand(
-      const WorkspaceCommandViewData(
+      WorkspaceCommandViewData(
         mode: WorkspaceCommandMode.createFolder,
         title: '新建文件夹',
         description: '在项目目录下创建一个新目录。',
@@ -557,7 +714,8 @@ class WorkbenchWorkspaceController
         genre: '',
         premise: '',
         notes: '',
-        relativePath: 'world',
+        relativePath: _workspaceCommandDefaultTargetService
+            .createFolderParentDirectory(),
         entryName: 'new_folder',
         content: '',
         sourcePathsText: '',
@@ -568,24 +726,15 @@ class WorkbenchWorkspaceController
 
   @override
   void onImportRequested() {
-    // 中文注释: 导入入口先收束到项目命令面板，后续接文件选择器也不改业务边界。
+    // 中文注释: 导入入口统一走共享命令构建服务，项目类型差异留给策略层处理。
+    final project = currentProject;
+    if (project == null) {
+      _announce('请先打开项目。');
+      return;
+    }
     _showWorkspaceCommand(
-      const WorkspaceCommandViewData(
-        mode: WorkspaceCommandMode.importFiles,
-        title: '导入文件',
-        description: '每行输入一个绝对路径，导入到项目指定目录。',
-        confirmLabel: '导入文件',
-        status: '',
-        projectTitle: '',
-        projectType: '',
-        genre: '',
-        premise: '',
-        notes: '',
-        relativePath: '',
-        entryName: '',
-        content: '',
-        sourcePathsText: '',
-        targetDirectory: 'assets',
+      _projectImportWorkspaceCommandViewDataService.build(
+        projectType: project.projectType,
       ),
     );
   }
@@ -593,7 +742,7 @@ class WorkbenchWorkspaceController
   @override
   void onCreateChapterRequested() {
     // 中文注释: 当前章节创建仍走自然语言发送链，这里只给统一提示，不偷偷生成空稿。
-    _announce('直接在右侧输入章节需求并发送，当前版本会自动保存到 drafts/。');
+    _announce('直接在右侧输入章节需求并发送，当前版本会自动保存到 chapters/。');
   }
 
   @override
@@ -603,15 +752,52 @@ class WorkbenchWorkspaceController
   }
 
   @override
+  void onProjectAgentGroupRequested() {
+    // 中文注释: 项目级智能体组入口必须在任意已打开项目下稳定可达，因此这里直接打开正式配置浮层。
+    final viewData = _readProjectAgentGroupWorkspaceViewData();
+    if (viewData == null) {
+      _announce('请先打开项目，再配置当前项目的智能体组。');
+      return;
+    }
+    _mutateWorkbench(
+      (current) => current.copyWith(projectAgentGroupWorkspace: viewData),
+    );
+  }
+
+  @override
+  void onProjectAgentGroupDismissed() {
+    // 中文注释: 项目级组配置浮层关闭只清理当前 overlay 状态，不影响会话和资源区。
+    _mutateWorkbench(
+      (current) => current.copyWith(projectAgentGroupWorkspace: null),
+    );
+  }
+
+  @override
+  void onProjectAgentGroupSelected(String groupId) {
+    // 中文注释: 组切换属于项目级协作基线变更，因此这里统一走共享选择链并在成功后刷新浮层内容。
+    unawaited(_selectProjectAgentGroupAndRefreshOverlay(groupId));
+  }
+
+  @override
   void onAgentEcosystemRequested() {
     // 中文注释: 工作区只发起全局导航请求，不直接操作生态页数据。
     _showAgentEcosystem();
   }
 
   @override
+  void onCurrentAgentSkillLoadoutRequested() {
+    final agentId = _readWorkbench().agentSelector.currentAgentId.trim();
+    if (agentId.isEmpty) {
+      _announce('当前没有可定位的会话智能体。');
+      return;
+    }
+    _showCurrentAgentSkillLoadout(agentId);
+  }
+
+  @override
   void onTasksRequested() {
-    // 中文注释: 任务中心入口交给壳层导航控制器处理。
-    _showTaskCenter();
+    // 中文注释: 历史任务入口统一折返到长任务总站，工作台内不再保留第二套任务空间。
+    _showLongTaskStation();
   }
 
   @override
@@ -622,8 +808,8 @@ class WorkbenchWorkspaceController
 
   @override
   void onReviewsRequested() {
-    // 中文注释: 审稿中心导航继续保持全局入口语义。
-    _showReviewCenter();
+    // 中文注释: 历史审稿入口同样折返到总站，具体结果查看回到工作台文件区。
+    _showLongTaskStation();
   }
 
   @override
@@ -639,6 +825,21 @@ class WorkbenchWorkspaceController
   }
 
   @override
+  void onCurrentAgentExpressionConstraintsRequested() {
+    final agentId = _readWorkbench().agentSelector.currentAgentId.trim();
+    if (agentId.isEmpty) {
+      _announce('当前没有可定位的会话智能体。');
+      return;
+    }
+    _showCurrentAgentExpressionConstraints(agentId);
+  }
+
+  void onInspirationWorkbenchRequested() {
+    // 中文注释: 灵感工作台从资源区独立进入，工作区只负责发起导航，不参与其状态机。
+    _showInspirationWorkbench();
+  }
+
+  @override
   void onResourceEntrySelected(String entryId) {
     // 中文注释: 资源树点击统一走真实工作区读取链，避免 widget 直接读文件。
     _openResource(entryId);
@@ -648,6 +849,13 @@ class WorkbenchWorkspaceController
   void onWorkspaceCommandDismissed() {
     // 中文注释: 工作区命令关闭只清理弹层状态，不触碰项目本身。
     _mutateWorkbench((current) => current.copyWith(workspaceCommand: null));
+  }
+
+  @override
+  void onWorkspaceImportFilesPickRequested(
+    WorkspaceCommandRequestViewData request,
+  ) {
+    unawaited(_pickImportFiles(request));
   }
 
   @override
@@ -697,9 +905,8 @@ class WorkbenchWorkspaceController
     }
     _writeProjectState(state.copyWith(activeOpenDocumentId: documentId));
     _mutateWorkbench(
-      (current) => applyWorkbenchState(
-        current.copyWith(generationStatus: '已切换文档。'),
-      ),
+      (current) =>
+          applyWorkbenchState(current.copyWith(generationStatus: '已切换文档。')),
     );
     _persistWorkbenchSnapshot();
   }
@@ -733,9 +940,8 @@ class WorkbenchWorkspaceController
       ),
     );
     _mutateWorkbench(
-      (current) => applyWorkbenchState(
-        current.copyWith(generationStatus: '已关闭文档。'),
-      ),
+      (current) =>
+          applyWorkbenchState(current.copyWith(generationStatus: '已关闭文档。')),
     );
     _persistWorkbenchSnapshot();
   }
@@ -766,7 +972,10 @@ class WorkbenchWorkspaceController
       return;
     }
     _expandResourceAncestors(relativePath);
-    final content = await _readProjectFileUseCase.execute(project, relativePath);
+    final content = await _readProjectFileUseCase.execute(
+      project,
+      relativePath,
+    );
     if (content == null) {
       _mutateWorkbench(
         (current) => current.copyWith(
@@ -803,7 +1012,7 @@ class WorkbenchWorkspaceController
     final project = currentProject;
     final body = _readWorkbench().activeDocumentBody.trim();
     if (project == null || body.isEmpty) {
-      _announce('当前没有可保存的草稿内容。');
+      _announce('当前没有可保存的正文内容。');
       return;
     }
     try {
@@ -813,7 +1022,9 @@ class WorkbenchWorkspaceController
         title: _readWorkbench().activeDocumentTitle,
         relativePath: _readWorkbench().activeDocumentPath,
       );
-      final resourceEntries = await reloadResourceEntries(selectedId: savedPath);
+      final resourceEntries = await reloadResourceEntries(
+        selectedId: savedPath,
+      );
       final activeDocument = _activeOpenDocument();
       if (activeDocument != null) {
         _replaceOpenDocument(
@@ -899,8 +1110,13 @@ class WorkbenchWorkspaceController
         return;
       }
       final createdPath = _stringValue(result['relative_path']);
-      final resourceEntries = await reloadResourceEntries(selectedId: createdPath);
-      final content = await _readProjectFileUseCase.execute(project, createdPath);
+      final resourceEntries = await reloadResourceEntries(
+        selectedId: createdPath,
+      );
+      final content = await _readProjectFileUseCase.execute(
+        project,
+        createdPath,
+      );
       if (content != null) {
         openOrActivateDocument(
           relativePath: createdPath,
@@ -948,7 +1164,9 @@ class WorkbenchWorkspaceController
       }
       final createdPath = _stringValue(result['relative_path']);
       _expandResourceAncestors(createdPath);
-      final resourceEntries = await reloadResourceEntries(selectedId: createdPath);
+      final resourceEntries = await reloadResourceEntries(
+        selectedId: createdPath,
+      );
       _mutateWorkbench(
         (current) => current.copyWith(
           resourceEntries: resourceEntries,
@@ -964,43 +1182,83 @@ class WorkbenchWorkspaceController
   Future<void> _submitImportFilesCommand(
     WorkspaceCommandRequestViewData request,
   ) async {
-    // 中文注释: 文件导入继续复用共享导入用例，避免 UI 层直接碰宿主文件系统细节。
+    // 中文注释: 文件导入执行统一交给导入编排服务，控制器只做请求转换与界面回写。
     final project = currentProject;
     if (project == null) {
       _announce('请先打开项目。');
       return;
     }
-    final sourcePaths = request.sourcePathsText
-        .split('\n')
-        .map((value) => value.trim())
-        .where((value) => value.isNotEmpty)
-        .toList(growable: false);
-    if (sourcePaths.isEmpty) {
-      _announce('请至少填写一个要导入的文件路径。');
+    final policy = _projectImportWorkspaceCommandViewDataService.resolvePolicy(
+      request: request,
+    );
+    if (policy.sourcePaths.isEmpty) {
+      _announce('请先选择至少一个要导入的文件。');
       return;
     }
     try {
-      final result = await _importProjectFilesUseCase.execute(
+      final result = await _projectImportExecutionService.execute(
         project: project,
-        sourcePaths: sourcePaths,
-        targetDirectory: request.targetDirectory.trim(),
-      );
-      if (_boolValue(result['ok']) != true) {
-        _announce(_stringValue(result['summary'], '导入失败。'));
-        return;
-      }
-      final resourceEntries = await reloadResourceEntries(selectedId: '');
-      _mutateWorkbench(
-        (current) => current.copyWith(
-          resourceEntries: resourceEntries,
-          workspaceCommand: null,
-          generationStatus: _stringValue(result['summary'], '导入完成。'),
+        request: ProjectImportRequest(
+          sourcePaths: policy.sourcePaths,
+          targetDirectory: policy.resolvedTargetDirectory,
+          autoDeconstruct: policy.autoDeconstruct,
         ),
       );
-      _announce(_stringValue(result['summary'], '导入完成。'));
+      final selectedId = result.autoDeconstructionPreviewPath.trim();
+      if (selectedId.isNotEmpty) {
+        _expandResourceAncestors(selectedId);
+      }
+      final resourceEntries = await reloadResourceEntries(
+        selectedId: selectedId,
+      );
+      if (selectedId.isNotEmpty) {
+        final content = await _readProjectFileUseCase.execute(
+          project,
+          selectedId,
+        );
+        if ((content ?? '').trim().isNotEmpty) {
+          openOrActivateDocument(
+            relativePath: selectedId,
+            title: _displayNameOf(selectedId),
+            content: content!,
+          );
+        }
+      }
+      _mutateWorkbench(
+        (current) => applyWorkbenchState(
+          current.copyWith(
+            resourceEntries: resourceEntries,
+            workspaceCommand: null,
+            generationStatus: result.summary,
+          ),
+        ),
+      );
+      _announce(result.summary);
     } catch (error) {
       _announce('导入文件失败：$error');
     }
+  }
+
+  Future<void> _pickImportFiles(WorkspaceCommandRequestViewData request) async {
+    // 中文注释: 文件选择器属于宿主动作，选完后只把结果回写到统一命令视图。
+    final project = currentProject;
+    if (project == null) {
+      _announce('请先打开项目。');
+      return;
+    }
+    final sourcePaths = await _desktopProjectImportFilePickerService
+        .pickFiles();
+    if (sourcePaths.isEmpty) {
+      return;
+    }
+    _showWorkspaceCommand(
+      _projectImportWorkspaceCommandViewDataService.build(
+        projectType: project.projectType,
+        sourcePaths: sourcePaths,
+        requestedTargetDirectory: request.targetDirectory,
+        requestedAutoDeconstruct: request.autoDeconstruct,
+      ),
+    );
   }
 
   Future<void> _createReviewTaskForCurrentDocument() async {
@@ -1015,14 +1273,12 @@ class WorkbenchWorkspaceController
       _announce('当前没有可审稿的文档。');
       return;
     }
-    final result = await _reviewReportService.createReviewTask(
-      project,
-      <String, Object?>{
-        'source_path': relativePath,
-        'review_type': ReviewTypeConstants.continuity,
-        'scope': relativePath,
-      },
-    );
+    final result = await _reviewReportService
+        .createReviewTask(project, <String, Object?>{
+          'source_path': relativePath,
+          'review_type': ReviewTypeConstants.continuity,
+          'scope': relativePath,
+        });
     _announce(_stringValue(result['message'], '已创建审稿任务。'));
   }
 
@@ -1054,7 +1310,9 @@ class WorkbenchWorkspaceController
     _replaceOpenDocument(active.copyWith(isRendered: !active.isRendered));
     _mutateWorkbench(
       (current) => applyWorkbenchState(
-        current.copyWith(generationStatus: active.isRendered ? '已切回编辑模式。' : '已切到渲染模式。'),
+        current.copyWith(
+          generationStatus: active.isRendered ? '已切回编辑模式。' : '已切到渲染模式。',
+        ),
       ),
     );
   }
@@ -1062,6 +1320,37 @@ class WorkbenchWorkspaceController
   void _showWorkspaceCommand(WorkspaceCommandViewData command) {
     // 中文注释: 工作区命令弹层通过统一入口挂到工作台视图，避免每个按钮自己持有表单状态。
     _mutateWorkbench((current) => current.copyWith(workspaceCommand: command));
+  }
+
+  Future<void> _selectProjectAgentGroupAndRefreshOverlay(String groupId) async {
+    final cleanGroupId = groupId.trim();
+    if (cleanGroupId.isEmpty) {
+      return;
+    }
+    final currentOverlay = _readWorkbench().projectAgentGroupWorkspace;
+    if (currentOverlay != null) {
+      _mutateWorkbench(
+        (current) => current.copyWith(
+          projectAgentGroupWorkspace: currentOverlay.copyWith(
+            statusMessage: '正在切换项目智能体组...',
+          ),
+        ),
+      );
+    }
+    final refreshedViewData = await _selectProjectAgentGroup(cleanGroupId);
+    if (refreshedViewData == null) {
+      _mutateWorkbench(
+        (current) => current.copyWith(projectAgentGroupWorkspace: null),
+      );
+      return;
+    }
+    _mutateWorkbench(
+      (current) => current.copyWith(
+        projectAgentGroupWorkspace: refreshedViewData.copyWith(
+          statusMessage: '',
+        ),
+      ),
+    );
   }
 
   Future<void> _persistLastProjectPath(String rootPath) async {
@@ -1075,7 +1364,9 @@ class WorkbenchWorkspaceController
       await _persistWorkbenchSnapshot();
       return;
     }
-    await _saveSettingsSilently(settings.copyWith(defaultProjectPath: rootPath));
+    await _saveSettingsSilently(
+      settings.copyWith(defaultProjectPath: rootPath),
+    );
     await _persistWorkbenchSnapshot();
   }
 
@@ -1084,7 +1375,9 @@ class WorkbenchWorkspaceController
     final settings = _readSettings();
     final project = currentProject;
     final state = _readProjectState();
-    if (settings == null || project == null || state.isSavingWorkbenchSnapshot) {
+    if (settings == null ||
+        project == null ||
+        state.isSavingWorkbenchSnapshot) {
       return;
     }
     _writeProjectState(state.copyWith(isSavingWorkbenchSnapshot: true));
@@ -1095,8 +1388,12 @@ class WorkbenchWorkspaceController
         'expanded_directories': state.expandedResourceDirectories.toList(
           growable: false,
         ),
+        'selected_conversation_agent_id':
+            _readWorkbench().agentSelector.currentAgentId,
       };
-      final currentSnapshot = _mapValue(settings.extraSettings['workbench_state']);
+      final currentSnapshot = _mapValue(
+        settings.extraSettings['workbench_state'],
+      );
       if (_normalizePathForCompare(
             _stringValue(currentSnapshot['project_root_path']),
           ) ==
@@ -1106,7 +1403,9 @@ class WorkbenchWorkspaceController
               state.expandedResourceDirectories.toList(growable: false),
             ) &&
             _stringValue(currentSnapshot['active_document_path']) ==
-                _readWorkbench().activeDocumentPath) {
+                _readWorkbench().activeDocumentPath &&
+            _stringValue(currentSnapshot['selected_conversation_agent_id']) ==
+                _readWorkbench().agentSelector.currentAgentId) {
           return;
         }
       }
@@ -1196,7 +1495,9 @@ class WorkbenchWorkspaceController
   }
 
   ResourceEntryViewData? _resourceEntryById(String entryId) {
-    for (final entry in _resourceEntriesFrom(_readProjectState().resourceSnapshotEntries)) {
+    for (final entry in _resourceEntriesFrom(
+      _readProjectState().resourceSnapshotEntries,
+    )) {
       if (entry.id == entryId.trim()) {
         return entry;
       }
@@ -1231,9 +1532,7 @@ class WorkbenchWorkspaceController
       return;
     }
     final state = _readProjectState();
-    final nextExpanded = <String>{
-      ...state.expandedResourceDirectories,
-    };
+    final nextExpanded = <String>{...state.expandedResourceDirectories};
     var current = '';
     for (var index = 0; index < parts.length - 1; index++) {
       current = current.isEmpty ? parts[index] : '$current/${parts[index]}';
@@ -1325,7 +1624,9 @@ class WorkbenchWorkspaceController
   void _replaceOpenDocument(OpenDocumentState document) {
     // 中文注释: 已打开文档的替换逻辑单独收口，避免多个动作各自维护标签列表。
     final state = _readProjectState();
-    final index = state.openDocuments.indexWhere((item) => item.id == document.id);
+    final index = state.openDocuments.indexWhere(
+      (item) => item.id == document.id,
+    );
     if (index < 0) {
       return;
     }

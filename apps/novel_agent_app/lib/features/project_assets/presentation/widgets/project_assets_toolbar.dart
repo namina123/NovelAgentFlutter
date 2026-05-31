@@ -1,0 +1,56 @@
+import 'package:flutter/material.dart';
+
+import '../../../../shared/widgets/action_button.dart';
+import '../../../../shared/widgets/workspace_page_header.dart';
+import '../../application/controllers/project_assets_controller.dart';
+import '../models/project_assets_view_data.dart';
+import 'project_asset_bundle_dialogs.dart';
+
+class ProjectAssetsToolbar extends StatelessWidget {
+  const ProjectAssetsToolbar({
+    super.key,
+    required this.controller,
+    required this.viewData,
+  });
+
+  final ProjectAssetsController controller;
+  final ProjectAssetsViewData viewData;
+
+  @override
+  Widget build(BuildContext context) {
+    return WorkspacePageHeader(
+      title: viewData.title,
+      subtitle: viewData.description,
+      onBackRequested: controller.onProjectAssetsBackRequested,
+      actions: [
+        ActionButton(
+          label: '新建',
+          icon: Icons.add_rounded,
+          compact: true,
+          onPressed: controller.onProjectAssetsNewRequested,
+        ),
+        ActionButton(
+          label: '导入资产包',
+          icon: Icons.file_upload_outlined,
+          compact: true,
+          tone: ActionButtonTone.neutral,
+          onPressed: () => showProjectAssetImportDialog(context, controller),
+        ),
+        ActionButton(
+          label: '导出资产包',
+          icon: Icons.inventory_2_outlined,
+          compact: true,
+          tone: ActionButtonTone.neutral,
+          onPressed: () => showProjectAssetExportDialog(context, controller),
+        ),
+        ActionButton(
+          label: '刷新',
+          icon: Icons.refresh_rounded,
+          compact: true,
+          tone: ActionButtonTone.neutral,
+          onPressed: controller.onProjectAssetsRefreshRequested,
+        ),
+      ],
+    );
+  }
+}

@@ -80,6 +80,13 @@ class LocalProjectFileMutationAdapter {
     return file.readAsString();
   }
 
+  Future<void> writeExternalTextFile(String absolutePath, String content) async {
+    // 中文注释: 目录导出先统一收口到绝对路径写文本，后续 zip 导出只需替换这一层实现。
+    final file = File(absolutePath);
+    await file.parent.create(recursive: true);
+    await file.writeAsString(content);
+  }
+
   Future<void> copyExternalFile(
     String absolutePath,
     String rootPath,

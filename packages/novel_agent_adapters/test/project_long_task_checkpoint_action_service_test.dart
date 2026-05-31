@@ -77,7 +77,7 @@ void main() {
       await modeRepository.save(project, state);
       await workspacePort.writeTextFile(
         project.rootPath,
-        'drafts/ch01.md',
+        'chapters/ch01.md',
         '# 第01章\n\n样章正文\n',
       );
       await taskRepository.saveTask(project, const <String, Object?>{
@@ -86,7 +86,7 @@ void main() {
         'task_type': 'chapter',
         'mode': TaskRuntimeConstants.modeSeedToFullNovel,
         'status': TaskRuntimeConstants.statusWaitingUser,
-        'output_paths': <Object?>['drafts/ch01.md'],
+        'output_paths': <Object?>['chapters/ch01.md'],
         'metadata': <String, Object?>{
           'stage': 'sample',
           'persistent_context_paths': <Object?>[
@@ -108,7 +108,7 @@ void main() {
           'task_type': 'chapter',
           'stage': 'sample',
           'result_ok': true,
-          'output_paths': <Object?>['drafts/ch01.md'],
+          'output_paths': <Object?>['chapters/ch01.md'],
           'confirmation_focus': <Object?>['样章入口是否成立。'],
           'drift_watch_items': <Object?>[
             '检查文风是否漂移。',
@@ -131,17 +131,39 @@ void main() {
     test(
       'builds action package and materializes followup review tasks',
       () async {
+        await taskRepository.saveRecord(
+          project,
+          'tracking/checkpoint_reviews/chapter_medium.json',
+          const <String, Object?>{
+            'task': <String, Object?>{
+              'id': 'chapter_001',
+              'title': '样章：第01章',
+              'task_type': 'chapter',
+              'relative_path': 'tasks/chapter_001.json',
+            },
+            'task_type': 'chapter',
+            'stage': 'sample',
+            'result_ok': true,
+            'severity': 'medium',
+            'severity_label': '中',
+            'output_paths': <Object?>['chapters/ch01.md'],
+            'confirmation_focus': <Object?>['样章入口是否成立。'],
+            'drift_watch_items': <Object?>['检查文风是否漂移。'],
+            'persistent_context_paths': <Object?>[],
+          },
+        );
+
         final package = await service.buildActionPackage(
           project,
-          'tracking/checkpoint_reviews/chapter_001.json',
+          'tracking/checkpoint_reviews/chapter_medium.json',
         );
 
         expect(ValueReaders.boolValue(package['ok']), isTrue);
-        expect(ValueReaders.stringValue(package['severity']), 'high');
+        expect(ValueReaders.stringValue(package['severity']), 'medium');
 
         final applied = await service.applyAction(
           project,
-          'tracking/checkpoint_reviews/chapter_001.json',
+          'tracking/checkpoint_reviews/chapter_medium.json',
           'create_followup_review_tasks',
         );
 
@@ -204,7 +226,7 @@ void main() {
             'result_ok': true,
             'severity': 'low',
             'severity_label': '低风险',
-            'output_paths': <Object?>['drafts/ch01.md'],
+            'output_paths': <Object?>['chapters/ch01.md'],
             'confirmation_focus': <Object?>['样章入口成立。'],
             'drift_watch_items': <Object?>[],
             'persistent_context_paths': <Object?>[],

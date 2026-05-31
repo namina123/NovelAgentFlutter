@@ -11,6 +11,16 @@ abstract class ReviewCenterActionHandler {
 
   void onReviewCenterCreateRepairTaskRequested();
 
+  void onReviewCenterRewriteModeSelected(String rewriteMode);
+
+  void onReviewCenterSuggestionToggled(String suggestionId, bool selected);
+
+  void onReviewCenterSegmentToggled(String segmentId, bool selected);
+
+  void onReviewCenterPlanRequested();
+
+  void onReviewCenterMaterializeRewriteRequested();
+
   void onReviewCenterFilterSubmitted({
     required String reviewType,
     required String scope,

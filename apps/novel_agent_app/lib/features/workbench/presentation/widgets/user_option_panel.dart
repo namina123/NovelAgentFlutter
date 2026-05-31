@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../app/theme/app_palette.dart';
+import '../../../../../shared/theme/novel_theme_context.dart';
 import '../models/user_option_view_data.dart';
 import 'user_option_tile.dart';
 
@@ -20,14 +20,15 @@ class UserOptionPanel extends StatelessWidget {
     if (options.isEmpty) {
       return const SizedBox.shrink();
     }
+    final colors = context.novelThemeColors;
     final question = options.first.sourceQuestion.trim();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           '等待确认',
           style: TextStyle(
-            color: AppPalette.text,
+            color: colors.textColor,
             fontSize: 15,
             fontWeight: FontWeight.w700,
           ),
@@ -36,8 +37,8 @@ class UserOptionPanel extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             question,
-            style: const TextStyle(
-              color: AppPalette.mutedText,
+            style: TextStyle(
+              color: colors.mutedTextColor,
               fontSize: 12,
               height: 1.4,
             ),
