@@ -15,6 +15,94 @@ class LongTaskCheckpointDispositionService {
     final persistentContextPaths = ValueReaders.stringList(
       review['persistent_context_paths'],
     );
+    final narrativeRisk = ValueReaders.mapValue(
+      review['narrative_supervisor_risk'],
+    );
+    final overallRisk = ValueReaders.mapValue(narrativeRisk['overall']);
+    final overallCategory = ValueReaders.stringValue(
+      overallRisk['category'],
+    ).trim();
+    final overallSummary = ValueReaders.stringValue(
+      overallRisk['summary'],
+    ).trim();
+    final overallReason = ValueReaders.stringValue(
+      overallRisk['reason'],
+    ).trim();
+
+    if (overallCategory == 'manual_attention') {
+      return _result(
+        disposition: 'manual_attention',
+        reason: overallReason.isEmpty
+            ? 'narrative_manual_attention'
+            : overallReason,
+        summary: overallSummary.isEmpty
+            ? '当前节点已经进入人工处理范围，不应继续按普通 waiting_user 或自动放行处理。'
+            : overallSummary,
+        blocksAutoContinue: true,
+        manualAttentionRequired: true,
+        allowContinue: false,
+        allowConfirmCheckpoint: false,
+        createFollowupReviewTasks: false,
+        requestRevisionFollowup: false,
+        revisitModeGuidance: persistentContextPaths.isNotEmpty,
+        recommendedActionId: persistentContextPaths.isNotEmpty
+            ? 'revisit_mode_guidance'
+            : '',
+      );
+    }
+
+    if (overallCategory == 'repair') {
+      return _result(
+        disposition: 'blocked_wait_user',
+        reason: overallReason.isEmpty
+            ? 'narrative_repair_required'
+            : overallReason,
+        summary: overallSummary.isEmpty
+            ? '当前节点已经有明确返工信号，建议先走 repair / revision，再决定是否继续主链。'
+            : overallSummary,
+        blocksAutoContinue: true,
+        manualAttentionRequired: false,
+        allowContinue: false,
+        allowConfirmCheckpoint: false,
+        createFollowupReviewTasks: false,
+        requestRevisionFollowup: true,
+        revisitModeGuidance: false,
+        recommendedActionId: 'request_revision_followup',
+      );
+    }
+
+    if (overallCategory == 'checkpoint_user') {
+      final waitingFromPermission = overallReason == 'permission_waiting_user';
+      final canDeferPermissionAndContinue =
+          waitingFromPermission &&
+          resultOk &&
+          error.isEmpty &&
+          outputPaths.isNotEmpty;
+      return _result(
+        disposition: 'blocked_wait_user',
+        reason: overallReason.isEmpty
+            ? 'narrative_checkpoint_user'
+            : overallReason,
+        summary: overallSummary.isEmpty
+            ? '当前节点停在真实用户确认点，应该等待用户处理而不是被别的技术缺口挤占。'
+            : (canDeferPermissionAndContinue
+                  ? '当前节点存在待确认的权限提案，但已有稳定产物；可先保留提案待处理，并由用户确认继续主链。'
+                  : overallSummary),
+        blocksAutoContinue: true,
+        manualAttentionRequired: false,
+        allowContinue: canDeferPermissionAndContinue,
+        allowConfirmCheckpoint:
+            !waitingFromPermission && taskType == 'checkpoint',
+        createFollowupReviewTasks: false,
+        requestRevisionFollowup: false,
+        revisitModeGuidance: false,
+        recommendedActionId: canDeferPermissionAndContinue
+            ? 'continue_long_task'
+            : (!waitingFromPermission && taskType == 'checkpoint'
+                  ? 'confirm_checkpoint_continue'
+                  : ''),
+      );
+    }
 
     if (!resultOk || error.isNotEmpty) {
       return _result(

@@ -283,6 +283,214 @@ void main() {
     );
 
     test(
+      'generate draft forces present_user_options for option selection turns',
+      () async {
+        // 中文注释: 这里 mock“让用户先选方向”的真实入口，验证请求级约束会把模型压到选项工具而不是普通正文列表。
+        final workspacePort = _FakeProjectWorkspacePort(entries: [], files: {});
+        final gateway = _FakeLlmGateway(
+          scriptedResults: [
+            <String, Object?>{
+              'ok': true,
+              'content': '',
+              'tool_calls': <Object?>[
+                <String, Object?>{
+                  'id': 'call_option_1',
+                  'name': 'present_user_options',
+                  'arguments': <String, Object?>{
+                    'question': '你想先走哪个方向？',
+                    'options': <Object?>[
+                      <String, Object?>{'label': '都市悬疑', 'value': 'urban'},
+                      <String, Object?>{'label': '仙侠成长', 'value': 'xianxia'},
+                      <String, Object?>{'label': '校园群像', 'value': 'school'},
+                    ],
+                  },
+                },
+              ],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '',
+              },
+            },
+          ],
+        );
+        final toolExecutionPort = _FakeToolExecutionPort(
+          resultByToolName: <String, JsonMap>{
+            'present_user_options': <String, Object?>{
+              'ok': true,
+              'waiting_for_user_choice': true,
+              'changed_paths': const <Object?>[],
+            },
+          },
+        );
+        final useCase = GenerateDraftUseCase(
+          projectWorkspacePort: workspacePort,
+          llmGateway: gateway,
+          toolExecutionPort: toolExecutionPort,
+          contextAssemblerService: ContextAssemblerService(
+            budgetService: ContextBudgetService(),
+            staticSectionService: ContextStaticSectionService(
+              projectPromptContract: ProjectPromptContract(),
+            ),
+            projectFileSectionService: ContextProjectFileSectionService(),
+          ),
+          projectPromptContract: ProjectPromptContract(),
+          toolStrategyService: _ForceOptionToolStrategyService(),
+        );
+
+        final result = await useCase.execute(
+          project: const ProjectDescriptor(
+            id: 'demo',
+            name: '示例项目',
+            rootPath: 'D:/demo',
+          ),
+          userPrompt: '先给我三个开局方向让我选，不要直接写正文。',
+          modelId: 'test-model',
+          intent: 'user_options',
+        );
+
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(
+              ValueReaders.mapValue(gateway.lastOptions['tool_choice'])['function'],
+            )['name'],
+          ),
+          'present_user_options',
+        );
+        expect(gateway.lastSystemPrompt, contains('必须调用 present_user_options'));
+        expect(result.waitingForUserChoice, isTrue);
+        expect(
+          result.executedTools
+              .map(ValueReaders.mapValue)
+              .map((tool) => ValueReaders.stringValue(tool['name'])),
+          contains('present_user_options'),
+        );
+      },
+    );
+
+    test(
+      'generate draft keeps ordinary chapter writing turns on chapter delivery contract instead of option forcing',
+      () async {
+        // 中文注释: 这里 mock“正式写章节”的轮次，验证它拿到的是章节交付合同，而不是被误压到选项工具或退回低层写入提示。
+        final workspacePort = _FakeProjectWorkspacePort(entries: [], files: {});
+        final gateway = _FakeLlmGateway(
+          scriptedResults: [
+            <String, Object?>{
+              'ok': true,
+              'content': '',
+              'tool_calls': <Object?>[
+                <String, Object?>{
+                  'id': 'call_write_1',
+                  'name': 'submit_chapter_delivery',
+                  'arguments': <String, Object?>{
+                    'chapter_path': 'chapters/chapter_01.md',
+                    'chapter_content': '# 第一章\n\n正文',
+                    'title': '第一章 开场',
+                    'submission': <String, Object?>{
+                      'submission_id': 'delivery-1',
+                      'chapter_ref': <String, Object?>{
+                        'ref_type': 'chapter',
+                        'ref_id': 'chapters/chapter_01.md',
+                        'relative_path': 'chapters/chapter_01.md',
+                      },
+                    },
+                  },
+                },
+              ],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '',
+              },
+            },
+            <String, Object?>{
+              'ok': true,
+              'content': '章节已保存。',
+              'tool_calls': const <Object?>[],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '章节已保存。',
+              },
+            },
+          ],
+        );
+        final toolExecutionPort = _FakeToolExecutionPort(
+          resultByToolName: <String, JsonMap>{
+            'submit_chapter_delivery': <String, Object?>{
+              'ok': true,
+              'changed_paths': <Object?>[
+                'chapters/chapter_01.md',
+                '.novel_agent/continuity/deliveries/delivery-1.json',
+              ],
+              'domain_outcome_status': 'accepted',
+              'domain_outcome': <String, Object?>{
+                'outcome_status': 'accepted',
+                'outcome_payload': <String, Object?>{
+                  'delivery_id': 'delivery-1',
+                  'chapter_path': 'chapters/chapter_01.md',
+                  'delivery_state': 'delivered',
+                  'chapter_body_state': 'delivered',
+                  'sidecar_state': 'accepted',
+                  'state_result': <String, Object?>{
+                    'chapter_body_delivered': true,
+                    'submission_accepted': true,
+                  },
+                },
+              },
+            },
+          },
+        );
+        final useCase = GenerateDraftUseCase(
+          projectWorkspacePort: workspacePort,
+          llmGateway: gateway,
+          toolExecutionPort: toolExecutionPort,
+          contextAssemblerService: ContextAssemblerService(
+            budgetService: ContextBudgetService(),
+            staticSectionService: ContextStaticSectionService(
+              projectPromptContract: ProjectPromptContract(),
+            ),
+            projectFileSectionService: ContextProjectFileSectionService(),
+          ),
+          projectPromptContract: ProjectPromptContract(),
+        );
+
+        final result = await useCase.execute(
+          project: const ProjectDescriptor(
+            id: 'demo',
+            name: '示例项目',
+            rootPath: 'D:/demo',
+          ),
+          userPrompt: '直接写第一章，约两千字。',
+          modelId: 'test-model',
+          title: '第一章 开场',
+          intent: 'draft',
+        );
+
+        expect(gateway.lastOptions.containsKey('tool_choice'), isFalse);
+        expect(
+          gateway.lastSystemPrompt,
+          contains('完成后应优先调用 submit_chapter_delivery'),
+        );
+        expect(
+          gateway.lastSystemPrompt,
+          contains('不要只靠 write_project_file 冒充正式章节交付'),
+        );
+        expect(
+          result.executedTools
+              .map(ValueReaders.mapValue)
+              .map((tool) => ValueReaders.stringValue(tool['name'])),
+          contains('submit_chapter_delivery'),
+        );
+        expect(
+          result.changedPaths,
+          contains('.novel_agent/continuity/deliveries/delivery-1.json'),
+        );
+        expect(
+          toolExecutionPort.executedToolNames,
+          contains('submit_chapter_delivery'),
+        );
+      },
+    );
+
+    test(
       'generate draft preloads routed skills before model response',
       () async {
         // 中文注释: 这里验证长任务阶段会先按策略读取技能摘要，而不是完全等模型自己想起来。
@@ -671,6 +879,7 @@ class _FakeLlmGateway extends LlmGateway {
   }) : _scriptedResults = List<JsonMap>.from(scriptedResults);
 
   String lastPrompt = '';
+  String lastSystemPrompt = '';
   String lastModelId = '';
   JsonMap lastOptions = const <String, Object?>{};
   List<String> lastToolNames = const <String>[];
@@ -705,7 +914,12 @@ class _FakeLlmGateway extends LlmGateway {
       (message) => message['role'] == 'user',
       orElse: () => const <String, Object?>{'content': ''},
     );
+    final systemMessage = request.messages.firstWhere(
+      (message) => message['role'] == 'system',
+      orElse: () => const <String, Object?>{'content': ''},
+    );
     lastPrompt = promptMessage['content']?.toString() ?? '';
+    lastSystemPrompt = systemMessage['content']?.toString() ?? '';
     lastModelId = request.modelId;
     lastOptions = ValueReaders.deepCopyMap(request.options);
     lastToolNames = request.tools
@@ -743,6 +957,15 @@ class _FakeLlmGateway extends LlmGateway {
         'content': '# 模型返回的草稿\n\n这是一个测试草稿。',
       },
     };
+  }
+}
+
+class _ForceOptionToolStrategyService extends ToolStrategyService {
+  @override
+  JsonMap defaultSettings() {
+    return super.defaultSettings()
+      ..['force_tool_choice'] = true
+      ..['auto_present_options'] = true;
   }
 }
 

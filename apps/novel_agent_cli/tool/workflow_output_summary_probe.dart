@@ -38,5 +38,40 @@ void main() {
       return;
     }
   }
+  final narrativeContract = service.extractNarrativeRuntimeContract(
+    const <String, Object?>{
+      'activation_report_path':
+          'tracking/chapter_atomic/ch01.activation_report.json',
+      'activation_report_summary': 'selected 8, omitted 2, files 8.',
+      'chapter_delivery_state': 'delivered',
+      'chapter_delivery_path': 'chapters/ch01.md',
+      'checkpoint_review': <String, Object?>{
+        'relative_path': 'tracking/checkpoint_reviews/ch01.json',
+        'review': <String, Object?>{
+          'summary': '当前章已通过检查点复核。',
+        },
+      },
+      'changed_paths': <Object?>[
+        '.novel_agent/continuity/ledgers/main-ledger/entries.jsonl',
+        '.novel_agent/continuity/reviews/review-001.json',
+        '.novel_agent/continuity/deliveries/delivery-001.json',
+      ],
+    },
+  );
+  final narrativeLines = service.narrativeBriefLines(narrativeContract);
+  final narrativeExpected = <String>[
+    'Activation：selected 8, omitted 2, files 8.',
+    'Delivery：delivered | chapters/ch01.md',
+    'Review：当前章已通过检查点复核。',
+    'Continuity：ledger 1 | reviews 1 | deliveries 1',
+  ];
+  for (final item in narrativeExpected) {
+    if (!narrativeLines.contains(item)) {
+      stderr.writeln('workflow_output_summary_probe: missing narrative line -> $item');
+      stderr.writeln(narrativeLines.join('\n'));
+      exitCode = 1;
+      return;
+    }
+  }
   stdout.writeln('workflow_output_summary_probe: PASS');
 }

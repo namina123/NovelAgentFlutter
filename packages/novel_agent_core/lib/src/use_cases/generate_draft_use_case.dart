@@ -157,6 +157,7 @@ class GenerateDraftUseCase {
     List<Object?> projectExpressionConstraintBindings = const <Object?>[],
     List<Object?> projectFileSectionPlan = const <Object?>[],
     JsonMap projectFileContents = const <String, Object?>{},
+    List<String> exposedToolIds = const <String>[],
     String activeDocumentPath = '',
     String activeDocumentBody = '',
     DraftGenerationCancellationToken? cancellationToken,
@@ -316,14 +317,16 @@ class GenerateDraftUseCase {
       return cancelledResult(DraftGenerationStopPhase.preparingContext);
     }
     final toolSettings = _toolStrategyService.defaultSettings();
-    final enabledToolIds = _toolStrategyService.enabledToolIds(toolSettings);
-    final exposedToolIds = _toolExposurePolicyService.filterExposedToolIds(
-      enabledToolIds,
+    final requestedToolIds = exposedToolIds.isEmpty
+        ? _toolStrategyService.enabledToolIds(toolSettings)
+        : exposedToolIds;
+    final filteredToolIds = _toolExposurePolicyService.filterExposedToolIds(
+      requestedToolIds,
       hostPlatform: _hostPlatform,
       projectType: project.projectType,
     );
     final toolSchemas = _toolSchemaBuilderService.buildOpenAiSchemas(
-      exposedToolIds,
+      filteredToolIds,
     );
     final llmRequestOptions = _llmRequestOptions(
       requestOptions,
@@ -385,7 +388,7 @@ class GenerateDraftUseCase {
         '当前请求已经附带上下文包；如需更多文件，请调用项目工具按需读取。',
         skillRoutingNote,
       ].where((item) => item.trim().isNotEmpty).join('\n'),
-      toolIds: exposedToolIds,
+      toolIds: filteredToolIds,
     );
     messages = <JsonMap>[
       <String, Object?>{'role': 'system', 'content': systemPrompt},

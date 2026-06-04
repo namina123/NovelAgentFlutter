@@ -31,6 +31,9 @@ class LongTaskChapterGateDispositionService {
       reviewReport['issues'],
     );
     final suggestions = ValueReaders.stringList(reviewReport['suggestions']);
+    final recommendedDisposition = ValueReaders.stringValue(
+      ValueReaders.mapValue(reviewReport['metadata'])['recommended_disposition'],
+    ).trim();
     final criticalIssueCount = issues
         .where(
           (issue) => ValueReaders.stringValue(issue['severity']) == 'critical',
@@ -42,6 +45,48 @@ class LongTaskChapterGateDispositionService {
     }).length;
 
     if (issues.isEmpty && suggestions.isEmpty) {
+      if (recommendedDisposition == 'manual_attention') {
+        return const <String, Object?>{
+          'disposition': 'manual_attention',
+          'action': 'manual_attention',
+          'reason': 'review_requests_manual_attention',
+          'blocks_auto_advance': true,
+          'manual_attention_required': true,
+          'should_create_repair_task': false,
+          'issue_count': 0,
+          'suggestion_count': 0,
+          'critical_issue_count': 0,
+          'high_issue_count': 0,
+        };
+      }
+      if (recommendedDisposition == 'repair') {
+        return const <String, Object?>{
+          'disposition': 'auto_create_repair_task',
+          'action': 'create_repair_task',
+          'reason': 'review_requests_repair',
+          'blocks_auto_advance': true,
+          'manual_attention_required': false,
+          'should_create_repair_task': true,
+          'issue_count': 0,
+          'suggestion_count': 0,
+          'critical_issue_count': 0,
+          'high_issue_count': 0,
+        };
+      }
+      if (recommendedDisposition == 'checkpoint_user') {
+        return const <String, Object?>{
+          'disposition': 'blocked_wait_user',
+          'action': 'block_gate',
+          'reason': 'review_requests_user_checkpoint',
+          'blocks_auto_advance': true,
+          'manual_attention_required': false,
+          'should_create_repair_task': false,
+          'issue_count': 0,
+          'suggestion_count': 0,
+          'critical_issue_count': 0,
+          'high_issue_count': 0,
+        };
+      }
       return const <String, Object?>{
         'disposition': 'auto_continue',
         'action': 'pass_gate',

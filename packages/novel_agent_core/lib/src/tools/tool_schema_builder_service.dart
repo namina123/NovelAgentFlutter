@@ -1,8 +1,17 @@
 import '../common/json_types.dart';
 import 'builtin_tool_catalog.dart';
 import 'builtin_tool_definition.dart';
+import 'domain/narrative_domain_tool_catalog.dart';
+import 'domain/narrative_domain_tool_names.dart';
 
 class ToolSchemaBuilderService {
+  ToolSchemaBuilderService({
+    NarrativeDomainToolCatalog? narrativeDomainToolCatalog,
+  }) : _narrativeDomainToolCatalog =
+           narrativeDomainToolCatalog ?? NarrativeDomainToolCatalog();
+
+  final NarrativeDomainToolCatalog _narrativeDomainToolCatalog;
+
   List<JsonMap> buildOpenAiSchemas(List<String> toolIds) {
     // 中文注释: schema 生成集中在核心层，确保 CLI、GUI 和未来远程宿主暴露同一套工具协议。
     final result = <JsonMap>[];
@@ -16,6 +25,12 @@ class ToolSchemaBuilderService {
   }
 
   JsonMap _schemaFor(String toolId) {
+    if (NarrativeDomainToolNames.all.contains(toolId)) {
+      final schemas = _narrativeDomainToolCatalog.buildOpenAiSchemas(<String>[
+        toolId,
+      ]);
+      return schemas.isEmpty ? <String, Object?>{} : schemas.single;
+    }
     BuiltinToolDefinition? definition;
     for (final item in BuiltinToolCatalog.definitions) {
       if (item.id == toolId) {

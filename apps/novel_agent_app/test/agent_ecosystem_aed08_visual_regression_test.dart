@@ -457,9 +457,6 @@ class _FakeResourceManagerActionHandler
   void onImportRequested() {}
 
   @override
-  void onLongTaskStationRequested() {}
-
-  @override
   void onModelSettingsRequested() {}
 
   @override
@@ -577,6 +574,9 @@ class _FakeAgentEcosystemActionHandler implements AgentEcosystemActionHandler {
 
   @override
   void onOpenEcosystemEntrySourceRequested(String entryId) {}
+
+  @override
+  void onProjectExpressionConstraintsRequested() {}
 
   @override
   void onProjectSkillLoadoutApplyRequested(String agentId) {}

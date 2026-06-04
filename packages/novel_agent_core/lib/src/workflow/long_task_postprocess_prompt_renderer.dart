@@ -15,7 +15,7 @@ class LongTaskPostprocessPromptRenderer {
     final revision = phase == 'revision_review';
     final lines = <String>[
       revision
-          ? '你正在执行 NOVEL Agent 的修复任务后处理。本轮只检查刚才的修订质量，不继续重写正文。'
+          ? '你正在执行 NOVEL Agent 的修复任务后处理。本轮目标只能有一个：判断当前修订是否可收口；不要继续重写正文，也不要顺手扩展任务范围。'
           : '你正在执行 NOVEL Agent 的章节任务后处理。请不要重写正文，优先读取已写入文件，再调用工具保存后处理结果。',
       '',
       '## 任务',
@@ -41,9 +41,10 @@ class LongTaskPostprocessPromptRenderer {
         ..add('1. 调用 read_project_file 读取每个修订目标。')
         ..add('2. 如果有原审稿报告或修复 Diff，调用 read_project_file 读取它们。')
         ..add(
-          '3. 调用 run_continuity_check 保存修订检查报告，source_paths 使用修订目标，related_paths 包含原审稿报告和修复 Diff。',
+          '3. 正式修订结论优先调用 submit_semantic_review，提交结构化 findings 和 recommended_disposition；不要把散文评语或普通检查报告冒充为正式审稿交付。',
         )
-        ..add('4. 最终只简短说明修订是否通过、还有哪些风险、是否建议回滚。');
+        ..add('4. 如果宿主还要求连续性报告，可把它当补充证据；但本轮唯一正式结论仍然围绕当前修订目标，不扩展成新写作任务。')
+        ..add('5. 最终只简短说明修订是否通过、还有哪些风险、是否建议回滚。');
     } else {
       lines
         ..add(
@@ -59,7 +60,9 @@ class LongTaskPostprocessPromptRenderer {
         ..add(
           '4. 如果出现新的伏笔、伏笔推进/回收、明确时间顺序节点或关键关系变化，分别调用 update_foreshadow_state、update_timeline_state、update_relationship_state。',
         )
-        ..add('5. 调用 run_continuity_check 保存连续性、剧情或文风风险报告。')
+        ..add(
+          '5. 如果本轮需要给出正式审稿结论，优先调用 submit_semantic_review；连续性报告、摘要或检查备注只能作为补充，不替代结构化审稿交付。',
+        )
         ..add('6. 最终用简短 Markdown 告诉用户保存了哪些后处理产物，以及哪些内容需要人工确认。');
     }
     final creativeRuleSummary = ValueReaders.stringValue(

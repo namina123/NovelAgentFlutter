@@ -1,5 +1,6 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import 'chapter_delivery_state_statuses.dart';
 import 'task_queue_option_service.dart';
 import 'task_runtime_constants.dart';
 
@@ -41,8 +42,19 @@ class TaskQueueStopPolicyService {
         'note': '任务进入等待用户确认状态，队列已暂停。',
       };
     }
+    final deliveryState = ValueReaders.stringValue(
+      result['chapter_delivery_state'],
+      ValueReaders.stringValue(
+        ValueReaders.mapValue(result['execution'])['chapter_delivery_state'],
+      ),
+    ).trim();
+    final deliveryDecision = _deliveryStopDecision(deliveryState);
+    if (deliveryDecision.isNotEmpty) {
+      return deliveryDecision;
+    }
     final outputPaths = ValueReaders.stringList(result['output_paths']);
     if (outputPaths.isEmpty &&
+        deliveryState.isEmpty &&
         ValueReaders.boolValue(cleanOptions['stop_on_no_output'], true)) {
       return <String, Object?>{
         'stop': true,
@@ -62,6 +74,34 @@ class TaskQueueStopPolicyService {
       return 'completed';
     }
     return 'stopped';
+  }
+
+  JsonMap _deliveryStopDecision(String deliveryState) {
+    switch (deliveryState) {
+      case ChapterDeliveryStateStatuses.missingOutputRecoverable:
+      case ChapterDeliveryStateStatuses.pathMismatchRecoverable:
+      case ChapterDeliveryStateStatuses.deliveredNeedsRepair:
+        return const <String, Object?>{
+          'stop': true,
+          'reason': 'delivery_repair_required',
+          'note': '章节交付状态要求先进入 repair/recovery，队列已暂停。',
+        };
+      case ChapterDeliveryStateStatuses.invalidOutputRewriteRequired:
+      case ChapterDeliveryStateStatuses.manualAttentionRequired:
+      case ChapterDeliveryStateStatuses.hardFailure:
+        return const <String, Object?>{
+          'stop': true,
+          'reason': 'delivery_manual_attention',
+          'note': '章节交付状态要求人工介入，队列已暂停。',
+        };
+      case ChapterDeliveryStateStatuses.waitingUserChoice:
+        return const <String, Object?>{
+          'stop': true,
+          'reason': 'delivery_waiting_user_choice',
+          'note': '章节交付状态正在等待用户确认，队列已暂停。',
+        };
+    }
+    return const <String, Object?>{};
   }
 
   List<String> toolNamesFromResponse(JsonMap response) {

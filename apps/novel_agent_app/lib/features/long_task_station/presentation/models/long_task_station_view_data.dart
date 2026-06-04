@@ -118,6 +118,12 @@ class LongTaskRunDetailViewData {
     required this.latestCheckpointReview,
     required this.latestReviewReport,
     required this.latestRepairTask,
+    required this.narrativeActivation,
+    required this.narrativeDelivery,
+    required this.narrativeReview,
+    required this.narrativeContinuity,
+    required this.narrativeProjectionItems,
+    required this.narrativePermissionItems,
     required this.requiresManualAttention,
     required this.canPause,
     required this.canResume,
@@ -158,6 +164,12 @@ class LongTaskRunDetailViewData {
   final LongTaskRunRelatedItemViewData? latestCheckpointReview;
   final LongTaskRunRelatedItemViewData? latestReviewReport;
   final LongTaskRunRelatedItemViewData? latestRepairTask;
+  final LongTaskRunRelatedItemViewData? narrativeActivation;
+  final LongTaskRunRelatedItemViewData? narrativeDelivery;
+  final LongTaskRunRelatedItemViewData? narrativeReview;
+  final LongTaskRunRelatedItemViewData? narrativeContinuity;
+  final List<LongTaskRunRelatedItemViewData> narrativeProjectionItems;
+  final List<LongTaskRunRelatedItemViewData> narrativePermissionItems;
   final bool requiresManualAttention;
   final bool canPause;
   final bool canResume;

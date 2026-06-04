@@ -171,6 +171,9 @@ class LongTaskTaskTransactionService {
               .toList(growable: false),
       'context_needs': _contextService.commonContextNeeds(task),
       'tool_contracts': _contractService.toolContractsForTask(task),
+      'domain_tool_contracts': _contractService.domainToolContractsForTask(
+        task,
+      ),
       'instructions': _contractService.primaryInstructionsForTask(task),
       'skill_routing': _contractService.skillRoutingForTask(task),
       'postprocess_plan': _contractService.postprocessPlanForTask(task),

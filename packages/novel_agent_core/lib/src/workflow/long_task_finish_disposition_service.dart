@@ -56,6 +56,9 @@ class LongTaskFinishDispositionService {
       'planning_completed',
       'sample_completed',
       'step_failed',
+      'delivery_repair_required',
+      'delivery_manual_attention',
+      'delivery_waiting_user_choice',
       'max_steps',
       'max_seconds',
       'record_missing',
@@ -76,6 +79,12 @@ class LongTaskFinishDispositionService {
         return '用户请求停止长任务。';
       case 'step_failed':
         return '任务单步执行失败，长任务已暂停等待重试、跳过或人工修复。';
+      case 'delivery_repair_required':
+        return '章节交付状态要求先进入 repair/recovery，长任务已暂停。';
+      case 'delivery_manual_attention':
+        return '章节交付状态要求人工介入，长任务已暂停。';
+      case 'delivery_waiting_user_choice':
+        return '章节交付状态正在等待用户确认，长任务已暂停。';
       default:
         return '长任务已停止。';
     }

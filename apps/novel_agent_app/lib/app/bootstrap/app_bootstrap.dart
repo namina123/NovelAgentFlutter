@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../../features/book_deconstruction/application/services/book_deconstruction_narrative_persistence_service.dart';
 import '../../features/project_assets/application/services/project_expression_constraint_workspace_service.dart';
 import '../../features/long_task_station/application/controllers/long_task_station_controller.dart';
 import '../app.dart';
@@ -26,6 +27,10 @@ class AppBootstrap {
     final writeProjectTextFileUseCase = WriteProjectTextFileUseCase(
       projectWorkspacePort: bundle.projectWorkspacePort,
     );
+    final bookDeconstructionNarrativePersistenceService =
+        BookDeconstructionNarrativePersistenceService(
+          workspacePort: bundle.projectWorkspacePort,
+        );
     final modeGuidanceRepository = ProjectModeGuidanceRepository(
       workspacePort: bundle.projectWorkspacePort,
     );
@@ -82,6 +87,16 @@ class AppBootstrap {
           saveBindings:
               projectExpressionConstraintBindingRepository.saveBindings,
         );
+    final draftExecutionConstraintRuntimeService =
+        ProjectDraftExecutionConstraintRuntimeService(
+          expressionConstraintProfileRepository:
+              expressionConstraintProfileRepository,
+          projectExpressionConstraintBindingRepository:
+              projectExpressionConstraintBindingRepository,
+          constraintBindingRepository: LocalConstraintBindingRepository(
+            workspacePort: bundle.projectWorkspacePort,
+          ),
+        );
     final projectSkillLoadoutSaveAsGroupService =
         ProjectSkillLoadoutSaveAsGroupService(
           workspacePort: bundle.projectWorkspacePort,
@@ -121,6 +136,12 @@ class AppBootstrap {
         );
       },
     );
+    final conversationDraftRuntimeService =
+        ProjectConversationDraftRuntimeService(
+          workspacePort: bundle.projectWorkspacePort,
+          hostPort: bundle.projectToolHostPort,
+          taskRepository: projectTaskRepository,
+        );
     final longTaskStationController = LongTaskStationController(
       longTaskSupervisor: bundle.longTaskSupervisor,
       detailService: longTaskStationDetailService,
@@ -163,6 +184,8 @@ class AppBootstrap {
         writeProjectTextFileUseCase: writeProjectTextFileUseCase,
       ),
       projectToolHostPort: bundle.projectToolHostPort,
+      bookDeconstructionNarrativePersistenceService:
+          bookDeconstructionNarrativePersistenceService,
       projectRuntimeProfileRepository: ProjectRuntimeProfileRepository(
         workspacePort: bundle.projectWorkspacePort,
       ),
@@ -215,7 +238,10 @@ class AppBootstrap {
             description: description,
           ),
       writeProjectTextFileUseCase: writeProjectTextFileUseCase,
+      draftExecutionConstraintRuntimeService:
+          draftExecutionConstraintRuntimeService,
       workflowRuntimeService: workflowRuntimeService,
+      conversationDraftRuntimeService: conversationDraftRuntimeService,
       reviewReportService: reviewReportService,
       projectChapterRewriteTaskService: projectChapterRewriteTaskService,
       promptTemplateService: promptTemplateService,

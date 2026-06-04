@@ -29,12 +29,36 @@ class LongTaskRunMarkdownRenderer {
       final checkpointReviewPath = ValueReaders.stringValue(
         step['checkpoint_review_path'],
       ).trim();
+      final activationReportPath = ValueReaders.stringValue(
+        step['activation_report_path'],
+      ).trim();
+      final activationSummary = ValueReaders.stringValue(
+        step['activation_report_summary'],
+      ).trim();
+      final deliveryState = ValueReaders.stringValue(
+        step['chapter_delivery_state'],
+      ).trim();
+      final deliveryPath = ValueReaders.stringValue(
+        step['chapter_delivery_path'],
+      ).trim();
       lines.add(
         '- #${ValueReaders.intValue(step['index'])}'
         '｜${ValueReaders.stringValue(step['phase'])}'
         '｜${ValueReaders.stringValue(task['title'])}'
         '｜$detail',
       );
+      if (activationReportPath.isNotEmpty) {
+        lines.add('  激活报告：$activationReportPath');
+      }
+      if (activationSummary.isNotEmpty) {
+        lines.add('  激活摘要：$activationSummary');
+      }
+      if (deliveryState.isNotEmpty) {
+        lines.add('  交付状态：$deliveryState');
+      }
+      if (deliveryPath.isNotEmpty) {
+        lines.add('  交付路径：$deliveryPath');
+      }
       if (checkpointReviewPath.isNotEmpty) {
         lines.add('  复盘：$checkpointReviewPath');
       }

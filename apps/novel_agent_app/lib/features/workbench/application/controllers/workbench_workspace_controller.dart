@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../../../book_deconstruction/application/services/book_deconstruction_narrative_persistence_service.dart';
 import '../../../project_creation/application/controllers/project_creation_controller.dart';
 import '../../presentation/contracts/document_workspace_action_handler.dart';
 import '../../presentation/contracts/resource_manager_action_handler.dart';
@@ -34,6 +35,8 @@ class WorkbenchWorkspaceController
     required UpdateProjectManifestUseCase updateProjectManifestUseCase,
     required ProjectToolHostPort projectToolHostPort,
     required WriteProjectTextFileUseCase writeProjectTextFileUseCase,
+    required BookDeconstructionNarrativePersistenceService
+    narrativePersistenceService,
     required LongTaskSupervisor longTaskSupervisor,
     required ProjectReviewReportService reviewReportService,
     required ProjectRuntimeProfileRepository projectRuntimeProfileRepository,
@@ -135,6 +138,7 @@ class WorkbenchWorkspaceController
              importProjectFilesUseCase: importProjectFilesUseCase,
              projectToolHostPort: projectToolHostPort,
              writeProjectTextFileUseCase: writeProjectTextFileUseCase,
+             narrativePersistenceService: narrativePersistenceService,
            );
 
   final LoadProjectWorkspaceUseCase _loadProjectWorkspaceUseCase;
@@ -800,7 +804,6 @@ class WorkbenchWorkspaceController
     _showLongTaskStation();
   }
 
-  @override
   void onLongTaskStationRequested() {
     // 中文注释: 长任务总站入口不再混进工作区自身状态机。
     _showLongTaskStation();

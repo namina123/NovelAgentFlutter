@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:novel_agent_app/features/book_deconstruction/application/services/book_deconstruction_narrative_persistence_service.dart';
 import 'package:novel_agent_app/features/workbench/application/models/project_import_request.dart';
 import 'package:novel_agent_app/features/workbench/application/services/project_import_execution_service.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
@@ -22,6 +23,10 @@ void main() {
         writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
           projectWorkspacePort: workspacePort,
         ),
+        narrativePersistenceService:
+            BookDeconstructionNarrativePersistenceService(
+              workspacePort: workspacePort,
+            ),
       );
 
       final result = await service.execute(
@@ -68,6 +73,10 @@ void main() {
         writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
           projectWorkspacePort: workspacePort,
         ),
+        narrativePersistenceService:
+            BookDeconstructionNarrativePersistenceService(
+              workspacePort: workspacePort,
+            ),
       );
 
       final result = await service.execute(
@@ -96,6 +105,11 @@ void main() {
       );
       expect(previewContent, isNotNull);
       expect(previewContent, contains('# 拆书结构化预演'));
+      final claimsLog = workspacePort.readStoredTextFile(
+        'D:/Projects/deconstruction_project',
+        '.novel_agent/continuity/claims/claims.jsonl',
+      );
+      expect(claimsLog, contains('analysis.deconstruction.story_outline'));
       expect(result.summary, contains('自动拆书预演纪要已写入'));
     },
   );

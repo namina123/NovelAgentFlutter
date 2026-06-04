@@ -60,6 +60,9 @@ class WorkbenchConversationController implements ConversationActionHandler {
     required ConversationUserVisibleTextService
     conversationUserVisibleTextService,
     required WorkbenchPrimaryActionService workbenchPrimaryActionService,
+    ProjectConversationDraftRuntimeService? conversationDraftRuntimeService,
+    ProjectDraftExecutionConstraintRuntimeService?
+    draftExecutionConstraintRuntimeService,
     ConversationRequestRuntimeService? conversationRequestRuntimeService,
     ConversationDraftAutosavePolicyService? draftAutosavePolicyService,
     ConversationAttachmentPickerService? conversationAttachmentPickerService,
@@ -119,6 +122,9 @@ class WorkbenchConversationController implements ConversationActionHandler {
            projectOpeningAgentGroupBindingService,
        _conversationUserVisibleTextService = conversationUserVisibleTextService,
        _workbenchPrimaryActionService = workbenchPrimaryActionService,
+       _conversationDraftRuntimeService = conversationDraftRuntimeService,
+       _draftExecutionConstraintRuntimeService =
+           draftExecutionConstraintRuntimeService,
        _conversationRequestRuntimeService =
            conversationRequestRuntimeService ??
            ConversationRequestRuntimeService(),
@@ -188,6 +194,10 @@ class WorkbenchConversationController implements ConversationActionHandler {
   _projectOpeningAgentGroupBindingService;
   final ConversationUserVisibleTextService _conversationUserVisibleTextService;
   final WorkbenchPrimaryActionService _workbenchPrimaryActionService;
+  final ProjectConversationDraftRuntimeService?
+  _conversationDraftRuntimeService;
+  final ProjectDraftExecutionConstraintRuntimeService?
+  _draftExecutionConstraintRuntimeService;
   final ConversationRequestRuntimeService _conversationRequestRuntimeService;
   final ConversationDraftAutosavePolicyService _draftAutosavePolicyService;
   final ConversationAttachmentPickerService
@@ -939,6 +949,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
       fallback: '正在接收模型输出',
     );
     var streamingBaseState = userPromptState;
+    ProjectConversationDraftRuntimePreparation? conversationDraftRuntime;
     late final ConversationRequestHandle requestHandle;
     try {
       requestHandle = _conversationRequestRuntimeService.start(
@@ -967,6 +978,15 @@ class WorkbenchConversationController implements ConversationActionHandler {
           }
 
           cancellationToken.addListener(syncCancellation);
+          final executionConstraints =
+              await _resolveExecutionConstraints(
+                project: project,
+                agent: requestAgent.agent,
+              );
+          conversationDraftRuntime = await _prepareConversationDraftRuntime(
+            project: project,
+            agent: requestAgent.agent,
+          );
           final useCase = _generateDraftUseCaseFactory(
             provider,
             settings.networkSettings,
@@ -978,10 +998,26 @@ class WorkbenchConversationController implements ConversationActionHandler {
               modelId: resolvedModelId,
               title: title,
               agent: requestAgent.agent,
-              sessionContext: sessionContext,
+              sessionContext: _mergeSessionContext(
+                _mergeSessionContext(
+                  sessionContext,
+                  ValueReaders.stringValue(
+                    executionConstraints['session_context_markdown'],
+                  ),
+                ),
+                conversationDraftRuntime?.sessionContextMarkdown ?? '',
+              ),
               requestOptions: _mapValue(executionProfile['request_options']),
               contextSettings: contextStrategySettings,
               modelProfile: runtimeProfile,
+              exposedToolIds:
+                  conversationDraftRuntime?.exposedToolIds ?? const <String>[],
+              expressionConstraintProfiles: ValueReaders.objectList(
+                executionConstraints['expression_constraint_profiles'],
+              ),
+              projectExpressionConstraintBindings: ValueReaders.objectList(
+                executionConstraints['project_expression_constraint_bindings'],
+              ),
               activeDocumentPath: _workspaceController.activeDocumentPath,
               activeDocumentBody: _workspaceController.activeDocumentBody,
               cancellationToken: coreCancellationToken,
@@ -1008,6 +1044,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
         contextStrategySettings: contextStrategySettings,
         runtimeProfile: runtimeProfile,
         providerTitle: provider.title,
+        conversationDraftRuntime: conversationDraftRuntime,
       );
     } catch (error) {
       if (!_isActiveRequestHandle(requestHandle)) {
@@ -1026,6 +1063,96 @@ class WorkbenchConversationController implements ConversationActionHandler {
         _activeRequestHandle = null;
       }
     }
+  }
+
+  Future<JsonMap> _resolveExecutionConstraints({
+    required ProjectDescriptor project,
+    required JsonMap agent,
+  }) async {
+    if (_draftExecutionConstraintRuntimeService == null) {
+      return const <String, Object?>{};
+    }
+    return _draftExecutionConstraintRuntimeService.resolve(
+      project,
+      appliesTo: ConstraintBindingAppliesTo.writing,
+      agentId: ValueReaders.stringValue(agent['id']),
+      stageId: 'draft',
+    );
+  }
+
+  Future<ProjectConversationDraftRuntimePreparation?>
+  _prepareConversationDraftRuntime({
+    required ProjectDescriptor project,
+    required JsonMap agent,
+  }) async {
+    if (_conversationDraftRuntimeService == null) {
+      return null;
+    }
+    return _conversationDraftRuntimeService.prepareDraftRun(
+      project,
+      taskType: _ordinaryConversationTaskType(agent),
+      pinnedRelativePaths: _workspaceController.activeDocumentPath.trim().isEmpty
+          ? const <String>[]
+          : <String>[_workspaceController.activeDocumentPath],
+    );
+  }
+
+  Future<ProjectConversationDraftRuntimeArtifacts>
+  _finalizeConversationDraftRuntime({
+    required ProjectDescriptor project,
+    required DraftGenerationResult result,
+    required String title,
+    required String savedPath,
+    required ProjectConversationDraftRuntimePreparation? preparation,
+  }) async {
+    if (_conversationDraftRuntimeService == null || preparation == null) {
+      return const ProjectConversationDraftRuntimeArtifacts();
+    }
+    return _conversationDraftRuntimeService.finalizeDraftRun(
+      project: project,
+      preparation: preparation,
+      result: result,
+      title: title,
+      fallbackSavedPath: savedPath,
+    );
+  }
+
+  String _mergeSessionContext(String base, String extra) {
+    final parts = <String>[];
+    final cleanBase = base.trim();
+    final cleanExtra = extra.trim();
+    if (cleanBase.isNotEmpty) {
+      parts.add(cleanBase);
+    }
+    if (cleanExtra.isNotEmpty) {
+      parts.add(cleanExtra);
+    }
+    return parts.join('\n\n');
+  }
+
+  String _ordinaryConversationTaskType(JsonMap agent) {
+    final tokens = <String>[
+      ValueReaders.stringValue(agent['id']),
+      ValueReaders.stringValue(agent['role']),
+      ValueReaders.stringValue(agent['name']),
+      ValueReaders.stringValue(agent['display_name']),
+      ValueReaders.stringValue(agent['description']),
+    ].join(' ').toLowerCase();
+    if (tokens.contains('review')) {
+      return 'review';
+    }
+    if (tokens.contains('recover') ||
+        tokens.contains('repair') ||
+        tokens.contains('修复') ||
+        tokens.contains('恢复')) {
+      return 'revision';
+    }
+    if (tokens.contains('profile') ||
+        tokens.contains('architect') ||
+        tokens.contains('解释器')) {
+      return 'planning';
+    }
+    return 'chapter';
   }
 
   Future<bool> _handleGuideNavigationAction(
@@ -1527,6 +1654,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
     required JsonMap contextStrategySettings,
     required JsonMap runtimeProfile,
     required String providerTitle,
+    ProjectConversationDraftRuntimePreparation? conversationDraftRuntime,
   }) async {
     // 中文注释: 成功后的文档落盘、资源刷新和右栏回写统一收口，避免再次散回发送主流程。
     final assistantState = _conversationSessionStateService
@@ -1556,6 +1684,16 @@ class WorkbenchConversationController implements ConversationActionHandler {
         title: title,
       );
     }
+    final runtimeArtifacts = await _finalizeConversationDraftRuntime(
+      project: project,
+      result: result,
+      title: title,
+      savedPath: savedPath,
+      preparation: conversationDraftRuntime,
+    );
+    if (savedPath.isEmpty && runtimeArtifacts.outputPath.trim().isNotEmpty) {
+      savedPath = runtimeArtifacts.outputPath.trim();
+    }
     if (!_isActiveRequestHandle(handle)) {
       return;
     }
@@ -1565,7 +1703,8 @@ class WorkbenchConversationController implements ConversationActionHandler {
     final shouldReloadResources =
         savedPath.isNotEmpty ||
         result.writtenPaths.isNotEmpty ||
-        result.changedPaths.isNotEmpty;
+        result.changedPaths.isNotEmpty ||
+        runtimeArtifacts.changedPaths.isNotEmpty;
     final resourceEntries = shouldReloadResources
         ? await _workspaceController.reloadResourceEntries(
             selectedId: selectedResourcePath,
@@ -1577,7 +1716,9 @@ class WorkbenchConversationController implements ConversationActionHandler {
       return;
     }
     final shouldOpenDocument =
-        savedPath.isNotEmpty || result.writtenPaths.isNotEmpty;
+        savedPath.isNotEmpty ||
+        result.writtenPaths.isNotEmpty ||
+        runtimeArtifacts.outputPath.trim().isNotEmpty;
     final resolvedBody = shouldOpenDocument
         ? await _workspaceController.resolvedDocumentBody(
             project: project,
@@ -1703,6 +1844,11 @@ class WorkbenchConversationController implements ConversationActionHandler {
         return '已停止当前生成，并保留已完成的阶段结果。';
       }
       return '已停止当前生成。';
+    }
+    if (result.stoppedByToolError && savedPath.isNotEmpty) {
+      final errorSummary = result.toolErrorSummary.trim();
+      final suffix = errorSummary.isEmpty ? '' : '，但部分工具失败：$errorSummary';
+      return '内容生成完成，并已保存到 $savedPath$suffix';
     }
     if (result.stoppedByToolError) {
       final errorSummary = result.toolErrorSummary.trim();

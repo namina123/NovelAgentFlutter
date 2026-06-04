@@ -78,13 +78,15 @@ class LongTaskChapterGatePolicyService {
   }
 
   String statusAfterReviewOutcome(JsonMap decision, String defaultStatus) {
-    // 中文注释: 章级 gate 只在明确阻塞用户或人工介入时拦下当前 review 任务，其他情况沿用默认完成策略。
+    // 中文注释: 章级 gate 只有真实用户确认才落 waiting_user；人工处理必须和 waiting_user 区分开。
     final disposition = ValueReaders.stringValue(
       decision['disposition'],
     ).trim();
-    if (disposition == 'blocked_wait_user' ||
-        disposition == 'manual_attention') {
+    if (disposition == 'blocked_wait_user') {
       return TaskRuntimeConstants.statusWaitingUser;
+    }
+    if (disposition == 'manual_attention') {
+      return TaskRuntimeConstants.statusFailed;
     }
     return defaultStatus;
   }

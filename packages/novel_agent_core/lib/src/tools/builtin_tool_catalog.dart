@@ -20,6 +20,36 @@ final class BuiltinToolCatalog {
           description: '把章节正文、场景片段和其他产物写入正确英文目录；修正同一路径时要显式 overwrite。',
         ),
         BuiltinToolDefinition(
+          id: 'submit_chapter_delivery',
+          name: '提交章节交付',
+          description: '一次性提交章节正文、目标路径和结构化 submission，由受控领域合同完成章节交付。',
+        ),
+        BuiltinToolDefinition(
+          id: 'submit_narrative_state_claims',
+          name: '提交叙事状态声明',
+          description: '提交开放叙事状态 claims，保留未知 namespace 和 payload，不做文学语义判断。',
+        ),
+        BuiltinToolDefinition(
+          id: 'propose_narrative_profile_update',
+          name: '提出项目叙事解释器更新',
+          description: '提出项目级 narrative profile 更新提案，只做结构化校验，不直接覆盖长期规则。',
+        ),
+        BuiltinToolDefinition(
+          id: 'submit_semantic_review',
+          name: '提交语义复核',
+          description: '提交 reviewer 的结构化 findings 和 disposition 建议，不直接推进调度。',
+        ),
+        BuiltinToolDefinition(
+          id: 'propose_constraint_binding',
+          name: '提出约束绑定',
+          description: '提出项目级或阶段级约束绑定，保留开放 constraint payload，不把题材写死进程序。',
+        ),
+        BuiltinToolDefinition(
+          id: 'request_profile_clarification',
+          name: '请求规则澄清',
+          description: '在缺少关键信息时提出一个小而具体的澄清问题，等待用户确认后继续。',
+        ),
+        BuiltinToolDefinition(
           id: 'edit_project_file',
           name: '修改项目文件',
           description: '对已有文件追加、替换、前置或覆盖。',

@@ -141,6 +141,57 @@ void main() {
       },
     );
 
+    test(
+      'allows user to continue when permission proposal waits but outputs exist',
+      () {
+        final review = <String, Object?>{
+          'task': <String, Object?>{
+            'id': 'planning_001',
+            'relative_path': 'tasks/planning_001.json',
+          },
+          'task_type': 'planning',
+          'stage': 'planning',
+          'result_ok': true,
+          'severity': 'medium',
+          'severity_label': '中',
+          'output_paths': <Object?>['specs/project_spec.md', 'outline/总纲.md'],
+          'narrative_supervisor_risk': <String, Object?>{
+            'overall': <String, Object?>{
+              'category': 'checkpoint_user',
+              'reason': 'permission_waiting_user',
+              'summary': '至少一个领域工具正在等待用户确认。',
+              'waiting_user': true,
+            },
+          },
+        };
+
+        final package = actionService.buildPackage(
+          review,
+          checkpointReviewPath: 'tracking/checkpoint_reviews/planning_001.json',
+        );
+        final actions = ValueReaders.mapList(package['actions']);
+        final disposition = ValueReaders.mapValue(package['disposition']);
+
+        expect(
+          ValueReaders.stringValue(disposition['reason']),
+          'permission_waiting_user',
+        );
+        expect(ValueReaders.boolValue(disposition['allow_continue']), isTrue);
+        expect(
+          ValueReaders.stringValue(package['recommended_action_id']),
+          'continue_long_task',
+        );
+        expect(
+          actions.any(
+            (item) =>
+                ValueReaders.stringValue(item['id']) == 'continue_long_task' &&
+                ValueReaders.boolValue(item['enabled']),
+          ),
+          isTrue,
+        );
+      },
+    );
+
     test('marks failed checkpoint as critical', () {
       final severity = severityService.assess(<String, Object?>{
         'task_type': 'planning',

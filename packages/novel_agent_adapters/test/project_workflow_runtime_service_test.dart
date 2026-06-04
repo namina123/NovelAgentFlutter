@@ -162,6 +162,311 @@ void main() {
     });
 
     test(
+      'createLongTaskWorkflow materializes only initial seed window for seed_to_full_novel',
+      () async {
+        final queueProject = ProjectDescriptor(
+          id: 'seed_queue_initial_window',
+          name: '长任务初始窗口测试',
+          rootPath:
+              '${tempDirectory.path}${Platform.pathSeparator}seed_queue_initial_window',
+          projectType: 'long_novel',
+        );
+
+        final created = await workflowRuntimeService.createLongTaskWorkflow(
+          queueProject,
+          TaskRuntimeConstants.modeSeedToFullNovel,
+          options: const <String, Object?>{
+            'seed_prompt': '宫廷权谋长篇。',
+            'chapter_count': 8,
+            'checkpoint_interval': 3,
+          },
+        );
+
+        expect(ValueReaders.boolValue(created['ok']), isTrue);
+        final tasks = await workflowRuntimeService.listWorkflowTasks(
+          queueProject,
+        );
+        expect(tasks, hasLength(4));
+        expect(
+          tasks.map((task) => ValueReaders.stringValue(task['task_type'])),
+          orderedEquals(const <String>[
+            'planning',
+            'checkpoint',
+            'chapter',
+            'checkpoint',
+          ]),
+        );
+        expect(
+          tasks.any(
+            (task) =>
+                ValueReaders.stringValue(task['id']).contains('chapter_002'),
+          ),
+          isFalse,
+        );
+        final plan = await taskRepository.loadRecord(
+          queueProject,
+          ValueReaders.stringValue(created['plan_path']),
+        );
+        expect(
+          ValueReaders.intValue(plan['planned_task_count']),
+          greaterThan(4),
+        );
+        expect(ValueReaders.intValue(plan['materialized_task_count']), 4);
+        expect(
+          ValueReaders.stringValue(plan['queue_materialization']),
+          'incremental',
+        );
+      },
+    );
+
+    test(
+      'nextWorkflowTask materializes next seed window after checkpoint confirmation',
+      () async {
+        final queueProject = ProjectDescriptor(
+          id: 'seed_queue_next_window',
+          name: '长任务续队列测试',
+          rootPath:
+              '${tempDirectory.path}${Platform.pathSeparator}seed_queue_next_window',
+          projectType: 'long_novel',
+        );
+        await workflowRuntimeService.createLongTaskWorkflow(
+          queueProject,
+          TaskRuntimeConstants.modeSeedToFullNovel,
+          options: const <String, Object?>{
+            'seed_prompt': '宫廷权谋长篇。',
+            'chapter_count': 5,
+            'checkpoint_interval': 3,
+          },
+        );
+        final initialTasks = await workflowRuntimeService.listWorkflowTasks(
+          queueProject,
+        );
+        for (final task in initialTasks) {
+          await taskRepository.transitionTask(
+            queueProject,
+            <String, Object?>{
+              'relative_path': ValueReaders.stringValue(task['relative_path']),
+            },
+            TaskRuntimeConstants.statusSucceeded,
+            note: 'test confirm',
+          );
+        }
+
+        final nextTask = await workflowRuntimeService.nextWorkflowTask(
+          queueProject,
+        );
+
+        expect(
+          ValueReaders.stringValue(nextTask['id']),
+          contains('chapter_002'),
+        );
+        final tasks = await workflowRuntimeService.listWorkflowTasks(
+          queueProject,
+        );
+        expect(
+          tasks.any(
+            (task) =>
+                ValueReaders.stringValue(task['id']).contains('chapter_002'),
+          ),
+          isTrue,
+        );
+        expect(
+          tasks.any(
+            (task) =>
+                ValueReaders.stringValue(task['id']).contains('chapter_003'),
+          ),
+          isTrue,
+        );
+        expect(
+          tasks.any(
+            (task) =>
+                ValueReaders.stringValue(task['id']).contains('checkpoint_003'),
+          ),
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'nextWorkflowTask still materializes next seed window when source tasks remain waiting_user but succeeded checkpoints already cover them',
+      () async {
+        final queueProject = ProjectDescriptor(
+          id: 'seed_queue_checkpoint_covered_waiting_user',
+          name: '长任务检查点覆盖测试',
+          rootPath:
+              '${tempDirectory.path}${Platform.pathSeparator}seed_queue_checkpoint_covered_waiting_user',
+          projectType: 'long_novel',
+        );
+        await workflowRuntimeService.createLongTaskWorkflow(
+          queueProject,
+          TaskRuntimeConstants.modeSeedToFullNovel,
+          options: const <String, Object?>{
+            'seed_prompt': '宫廷权谋长篇。',
+            'chapter_count': 5,
+            'checkpoint_interval': 3,
+          },
+        );
+        final initialTasks = await workflowRuntimeService.listWorkflowTasks(
+          queueProject,
+        );
+        final planningTask = initialTasks.firstWhere(
+          (task) => ValueReaders.stringValue(task['task_type']) == 'planning',
+        );
+        final outlineCheckpoint = initialTasks.firstWhere(
+          (task) =>
+              ValueReaders.stringValue(task['task_type']) == 'checkpoint' &&
+              ValueReaders.stringValue(task['id']).contains(
+                'checkpoint_outline',
+              ),
+        );
+        final sampleTask = initialTasks.firstWhere(
+          (task) =>
+              ValueReaders.stringValue(task['task_type']) == 'chapter' &&
+              ValueReaders.stringValue(
+                    ValueReaders.mapValue(task['metadata'])['stage'],
+                  ) ==
+                  'sample',
+        );
+        final sampleCheckpoint = initialTasks.firstWhere(
+          (task) =>
+              ValueReaders.stringValue(task['task_type']) == 'checkpoint' &&
+              ValueReaders.stringValue(task['id']).contains('checkpoint_001'),
+        );
+
+        await taskRepository.transitionTask(
+          queueProject,
+          <String, Object?>{
+            'relative_path': ValueReaders.stringValue(
+              planningTask['relative_path'],
+            ),
+          },
+          TaskRuntimeConstants.statusWaitingUser,
+          note: 'planning review waiting',
+        );
+        await taskRepository.transitionTask(
+          queueProject,
+          <String, Object?>{
+            'relative_path': ValueReaders.stringValue(
+              outlineCheckpoint['relative_path'],
+            ),
+          },
+          TaskRuntimeConstants.statusSucceeded,
+          note: 'outline checkpoint confirmed',
+        );
+        await taskRepository.transitionTask(
+          queueProject,
+          <String, Object?>{
+            'relative_path': ValueReaders.stringValue(
+              sampleTask['relative_path'],
+            ),
+          },
+          TaskRuntimeConstants.statusWaitingUser,
+          note: 'sample review waiting',
+        );
+        await taskRepository.transitionTask(
+          queueProject,
+          <String, Object?>{
+            'relative_path': ValueReaders.stringValue(
+              sampleCheckpoint['relative_path'],
+            ),
+          },
+          TaskRuntimeConstants.statusSucceeded,
+          note: 'sample checkpoint confirmed',
+        );
+
+        final nextTask = await workflowRuntimeService.nextWorkflowTask(
+          queueProject,
+        );
+
+        expect(
+          ValueReaders.stringValue(nextTask['id']),
+          contains('chapter_002'),
+        );
+        final tasks = await workflowRuntimeService.listWorkflowTasks(
+          queueProject,
+        );
+        expect(
+          tasks.any(
+            (task) =>
+                ValueReaders.stringValue(task['id']).contains('chapter_002'),
+          ),
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'nextWorkflowTask materializes one chapter at a time when checkpoint interval is zero',
+      () async {
+        final queueProject = ProjectDescriptor(
+          id: 'seed_queue_zero_checkpoint',
+          name: '长任务零检查点测试',
+          rootPath:
+              '${tempDirectory.path}${Platform.pathSeparator}seed_queue_zero_checkpoint',
+          projectType: 'long_novel',
+        );
+        await workflowRuntimeService.createLongTaskWorkflow(
+          queueProject,
+          TaskRuntimeConstants.modeSeedToFullNovel,
+          options: const <String, Object?>{
+            'seed_prompt': '宫廷权谋长篇。',
+            'chapter_count': 4,
+            'checkpoint_interval': 0,
+          },
+        );
+        final initialTasks = await workflowRuntimeService.listWorkflowTasks(
+          queueProject,
+        );
+        for (final task in initialTasks) {
+          await taskRepository.transitionTask(
+            queueProject,
+            <String, Object?>{
+              'relative_path': ValueReaders.stringValue(task['relative_path']),
+            },
+            TaskRuntimeConstants.statusSucceeded,
+            note: 'test confirm',
+          );
+        }
+
+        final chapterTwo = await workflowRuntimeService.nextWorkflowTask(
+          queueProject,
+        );
+        expect(
+          ValueReaders.stringValue(chapterTwo['id']),
+          contains('chapter_002'),
+        );
+        await taskRepository.transitionTask(
+          queueProject,
+          <String, Object?>{
+            'relative_path': ValueReaders.stringValue(
+              chapterTwo['relative_path'],
+            ),
+          },
+          TaskRuntimeConstants.statusSucceeded,
+          note: 'test confirm',
+        );
+
+        final chapterThree = await workflowRuntimeService.nextWorkflowTask(
+          queueProject,
+        );
+        expect(
+          ValueReaders.stringValue(chapterThree['id']),
+          contains('chapter_003'),
+        );
+        final tasks = await workflowRuntimeService.listWorkflowTasks(
+          queueProject,
+        );
+        expect(
+          tasks.where(
+            (task) =>
+                ValueReaders.stringValue(task['task_type']) == 'checkpoint',
+          ),
+          hasLength(2),
+        );
+      },
+    );
+
+    test(
       'prepareWorkflowTaskExecution builds planned context sections from task paths',
       () async {
         final result = await workflowRuntimeService
@@ -196,6 +501,120 @@ void main() {
         expect(
           sections.any(
             (section) => ValueReaders.stringValue(section['title']) == '项目风格规范',
+          ),
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'prepareWorkflowTaskExecution injects bridged chapter length and expression constraints into long task runtime',
+      () async {
+        final workflowService = _buildRuntimeService(
+          taskRepository: taskRepository,
+          promptTemplateService: promptTemplateService,
+          workspacePort: workspacePort,
+          gateway: _RecordingWorkflowGateway(
+            scriptedResults: const <JsonMap>[],
+          ),
+          toolExecutionPort: _WorkflowToolExecutionPort(
+            workspacePort: workspacePort,
+          ),
+          draftExecutionConstraintRuntimeService:
+              _FakeProjectDraftExecutionConstraintRuntimeService(
+                response: const <String, Object?>{
+                  'chapter_length_metadata': <String, Object?>{
+                    'chapter_length_profile': <String, Object?>{
+                      'enabled': true,
+                      'target_length': 1800,
+                      'preferred_min': 1500,
+                      'preferred_max': 2100,
+                      'stage': 'sample',
+                      'metric_unit': 'visible_characters',
+                    },
+                    'chapter_length_distribution_policy': <String, Object?>{
+                      'rolling_window': 4,
+                      'mild_deviation_ratio': 0.18,
+                      'severe_deviation_ratio': 0.35,
+                      'mild_adjacent_delta_ratio': 0.22,
+                      'severe_adjacent_delta_ratio': 0.45,
+                    },
+                    'chapter_word_target': 1800,
+                    'chapter_word_min': 1500,
+                    'chapter_word_max': 2100,
+                  },
+                  'expression_constraint_profiles': <Object?>[
+                    <String, Object?>{
+                      'id': 'de_ai',
+                      'display_name': '去 AI 风',
+                      'summary': '降低模板化表达。',
+                      'kind': 'natural_expression',
+                      'rules': <Object?>['减少总结句。'],
+                    },
+                  ],
+                  'project_expression_constraint_bindings': <Object?>[
+                    <String, Object?>{
+                      'id': 'binding_1',
+                      'profile_id': 'de_ai',
+                      'default_for_project': true,
+                    },
+                  ],
+                  'runtime_report': <String, Object?>{
+                    'chapter_length': <String, Object?>{'source': 'binding'},
+                  },
+                  'session_context_markdown':
+                      '## Execution Constraints\n- 字数约束：目标约 1800 字',
+                },
+              ),
+        );
+
+        final result = await workflowService.prepareWorkflowTaskExecution(
+          project,
+          const <String, Object?>{'id': 'task_001'},
+        );
+
+        expect(ValueReaders.boolValue(result['ok']), isTrue);
+        final execution = ValueReaders.mapValue(result['execution']);
+        final effectiveTask = ValueReaders.mapValue(
+          execution['effective_task'],
+        );
+        expect(
+          ValueReaders.intValue(
+            ValueReaders.mapValue(
+              ValueReaders.mapValue(
+                effectiveTask['metadata'],
+              )['chapter_length_profile'],
+            )['target_length'],
+          ),
+          1800,
+        );
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(
+              ValueReaders.mapValue(
+                execution['execution_constraint_bridge_report'],
+              )['chapter_length'],
+            )['source'],
+          ),
+          'binding',
+        );
+        expect(
+          ValueReaders.stringValue(execution['prompt_preview_markdown']),
+          contains('目标约 1800 字'),
+        );
+        expect(
+          ValueReaders.stringValue(execution['prompt_preview_markdown']),
+          contains('表达限制细则'),
+        );
+        expect(
+          ValueReaders.mapList(
+            ValueReaders.mapValue(execution['context_pack'])['sections'],
+          ).any(
+            (section) =>
+                ValueReaders.stringValue(
+                  ValueReaders.mapValue(section)['title'],
+                ) ==
+                '表达限制规范',
           ),
           isTrue,
         );
@@ -561,5 +980,665 @@ void main() {
         );
       },
     );
+
+    test(
+      'runWorkflowTaskQueue records activation report and delivery outcome in long task run steps',
+      () async {
+        final gateway = _RecordingWorkflowGateway(
+          scriptedResults: <JsonMap>[
+            <String, Object?>{
+              'ok': true,
+              'content': '',
+              'tool_calls': <Object?>[
+                <String, Object?>{
+                  'id': 'call_delivery_1',
+                  'name': 'submit_chapter_delivery',
+                  'arguments': <String, Object?>{
+                    'chapter_path': 'chapters/第01章_seed_to_full.md',
+                    'chapter_content': '# 第01章\n\n正式正文。',
+                    'submission': <String, Object?>{
+                      'submission_id': 'delivery-test-1',
+                      'title': '第01章',
+                      'summary': '完成章节交付',
+                    },
+                  },
+                },
+              ],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '',
+              },
+            },
+            <String, Object?>{
+              'ok': true,
+              'content': '章节交付已完成。',
+              'tool_calls': const <Object?>[],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '章节交付已完成。',
+              },
+            },
+          ],
+        );
+        final workflowService = _buildRuntimeService(
+          taskRepository: taskRepository,
+          promptTemplateService: promptTemplateService,
+          workspacePort: workspacePort,
+          gateway: gateway,
+          toolExecutionPort: _WorkflowToolExecutionPort(
+            workspacePort: workspacePort,
+          ),
+        );
+
+        final result = await workflowService.runWorkflowTaskQueue(
+          project,
+          _testSettings(),
+          options: const <String, Object?>{'max_steps': 1},
+        );
+
+        expect(ValueReaders.boolValue(result['ok']), isTrue);
+        final longTaskRecord = ValueReaders.mapValue(
+          result['long_task_record'],
+        );
+        final steps = ValueReaders.mapList(longTaskRecord['steps']);
+        expect(steps, hasLength(1));
+        final step = steps.first;
+        expect(
+          ValueReaders.stringValue(step['chapter_delivery_state']),
+          'delivered',
+        );
+        expect(
+          ValueReaders.stringValue(step['chapter_delivery_path']),
+          'chapters/第01章_seed_to_full.md',
+        );
+        expect(
+          ValueReaders.stringValue(step['activation_report_path']),
+          isNotEmpty,
+        );
+      },
+    );
+
+    test(
+      'runWorkflowTaskOnce exposes chapter delivery schema records activation report and writes delivery outcome back to execution',
+      () async {
+        final gateway = _RecordingWorkflowGateway(
+          scriptedResults: <JsonMap>[
+            <String, Object?>{
+              'ok': true,
+              'content': '',
+              'tool_calls': <Object?>[
+                <String, Object?>{
+                  'id': 'call_delivery_1',
+                  'name': 'submit_chapter_delivery',
+                  'arguments': <String, Object?>{
+                    'chapter_path': 'chapters/第01章_seed_to_full.md',
+                    'chapter_content': '# 第01章\n\n正式正文。',
+                    'submission': <String, Object?>{
+                      'submission_id': 'delivery-test-1',
+                      'title': '第01章',
+                      'summary': '完成章节交付',
+                    },
+                  },
+                },
+              ],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '',
+              },
+            },
+            <String, Object?>{
+              'ok': true,
+              'content': '章节交付已完成。',
+              'tool_calls': const <Object?>[],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '章节交付已完成。',
+              },
+            },
+          ],
+        );
+        final workflowService = _buildRuntimeService(
+          taskRepository: taskRepository,
+          promptTemplateService: promptTemplateService,
+          workspacePort: workspacePort,
+          gateway: gateway,
+          toolExecutionPort: _WorkflowToolExecutionPort(
+            workspacePort: workspacePort,
+          ),
+        );
+
+        final result = await workflowService.runWorkflowTaskOnce(
+          project,
+          _testSettings(),
+          const <String, Object?>{'id': 'task_001'},
+        );
+
+        expect(ValueReaders.boolValue(result['ok']), isTrue);
+        final toolNames = gateway.lastToolNames;
+        expect(toolNames, contains('submit_chapter_delivery'));
+        expect(
+          toolNames.indexOf('submit_chapter_delivery') <
+              toolNames.indexOf('write_project_file'),
+          isTrue,
+        );
+        expect(
+          ValueReaders.stringList(result['output_paths']),
+          contains('chapters/第01章_seed_to_full.md'),
+        );
+
+        final task = await taskRepository.loadTask(
+          project,
+          const <String, Object?>{'id': 'task_001'},
+        );
+        final execution = await taskRepository.loadRecord(
+          project,
+          ValueReaders.stringValue(task['atomic_execution_path']),
+        );
+        expect(
+          ValueReaders.stringValue(execution['activation_report_path']),
+          isNotEmpty,
+        );
+        expect(
+          ValueReaders.stringValue(execution['chapter_delivery_state']),
+          'delivered',
+        );
+        expect(
+          ValueReaders.stringValue(execution['chapter_delivery_path']),
+          'chapters/第01章_seed_to_full.md',
+        );
+        expect(
+          ValueReaders.stringList(execution['output_paths']),
+          contains('chapters/第01章_seed_to_full.md'),
+        );
+
+        final activationReport = await taskRepository.loadRecord(
+          project,
+          ValueReaders.stringValue(task['activation_report_path']),
+        );
+        expect(
+          ValueReaders.mapList(
+            ValueReaders.mapValue(
+              activationReport['metadata'],
+            )['selected_context_sections'],
+          ),
+          isNotEmpty,
+        );
+      },
+    );
+
+    test(
+      'runWorkflowTaskOnce keeps low level write path compatible when model still chooses write_project_file',
+      () async {
+        final gateway = _RecordingWorkflowGateway(
+          scriptedResults: <JsonMap>[
+            <String, Object?>{
+              'ok': true,
+              'content': '',
+              'tool_calls': <Object?>[
+                <String, Object?>{
+                  'id': 'call_write_1',
+                  'name': 'write_project_file',
+                  'arguments': <String, Object?>{
+                    'content_type': 'chapter',
+                    'relative_path': 'chapters/第01章_seed_to_full.md',
+                    'title': '第01章',
+                    'content': '# 第01章\n\n兼容旧写入路径。',
+                    'overwrite': true,
+                  },
+                },
+              ],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '',
+              },
+            },
+            <String, Object?>{
+              'ok': true,
+              'content': '章节已写入。',
+              'tool_calls': const <Object?>[],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '章节已写入。',
+              },
+            },
+          ],
+        );
+        final workflowService = _buildRuntimeService(
+          taskRepository: taskRepository,
+          promptTemplateService: promptTemplateService,
+          workspacePort: workspacePort,
+          gateway: gateway,
+          toolExecutionPort: _WorkflowToolExecutionPort(
+            workspacePort: workspacePort,
+          ),
+        );
+
+        final result = await workflowService.runWorkflowTaskOnce(
+          project,
+          _testSettings(),
+          const <String, Object?>{'id': 'task_001'},
+        );
+
+        expect(ValueReaders.boolValue(result['ok']), isTrue);
+        expect(
+          ValueReaders.stringList(result['output_paths']),
+          contains('chapters/第01章_seed_to_full.md'),
+        );
+        final task = await taskRepository.loadTask(
+          project,
+          const <String, Object?>{'id': 'task_001'},
+        );
+        final execution = await taskRepository.loadRecord(
+          project,
+          ValueReaders.stringValue(task['atomic_execution_path']),
+        );
+        expect(
+          ValueReaders.stringList(execution['output_paths']),
+          contains('chapters/第01章_seed_to_full.md'),
+        );
+        expect(
+          ValueReaders.mapValue(execution['chapter_delivery']).isEmpty,
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'runWorkflowTaskOnce keeps formal workflow chapter at waiting_user when model asks user to choose instead of delivering chapter body',
+      () async {
+        final gateway = _RecordingWorkflowGateway(
+          scriptedResults: <JsonMap>[
+            <String, Object?>{
+              'ok': true,
+              'content': '',
+              'tool_calls': <Object?>[
+                <String, Object?>{
+                  'id': 'call_options_1',
+                  'name': 'present_user_options',
+                  'arguments': <String, Object?>{
+                    'question': '当前总纲对第01章的冲突入口存在两种方向，先确认再继续？',
+                    'options': <Object?>[
+                      <String, Object?>{
+                        'id': 'option_a',
+                        'label': '保留旧入口',
+                        'prompt': '保留旧入口',
+                      },
+                    ],
+                  },
+                },
+              ],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '',
+              },
+            },
+          ],
+        );
+        final workflowService = _buildRuntimeService(
+          taskRepository: taskRepository,
+          promptTemplateService: promptTemplateService,
+          workspacePort: workspacePort,
+          gateway: gateway,
+          toolExecutionPort: _WorkflowToolExecutionPort(
+            workspacePort: workspacePort,
+          ),
+        );
+
+        final result = await workflowService.runWorkflowTaskOnce(
+          project,
+          _testSettings(),
+          const <String, Object?>{'id': 'task_001'},
+        );
+
+        expect(ValueReaders.boolValue(result['ok']), isTrue);
+        expect(ValueReaders.boolValue(result['waiting_for_user_choice']), isTrue);
+        final task = await taskRepository.loadTask(
+          project,
+          const <String, Object?>{'id': 'task_001'},
+        );
+        expect(
+          ValueReaders.stringValue(task['status']),
+          TaskRuntimeConstants.statusWaitingUser,
+        );
+        expect(
+          ValueReaders.stringValue(task['checkpoint_review_summary']),
+          isNotEmpty,
+        );
+      },
+    );
+
+    test(
+      'runWorkflowTaskOnce fails formal workflow chapter when no chapter body or delivery is produced',
+      () async {
+        final gateway = _RecordingWorkflowGateway(
+          scriptedResults: <JsonMap>[
+            <String, Object?>{
+              'ok': true,
+              'content': '',
+              'tool_calls': <Object?>[
+                <String, Object?>{
+                  'id': 'call_skill_1',
+                  'name': 'load_agent_skill',
+                  'arguments': <String, Object?>{
+                    'skill_id': 'novel-control-station',
+                  },
+                },
+              ],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '',
+              },
+            },
+          ],
+        );
+        final workflowService = _buildRuntimeService(
+          taskRepository: taskRepository,
+          promptTemplateService: promptTemplateService,
+          workspacePort: workspacePort,
+          gateway: gateway,
+          toolExecutionPort: _WorkflowToolExecutionPort(
+            workspacePort: workspacePort,
+          ),
+        );
+
+        final result = await workflowService.runWorkflowTaskOnce(
+          project,
+          _testSettings(),
+          const <String, Object?>{'id': 'task_001'},
+        );
+
+        expect(ValueReaders.boolValue(result['ok']), isFalse);
+        expect(
+          ValueReaders.stringValue(result['error']),
+          contains('长任务正式章节任务未形成正式交付'),
+        );
+        final task = await taskRepository.loadTask(
+          project,
+          const <String, Object?>{'id': 'task_001'},
+        );
+        expect(
+          ValueReaders.stringValue(task['status']),
+          TaskRuntimeConstants.statusFailed,
+        );
+      },
+    );
+
+    test(
+      'runWorkflowTaskOnce skips reviewer and creates recovery task when chapter body is missing',
+      () async {
+        await taskRepository.saveTask(project, <String, Object?>{
+          'id': 'gate_review_task_001',
+          'title': '章级审稿：第01章',
+          'task_type': 'review',
+          'mode': TaskRuntimeConstants.modeHumanOutlineAiDraft,
+          'status': TaskRuntimeConstants.statusQueued,
+          'chapter': '第01章',
+          'depends_on': <Object?>['task_001'],
+          'source_paths': <Object?>['chapters/第01章_seed_to_full.md'],
+          'output_paths': <Object?>[
+            'reviews/general/ch01_gate.md',
+            'reviews/general/ch01_gate.json',
+          ],
+          'metadata': <String, Object?>{
+            'origin': 'chapter_gate_review',
+            'runtime_baseline_id': 'chapter_collaboration_autorun',
+            'review_type': 'general',
+            'gate_source_task_id': 'task_001',
+            'gate_source_task_path': 'tasks/task_001.json',
+          },
+          'relative_path': 'tasks/gate_review_task_001.json',
+        });
+        await taskRepository.saveTask(project, <String, Object?>{
+          'id': 'chapter_002',
+          'title': '第02章',
+          'task_type': 'chapter',
+          'mode': TaskRuntimeConstants.modeHumanOutlineAiDraft,
+          'status': TaskRuntimeConstants.statusQueued,
+          'depends_on': <Object?>['gate_review_task_001'],
+          'output_paths': <Object?>['chapters/ch02.md'],
+          'relative_path': 'tasks/chapter_002.json',
+        });
+        final gateway = _RecordingWorkflowGateway(scriptedResults: <JsonMap>[]);
+        final workflowService = _buildRuntimeService(
+          taskRepository: taskRepository,
+          promptTemplateService: promptTemplateService,
+          workspacePort: workspacePort,
+          gateway: gateway,
+          toolExecutionPort: _WorkflowToolExecutionPort(
+            workspacePort: workspacePort,
+          ),
+        );
+
+        final result = await workflowService.runWorkflowTaskOnce(
+          project,
+          _testSettings(),
+          const <String, Object?>{'id': 'gate_review_task_001'},
+        );
+
+        expect(ValueReaders.boolValue(result['ok']), isTrue);
+        expect(ValueReaders.boolValue(result['skipped_review']), isTrue);
+        expect(gateway.requestCount, 0);
+        final recoveryTask = ValueReaders.mapValue(result['recovery_task']);
+        expect(ValueReaders.stringValue(recoveryTask['task_type']), 'revision');
+
+        final chapterTwo = await taskRepository.loadTask(
+          project,
+          const <String, Object?>{'id': 'chapter_002'},
+        );
+        expect(
+          ValueReaders.stringList(chapterTwo['depends_on']),
+          contains(ValueReaders.stringValue(recoveryTask['id'])),
+        );
+        expect(
+          ValueReaders.stringList(chapterTwo['depends_on']),
+          isNot(contains('gate_review_task_001')),
+        );
+      },
+    );
   });
+}
+
+ProjectWorkflowRuntimeService _buildRuntimeService({
+  required ProjectTaskRepository taskRepository,
+  required ProjectPromptTemplateService promptTemplateService,
+  required LocalProjectWorkspacePort workspacePort,
+  required LlmGateway gateway,
+  required ToolExecutionPort toolExecutionPort,
+  ProjectDraftExecutionConstraintRuntimeService?
+  draftExecutionConstraintRuntimeService,
+}) {
+  return ProjectWorkflowRuntimeService(
+    taskRepository: taskRepository,
+    promptTemplateService: promptTemplateService,
+    draftExecutionConstraintRuntimeService:
+        draftExecutionConstraintRuntimeService,
+    generateDraftUseCaseFactory: (_, __) => GenerateDraftUseCase(
+      projectWorkspacePort: workspacePort,
+      llmGateway: gateway,
+      toolExecutionPort: toolExecutionPort,
+      contextAssemblerService: ContextAssemblerService(
+        budgetService: ContextBudgetService(),
+        staticSectionService: ContextStaticSectionService(
+          projectPromptContract: ProjectPromptContract(),
+        ),
+        projectFileSectionService: ContextProjectFileSectionService(),
+      ),
+      projectPromptContract: ProjectPromptContract(),
+    ),
+  );
+}
+
+AppSettings _testSettings() {
+  return const AppSettings(
+    defaultProviderId: 'test-provider',
+    defaultAgentId: '',
+    defaultModelId: 'test-model',
+    defaultProjectPath: '',
+    autoSaveDrafts: false,
+    providers: <ProviderEndpointSettings>[
+      ProviderEndpointSettings(
+        id: 'test-provider',
+        title: 'Test Provider',
+        protocol: 'openai',
+        baseUrl: 'https://example.invalid',
+        apiKey: 'test-key',
+        modelId: 'test-model',
+        description: 'workflow runtime test provider',
+      ),
+    ],
+  );
+}
+
+class _RecordingWorkflowGateway extends LlmGateway {
+  _RecordingWorkflowGateway({required List<JsonMap> scriptedResults})
+    : _scriptedResults = List<JsonMap>.from(scriptedResults);
+
+  final List<JsonMap> _scriptedResults;
+  List<String> lastToolNames = const <String>[];
+  int requestCount = 0;
+
+  @override
+  Future<JsonMap> requestChat({
+    required ChatRequest request,
+    DraftGenerationCancellationToken? cancellationToken,
+    void Function(LlmStreamUpdate update)? onStreamUpdate,
+  }) async {
+    requestCount += 1;
+    lastToolNames = request.tools
+        .map(
+          (schema) => ValueReaders.stringValue(
+            ValueReaders.mapValue(schema['function'])['name'],
+          ),
+        )
+        .where((name) => name.trim().isNotEmpty)
+        .toList(growable: false);
+    if (_scriptedResults.isEmpty) {
+      return const <String, Object?>{
+        'ok': true,
+        'content': '',
+        'tool_calls': <Object?>[],
+        'message': <String, Object?>{'role': 'assistant', 'content': ''},
+      };
+    }
+    return _scriptedResults.removeAt(0);
+  }
+}
+
+class _FakeProjectDraftExecutionConstraintRuntimeService
+    extends ProjectDraftExecutionConstraintRuntimeService {
+  _FakeProjectDraftExecutionConstraintRuntimeService({required this.response})
+    : super(
+        expressionConstraintProfileRepository:
+            ExpressionConstraintProfileRepository(
+              workspacePort: LocalProjectWorkspacePort(),
+            ),
+        projectExpressionConstraintBindingRepository:
+            ProjectExpressionConstraintBindingRepository(
+              workspacePort: LocalProjectWorkspacePort(),
+            ),
+        constraintBindingRepository: LocalConstraintBindingRepository(
+          workspacePort: LocalProjectWorkspacePort(),
+        ),
+      );
+
+  final JsonMap response;
+
+  @override
+  Future<JsonMap> resolve(
+    ProjectDescriptor project, {
+    required String appliesTo,
+    String agentId = '',
+    String modeId = '',
+    String stageId = '',
+    JsonMap legacyChapterLengthOptions = const <String, Object?>{},
+  }) async {
+    return ValueReaders.deepCopyMap(response);
+  }
+}
+
+class _WorkflowToolExecutionPort implements ToolExecutionPort {
+  _WorkflowToolExecutionPort({required LocalProjectWorkspacePort workspacePort})
+    : _workspacePort = workspacePort;
+
+  final LocalProjectWorkspacePort _workspacePort;
+
+  @override
+  Future<JsonMap> execute({
+    required ProjectDescriptor project,
+    required JsonMap toolCall,
+  }) async {
+    final name = ValueReaders.stringValue(toolCall['name']);
+    final arguments = ValueReaders.mapValue(toolCall['arguments']);
+    if (name == 'submit_chapter_delivery') {
+      final chapterPath = ValueReaders.stringValue(arguments['chapter_path']);
+      final chapterContent = ValueReaders.stringValue(
+        arguments['chapter_content'],
+      );
+      await _workspacePort.writeTextFile(
+        project.rootPath,
+        chapterPath,
+        chapterContent,
+      );
+      return <String, Object?>{
+        'ok': true,
+        'display_text': '已提交章节交付。',
+        'changed_paths': <Object?>[
+          chapterPath,
+          '.novel_agent/continuity/deliveries/delivery-test-1.json',
+        ],
+        'interaction_type': 'domain_tool',
+        'tool_layer': 'domain',
+        'domain_tool_name': 'submit_chapter_delivery',
+        'domain_outcome_status': 'accepted',
+        'domain_outcome': <String, Object?>{
+          'outcome_status': 'accepted',
+          'outcome_payload': <String, Object?>{
+            'delivery_id': 'delivery-test-1',
+            'chapter_path': chapterPath,
+            'delivery_state': 'delivered',
+            'chapter_body_state': 'delivered',
+            'sidecar_state': 'accepted',
+            'state_result': <String, Object?>{
+              'state': 'delivered',
+              'chapter_body_delivered': true,
+              'submission_accepted': true,
+            },
+          },
+        },
+      };
+    }
+    if (name == 'write_project_file') {
+      final relativePath = ValueReaders.stringValue(
+        arguments['relative_path'],
+        'chapters/generated.md',
+      );
+      await _workspacePort.writeTextFile(
+        project.rootPath,
+        relativePath,
+        ValueReaders.stringValue(arguments['content']),
+      );
+      return <String, Object?>{
+        'ok': true,
+        'relative_path': relativePath,
+        'changed_paths': <Object?>[relativePath],
+      };
+    }
+    if (name == 'load_agent_skill') {
+      return <String, Object?>{
+        'ok': true,
+        'changed_paths': const <Object?>[],
+        'display_text': '已加载技能。',
+      };
+    }
+    if (name == 'present_user_options') {
+      return <String, Object?>{
+        'ok': true,
+        'waiting_for_user_choice': true,
+        'question': ValueReaders.stringValue(arguments['question']),
+        'options': ValueReaders.objectList(arguments['options']),
+        'changed_paths': const <Object?>[],
+      };
+    }
+    throw UnimplementedError('Unexpected tool call: $name');
+  }
 }

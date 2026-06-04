@@ -464,9 +464,6 @@ class _FakeResourceManagerActionHandler
   void onImportRequested() {}
 
   @override
-  void onLongTaskStationRequested() {}
-
-  @override
   void onModelSettingsRequested() {}
 
   @override

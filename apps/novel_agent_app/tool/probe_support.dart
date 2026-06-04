@@ -1,7 +1,8 @@
 import 'dart:io';
-import 'dart:convert';
 
 import 'package:novel_agent_core/novel_agent_core.dart';
+
+import '../../../tools/probe_config_support.dart';
 
 typedef ProbeResultValidator =
     Future<Map<String, Object?>> Function(DraftGenerationResult result);
@@ -18,74 +19,38 @@ class ProbeApiConfig {
   final String modelId;
 }
 
-Future<ProbeApiConfig> loadProbeApiConfig() async {
-  // 中文注释: 真实探针优先读取 test_api.txt；若当前机器只保留项目设置文件，则自动回退到 temp 设置。
-  final repoRoot = _resolveProbeRepoRoot();
-  final testApiFile = File(
-    '$repoRoot${Platform.pathSeparator}test_api.txt',
+final class ProbeReportCategories {
+  static const String success = 'success';
+  static const String technicalFailure = 'technical_failure';
+  static const String waitingUser = 'waiting_user';
+  static const String budgetFailure = 'budget_failure';
+  static const String contentQualityFailure = 'content_quality_failure';
+}
+
+Future<ProbeApiConfig> loadProbeApiConfig({
+  String probeName = 'novel_agent_app_probe',
+  bool requireRealProbeOptIn = true,
+  bool allowLegacyTestApi = true,
+  bool allowTempSettingsFallback = true,
+  String? repoRootOverride,
+  Directory? startDirectory,
+  Map<String, String>? environment,
+}) async {
+  // 中文注释: app 侧真实探针统一走仓库级本地配置入口，避免每支脚本继续各自读取密钥文件。
+  final config = await loadLocalProbeApiConfig(
+    probeName: probeName,
+    requireRealProbeOptIn: requireRealProbeOptIn,
+    allowLegacyTestApi: allowLegacyTestApi,
+    allowTempSettingsFallback: allowTempSettingsFallback,
+    repoRootOverride: repoRootOverride,
+    startDirectory: startDirectory,
+    environment: environment,
   );
-  if (await testApiFile.exists()) {
-    final lines = await testApiFile.readAsLines();
-    final cleanLines = lines
-        .map((line) => line.trim())
-        .where((line) => line.isNotEmpty)
-        .toList(growable: false);
-    if (cleanLines.length < 3) {
-      throw StateError('test_api.txt 至少需要 baseUrl、apiKey、modelId 三行。');
-    }
-    return ProbeApiConfig(
-      baseUrl: cleanLines[0],
-      apiKey: cleanLines[1],
-      modelId: cleanLines[2],
-    );
-  }
-  final settingsFile = File(
-    '$repoRoot${Platform.pathSeparator}temp${Platform.pathSeparator}novel_agent_settings.json',
+  return ProbeApiConfig(
+    baseUrl: config.baseUrl,
+    apiKey: config.apiKey,
+    modelId: config.modelId,
   );
-  if (!await settingsFile.exists()) {
-    throw StateError('未找到 test_api.txt，也未找到 temp/novel_agent_settings.json。');
-  }
-  final raw = jsonDecode(await settingsFile.readAsString());
-  if (raw is! Map) {
-    throw StateError('temp/novel_agent_settings.json 结构无效。');
-  }
-  final root = raw.map((key, value) => MapEntry(key.toString(), value));
-  final providers = _objectList(root['providers']);
-  final defaultProviderId = _stringValue(
-    root['defaultProviderId'],
-    _stringValue(root['default_provider_id']),
-  );
-  Map<String, Object?>? selectedProvider;
-  for (final candidate in providers) {
-    final provider = _mapValue(candidate);
-    if (_stringValue(provider['id']) == defaultProviderId) {
-      selectedProvider = provider;
-      break;
-    }
-  }
-  selectedProvider ??= providers.isEmpty ? null : _mapValue(providers.first);
-  if (selectedProvider == null) {
-    throw StateError('temp/novel_agent_settings.json 中没有可用 provider。');
-  }
-  final baseUrl = _stringValue(
-    selectedProvider['baseUrl'],
-    _stringValue(selectedProvider['base_url']),
-  );
-  final apiKey = _stringValue(
-    selectedProvider['apiKey'],
-    _stringValue(selectedProvider['api_key']),
-  );
-  final modelId = _stringValue(
-    selectedProvider['modelId'],
-    _stringValue(
-      selectedProvider['model_id'],
-      _stringValue(root['defaultModelId'], _stringValue(root['default_model_id'])),
-    ),
-  );
-  if (baseUrl.isEmpty || apiKey.isEmpty || modelId.isEmpty) {
-    throw StateError('temp/novel_agent_settings.json 缺少 baseUrl/apiKey/modelId。');
-  }
-  return ProbeApiConfig(baseUrl: baseUrl, apiKey: apiKey, modelId: modelId);
 }
 
 Future<Map<String, Object?>> runDraftProbeCase({
@@ -94,112 +59,103 @@ Future<Map<String, Object?>> runDraftProbeCase({
   required String modelId,
   required String prompt,
   required ProbeResultValidator validator,
-  int maxAttempts = 2,
 }) async {
-  // 中文注释: 真实 API 探针允许对可判定的传输层抖动做小次数重试，避免把瞬时网络问题误判成实现回归。
-  var lastError = '';
-  var lastStackTrace = '';
-  List<String> lastPhases = const <String>[];
-  for (var attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    final phases = <String>[];
-    try {
-      final result = await useCase.execute(
-        project: project,
-        userPrompt: prompt,
-        modelId: modelId,
-        title: 'Mode Probe',
-        requestOptions: const <String, Object?>{'stream': true},
-        contextSettings: const <String, Object?>{},
-        modelProfile: const <String, Object?>{},
-        onProgress: (progress) {
-          phases.add(progress.phase);
-        },
-      );
-      final validation = await validator(result);
-      return <String, Object?>{
-        ...validation,
-        'attempt': attempt,
-        'progress_phases': phases,
-        'executed_tools': result.executedTools,
-        'written_paths': result.writtenPaths,
-        'changed_paths': result.changedPaths,
-        'waiting_for_user_choice': result.waitingForUserChoice,
-        'reasoning_content': result.reasoningContent,
-        'draft_markdown': result.draftMarkdown,
-      };
-    } catch (error, stackTrace) {
-      lastError = '$error';
-      lastStackTrace = '$stackTrace';
-      lastPhases = phases;
-      if (!_isRetryableTransportError(error) || attempt >= maxAttempts) {
-        break;
-      }
-    }
-  }
-  return <String, Object?>{
-    'ok': false,
-    'summary': lastError,
-    'stack_trace': lastStackTrace,
-    'progress_phases': lastPhases,
-  };
-}
-
-bool _isRetryableTransportError(Object error) {
-  if (error is HttpException) {
-    return true;
-  }
-  if (error is SocketException) {
-    return true;
-  }
-  final message = '$error'.toLowerCase();
-  return message.contains('connection closed before full header') ||
-      message.contains('connection terminated') ||
-      message.contains('connection reset');
-}
-
-String _resolveProbeRepoRoot() {
-  // 中文注释: 探针既可能从 app 目录启动，也可能从仓库根启动，因此统一向上查找真实仓库根。
-  var current = Directory.current.absolute;
-  for (var depth = 0; depth < 6; depth += 1) {
-    final testApi = File(
-      '${current.path}${Platform.pathSeparator}test_api.txt',
+  // 中文注释: 真实 probe 只消费 production 合同，不再在探针层补私有 retry/repair 逻辑。
+  final phases = <String>[];
+  try {
+    final result = await useCase.execute(
+      project: project,
+      userPrompt: prompt,
+      modelId: modelId,
+      title: 'Mode Probe',
+      requestOptions: const <String, Object?>{'stream': true},
+      contextSettings: const <String, Object?>{},
+      modelProfile: const <String, Object?>{},
+      onProgress: (progress) {
+        phases.add(progress.phase);
+      },
     );
-    final settings = File(
-      '${current.path}${Platform.pathSeparator}temp${Platform.pathSeparator}novel_agent_settings.json',
-    );
-    if (testApi.existsSync() || settings.existsSync()) {
-      return current.path;
-    }
-    final parent = current.parent;
-    if (parent.path == current.path) {
-      break;
-    }
-    current = parent;
+    final validation = await validator(result);
+    final ok = ValueReaders.boolValue(validation['ok']);
+    return <String, Object?>{
+      ...validation,
+      'ok': ok,
+      'report_category': classifyDraftProbeReportCategory(
+        ok: ok,
+        result: result,
+        validation: validation,
+      ),
+      'progress_phases': phases,
+      'executed_tools': result.executedTools,
+      'written_paths': result.writtenPaths,
+      'changed_paths': result.changedPaths,
+      'waiting_for_user_choice': result.waitingForUserChoice,
+      'reasoning_content': result.reasoningContent,
+      'tool_error_summary': result.toolErrorSummary,
+      'draft_markdown': result.draftMarkdown,
+    };
+  } catch (error, stackTrace) {
+    final summary = '$error';
+    return <String, Object?>{
+      'ok': false,
+      'summary': summary,
+      'stack_trace': '$stackTrace',
+      'progress_phases': phases,
+      'report_category': classifyDraftProbeReportCategory(
+        ok: false,
+        errorSummary: summary,
+      ),
+    };
   }
-  return Directory.current.absolute.path;
 }
 
-String _stringValue(Object? value, [String fallback = '']) {
-  if (value == null) {
-    return fallback;
+String classifyDraftProbeReportCategory({
+  required bool ok,
+  DraftGenerationResult? result,
+  JsonMap validation = const <String, Object?>{},
+  String errorSummary = '',
+}) {
+  final explicitCategory = ValueReaders.stringValue(
+    validation['report_category'],
+    ValueReaders.stringValue(validation['probe_failure_category']),
+  ).trim();
+  if (explicitCategory.isNotEmpty) {
+    return explicitCategory;
   }
-  final text = value.toString().trim();
-  return text.isEmpty ? fallback : text;
+  if (ok) {
+    return ProbeReportCategories.success;
+  }
+  final waitingForUser =
+      ValueReaders.boolValue(validation['waiting_for_user_choice']) ||
+      (result?.waitingForUserChoice ?? false);
+  if (waitingForUser) {
+    return ProbeReportCategories.waitingUser;
+  }
+  final summary = [
+    errorSummary,
+    ValueReaders.stringValue(validation['summary']),
+    result?.toolErrorSummary ?? '',
+  ].join(' ').toLowerCase();
+  if (_isBudgetLikeFailureSummary(summary)) {
+    return ProbeReportCategories.budgetFailure;
+  }
+  if (errorSummary.trim().isNotEmpty || (result?.stoppedByToolError ?? false)) {
+    return ProbeReportCategories.technicalFailure;
+  }
+  return ProbeReportCategories.contentQualityFailure;
 }
 
-List<Object?> _objectList(Object? value) {
-  if (value is List) {
-    return List<Object?>.from(value);
-  }
-  return const <Object?>[];
-}
-
-Map<String, Object?> _mapValue(Object? value) {
-  if (value is Map<String, Object?>) {
-    return Map<String, Object?>.from(value);
-  }
-  if (value is Map) {
-    return value.map((key, item) => MapEntry(key.toString(), item));
-  }
-  return <String, Object?>{};
+bool _isBudgetLikeFailureSummary(String summary) {
+  return summary.contains('context length') ||
+      summary.contains('maximum context') ||
+      summary.contains('token limit') ||
+      summary.contains('max tokens') ||
+      summary.contains('budget') ||
+      summary.contains('quota') ||
+      summary.contains('rate limit') ||
+      summary.contains('insufficient_quota') ||
+      summary.contains('too many requests') ||
+      summary.contains('余额') ||
+      summary.contains('额度') ||
+      summary.contains('上下文长度');
 }

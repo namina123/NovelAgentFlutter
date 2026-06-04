@@ -92,8 +92,90 @@ class LongTaskRunDetailPanel extends StatelessWidget {
                       run.id,
                       item.relativePath,
                     ),
+                  ),
             ),
+        if (run.narrativeActivation != null ||
+            run.narrativeDelivery != null ||
+            run.narrativeReview != null ||
+            run.narrativeContinuity != null ||
+            run.narrativeProjectionItems.isNotEmpty ||
+            run.narrativePermissionItems.isNotEmpty) ...[
+          _SectionTitle(title: '开放叙事摘要'),
+          _RelatedItemSection(
+            title: 'Activation',
+            item: run.narrativeActivation,
+            onOpenRequested: run.narrativeActivation == null ||
+                    run.narrativeActivation!.relativePath.trim().isEmpty
+                ? null
+                : () => actionHandler.onLongTaskStationResourceRequested(
+                    run.id,
+                    run.narrativeActivation!.relativePath,
+                  ),
           ),
+          _RelatedItemSection(
+            title: 'Delivery',
+            item: run.narrativeDelivery,
+            onOpenRequested: run.narrativeDelivery == null ||
+                    run.narrativeDelivery!.relativePath.trim().isEmpty
+                ? null
+                : () => actionHandler.onLongTaskStationResourceRequested(
+                    run.id,
+                    run.narrativeDelivery!.relativePath,
+                  ),
+          ),
+          _RelatedItemSection(
+            title: 'Review',
+            item: run.narrativeReview,
+            onOpenRequested: run.narrativeReview == null ||
+                    run.narrativeReview!.relativePath.trim().isEmpty
+                ? null
+                : () => actionHandler.onLongTaskStationResourceRequested(
+                    run.id,
+                    run.narrativeReview!.relativePath,
+                  ),
+          ),
+          _RelatedItemSection(
+            title: 'Continuity',
+            item: run.narrativeContinuity,
+            onOpenRequested: run.narrativeContinuity == null ||
+                    run.narrativeContinuity!.relativePath.trim().isEmpty
+                ? null
+                : () => actionHandler.onLongTaskStationResourceRequested(
+                    run.id,
+                    run.narrativeContinuity!.relativePath,
+                  ),
+          ),
+          if (run.narrativeProjectionItems.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            ...run.narrativeProjectionItems.map(
+              (item) => _RelatedItemSection(
+                title: item.title,
+                item: item,
+                onOpenRequested: item.relativePath.trim().isEmpty
+                    ? null
+                    : () => actionHandler.onLongTaskStationResourceRequested(
+                        run.id,
+                        item.relativePath,
+                      ),
+              ),
+            ),
+          ],
+          if (run.narrativePermissionItems.isNotEmpty) ...[
+            _SectionTitle(title: '权限确认'),
+            ...run.narrativePermissionItems.map(
+              (item) => _RelatedItemSection(
+                title: item.title,
+                item: item,
+                onOpenRequested: item.relativePath.trim().isEmpty
+                    ? null
+                    : () => actionHandler.onLongTaskStationResourceRequested(
+                        run.id,
+                        item.relativePath,
+                      ),
+              ),
+            ),
+          ],
+        ],
         _SectionTitle(title: '最近关联结果'),
         _RelatedItemSection(
           title: '最近检查点',

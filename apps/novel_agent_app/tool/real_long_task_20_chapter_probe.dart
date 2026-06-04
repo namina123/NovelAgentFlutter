@@ -4,9 +4,13 @@ import 'dart:io';
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../../../tools/probe_config_support.dart';
+import 'probe_support.dart';
+
 Future<void> main() async {
   // 中文注释: 这支探针专门从“创建长篇项目”开始，真实压一轮 20 章左右的 mode 1 长任务链，用于排查检查点、后处理和持续推进是否会中途卡死。
-  final repoRoot = _resolveRepoRoot();
+  await ensureLocalRealProbeOptIn(probeName: 'real_long_task_20_chapter_probe');
+  final repoRoot = resolveLocalProbeRepoRoot();
   final provider = await _loadProvider(repoRoot);
   final settings = AppSettings(
     defaultProviderId: provider.id,
@@ -267,6 +271,9 @@ Future<void> main() async {
     );
     report.addAll(<String, Object?>{
       'ok': chapterCount >= 20,
+      'report_category': chapterCount >= 20
+          ? ProbeReportCategories.success
+          : ProbeReportCategories.contentQualityFailure,
       'project_root': project.rootPath,
       'created_plan_path': ValueReaders.stringValue(created['plan_path']),
       'chapter_file_count': chapterCount,
@@ -289,6 +296,10 @@ Future<void> main() async {
     report['ok'] = false;
     report['error'] = '$error';
     report['stack_trace'] = '$stackTrace';
+    report['report_category'] = classifyDraftProbeReportCategory(
+      ok: false,
+      errorSummary: '$error',
+    );
   } finally {
     report['finished_at'] = DateTime.now().toIso8601String();
     final reportFile = File(
@@ -317,79 +328,20 @@ Future<void> _writeProgressSnapshot(
   );
 }
 
-String _resolveRepoRoot() {
-  // 中文注释: 探针可能从仓库根或 app 子目录执行，这里统一向上定位包含 test_api.txt 的仓库根。
-  var current = Directory.current.absolute;
-  for (var depth = 0; depth < 6; depth += 1) {
-    final candidate = File(
-      '${current.path}${Platform.pathSeparator}test_api.txt',
-    );
-    if (candidate.existsSync()) {
-      return current.path;
-    }
-    final parent = current.parent;
-    if (parent.path == current.path) {
-      break;
-    }
-    current = parent;
-  }
-  return Directory.current.absolute.path;
-}
-
 Future<ProviderEndpointSettings> _loadProvider(String repoRoot) async {
-  // 中文注释: 优先读取 temp 设置中的默认 provider；缺失时回退到 test_api.txt，便于在本地快速跑真实探针。
-  final tempSettings = File(
-    '$repoRoot${Platform.pathSeparator}temp${Platform.pathSeparator}novel_agent_settings.json',
+  // 中文注释: 真实探针统一读取 local/probe_api.txt 或环境变量指定文件，不再私吃 temp/test_api 配置。
+  final config = await loadLocalProbeApiConfig(
+    probeName: 'real_long_task_20_chapter_probe',
+    repoRootOverride: repoRoot,
   );
-  if (await tempSettings.exists()) {
-    final root = ValueReaders.mapValue(
-      jsonDecode(await tempSettings.readAsString()),
-    );
-    final rawProviders = ValueReaders.objectList(
-      root['providers'],
-    ).map(ValueReaders.mapValue).toList(growable: false);
-    if (rawProviders.isNotEmpty) {
-      final selected = rawProviders.firstWhere(
-        (provider) => ValueReaders.boolValue(provider['is_default']),
-        orElse: () => rawProviders.first,
-      );
-      return ProviderEndpointSettings(
-        id: ValueReaders.stringValue(selected['id'], 'temp-provider'),
-        title: ValueReaders.stringValue(selected['title'], '临时提供商'),
-        protocol: ValueReaders.stringValue(
-          selected['protocol'],
-          'openai_compatible',
-        ),
-        baseUrl: ValueReaders.stringValue(selected['base_url']),
-        apiKey: ValueReaders.stringValue(selected['api_key']),
-        modelId: ValueReaders.stringValue(
-          selected['model_id'],
-          'deepseek-v4-flash',
-        ),
-        description: ValueReaders.stringValue(selected['description']),
-        isDefault: true,
-      );
-    }
-  }
-  final testApi = File('$repoRoot${Platform.pathSeparator}test_api.txt');
-  if (!await testApi.exists()) {
-    throw StateError('缺少 test_api.txt，无法运行真实探针。');
-  }
-  final lines = (await testApi.readAsLines())
-      .map((item) => item.trim())
-      .where((item) => item.isNotEmpty)
-      .toList(growable: false);
-  if (lines.length < 3) {
-    throw StateError('test_api.txt 至少需要 base_url、api_key、model_id 三行。');
-  }
   return ProviderEndpointSettings(
-    id: 'test-api-provider',
-    title: '测试 API',
+    id: 'real_long_task_20_chapter_probe',
+    title: 'Real Long Task 20 Chapter Probe',
     protocol: 'openai_compatible',
-    baseUrl: lines[0],
-    apiKey: lines[1],
-    modelId: lines[2],
-    description: '来自 test_api.txt 的真实探针提供商',
+    baseUrl: config.baseUrl,
+    apiKey: config.apiKey,
+    modelId: config.modelId,
+    description: 'Shared local probe configuration for the 20 chapter probe.',
     isDefault: true,
   );
 }

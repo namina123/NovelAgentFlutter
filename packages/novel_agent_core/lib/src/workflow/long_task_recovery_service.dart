@@ -1,5 +1,6 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import 'chapter_delivery_state_statuses.dart';
 import 'task_runtime_constants.dart';
 
 class LongTaskRecoveryService {
@@ -30,6 +31,10 @@ class LongTaskRecoveryService {
       record['status'],
       TaskRuntimeConstants.statusRunning,
     );
+    final deliveryRecovery = _deliveryRecoveryPlan(record, result);
+    if (deliveryRecovery.isNotEmpty) {
+      return deliveryRecovery;
+    }
     if (status == TaskRuntimeConstants.statusPaused) {
       return <String, Object?>{
         ...result,
@@ -85,6 +90,43 @@ class LongTaskRecoveryService {
     };
   }
 
+  JsonMap _deliveryRecoveryPlan(JsonMap record, JsonMap result) {
+    final deliveryState = ValueReaders.stringValue(
+      record['last_chapter_delivery_state'],
+      ValueReaders.stringValue(
+        ValueReaders.mapValue(_lastStep(record))['chapter_delivery_state'],
+      ),
+    ).trim();
+    switch (deliveryState) {
+      case ChapterDeliveryStateStatuses.missingOutputRecoverable:
+      case ChapterDeliveryStateStatuses.pathMismatchRecoverable:
+      case ChapterDeliveryStateStatuses.deliveredNeedsRepair:
+        return <String, Object?>{
+          ...result,
+          'action': 'pause_for_repair',
+          'reason': 'delivery_recovery_required',
+          'note': '最近一步的章节交付状态要求先进入 repair/recovery。',
+        };
+      case ChapterDeliveryStateStatuses.waitingUserChoice:
+        return <String, Object?>{
+          ...result,
+          'action': 'resume_when_user_confirms',
+          'reason': 'delivery_waiting_user_choice',
+          'note': '最近一步的章节交付状态正在等待用户确认。',
+        };
+      case ChapterDeliveryStateStatuses.invalidOutputRewriteRequired:
+      case ChapterDeliveryStateStatuses.manualAttentionRequired:
+      case ChapterDeliveryStateStatuses.hardFailure:
+        return <String, Object?>{
+          ...result,
+          'action': 'pause_for_manual_attention',
+          'reason': 'delivery_manual_attention',
+          'note': '最近一步的章节交付状态要求人工介入。',
+        };
+    }
+    return const <String, Object?>{};
+  }
+
   JsonMap _firstTaskWithStatus(List<Object?> tasks, String status) {
     // 中文注释: 恢复规则只需要第一条命中的异常任务即可给宿主足够的决策信息。
     for (final rawTask in tasks) {
@@ -105,5 +147,13 @@ class LongTaskRecoveryService {
       'status': ValueReaders.stringValue(task['status']),
       'relative_path': ValueReaders.stringValue(task['relative_path']),
     };
+  }
+
+  JsonMap _lastStep(JsonMap record) {
+    final steps = ValueReaders.mapList(record['steps']);
+    if (steps.isEmpty) {
+      return const <String, Object?>{};
+    }
+    return steps.last;
   }
 }

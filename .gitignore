@@ -30,6 +30,12 @@ temp/
 artifacts/
 **/artifacts/
 test_api.txt
+local/*
+!local/README.md
+!local/probe_api.example.txt
+.env
+.env.*
+.envrc
 references/MuMuAINovel-main/
 references/assets/
 references/files/

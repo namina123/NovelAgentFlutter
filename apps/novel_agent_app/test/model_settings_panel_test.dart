@@ -295,6 +295,8 @@ void main() {
         200,
         scrollable: find.byType(Scrollable).first,
       );
+      await tester.ensureVisible(find.text('保存模型设置'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('保存模型设置'));
       await tester.pumpAndSettle();
 

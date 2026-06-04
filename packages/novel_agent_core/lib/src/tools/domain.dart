@@ -1,0 +1,33 @@
+/// 领域级工具合同的轻量聚合导出。
+///
+/// 本文件只建立受控 toolcall 的中性命名空间，不放执行算法。
+export 'domain/domain_tool_contract_typedefs.dart';
+export 'domain/domain_tool_codec_service.dart';
+export 'domain/domain_tool_error.dart';
+export 'domain/domain_tool_outcome.dart';
+export 'domain/domain_tool_outcome_statuses.dart';
+export 'domain/narrative_domain_tool_capability.dart';
+export 'domain/narrative_domain_tool_catalog.dart';
+export 'domain/narrative_domain_tool_dispatch_service.dart';
+export 'domain/narrative_domain_tool_dispatcher.dart';
+export 'domain/narrative_domain_tool_definition.dart';
+export 'domain/narrative_domain_tool_handler.dart';
+export 'domain/narrative_domain_tool_names.dart';
+export 'domain/narrative_domain_tool_parse_issue.dart';
+export 'domain/narrative_domain_tool_parse_result.dart';
+export 'domain/narrative_domain_tool_validation_codes.dart';
+export 'domain/narrative_permission_policy_service.dart';
+export 'domain/propose_constraint_binding_handler.dart';
+export 'domain/propose_narrative_profile_update_handler.dart';
+export 'domain/profile_clarification_option.dart';
+export 'domain/profile_clarification_request.dart';
+export 'domain/profile_clarification_validation_codes.dart';
+export 'domain/request_profile_clarification_handler.dart';
+export 'domain/submit_chapter_delivery_handler.dart';
+export 'domain/submit_chapter_delivery_result.dart';
+export 'domain/submit_narrative_state_claims_handler.dart';
+export 'domain/submit_semantic_review_handler.dart';
+export 'domain/domain_tool_permission_decision.dart';
+export 'domain/domain_tool_permission_dispositions.dart';
+export 'domain/domain_tool_request.dart';
+export 'domain/domain_tool_validation_codes.dart';

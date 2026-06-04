@@ -35,24 +35,67 @@ class LongTaskTransactionContractService {
       _addUnique(contracts, '不要把审稿报告、修复计划或解释性文字写入正文文件。');
     } else if (taskType == 'review') {
       _addUnique(contracts, '只读取来源文件和必要上下文，不修改正文、大纲、设定或风格文件。');
-      _addUnique(contracts, '调用 run_continuity_check 保存结构化审稿报告。');
-      _addUnique(contracts, '本步结束前必须至少写出一份 reviews/ 下的报告文件；没有保存报告就不算完成。');
+      _addUnique(
+        contracts,
+        '正式语义审稿必须调用 submit_semantic_review，提交结构化 findings 和 recommended_disposition；不要用散文评论冒充正式交付。',
+      );
+      _addUnique(
+        contracts,
+        '如果宿主还要求保存 reviews/ 报告，把报告视为 submit_semantic_review 的镜像产物，而不是反过来用报告替代领域工具交付。',
+      );
     } else if (taskType == 'planning') {
       _addUnique(
         contracts,
         '不要写正文；优先写入 specs/project_spec.md、outline/总纲.md、chapter_outlines/章节任务清单.md。',
       );
       _addUnique(contracts, '如需调整队列，可调用 create_chapter_task 补充任务，但不要删除旧任务。');
+      _addUnique(
+        contracts,
+        '如果本轮在设计项目级 narrative profile / 解释器或长期规则，使用 propose_narrative_profile_update；关键信息不明时调用 request_profile_clarification 停下等待。',
+      );
     } else if (taskType == 'checkpoint') {
       _addUnique(contracts, '检查点通常不修改文件；整理产物并让用户确认继续、修订、暂停或改方向。');
     } else {
       _addUnique(
         contracts,
-        '能产出章节正文时调用 write_project_file 自动保存；章节级正文、样章和连续正文写 chapters/，局部场景或片段写 scenes/。',
+        '正式章节、样章或补写结果必须通过 submit_chapter_delivery 交付；不要只写文件就宣布完成章节任务。',
       );
       _addUnique(
         contracts,
-        '目标路径已存在且是在修正同一文件时必须传 overwrite=true，或改用 edit_project_file 精确修改。',
+        '如果只是脑暴方案、局部片段或风险说明，不要把它们伪装成 submit_chapter_delivery 的正式交付。',
+      );
+    }
+    return contracts;
+  }
+
+  List<String> domainToolContractsForTask(JsonMap task) {
+    // 中文注释: 领域工具契约单独成段，专门告诉模型本轮必须用哪类 domain tool 收口。
+    final taskType = ValueReaders.stringValue(
+      task['task_type'],
+      'chapter',
+    ).trim();
+    final contracts = <String>[
+      '示例只用于说明调用形态，不是题材、机制或世界观范本；未知变化、非常规设定和未来扩展字段都要保留，不要擅自归类成固定套路。',
+    ];
+    if (taskType == 'review') {
+      _addUnique(
+        contracts,
+        '本轮 reviewer 的正式结论必须通过 submit_semantic_review 提交；不要把自然语言点评、修文建议或任务调度冒充为已完成的审稿交付。',
+      );
+    } else if (taskType == 'planning') {
+      _addUnique(
+        contracts,
+        '如果本轮承担 profile architect / 规则架构职责，使用 propose_narrative_profile_update 提交长期规则提案；适用范围、保留策略或未知字段存在关键歧义时改用 request_profile_clarification。',
+      );
+    } else if (taskType == 'revision') {
+      _addUnique(
+        contracts,
+        '本轮 recovery / repair 只解决当前修订目标，不扩展成新章节、总纲改写或多目标规划；如果需要重新形成正式章节交付，只围绕当前目标收口。',
+      );
+    } else if (taskType != 'checkpoint') {
+      _addUnique(
+        contracts,
+        '本轮 writer 的正式章节收口必须调用 submit_chapter_delivery；不要只靠 write_project_file、散文说明或多文件拼装来冒充交付成功。',
       );
     }
     return contracts;
@@ -67,21 +110,33 @@ class LongTaskTransactionContractService {
     final instructions = <String>[];
     if (taskType == 'revision') {
       _addUnique(instructions, '这是修订任务：读取审稿报告和待修订文件，备份后做最小必要修改。');
+      _addUnique(
+        instructions,
+        '本轮 recovery / repair 目标单一：只修当前缺口，不顺手改下一章、总纲或无关设定。',
+      );
       _addUnique(instructions, '最终只简短说明改了什么、写入了哪里、仍需人工确认什么。');
     } else if (taskType == 'review') {
       _addUnique(instructions, '这是独立审稿任务：读取来源，定位问题，保存报告，不重写正文。');
       _addUnique(
         instructions,
-        '必须实际调用工具把报告写到 reviews/，最终只告诉用户报告路径和最重要风险，不要把口头分析冒充成已保存报告。',
+        '必须实际调用 submit_semantic_review 提交结构化结论；最终只告诉用户最重要风险和是否建议 repair，不要把口头分析冒充成已完成审稿。',
       );
     } else if (taskType == 'planning') {
       _addUnique(instructions, '这是长篇规划任务：把种子扩展为可执行的作品规格、总纲、卷纲/章纲和任务清单。');
+      _addUnique(
+        instructions,
+        '如果本轮涉及项目级 narrative profile / 规则架构，使用 profile architect 契约：提案走 propose_narrative_profile_update，缺口走 request_profile_clarification。',
+      );
       _addUnique(instructions, '如项目已有规划，先判断是否兼容；不兼容时提出迁移或修订选项。');
     } else if (taskType == 'checkpoint') {
       _addUnique(instructions, '这是人工检查点：阅读前序产物，概括当前风险和推荐下一步。');
       _addUnique(instructions, '不要自动推进后续章节；用户确认后再由任务系统继续。');
     } else {
       _addUnique(instructions, '这是长篇章节写作单步：只推进当前章节，不跨章节抢写。');
+      _addUnique(
+        instructions,
+        '当正文已经达到正式交付条件时，用 submit_chapter_delivery 收口，而不是停留在“已写好但未交付”的口头状态。',
+      );
       _addUnique(instructions, '写作前先对齐项目规格、章纲、最近摘要、人物状态和风格边界。');
       _addUnique(instructions, '如果上下文不满足写作条件，先保存/呈现需要补齐的选择，而不是硬写。');
     }

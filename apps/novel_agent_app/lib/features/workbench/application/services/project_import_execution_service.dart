@@ -1,6 +1,7 @@
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../../../book_deconstruction/application/services/book_deconstruction_draft_builder_service.dart';
+import '../../../book_deconstruction/application/services/book_deconstruction_narrative_persistence_service.dart';
 import '../../../book_deconstruction/application/services/book_deconstruction_preview_markdown_service.dart';
 import '../models/project_import_execution_result.dart';
 import '../models/project_import_request.dart';
@@ -11,12 +12,15 @@ class ProjectImportExecutionService {
     required ImportProjectFilesUseCase importProjectFilesUseCase,
     required ProjectToolHostPort projectToolHostPort,
     required WriteProjectTextFileUseCase writeProjectTextFileUseCase,
+    required BookDeconstructionNarrativePersistenceService
+    narrativePersistenceService,
     ProjectImportActionPolicyService? actionPolicyService,
     BookDeconstructionDraftBuilderService? draftBuilderService,
     BookDeconstructionPreviewMarkdownService? previewMarkdownService,
   }) : _importProjectFilesUseCase = importProjectFilesUseCase,
        _projectToolHostPort = projectToolHostPort,
        _writeProjectTextFileUseCase = writeProjectTextFileUseCase,
+       _narrativePersistenceService = narrativePersistenceService,
        _actionPolicyService =
            actionPolicyService ?? ProjectImportActionPolicyService(),
        _draftBuilderService =
@@ -28,6 +32,8 @@ class ProjectImportExecutionService {
   final ImportProjectFilesUseCase _importProjectFilesUseCase;
   final ProjectToolHostPort _projectToolHostPort;
   final WriteProjectTextFileUseCase _writeProjectTextFileUseCase;
+  final BookDeconstructionNarrativePersistenceService
+  _narrativePersistenceService;
   final ProjectImportActionPolicyService _actionPolicyService;
   final BookDeconstructionDraftBuilderService _draftBuilderService;
   final BookDeconstructionPreviewMarkdownService _previewMarkdownService;
@@ -114,6 +120,10 @@ class ProjectImportExecutionService {
       project: project,
       relativePath: previewPath,
       content: previewMarkdown,
+    );
+    await _narrativePersistenceService.persist(
+      project: project,
+      narrativeArtifacts: buildResult.narrativeArtifacts,
     );
     return ProjectImportExecutionResult(
       ok: importOk,

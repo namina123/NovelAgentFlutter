@@ -157,6 +157,34 @@ class LongTaskStationViewDataService {
         detail?.latestRepairTask,
         actionLabel: '打开返工任务',
       ),
+      narrativeActivation: _relatedItem(
+        detail?.narrativeSummary?.activation,
+        actionLabel: '查看激活报告',
+      ),
+      narrativeDelivery: _relatedItem(
+        detail?.narrativeSummary?.delivery,
+        actionLabel: '打开交付章节',
+      ),
+      narrativeReview: _relatedItem(
+        detail?.narrativeSummary?.review,
+        actionLabel: '查看审稿结果',
+      ),
+      narrativeContinuity: _relatedItem(
+        detail?.narrativeSummary?.continuity,
+        actionLabel: '查看变更摘要',
+      ),
+      narrativeProjectionItems: detail?.narrativeSummary?.projectionItems
+              .map(
+                (item) => _relatedItem(item, actionLabel: '打开投影')!,
+              )
+              .toList(growable: false) ??
+          const <LongTaskRunRelatedItemViewData>[],
+      narrativePermissionItems: detail?.narrativeSummary?.permissionItems
+              .map(
+                (item) => _relatedItem(item, actionLabel: '打开确认记录')!,
+              )
+              .toList(growable: false) ??
+          const <LongTaskRunRelatedItemViewData>[],
       requiresManualAttention: run.requiresManualAttention,
       canPause: _runStateMachine.canTransition(
         run.status,

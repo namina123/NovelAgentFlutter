@@ -174,7 +174,8 @@ class LongTaskTaskFactoryService {
         'plan_id': planId,
         'sort_order': 1,
         'stage': 'atomic',
-        'tool_hint': '这是单章原子任务，只完成当前章节目标；不要自动生成后续章节任务。',
+        'tool_hint':
+            '这是单章原子任务，只完成当前章节目标；不要自动生成后续章节任务。正文达到正式交付条件后，用 submit_chapter_delivery 收口。',
       }, createdAt: createdAt),
     ];
   }
@@ -278,7 +279,7 @@ class LongTaskTaskFactoryService {
           'stage': stage,
           'runtime_baseline_id': runtimeBaselineId,
           'tool_hint':
-              '先读取项目规格、总纲、章纲、摘要和必要设定；如果规划尚未充分，请先调用 present_user_options 或写入大纲，而不是硬写正文。',
+              '先读取项目规格、总纲、章纲、摘要和必要设定；如果规划尚未充分，请先调用 present_user_options 或写入大纲，而不是硬写正文。正文达到正式交付条件后，用 submit_chapter_delivery 收口。',
           'persistent_context_paths': persistentPaths,
           'chapter_length_metadata': _chapterLengthMetadata(
             options,
@@ -496,7 +497,7 @@ class LongTaskTaskFactoryService {
           'runtime_baseline_id': runtimeBaselineId.trim(),
       },
       'tool_hint':
-          '不要写正文。优先保存 specs/project_spec.md、outline/总纲.md、chapter_outlines/章节任务清单.md；需要用户确认时调用 present_user_options。',
+          '不要写正文。优先保存 specs/project_spec.md、outline/总纲.md、chapter_outlines/章节任务清单.md；如果本轮在设计项目级 narrative profile / 解释器，提案走 propose_narrative_profile_update，缺口走 request_profile_clarification；需要用户确认时调用 present_user_options。',
     }, createdAt);
   }
 

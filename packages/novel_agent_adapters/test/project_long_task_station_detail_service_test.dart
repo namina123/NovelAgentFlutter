@@ -87,6 +87,51 @@ void main() {
       expect(detail.latestRepairTask, isNotNull);
       expect(detail.latestRepairTask!.id, 'revision_001');
       expect(detail.latestRepairTask!.relativePath, 'tasks/revision_001.json');
+      expect(detail.narrativeSummary, isNotNull);
+      expect(
+        detail.narrativeSummary!.activation?.relativePath,
+        'tracking/chapter_atomic/chapter_001.activation_report.json',
+      );
+      expect(
+        detail.narrativeSummary!.activation?.summary,
+        'selected 8, omitted 2, files 8.',
+      );
+      expect(detail.narrativeSummary!.delivery, isNotNull);
+      expect(detail.narrativeSummary!.delivery?.status, 'delivered');
+      expect(
+        detail.narrativeSummary!.delivery?.relativePath,
+        'chapters/ch01.md',
+      );
+      expect(detail.narrativeSummary!.review, isNotNull);
+      expect(
+        detail.narrativeSummary!.review?.relativePath,
+        'reviews/continuity/ch01_gate.md',
+      );
+      expect(detail.narrativeSummary!.continuity, isNotNull);
+      expect(detail.narrativeSummary!.continuity?.summary, 'ledger 1 | reviews 1');
+      expect(detail.narrativeSummary!.continuity?.subtitle, '更新 2 项');
+      expect(detail.narrativeSummary!.projectionItems, hasLength(2));
+      expect(
+        detail.narrativeSummary!.projectionItems.map((item) => item.relativePath),
+        containsAll(<String>[
+          'continuity/最近状态变化.md',
+          'reviews/语义复核摘要.md',
+        ]),
+      );
+      expect(detail.narrativeSummary!.permissionItems, hasLength(2));
+      expect(
+        detail.narrativeSummary!.permissionItems.map((item) => item.relativePath),
+        containsAll(<String>[
+          '.novel_agent/continuity/clarifications/clarification_call-5.json',
+          '.novel_agent/continuity/profile_proposals/proposal-1.json',
+        ]),
+      );
+      expect(
+        detail.narrativeSummary!.permissionItems
+            .firstWhere((item) => item.title == 'Clarification')
+            .summary,
+        '这个机制是否长期生效？',
+      );
 
       expect(detail.blocker.code, 'waiting_user_checkpoint');
       expect(detail.blocker.note, isNotEmpty);
@@ -108,6 +153,10 @@ Future<void> _seedProject(
       'status': TaskRuntimeConstants.statusSucceeded,
       'relative_path': 'tasks/chapter_001.json',
       'output_paths': <Object?>['chapters/ch01.md'],
+      'atomic_execution_path': 'tracking/chapter_atomic/chapter_001.execution.json',
+      'activation_report_path':
+          'tracking/chapter_atomic/chapter_001.activation_report.json',
+      'activation_report_summary': 'selected 8, omitted 2, files 8.',
       'created_at': '2026-05-26T08:01:00.000Z',
       'updated_at': '2026-05-26T08:06:00.000Z',
       'metadata': <String, Object?>{
@@ -157,6 +206,71 @@ Future<void> _seedProject(
   ]);
   await taskRepository.saveRecord(
     project,
+    'tracking/chapter_atomic/chapter_001.execution.json',
+    <String, Object?>{
+      'activation_report_path':
+          'tracking/chapter_atomic/chapter_001.activation_report.json',
+      'activation_report_summary': 'selected 8, omitted 2, files 8.',
+      'chapter_delivery_state': 'delivered',
+      'chapter_delivery_path': 'chapters/ch01.md',
+      'changed_paths': <Object?>[
+        '.novel_agent/continuity/ledgers/main-ledger/entries.jsonl',
+        '.novel_agent/continuity/reviews/review-001.json',
+        '.novel_agent/continuity/profile_proposals/proposal-1.json',
+        '.novel_agent/continuity/clarifications/clarification_call-5.json',
+        'continuity/最近状态变化.md',
+        'reviews/语义复核摘要.md',
+      ],
+    },
+  );
+  await taskRepository.saveRecord(
+    project,
+    '.novel_agent/continuity/profile_proposals/proposal-1.json',
+    <String, Object?>{
+      'schema_version': '1',
+      'proposal': <String, Object?>{
+        'proposal_id': 'proposal-1',
+        'proposal_status': 'proposed',
+        'requires_user_confirmation': true,
+        'reason': '需要确认是否升级为长期叙事规则。',
+        'profile_patch': <String, Object?>{
+          'patch_id': 'patch-1',
+          'patch_payload': <String, Object?>{'namespace': 'continuity'},
+        },
+      },
+      'outcome_status': 'proposed',
+      'permission_decision': <String, Object?>{
+        'disposition': 'needs_user_confirmation',
+        'reason': '高风险 profile 更新需要用户确认。',
+        'policy_ref': 'policy.profile.high_risk_confirmation',
+      },
+      'persisted_at': '2026-05-26T08:06:20.000Z',
+    },
+  );
+  await taskRepository.saveRecord(
+    project,
+    '.novel_agent/continuity/clarifications/clarification_call-5.json',
+    <String, Object?>{
+      'schema_version': '1',
+      'clarification_request': <String, Object?>{
+        'question': '这个机制是否长期生效？',
+        'options': <Object?>[
+          <String, Object?>{'option_id': 'yes', 'label': '长期生效'},
+          <String, Object?>{'option_id': 'no', 'label': '只限本卷'},
+        ],
+        'blocking': true,
+      },
+      'outcome_status': 'needs_user_confirmation',
+      'permission_decision': <String, Object?>{
+        'disposition': 'needs_user_confirmation',
+        'reason': '需要用户选择后才能继续。',
+        'policy_ref': 'policy.profile.clarification',
+      },
+      'persisted_at': '2026-05-26T08:06:25.000Z',
+    },
+  );
+  await taskRepository.saveRecord(
+    project,
     'tracking/checkpoint_reviews/ch01_checkpoint.json',
     <String, Object?>{
       'id': 'checkpoint_review_ch01',
@@ -201,8 +315,40 @@ Future<void> _seedProject(
       'stop_reason': 'waiting_user_checkpoint',
       'stop_note': '检查点已创建，请用户决定是否继续推进。',
       'last_task_id': 'checkpoint_001',
+      'last_activation_report_path':
+          'tracking/chapter_atomic/chapter_001.activation_report.json',
+      'last_chapter_delivery_state': 'delivered',
+      'last_chapter_delivery_path': 'chapters/ch01.md',
+      'last_changed_paths': <Object?>[
+        '.novel_agent/continuity/ledgers/main-ledger/entries.jsonl',
+        '.novel_agent/continuity/reviews/review-001.json',
+        '.novel_agent/continuity/profile_proposals/proposal-1.json',
+        '.novel_agent/continuity/clarifications/clarification_call-5.json',
+        'continuity/最近状态变化.md',
+        'reviews/语义复核摘要.md',
+      ],
       'last_checkpoint_review_path':
           'tracking/checkpoint_reviews/ch01_checkpoint.json',
+      'steps': <Object?>[
+        <String, Object?>{
+          'index': 1,
+          'task_id': 'chapter_001',
+          'activation_report_path':
+              'tracking/chapter_atomic/chapter_001.activation_report.json',
+          'activation_report_summary': 'selected 8, omitted 2, files 8.',
+          'chapter_delivery_state': 'delivered',
+          'chapter_delivery_path': 'chapters/ch01.md',
+          'changed_paths': <Object?>[
+            '.novel_agent/continuity/ledgers/main-ledger/entries.jsonl',
+            '.novel_agent/continuity/reviews/review-001.json',
+            '.novel_agent/continuity/profile_proposals/proposal-1.json',
+            '.novel_agent/continuity/clarifications/clarification_call-5.json',
+            'continuity/最近状态变化.md',
+            'reviews/语义复核摘要.md',
+          ],
+          'created_at': '2026-05-26T08:06:30.000Z',
+        },
+      ],
       'updated_at': '2026-05-26T08:12:30.000Z',
     },
   );

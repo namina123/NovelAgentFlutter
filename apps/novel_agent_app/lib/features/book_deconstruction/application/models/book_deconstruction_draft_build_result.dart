@@ -6,10 +6,12 @@ class BookDeconstructionDraftBuildResult {
     required this.extractionResult,
     required this.applicationPlan,
     required this.followupMenu,
+    required this.narrativeArtifacts,
   });
 
   final BookDeconstructionInput input;
   final BookDeconstructionExtractionResult extractionResult;
   final BookDeconstructionApplicationPlan applicationPlan;
   final BookDeconstructionFollowupMenu followupMenu;
+  final BookDeconstructionNarrativeArtifactBundle narrativeArtifacts;
 }

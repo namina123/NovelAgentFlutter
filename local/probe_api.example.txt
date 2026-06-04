@@ -1,0 +1,3 @@
+https://example.com/v1
+your-local-api-key
+deepseek-v4-flash

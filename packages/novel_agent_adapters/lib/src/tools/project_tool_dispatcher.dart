@@ -14,6 +14,7 @@ import 'project_gateway_process_service.dart';
 import 'project_gateway_tool_executor.dart';
 import 'project_long_task_tool_executor.dart';
 import 'project_management_tool_executor.dart';
+import 'project_narrative_domain_tool_executor.dart';
 import 'project_structured_memory_tool_executor.dart';
 import 'project_task_tool_executor.dart';
 import 'project_tool_path_policy.dart';
@@ -98,6 +99,13 @@ class ProjectToolDispatcher implements ToolExecutionPort {
          skillGroupCatalog: skillGroupCatalog,
          resultFactory: resultFactory,
          runtimeLoadoutService: agentSkillRuntimeLoadoutService,
+       ),
+       _narrativeDomainToolCatalog = NarrativeDomainToolCatalog(),
+       _narrativeDomainDispatcher = _buildNarrativeDomainDispatcher(),
+       _narrativeDomainToolExecutor = ProjectNarrativeDomainToolExecutor(
+         workspacePort: _ProjectToolHostWorkspacePortAdapter(hostPort),
+         hostPort: hostPort,
+         dispatcher: _buildNarrativeDomainDispatcher(),
        );
 
   final ToolCallNormalizerService _toolCallNormalizerService;
@@ -111,6 +119,48 @@ class ProjectToolDispatcher implements ToolExecutionPort {
   final ProjectManagementToolExecutor _managementToolExecutor;
   final ProjectLongTaskToolExecutor? _longTaskToolExecutor;
   final ProjectAgentSkillToolExecutor _agentSkillToolExecutor;
+  final NarrativeDomainToolCatalog _narrativeDomainToolCatalog;
+  final NarrativeDomainToolDispatcher _narrativeDomainDispatcher;
+  final ProjectNarrativeDomainToolExecutor _narrativeDomainToolExecutor;
+
+  static NarrativeDomainToolDispatcher _buildNarrativeDomainDispatcher() {
+    return NarrativeDomainToolDispatchService(
+      handlers: <NarrativeDomainToolHandler>[
+        SubmitChapterDeliveryHandler(),
+        const SubmitNarrativeStateClaimsHandler(),
+        const ProposeNarrativeProfileUpdateHandler(),
+        const SubmitSemanticReviewHandler(),
+        const ProposeConstraintBindingHandler(),
+        const RequestProfileClarificationHandler(),
+      ],
+    );
+  }
+
+  static const Set<String> _domainToolNames = <String>{
+    NarrativeDomainToolNames.submitChapterDelivery,
+    NarrativeDomainToolNames.submitNarrativeStateClaims,
+    NarrativeDomainToolNames.proposeNarrativeProfileUpdate,
+    NarrativeDomainToolNames.submitSemanticReview,
+    NarrativeDomainToolNames.proposeConstraintBinding,
+    NarrativeDomainToolNames.requestProfileClarification,
+  };
+
+  static const Set<String> _lowLevelToolNames = <String>{
+    'list_project_files',
+    'read_project_file',
+    'write_project_file',
+    'edit_project_file',
+    'delete_project_file',
+    'get_project_file_info',
+    'search_project_files',
+    'create_project_entry',
+    'move_project_file',
+    'rename_project_file',
+    'manipulate_project_file_lines',
+    'list_history_sessions',
+    'create_backup',
+    'restore_backup',
+  };
 
   @override
   Future<JsonMap> execute({
@@ -125,6 +175,28 @@ class ProjectToolDispatcher implements ToolExecutionPort {
       toolName: toolName,
       arguments: ValueReaders.mapValue(normalized['arguments']),
     );
+    if (_domainToolNames.contains(toolName)) {
+      return _executeNarrativeDomainTool(
+        project: project,
+        rawToolCall: toolCall,
+        normalizedToolCall: normalized,
+        toolName: toolName,
+        arguments: arguments,
+      );
+    }
+    final result = await _executeProjectTool(
+      project: project,
+      toolName: toolName,
+      arguments: arguments,
+    );
+    return _annotateToolResult(toolName, result);
+  }
+
+  Future<JsonMap> _executeProjectTool({
+    required ProjectDescriptor project,
+    required String toolName,
+    required JsonMap arguments,
+  }) async {
     switch (toolName) {
       case 'list_project_files':
         return _readToolExecutor.listProjectFiles(project, arguments);
@@ -295,9 +367,254 @@ class ProjectToolDispatcher implements ToolExecutionPort {
           normalized['output_relative_path'] = normalizedOutputPath;
         }
         return normalized;
+      case NarrativeDomainToolNames.submitChapterDelivery:
+        normalized['chapter_path'] = _relativePathResolver.normalizeProjectPath(
+          ValueReaders.stringValue(normalized['chapter_path']),
+        );
+        return normalized;
       default:
         return normalized;
     }
+  }
+
+  Future<JsonMap> _executeNarrativeDomainTool({
+    required ProjectDescriptor project,
+    required JsonMap rawToolCall,
+    required JsonMap normalizedToolCall,
+    required String toolName,
+    required JsonMap arguments,
+  }) async {
+    final parseResult = _narrativeDomainToolCatalog.parseRequest(
+      callId: ValueReaders.stringValue(normalizedToolCall['id']).trim(),
+      toolName: toolName,
+      source: _resolveDomainSource(toolName, rawToolCall, arguments),
+      arguments: arguments,
+      toolRoundEvidence: _readToolRoundEvidence(rawToolCall, arguments),
+      schemaVersion: ValueReaders.stringValue(
+        rawToolCall['schema_version'],
+        ValueReaders.stringValue(arguments['schema_version']),
+      ).trim(),
+    );
+    if (!parseResult.isSuccess) {
+      final capability = _domainCapabilityFor(toolName);
+      return <String, Object?>{
+        'ok': false,
+        'error': '领域工具参数不合法。',
+        'display_text': '领域工具参数不合法：${_domainDisplayName(toolName)}',
+        'changed_paths': const <String>[],
+        'interaction_type': 'domain_tool',
+        'tool_layer': 'domain',
+        'tool_capability': _toolCapability(
+          toolName,
+          toolLayer: 'domain',
+          capabilityKind: 'narrative_domain_tool',
+        ),
+        'domain_tool_name': toolName,
+        'domain_capability': capability?.toJson(),
+        'domain_parse_issues': parseResult.issues
+            .map(
+              (issue) => <String, Object?>{
+                'code': issue.code,
+                'field_path': issue.fieldPath,
+                'message': issue.message,
+              },
+            )
+            .toList(growable: false),
+        'tool_result_summary': '领域工具参数不合法，需要修正后重试。',
+      };
+    }
+
+    final outcome = await _narrativeDomainToolExecutor.execute(
+      project,
+      parseResult.request!,
+    );
+    final changedPaths = _domainChangedPaths(outcome);
+    final waitingForUserChoice =
+        outcome.outcomeStatus ==
+        DomainToolOutcomeStatuses.needsUserConfirmation;
+    final ok =
+        outcome.outcomeStatus == DomainToolOutcomeStatuses.accepted ||
+        outcome.outcomeStatus == DomainToolOutcomeStatuses.proposed ||
+        waitingForUserChoice;
+    final summary = _domainToolSummary(toolName, outcome, changedPaths);
+    return <String, Object?>{
+      'ok': ok,
+      if (!ok)
+        'error': ValueReaders.stringValue(outcome.error?.message, '领域工具执行失败。'),
+      'display_text': summary,
+      'changed_paths': changedPaths,
+      'interaction_type': 'domain_tool',
+      'tool_layer': 'domain',
+      'tool_capability': _toolCapability(
+        toolName,
+        toolLayer: 'domain',
+        capabilityKind: 'narrative_domain_tool',
+      ),
+      'domain_tool_name': toolName,
+      'domain_capability': _domainCapabilityFor(toolName)?.toJson(),
+      'domain_outcome_status': outcome.outcomeStatus,
+      'domain_outcome': outcome.toJson(),
+      'tool_result_summary': summary,
+      'waiting_for_user_choice': waitingForUserChoice,
+    };
+  }
+
+  NarrativeSourceRef _resolveDomainSource(
+    String toolName,
+    JsonMap rawToolCall,
+    JsonMap arguments,
+  ) {
+    final sourceJson =
+        ValueReaders.mapValue(rawToolCall['source_ref']).isNotEmpty
+        ? ValueReaders.mapValue(rawToolCall['source_ref'])
+        : ValueReaders.mapValue(
+            ValueReaders.mapValue(rawToolCall['source']).isNotEmpty
+                ? rawToolCall['source']
+                : arguments['source_ref'],
+          );
+    if (sourceJson.isNotEmpty) {
+      return NarrativeSourceRef.fromJson(sourceJson);
+    }
+    final sourceType = ValueReaders.stringValue(
+      rawToolCall['source_type'],
+      ValueReaders.stringValue(
+        arguments['_domain_source_type'],
+        ValueReaders.stringValue(
+          arguments['domain_source_type'],
+          _defaultDomainSourceType(toolName),
+        ),
+      ),
+    ).trim();
+    final sourceId = ValueReaders.stringValue(
+      rawToolCall['source_id'],
+      ValueReaders.stringValue(
+        arguments['_domain_source_id'],
+        'project_tool_dispatcher',
+      ),
+    ).trim();
+    return NarrativeSourceRef(
+      sourceType: sourceType.isEmpty
+          ? _defaultDomainSourceType(toolName)
+          : sourceType,
+      sourceId: sourceId.isEmpty ? 'project_tool_dispatcher' : sourceId,
+      label: ValueReaders.stringValue(
+        rawToolCall['source_label'],
+        ValueReaders.stringValue(arguments['_domain_source_label'], sourceType),
+      ).trim(),
+    );
+  }
+
+  ToolRoundEvidence? _readToolRoundEvidence(
+    JsonMap rawToolCall,
+    JsonMap arguments,
+  ) {
+    final raw = ValueReaders.mapValue(rawToolCall['tool_round_evidence']);
+    if (raw.isNotEmpty) {
+      return ToolRoundEvidence.fromJson(raw);
+    }
+    final argumentRaw = ValueReaders.mapValue(arguments['tool_round_evidence']);
+    if (argumentRaw.isNotEmpty) {
+      return ToolRoundEvidence.fromJson(argumentRaw);
+    }
+    return null;
+  }
+
+  NarrativeDomainToolCapability? _domainCapabilityFor(String toolName) {
+    return _narrativeDomainDispatcher.capabilityFor(toolName);
+  }
+
+  String _defaultDomainSourceType(String toolName) {
+    switch (toolName) {
+      case NarrativeDomainToolNames.submitChapterDelivery:
+      case NarrativeDomainToolNames.submitNarrativeStateClaims:
+        return NarrativeSourceTypes.writer;
+      case NarrativeDomainToolNames.submitSemanticReview:
+        return NarrativeSourceTypes.reviewer;
+      case NarrativeDomainToolNames.proposeConstraintBinding:
+        return NarrativeSourceTypes.user;
+      case NarrativeDomainToolNames.proposeNarrativeProfileUpdate:
+        return NarrativeSourceTypes.deconstruction;
+      case NarrativeDomainToolNames.requestProfileClarification:
+      default:
+        return NarrativeSourceTypes.system;
+    }
+  }
+
+  List<String> _domainChangedPaths(DomainToolOutcome outcome) {
+    final persistence = ValueReaders.mapValue(
+      ValueReaders.mapValue(outcome.metadata['adapter_persistence']),
+    );
+    return ValueReaders.stringList(persistence['changed_paths']);
+  }
+
+  String _domainToolSummary(
+    String toolName,
+    DomainToolOutcome outcome,
+    List<String> changedPaths,
+  ) {
+    final label = _domainDisplayName(toolName);
+    final status = outcome.outcomeStatus;
+    final pathPreview = changedPaths.isEmpty ? '' : '：${changedPaths.first}';
+    switch (status) {
+      case DomainToolOutcomeStatuses.accepted:
+        return '已执行领域工具：$label$pathPreview';
+      case DomainToolOutcomeStatuses.proposed:
+        return '已记录领域提案：$label$pathPreview';
+      case DomainToolOutcomeStatuses.needsUserConfirmation:
+        return '领域工具等待用户确认：$label';
+      case DomainToolOutcomeStatuses.rejected:
+        return '领域工具被拒绝：$label';
+      case DomainToolOutcomeStatuses.invalidPayload:
+        return '领域工具参数无效：$label';
+      case DomainToolOutcomeStatuses.executionFailed:
+      default:
+        return '领域工具执行失败：$label';
+    }
+  }
+
+  String _domainDisplayName(String toolName) {
+    final definition = _narrativeDomainToolCatalog.definitionFor(toolName);
+    return definition?.displayName ?? toolName;
+  }
+
+  JsonMap _annotateToolResult(String toolName, JsonMap result) {
+    if (ValueReaders.stringValue(result['tool_layer']).trim().isNotEmpty) {
+      return result;
+    }
+    final toolLayer = _toolLayerFor(toolName);
+    return <String, Object?>{
+      ...result,
+      'tool_layer': toolLayer,
+      'tool_capability': _toolCapability(
+        toolName,
+        toolLayer: toolLayer,
+        capabilityKind: toolLayer == 'low_level'
+            ? 'project_low_level_tool'
+            : 'project_tool',
+      ),
+    };
+  }
+
+  String _toolLayerFor(String toolName) {
+    if (_domainToolNames.contains(toolName)) {
+      return 'domain';
+    }
+    if (_lowLevelToolNames.contains(toolName)) {
+      return 'low_level';
+    }
+    return 'project';
+  }
+
+  JsonMap _toolCapability(
+    String toolName, {
+    required String toolLayer,
+    required String capabilityKind,
+  }) {
+    return <String, Object?>{
+      'tool_name': toolName,
+      'tool_layer': toolLayer,
+      'capability_kind': capabilityKind,
+    };
   }
 
   JsonMap _presentUserOptions(JsonMap arguments) {
@@ -398,5 +715,35 @@ class ProjectToolDispatcher implements ToolExecutionPort {
       });
     }
     return result;
+  }
+}
+
+class _ProjectToolHostWorkspacePortAdapter implements ProjectWorkspacePort {
+  const _ProjectToolHostWorkspacePortAdapter(this._hostPort);
+
+  final ProjectToolHostPort _hostPort;
+
+  @override
+  Future<void> createDirectory(String rootPath, String relativePath) {
+    return _hostPort.createDirectory(rootPath, relativePath);
+  }
+
+  @override
+  Future<List<JsonMap>> listEntries(String rootPath, {bool recursive = true}) {
+    return _hostPort.listEntries(rootPath, recursive: recursive);
+  }
+
+  @override
+  Future<String?> readTextFile(String rootPath, String relativePath) {
+    return _hostPort.readTextFile(rootPath, relativePath);
+  }
+
+  @override
+  Future<void> writeTextFile(
+    String rootPath,
+    String relativePath,
+    String content,
+  ) {
+    return _hostPort.writeTextFile(rootPath, relativePath, content);
   }
 }

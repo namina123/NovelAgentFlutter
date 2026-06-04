@@ -6,17 +6,22 @@ class BookDeconstructionDraftBuilderService {
   BookDeconstructionDraftBuilderService({
     BuildBookDeconstructionApplicationPlanUseCase? buildApplicationPlanUseCase,
     BookDeconstructionFollowupMenuBuilderService? followupMenuBuilderService,
+    BookDeconstructionNarrativeBridgeService? narrativeBridgeService,
   }) : _buildApplicationPlanUseCase =
            buildApplicationPlanUseCase ??
            BuildBookDeconstructionApplicationPlanUseCase(),
        _followupMenuBuilderService =
            followupMenuBuilderService ??
-           const BookDeconstructionFollowupMenuBuilderService();
+           const BookDeconstructionFollowupMenuBuilderService(),
+       _narrativeBridgeService =
+           narrativeBridgeService ??
+           const BookDeconstructionNarrativeBridgeService();
 
   final BuildBookDeconstructionApplicationPlanUseCase
   _buildApplicationPlanUseCase;
   final BookDeconstructionFollowupMenuBuilderService
   _followupMenuBuilderService;
+  final BookDeconstructionNarrativeBridgeService _narrativeBridgeService;
 
   BookDeconstructionDraftBuildResult build({
     required String sourceTitle,
@@ -91,11 +96,16 @@ class BookDeconstructionDraftBuilderService {
     final followupMenu = _followupMenuBuilderService.build(
       preferredDirection: preferredContinuationDirection,
     );
+    final narrativeArtifacts = _narrativeBridgeService.build(
+      input: input,
+      extractionResult: extractionResult,
+    );
     return BookDeconstructionDraftBuildResult(
       input: input,
       extractionResult: extractionResult,
       applicationPlan: applicationPlan,
       followupMenu: followupMenu,
+      narrativeArtifacts: narrativeArtifacts,
     );
   }
 

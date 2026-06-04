@@ -18,6 +18,10 @@ class LongTaskCheckpointSeverityService {
     );
     final toolNames = ValueReaders.stringList(review['tool_names']);
     final error = ValueReaders.stringValue(review['error']).trim();
+    final narrativeRisk = ValueReaders.mapValue(review['narrative_supervisor_risk']);
+    final overallRisk = ValueReaders.mapValue(narrativeRisk['overall']);
+    final reviewRisk = ValueReaders.mapValue(narrativeRisk['review']);
+    final permissionRisk = ValueReaders.mapValue(narrativeRisk['permission']);
 
     var severity = 'low';
     if (!resultOk || error.isNotEmpty) {
@@ -41,6 +45,15 @@ class LongTaskCheckpointSeverityService {
         severity = 'medium';
       }
     }
+    severity = _maxSeverity(
+      severity,
+      switch (ValueReaders.stringValue(overallRisk['category'])) {
+        'manual_attention' => 'critical',
+        'repair' => 'high',
+        'checkpoint_user' => 'medium',
+        _ => 'low',
+      },
+    );
 
     if (taskType == 'chapter' && stage == 'sample') {
       reasons.add('样章阶段决定长期可写性，建议提高人工确认强度。');
@@ -68,6 +81,17 @@ class LongTaskCheckpointSeverityService {
     }
     if (toolNames.isEmpty && resultOk && outputPaths.isNotEmpty) {
       reasons.add('本轮虽然有产物，但工具轨迹较少，建议人工检查实际落盘内容。');
+    }
+    final riskSummary = ValueReaders.stringValue(overallRisk['summary']).trim();
+    if (riskSummary.isNotEmpty) {
+      reasons.add(riskSummary);
+    }
+    if (ValueReaders.boolValue(permissionRisk['waiting_for_user'])) {
+      reasons.add('本轮存在真实权限确认等待，waiting_user 应只保留给这种用户确认场景。');
+    }
+    if (ValueReaders.intValue(reviewRisk['questioned_claim_count']) > 0) {
+      reasons.add('语义复核对部分 claim 给出了 questioned disposition，建议把它纳入继续推进前的确认范围。');
+      severity = _maxSeverity(severity, 'medium');
     }
     if (reasons.isEmpty) {
       reasons.add('当前节点风险较低，可在确认产物后继续推进。');
@@ -128,5 +152,9 @@ class LongTaskCheckpointSeverityService {
       default:
         return 0;
     }
+  }
+
+  String _maxSeverity(String left, String right) {
+    return _severityRank(right) > _severityRank(left) ? right : left;
   }
 }

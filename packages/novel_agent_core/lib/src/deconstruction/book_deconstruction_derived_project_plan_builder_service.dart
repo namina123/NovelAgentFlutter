@@ -1,17 +1,33 @@
 import 'book_deconstruction_derived_project_plan.dart';
+import 'book_deconstruction_derived_project_narrative_inheritance_service.dart';
 import 'book_deconstruction_followup_menu.dart';
 import 'book_deconstruction_followup_option.dart';
 import 'book_deconstruction_input.dart';
+import 'book_deconstruction_narrative_artifact_bundle.dart';
 
 class BookDeconstructionDerivedProjectPlanBuilderService {
-  const BookDeconstructionDerivedProjectPlanBuilderService();
+  const BookDeconstructionDerivedProjectPlanBuilderService({
+    BookDeconstructionDerivedProjectNarrativeInheritanceService?
+    narrativeInheritanceService,
+  }) : _narrativeInheritanceService =
+           narrativeInheritanceService ??
+           const BookDeconstructionDerivedProjectNarrativeInheritanceService();
+
+  final BookDeconstructionDerivedProjectNarrativeInheritanceService
+  _narrativeInheritanceService;
 
   BookDeconstructionDerivedProjectPlan build({
     required BookDeconstructionInput input,
     required BookDeconstructionFollowupMenu followupMenu,
     required String followupOptionId,
+    BookDeconstructionNarrativeArtifactBundle? narrativeArtifacts,
   }) {
     final option = _resolveOption(followupMenu, followupOptionId);
+    final inheritedEntries = narrativeArtifacts == null
+        ? const []
+        : _narrativeInheritanceService.buildEntries(
+            narrativeArtifacts: narrativeArtifacts,
+          );
     return BookDeconstructionDerivedProjectPlan(
       planId: 'derive_${input.extractionId}_${option.id}',
       sourceExtractionId: input.extractionId,
@@ -26,6 +42,9 @@ class BookDeconstructionDerivedProjectPlanBuilderService {
       metadata: <String, Object?>{
         'source_project_type_id': input.targetProjectTypeId,
         'source_project_strategy_id': input.projectStrategyId,
+        'inherited_narrative_artifacts': inheritedEntries
+            .map((entry) => entry.toJson())
+            .toList(growable: false),
       },
     );
   }

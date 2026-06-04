@@ -5,6 +5,9 @@ import '../storage/project_prompt_template_service.dart';
 import '../storage/project_review_report_service.dart';
 import '../storage/project_runtime_profile_repository.dart';
 import '../storage/project_task_repository.dart';
+import 'project_draft_execution_constraint_runtime_service.dart';
+import 'project_context_activation_service.dart';
+import 'project_long_task_chapter_queue_runtime_service.dart';
 import 'project_long_task_checkpoint_action_service.dart';
 import 'project_long_task_chapter_gate_service.dart';
 import 'project_long_task_checkpoint_review_service.dart';
@@ -14,6 +17,8 @@ import 'project_long_task_revision_resolution_service.dart';
 import 'project_long_task_review_repair_task_service.dart';
 import 'project_mode_guidance_memory_section_service.dart';
 import 'project_task_queue_runtime_option_resolver.dart';
+import 'project_workflow_runtime_bridge_service.dart';
+import 'project_workflow_review_runtime_service.dart';
 
 typedef WorkflowGenerateDraftUseCaseFactory =
     GenerateDraftUseCase Function(
@@ -60,11 +65,16 @@ class ProjectWorkflowRuntimeService {
     ProjectLongTaskCheckpointReviewService? checkpointReviewService,
     ProjectLongTaskCheckpointReviewTaskService? checkpointReviewTaskService,
     ProjectLongTaskCheckpointActionService? checkpointActionService,
+    ProjectLongTaskChapterQueueRuntimeService? chapterQueueRuntimeService,
     ProjectLongTaskPostprocessResultService? postprocessResultService,
     ProjectLongTaskReviewRepairTaskService? reviewRepairTaskService,
     ProjectLongTaskRevisionResolutionService? revisionResolutionService,
     ProjectLongTaskChapterGateService? chapterGateService,
     ProjectTaskQueueRuntimeOptionResolver? taskQueueRuntimeOptionResolver,
+    ProjectDraftExecutionConstraintRuntimeService?
+    draftExecutionConstraintRuntimeService,
+    ProjectWorkflowRuntimeBridgeService? workflowRuntimeBridgeService,
+    ProjectWorkflowReviewRuntimeService? workflowReviewRuntimeService,
   }) : _taskRepository = taskRepository,
        _promptTemplateService = promptTemplateService,
        _generateDraftUseCaseFactory = generateDraftUseCaseFactory,
@@ -240,6 +250,11 @@ class ProjectWorkflowRuntimeService {
                    ),
                  ),
            ),
+       _chapterQueueRuntimeService =
+           chapterQueueRuntimeService ??
+           ProjectLongTaskChapterQueueRuntimeService(
+             taskRepository: taskRepository,
+           ),
        _reviewRepairTaskService =
            reviewRepairTaskService ??
            ProjectLongTaskReviewRepairTaskService(
@@ -274,6 +289,11 @@ class ProjectWorkflowRuntimeService {
                workspacePort: taskRepository.workspacePort,
              ),
            ),
+       _draftExecutionConstraintRuntimeService =
+           draftExecutionConstraintRuntimeService ??
+           ProjectDraftExecutionConstraintRuntimeService.fromWorkspacePort(
+             workspacePort: taskRepository.workspacePort,
+           ),
        _revisionResolutionService =
            revisionResolutionService ??
            ProjectLongTaskRevisionResolutionService(
@@ -287,7 +307,17 @@ class ProjectWorkflowRuntimeService {
                      taskRepository: taskRepository,
                    ),
                  ),
-           );
+           ),
+       _workflowRuntimeBridgeService =
+           workflowRuntimeBridgeService ??
+           ProjectWorkflowRuntimeBridgeService(
+             contextActivationService: ProjectContextActivationService(
+               workspacePort: taskRepository.workspacePort,
+             ),
+           ),
+       _workflowReviewRuntimeService =
+           workflowReviewRuntimeService ??
+           ProjectWorkflowReviewRuntimeService(taskRepository: taskRepository);
 
   final ProjectTaskRepository _taskRepository;
   final ProjectPromptTemplateService _promptTemplateService;
@@ -328,10 +358,15 @@ class ProjectWorkflowRuntimeService {
   final ProjectLongTaskPostprocessResultService _postprocessResultService;
   final ProjectLongTaskCheckpointReviewTaskService _checkpointReviewTaskService;
   final ProjectLongTaskCheckpointActionService _checkpointActionService;
+  final ProjectLongTaskChapterQueueRuntimeService _chapterQueueRuntimeService;
   final ProjectLongTaskReviewRepairTaskService _reviewRepairTaskService;
   final ProjectLongTaskChapterGateService _chapterGateService;
   final ProjectTaskQueueRuntimeOptionResolver _taskQueueRuntimeOptionResolver;
+  final ProjectDraftExecutionConstraintRuntimeService
+  _draftExecutionConstraintRuntimeService;
   final ProjectLongTaskRevisionResolutionService _revisionResolutionService;
+  final ProjectWorkflowRuntimeBridgeService _workflowRuntimeBridgeService;
+  final ProjectWorkflowReviewRuntimeService _workflowReviewRuntimeService;
 
   List<JsonMap> listTaskRuntimeModes() {
     // 中文注释: 模式定义直接来自 core，确保任务中心和 CLI 的枚举完全同源。
@@ -357,7 +392,7 @@ class ProjectWorkflowRuntimeService {
       planPath: planPath,
       planMarkdownPath: planMarkdownPath,
     );
-    final tasks = ValueReaders.mapList(built['tasks'])
+    final fullTasks = ValueReaders.mapList(built['tasks'])
         .map(
           (task) => ValueReaders.deepCopyMap(task)
             ..['relative_path'] = _longTaskRunPathService.taskPathForNewTask(
@@ -365,16 +400,25 @@ class ProjectWorkflowRuntimeService {
             ),
         )
         .toList(growable: false);
+    final materialized = _chapterQueueRuntimeService
+        .materializeInitialPlanWindow(
+          mode,
+          ValueReaders.mapValue(built['plan']),
+          fullTasks,
+        );
+    final tasks = ValueReaders.mapList(
+      materialized['tasks'],
+    ).map(ValueReaders.deepCopyMap).toList(growable: false);
     await _taskRepository.saveTasks(project, tasks);
     await _taskRepository.saveRecord(
       project,
       planPath,
-      ValueReaders.mapValue(built['plan']),
+      ValueReaders.mapValue(materialized['plan']),
     );
     await _taskRepository.writeTextFile(
       project,
       planMarkdownPath,
-      ValueReaders.stringValue(built['markdown']),
+      ValueReaders.stringValue(materialized['markdown']),
     );
     return <String, Object?>{
       'ok': true,
@@ -405,8 +449,22 @@ class ProjectWorkflowRuntimeService {
     JsonMap filters = const <String, Object?>{},
   }) async {
     // 中文注释: 下一可运行任务完全复用共享调度规则。
-    final tasks = await listWorkflowTasks(project, filters: filters);
-    return _taskSelectionService.nextRunnableTaskFromTasks(tasks);
+    var tasks = await listWorkflowTasks(project, filters: filters);
+    var nextTask = _taskSelectionService.nextRunnableTaskFromTasks(tasks);
+    if (nextTask.isNotEmpty) {
+      return nextTask;
+    }
+    final materialized = await _chapterQueueRuntimeService
+        .ensureMaterializedQueueForNextTask(project, tasks);
+    if (!ValueReaders.boolValue(materialized['ok'])) {
+      return <String, Object?>{};
+    }
+    if (!ValueReaders.boolValue(materialized['materialized'])) {
+      return const <String, Object?>{};
+    }
+    tasks = await listWorkflowTasks(project, filters: filters);
+    nextTask = _taskSelectionService.nextRunnableTaskFromTasks(tasks);
+    return nextTask;
   }
 
   Future<JsonMap> nextWorkflowPostprocessTask(
@@ -691,16 +749,42 @@ class ProjectWorkflowRuntimeService {
       project,
       task,
     );
+    final executionConstraints = await _draftExecutionConstraintRuntimeService
+        .resolve(
+          project,
+          appliesTo: _constraintAppliesToForTask(task),
+          agentId: ValueReaders.stringValue(agent['id']),
+          modeId: ValueReaders.stringValue(task['mode']),
+          stageId: ValueReaders.stringValue(
+            ValueReaders.mapValue(task['metadata'])['stage'],
+            'draft',
+          ),
+          legacyChapterLengthOptions: ValueReaders.mapValue(task['metadata']),
+        );
+    final effectiveTask = _taskWithExecutionConstraintMetadata(
+      task,
+      executionConstraints,
+    );
+    final workflowBridge = await _workflowRuntimeBridgeService.buildTaskBridge(
+      project,
+      task,
+    );
     final projectFileContents = await _readPlannedProjectFileContents(
       project,
       task,
     );
     final prompt = _buildLongTaskPromptUseCase.execute(
-      task,
+      effectiveTask,
       options: <String, Object?>{
         'project_templates': await _templateMap(project),
         'memory_sections': memorySections,
         'project_file_contents': projectFileContents,
+        'expression_constraint_profiles': ValueReaders.objectList(
+          executionConstraints['expression_constraint_profiles'],
+        ),
+        'project_expression_constraint_bindings': ValueReaders.objectList(
+          executionConstraints['project_expression_constraint_bindings'],
+        ),
       },
     );
     final entries = await _taskRepository.workspacePort.listEntries(
@@ -715,9 +799,14 @@ class ProjectWorkflowRuntimeService {
               'project_type': project.projectType,
             }
           : projectInfo,
-      'task': task,
+      'task': effectiveTask,
       'project_files': entries,
-      'session_context': '',
+      'session_context': _mergeSessionContexts(
+        ValueReaders.stringValue(workflowBridge['activation_context_markdown']),
+        ValueReaders.stringValue(
+          executionConstraints['session_context_markdown'],
+        ),
+      ),
       'current_file_body': '',
       'current_file_path': '',
       'user_prompt': prompt,
@@ -726,6 +815,12 @@ class ProjectWorkflowRuntimeService {
       'context_settings': contextSettings,
       'model_profile': modelProfile,
       'memory_sections': memorySections,
+      'expression_constraint_profiles': ValueReaders.objectList(
+        executionConstraints['expression_constraint_profiles'],
+      ),
+      'project_expression_constraint_bindings': ValueReaders.objectList(
+        executionConstraints['project_expression_constraint_bindings'],
+      ),
       'project_file_section_plan': _longTaskProjectFileSectionPlanService.build(
         task,
       ),
@@ -740,10 +835,30 @@ class ProjectWorkflowRuntimeService {
       );
       return result;
     }
-    final execution = ValueReaders.mapValue(result['execution'])
-      ..['prompt_preview_markdown'] = prompt;
+    final safeId = _longTaskPathPolicyService.safeId(
+      ValueReaders.stringValue(task['id']),
+      fallbackPrefix: 'task',
+    );
+    final activationReportPath =
+        'tracking/chapter_atomic/$safeId.activation_report.json';
+    final execution =
+        _workflowRuntimeBridgeService.attachPreparationArtifacts(
+            ValueReaders.mapValue(result['execution'])
+              ..['prompt_preview_markdown'] = prompt,
+            workflowBridge,
+            activationReportPath: activationReportPath,
+          )
+          ..['effective_task'] = ValueReaders.deepCopyMap(effectiveTask)
+          ..['execution_constraint_bridge_report'] = ValueReaders.deepCopyMap(
+            ValueReaders.mapValue(executionConstraints['runtime_report']),
+          );
     final executionPath = ValueReaders.stringValue(result['execution_path']);
     final checklistPath = ValueReaders.stringValue(result['checklist_path']);
+    await _taskRepository.saveRecord(
+      project,
+      activationReportPath,
+      ValueReaders.mapValue(workflowBridge['activation_report']),
+    );
     await _taskRepository.saveRecord(project, executionPath, execution);
     await _taskRepository.writeTextFile(project, checklistPath, prompt);
     await _taskRepository.transitionTask(
@@ -758,6 +873,10 @@ class ProjectWorkflowRuntimeService {
         'proposed_output_paths': ValueReaders.mapValue(
           result['proposed_output_paths'],
         ),
+        'activation_report_path': activationReportPath,
+        'activation_report_summary': ValueReaders.stringValue(
+          ValueReaders.mapValue(workflowBridge['activation_report'])['summary'],
+        ),
       },
     );
     return <String, Object?>{
@@ -766,8 +885,13 @@ class ProjectWorkflowRuntimeService {
       'checklist_path': checklistPath,
       'relative_path': executionPath,
       'context_pack_id': ValueReaders.stringValue(result['context_pack_id']),
+      'activation_report_path': activationReportPath,
       'execution': execution,
-      'changed_paths': <Object?>[executionPath, checklistPath],
+      'changed_paths': <Object?>[
+        executionPath,
+        checklistPath,
+        activationReportPath,
+      ],
     };
   }
 
@@ -813,6 +937,47 @@ class ProjectWorkflowRuntimeService {
         'response': <String, Object?>{},
       };
     }
+    final reviewPreflight = await _workflowReviewRuntimeService
+        .preflightReviewTask(project: project, task: task);
+    if (ValueReaders.stringValue(reviewPreflight['action']) ==
+        'skip_review_create_recovery') {
+      final transitioned = await _taskRepository.transitionTask(
+        project,
+        selector,
+        TaskRuntimeConstants.statusSucceeded,
+        note: '正文尚未形成可审稿交付，已跳过语义审稿并创建 recovery 任务。',
+        extra: <String, Object?>{
+          'review_skipped_reason': ValueReaders.stringValue(
+            ValueReaders.mapValue(reviewPreflight['delivery_state'])['reason'],
+          ),
+          'review_skipped_delivery_state': ValueReaders.stringValue(
+            ValueReaders.mapValue(reviewPreflight['delivery_state'])['state'],
+          ),
+          'recovery_task_id': ValueReaders.stringValue(
+            ValueReaders.mapValue(reviewPreflight['recovery_task'])['id'],
+          ),
+          'recovery_task_path': ValueReaders.stringValue(
+            ValueReaders.mapValue(
+              reviewPreflight['recovery_task'],
+            )['relative_path'],
+          ),
+        },
+      );
+      return <String, Object?>{
+        'ok': true,
+        'skipped_review': true,
+        'review_preflight': reviewPreflight,
+        'recovery_task': ValueReaders.mapValue(
+          reviewPreflight['recovery_task'],
+        ),
+        'response': const <String, Object?>{},
+        'output_paths': const <Object?>[],
+        'changed_paths': <Object?>[
+          ...ValueReaders.objectList(reviewPreflight['changed_paths']),
+          ValueReaders.stringValue(transitioned['relative_path']),
+        ],
+      };
+    }
     if (ValueReaders.stringValue(
       task['atomic_execution_path'],
     ).trim().isEmpty) {
@@ -842,6 +1007,26 @@ class ProjectWorkflowRuntimeService {
       project,
       task,
     );
+    final executionConstraints = await _draftExecutionConstraintRuntimeService
+        .resolve(
+          project,
+          appliesTo: _constraintAppliesToForTask(task),
+          agentId: ValueReaders.stringValue(agent['id']),
+          modeId: ValueReaders.stringValue(task['mode']),
+          stageId: ValueReaders.stringValue(
+            ValueReaders.mapValue(task['metadata'])['stage'],
+            'draft',
+          ),
+          legacyChapterLengthOptions: ValueReaders.mapValue(task['metadata']),
+        );
+    final effectiveTask = _taskWithExecutionConstraintMetadata(
+      task,
+      executionConstraints,
+    );
+    final workflowBridge = await _workflowRuntimeBridgeService.buildTaskBridge(
+      project,
+      task,
+    );
     final projectFileSectionPlan = _longTaskProjectFileSectionPlanService.build(
       task,
     );
@@ -850,12 +1035,18 @@ class ProjectWorkflowRuntimeService {
       task,
     );
     final prompt = _buildLongTaskPromptUseCase.execute(
-      task,
+      effectiveTask,
       runRecord: runRecord,
       options: <String, Object?>{
         'project_templates': await _templateMap(project),
         'memory_sections': memorySections,
         'project_file_contents': projectFileContents,
+        'expression_constraint_profiles': ValueReaders.objectList(
+          executionConstraints['expression_constraint_profiles'],
+        ),
+        'project_expression_constraint_bindings': ValueReaders.objectList(
+          executionConstraints['project_expression_constraint_bindings'],
+        ),
       },
     );
     await _taskRepository.transitionTask(
@@ -914,8 +1105,40 @@ class ProjectWorkflowRuntimeService {
       memorySections: memorySections,
       projectFileSectionPlan: projectFileSectionPlan,
       projectFileContents: projectFileContents,
+      expressionConstraintProfiles: ValueReaders.objectList(
+        executionConstraints['expression_constraint_profiles'],
+      ),
+      projectExpressionConstraintBindings: ValueReaders.objectList(
+        executionConstraints['project_expression_constraint_bindings'],
+      ),
+      sessionContext: _mergeSessionContexts(
+        ValueReaders.stringValue(workflowBridge['activation_context_markdown']),
+        ValueReaders.stringValue(
+          executionConstraints['session_context_markdown'],
+        ),
+      ),
+      exposedToolIds: ValueReaders.stringList(
+        workflowBridge['workflow_tool_ids'],
+      ),
     );
-    final outputPaths = result.writtenPaths;
+    var outputPaths = _workflowRuntimeBridgeService.resolveOutputPaths(
+      executedTools: result.executedTools,
+      writtenPaths: result.writtenPaths,
+    );
+    final semanticReviewArtifacts = await _workflowReviewRuntimeService
+        .persistSemanticReviewArtifacts(
+          project: project,
+          task: task,
+          executedTools: result.executedTools,
+        );
+    outputPaths = _mergePaths(
+      outputPaths,
+      ValueReaders.stringList(semanticReviewArtifacts['output_paths']),
+    );
+    final workflowChangedPaths = _mergePaths(
+      result.changedPaths,
+      ValueReaders.stringList(semanticReviewArtifacts['changed_paths']),
+    );
     JsonMap revisionDiff = const <String, Object?>{};
     if (ValueReaders.stringValue(task['task_type']) == 'revision') {
       revisionDiff = await _saveRevisionDiffIfNeeded(
@@ -934,10 +1157,38 @@ class ProjectWorkflowRuntimeService {
         executionPath,
       );
       if (executionRecord.isNotEmpty) {
-        final nextExecution = ValueReaders.deepCopyMap(executionRecord)
-          ..['output_paths'] = outputPaths
-          ..['last_result_preview'] = result.draftMarkdown
-          ..['updated_at'] = DateTime.now().toIso8601String();
+        var nextExecution = ValueReaders.deepCopyMap(executionRecord);
+        if (ValueReaders.stringValue(
+          nextExecution['activation_report_path'],
+        ).trim().isEmpty) {
+          final safeId = _longTaskPathPolicyService.safeId(
+            ValueReaders.stringValue(task['id']),
+            fallbackPrefix: 'task',
+          );
+          final activationReportPath =
+              'tracking/chapter_atomic/$safeId.activation_report.json';
+          await _taskRepository.saveRecord(
+            project,
+            activationReportPath,
+            ValueReaders.mapValue(workflowBridge['activation_report']),
+          );
+          nextExecution = _workflowRuntimeBridgeService
+              .attachPreparationArtifacts(
+                nextExecution,
+                workflowBridge,
+                activationReportPath: activationReportPath,
+              );
+        }
+        nextExecution = _workflowRuntimeBridgeService.attachRunArtifacts(
+          nextExecution,
+          executedTools: result.executedTools,
+          writtenPaths: result.writtenPaths,
+          draftPreview: result.draftMarkdown,
+        );
+        nextExecution = _workflowReviewRuntimeService.attachReviewArtifacts(
+          nextExecution,
+          semanticReviewArtifacts,
+        );
         if (ValueReaders.boolValue(revisionDiff['ok'])) {
           nextExecution['revision_diff_path'] = ValueReaders.stringValue(
             revisionDiff['relative_path'],
@@ -957,7 +1208,7 @@ class ProjectWorkflowRuntimeService {
         result: <String, Object?>{
           'ok': true,
           'output_paths': outputPaths,
-          'changed_paths': result.changedPaths,
+          'changed_paths': workflowChangedPaths,
           'executed_tools': result.executedTools,
           'response': _resultAsResponse(result),
         },
@@ -984,12 +1235,139 @@ class ProjectWorkflowRuntimeService {
         ),
         'response': _resultAsResponse(result),
         'output_paths': outputPaths,
+        'execution': executionRecord,
+        'activation_report_path': ValueReaders.stringValue(
+          executionRecord['activation_report_path'],
+        ),
+        'activation_report_summary': ValueReaders.stringValue(
+          executionRecord['activation_report_summary'],
+        ),
+        'chapter_delivery': ValueReaders.mapValue(
+          executionRecord['chapter_delivery'],
+        ),
+        'chapter_delivery_state': ValueReaders.stringValue(
+          executionRecord['chapter_delivery_state'],
+        ),
+        'chapter_delivery_path': ValueReaders.stringValue(
+          executionRecord['chapter_delivery_path'],
+        ),
         'revision_diff': revisionDiff,
         'checkpoint_review': checkpointReview,
         'gate_outcome': gateOutcome,
         'executed_tools': result.executedTools,
         'changed_paths': _mergePaths(
-          result.changedPaths,
+          workflowChangedPaths,
+          ValueReaders.stringList(gateOutcome['changed_paths']),
+        ),
+      };
+    }
+    final formalChapterDecision = _formalChapterCompletionDecision(
+      task: task,
+      result: result,
+      outputPaths: outputPaths,
+      executionRecord: executionRecord,
+    );
+    if (ValueReaders.stringValue(formalChapterDecision['action']) ==
+        'wait_user') {
+      await _taskRepository.transitionTask(
+        project,
+        selector,
+        TaskRuntimeConstants.statusWaitingUser,
+        note: ValueReaders.stringValue(formalChapterDecision['note']),
+        extra: <String, Object?>{
+          'output_paths': outputPaths,
+          'waiting_for_user_choice': true,
+          if (ValueReaders.boolValue(checkpointReview['ok']))
+            'checkpoint_review_path': ValueReaders.stringValue(
+              checkpointReview['relative_path'],
+            ),
+          if (ValueReaders.boolValue(checkpointReview['ok']))
+            'checkpoint_review_summary': ValueReaders.stringValue(
+              ValueReaders.mapValue(checkpointReview['review'])['summary'],
+            ),
+        },
+      );
+      return <String, Object?>{
+        'ok': true,
+        'response': _resultAsResponse(result),
+        'waiting_for_user_choice': true,
+        'output_paths': outputPaths,
+        'execution': executionRecord,
+        'activation_report_path': ValueReaders.stringValue(
+          executionRecord['activation_report_path'],
+        ),
+        'activation_report_summary': ValueReaders.stringValue(
+          executionRecord['activation_report_summary'],
+        ),
+        'chapter_delivery': ValueReaders.mapValue(
+          executionRecord['chapter_delivery'],
+        ),
+        'chapter_delivery_state': ValueReaders.stringValue(
+          executionRecord['chapter_delivery_state'],
+        ),
+        'chapter_delivery_path': ValueReaders.stringValue(
+          executionRecord['chapter_delivery_path'],
+        ),
+        'revision_diff': revisionDiff,
+        'checkpoint_review': checkpointReview,
+        'gate_outcome': gateOutcome,
+        'executed_tools': result.executedTools,
+        'changed_paths': _mergePaths(
+          workflowChangedPaths,
+          ValueReaders.stringList(gateOutcome['changed_paths']),
+        ),
+      };
+    }
+    if (ValueReaders.stringValue(formalChapterDecision['action']) == 'fail') {
+      final error = ValueReaders.stringValue(
+        formalChapterDecision['error'],
+        'Formal chapter completion is missing.',
+      );
+      await _taskRepository.transitionTask(
+        project,
+        selector,
+        TaskRuntimeConstants.statusFailed,
+        note: error,
+        extra: <String, Object?>{
+          'output_paths': outputPaths,
+          if (ValueReaders.boolValue(checkpointReview['ok']))
+            'checkpoint_review_path': ValueReaders.stringValue(
+              checkpointReview['relative_path'],
+            ),
+          if (ValueReaders.boolValue(checkpointReview['ok']))
+            'checkpoint_review_summary': ValueReaders.stringValue(
+              ValueReaders.mapValue(checkpointReview['review'])['summary'],
+            ),
+        },
+      );
+      return <String, Object?>{
+        'ok': false,
+        'error': error,
+        'response': _resultAsResponse(result),
+        'waiting_for_user_choice': false,
+        'output_paths': outputPaths,
+        'execution': executionRecord,
+        'activation_report_path': ValueReaders.stringValue(
+          executionRecord['activation_report_path'],
+        ),
+        'activation_report_summary': ValueReaders.stringValue(
+          executionRecord['activation_report_summary'],
+        ),
+        'chapter_delivery': ValueReaders.mapValue(
+          executionRecord['chapter_delivery'],
+        ),
+        'chapter_delivery_state': ValueReaders.stringValue(
+          executionRecord['chapter_delivery_state'],
+        ),
+        'chapter_delivery_path': ValueReaders.stringValue(
+          executionRecord['chapter_delivery_path'],
+        ),
+        'revision_diff': revisionDiff,
+        'checkpoint_review': checkpointReview,
+        'gate_outcome': gateOutcome,
+        'executed_tools': result.executedTools,
+        'changed_paths': _mergePaths(
+          workflowChangedPaths,
           ValueReaders.stringList(gateOutcome['changed_paths']),
         ),
       };
@@ -998,7 +1376,7 @@ class ProjectWorkflowRuntimeService {
         .statusAfterSuccessfulModelStep(task);
     final nextStatus = _resolveStatusAfterGate(defaultNextStatus, gateOutcome);
     await _taskRepository.transitionTask(
-      project,
+        project,
       selector,
       nextStatus,
       note: _completionNote(nextStatus, outputPaths),
@@ -1049,13 +1427,30 @@ class ProjectWorkflowRuntimeService {
     return <String, Object?>{
       'ok': true,
       'response': _resultAsResponse(result),
+      'waiting_for_user_choice': result.waitingForUserChoice,
       'output_paths': outputPaths,
+      'execution': executionRecord,
+      'activation_report_path': ValueReaders.stringValue(
+        executionRecord['activation_report_path'],
+      ),
+      'activation_report_summary': ValueReaders.stringValue(
+        executionRecord['activation_report_summary'],
+      ),
+      'chapter_delivery': ValueReaders.mapValue(
+        executionRecord['chapter_delivery'],
+      ),
+      'chapter_delivery_state': ValueReaders.stringValue(
+        executionRecord['chapter_delivery_state'],
+      ),
+      'chapter_delivery_path': ValueReaders.stringValue(
+        executionRecord['chapter_delivery_path'],
+      ),
       'revision_diff': revisionDiff,
       'checkpoint_review': checkpointReview,
       'gate_outcome': gateOutcome,
       'executed_tools': result.executedTools,
       'changed_paths': _mergePaths(
-        result.changedPaths,
+        workflowChangedPaths,
         ValueReaders.stringList(gateOutcome['changed_paths']),
       ),
     };
@@ -1069,6 +1464,115 @@ class ProjectWorkflowRuntimeService {
           : '模型已写入项目文件，本任务按当前模式自动标记完成。';
     }
     return outputPaths.isEmpty ? '模型已返回，等待用户确认后继续。' : '模型已写入项目文件，等待用户确认后继续。';
+  }
+
+  JsonMap _formalChapterCompletionDecision({
+    required JsonMap task,
+    required DraftGenerationResult result,
+    required List<String> outputPaths,
+    required JsonMap executionRecord,
+  }) {
+    if (!_requiresFormalWorkflowChapterCompletion(task)) {
+      return const <String, Object?>{'action': 'pass'};
+    }
+    if (result.cancelledByUser) {
+      return const <String, Object?>{'action': 'pass'};
+    }
+    if (_hasFormalWorkflowChapterArtifact(outputPaths, executionRecord)) {
+      return const <String, Object?>{'action': 'pass'};
+    }
+    if (result.waitingForUserChoice) {
+      return <String, Object?>{
+        'action': 'wait_user',
+        'note': _formalWorkflowChapterWaitingMessage(result),
+      };
+    }
+    return <String, Object?>{
+      'action': 'fail',
+      'error': _formalWorkflowChapterFailureMessage(result),
+    };
+  }
+
+  bool _requiresFormalWorkflowChapterCompletion(JsonMap task) {
+    final taskType = ValueReaders.stringValue(task['task_type']).trim();
+    return taskType == 'chapter' || taskType == 'revision';
+  }
+
+  bool _hasFormalWorkflowChapterArtifact(
+    List<String> outputPaths,
+    JsonMap executionRecord,
+  ) {
+    for (final path in <String>[
+      ...outputPaths,
+      ...ValueReaders.stringList(executionRecord['output_paths']),
+      ValueReaders.stringValue(executionRecord['chapter_delivery_path']),
+      ValueReaders.stringValue(
+        ValueReaders.mapValue(executionRecord['chapter_delivery'])['chapter_path'],
+      ),
+    ]) {
+      if (_isWorkflowChapterPath(path)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _isWorkflowChapterPath(String path) {
+    final clean = path.trim().replaceAll('\\', '/').toLowerCase();
+    return clean.startsWith('chapters/') && clean.endsWith('.md');
+  }
+
+  String _formalWorkflowChapterWaitingMessage(DraftGenerationResult result) {
+    final trace = _formalWorkflowChapterToolTrace(result);
+    return '长任务正式章节任务停在用户选择点：本轮只执行了用户选项/计划/读取类工具（$trace），没有形成正式章节正文或交付。';
+  }
+
+  String _formalWorkflowChapterFailureMessage(DraftGenerationResult result) {
+    final toolNames = _distinctWorkflowToolNames(result.executedTools);
+    final trace = toolNames.isEmpty ? '无工具调用' : toolNames.join('、');
+    final onlyNonDelivering = toolNames.isNotEmpty &&
+        toolNames.every(_isNonDeliveringWorkflowTool);
+    if (onlyNonDelivering) {
+      return '长任务正式章节任务未形成正式交付：本轮只执行了计划/选项/读取类工具（$trace），没有写出章节正文，也没有 submit_chapter_delivery。';
+    }
+    return '长任务正式章节任务未形成正式交付：缺少章节正文输出或 submit_chapter_delivery。当前工具轨迹：$trace';
+  }
+
+  String _formalWorkflowChapterToolTrace(DraftGenerationResult result) {
+    final toolNames = _distinctWorkflowToolNames(result.executedTools);
+    return toolNames.isEmpty ? '无工具调用' : toolNames.join('、');
+  }
+
+  List<String> _distinctWorkflowToolNames(List<Object?> executedTools) {
+    final names = <String>[];
+    for (final rawTool in executedTools) {
+      final tool = ValueReaders.mapValue(rawTool);
+      final name = ValueReaders.stringValue(tool['name']).trim();
+      if (name.isEmpty || names.contains(name)) {
+        continue;
+      }
+      names.add(name);
+    }
+    return names;
+  }
+
+  bool _isNonDeliveringWorkflowTool(String toolName) {
+    return const <String>{
+      'present_user_options',
+      'load_agent_skill',
+      'read_project_file',
+      'get_project_file_info',
+      'list_project_files',
+      'search_project_files',
+      'call_sub_agent',
+      'set_agent_tasks',
+      'summarize_context',
+      'submit_semantic_review',
+      'request_profile_clarification',
+      'propose_narrative_profile_update',
+      'propose_constraint_binding',
+      'submit_narrative_state_claims',
+    }.contains(toolName);
   }
 
   String _resolveStatusAfterGate(String defaultStatus, JsonMap gateOutcome) {
@@ -1768,6 +2272,48 @@ class ProjectWorkflowRuntimeService {
     return result;
   }
 
+  String _constraintAppliesToForTask(JsonMap task) {
+    return switch (ValueReaders.stringValue(
+      task['task_type'],
+      'chapter',
+    ).trim()) {
+      'revision' => ConstraintBindingAppliesTo.repair,
+      'review' => ConstraintBindingAppliesTo.review,
+      _ => ConstraintBindingAppliesTo.writing,
+    };
+  }
+
+  JsonMap _taskWithExecutionConstraintMetadata(
+    JsonMap task,
+    JsonMap executionConstraints,
+  ) {
+    final merged = ValueReaders.deepCopyMap(task);
+    final metadata = ValueReaders.deepCopyMap(
+      ValueReaders.mapValue(task['metadata']),
+    );
+    final chapterLengthMetadata = ValueReaders.mapValue(
+      executionConstraints['chapter_length_metadata'],
+    );
+    if (chapterLengthMetadata.isNotEmpty) {
+      metadata.addAll(chapterLengthMetadata);
+    }
+    merged['metadata'] = metadata;
+    return merged;
+  }
+
+  String _mergeSessionContexts(String left, String right) {
+    final parts = <String>[];
+    final cleanLeft = left.trim();
+    final cleanRight = right.trim();
+    if (cleanLeft.isNotEmpty) {
+      parts.add(cleanLeft);
+    }
+    if (cleanRight.isNotEmpty) {
+      parts.add(cleanRight);
+    }
+    return parts.join('\n\n');
+  }
+
   JsonMap _resultAsResponse(DraftGenerationResult result) {
     // 中文注释: 任务运行结果折叠成旧 AppState 风格字典，方便 UI/CLI 沿用同一渲染口径。
     return <String, Object?>{
@@ -1800,6 +2346,18 @@ class ProjectWorkflowRuntimeService {
       'ok': ValueReaders.boolValue(result['ok']),
       'error': ValueReaders.stringValue(result['error']),
       'output_paths': ValueReaders.stringList(result['output_paths']),
+      'activation_report_path': ValueReaders.stringValue(
+        result['activation_report_path'],
+      ),
+      'activation_report_summary': ValueReaders.stringValue(
+        result['activation_report_summary'],
+      ),
+      'chapter_delivery_state': ValueReaders.stringValue(
+        result['chapter_delivery_state'],
+      ),
+      'chapter_delivery_path': ValueReaders.stringValue(
+        result['chapter_delivery_path'],
+      ),
       'created_at': DateTime.now().toIso8601String(),
     });
     next['steps'] = steps;
@@ -1807,6 +2365,15 @@ class ProjectWorkflowRuntimeService {
     next['last_task_id'] = ValueReaders.stringValue(task['id']);
     next['last_task_relative_path'] = ValueReaders.stringValue(
       task['relative_path'],
+    );
+    next['last_activation_report_path'] = ValueReaders.stringValue(
+      result['activation_report_path'],
+    );
+    next['last_chapter_delivery_state'] = ValueReaders.stringValue(
+      result['chapter_delivery_state'],
+    );
+    next['last_chapter_delivery_path'] = ValueReaders.stringValue(
+      result['chapter_delivery_path'],
     );
     next['updated_at'] = DateTime.now().toIso8601String();
     return next;

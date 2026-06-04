@@ -4,16 +4,13 @@ import 'dart:io';
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import 'probe_support.dart';
+
 Future<void> main() async {
-  final lines = await File('test_api.txt').readAsLines();
-  if (lines.length < 3) {
-    stderr.writeln('test_api.txt 至少需要 baseUrl / apiKey / modelId 三行。');
-    exitCode = 2;
-    return;
-  }
-  final baseUrl = lines[0].trim();
-  final apiKey = lines[1].trim();
-  final modelId = lines[2].trim();
+  final apiConfig = await loadProbeApiConfig();
+  final baseUrl = apiConfig.baseUrl;
+  final apiKey = apiConfig.apiKey;
+  final modelId = apiConfig.modelId;
   final provider = ProviderEndpointSettings(
     id: 'opencode_go_anthropic_probe',
     title: 'OpenCode Go Anthropic Probe',

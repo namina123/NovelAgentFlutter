@@ -52,10 +52,15 @@ class ProjectLongTaskPostprocessResultService {
     final updatedExecution = ValueReaders.mapValue(
       executionUpdate['execution'],
     );
+    final evaluationTask = ValueReaders.mapValue(
+      updatedExecution['effective_task'],
+    ).isNotEmpty
+        ? ValueReaders.mapValue(updatedExecution['effective_task'])
+        : task;
     final chapterLengthEvaluation =
         await _chapterLengthEvaluationService.evaluate(
           project: project,
-          task: task,
+          task: evaluationTask,
           result: result,
         );
     if (chapterLengthEvaluation.isNotEmpty) {

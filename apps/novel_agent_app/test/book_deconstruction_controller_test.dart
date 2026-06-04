@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novel_agent_app/features/book_deconstruction/application/controllers/book_deconstruction_controller.dart';
+import 'package:novel_agent_app/features/book_deconstruction/application/services/book_deconstruction_narrative_persistence_service.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 void main() {
@@ -10,6 +11,10 @@ void main() {
       writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
         projectWorkspacePort: workspacePort,
       ),
+      narrativePersistenceService:
+          BookDeconstructionNarrativePersistenceService(
+            workspacePort: workspacePort,
+          ),
       readCurrentProject: () => const ProjectDescriptor(
         id: 'project-1',
         name: '拆书测试项目',
@@ -48,6 +53,21 @@ void main() {
     );
     expect(content, isNotNull);
     expect(content, contains('# 拆书结构化预演'));
+    final claimsLog = workspacePort.readStoredTextFile(
+      'D:/Projects/deconstruction_project',
+      '.novel_agent/continuity/claims/claims.jsonl',
+    );
+    final proposalIndex = workspacePort.readStoredTextFile(
+      'D:/Projects/deconstruction_project',
+      '.novel_agent/continuity/profile_proposals/index.json',
+    );
+    final reviewIndex = workspacePort.readStoredTextFile(
+      'D:/Projects/deconstruction_project',
+      '.novel_agent/continuity/reviews/index.json',
+    );
+    expect(claimsLog, contains('analysis.deconstruction.story_outline'));
+    expect(proposalIndex, contains('proposal_'));
+    expect(reviewIndex, contains('review_'));
     expect(
       controller.viewData.confirmedPreviewPath,
       'analysis/book_deconstruction_preview.md',

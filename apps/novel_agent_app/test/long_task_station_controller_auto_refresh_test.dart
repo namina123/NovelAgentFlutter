@@ -218,6 +218,7 @@ Future<ProjectLongTaskStationDetail> _loadEmptyDetail(RunInstance run) async =>
       latestCheckpointReview: null,
       latestReviewReport: null,
       latestRepairTask: null,
+      narrativeSummary: null,
       blocker: ProjectLongTaskStationBlockerSummary(
         code: '',
         note: '',

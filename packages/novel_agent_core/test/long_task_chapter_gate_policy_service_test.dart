@@ -38,5 +38,14 @@ void main() {
 
       expect(nextStatus, TaskRuntimeConstants.statusWaitingUser);
     });
+
+    test('uses failed status when gate decision requires manual attention', () {
+      final nextStatus = service.statusAfterReviewOutcome(
+        const <String, Object?>{'disposition': 'manual_attention'},
+        TaskRuntimeConstants.statusSucceeded,
+      );
+
+      expect(nextStatus, TaskRuntimeConstants.statusFailed);
+    });
   });
 }

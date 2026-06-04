@@ -262,6 +262,7 @@ void main() {
               isGenerating: false,
               hostSupportsAttachmentPicking: true,
               modelSupportsReasoning: true,
+              modelReasoningCanToggle: true,
               modelSupportsFileAttachments: false,
               modelSupportsImageAttachments: false,
               modelSupportsAttachmentUrlsOnly: false,

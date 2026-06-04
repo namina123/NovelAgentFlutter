@@ -654,9 +654,6 @@ class _FakeResourceHandler implements ResourceManagerActionHandler {
   void onImportRequested() {}
 
   @override
-  void onLongTaskStationRequested() {}
-
-  @override
   void onModelSettingsRequested() {}
 
   @override

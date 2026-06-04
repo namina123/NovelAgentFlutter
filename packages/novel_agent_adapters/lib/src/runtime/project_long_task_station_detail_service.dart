@@ -7,8 +7,19 @@ import 'project_long_task_station_chain_item.dart';
 import 'project_long_task_station_chain_summary.dart';
 import 'project_long_task_station_detail.dart';
 import 'project_long_task_station_item_summary.dart';
+import 'project_long_task_station_narrative_summary.dart';
 
 class ProjectLongTaskStationDetailService {
+  static const String _continuityRoot = '.novel_agent/continuity/';
+  static const String _ledgerRoot = '.novel_agent/continuity/ledgers/';
+  static const String _claimsRoot = '.novel_agent/continuity/claims/';
+  static const String _reviewsRoot = '.novel_agent/continuity/reviews/';
+  static const String _deliveriesRoot = '.novel_agent/continuity/deliveries/';
+  static const String _profileProposalsRoot =
+      '.novel_agent/continuity/profile_proposals/';
+  static const String _clarificationsRoot =
+      '.novel_agent/continuity/clarifications/';
+
   ProjectLongTaskStationDetailService({
     required ProjectTaskRepository taskRepository,
     required ProjectReviewReportService reviewReportService,
@@ -44,12 +55,19 @@ class ProjectLongTaskStationDetailService {
       relatedTasks,
       latestRepairTask: latestRepairTask,
     );
+    final narrativeSummary = await _loadNarrativeSummary(
+      project,
+      activeTask: activeTask,
+      runRecord: runRecord,
+      latestReviewReport: latestReviewReport,
+    );
     return ProjectLongTaskStationDetail(
       activeTask: _taskSummary(activeTask),
       chain: chain,
       latestCheckpointReview: latestCheckpointReview,
       latestReviewReport: latestReviewReport,
       latestRepairTask: latestRepairTask,
+      narrativeSummary: narrativeSummary,
       blocker: _buildBlocker(
         run,
         activeTask: activeTask,
@@ -376,6 +394,366 @@ class ProjectLongTaskStationDetailService {
         report['summary'],
         ValueReaders.stringValue(loaded['markdown_body']),
       ).trim(),
+    );
+  }
+
+  Future<ProjectLongTaskStationNarrativeSummary?> _loadNarrativeSummary(
+    ProjectDescriptor project, {
+    required JsonMap activeTask,
+    required JsonMap runRecord,
+    required ProjectLongTaskStationItemSummary? latestReviewReport,
+  }) async {
+    final metadata = ValueReaders.mapValue(activeTask['metadata']);
+    final executionPath = _firstNonEmptyDistinct(<String>[
+      ValueReaders.stringValue(activeTask['atomic_execution_path']),
+      ValueReaders.stringValue(metadata['atomic_execution_path']),
+    ]);
+    final execution = executionPath.isEmpty
+        ? const <String, Object?>{}
+        : await _taskRepository.loadRecord(project, executionPath);
+    final lastStep = _latestRunStep(runRecord);
+    final activationPath = _firstNonEmptyDistinct(<String>[
+      ValueReaders.stringValue(execution['activation_report_path']),
+      ValueReaders.stringValue(activeTask['activation_report_path']),
+      ValueReaders.stringValue(metadata['activation_report_path']),
+      ValueReaders.stringValue(runRecord['last_activation_report_path']),
+      ValueReaders.stringValue(lastStep['activation_report_path']),
+    ]);
+    final activationSummary = _firstNonEmptyDistinct(<String>[
+      ValueReaders.stringValue(execution['activation_report_summary']),
+      ValueReaders.stringValue(activeTask['activation_report_summary']),
+      ValueReaders.stringValue(metadata['activation_report_summary']),
+      ValueReaders.stringValue(lastStep['activation_report_summary']),
+    ]);
+    final deliveryState = _firstNonEmptyDistinct(<String>[
+      ValueReaders.stringValue(execution['chapter_delivery_state']),
+      ValueReaders.stringValue(activeTask['chapter_delivery_state']),
+      ValueReaders.stringValue(metadata['chapter_delivery_state']),
+      ValueReaders.stringValue(runRecord['last_chapter_delivery_state']),
+      ValueReaders.stringValue(lastStep['chapter_delivery_state']),
+    ]);
+    final deliveryPath = _firstNonEmptyDistinct(<String>[
+      ValueReaders.stringValue(execution['chapter_delivery_path']),
+      ValueReaders.stringValue(activeTask['chapter_delivery_path']),
+      ValueReaders.stringValue(metadata['chapter_delivery_path']),
+      ValueReaders.stringValue(runRecord['last_chapter_delivery_path']),
+      ValueReaders.stringValue(lastStep['chapter_delivery_path']),
+    ]);
+    final activation = _narrativeItem(
+      title: 'Activation',
+      status: 'activation',
+      relativePath: activationPath,
+      subtitle: activationPath.isEmpty ? '上下文激活摘要' : '上下文激活报告',
+      summary: activationSummary,
+    );
+    final deliverySubtitleParts = <String>[];
+    if (deliveryState.isNotEmpty) {
+      deliverySubtitleParts.add(deliveryState);
+    }
+    if (deliveryPath.isNotEmpty) {
+      deliverySubtitleParts.add(deliveryPath);
+    }
+    final delivery = _narrativeItem(
+      title: 'Delivery',
+      status: deliveryState,
+      relativePath: deliveryPath,
+      subtitle: deliverySubtitleParts.join(' · '),
+      summary: deliveryState,
+    );
+    final review = latestReviewReport == null
+        ? null
+        : ProjectLongTaskStationItemSummary(
+            id: latestReviewReport.id,
+            title: 'Review',
+            relativePath: latestReviewReport.relativePath,
+            status: latestReviewReport.status,
+            subtitle: latestReviewReport.subtitle,
+            summary: latestReviewReport.summary,
+          );
+    final changedPaths = <String>[
+      ...ValueReaders.stringList(execution['changed_paths']),
+      ...ValueReaders.stringList(runRecord['last_changed_paths']),
+      ...ValueReaders.stringList(lastStep['changed_paths']),
+    ];
+    final continuity = _continuityItem(
+      _continuityCounts(changedPaths),
+    );
+    final projectionItems = _projectionItems(changedPaths);
+    final permissionItems = await _permissionItems(project, changedPaths);
+    final summary = ProjectLongTaskStationNarrativeSummary(
+      activation: activation,
+      delivery: delivery,
+      review: review,
+      continuity: continuity,
+      projectionItems: projectionItems,
+      permissionItems: permissionItems,
+    );
+    return summary.hasContent ? summary : null;
+  }
+
+  JsonMap _latestRunStep(JsonMap runRecord) {
+    final steps = ValueReaders.mapList(runRecord['steps']);
+    if (steps.isEmpty) {
+      return const <String, Object?>{};
+    }
+    return steps.last;
+  }
+
+  ProjectLongTaskStationItemSummary? _narrativeItem({
+    required String title,
+    required String status,
+    required String relativePath,
+    required String subtitle,
+    required String summary,
+  }) {
+    if (relativePath.trim().isEmpty && summary.trim().isEmpty) {
+      return null;
+    }
+    final resolvedSubtitle = subtitle.trim().isEmpty ? title : subtitle.trim();
+    final resolvedSummary = summary.trim().isEmpty ? resolvedSubtitle : summary.trim();
+    return ProjectLongTaskStationItemSummary(
+      id: relativePath.trim().isEmpty ? title : relativePath.trim(),
+      title: title,
+      relativePath: relativePath.trim(),
+      status: status.trim(),
+      subtitle: resolvedSubtitle,
+      summary: resolvedSummary,
+    );
+  }
+
+  List<ProjectLongTaskStationItemSummary> _projectionItems(
+    List<String> changedPaths,
+  ) {
+    final normalizedPaths = _normalizedChangedPaths(changedPaths);
+    final items = <ProjectLongTaskStationItemSummary>[];
+
+    void addProjection({
+      required String title,
+      required String relativePath,
+      required String summary,
+    }) {
+      if (!normalizedPaths.contains(relativePath)) {
+        return;
+      }
+      items.add(
+        ProjectLongTaskStationItemSummary(
+          id: relativePath,
+          title: title,
+          relativePath: relativePath,
+          status: 'projection',
+          subtitle: 'Readable projection',
+          summary: summary,
+        ),
+      );
+    }
+
+    addProjection(
+      title: '叙事状态规则',
+      relativePath: NarrativeStateProjectionDocument.rulesRelativePath,
+      summary: '打开当前叙事规则投影。',
+    );
+    addProjection(
+      title: '最近状态变化',
+      relativePath: NarrativeStateProjectionDocument.recentChangesRelativePath,
+      summary: '打开最近 claims 与 ledger 变化投影。',
+    );
+    addProjection(
+      title: '项目约束摘要',
+      relativePath:
+          NarrativeStateProjectionDocument.constraintSummaryRelativePath,
+      summary: '打开当前项目约束投影。',
+    );
+    addProjection(
+      title: '语义复核摘要',
+      relativePath:
+          NarrativeStateProjectionDocument.semanticReviewSummaryRelativePath,
+      summary: '打开当前语义复核投影。',
+    );
+    return items;
+  }
+
+  Set<String> _normalizedChangedPaths(List<String> changedPaths) {
+    final normalizedPaths = <String>{};
+    for (final rawPath in changedPaths) {
+      final normalized = rawPath.replaceAll('\\', '/').trim();
+      if (normalized.isNotEmpty) {
+        normalizedPaths.add(normalized);
+      }
+    }
+    return normalizedPaths;
+  }
+
+  Future<List<ProjectLongTaskStationItemSummary>> _permissionItems(
+    ProjectDescriptor project,
+    List<String> changedPaths,
+  ) async {
+    final paths = _normalizedChangedPaths(changedPaths)
+        .where(_isPermissionRecordPath)
+        .toList(growable: false)
+      ..sort();
+    final items = <ProjectLongTaskStationItemSummary>[];
+    for (final path in paths) {
+      final record = await _taskRepository.loadRecord(project, path);
+      items.add(_permissionItem(path, record));
+    }
+    return items;
+  }
+
+  bool _isPermissionRecordPath(String path) {
+    if (!path.endsWith('.json') || path.endsWith('/index.json')) {
+      return false;
+    }
+    return path.startsWith(_profileProposalsRoot) ||
+        path.startsWith(_clarificationsRoot);
+  }
+
+  ProjectLongTaskStationItemSummary _permissionItem(
+    String relativePath,
+    JsonMap record,
+  ) {
+    if (relativePath.startsWith(_clarificationsRoot)) {
+      return _clarificationPermissionItem(relativePath, record);
+    }
+    return _profileProposalPermissionItem(relativePath, record);
+  }
+
+  ProjectLongTaskStationItemSummary _profileProposalPermissionItem(
+    String relativePath,
+    JsonMap record,
+  ) {
+    final proposal = ValueReaders.mapValue(record['proposal']);
+    final proposalId = ValueReaders.stringValue(
+      proposal['proposal_id'],
+      relativePath,
+    );
+    final permissionDecision = ValueReaders.mapValue(
+      record['permission_decision'],
+    );
+    final reason = _firstNonEmptyDistinct(<String>[
+      ValueReaders.stringValue(proposal['reason']),
+      ValueReaders.stringValue(permissionDecision['reason']),
+    ]);
+    final subtitle = _permissionSubtitle(
+      record,
+      fallback: ValueReaders.boolValue(proposal['requires_user_confirmation'])
+          ? '需要确认'
+          : '提案待处理',
+    );
+    return ProjectLongTaskStationItemSummary(
+      id: relativePath,
+      title: 'Profile Proposal',
+      relativePath: relativePath,
+      status: ValueReaders.stringValue(record['outcome_status'], 'proposed'),
+      subtitle: '$subtitle · $proposalId',
+      summary: reason.isEmpty ? 'Profile proposal 等待用户查看。' : reason,
+    );
+  }
+
+  ProjectLongTaskStationItemSummary _clarificationPermissionItem(
+    String relativePath,
+    JsonMap record,
+  ) {
+    final clarification = ValueReaders.mapValue(
+      record['clarification_request'],
+    );
+    final question = ValueReaders.stringValue(clarification['question']).trim();
+    final optionCount = ValueReaders.mapList(clarification['options']).length;
+    final blocking = ValueReaders.boolValue(clarification['blocking'], true);
+    final subtitle = _permissionSubtitle(
+      record,
+      fallback: blocking ? '阻塞确认' : '非阻塞确认',
+    );
+    final parts = <String>[
+      subtitle,
+      if (optionCount > 0) '选项 $optionCount',
+    ];
+    return ProjectLongTaskStationItemSummary(
+      id: relativePath,
+      title: 'Clarification',
+      relativePath: relativePath,
+      status: ValueReaders.stringValue(
+        record['outcome_status'],
+        DomainToolOutcomeStatuses.needsUserConfirmation,
+      ),
+      subtitle: parts.join(' · '),
+      summary: question.isEmpty ? '等待用户确认补充信息。' : question,
+    );
+  }
+
+  String _permissionSubtitle(JsonMap record, {required String fallback}) {
+    final outcomeStatus = ValueReaders.stringValue(record['outcome_status']);
+    final permissionDecision = ValueReaders.mapValue(
+      record['permission_decision'],
+    );
+    final disposition = ValueReaders.stringValue(
+      permissionDecision['disposition'],
+    );
+    final parts = <String>[
+      if (outcomeStatus.trim().isNotEmpty) outcomeStatus.trim(),
+      if (disposition.trim().isNotEmpty) disposition.trim(),
+    ];
+    return parts.isEmpty ? fallback : parts.join(' · ');
+  }
+
+  JsonMap _continuityCounts(List<String> changedPaths) {
+    final normalizedPaths = _normalizedChangedPaths(changedPaths);
+    var ledger = 0;
+    var claims = 0;
+    var reviews = 0;
+    var deliveries = 0;
+    for (final normalized in normalizedPaths) {
+      if (!normalized.startsWith(_continuityRoot)) {
+        continue;
+      }
+      if (normalized.startsWith(_ledgerRoot)) {
+        ledger += 1;
+      } else if (normalized.startsWith(_claimsRoot)) {
+        claims += 1;
+      } else if (normalized.startsWith(_reviewsRoot)) {
+        reviews += 1;
+      } else if (normalized.startsWith(_deliveriesRoot)) {
+        deliveries += 1;
+      }
+    }
+    final total = ledger + claims + reviews + deliveries;
+    return <String, Object?>{
+      'total': total,
+      'ledger': ledger,
+      'claims': claims,
+      'reviews': reviews,
+      'deliveries': deliveries,
+    };
+  }
+
+  ProjectLongTaskStationItemSummary? _continuityItem(JsonMap counts) {
+    final total = ValueReaders.intValue(counts['total']);
+    if (total <= 0) {
+      return null;
+    }
+    final parts = <String>[];
+    final ledger = ValueReaders.intValue(counts['ledger']);
+    final claims = ValueReaders.intValue(counts['claims']);
+    final reviews = ValueReaders.intValue(counts['reviews']);
+    final deliveries = ValueReaders.intValue(counts['deliveries']);
+    if (ledger > 0) {
+      parts.add('ledger $ledger');
+    }
+    if (claims > 0) {
+      parts.add('claims $claims');
+    }
+    if (reviews > 0) {
+      parts.add('reviews $reviews');
+    }
+    if (deliveries > 0) {
+      parts.add('deliveries $deliveries');
+    }
+    return ProjectLongTaskStationItemSummary(
+      id: 'continuity_counts',
+      title: 'Continuity',
+      relativePath: '',
+      status: 'continuity',
+      subtitle: '更新 $total 项',
+      summary: parts.isEmpty ? '更新 $total 项' : parts.join(' | '),
     );
   }
 

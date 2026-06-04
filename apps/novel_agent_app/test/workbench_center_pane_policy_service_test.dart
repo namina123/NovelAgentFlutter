@@ -73,6 +73,5 @@ WorkbenchWorkspaceShellViewData _shellViewData({
       actionDescription: '查看当前项目支持的智能体组，并调整默认协作基线。',
       canConfigure: true,
     ),
-    projectLongTaskSummary: null,
   );
 }

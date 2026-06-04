@@ -27,6 +27,20 @@ void main() {
     expect(result.extractionResult.chapterOutlines, hasLength(2));
     expect(result.extractionResult.characterProfiles, hasLength(2));
     expect(result.extractionResult.organizationProfiles, hasLength(1));
+    expect(result.narrativeArtifacts.claims, isNotEmpty);
+    expect(result.narrativeArtifacts.profileProposals, hasLength(1));
+    expect(result.narrativeArtifacts.semanticReviews, hasLength(1));
+    expect(
+      result.narrativeArtifacts.claims.map((claim) => claim.claimNamespace),
+      containsAll(<String>[
+        'analysis.deconstruction.story_outline',
+        'analysis.deconstruction.character_profile',
+      ]),
+    );
+    expect(
+      result.narrativeArtifacts.profileProposals.single.source.sourceType,
+      NarrativeSourceTypes.explainerInterpreted,
+    );
     expect(result.followupMenu.highlightedGroupId, 'long_task_writing');
     expect(result.followupMenu.highlightedOptionId, 'seed_autopilot_novel');
     expect(

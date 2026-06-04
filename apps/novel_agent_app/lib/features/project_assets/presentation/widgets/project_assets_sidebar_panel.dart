@@ -75,14 +75,17 @@ class _GraphPane extends StatelessWidget {
         ],
         const SizedBox(height: 12),
         ...viewData.relatedAssets.map(
-          (item) => ListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            title: Text(item.title),
-            subtitle: Text(item.subtitle),
-            trailing: Text(item.badge),
-            selected: item.isSelected,
-            onTap: () => onReferenceSelected(item.referenceKey),
+          (item) => Material(
+            color: Colors.transparent,
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: Text(item.title),
+              subtitle: Text(item.subtitle),
+              trailing: Text(item.badge),
+              selected: item.isSelected,
+              onTap: () => onReferenceSelected(item.referenceKey),
+            ),
           ),
         ),
         if (viewData.relatedAssets.isEmpty)

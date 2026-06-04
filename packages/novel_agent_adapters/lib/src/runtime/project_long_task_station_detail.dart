@@ -1,6 +1,7 @@
 import 'project_long_task_station_blocker_summary.dart';
 import 'project_long_task_station_chain_summary.dart';
 import 'project_long_task_station_item_summary.dart';
+import 'project_long_task_station_narrative_summary.dart';
 
 class ProjectLongTaskStationDetail {
   const ProjectLongTaskStationDetail({
@@ -9,6 +10,7 @@ class ProjectLongTaskStationDetail {
     required this.latestCheckpointReview,
     required this.latestReviewReport,
     required this.latestRepairTask,
+    required this.narrativeSummary,
     required this.blocker,
   });
 
@@ -17,5 +19,6 @@ class ProjectLongTaskStationDetail {
   final ProjectLongTaskStationItemSummary? latestCheckpointReview;
   final ProjectLongTaskStationItemSummary? latestReviewReport;
   final ProjectLongTaskStationItemSummary? latestRepairTask;
+  final ProjectLongTaskStationNarrativeSummary? narrativeSummary;
   final ProjectLongTaskStationBlockerSummary blocker;
 }

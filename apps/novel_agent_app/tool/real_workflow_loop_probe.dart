@@ -4,21 +4,21 @@ import 'dart:io';
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../../../tools/probe_config_support.dart';
+
 Future<void> main(List<String> arguments) async {
   // 中文注释: 该探针复制真实项目到隔离副本，并用指定 provider 跑一次 workflow next，专门排查“同一轮是否重复读取同一路径”。
-  final repoRoot = _resolveRepoRoot();
-  final tempSettingsFile = File(
-    '$repoRoot${Platform.pathSeparator}temp${Platform.pathSeparator}novel_agent_settings.json',
-  );
-  if (!await tempSettingsFile.exists()) {
-    stderr.writeln('缺少 temp/novel_agent_settings.json');
+  await ensureLocalRealProbeOptIn(probeName: 'real_workflow_loop_probe');
+  final repoRoot = resolveLocalProbeRepoRoot();
+  final bundle = AdapterBundle.standard(workingDirectoryPath: repoRoot);
+  final localSettings = await bundle.settingsRepository.load();
+  final sourceProjectPath =
+      arguments.isEmpty ? localSettings.defaultProjectPath.trim() : arguments.first;
+  if (sourceProjectPath.trim().isEmpty) {
+    stderr.writeln('请传入源项目路径，或先在本地设置中配置 defaultProjectPath。');
     exitCode = 2;
     return;
   }
-  final sourceProjectPath =
-      arguments.isEmpty
-          ? r'C:\Users\26988\Documents\NovelAgent\default_project\未命名长篇'
-          : arguments.first;
   final sourceProjectDirectory = Directory(sourceProjectPath);
   if (!await sourceProjectDirectory.exists()) {
     stderr.writeln('源项目不存在: $sourceProjectPath');
@@ -26,7 +26,21 @@ Future<void> main(List<String> arguments) async {
     return;
   }
 
-  final provider = await _loadProvider(tempSettingsFile);
+  final apiConfig = await loadLocalProbeApiConfig(
+    probeName: 'real_workflow_loop_probe',
+    requireRealProbeOptIn: false,
+    repoRootOverride: repoRoot,
+  );
+  final provider = ProviderEndpointSettings(
+    id: 'real_workflow_loop_probe',
+    title: 'Real Workflow Loop Probe',
+    protocol: 'openai_compatible',
+    baseUrl: apiConfig.baseUrl,
+    apiKey: apiConfig.apiKey,
+    modelId: apiConfig.modelId,
+    description: 'Shared local probe configuration for workflow loop probe.',
+    isDefault: true,
+  );
   final settings = AppSettings(
     defaultProviderId: provider.id,
     defaultAgentId: 'default_generalist',
@@ -34,7 +48,9 @@ Future<void> main(List<String> arguments) async {
     defaultProjectPath: '',
     autoSaveDrafts: true,
     providers: <ProviderEndpointSettings>[provider],
-    networkSettings: const <String, Object?>{'proxy_mode': 'system'},
+    networkSettings: localSettings.networkSettings.isEmpty
+        ? const <String, Object?>{'proxy_mode': 'system'}
+        : localSettings.networkSettings,
     extraSettings: <String, Object?>{
       'model_settings': <String, Object?>{
         'provider_id': provider.id,
@@ -57,7 +73,6 @@ Future<void> main(List<String> arguments) async {
       '${probeRoot.path}${Platform.pathSeparator}project_copy';
   await _copyDirectory(sourceProjectDirectory, Directory(copiedProjectPath));
 
-  final bundle = AdapterBundle.standard(workingDirectoryPath: repoRoot);
   final project = await bundle.projectRepository.openByPath(copiedProjectPath);
   if (project == null) {
     stderr.writeln('复制后的项目无法打开: $copiedProjectPath');
@@ -156,54 +171,6 @@ Future<void> main(List<String> arguments) async {
       'tool=$toolName path=$relativePath',
     );
   }
-}
-
-String _resolveRepoRoot() {
-  // 中文注释: 探针脚本允许从仓库根或 app 目录执行，这里沿父目录向上查找 temp/novel_agent_settings.json。
-  var current = Directory.current.absolute;
-  for (var depth = 0; depth < 6; depth += 1) {
-    final candidate = File(
-      '${current.path}${Platform.pathSeparator}temp${Platform.pathSeparator}novel_agent_settings.json',
-    );
-    if (candidate.existsSync()) {
-      return current.path;
-    }
-    final parent = current.parent;
-    if (parent.path == current.path) {
-      break;
-    }
-    current = parent;
-  }
-  return Directory.current.absolute.path;
-}
-
-Future<ProviderEndpointSettings> _loadProvider(File settingsFile) async {
-  // 中文注释: 这里只解析临时设置中的 provider，避免把用户主设置的其它状态带入探针。
-  final root = ValueReaders.mapValue(jsonDecode(await settingsFile.readAsString()));
-  final rawProviders = ValueReaders.objectList(root['providers'])
-      .map(ValueReaders.mapValue)
-      .toList(growable: false);
-  if (rawProviders.isEmpty) {
-    throw StateError('temp/novel_agent_settings.json 缺少 providers。');
-  }
-  final selected =
-      rawProviders.firstWhere(
-        (provider) => ValueReaders.boolValue(provider['is_default']),
-        orElse: () => rawProviders.first,
-      );
-  return ProviderEndpointSettings(
-    id: ValueReaders.stringValue(selected['id'], 'local-openai'),
-    title: ValueReaders.stringValue(selected['title'], '本地 OpenAI Compatible'),
-    protocol: ValueReaders.stringValue(
-      selected['protocol'],
-      'openai_compatible',
-    ),
-    baseUrl: ValueReaders.stringValue(selected['base_url']),
-    apiKey: ValueReaders.stringValue(selected['api_key']),
-    modelId: ValueReaders.stringValue(selected['model_id'], 'deepseek-v4-flash'),
-    description: ValueReaders.stringValue(selected['description']),
-    isDefault: true,
-  );
 }
 
 Future<void> _copyDirectory(Directory source, Directory target) async {

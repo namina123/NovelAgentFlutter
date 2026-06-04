@@ -44,5 +44,22 @@ void main() {
       expect(decision['stop'], isTrue);
       expect(decision['reason'], 'waiting_user_choice');
     });
+
+    test('stop policy pauses on delivery state machine repair signal', () {
+      // 中文注释: 这里验证队列刹车会直接读取章节交付状态，而不是只靠无输出兜底。
+      final decision = stopPolicyService.stopAfterStep(
+        <String, Object?>{
+          'ok': true,
+          'chapter_delivery_state':
+              ChapterDeliveryStateStatuses.missingOutputRecoverable,
+          'response': const <String, Object?>{},
+          'output_paths': const <Object?>[],
+        },
+        <String, Object?>{'status': TaskRuntimeConstants.statusSucceeded},
+      );
+
+      expect(decision['stop'], isTrue);
+      expect(decision['reason'], 'delivery_repair_required');
+    });
   });
 }

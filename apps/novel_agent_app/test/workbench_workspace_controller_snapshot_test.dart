@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
+import 'package:novel_agent_app/features/book_deconstruction/application/services/book_deconstruction_narrative_persistence_service.dart';
 import 'package:novel_agent_app/features/workbench/application/controllers/workbench_workspace_controller.dart';
 import 'package:novel_agent_app/features/workbench/application/models/open_document_state.dart';
 import 'package:novel_agent_app/features/workbench/application/models/workbench_project_runtime_state.dart';
@@ -189,6 +190,9 @@ WorkbenchWorkspaceController _createController({
     projectToolHostPort: toolHostPort,
     writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
       projectWorkspacePort: workspacePort,
+    ),
+    narrativePersistenceService: BookDeconstructionNarrativePersistenceService(
+      workspacePort: workspacePort,
     ),
     longTaskSupervisor: _NoopLongTaskSupervisor(),
     reviewReportService: _NoopProjectReviewReportService(),

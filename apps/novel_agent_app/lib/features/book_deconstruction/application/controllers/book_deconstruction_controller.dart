@@ -6,6 +6,7 @@ import '../../presentation/models/book_deconstruction_view_data.dart';
 import '../models/book_deconstruction_snapshot.dart';
 import '../models/book_deconstruction_step_id.dart';
 import '../services/book_deconstruction_draft_builder_service.dart';
+import '../services/book_deconstruction_narrative_persistence_service.dart';
 import '../services/book_deconstruction_preview_markdown_service.dart';
 import '../services/book_deconstruction_view_data_service.dart';
 import '../services/desktop_book_deconstruction_source_picker_service.dart';
@@ -15,6 +16,8 @@ class BookDeconstructionController extends ChangeNotifier
   BookDeconstructionController({
     required ProjectToolHostPort projectToolHostPort,
     required WriteProjectTextFileUseCase writeProjectTextFileUseCase,
+    required BookDeconstructionNarrativePersistenceService
+    narrativePersistenceService,
     required ProjectDescriptor? Function() readCurrentProject,
     required Future<void> Function() syncWorkbenchResources,
     required VoidCallback onBackRequested,
@@ -24,6 +27,7 @@ class BookDeconstructionController extends ChangeNotifier
     BookDeconstructionViewDataService? viewDataService,
   }) : _projectToolHostPort = projectToolHostPort,
        _writeProjectTextFileUseCase = writeProjectTextFileUseCase,
+       _narrativePersistenceService = narrativePersistenceService,
        _readCurrentProject = readCurrentProject,
        _syncWorkbenchResources = syncWorkbenchResources,
        _onBackRequested = onBackRequested,
@@ -42,6 +46,8 @@ class BookDeconstructionController extends ChangeNotifier
 
   final ProjectToolHostPort _projectToolHostPort;
   final WriteProjectTextFileUseCase _writeProjectTextFileUseCase;
+  final BookDeconstructionNarrativePersistenceService
+  _narrativePersistenceService;
   final ProjectDescriptor? Function() _readCurrentProject;
   final Future<void> Function() _syncWorkbenchResources;
   final VoidCallback _onBackRequested;
@@ -293,6 +299,10 @@ class BookDeconstructionController extends ChangeNotifier
         project: project,
         relativePath: previewPath,
         content: markdown,
+      );
+      await _narrativePersistenceService.persist(
+        project: project,
+        narrativeArtifacts: buildResult.narrativeArtifacts,
       );
       await _syncWorkbenchResources();
       _snapshot = _snapshot.copyWith(

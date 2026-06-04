@@ -8,7 +8,7 @@ import 'conversation_opening_state_summary.dart';
 import 'conversation_supplement_section.dart';
 import 'primary_action_list.dart';
 
-class ConversationEmptyStatePanel extends StatelessWidget {
+class ConversationEmptyStatePanel extends StatefulWidget {
   const ConversationEmptyStatePanel({
     super.key,
     required this.title,
@@ -27,6 +27,22 @@ class ConversationEmptyStatePanel extends StatelessWidget {
   final Widget? supplement;
 
   @override
+  State<ConversationEmptyStatePanel> createState() =>
+      _ConversationEmptyStatePanelState();
+}
+
+class _ConversationEmptyStatePanelState
+    extends State<ConversationEmptyStatePanel> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    // 中文注释: 空态面板拥有自己的滚动条控制器，确保 Scrollbar 与 ScrollView 绑定同一个位置。
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     // 中文注释: 会话空态面板独立占满中区，避免空白状态下只剩几颗按钮和一大段无意义留白。
     return PanelSurface(
@@ -42,7 +58,7 @@ class ConversationEmptyStatePanel extends StatelessWidget {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  title,
+                  widget.title,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
@@ -52,37 +68,40 @@ class ConversationEmptyStatePanel extends StatelessWidget {
           ),
           Expanded(
             child: Scrollbar(
+              controller: _scrollController,
               thumbVisibility: true,
               child: SingleChildScrollView(
+                controller: _scrollController,
                 primary: false,
                 padding: const EdgeInsets.only(right: 4),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: 12),
-                    if (openingState != null)
+                    if (widget.openingState != null)
                       ConversationOpeningStateSummary(
-                        state: openingState!,
-                        actionHandler: actionHandler,
-                        eyebrow: title,
+                        state: widget.openingState!,
+                        actionHandler: widget.actionHandler,
+                        eyebrow: widget.title,
                       )
                     else
                       Text(
-                        description,
+                        widget.description,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           height: 1.5,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
-                    if (supplement != null) ...[
+                    if (widget.supplement != null) ...[
                       const SizedBox(height: 12),
-                      ConversationSupplementSection(child: supplement!),
+                      ConversationSupplementSection(child: widget.supplement!),
                     ],
-                    if (openingState == null && actions.isNotEmpty) ...[
+                    if (widget.openingState == null &&
+                        widget.actions.isNotEmpty) ...[
                       const SizedBox(height: 12),
                       PrimaryActionList(
-                        actions: actions,
-                        actionHandler: actionHandler,
+                        actions: widget.actions,
+                        actionHandler: widget.actionHandler,
                       ),
                     ],
                   ],

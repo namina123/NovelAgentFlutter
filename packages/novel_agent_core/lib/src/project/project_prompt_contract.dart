@@ -180,6 +180,95 @@ class ProjectPromptContract {
       '5. 修改或覆盖已有文件前先读取原文；修正同一个已存在文件时，优先 edit_project_file 精确修改，或在 write_project_file 中显式传 overwrite=true，避免生成重复文件。删除、恢复、覆盖等危险动作必须有明确用户意图，并尽量先备份。',
       '6. 共享叙事资产优先走专用工具：角色用 update_character_state，伏笔用 update_foreshadow_state，时间线用 update_timeline_state，关系用 update_relationship_state；不要把这些长期记忆混成随手写的普通 Markdown。',
       '7. 工具参数只写项目相对路径；Android/iOS 上也不要请求终端命令或外部用户目录权限。',
+      '8. 正式章节交付优先使用 submit_chapter_delivery；不要把正文、sidecar 和交付状态拆成散乱的低层文件操作来冒充完成。',
+      '9. 正式语义审稿优先使用 submit_semantic_review；自然语言点评、临时备注或 run_continuity_check 报告都不能替代结构化审稿交付。',
+      '10. 项目级 narrative profile / 解释器更新优先使用 propose_narrative_profile_update；关键适用范围不明确时用 request_profile_clarification 停下等待。',
     ].join('\n');
+  }
+
+  String domainToolGuidance(
+    String intent, {
+    JsonMap agent = const <String, Object?>{},
+  }) {
+    // 中文注释: 领域工具收口规则按当前意图/角色切换，避免不同 prompt builder 各自散写固定文案。
+    final normalizedIntent = intent.trim().toLowerCase();
+    final lines = <String>[
+      '## 领域工具收口',
+      '示例只用于说明调用形态，不是题材、机制、世界观或叙事套路范本；不要把任何示例当成固定模板。',
+      '遇到未知变化、混合题材或未覆盖设定时，保留原始变化和不确定性，不要擅自归类成常见套路。',
+    ];
+    if (_isProfileArchitect(agent, normalizedIntent)) {
+      lines.addAll(<String>[
+        '1. 设计或调整项目级叙事解释器 / 长期 profile 时，使用 propose_narrative_profile_update 提交结构化提案。',
+        '2. 如果适用范围、保留策略、未知字段或未来扩展点存在关键歧义，调用 request_profile_clarification 停下来等待，不要擅自写死规则。',
+        '3. 可以举例帮助说明，但例子不是范本；非常规题材、未知字段和未来扩展字段都要原样保留。',
+      ]);
+      return lines.join('\n');
+    }
+    if (_isReviewer(agent, normalizedIntent)) {
+      lines.addAll(<String>[
+        '1. 正式语义审稿必须调用 submit_semantic_review，提交结构化 findings 和 recommended_disposition。',
+        '2. 不要把散文评论、任务调度建议或顺手修文冒充为 semantic review 交付。',
+        '3. 如果还缺少关键证据，就在结构化审稿里明确标注缺口，而不是编造已确认结论。',
+      ]);
+      return lines.join('\n');
+    }
+    if (_isRecovery(agent, normalizedIntent)) {
+      lines.addAll(<String>[
+        '1. 本轮目标只能有一个：修复当前缺失/损坏的章节交付，或明确说明为什么仍然阻塞。',
+        '2. 如果已经补齐正文、chapter_path 和必要交付信息，必须调用 submit_chapter_delivery 重新交付；不要顺手扩写下一章、改总纲或同时推进多个目标。',
+        '3. 如果仍然无法交付，就只说明当前阻塞点和最小下一步，不要假装已经完成恢复。',
+      ]);
+      return lines.join('\n');
+    }
+    lines.addAll(<String>[
+      '1. 需要正式交付章节、样章或补写结果时，必须调用 submit_chapter_delivery；不要只靠散文解释或低层文件工具假装已交付。',
+      '2. 如果正文、chapter_path 或 submission sidecar 还不完整，就先补齐或明确阻塞，不要伪造成功交付。',
+      '3. 若本轮只是给选项、结构建议或风险说明，不要把它们冒充成已经完成的章节交付。',
+    ]);
+    return lines.join('\n');
+  }
+
+  bool _isReviewer(JsonMap agent, String normalizedIntent) {
+    if (normalizedIntent == 'review') {
+      return true;
+    }
+    return _matchesAgent(agent, <String>['reviewer', '审稿', 'review']);
+  }
+
+  bool _isRecovery(JsonMap agent, String normalizedIntent) {
+    if (normalizedIntent == 'recovery') {
+      return true;
+    }
+    return _matchesAgent(agent, <String>['recovery', 'repair', '修复', '恢复']);
+  }
+
+  bool _isProfileArchitect(JsonMap agent, String normalizedIntent) {
+    if (normalizedIntent == 'profile_architect' ||
+        normalizedIntent == 'profile_architecture') {
+      return true;
+    }
+    return _matchesAgent(agent, <String>[
+      'profile_architect',
+      'profile architect',
+      '解释器',
+      'profile',
+      '叙事规则',
+    ]);
+  }
+
+  bool _matchesAgent(JsonMap agent, List<String> tokens) {
+    final haystack = <String>[
+      ValueReaders.stringValue(agent['id']).toLowerCase(),
+      ValueReaders.stringValue(agent['name']).toLowerCase(),
+      ValueReaders.stringValue(agent['role']).toLowerCase(),
+      ValueReaders.stringValue(agent['system_prompt']).toLowerCase(),
+    ].join('\n');
+    for (final token in tokens) {
+      if (haystack.contains(token.toLowerCase())) {
+        return true;
+      }
+    }
+    return false;
   }
 }

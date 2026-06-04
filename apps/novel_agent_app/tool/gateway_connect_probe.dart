@@ -4,12 +4,16 @@ import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_adapters/src/providers/system_proxy_resolver.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import 'probe_support.dart';
+
 Future<void> main() async {
   // 中文注释: 这支探针只验证系统代理解析与 OpenAI 兼容网关连通性，不掺入项目上下文和工具链。
-  const baseUrl = 'https://opencode.ai/zen/go/v1';
-  const apiKey =
-      '***REMOVED***';
-  const modelId = 'deepseek-v4-flash';
+  final apiConfig = await loadProbeApiConfig(
+    probeName: 'gateway_connect_probe',
+  );
+  final baseUrl = apiConfig.baseUrl;
+  final apiKey = apiConfig.apiKey;
+  final modelId = apiConfig.modelId;
   final resolver = const SystemProxyResolver();
   final proxyRule = await resolver.resolveFor(
     Uri.parse('$baseUrl/chat/completions'),

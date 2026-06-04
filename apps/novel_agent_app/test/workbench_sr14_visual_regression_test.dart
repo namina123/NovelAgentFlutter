@@ -205,6 +205,7 @@ WorkbenchViewData _desktopWorkbenchState() {
       isGenerating: false,
       hostSupportsAttachmentPicking: true,
       modelSupportsReasoning: true,
+      modelReasoningCanToggle: true,
       modelSupportsFileAttachments: false,
       modelSupportsImageAttachments: false,
       modelSupportsAttachmentUrlsOnly: false,
@@ -364,6 +365,7 @@ WorkbenchViewData _emptyConversationState() {
       isGenerating: false,
       hostSupportsAttachmentPicking: true,
       modelSupportsReasoning: true,
+      modelReasoningCanToggle: true,
       modelSupportsFileAttachments: false,
       modelSupportsImageAttachments: false,
       modelSupportsAttachmentUrlsOnly: false,
@@ -464,6 +466,7 @@ WorkbenchViewData _activeConversationState() {
       isGenerating: false,
       hostSupportsAttachmentPicking: true,
       modelSupportsReasoning: true,
+      modelReasoningCanToggle: true,
       modelSupportsFileAttachments: false,
       modelSupportsImageAttachments: false,
       modelSupportsAttachmentUrlsOnly: false,
@@ -725,9 +728,6 @@ class _FakeResourceHandler implements ResourceManagerActionHandler {
 
   @override
   void onImportRequested() {}
-
-  @override
-  void onLongTaskStationRequested() {}
 
   @override
   void onModelSettingsRequested() {}

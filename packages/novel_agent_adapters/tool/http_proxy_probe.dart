@@ -2,11 +2,15 @@ import 'dart:io';
 
 import 'package:novel_agent_adapters/src/providers/system_proxy_resolver.dart';
 
+import '../../../tools/probe_config_support.dart';
+
 Future<void> main() async {
   // 中文注释: 这个探针只负责验证 Dart HttpClient 在 direct/system/custom 三种代理模式下是否能打通同一个 OpenAI 兼容端点。
-  const requestUri = 'https://opencode.ai/zen/go/v1/models';
-  const apiKey =
-      '***REMOVED***';
+  final apiConfig = await loadLocalProbeApiConfig(
+    probeName: 'http_proxy_probe',
+  );
+  final requestUri = '${apiConfig.baseUrl}/models';
+  final apiKey = apiConfig.apiKey;
   final resolver = const SystemProxyResolver();
   final systemProxy = await resolver.resolveFor(Uri.parse(requestUri));
   stdout.writeln('system_proxy=$systemProxy');
@@ -29,9 +33,7 @@ Future<void> main() async {
       );
     } catch (error, stackTrace) {
       stdout.writeln('mode=$mode error=$error');
-      stdout.writeln(
-        stackTrace.toString().split('\n').take(3).join('\n'),
-      );
+      stdout.writeln(stackTrace.toString().split('\n').take(3).join('\n'));
     } finally {
       client.close(force: true);
     }

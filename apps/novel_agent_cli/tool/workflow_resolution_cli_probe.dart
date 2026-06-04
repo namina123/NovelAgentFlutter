@@ -5,9 +5,13 @@ import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_cli/bootstrap/cli_bootstrap.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../../../tools/probe_config_support.dart';
+
 Future<void> main() async {
   // 中文注释: 该探针验证 CLI 是否能消费新的 checkpoint / revision 共享动作合同，并应用其中的真实动作。
-  final apiConfig = await _loadProbeApiConfig();
+  final apiConfig = await loadLocalProbeApiConfig(
+    probeName: 'workflow_resolution_cli_probe',
+  );
   final provider = ProviderEndpointSettings(
     id: 'cli_resolution_probe',
     title: 'CLI Resolution Probe',
@@ -352,25 +356,6 @@ String _resolveEnabledActionCommand(JsonMap actionPackage) {
   throw StateError('当前动作包没有可执行动作。');
 }
 
-Future<_ProbeApiConfig> _loadProbeApiConfig() async {
-  final file = File(
-    '${Directory.current.parent.parent.path}${Platform.pathSeparator}test_api.txt',
-  );
-  final lines = await file.readAsLines();
-  final cleanLines = lines
-      .map((line) => line.trim())
-      .where((line) => line.isNotEmpty)
-      .toList(growable: false);
-  if (cleanLines.length < 3) {
-    throw StateError('test_api.txt 至少需要 baseUrl、apiKey、modelId 三行。');
-  }
-  return _ProbeApiConfig(
-    baseUrl: cleanLines[0],
-    apiKey: cleanLines[1],
-    modelId: cleanLines[2],
-  );
-}
-
 Future<T> _runWithRetry<T>(
   Future<T> Function() action, {
   int attempts = 2,
@@ -453,17 +438,5 @@ Future<void> _seedReadyState({
     );
   }
   await repository.save(project, state);
-}
-
-class _ProbeApiConfig {
-  const _ProbeApiConfig({
-    required this.baseUrl,
-    required this.apiKey,
-    required this.modelId,
-  });
-
-  final String baseUrl;
-  final String apiKey;
-  final String modelId;
 }
 

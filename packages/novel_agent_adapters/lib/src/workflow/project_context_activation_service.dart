@@ -1,0 +1,627 @@
+import 'dart:convert';
+
+import 'package:novel_agent_core/novel_agent_core.dart';
+
+import '../storage/local_constraint_binding_repository.dart';
+import '../storage/local_narrative_claim_repository.dart';
+import '../storage/local_narrative_profile_repository.dart';
+import '../storage/open_narrative_state_path_service.dart';
+
+class ProjectContextActivationService {
+  ProjectContextActivationService({
+    required ProjectWorkspacePort workspacePort,
+    NarrativeProfileRepository? profileRepository,
+    NarrativeClaimRepository? claimRepository,
+    ConstraintBindingRepository? bindingRepository,
+    ProjectContextFileSelectionService? fileSelectionService,
+    ContextActivationPlannerService? plannerService,
+    OpenNarrativeStatePathService? pathService,
+  }) : _workspacePort = workspacePort,
+       _profileRepository =
+           profileRepository ??
+           LocalNarrativeProfileRepository(workspacePort: workspacePort),
+       _claimRepository =
+           claimRepository ??
+           LocalNarrativeClaimRepository(workspacePort: workspacePort),
+       _bindingRepository =
+           bindingRepository ??
+           LocalConstraintBindingRepository(workspacePort: workspacePort),
+       _fileSelectionService =
+           fileSelectionService ?? ProjectContextFileSelectionService(),
+       _plannerService =
+           plannerService ?? const ContextActivationPlannerService(),
+       _pathService = pathService ?? OpenNarrativeStatePathService();
+
+  final ProjectWorkspacePort _workspacePort;
+  final NarrativeProfileRepository _profileRepository;
+  final NarrativeClaimRepository _claimRepository;
+  final ConstraintBindingRepository _bindingRepository;
+  final ProjectContextFileSelectionService _fileSelectionService;
+  final ContextActivationPlannerService _plannerService;
+  final OpenNarrativeStatePathService _pathService;
+
+  Future<ContextActivationPlan> buildPlan({
+    required ProjectDescriptor project,
+    String taskType = 'draft',
+    int budgetChars = 6000,
+    int reservedOutputChars = 2000,
+    int maxFiles = 12,
+    List<String> pinnedRelativePaths = const <String>[],
+    String source = 'project_context_activation_adapter',
+  }) async {
+    final cleanTaskType = taskType.trim().isEmpty ? 'draft' : taskType.trim();
+    final pinnedPathSet = pinnedRelativePaths
+        .map((path) => path.trim().replaceAll('\\', '/'))
+        .where((path) => path.isNotEmpty)
+        .toSet();
+
+    final items = <ContextActivationItem>[
+      ...await _buildProjectFileItems(
+        project: project,
+        taskType: cleanTaskType,
+        maxFiles: maxFiles,
+        pinnedPaths: pinnedPathSet,
+      ),
+      ...await _buildProfileItems(project),
+      ...await _buildClaimItems(project),
+      ...await _buildConstraintItems(project),
+    ];
+
+    final sourceCounts = _countBySource(items);
+    return ContextActivationPlan(
+      planId: _planId(project, cleanTaskType),
+      source: source,
+      taskType: cleanTaskType,
+      budgetChars: budgetChars < 0 ? 0 : budgetChars,
+      reservedOutputChars: reservedOutputChars < 0 ? 0 : reservedOutputChars,
+      items: items,
+      summary:
+          'project files ${sourceCounts['project_file'] ?? 0}, profiles ${sourceCounts['narrative_profile'] ?? 0}, claims ${sourceCounts['narrative_claim'] ?? 0}, constraints ${sourceCounts['narrative_constraint'] ?? 0}.',
+      schemaVersion: '1',
+      metadata: <String, Object?>{
+        'project_id': project.id,
+        'project_name': project.name,
+        'task_type': cleanTaskType,
+        'max_files': maxFiles,
+        'pinned_relative_paths': pinnedPathSet.toList()..sort(),
+        'candidate_source_counts': sourceCounts,
+      },
+    );
+  }
+
+  Future<ContextActivationReport> buildReport({
+    required ProjectDescriptor project,
+    String taskType = 'draft',
+    int budgetChars = 6000,
+    int reservedOutputChars = 2000,
+    int maxFiles = 12,
+    List<String> pinnedRelativePaths = const <String>[],
+    String planSource = 'project_context_activation_adapter',
+    String reportSource = 'project_context_activation_adapter',
+  }) async {
+    final plan = await buildPlan(
+      project: project,
+      taskType: taskType,
+      budgetChars: budgetChars,
+      reservedOutputChars: reservedOutputChars,
+      maxFiles: maxFiles,
+      pinnedRelativePaths: pinnedRelativePaths,
+      source: planSource,
+    );
+    final plannedTextById = <String, String>{
+      for (final item in plan.items)
+        item.itemId: ValueReaders.stringValue(item.metadata['activation_text']),
+    };
+    final rawReport = _plannerService.buildReport(
+      plan: plan,
+      reportId: _reportId(plan),
+      source: reportSource,
+    );
+    final enrichedItems = rawReport.items
+        .map(
+          (item) => _enrichReportItem(item, plannedTextById[item.itemId] ?? ''),
+        )
+        .toList(growable: false);
+    return rawReport.copyWith(
+      items: enrichedItems,
+      summary: _reportSummary(rawReport, enrichedItems),
+      metadata: <String, Object?>{
+        ...rawReport.metadata,
+        'project_id': project.id,
+        'project_name': project.name,
+        'candidate_source_counts': _countBySource(plan.items),
+        'selected_context_sections': _selectionSections(
+          enrichedItems.where((item) => item.selected),
+        ),
+        'omitted_context_sections': _selectionSections(
+          enrichedItems.where((item) => item.omitted),
+        ),
+        'truncated_context_sections': _selectionSections(
+          enrichedItems.where((item) => item.truncated),
+        ),
+      },
+    );
+  }
+
+  Future<List<ContextActivationItem>> _buildProjectFileItems({
+    required ProjectDescriptor project,
+    required String taskType,
+    required int maxFiles,
+    required Set<String> pinnedPaths,
+  }) async {
+    final entries = await _workspacePort.listEntries(project.rootPath);
+    final selectedPaths = _fileSelectionService.select(
+      entries,
+      maxFiles: maxFiles,
+    );
+    final result = <ContextActivationItem>[];
+    for (final path in selectedPaths) {
+      final content = await _workspacePort.readTextFile(project.rootPath, path);
+      final normalized = _normalizeContent(content);
+      if (normalized.isEmpty) {
+        continue;
+      }
+      final pinned = pinnedPaths.contains(path);
+      final activationText = '# File: $path\n\n$normalized';
+      final title = path.split('/').last;
+      result.add(
+        ContextActivationItem(
+          itemId: 'file:$path',
+          source: 'project_file',
+          title: title,
+          targetPath: path,
+          refs: <NarrativeRef>[
+            NarrativeRef(
+              refType: NarrativeRefTypes.asset,
+              refId: path,
+              displayName: title,
+              relativePath: path,
+              sourcePath: path,
+            ),
+          ],
+          activationReasons: <String>[
+            if (pinned) ContextActivationReasonCodes.manualPin,
+            ContextActivationReasonCodes.taskType,
+          ],
+          reasonDetails: <String, Object?>{
+            'task_type': taskType,
+            'relative_path': path,
+            'pinned': pinned,
+          },
+          requestedChars: activationText.length,
+          metadata: <String, Object?>{
+            'source_kind': 'project_file',
+            'relative_path': path,
+            'task_type': taskType,
+            'pinned': pinned,
+            'activation_text': activationText,
+          },
+        ),
+      );
+    }
+    return result;
+  }
+
+  Future<List<ContextActivationItem>> _buildProfileItems(
+    ProjectDescriptor project,
+  ) async {
+    final profiles = await _profileRepository.listProfiles(project);
+    profiles.sort(
+      (left, right) =>
+          left.profileNamespace.compareTo(right.profileNamespace) != 0
+          ? left.profileNamespace.compareTo(right.profileNamespace)
+          : left.profileId.compareTo(right.profileId),
+    );
+    return profiles
+        .map((profile) => _profileItem(profile))
+        .toList(growable: false);
+  }
+
+  Future<List<ContextActivationItem>> _buildClaimItems(
+    ProjectDescriptor project,
+  ) async {
+    final claims = await _claimRepository.listClaims(project);
+    claims.sort(
+      (left, right) => left.claimNamespace.compareTo(right.claimNamespace) != 0
+          ? left.claimNamespace.compareTo(right.claimNamespace)
+          : left.claimId.compareTo(right.claimId),
+    );
+    return claims.map((claim) => _claimItem(claim)).toList(growable: false);
+  }
+
+  Future<List<ContextActivationItem>> _buildConstraintItems(
+    ProjectDescriptor project,
+  ) async {
+    final bindings = await _bindingRepository.listBindings(project);
+    bindings.sort(
+      (left, right) => left.constraintType.compareTo(right.constraintType) != 0
+          ? left.constraintType.compareTo(right.constraintType)
+          : left.bindingId.compareTo(right.bindingId),
+    );
+    return bindings
+        .map((binding) => _constraintItem(binding))
+        .toList(growable: false);
+  }
+
+  ContextActivationItem _profileItem(NarrativeProfile profile) {
+    final targetPath = _pathService.profilePath(profile.profileId);
+    final label = profile.profileLabel.trim().isEmpty
+        ? profile.profileId
+        : profile.profileLabel.trim();
+    final pinned = _boolFlags(
+      profile.metadata['pinned'],
+      profile.metadata['pin'],
+      profile.profileExtensions['pinned'],
+    );
+    final required = _boolFlags(
+      profile.metadata['required'],
+      profile.metadata['is_required'],
+      profile.profileExtensions['required'],
+    );
+    final activationText = _profileActivationText(profile);
+    return ContextActivationItem(
+      itemId: 'profile:${profile.profileId}',
+      source: 'narrative_profile',
+      title: label,
+      targetPath: targetPath,
+      refs: <NarrativeRef>[
+        NarrativeRef(
+          refType: NarrativeRefTypes.asset,
+          refId: profile.profileId,
+          displayName: label,
+          relativePath: targetPath,
+          sourcePath: targetPath,
+        ),
+      ],
+      activationReasons: <String>[
+        if (pinned) ContextActivationReasonCodes.manualPin,
+        ContextActivationReasonCodes.profilePolicy,
+      ],
+      reasonDetails: <String, Object?>{
+        'profile_id': profile.profileId,
+        'profile_namespace': profile.profileNamespace,
+        'required': required,
+        'pinned': pinned,
+      },
+      requestedChars: activationText.length,
+      metadata: <String, Object?>{
+        'source_kind': 'narrative_profile',
+        'profile_id': profile.profileId,
+        'profile_namespace': profile.profileNamespace,
+        'lifecycle_status': profile.lifecycleStatus.id,
+        'activation_text': activationText,
+        'required': required,
+        'pinned': pinned,
+      },
+    );
+  }
+
+  ContextActivationItem _claimItem(NarrativeStateClaim claim) {
+    final targetPath = _pathService.claimsLogPath();
+    final label = claim.claimLabel.trim().isEmpty
+        ? claim.claimId
+        : claim.claimLabel.trim();
+    final refs = _dedupeRefs(<NarrativeRef>[
+      ...claim.affectedRefs,
+      ...claim.contextRefs,
+    ]);
+    final required = _boolFlags(
+      claim.metadata['required'],
+      claim.metadata['is_required'],
+    );
+    final pinned = _boolFlags(claim.metadata['pinned'], claim.metadata['pin']);
+    final activationText = _claimActivationText(claim);
+    return ContextActivationItem(
+      itemId: 'claim:${claim.claimId}',
+      source: 'narrative_claim',
+      title: label,
+      targetPath: targetPath,
+      refs: refs.isEmpty
+          ? <NarrativeRef>[
+              NarrativeRef(
+                refType: NarrativeRefTypes.asset,
+                refId: claim.claimId,
+                displayName: label,
+                relativePath: targetPath,
+                sourcePath: targetPath,
+              ),
+            ]
+          : refs,
+      activationReasons: <String>[
+        if (pinned) ContextActivationReasonCodes.manualPin,
+        ContextActivationReasonCodes.claim,
+      ],
+      reasonDetails: <String, Object?>{
+        'claim_id': claim.claimId,
+        'claim_namespace': claim.claimNamespace,
+        'required': required,
+        'pinned': pinned,
+      },
+      requestedChars: activationText.length,
+      metadata: <String, Object?>{
+        'source_kind': 'narrative_claim',
+        'claim_id': claim.claimId,
+        'claim_namespace': claim.claimNamespace,
+        'confidence': claim.confidence,
+        'uncertainty': claim.uncertainty,
+        'activation_text': activationText,
+        'required': required,
+        'pinned': pinned,
+      },
+    );
+  }
+
+  ContextActivationItem _constraintItem(
+    NarrativeConstraintBindingProposal binding,
+  ) {
+    final targetPath = _pathService.bindingPath(binding.bindingId);
+    final label = binding.constraintLabel.trim().isEmpty
+        ? binding.bindingId
+        : binding.constraintLabel.trim();
+    final pinned = _boolFlags(
+      binding.metadata['pinned'],
+      binding.metadata['pin'],
+      binding.policy.metadata['pinned'],
+    );
+    final required =
+        _boolFlags(
+          binding.metadata['required'],
+          binding.metadata['is_required'],
+        ) ||
+        binding.policy.requiresUserConfirmation ||
+        binding.policy.forbiddenAutoApply;
+    final activationText = _constraintActivationText(binding);
+    return ContextActivationItem(
+      itemId: 'constraint:${binding.bindingId}',
+      source: 'narrative_constraint',
+      title: label,
+      targetPath: targetPath,
+      refs: binding.scope.targetRefs.isEmpty
+          ? <NarrativeRef>[
+              NarrativeRef(
+                refType: NarrativeRefTypes.asset,
+                refId: binding.bindingId,
+                displayName: label,
+                relativePath: targetPath,
+                sourcePath: targetPath,
+              ),
+            ]
+          : _dedupeRefs(binding.scope.targetRefs),
+      activationReasons: <String>[
+        if (pinned) ContextActivationReasonCodes.manualPin,
+        ContextActivationReasonCodes.profilePolicy,
+      ],
+      reasonDetails: <String, Object?>{
+        'binding_id': binding.bindingId,
+        'constraint_type': binding.constraintType,
+        'required': required,
+        'pinned': pinned,
+      },
+      requestedChars: activationText.length,
+      metadata: <String, Object?>{
+        'source_kind': 'narrative_constraint',
+        'binding_id': binding.bindingId,
+        'constraint_type': binding.constraintType,
+        'requires_user_confirmation': binding.policy.requiresUserConfirmation,
+        'forbidden_auto_apply': binding.policy.forbiddenAutoApply,
+        'activation_text': activationText,
+        'required': required,
+        'pinned': pinned,
+      },
+    );
+  }
+
+  ContextActivationItem _enrichReportItem(
+    ContextActivationItem item,
+    String activationText,
+  ) {
+    final safeIncludedChars = item.includedChars < 0 ? 0 : item.includedChars;
+    final boundedIncludedChars = safeIncludedChars > activationText.length
+        ? activationText.length
+        : safeIncludedChars;
+    final selectedText = boundedIncludedChars == 0
+        ? ''
+        : activationText.substring(0, boundedIncludedChars);
+    final trimmedChars = item.requestedChars - item.includedChars;
+    return item.copyWith(
+      metadata: <String, Object?>{
+        ...item.metadata,
+        'activation_text': activationText,
+        'selected_text': selectedText,
+        'trimmed_chars': trimmedChars < 0 ? 0 : trimmedChars,
+        'explanation': _itemExplanation(item),
+      },
+    );
+  }
+
+  List<JsonMap> _selectionSections(Iterable<ContextActivationItem> items) {
+    return items
+        .map(
+          (item) => <String, Object?>{
+            'item_id': item.itemId,
+            'source': item.source,
+            'title': item.title,
+            'target_path': item.targetPath,
+            'requested_chars': item.requestedChars,
+            'included_chars': item.includedChars,
+            'selected': item.selected,
+            'omitted': item.omitted,
+            'truncated': item.truncated,
+            'omission_reason': item.omissionReason,
+            'truncation_reason': item.truncationReason,
+            'selected_text': ValueReaders.stringValue(
+              item.metadata['selected_text'],
+            ),
+            'source_kind': ValueReaders.stringValue(
+              item.metadata['source_kind'],
+            ),
+            'explanation': ValueReaders.stringValue(
+              item.metadata['explanation'],
+            ),
+          },
+        )
+        .toList(growable: false);
+  }
+
+  Map<String, int> _countBySource(Iterable<ContextActivationItem> items) {
+    final counts = <String, int>{};
+    for (final item in items) {
+      counts.update(item.source, (value) => value + 1, ifAbsent: () => 1);
+    }
+    return counts;
+  }
+
+  List<NarrativeRef> _dedupeRefs(List<NarrativeRef> refs) {
+    final seen = <String>{};
+    final result = <NarrativeRef>[];
+    for (final ref in refs) {
+      final key = [
+        ref.refType,
+        ref.refId,
+        ref.relativePath,
+        ref.chapterId,
+        ref.segmentId,
+      ].join('|');
+      if (seen.add(key)) {
+        result.add(ref);
+      }
+    }
+    return result;
+  }
+
+  bool _boolFlags(Object? first, Object? second, [Object? third]) {
+    return ValueReaders.boolValue(first) ||
+        ValueReaders.boolValue(second) ||
+        ValueReaders.boolValue(third);
+  }
+
+  String _normalizeContent(String? content) {
+    return (content ?? '').trim();
+  }
+
+  String _profileActivationText(NarrativeProfile profile) {
+    final lines = <String>[
+      '[Profile] ${profile.profileLabel.trim().isEmpty ? profile.profileId : profile.profileLabel.trim()}',
+      'profile_id: ${profile.profileId}',
+      'profile_namespace: ${profile.profileNamespace}',
+      'lifecycle_status: ${profile.lifecycleStatus.id}',
+      'confidence: ${profile.confidence}',
+    ];
+    if (profile.reason.trim().isNotEmpty) {
+      lines.add('reason: ${profile.reason.trim()}');
+    }
+    if (profile.profilePayload.isNotEmpty) {
+      lines
+        ..add('profile_payload:')
+        ..add(_prettyJson(profile.profilePayload));
+    }
+    if (profile.profileExtensions.isNotEmpty) {
+      lines
+        ..add('profile_extensions:')
+        ..add(_prettyJson(profile.profileExtensions));
+    }
+    return lines.join('\n');
+  }
+
+  String _claimActivationText(NarrativeStateClaim claim) {
+    final lines = <String>[
+      '[Claim] ${claim.claimLabel.trim().isEmpty ? claim.claimId : claim.claimLabel.trim()}',
+      'claim_id: ${claim.claimId}',
+      'claim_namespace: ${claim.claimNamespace}',
+      'confidence: ${claim.confidence}',
+    ];
+    if (claim.uncertainty.trim().isNotEmpty) {
+      lines.add('uncertainty: ${claim.uncertainty.trim()}');
+    }
+    if (claim.claimPayload.isNotEmpty) {
+      lines
+        ..add('claim_payload:')
+        ..add(_prettyJson(claim.claimPayload));
+    }
+    if (claim.affectedRefs.isNotEmpty) {
+      lines
+        ..add('affected_refs:')
+        ..add(_prettyObject(_refsJson(claim.affectedRefs)));
+    }
+    if (claim.contextRefs.isNotEmpty) {
+      lines
+        ..add('context_refs:')
+        ..add(_prettyObject(_refsJson(claim.contextRefs)));
+    }
+    return lines.join('\n');
+  }
+
+  String _constraintActivationText(NarrativeConstraintBindingProposal binding) {
+    final lines = <String>[
+      '[Constraint] ${binding.constraintLabel.trim().isEmpty ? binding.bindingId : binding.constraintLabel.trim()}',
+      'binding_id: ${binding.bindingId}',
+      'constraint_type: ${binding.constraintType}',
+    ];
+    if (binding.constraintOrigin.trim().isNotEmpty) {
+      lines.add('constraint_origin: ${binding.constraintOrigin.trim()}');
+    }
+    if (binding.reason.trim().isNotEmpty) {
+      lines.add('reason: ${binding.reason.trim()}');
+    }
+    lines
+      ..add('binding_scope:')
+      ..add(_prettyJson(binding.scope.toJson()))
+      ..add('binding_policy:')
+      ..add(_prettyJson(binding.policy.toJson()));
+    if (binding.constraintPayload.isNotEmpty) {
+      lines
+        ..add('constraint_payload:')
+        ..add(_prettyJson(binding.constraintPayload));
+    }
+    return lines.join('\n');
+  }
+
+  List<JsonMap> _refsJson(List<NarrativeRef> refs) {
+    return refs.map((ref) => ref.toJson()).toList(growable: false);
+  }
+
+  String _prettyJson(JsonMap json) => _prettyObject(json);
+
+  String _prettyObject(Object? value) {
+    return const JsonEncoder.withIndent('  ').convert(value);
+  }
+
+  String _planId(ProjectDescriptor project, String taskType) {
+    return '${project.id}.${taskType}.context_activation';
+  }
+
+  String _reportId(ContextActivationPlan plan) => '${plan.planId}.report';
+
+  String _reportSummary(
+    ContextActivationReport report,
+    List<ContextActivationItem> items,
+  ) {
+    final kinds = _countByKind(items);
+    return '${report.summary} selected profiles ${kinds['narrative_profile_selected'] ?? 0}, claims ${kinds['narrative_claim_selected'] ?? 0}, constraints ${kinds['narrative_constraint_selected'] ?? 0}, files ${kinds['project_file_selected'] ?? 0}.';
+  }
+
+  Map<String, int> _countByKind(List<ContextActivationItem> items) {
+    final counts = <String, int>{};
+    for (final item in items) {
+      final kind = ValueReaders.stringValue(item.metadata['source_kind']);
+      final key =
+          '${kind}_${item.selected
+              ? 'selected'
+              : item.omitted
+              ? 'omitted'
+              : 'other'}';
+      counts.update(key, (value) => value + 1, ifAbsent: () => 1);
+    }
+    return counts;
+  }
+
+  String _itemExplanation(ContextActivationItem item) {
+    if (item.truncated) {
+      return 'Selected with ${item.includedChars}/${item.requestedChars} chars because ${item.truncationReason}.';
+    }
+    if (item.omitted) {
+      return 'Omitted because ${item.omissionReason}.';
+    }
+    return 'Selected with ${item.includedChars}/${item.requestedChars} chars.';
+  }
+}

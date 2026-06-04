@@ -110,6 +110,18 @@ class ToolEventPresenterService {
         return '读取文件';
       case 'write_project_file':
         return '写入文件';
+      case 'submit_chapter_delivery':
+        return '提交章节交付';
+      case 'submit_narrative_state_claims':
+        return '提交叙事状态声明';
+      case 'propose_narrative_profile_update':
+        return '提出叙事解释器更新';
+      case 'submit_semantic_review':
+        return '提交语义复核';
+      case 'propose_constraint_binding':
+        return '提出约束绑定';
+      case 'request_profile_clarification':
+        return '请求规则澄清';
       case 'edit_project_file':
         return '修改文件';
       case 'create_project_entry':
@@ -166,6 +178,18 @@ class ToolEventPresenterService {
         return '已读取文件';
       case 'write_project_file':
         return '已写入文件';
+      case 'submit_chapter_delivery':
+        return '已提交章节交付';
+      case 'submit_narrative_state_claims':
+        return '已提交叙事状态声明';
+      case 'propose_narrative_profile_update':
+        return '已记录叙事解释器提案';
+      case 'submit_semantic_review':
+        return '已提交语义复核';
+      case 'propose_constraint_binding':
+        return '已记录约束绑定提案';
+      case 'request_profile_clarification':
+        return '已发出规则澄清请求';
       case 'edit_project_file':
         return '已修改文件';
       case 'create_project_entry':
@@ -222,6 +246,18 @@ class ToolEventPresenterService {
         return '文件读取';
       case 'write_project_file':
         return '文件写入';
+      case 'submit_chapter_delivery':
+        return '章节交付';
+      case 'submit_narrative_state_claims':
+        return '叙事状态声明';
+      case 'propose_narrative_profile_update':
+        return '叙事解释器提案';
+      case 'submit_semantic_review':
+        return '语义复核';
+      case 'propose_constraint_binding':
+        return '约束绑定提案';
+      case 'request_profile_clarification':
+        return '规则澄清';
       case 'edit_project_file':
         return '文件修改';
       case 'create_project_entry':

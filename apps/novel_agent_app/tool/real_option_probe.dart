@@ -4,18 +4,27 @@ import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_app/features/workbench/application/services/conversation_session_state_service.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import 'probe_support.dart';
+import '../../../tools/probe_config_support.dart';
+
 Future<void> main(List<String> arguments) async {
   // 中文注释: 这个探针脚本复用应用当前装配，专门排查真实模型链路里的 present_user_options 是否成功落成按钮。
+  await ensureLocalRealProbeOptIn(probeName: 'real_option_probe');
   final bundle = AdapterBundle.standard(
     workingDirectoryPath: Directory.current.path,
   );
   final settings = await bundle.settingsRepository.load();
-  final provider = _resolveProvider(settings);
-  if (provider == null) {
-    stderr.writeln('没有找到可用 provider。');
-    exitCode = 2;
-    return;
-  }
+  final apiConfig = await loadProbeApiConfig(probeName: 'real_option_probe');
+  final provider = ProviderEndpointSettings(
+    id: 'real_option_probe',
+    title: 'Real Option Probe',
+    protocol: 'openai_compatible',
+    baseUrl: apiConfig.baseUrl,
+    apiKey: apiConfig.apiKey,
+    modelId: apiConfig.modelId,
+    description: 'Shared local probe configuration for real option probe.',
+    isDefault: true,
+  );
 
   final projectPath = settings.defaultProjectPath.trim();
   if (projectPath.isEmpty) {
@@ -36,7 +45,9 @@ Future<void> main(List<String> arguments) async {
     settings: settings,
     provider: provider,
   );
-  final requestOptions = ValueReaders.mapValue(executionProfile['request_options']);
+  final requestOptions = ValueReaders.mapValue(
+    executionProfile['request_options'],
+  );
   final resolvedModelId = ValueReaders.stringValue(
     executionProfile['resolved_model_id'],
     settings.defaultModelId,
@@ -48,14 +59,13 @@ Future<void> main(List<String> arguments) async {
   final activeDocumentPath = ValueReaders.stringValue(
     workbenchState['active_document_path'],
   );
-  final activeDocumentBody =
-      activeDocumentPath.trim().isEmpty
-          ? ''
-          : await bundle.projectWorkspacePort.readTextFile(
-                project.rootPath,
-                activeDocumentPath,
-              ) ??
-              '';
+  final activeDocumentBody = activeDocumentPath.trim().isEmpty
+      ? ''
+      : await bundle.projectWorkspacePort.readTextFile(
+              project.rootPath,
+              activeDocumentPath,
+            ) ??
+            '';
 
   final useCase = GenerateDraftUseCase(
     projectWorkspacePort: bundle.projectWorkspacePort,
@@ -81,10 +91,9 @@ Future<void> main(List<String> arguments) async {
         bundle.agentGroupCatalog.loadAgentGroups(currentProject),
   );
 
-  final prompt =
-      arguments.isEmpty
-          ? '我想做一个真实可写的智能开局。请先基于当前项目现状给我 3 个不同方向让我选择，每个方向一句标题加一句说明，不要直接写正文，必须使用 present_user_options。'
-          : arguments.join(' ');
+  final prompt = arguments.isEmpty
+      ? '我想做一个真实可写的智能开局。请先基于当前项目现状给我 3 个不同方向让我选择，每个方向一句标题加一句说明，不要直接写正文，必须使用 present_user_options。'
+      : arguments.join(' ');
 
   stdout.writeln('=== Probe Start ===');
   stdout.writeln('project: ${project.rootPath}');
@@ -144,13 +153,15 @@ Future<void> main(List<String> arguments) async {
       continue;
     }
     final toolResult = ValueReaders.mapValue(tool['result']);
-    stdout.writeln('present_user_options.result.keys: ${toolResult.keys.join(', ')}');
+    stdout.writeln(
+      'present_user_options.result.keys: ${toolResult.keys.join(', ')}',
+    );
     stdout.writeln(
       'present_user_options.question: ${ValueReaders.stringValue(toolResult['question'])}',
     );
-    final options = ValueReaders.objectList(toolResult['options'])
-        .map(ValueReaders.mapValue)
-        .toList(growable: false);
+    final options = ValueReaders.objectList(
+      toolResult['options'],
+    ).map(ValueReaders.mapValue).toList(growable: false);
     stdout.writeln('present_user_options.optionCount: ${options.length}');
     for (var index = 0; index < options.length && index < 3; index++) {
       final option = options[index];
@@ -168,7 +179,11 @@ Future<void> main(List<String> arguments) async {
   );
   final state = sessionService.stateWithAssistantResult(session, result);
   stdout.writeln('pendingOptionsFromState: ${state.pendingOptions.length}');
-  for (var index = 0; index < state.pendingOptions.length && index < 3; index++) {
+  for (
+    var index = 0;
+    index < state.pendingOptions.length && index < 3;
+    index++
+  ) {
     final option = state.pendingOptions[index];
     stdout.writeln(
       'state.option[$index]: label=${option.label} | prompt=${option.prompt}',
@@ -180,19 +195,8 @@ Future<void> main(List<String> arguments) async {
       '- ${entry.value > 1 ? 'repeat' : 'unique'} | count=${entry.value} | path=${entry.key}',
     );
   }
-  stdout.writeln('draftMarkdownPreview: ${result.draftMarkdown.substring(0, result.draftMarkdown.length > 120 ? 120 : result.draftMarkdown.length)}');
-  stdout.writeln('=== Probe End ===');
-}
-
-ProviderEndpointSettings? _resolveProvider(AppSettings settings) {
-  final providerId = ValueReaders.stringValue(
-    ValueReaders.mapValue(settings.extraSettings['model_settings'])['provider_id'],
-    settings.defaultProviderId,
+  stdout.writeln(
+    'draftMarkdownPreview: ${result.draftMarkdown.substring(0, result.draftMarkdown.length > 120 ? 120 : result.draftMarkdown.length)}',
   );
-  for (final provider in settings.providers) {
-    if (provider.id == providerId) {
-      return provider;
-    }
-  }
-  return settings.providers.isEmpty ? null : settings.providers.first;
+  stdout.writeln('=== Probe End ===');
 }

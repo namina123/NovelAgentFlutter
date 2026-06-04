@@ -188,6 +188,16 @@ guardrails:
           'ok': false,
           'error': '模型失败',
           'output_paths': <Object?>[],
+          'changed_paths': <Object?>[
+            '.novel_agent/continuity/ledgers/main/entries.jsonl',
+            '.novel_agent/continuity/reviews/review_001.json',
+          ],
+          'activation_report_path':
+              'tracking/chapter_atomic/task_revision.activation_report.json',
+          'activation_report_summary': '已注入长期约束与模式引导。',
+          'chapter_delivery_state':
+              ChapterDeliveryStateStatuses.missingOutputRecoverable,
+          'chapter_delivery_path': 'chapters/ch01.md',
           'checkpoint_review': <String, Object?>{
             'relative_path': 'tracking/checkpoint_reviews/rev.json',
             'review': <String, Object?>{
@@ -228,7 +238,7 @@ guardrails:
           },
         );
         final postPrompt = postprocessRenderer.renderPostprocessPrompt(postTx);
-        final recoveryPlan = recovery.recoveryPlan(record, <Object?>[task]);
+        final recoveryPlan = recovery.recoveryPlan(stepped, <Object?>[task]);
         final failureAction = failure.failureAction(
           record,
           task,
@@ -237,13 +247,35 @@ guardrails:
         );
 
         expect(stepped['status'], TaskRuntimeConstants.statusPaused);
+        expect(
+          ValueReaders.stringValue(stepped['last_activation_report_path']),
+          'tracking/chapter_atomic/task_revision.activation_report.json',
+        );
+        expect(
+          ValueReaders.stringValue(stepped['last_chapter_delivery_state']),
+          ChapterDeliveryStateStatuses.missingOutputRecoverable,
+        );
+        expect(
+          ValueReaders.stringList(stepped['last_changed_paths']),
+          contains('.novel_agent/continuity/ledgers/main/entries.jsonl'),
+        );
+        expect(
+          ValueReaders.stringList(
+            ValueReaders.mapList(stepped['steps']).single['changed_paths'],
+          ),
+          contains('.novel_agent/continuity/reviews/review_001.json'),
+        );
         expect(postPrompt, contains('修复任务后处理'));
         expect(postPrompt, contains('创作约束栈'));
         expect(postPrompt, contains('Mini Recheck'));
         expect(postPrompt, contains('真实性复核强度'));
-        expect(recoveryPlan['action'], 'pause_for_failure');
+        expect(recoveryPlan['action'], 'pause_for_repair');
         expect(failureAction['task_status'], TaskRuntimeConstants.statusQueued);
         expect(markdown.renderMarkdown(stepped), contains('模型失败'));
+        expect(
+          markdown.renderMarkdown(stepped),
+          contains('交付状态：missing_output_recoverable'),
+        );
         expect(
           markdown.renderMarkdown(stepped),
           contains('tracking/checkpoint_reviews/rev.json'),

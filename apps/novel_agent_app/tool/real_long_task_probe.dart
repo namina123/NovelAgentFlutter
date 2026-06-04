@@ -9,7 +9,7 @@ import 'probe_support.dart';
 Future<void> main() async {
   // 中文注释: 该探针使用统一探针配置源真实跑一段 mode 1 长任务主链，重点核对样章门槛、正文落盘、角色状态与技能调用。
   final repoRoot = _resolveRepoRoot();
-  final apiConfig = await loadProbeApiConfig();
+  final apiConfig = await loadProbeApiConfig(probeName: 'real_long_task_probe');
   final provider = ProviderEndpointSettings(
     id: 'real_long_task_probe',
     title: 'Real Long Task Probe',
@@ -252,18 +252,124 @@ Future<void> main() async {
       note: '真实探针确认样章检查点通过。',
     );
 
-    final chapterTwoTask = await _findTask(
-      workflowRuntimeService,
-      project,
-      (task) =>
-          ValueReaders.stringValue(task['task_type']) == 'chapter' &&
-          ValueReaders.stringValue(
-                ValueReaders.mapValue(task['metadata'])['stage'],
-              ) ==
-              'draft' &&
-          ValueReaders.stringValue(task['chapter']) == '第02章',
-    );
-    final chapterTwoResult = await workflowRuntimeService.runWorkflowTaskOnce(
+    final chapterTwoTrace = <String, Object?>{
+      'steps': <Object?>[],
+      'resolved': false,
+    };
+    JsonMap chapterTwoTask = const <String, Object?>{};
+    JsonMap chapterTwoResult = const <String, Object?>{};
+    JsonMap chapterTwoTaskAfter = const <String, Object?>{};
+    JsonMap chapterTwoPostprocess = const <String, Object?>{};
+    for (var safetyCounter = 0; safetyCounter < 12; safetyCounter += 1) {
+      final existingChapterTwo = await _findOptionalTask(
+        workflowRuntimeService,
+        project,
+        (task) =>
+            ValueReaders.stringValue(task['task_type']) == 'chapter' &&
+            ValueReaders.stringValue(
+                  ValueReaders.mapValue(task['metadata'])['stage'],
+                ) ==
+                'draft' &&
+            ValueReaders.stringValue(task['chapter']) == '第02章',
+      );
+      if (existingChapterTwo.isNotEmpty) {
+        chapterTwoTask = existingChapterTwo;
+        break;
+      }
+
+      final postprocessTask = await workflowRuntimeService
+          .nextWorkflowPostprocessTask(project);
+      if (postprocessTask.isNotEmpty) {
+        final relativePath = ValueReaders.stringValue(
+          postprocessTask['relative_path'],
+        );
+        final result = await workflowRuntimeService.runWorkflowTaskPostprocessOnce(
+          project,
+          settings,
+          <String, Object?>{'relative_path': relativePath},
+        );
+        final checkpointReviewPath = ValueReaders.stringValue(
+          ValueReaders.mapValue(result['checkpoint_review'])['relative_path'],
+        );
+        if (checkpointReviewPath.trim().isNotEmpty) {
+          await _applyContinuableCheckpointAction(
+            workflowRuntimeService,
+            project,
+            checkpointReviewPath,
+          );
+        }
+        ValueReaders.objectList(chapterTwoTrace['steps']).add(<String, Object?>{
+          'kind': 'postprocess',
+          'task_path': relativePath,
+          'ok': ValueReaders.boolValue(result['ok']),
+          'output_paths': ValueReaders.stringList(result['output_paths']),
+        });
+        continue;
+      }
+
+      final nextTask = await workflowRuntimeService.nextWorkflowTask(project);
+      if (nextTask.isEmpty) {
+        final resolved = await _resolveManualBlocker(
+          workflowRuntimeService: workflowRuntimeService,
+          taskRepository: taskRepository,
+          project: project,
+        );
+        ValueReaders.objectList(chapterTwoTrace['steps']).add(<String, Object?>{
+          'kind': resolved ? 'manual_resolution' : 'no_runnable_task',
+        });
+        if (!resolved) {
+          break;
+        }
+        continue;
+      }
+
+      final taskType = ValueReaders.stringValue(nextTask['task_type']);
+      final taskPath = ValueReaders.stringValue(nextTask['relative_path']);
+      if (taskType == 'checkpoint') {
+        final transitioned = await taskRepository.transitionTask(
+          project,
+          <String, Object?>{'relative_path': taskPath},
+          TaskRuntimeConstants.statusSucceeded,
+          note: '真实探针自动确认检查点通过。',
+        );
+        ValueReaders.objectList(chapterTwoTrace['steps']).add(<String, Object?>{
+          'kind': 'checkpoint_confirm',
+          'task_path': taskPath,
+          'ok': ValueReaders.boolValue(transitioned['ok']),
+        });
+        continue;
+      }
+
+      final result = await workflowRuntimeService.runWorkflowTaskOnce(
+        project,
+        settings,
+        <String, Object?>{'relative_path': taskPath},
+      );
+      final checkpointReviewPath = ValueReaders.stringValue(
+        ValueReaders.mapValue(result['checkpoint_review'])['relative_path'],
+      );
+      if (checkpointReviewPath.trim().isNotEmpty) {
+        await _applyContinuableCheckpointAction(
+          workflowRuntimeService,
+          project,
+          checkpointReviewPath,
+        );
+      }
+      ValueReaders.objectList(chapterTwoTrace['steps']).add(<String, Object?>{
+        'kind': 'task',
+        'task_type': taskType,
+        'task_path': taskPath,
+        'chapter': ValueReaders.stringValue(nextTask['chapter']),
+        'ok': ValueReaders.boolValue(result['ok']),
+        'output_paths': ValueReaders.stringList(result['output_paths']),
+      });
+    }
+
+    if (chapterTwoTask.isEmpty) {
+      throw StateError('样章确认后未能推进出第02章任务。');
+    }
+    chapterTwoTrace['resolved'] = true;
+    chapterTwoResult = await workflowRuntimeService.runWorkflowTaskOnce(
       project,
       settings,
       <String, Object?>{
@@ -272,16 +378,29 @@ Future<void> main() async {
         ),
       },
     );
-    final chapterTwoTaskAfter = await taskRepository.loadTask(
+    final chapterTwoCheckpointReviewPath = ValueReaders.stringValue(
+      ValueReaders.mapValue(chapterTwoResult['checkpoint_review'])['relative_path'],
+    );
+    if (chapterTwoCheckpointReviewPath.trim().isNotEmpty) {
+      await _applyContinuableCheckpointAction(
+        workflowRuntimeService,
+        project,
+        chapterTwoCheckpointReviewPath,
+      );
+    }
+    chapterTwoTaskAfter = await taskRepository.loadTask(
       project,
       <String, Object?>{'id': ValueReaders.stringValue(chapterTwoTask['id'])},
     );
-    final chapterTwoPostprocess = await workflowRuntimeService
-        .runWorkflowTaskPostprocessOnce(project, settings, <String, Object?>{
-          'relative_path': ValueReaders.stringValue(
-            chapterTwoTask['relative_path'],
-          ),
-        });
+    chapterTwoPostprocess = await workflowRuntimeService.runWorkflowTaskPostprocessOnce(
+      project,
+      settings,
+      <String, Object?>{
+        'relative_path': ValueReaders.stringValue(
+          chapterTwoTask['relative_path'],
+        ),
+      },
+    );
 
     final samplePrompt = ValueReaders.stringValue(
       ValueReaders.mapValue(
@@ -293,6 +412,7 @@ Future<void> main() async {
     );
     report.addAll(<String, Object?>{
       'ok': true,
+      'report_category': ProbeReportCategories.success,
       'project_root': project.rootPath,
       'planning': <String, Object?>{
         'ok': ValueReaders.boolValue(planningResult['ok']),
@@ -321,6 +441,7 @@ Future<void> main() async {
       },
       'chapter_02': <String, Object?>{
         'ok': ValueReaders.boolValue(chapterTwoResult['ok']),
+        'task_path': ValueReaders.stringValue(chapterTwoTask['relative_path']),
         'status_after_step': ValueReaders.stringValue(
           chapterTwoTaskAfter['status'],
         ),
@@ -332,6 +453,8 @@ Future<void> main() async {
           chapterTwoPostprocess['output_paths'],
         ),
         'postprocess_tools': _resultToolNames(chapterTwoPostprocess),
+        'checkpoint_review_path': chapterTwoCheckpointReviewPath,
+        'trace': chapterTwoTrace,
       },
       'character_state_written': projectFiles.any((entry) {
         final path = ValueReaders.stringValue(entry['relative_path']);
@@ -357,6 +480,10 @@ Future<void> main() async {
     report['ok'] = false;
     report['error'] = '$error';
     report['stack_trace'] = '$stackTrace';
+    report['report_category'] = classifyDraftProbeReportCategory(
+      ok: false,
+      errorSummary: '$error',
+    );
   } finally {
     report['finished_at'] = DateTime.now().toIso8601String();
     final reportFile = File(
@@ -474,13 +601,91 @@ Future<JsonMap> _findTask(
   ProjectDescriptor project,
   bool Function(JsonMap task) predicate,
 ) async {
+  final task = await _findOptionalTask(
+    workflowRuntimeService,
+    project,
+    predicate,
+  );
+  if (task.isNotEmpty) {
+    return task;
+  }
+  throw StateError('未找到符合条件的任务。');
+}
+
+Future<JsonMap> _findOptionalTask(
+  ProjectWorkflowRuntimeService workflowRuntimeService,
+  ProjectDescriptor project,
+  bool Function(JsonMap task) predicate,
+) async {
   final tasks = await workflowRuntimeService.listWorkflowTasks(project);
   for (final task in tasks) {
     if (predicate(task)) {
       return task;
     }
   }
-  throw StateError('未找到符合条件的任务。');
+  return const <String, Object?>{};
+}
+
+Future<bool> _resolveManualBlocker({
+  required ProjectWorkflowRuntimeService workflowRuntimeService,
+  required ProjectTaskRepository taskRepository,
+  required ProjectDescriptor project,
+}) async {
+  final tasks = await workflowRuntimeService.listWorkflowTasks(project);
+  for (final task in tasks) {
+    if (ValueReaders.stringValue(task['status']) !=
+        TaskRuntimeConstants.statusWaitingUser) {
+      continue;
+    }
+    final taskType = ValueReaders.stringValue(task['task_type']);
+    final taskPath = ValueReaders.stringValue(task['relative_path']);
+    if (taskType == 'checkpoint' && taskPath.trim().isNotEmpty) {
+      await taskRepository.transitionTask(
+        project,
+        <String, Object?>{'relative_path': taskPath},
+        TaskRuntimeConstants.statusSucceeded,
+        note: '真实探针自动确认检查点通过。',
+      );
+      return true;
+    }
+    final checkpointReviewPath = ValueReaders.stringValue(
+      task['checkpoint_review_path'],
+    ).trim();
+    if (checkpointReviewPath.isNotEmpty) {
+      return _applyContinuableCheckpointAction(
+        workflowRuntimeService,
+        project,
+        checkpointReviewPath,
+      );
+    }
+  }
+  return false;
+}
+
+Future<bool> _applyContinuableCheckpointAction(
+  ProjectWorkflowRuntimeService workflowRuntimeService,
+  ProjectDescriptor project,
+  String checkpointReviewPath,
+) async {
+  final actionPackage = await workflowRuntimeService
+      .buildCheckpointReviewActionPackage(project, checkpointReviewPath);
+  for (final actionId in const <String>[
+    'confirm_checkpoint_continue',
+    'continue_long_task',
+  ]) {
+    for (final action in ValueReaders.mapList(actionPackage['actions'])) {
+      if (ValueReaders.stringValue(action['id']) == actionId &&
+          ValueReaders.boolValue(action['enabled'])) {
+        final result = await workflowRuntimeService.applyCheckpointReviewAction(
+          project,
+          checkpointReviewPath,
+          actionId,
+        );
+        return ValueReaders.boolValue(result['ok']);
+      }
+    }
+  }
+  return false;
 }
 
 Future<void> _seedReadyState({

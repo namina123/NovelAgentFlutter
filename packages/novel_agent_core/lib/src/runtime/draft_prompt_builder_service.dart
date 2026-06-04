@@ -29,6 +29,8 @@ class DraftPromptBuilderService {
       '',
       _projectPromptContract.toolDecisionContract(),
       '',
+      _projectPromptContract.domainToolGuidance(intent, agent: agent),
+      '',
       _projectPromptContract.agentInstructions(agent),
       '',
       '## 输出要求',

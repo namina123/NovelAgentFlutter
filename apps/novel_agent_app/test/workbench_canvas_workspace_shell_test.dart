@@ -84,6 +84,9 @@ class _FakeConversationHandler implements ConversationActionHandler {
   void onAgentGroupSelected(String groupId) {}
 
   @override
+  void onConversationAgentSelected(String agentId) {}
+
+  @override
   void onAttachmentRequested() {}
 
   @override
@@ -183,9 +186,6 @@ class _FakeResourceHandler implements ResourceManagerActionHandler {
 
   @override
   void onImportRequested() {}
-
-  @override
-  void onLongTaskStationRequested() {}
 
   @override
   void onModelSettingsRequested() {}

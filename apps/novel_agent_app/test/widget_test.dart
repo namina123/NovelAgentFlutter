@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:novel_agent_app/app/app.dart';
 import 'package:novel_agent_app/app/state/app_shell_controller.dart';
+import 'package:novel_agent_app/features/book_deconstruction/application/services/book_deconstruction_narrative_persistence_service.dart';
 import 'package:novel_agent_app/features/long_task_station/application/controllers/long_task_station_controller.dart';
 import 'package:novel_agent_app/features/project_assets/application/services/project_expression_constraint_workspace_service.dart';
 
@@ -64,6 +65,16 @@ void main() {
               projectExpressionConstraintBindingRepository.loadBindings,
           saveBindings:
               projectExpressionConstraintBindingRepository.saveBindings,
+        );
+    final draftExecutionConstraintRuntimeService =
+        ProjectDraftExecutionConstraintRuntimeService(
+          expressionConstraintProfileRepository:
+              expressionConstraintProfileRepository,
+          projectExpressionConstraintBindingRepository:
+              projectExpressionConstraintBindingRepository,
+          constraintBindingRepository: LocalConstraintBindingRepository(
+            workspacePort: bundle.projectWorkspacePort,
+          ),
         );
     final projectSkillLoadoutSaveAsGroupService =
         ProjectSkillLoadoutSaveAsGroupService(
@@ -126,6 +137,12 @@ void main() {
         );
       },
     );
+    final conversationDraftRuntimeService =
+        ProjectConversationDraftRuntimeService(
+          workspacePort: bundle.projectWorkspacePort,
+          hostPort: bundle.projectToolHostPort,
+          taskRepository: projectTaskRepository,
+        );
     final longTaskStationController = LongTaskStationController(
       longTaskSupervisor: bundle.longTaskSupervisor,
       detailService: longTaskStationDetailService,
@@ -168,6 +185,10 @@ void main() {
         writeProjectTextFileUseCase: writeProjectTextFileUseCase,
       ),
       projectToolHostPort: bundle.projectToolHostPort,
+      bookDeconstructionNarrativePersistenceService:
+          BookDeconstructionNarrativePersistenceService(
+            workspacePort: bundle.projectWorkspacePort,
+          ),
       projectRuntimeProfileRepository: ProjectRuntimeProfileRepository(
         workspacePort: bundle.projectWorkspacePort,
       ),
@@ -220,7 +241,10 @@ void main() {
             description: description,
           ),
       writeProjectTextFileUseCase: writeProjectTextFileUseCase,
+      draftExecutionConstraintRuntimeService:
+          draftExecutionConstraintRuntimeService,
       workflowRuntimeService: workflowRuntimeService,
+      conversationDraftRuntimeService: conversationDraftRuntimeService,
       reviewReportService: reviewReportService,
       projectChapterRewriteTaskService: projectChapterRewriteTaskService,
       promptTemplateService: promptTemplateService,

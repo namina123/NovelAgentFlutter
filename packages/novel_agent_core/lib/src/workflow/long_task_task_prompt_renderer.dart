@@ -86,6 +86,15 @@ class LongTaskTaskPromptRenderer {
       ..add('')
       ..add('## 工具契约');
     _appendLines(lines, ValueReaders.stringList(transaction['tool_contracts']));
+    final domainToolContracts = ValueReaders.stringList(
+      transaction['domain_tool_contracts'],
+    );
+    if (domainToolContracts.isNotEmpty) {
+      lines
+        ..add('')
+        ..add('## 领域工具契约');
+      _appendLines(lines, domainToolContracts);
+    }
     final skillRouting = ValueReaders.stringList(transaction['skill_routing']);
     if (skillRouting.isNotEmpty) {
       lines

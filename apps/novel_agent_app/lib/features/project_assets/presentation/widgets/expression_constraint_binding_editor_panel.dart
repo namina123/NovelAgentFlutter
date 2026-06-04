@@ -251,21 +251,24 @@ class _ExpressionConstraintBindingEditorPanelState
           ),
           const SizedBox(height: 8),
           ...options.map(
-            (option) => CheckboxListTile(
-              value: _selectedAgentIds.contains(option.id),
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              title: Text(option.label),
-              subtitle: option.note.trim().isEmpty ? null : Text(option.note),
-              onChanged: (selected) {
-                setState(() {
-                  if (selected == true) {
-                    _selectedAgentIds.add(option.id);
-                  } else {
-                    _selectedAgentIds.remove(option.id);
-                  }
-                });
-              },
+            (option) => Material(
+              color: Colors.transparent,
+              child: CheckboxListTile(
+                value: _selectedAgentIds.contains(option.id),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: Text(option.label),
+                subtitle: option.note.trim().isEmpty ? null : Text(option.note),
+                onChanged: (selected) {
+                  setState(() {
+                    if (selected == true) {
+                      _selectedAgentIds.add(option.id);
+                    } else {
+                      _selectedAgentIds.remove(option.id);
+                    }
+                  });
+                },
+              ),
             ),
           ),
         ],
@@ -297,24 +300,27 @@ class _ExpressionConstraintBindingEditorPanelState
           ),
           const SizedBox(height: 8),
           ...options.map(
-            (option) => CheckboxListTile(
-              value: _selectedModeIds.contains(option.id),
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              title: Text(option.label),
-              subtitle: option.note.trim().isEmpty ? null : Text(option.note),
-              onChanged: (selected) {
-                setState(() {
-                  if (selected == true) {
-                    _selectedModeIds.add(option.id);
-                  } else {
-                    _selectedModeIds.remove(option.id);
-                    _selectedStageIds.removeWhere(
-                      (stageId) => !_visibleStageIds.contains(stageId),
-                    );
-                  }
-                });
-              },
+            (option) => Material(
+              color: Colors.transparent,
+              child: CheckboxListTile(
+                value: _selectedModeIds.contains(option.id),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: Text(option.label),
+                subtitle: option.note.trim().isEmpty ? null : Text(option.note),
+                onChanged: (selected) {
+                  setState(() {
+                    if (selected == true) {
+                      _selectedModeIds.add(option.id);
+                    } else {
+                      _selectedModeIds.remove(option.id);
+                      _selectedStageIds.removeWhere(
+                        (stageId) => !_visibleStageIds.contains(stageId),
+                      );
+                    }
+                  });
+                },
+              ),
             ),
           ),
         ],
@@ -348,21 +354,24 @@ class _ExpressionConstraintBindingEditorPanelState
           ),
           const SizedBox(height: 8),
           ...options.map(
-            (option) => CheckboxListTile(
-              value: _selectedStageIds.contains(option.id),
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              title: Text(option.label),
-              subtitle: option.note.trim().isEmpty ? null : Text(option.note),
-              onChanged: (selected) {
-                setState(() {
-                  if (selected == true) {
-                    _selectedStageIds.add(option.id);
-                  } else {
-                    _selectedStageIds.remove(option.id);
-                  }
-                });
-              },
+            (option) => Material(
+              color: Colors.transparent,
+              child: CheckboxListTile(
+                value: _selectedStageIds.contains(option.id),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: Text(option.label),
+                subtitle: option.note.trim().isEmpty ? null : Text(option.note),
+                onChanged: (selected) {
+                  setState(() {
+                    if (selected == true) {
+                      _selectedStageIds.add(option.id);
+                    } else {
+                      _selectedStageIds.remove(option.id);
+                    }
+                  });
+                },
+              ),
             ),
           ),
         ],

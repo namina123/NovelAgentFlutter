@@ -23,6 +23,7 @@ import '../../features/agent_ecosystem/presentation/models/ecosystem_import_comm
 import '../../features/agent_ecosystem/presentation/models/agent_ecosystem_view_data.dart';
 import '../../features/agent_ecosystem/presentation/models/project_skill_loadout_view_data.dart';
 import '../../features/book_deconstruction/application/controllers/book_deconstruction_controller.dart';
+import '../../features/book_deconstruction/application/services/book_deconstruction_narrative_persistence_service.dart';
 import '../../features/book_deconstruction/application/services/desktop_book_deconstruction_source_picker_service.dart';
 import '../../features/inspiration_workbench/application/controllers/inspiration_workbench_controller.dart';
 import '../../features/long_task_station/application/controllers/long_task_station_controller.dart';
@@ -154,6 +155,8 @@ class AppShellController extends ChangeNotifier
     required ImportProjectFilesUseCase importProjectFilesUseCase,
     required UpdateProjectManifestUseCase updateProjectManifestUseCase,
     required ProjectToolHostPort projectToolHostPort,
+    required BookDeconstructionNarrativePersistenceService
+    bookDeconstructionNarrativePersistenceService,
     required ProjectRuntimeProfileRepository projectRuntimeProfileRepository,
     required ProjectAgentGroupBindingRepository
     projectAgentGroupBindingRepository,
@@ -181,6 +184,10 @@ class AppShellController extends ChangeNotifier
     required WriteProjectTextFileUseCase writeProjectTextFileUseCase,
     required GenerateDraftUseCaseFactory generateDraftUseCaseFactory,
     required ProjectWorkflowRuntimeService workflowRuntimeService,
+    required ProjectConversationDraftRuntimeService
+    conversationDraftRuntimeService,
+    required ProjectDraftExecutionConstraintRuntimeService
+    draftExecutionConstraintRuntimeService,
     required ProjectReviewReportService reviewReportService,
     required ProjectChapterRewriteTaskService projectChapterRewriteTaskService,
     required ProjectPromptTemplateService promptTemplateService,
@@ -241,6 +248,8 @@ class AppShellController extends ChangeNotifier
        _importProjectFilesUseCase = importProjectFilesUseCase,
        _updateProjectManifestUseCase = updateProjectManifestUseCase,
        _projectToolHostPort = projectToolHostPort,
+       _bookDeconstructionNarrativePersistenceService =
+           bookDeconstructionNarrativePersistenceService,
        _previewCustomizationBundleImportUseCase =
            previewCustomizationBundleImportUseCase,
        _importCustomizationBundleUseCase = importCustomizationBundleUseCase,
@@ -259,6 +268,7 @@ class AppShellController extends ChangeNotifier
        _writeProjectTextFileUseCase = writeProjectTextFileUseCase,
        _generateDraftUseCaseFactory = generateDraftUseCaseFactory,
        _workflowRuntimeService = workflowRuntimeService,
+       _conversationDraftRuntimeService = conversationDraftRuntimeService,
        _reviewReportService = reviewReportService,
        _projectChapterRewriteTaskService = projectChapterRewriteTaskService,
        _promptTemplateService = promptTemplateService,
@@ -378,6 +388,8 @@ class AppShellController extends ChangeNotifier
       updateProjectManifestUseCase: _updateProjectManifestUseCase,
       projectToolHostPort: _projectToolHostPort,
       writeProjectTextFileUseCase: _writeProjectTextFileUseCase,
+      narrativePersistenceService:
+          _bookDeconstructionNarrativePersistenceService,
       longTaskSupervisor: longTaskSupervisor,
       reviewReportService: _reviewReportService,
       projectRuntimeProfileRepository: projectRuntimeProfileRepository,
@@ -441,6 +453,9 @@ class AppShellController extends ChangeNotifier
       conversationGuideViewDataService: _conversationGuideViewDataService,
       conversationUserVisibleTextService: _conversationUserVisibleTextService,
       workbenchPrimaryActionService: _workbenchPrimaryActionService,
+      conversationDraftRuntimeService: _conversationDraftRuntimeService,
+      draftExecutionConstraintRuntimeService:
+          draftExecutionConstraintRuntimeService,
       userOptionPromptBuilderService: _userOptionPromptBuilderService,
       loadModeGuidanceStateUseCase: _loadModeGuidanceStateUseCase,
       answerModeGuidanceStageUseCase: _answerModeGuidanceStageUseCase,
@@ -508,6 +523,8 @@ class AppShellController extends ChangeNotifier
       createBookDeconstructionController: () => BookDeconstructionController(
         projectToolHostPort: _projectToolHostPort,
         writeProjectTextFileUseCase: _writeProjectTextFileUseCase,
+        narrativePersistenceService:
+            _bookDeconstructionNarrativePersistenceService,
         readCurrentProject: () => _currentProject,
         syncWorkbenchResources: _syncWorkbenchResources,
         onBackRequested: showWorkbench,
@@ -546,6 +563,8 @@ class AppShellController extends ChangeNotifier
   final ImportProjectFilesUseCase _importProjectFilesUseCase;
   final UpdateProjectManifestUseCase _updateProjectManifestUseCase;
   final ProjectToolHostPort _projectToolHostPort;
+  final BookDeconstructionNarrativePersistenceService
+  _bookDeconstructionNarrativePersistenceService;
   final PreviewCustomizationBundleImportUseCase
   _previewCustomizationBundleImportUseCase;
   final ImportCustomizationBundleUseCase _importCustomizationBundleUseCase;
@@ -564,6 +583,7 @@ class AppShellController extends ChangeNotifier
   final WriteProjectTextFileUseCase _writeProjectTextFileUseCase;
   final GenerateDraftUseCaseFactory _generateDraftUseCaseFactory;
   final ProjectWorkflowRuntimeService _workflowRuntimeService;
+  final ProjectConversationDraftRuntimeService _conversationDraftRuntimeService;
   final ProjectReviewReportService _reviewReportService;
   final ProjectChapterRewriteTaskService _projectChapterRewriteTaskService;
   final ProjectPromptTemplateService _promptTemplateService;

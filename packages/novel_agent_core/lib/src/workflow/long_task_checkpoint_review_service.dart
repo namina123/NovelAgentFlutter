@@ -3,6 +3,7 @@ import '../common/value_readers.dart';
 import '../creative/expression_constraint_review_projection.dart';
 import '../creative/expression_constraint_review_projection_service.dart';
 import 'long_task_checkpoint_drift_signal_service.dart';
+import 'narrative_supervisor_risk_policy_service.dart';
 import 'long_task_task_summary_service.dart';
 import 'task_runtime_constants.dart';
 
@@ -10,17 +11,23 @@ class LongTaskCheckpointReviewService {
   LongTaskCheckpointReviewService({
     required LongTaskTaskSummaryService taskSummaryService,
     LongTaskCheckpointDriftSignalService? driftSignalService,
+    NarrativeSupervisorRiskPolicyService? narrativeSupervisorRiskPolicyService,
     ExpressionConstraintReviewProjectionService?
     expressionConstraintReviewProjectionService,
   }) : _taskSummaryService = taskSummaryService,
        _driftSignalService =
            driftSignalService ?? LongTaskCheckpointDriftSignalService(),
+       _narrativeSupervisorRiskPolicyService =
+           narrativeSupervisorRiskPolicyService ??
+           const NarrativeSupervisorRiskPolicyService(),
        _expressionConstraintReviewProjectionService =
            expressionConstraintReviewProjectionService ??
            const ExpressionConstraintReviewProjectionService();
 
   final LongTaskTaskSummaryService _taskSummaryService;
   final LongTaskCheckpointDriftSignalService _driftSignalService;
+  final NarrativeSupervisorRiskPolicyService
+  _narrativeSupervisorRiskPolicyService;
   final ExpressionConstraintReviewProjectionService
   _expressionConstraintReviewProjectionService;
 
@@ -84,6 +91,8 @@ class LongTaskCheckpointReviewService {
       chapterLengthEvaluation: chapterLengthEvaluation,
       miniRecheckItems: miniRecheckItems,
     );
+    final narrativeSupervisorRisk = _narrativeSupervisorRiskPolicyService
+        .assess(result: result, execution: execution);
     final now = createdAt.isEmpty
         ? DateTime.now().toIso8601String()
         : createdAt;
@@ -115,6 +124,7 @@ class LongTaskCheckpointReviewService {
       'expression_constraint_review': expressionConstraintReview.toJson(),
       'mini_recheck_items': miniRecheckItems,
       'next_actions': nextActions,
+      'narrative_supervisor_risk': narrativeSupervisorRisk,
       'output_paths': cleanOutputs,
       'tool_names': _toolNames(result),
       'changed_paths': ValueReaders.stringList(result['changed_paths']),

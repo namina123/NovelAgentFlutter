@@ -5,8 +5,12 @@ import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_app/features/workbench/application/services/conversation_session_state_service.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import 'probe_support.dart';
+import '../../../tools/probe_config_support.dart';
+
 Future<void> main(List<String> arguments) async {
   // 中文注释: 这个探针脚本专门验证真实 OpenAI 兼容提供商在不同模型下的工具调用链是否稳定可用。
+  await ensureLocalRealProbeOptIn(probeName: 'real_openai_compat_probe');
   final requestedModels = arguments
       .map((value) => value.trim())
       .where((value) => value.isNotEmpty)
@@ -19,22 +23,19 @@ Future<void> main(List<String> arguments) async {
     workingDirectoryPath: Directory.current.path,
   );
   final settings = await bundle.settingsRepository.load();
-  final provider = _resolveProvider(settings);
-  if (provider == null) {
-    stderr.writeln('没有找到可用 provider。');
-    exitCode = 2;
-    return;
-  }
-  if (provider.protocol.trim() != 'openai_compatible') {
-    stderr.writeln('当前 provider 不是 openai_compatible：${provider.protocol}');
-    exitCode = 2;
-    return;
-  }
-  if (provider.apiKey.trim().isEmpty || provider.baseUrl.trim().isEmpty) {
-    stderr.writeln('当前 provider 缺少 apiKey 或 baseUrl。');
-    exitCode = 2;
-    return;
-  }
+  final apiConfig = await loadProbeApiConfig(
+    probeName: 'real_openai_compat_probe',
+  );
+  final provider = ProviderEndpointSettings(
+    id: 'real_openai_compat_probe',
+    title: 'Real OpenAI Compat Probe',
+    protocol: 'openai_compatible',
+    baseUrl: apiConfig.baseUrl,
+    apiKey: apiConfig.apiKey,
+    modelId: apiConfig.modelId,
+    description: 'Shared local probe configuration for OpenAI compat probes.',
+    isDefault: true,
+  );
 
   final sourceProjectPath = settings.defaultProjectPath.trim();
   if (sourceProjectPath.isEmpty) {
@@ -147,7 +148,7 @@ Future<void> main(List<String> arguments) async {
       final ok = ValueReaders.boolValue(caseReport['ok']);
       modelOk = modelOk && ok;
       stdout.writeln(
-        '${ok ? 'PASS' : 'FAIL'} ${probeCase.id} | ${ValueReaders.stringValue(caseReport['summary'])}',
+        '${ok ? 'PASS' : 'FAIL'} ${probeCase.id} | ${ValueReaders.stringValue(caseReport['report_category'])} | ${ValueReaders.stringValue(caseReport['summary'])}',
       );
     }
     modelReports.add(<String, Object?>{
@@ -203,10 +204,16 @@ Future<JsonMap> _runProbeCase({
       },
     );
     final validation = await probeCase.validate(project, result);
+    final ok = ValueReaders.boolValue(validation['ok']);
     return <String, Object?>{
       'case_id': probeCase.id,
-      'ok': ValueReaders.boolValue(validation['ok']),
+      'ok': ok,
       'summary': ValueReaders.stringValue(validation['summary']),
+      'report_category': classifyDraftProbeReportCategory(
+        ok: ok,
+        result: result,
+        validation: validation,
+      ),
       'detail': ValueReaders.deepCopyMap(validation),
       'progress_phases': progressPhases,
       'executed_tools': result.executedTools
@@ -220,10 +227,15 @@ Future<JsonMap> _runProbeCase({
       'finished_at': DateTime.now().toIso8601String(),
     };
   } catch (error, stackTrace) {
+    final summary = '$error';
     return <String, Object?>{
       'case_id': probeCase.id,
       'ok': false,
-      'summary': '$error',
+      'summary': summary,
+      'report_category': classifyDraftProbeReportCategory(
+        ok: false,
+        errorSummary: summary,
+      ),
       'stack_trace': '$stackTrace',
       'progress_phases': progressPhases,
       'started_at': startedAt,
@@ -390,21 +402,6 @@ HostPlatform _currentHostPlatform() {
   return HostPlatform.unknown;
 }
 
-ProviderEndpointSettings? _resolveProvider(AppSettings settings) {
-  final providerId = ValueReaders.stringValue(
-    ValueReaders.mapValue(
-      settings.extraSettings['model_settings'],
-    )['provider_id'],
-    settings.defaultProviderId,
-  );
-  for (final provider in settings.providers) {
-    if (provider.id == providerId) {
-      return provider;
-    }
-  }
-  return settings.providers.isEmpty ? null : settings.providers.first;
-}
-
 class _ProbeCase {
   const _ProbeCase({
     required this.id,
@@ -420,4 +417,3 @@ class _ProbeCase {
   )
   validate;
 }
-

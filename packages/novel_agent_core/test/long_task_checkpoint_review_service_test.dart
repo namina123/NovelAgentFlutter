@@ -112,6 +112,14 @@ void main() {
           'aggressive',
         );
         expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(
+              ValueReaders.mapValue(review['narrative_supervisor_risk'])['overall'],
+            )['category'],
+          ),
+          'accept',
+        );
+        expect(
           ValueReaders.stringList(review['mini_recheck_items']),
           contains('确认真实性清理后主角与关键说话者仍然保留各自声音。'),
         );

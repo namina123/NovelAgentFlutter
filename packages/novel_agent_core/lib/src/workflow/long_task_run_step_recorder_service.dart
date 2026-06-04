@@ -27,6 +27,8 @@ class LongTaskRunStepRecorderService {
     final checkpointReview = ValueReaders.mapValue(
       checkpointReviewEnvelope['review'],
     );
+    final execution = ValueReaders.mapValue(result['execution']);
+    final changedPaths = ValueReaders.stringList(result['changed_paths']);
     final toolNames = <String>[];
     for (final rawCall in ValueReaders.objectList(response['tool_calls'])) {
       final call = ValueReaders.mapValue(rawCall);
@@ -45,7 +47,24 @@ class LongTaskRunStepRecorderService {
       'ok': ValueReaders.boolValue(result['ok']),
       'error': ValueReaders.stringValue(result['error']),
       'output_paths': ValueReaders.stringList(result['output_paths']),
+      'changed_paths': changedPaths,
       'tool_names': toolNames,
+      'activation_report_path': ValueReaders.stringValue(
+        result['activation_report_path'],
+        ValueReaders.stringValue(execution['activation_report_path']),
+      ),
+      'activation_report_summary': ValueReaders.stringValue(
+        result['activation_report_summary'],
+        ValueReaders.stringValue(execution['activation_report_summary']),
+      ),
+      'chapter_delivery_state': ValueReaders.stringValue(
+        result['chapter_delivery_state'],
+        ValueReaders.stringValue(execution['chapter_delivery_state']),
+      ),
+      'chapter_delivery_path': ValueReaders.stringValue(
+        result['chapter_delivery_path'],
+        ValueReaders.stringValue(execution['chapter_delivery_path']),
+      ),
       'checkpoint_review_path': ValueReaders.stringValue(
         checkpointReviewEnvelope['relative_path'],
       ),
@@ -65,6 +84,19 @@ class LongTaskRunStepRecorderService {
     next['last_task_id'] = ValueReaders.stringValue(task['id']);
     next['last_task_title'] = ValueReaders.stringValue(task['title']);
     next['last_output_paths'] = ValueReaders.stringList(result['output_paths']);
+    next['last_changed_paths'] = changedPaths;
+    next['last_activation_report_path'] = ValueReaders.stringValue(
+      result['activation_report_path'],
+      ValueReaders.stringValue(execution['activation_report_path']),
+    );
+    next['last_chapter_delivery_state'] = ValueReaders.stringValue(
+      result['chapter_delivery_state'],
+      ValueReaders.stringValue(execution['chapter_delivery_state']),
+    );
+    next['last_chapter_delivery_path'] = ValueReaders.stringValue(
+      result['chapter_delivery_path'],
+      ValueReaders.stringValue(execution['chapter_delivery_path']),
+    );
     next['last_checkpoint_review_path'] = ValueReaders.stringValue(
       checkpointReviewEnvelope['relative_path'],
     );

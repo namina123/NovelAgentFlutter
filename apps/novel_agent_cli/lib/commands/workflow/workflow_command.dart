@@ -731,6 +731,14 @@ class WorkflowCommand {
     }
     final response = ValueReaders.mapValue(result['response']);
     final content = ValueReaders.stringValue(response['content']).trim();
+    final narrativeContract = _workflowOutputSummaryService
+        .extractNarrativeRuntimeContract(result);
+    final narrativeLines = _workflowOutputSummaryService.narrativeBriefLines(
+      narrativeContract,
+    );
+    if (narrativeLines.isNotEmpty) {
+      _printer.block('开放叙事摘要', narrativeLines.join('\n'));
+    }
     if (content.isNotEmpty) {
       _printer.block('模型输出', content);
     }
