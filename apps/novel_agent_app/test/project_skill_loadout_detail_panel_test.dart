@@ -67,6 +67,7 @@ void main() {
                     ),
                   ],
                   issues: <String>[],
+                  permissionBoundarySummary: '当前装载没有额外权限需求；绑定或解绑技能时不会扩大默认权限边界。',
                 ),
                 actionHandler: handler,
                 projectAvailable: true,
@@ -132,6 +133,7 @@ void main() {
                     ),
                   ],
                   issues: <String>[],
+                  permissionBoundarySummary: '当前装载没有额外权限需求；绑定或解绑技能时不会扩大默认权限边界。',
                 ),
                 actionHandler: handler,
                 projectAvailable: true,
@@ -210,6 +212,8 @@ void main() {
                   ],
                   historyEntries: <ProjectSkillLoadoutHistoryItemViewData>[],
                   issues: <String>['当前不可用技能：missing_skill'],
+                  permissionBoundarySummary:
+                      '当前装载有 1 个技能声明了权限边界；必需能力：联网权限。未授予的能力会自动转成降级或阻止装载。',
                 ),
                 actionHandler: handler,
                 projectAvailable: true,
@@ -222,6 +226,8 @@ void main() {
 
       expect(find.text('诊断'), findsNothing);
       expect(find.text('当前不可用'), findsOneWidget);
+      expect(find.text('装载提示'), findsOneWidget);
+      expect(find.textContaining('必需能力：联网权限'), findsOneWidget);
 
       final resolvedSection = find.ancestor(
         of: find.text('最终技能'),

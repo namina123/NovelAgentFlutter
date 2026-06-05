@@ -81,6 +81,8 @@ import '../../features/workbench/presentation/contracts/document_workspace_actio
 import '../../features/workbench/presentation/contracts/resource_manager_action_handler.dart';
 import '../../features/workbench/presentation/models/conversation_group_selector_view_data.dart';
 import '../../features/workbench/presentation/models/project_create_request_view_data.dart';
+import '../../features/workbench/presentation/models/project_creation_phase.dart';
+import '../../features/workbench/presentation/models/project_launcher_view_data.dart';
 import '../../features/workbench/presentation/models/conversation_input_capability_context.dart';
 import '../../features/workbench/presentation/models/project_agent_group_workspace_view_data.dart';
 import '../../features/workbench/presentation/models/selector_option_view_data.dart';
@@ -305,8 +307,7 @@ class AppShellController extends ChangeNotifier
        _userOptionPromptBuilderService =
            userOptionPromptBuilderService ?? UserOptionPromptBuilderService(),
        _agentEcosystemViewDataService =
-           agentEcosystemViewDataService ??
-           const AgentEcosystemViewDataService(),
+           agentEcosystemViewDataService ?? AgentEcosystemViewDataService(),
        _ecosystemEntryCreationPlanService =
            ecosystemEntryCreationPlanService ??
            EcosystemEntryCreationPlanService(),
@@ -791,6 +792,52 @@ class AppShellController extends ChangeNotifier
   void showSettings() {
     // 中文注释: 该方法统一负责切换到设置页，让设置入口不再分散在多个组件内部。
     _destinationController.showSettings();
+  }
+
+  Future<bool> handleSystemBackRequested() async {
+    // 中文注释: 系统返回键只表达“退一步”，具体退到哪里由壳层状态统一判断。
+    final workbench = _viewModel.workbench;
+    if (workbench.workspaceCommand != null) {
+      onWorkspaceCommandDismissed();
+      return false;
+    }
+    if (workbench.projectAgentGroupWorkspace != null) {
+      _workbenchWorkspaceController.onProjectAgentGroupDismissed();
+      return false;
+    }
+    final launcher = workbench.projectLauncher;
+    if (launcher != null) {
+      if (launcher.mode == ProjectLauncherMode.create &&
+          launcher.creationPhase != ProjectCreationPhase.projectType) {
+        await _projectCreationController.onProjectCreationBackRequested();
+        return false;
+      }
+      if (launcher.canDismiss) {
+        _projectCreationController.onProjectLauncherDismissed();
+        return false;
+      }
+      return true;
+    }
+    if (workbench.isDocumentsWorkspaceVisible) {
+      onDocumentsWorkspaceDismissRequested();
+      return false;
+    }
+    switch (_viewModel.destination) {
+      case AppDestination.workbench:
+        return true;
+      case AppDestination.projectOpen:
+        if (_currentProject != null) {
+          showWorkbench();
+          return false;
+        }
+        return true;
+      case AppDestination.settings:
+      case AppDestination.agentEcosystem:
+      case AppDestination.projectAssets:
+      case AppDestination.longTaskStation:
+        showWorkbench();
+        return false;
+    }
   }
 
   void showAgentEcosystem() {
@@ -2056,16 +2103,20 @@ class AppShellController extends ChangeNotifier
     }
     final kind = _agentEcosystemSnapshot.activeTabId;
     final relativePath = _stringValue(entry['project_relative_path']).trim();
-    if (relativePath.isEmpty) {
-      _setAgentEcosystemStatus('当前条目不是项目级条目，不能直接编辑。');
+    final canDuplicateBuiltin =
+        relativePath.isEmpty &&
+        (kind == 'skill-groups' || kind == 'agent-groups');
+    if (relativePath.isEmpty && !canDuplicateBuiltin) {
+      _setAgentEcosystemStatus('当前条目不是可复制的项目级条目，不能直接编辑。');
       return;
     }
-    final sourceContent =
-        await _projectToolHostPort.readTextFile(
-          project.rootPath,
-          relativePath,
-        ) ??
-        '';
+    final sourceContent = relativePath.isEmpty
+        ? ''
+        : await _projectToolHostPort.readTextFile(
+                project.rootPath,
+                relativePath,
+              ) ??
+              '';
     final editorViewData = _ecosystemEntryEditorService.buildForEntry(
       entry,
       kind: kind,
@@ -2090,7 +2141,8 @@ class AppShellController extends ChangeNotifier
         content: plan.content,
       );
       final oldRelativePath = plan.oldRelativePath.trim();
-      if (oldRelativePath.isNotEmpty &&
+      if (plan.deleteOldRelativePath &&
+          oldRelativePath.isNotEmpty &&
           oldRelativePath != plan.relativePath &&
           await _projectToolHostPort.entryExists(
             project.rootPath,
@@ -2107,7 +2159,7 @@ class AppShellController extends ChangeNotifier
         selectedEntryId: request.entryId,
       );
       _setAgentEcosystemStatus(
-        '已保存${_ecosystemKindLabel(request.kind)}：${request.name.trim().isEmpty ? request.entryId : request.name.trim()}',
+        '已保存${_ecosystemKindLabel(request.kind)}：${request.name.trim().isEmpty ? request.entryId : request.name.trim()}。${plan.statusMessage}',
       );
     } catch (error) {
       _updateEcosystemEditorViewData(

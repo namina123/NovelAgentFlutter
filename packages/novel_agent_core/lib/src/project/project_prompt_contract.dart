@@ -229,6 +229,56 @@ class ProjectPromptContract {
     return lines.join('\n');
   }
 
+  String informationToolGuidance(
+    String intent, {
+    JsonMap agent = const <String, Object?>{},
+  }) {
+    // 中文注释: information tools 的使用约束集中放在这里，确保 writer、deconstructor、researcher、reviewer 共享同一套知识/设计/研究/引用边界。
+    final normalizedIntent = intent.trim().toLowerCase();
+    final lines = <String>[
+      '## Information Tools',
+      '信息工具分四类：project knowledge 用 propose_knowledge_card；作品巧思/结构设计/符号系统/命名暗线用 propose_design_element；外部资料与联网结果先走 request_external_research / submit_research_note；引用作品边界与风险用 propose_reference_work。',
+      '巧思、设计、符号系统、结构回扣、命名规律不能只写进正文、普通 Markdown 或聊天说明；如果它们会影响后续创作，必须通过 propose_design_element 提交。',
+      '外部资料、网页摘录、检索结论和来源说明不能直接冒充长期设定；先形成 research request / research note，再根据稳定性决定是否提升为 knowledge card 或 design element proposal。',
+      '如果只是发现来源证据、章节片段和已有知识/设计之间的可追踪关系，优先使用 link_information_evidence，而不是把来源线索埋进自然语言。',
+      '如果本轮没有显著的新长期信息、没有稳定证据、或仍然只是模糊猜测，就不要编造 knowledge/design/research/reference 交付，也不要为了显得积极而强行调用信息工具。',
+      '示例只能说明工具形态，不是题材、文化母题、世界观或叙事套路范本；不要把任何示例当作默认方案。',
+    ];
+    if (_isReviewer(agent, normalizedIntent)) {
+      lines.addAll(<String>[
+        'reviewer 重点：正式审稿发现的证据链、来源缺口、引用边界或高风险资料，应优先补 link_information_evidence、submit_research_note 或 propose_reference_work；不要把“需要补证据”只写成散文评语。',
+        '如果你只是指出“这里可能有巧思/长期规则”，但尚未形成稳定事实，就明确标注缺口；不要伪造已经提交过的信息卡。',
+      ]);
+      return lines.join('\n');
+    }
+    if (_isResearcher(agent, normalizedIntent)) {
+      lines.addAll(<String>[
+        'researcher 重点：需要外部资料时，先 request_external_research，拿到来源后再 submit_research_note；只有当研究结论已经稳定且适合进入项目长期记忆时，才继续 propose_knowledge_card 或 propose_design_element。',
+        '不要把联网摘录、引用原文或未经确认的研究结论直接包装成项目既定设定。',
+      ]);
+      return lines.join('\n');
+    }
+    if (_isDeconstructor(agent, normalizedIntent)) {
+      lines.addAll(<String>[
+        'deconstructor 重点：从原文、拆书分析或续写承接中提炼出的结构巧思、象征系统、命名暗线、章节回扣，优先 propose_design_element；明确世界事实、规则或可复用设定再用 propose_knowledge_card。',
+        '来源片段、章节证据和分析依据应保持可追踪；如果只是暂时观察到一种可能解释，不要冒充成已确认设计规则。',
+      ]);
+      return lines.join('\n');
+    }
+    if (_isWriter(agent, normalizedIntent)) {
+      lines.addAll(<String>[
+        'writer 重点：写作中如果顺带确定了新的长期世界事实，可用 propose_knowledge_card；如果发现了可复用的巧思、结构呼应、象征系统或命名规律，必须用 propose_design_element，不要只留在正文里等下一轮遗忘。',
+        '如果本轮只是正常推进章节、没有新增显著长期信息，就专注交付正文，不要为了凑工具而编造知识卡或设计卡。',
+      ]);
+      return lines.join('\n');
+    }
+    lines.addAll(<String>[
+      '通用重点：长期事实走 knowledge，作品巧思走 design，外部资料先 research，再按需要提升为 knowledge/design，引用边界走 reference。',
+      '如果角色/模式不明确，仍然遵守“不编造、不强提、先 research note 再 proposal、巧思必须走 propose_design_element”的最低规则。',
+    ]);
+    return lines.join('\n');
+  }
+
   bool _isReviewer(JsonMap agent, String normalizedIntent) {
     if (normalizedIntent == 'review') {
       return true;
@@ -241,6 +291,38 @@ class ProjectPromptContract {
       return true;
     }
     return _matchesAgent(agent, <String>['recovery', 'repair', '修复', '恢复']);
+  }
+
+  bool _isResearcher(JsonMap agent, String normalizedIntent) {
+    if (normalizedIntent == 'research' ||
+        normalizedIntent == 'researcher' ||
+        normalizedIntent == 'external_research') {
+      return true;
+    }
+    return _matchesAgent(agent, <String>['researcher', 'research', '研究']);
+  }
+
+  bool _isDeconstructor(JsonMap agent, String normalizedIntent) {
+    if (normalizedIntent == 'deconstruction' ||
+        normalizedIntent == 'deconstructor') {
+      return true;
+    }
+    return _matchesAgent(agent, <String>[
+      'deconstructor',
+      'deconstruction',
+      '拆书',
+      '解构',
+    ]);
+  }
+
+  bool _isWriter(JsonMap agent, String normalizedIntent) {
+    if (normalizedIntent == 'draft' ||
+        normalizedIntent == 'chapter' ||
+        normalizedIntent == 'write' ||
+        normalizedIntent == 'writer') {
+      return true;
+    }
+    return _matchesAgent(agent, <String>['writer', '写作', '正文', '作者']);
   }
 
   bool _isProfileArchitect(JsonMap agent, String normalizedIntent) {

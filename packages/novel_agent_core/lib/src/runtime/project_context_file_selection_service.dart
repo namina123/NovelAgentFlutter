@@ -1,5 +1,6 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import '../information/information_projection_document.dart';
 
 class ProjectContextFileSelectionService {
   List<String> select(List<JsonMap> entries, {int maxFiles = 12}) {
@@ -37,11 +38,25 @@ class ProjectContextFileSelectionService {
       return false;
     }
     final path = ValueReaders.stringValue(entry['relative_path']).toLowerCase();
+    if (_isInformationProjectionPath(path)) {
+      return false;
+    }
     return path.endsWith('.md') ||
         path.endsWith('.txt') ||
         path.endsWith('.json') ||
         path.endsWith('.yaml') ||
         path.endsWith('.yml');
+  }
+
+  bool _isInformationProjectionPath(String normalizedLowerPath) {
+    // 中文注释: information projection 已由结构化 activation bridge 单独注入，这里跳过可避免双源重复占预算。
+    const projectionPaths = <String>{
+      InformationProjectionDocument.knowledgeSummaryRelativePath,
+      InformationProjectionDocument.designSummaryRelativePath,
+      InformationProjectionDocument.researchSummaryRelativePath,
+      InformationProjectionDocument.referenceBoundaryRelativePath,
+    };
+    return projectionPaths.contains(normalizedLowerPath);
   }
 
   int _priorityOf(String relativePath) {

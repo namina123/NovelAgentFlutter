@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import 'workbench_information_view_data.dart';
 import 'resource_entry_view_data.dart';
 
 class WorkbenchResourceViewData {
@@ -7,11 +8,13 @@ class WorkbenchResourceViewData {
     required this.projectName,
     required this.projectSubtitle,
     required this.resourceEntries,
+    this.informationViewData = const WorkbenchInformationViewData(),
   });
 
   final String projectName;
   final String projectSubtitle;
   final List<ResourceEntryViewData> resourceEntries;
+  final WorkbenchInformationViewData informationViewData;
 
   @override
   bool operator ==(Object other) {
@@ -19,7 +22,8 @@ class WorkbenchResourceViewData {
         other is WorkbenchResourceViewData &&
             other.projectName == projectName &&
             other.projectSubtitle == projectSubtitle &&
-            listEquals(other.resourceEntries, resourceEntries);
+            listEquals(other.resourceEntries, resourceEntries) &&
+            other.informationViewData == informationViewData;
   }
 
   @override
@@ -27,5 +31,6 @@ class WorkbenchResourceViewData {
     projectName,
     projectSubtitle,
     Object.hashAll(resourceEntries),
+    informationViewData,
   );
 }

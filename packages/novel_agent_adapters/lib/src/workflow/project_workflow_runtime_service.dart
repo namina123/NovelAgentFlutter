@@ -25,12 +25,17 @@ typedef WorkflowGenerateDraftUseCaseFactory =
       ProviderEndpointSettings provider,
       JsonMap networkSettings,
     );
+typedef LoadWorkflowProjectAgentGroupSelections =
+    Future<List<ProjectAgentGroupSelection>> Function(
+      ProjectDescriptor project,
+    );
 
 class ProjectWorkflowRuntimeService {
   ProjectWorkflowRuntimeService({
     required ProjectTaskRepository taskRepository,
     required ProjectPromptTemplateService promptTemplateService,
     required WorkflowGenerateDraftUseCaseFactory generateDraftUseCaseFactory,
+    LoadWorkflowProjectAgentGroupSelections? loadProjectAgentGroupSelections,
     TaskDefinitionService? taskDefinitionService,
     TaskSelectionService? taskSelectionService,
     TaskQueueOptionService? taskQueueOptionService,
@@ -75,9 +80,12 @@ class ProjectWorkflowRuntimeService {
     draftExecutionConstraintRuntimeService,
     ProjectWorkflowRuntimeBridgeService? workflowRuntimeBridgeService,
     ProjectWorkflowReviewRuntimeService? workflowReviewRuntimeService,
+    WritingExecutionResultNormalizerService?
+    writingExecutionResultNormalizerService,
   }) : _taskRepository = taskRepository,
        _promptTemplateService = promptTemplateService,
        _generateDraftUseCaseFactory = generateDraftUseCaseFactory,
+       _loadProjectAgentGroupSelections = loadProjectAgentGroupSelections,
        _taskDefinitionService =
            taskDefinitionService ?? TaskDefinitionService(),
        _taskSelectionService =
@@ -317,11 +325,18 @@ class ProjectWorkflowRuntimeService {
            ),
        _workflowReviewRuntimeService =
            workflowReviewRuntimeService ??
-           ProjectWorkflowReviewRuntimeService(taskRepository: taskRepository);
+           ProjectWorkflowReviewRuntimeService(taskRepository: taskRepository),
+       _projectAgentGroupSelectionResolverService =
+           const ProjectAgentGroupSelectionResolverService(),
+       _writingExecutionResultNormalizerService =
+           writingExecutionResultNormalizerService ??
+           WritingExecutionResultNormalizerService();
 
   final ProjectTaskRepository _taskRepository;
   final ProjectPromptTemplateService _promptTemplateService;
   final WorkflowGenerateDraftUseCaseFactory _generateDraftUseCaseFactory;
+  final LoadWorkflowProjectAgentGroupSelections?
+  _loadProjectAgentGroupSelections;
   final TaskDefinitionService _taskDefinitionService;
   final TaskSelectionService _taskSelectionService;
   final TaskQueueOptionService _taskQueueOptionService;
@@ -367,6 +382,10 @@ class ProjectWorkflowRuntimeService {
   final ProjectLongTaskRevisionResolutionService _revisionResolutionService;
   final ProjectWorkflowRuntimeBridgeService _workflowRuntimeBridgeService;
   final ProjectWorkflowReviewRuntimeService _workflowReviewRuntimeService;
+  final ProjectAgentGroupSelectionResolverService
+  _projectAgentGroupSelectionResolverService;
+  final WritingExecutionResultNormalizerService
+  _writingExecutionResultNormalizerService;
 
   List<JsonMap> listTaskRuntimeModes() {
     // 中文注释: 模式定义直接来自 core，确保任务中心和 CLI 的枚举完全同源。
@@ -759,6 +778,8 @@ class ProjectWorkflowRuntimeService {
             ValueReaders.mapValue(task['metadata'])['stage'],
             'draft',
           ),
+          intent: 'workflow_task',
+          taskType: ValueReaders.stringValue(task['task_type']),
           legacyChapterLengthOptions: ValueReaders.mapValue(task['metadata']),
         );
     final effectiveTask = _taskWithExecutionConstraintMetadata(
@@ -963,6 +984,15 @@ class ProjectWorkflowRuntimeService {
           ),
         },
       );
+      final writingExecutionResult = _buildWritingExecutionResult(
+        task: task,
+        executionRecord: const <String, Object?>{},
+        executionConstraints: const <String, Object?>{},
+        checkpointReview: const <String, Object?>{},
+        deliveryOverride: ValueReaders.mapValue(
+          reviewPreflight['delivery_state'],
+        ),
+      );
       return <String, Object?>{
         'ok': true,
         'skipped_review': true,
@@ -970,6 +1000,7 @@ class ProjectWorkflowRuntimeService {
         'recovery_task': ValueReaders.mapValue(
           reviewPreflight['recovery_task'],
         ),
+        'writing_execution_result': writingExecutionResult,
         'response': const <String, Object?>{},
         'output_paths': const <Object?>[],
         'changed_paths': <Object?>[
@@ -1017,6 +1048,8 @@ class ProjectWorkflowRuntimeService {
             ValueReaders.mapValue(task['metadata'])['stage'],
             'draft',
           ),
+          intent: 'workflow_task',
+          taskType: ValueReaders.stringValue(task['task_type']),
           legacyChapterLengthOptions: ValueReaders.mapValue(task['metadata']),
         );
     final effectiveTask = _taskWithExecutionConstraintMetadata(
@@ -1071,6 +1104,12 @@ class ProjectWorkflowRuntimeService {
       provider,
       settings.networkSettings,
     );
+    final selectedCollaborationGroup =
+        await _resolveSelectedCollaborationGroupForTask(
+          project: project,
+          task: task,
+          agent: agent,
+        );
     final result = await useCase.execute(
       project: project,
       userPrompt: prompt,
@@ -1083,6 +1122,7 @@ class ProjectWorkflowRuntimeService {
       title: ValueReaders.stringValue(task['title']),
       intent: 'workflow_task',
       agent: agent,
+      selectedCollaborationGroup: selectedCollaborationGroup,
       requestOptions: ValueReaders.mapValue(
         executionProfile['request_options'],
       ),
@@ -1110,6 +1150,12 @@ class ProjectWorkflowRuntimeService {
       ),
       projectExpressionConstraintBindings: ValueReaders.objectList(
         executionConstraints['project_expression_constraint_bindings'],
+      ),
+      subAgentRuntimeSettings: settings,
+      subAgentBindingModeId: ValueReaders.stringValue(task['mode']),
+      subAgentBindingStageId: ValueReaders.stringValue(
+        ValueReaders.mapValue(task['metadata'])['stage'],
+        'draft',
       ),
       sessionContext: _mergeSessionContexts(
         ValueReaders.stringValue(workflowBridge['activation_context_markdown']),
@@ -1227,6 +1273,28 @@ class ProjectWorkflowRuntimeService {
         TaskRuntimeConstants.statusFailed,
         note: '章级闸门返工链创建失败：${ValueReaders.stringValue(gateOutcome["error"])}',
       );
+      final writingExecutionResult = _buildWritingExecutionResult(
+        task: task,
+        executionRecord: executionRecord,
+        executionConstraints: executionConstraints,
+        checkpointReview: checkpointReview,
+        result: result,
+        recoveryPlan: <String, Object?>{
+          'action': 'pause_for_failure',
+          'reason': 'chapter_gate_failed',
+          'note': ValueReaders.stringValue(
+            gateOutcome['error'],
+            '章级闸门返工链创建失败。',
+          ),
+        },
+        transportFailed: true,
+      );
+      executionRecord = await _persistWritingExecutionResult(
+        project,
+        executionPath,
+        executionRecord,
+        writingExecutionResult,
+      );
       return <String, Object?>{
         'ok': false,
         'error': ValueReaders.stringValue(
@@ -1254,6 +1322,7 @@ class ProjectWorkflowRuntimeService {
         'revision_diff': revisionDiff,
         'checkpoint_review': checkpointReview,
         'gate_outcome': gateOutcome,
+        'writing_execution_result': writingExecutionResult,
         'executed_tools': result.executedTools,
         'changed_paths': _mergePaths(
           workflowChangedPaths,
@@ -1287,6 +1356,24 @@ class ProjectWorkflowRuntimeService {
             ),
         },
       );
+      final writingExecutionResult = _buildWritingExecutionResult(
+        task: task,
+        executionRecord: executionRecord,
+        executionConstraints: executionConstraints,
+        checkpointReview: checkpointReview,
+        result: result,
+        recoveryPlan: <String, Object?>{
+          'action': 'resume_when_user_confirms',
+          'reason': 'formal_chapter_waiting_user',
+          'note': ValueReaders.stringValue(formalChapterDecision['note']),
+        },
+      );
+      executionRecord = await _persistWritingExecutionResult(
+        project,
+        executionPath,
+        executionRecord,
+        writingExecutionResult,
+      );
       return <String, Object?>{
         'ok': true,
         'response': _resultAsResponse(result),
@@ -1311,6 +1398,7 @@ class ProjectWorkflowRuntimeService {
         'revision_diff': revisionDiff,
         'checkpoint_review': checkpointReview,
         'gate_outcome': gateOutcome,
+        'writing_execution_result': writingExecutionResult,
         'executed_tools': result.executedTools,
         'changed_paths': _mergePaths(
           workflowChangedPaths,
@@ -1340,6 +1428,23 @@ class ProjectWorkflowRuntimeService {
             ),
         },
       );
+      final writingExecutionResult = _buildWritingExecutionResult(
+        task: task,
+        executionRecord: executionRecord,
+        executionConstraints: executionConstraints,
+        checkpointReview: checkpointReview,
+        result: result,
+        recoveryPlan: _formalChapterRecoveryPlan(
+          executionRecord: executionRecord,
+          note: error,
+        ),
+      );
+      executionRecord = await _persistWritingExecutionResult(
+        project,
+        executionPath,
+        executionRecord,
+        writingExecutionResult,
+      );
       return <String, Object?>{
         'ok': false,
         'error': error,
@@ -1365,6 +1470,7 @@ class ProjectWorkflowRuntimeService {
         'revision_diff': revisionDiff,
         'checkpoint_review': checkpointReview,
         'gate_outcome': gateOutcome,
+        'writing_execution_result': writingExecutionResult,
         'executed_tools': result.executedTools,
         'changed_paths': _mergePaths(
           workflowChangedPaths,
@@ -1376,7 +1482,7 @@ class ProjectWorkflowRuntimeService {
         .statusAfterSuccessfulModelStep(task);
     final nextStatus = _resolveStatusAfterGate(defaultNextStatus, gateOutcome);
     await _taskRepository.transitionTask(
-        project,
+      project,
       selector,
       nextStatus,
       note: _completionNote(nextStatus, outputPaths),
@@ -1424,6 +1530,24 @@ class ProjectWorkflowRuntimeService {
           ),
       },
     );
+    final writingExecutionResult = _buildWritingExecutionResult(
+      task: task,
+      executionRecord: executionRecord,
+      executionConstraints: executionConstraints,
+      checkpointReview: checkpointReview,
+      result: result,
+      recoveryPlan: _successRecoveryPlan(
+        nextStatus: nextStatus,
+        gateOutcome: gateOutcome,
+        waitingForUserChoice: result.waitingForUserChoice,
+      ),
+    );
+    executionRecord = await _persistWritingExecutionResult(
+      project,
+      executionPath,
+      executionRecord,
+      writingExecutionResult,
+    );
     return <String, Object?>{
       'ok': true,
       'response': _resultAsResponse(result),
@@ -1448,6 +1572,7 @@ class ProjectWorkflowRuntimeService {
       'revision_diff': revisionDiff,
       'checkpoint_review': checkpointReview,
       'gate_outcome': gateOutcome,
+      'writing_execution_result': writingExecutionResult,
       'executed_tools': result.executedTools,
       'changed_paths': _mergePaths(
         workflowChangedPaths,
@@ -1507,7 +1632,9 @@ class ProjectWorkflowRuntimeService {
       ...ValueReaders.stringList(executionRecord['output_paths']),
       ValueReaders.stringValue(executionRecord['chapter_delivery_path']),
       ValueReaders.stringValue(
-        ValueReaders.mapValue(executionRecord['chapter_delivery'])['chapter_path'],
+        ValueReaders.mapValue(
+          executionRecord['chapter_delivery'],
+        )['chapter_path'],
       ),
     ]) {
       if (_isWorkflowChapterPath(path)) {
@@ -1530,8 +1657,8 @@ class ProjectWorkflowRuntimeService {
   String _formalWorkflowChapterFailureMessage(DraftGenerationResult result) {
     final toolNames = _distinctWorkflowToolNames(result.executedTools);
     final trace = toolNames.isEmpty ? '无工具调用' : toolNames.join('、');
-    final onlyNonDelivering = toolNames.isNotEmpty &&
-        toolNames.every(_isNonDeliveringWorkflowTool);
+    final onlyNonDelivering =
+        toolNames.isNotEmpty && toolNames.every(_isNonDeliveringWorkflowTool);
     if (onlyNonDelivering) {
       return '长任务正式章节任务未形成正式交付：本轮只执行了计划/选项/读取类工具（$trace），没有写出章节正文，也没有 submit_chapter_delivery。';
     }
@@ -1996,6 +2123,12 @@ class ProjectWorkflowRuntimeService {
       provider,
       settings.networkSettings,
     );
+    final selectedCollaborationGroup =
+        await _resolveSelectedCollaborationGroupForTask(
+          project: project,
+          task: task,
+          agent: agent,
+        );
     final result = await useCase.execute(
       project: project,
       userPrompt: prompt,
@@ -2008,8 +2141,15 @@ class ProjectWorkflowRuntimeService {
       title: ValueReaders.stringValue(task['title']),
       intent: 'workflow_postprocess',
       agent: agent,
+      selectedCollaborationGroup: selectedCollaborationGroup,
       requestOptions: ValueReaders.mapValue(
         executionProfile['request_options'],
+      ),
+      subAgentRuntimeSettings: settings,
+      subAgentBindingModeId: ValueReaders.stringValue(task['mode']),
+      subAgentBindingStageId: ValueReaders.stringValue(
+        ValueReaders.mapValue(task['metadata'])['stage'],
+        'draft',
       ),
     );
     final mergedOutputs = _mergePaths(
@@ -2328,6 +2468,66 @@ class ProjectWorkflowRuntimeService {
     };
   }
 
+  Future<JsonMap> _resolveSelectedCollaborationGroupForTask({
+    required ProjectDescriptor project,
+    required JsonMap task,
+    required JsonMap agent,
+  }) async {
+    // 中文注释: workflow runtime 优先尊重项目已保存的组选择；旧单智能体项目则退化为单成员组合同。
+    final loader = _loadProjectAgentGroupSelections;
+    if (loader != null) {
+      try {
+        final selections = await loader(project);
+        final preferred = _projectAgentGroupSelectionResolverService
+            .resolvePreferredSelection(
+              selections,
+              modeId: ValueReaders.stringValue(task['mode']),
+              stageId: ValueReaders.stringValue(
+                ValueReaders.mapValue(task['metadata'])['stage'],
+              ),
+            );
+        if (preferred != null) {
+          return <String, Object?>{
+            'id': preferred.groupId,
+            'name': preferred.displayName.trim().isNotEmpty
+                ? preferred.displayName.trim()
+                : preferred.groupId,
+            'source': 'project_group_selection',
+            'enabled': preferred.enabled,
+            'metadata': <String, Object?>{
+              'selected_by_default': preferred.selectedByDefault,
+              'mode_ids': preferred.modeIds,
+              'stage_ids': preferred.stageIds,
+              ...preferred.metadata,
+            },
+          };
+        }
+      } catch (_) {}
+    }
+    return _singleMemberCollaborationGroup(agent);
+  }
+
+  JsonMap _singleMemberCollaborationGroup(JsonMap agent) {
+    final agentId = ValueReaders.stringValue(agent['id']).trim();
+    if (agentId.isEmpty) {
+      return const <String, Object?>{};
+    }
+    return <String, Object?>{
+      'id': 'single_agent_$agentId',
+      'name': ValueReaders.stringValue(agent['name'], agentId),
+      'description': '由当前 workflow 主智能体自动包装得到的单成员协作组。',
+      'orchestration': 'main_with_children',
+      'source': 'derived_single_agent_group',
+      'enabled': true,
+      'agents': <String>[agentId],
+      'primary_agent_id': agentId,
+      'metadata': <String, Object?>{
+        'derived_from_single_agent': true,
+        'agent_id': agentId,
+      },
+    };
+  }
+
   JsonMap _appendQueueStep(
     JsonMap record,
     JsonMap task,
@@ -2377,6 +2577,227 @@ class ProjectWorkflowRuntimeService {
     );
     next['updated_at'] = DateTime.now().toIso8601String();
     return next;
+  }
+
+  JsonMap _buildWritingExecutionResult({
+    required JsonMap task,
+    required JsonMap executionRecord,
+    required JsonMap executionConstraints,
+    required JsonMap checkpointReview,
+    DraftGenerationResult? result,
+    JsonMap deliveryOverride = const <String, Object?>{},
+    JsonMap recoveryPlan = const <String, Object?>{},
+    bool transportFailed = false,
+  }) {
+    final executionId = ValueReaders.stringValue(
+      executionRecord['relative_path'],
+      ValueReaders.stringValue(task['id']),
+    ).trim();
+    final review = ValueReaders.mapValue(checkpointReview['review']);
+    return _writingExecutionResultNormalizerService
+        .normalize(
+          executionId: executionId.isEmpty
+              ? 'workflow_task_${DateTime.now().microsecondsSinceEpoch}'
+              : executionId,
+          workflowKind: 'workflow_task',
+          deliveryState: _chapterDeliveryStateResultFromMaps(
+            executionRecord: executionRecord,
+            deliveryOverride: deliveryOverride,
+          ),
+          constraintBridgeResult: executionConstraints.isEmpty
+              ? null
+              : WritingExecutionConstraintBridgeResult.fromJson(
+                  executionConstraints,
+                ),
+          expressionConstraintReview:
+              ExpressionConstraintReviewProjection.fromJson(
+                ValueReaders.mapValue(review['expression_constraint_review']),
+              ),
+          activationReport: _activationReportFromExecution(executionRecord),
+          informationSignal: _informationSignal(checkpointReview),
+          collaborationResults: _collaborationResults(result),
+          recoveryPlan: recoveryPlan,
+          transportFailed: transportFailed,
+          metadata: <String, Object?>{
+            'task_id': ValueReaders.stringValue(task['id']),
+            'task_type': ValueReaders.stringValue(task['task_type']),
+            'checkpoint_review_path': ValueReaders.stringValue(
+              checkpointReview['relative_path'],
+            ),
+          },
+        )
+        .toJson();
+  }
+
+  Future<JsonMap> _persistWritingExecutionResult(
+    ProjectDescriptor project,
+    String executionPath,
+    JsonMap executionRecord,
+    JsonMap writingExecutionResult,
+  ) async {
+    if (writingExecutionResult.isEmpty) {
+      return executionRecord;
+    }
+    final next = ValueReaders.deepCopyMap(executionRecord)
+      ..['writing_execution_result'] = writingExecutionResult;
+    if (executionPath.trim().isNotEmpty && next.isNotEmpty) {
+      await _taskRepository.saveRecord(project, executionPath, next);
+    }
+    return next;
+  }
+
+  ChapterDeliveryStateResult? _chapterDeliveryStateResultFromMaps({
+    required JsonMap executionRecord,
+    required JsonMap deliveryOverride,
+  }) {
+    final delivery = deliveryOverride.isNotEmpty
+        ? deliveryOverride
+        : ValueReaders.mapValue(executionRecord['chapter_delivery']);
+    final stateResult = ValueReaders.mapValue(delivery['state_result']);
+    final state = ValueReaders.stringValue(
+      stateResult['state'],
+      ValueReaders.stringValue(
+        delivery['delivery_state'],
+        ValueReaders.stringValue(executionRecord['chapter_delivery_state']),
+      ),
+    ).trim();
+    if (state.isEmpty) {
+      return null;
+    }
+    return ChapterDeliveryStateResult(
+      deliveryId: ValueReaders.stringValue(
+        stateResult['delivery_id'],
+        ValueReaders.stringValue(delivery['delivery_id']),
+      ),
+      state: state,
+      recommendedAction: ValueReaders.stringValue(
+        stateResult['recommended_action'],
+      ),
+      suggestedOutcomeStatus: ValueReaders.stringValue(
+        stateResult['suggested_outcome_status'],
+      ),
+      reason: ValueReaders.stringValue(stateResult['reason']),
+      summary: ValueReaders.stringValue(stateResult['summary']),
+      blocksProgress: ValueReaders.boolValue(stateResult['blocks_progress']),
+      chapterBodyDelivered: ValueReaders.boolValue(
+        stateResult['chapter_body_delivered'],
+      ),
+      submissionAccepted: ValueReaders.boolValue(
+        stateResult['submission_accepted'],
+      ),
+      retryable: ValueReaders.boolValue(stateResult['retryable']),
+      metadata: ValueReaders.deepCopyMap(
+        ValueReaders.mapValue(stateResult['metadata']).isNotEmpty
+            ? ValueReaders.mapValue(stateResult['metadata'])
+            : <String, Object?>{
+                'chapter_path': ValueReaders.stringValue(
+                  delivery['chapter_path'],
+                  ValueReaders.stringValue(
+                    executionRecord['chapter_delivery_path'],
+                  ),
+                ),
+              },
+      ),
+    );
+  }
+
+  ContextActivationReport? _activationReportFromExecution(
+    JsonMap executionRecord,
+  ) {
+    final activationReport = ValueReaders.mapValue(
+      executionRecord['activation_report'],
+    );
+    if (activationReport.isEmpty) {
+      return null;
+    }
+    return ContextActivationReport.fromJson(activationReport);
+  }
+
+  JsonMap _informationSignal(JsonMap checkpointReview) {
+    final review = ValueReaders.mapValue(checkpointReview['review']);
+    final informationSignal = ValueReaders.mapValue(
+      review['information_signal'],
+    );
+    if (informationSignal.isNotEmpty) {
+      return informationSignal;
+    }
+    return ValueReaders.mapValue(
+      ValueReaders.mapValue(review['narrative_supervisor_risk'])['information'],
+    );
+  }
+
+  List<Object?> _collaborationResults(DraftGenerationResult? result) {
+    if (result == null) {
+      return const <Object?>[];
+    }
+    final collaborationResults = <Object?>[];
+    for (final rawTool in result.executedTools) {
+      final tool = ValueReaders.mapValue(rawTool);
+      if (ValueReaders.stringValue(tool['name']) != 'call_sub_agent') {
+        continue;
+      }
+      final toolResult = ValueReaders.mapValue(tool['result']);
+      if (toolResult.isNotEmpty) {
+        collaborationResults.add(toolResult);
+      }
+    }
+    return collaborationResults;
+  }
+
+  JsonMap _formalChapterRecoveryPlan({
+    required JsonMap executionRecord,
+    required String note,
+  }) {
+    final deliveryState = ValueReaders.stringValue(
+      executionRecord['chapter_delivery_state'],
+    ).trim();
+    if (<String>{
+      ChapterDeliveryStateStatuses.missingOutputRecoverable,
+      ChapterDeliveryStateStatuses.pathMismatchRecoverable,
+      ChapterDeliveryStateStatuses.deliveredNeedsRepair,
+      ChapterDeliveryStateStatuses.waitingUserChoice,
+      ChapterDeliveryStateStatuses.invalidOutputRewriteRequired,
+      ChapterDeliveryStateStatuses.manualAttentionRequired,
+      ChapterDeliveryStateStatuses.hardFailure,
+    }.contains(deliveryState)) {
+      return const <String, Object?>{};
+    }
+    return <String, Object?>{
+      'action': 'pause_for_repair',
+      'reason': 'formal_chapter_recovery_required',
+      'note': note,
+    };
+  }
+
+  JsonMap _successRecoveryPlan({
+    required String nextStatus,
+    required JsonMap gateOutcome,
+    required bool waitingForUserChoice,
+  }) {
+    if (ValueReaders.boolValue(gateOutcome['manual_attention_required'])) {
+      return <String, Object?>{
+        'action': 'pause_for_manual_attention',
+        'reason': ValueReaders.stringValue(
+          gateOutcome['gate_reason'],
+          'chapter_gate_manual_attention',
+        ),
+        'note': '章级闸门要求人工复核后再继续。',
+      };
+    }
+    if (waitingForUserChoice ||
+        nextStatus == TaskRuntimeConstants.statusWaitingUser) {
+      return <String, Object?>{
+        'action': 'resume_when_user_confirms',
+        'reason': waitingForUserChoice
+            ? 'waiting_user_choice'
+            : ValueReaders.stringValue(
+                gateOutcome['gate_reason'],
+                'gate_waiting_user',
+              ),
+        'note': waitingForUserChoice ? '当前步骤正在等待用户确认。' : '当前节点需要用户确认后再继续。',
+      };
+    }
+    return const <String, Object?>{};
   }
 
   List<String> _mergePaths(List<String> left, List<String> right) {

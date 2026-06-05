@@ -73,7 +73,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('只承接当前项目摘要'), findsOneWidget);
-    expect(find.text('项目协作基线'), findsOneWidget);
+    expect(find.text('当前协作摘要'), findsOneWidget);
     expect(find.text('项目智能体组'), findsNothing);
     expect(find.text('项目资料'), findsOneWidget);
     expect(find.byTooltip('导入文件'), findsNothing);
@@ -85,10 +85,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('只承接当前会话智能体摘要'), findsOneWidget);
-    expect(find.text('当前会话智能体'), findsOneWidget);
+    expect(find.text('当前会话分工'), findsOneWidget);
+    expect(find.text('当前智能体'), findsOneWidget);
     expect(find.text('审阅智能体'), findsOneWidget);
-    expect(find.text('项目智能体组'), findsWidgets);
-    expect(find.text('项目协作基线'), findsNothing);
+    expect(find.text('项目基线组'), findsOneWidget);
+    expect(find.text('当前协作摘要'), findsOneWidget);
     expect(find.text('项目资料'), findsNothing);
   });
 }

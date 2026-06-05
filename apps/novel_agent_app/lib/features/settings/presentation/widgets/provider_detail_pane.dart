@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../../application/services/provider_connection_validation_service.dart';
 import '../../../../../shared/widgets/action_button.dart';
 import '../../../../../shared/widgets/section_heading.dart';
 import '../models/settings_view_data.dart';
@@ -35,6 +36,7 @@ class ProviderDetailPane extends StatefulWidget {
 
 class _ProviderDetailPaneState extends State<ProviderDetailPane> {
   late final TextEditingController _titleController;
+  late final ProviderConnectionValidationService _connectionValidationService;
   late final ProviderProtocolService _protocolService;
   late final TextEditingController _baseUrlController;
   late final TextEditingController _apiKeyController;
@@ -44,10 +46,12 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
   String? _selectedDirectoryProviderId;
   bool _revealApiKey = false;
   String? _loadedProviderId;
+  ProviderConnectionValidationResult? _connectionValidationResult;
 
   @override
   void initState() {
     super.initState();
+    _connectionValidationService = const ProviderConnectionValidationService();
     _protocolService = ProviderProtocolService();
     _titleController = TextEditingController();
     _baseUrlController = TextEditingController();
@@ -127,11 +131,12 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
           title: provider?.title.trim().isNotEmpty == true
               ? provider!.title
               : '新接口',
-          subtitle: '这里只编辑接口/厂商、协议、地址、模型与密钥；内部 ID 会自动生成。',
+          subtitle: '首次使用先补齐接口、模型与密钥；协议和地址默认收进高级设置。',
         ),
         const SizedBox(height: 18),
         SettingsFormSection(
           title: '基础信息',
+          description: '先完成作品常用的厂商和模型配置，协议细节按需展开。',
           child: Column(
             children: [
               SettingsLabeledSearchDropdownField<String>(
@@ -142,26 +147,6 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
                 options: providerOptions,
                 hintText: '输入厂商名称筛选，例如 OpenAI / DeepSeek',
                 onSelected: _onProviderDirectorySelected,
-              ),
-              const SizedBox(height: 12),
-              SettingsLabeledDropdownField<String>(
-                label: '协议',
-                value: _protocol,
-                options: protocolOptions,
-                onChanged: (value) {
-                  if (value == null) {
-                    return;
-                  }
-                  setState(() {
-                    _protocol = value;
-                  });
-                },
-              ),
-              const SizedBox(height: 12),
-              SettingsLabeledTextField(
-                label: 'Base URL',
-                controller: _baseUrlController,
-                hintText: '例如 https://api.deepseek.com',
               ),
               const SizedBox(height: 12),
               SettingsLabeledSearchDropdownField<String>(
@@ -183,8 +168,10 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
         ),
         const SizedBox(height: 16),
         SettingsFormSection(
-          title: '凭据与说明',
+          title: '凭据与连接测试',
+          description: '先填写 API Key，再点一次测试连接，确认这组配置已经具备发送请求的基础条件。',
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SettingsLabeledTextField(
                 label: 'API Key',
@@ -202,13 +189,69 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
                   });
                 },
               ),
-              const SizedBox(height: 12),
-              SettingsLabeledTextField(
-                label: '说明',
-                controller: _descriptionController,
-                maxLines: 3,
+              const SizedBox(height: 16),
+              ActionButton(
+                label: '测试连接',
+                icon: Icons.wifi_tethering_rounded,
+                tone: ActionButtonTone.neutral,
+                compact: true,
+                onPressed: _testConnection,
               ),
+              if (_connectionValidationResult != null) ...[
+                const SizedBox(height: 12),
+                _ProviderConnectionStatusCard(
+                  key: const ValueKey('provider-connection-status'),
+                  result: _connectionValidationResult!,
+                ),
+              ],
             ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        SettingsFormSection(
+          title: '高级设置',
+          description: '只有在协议、地址或补充说明需要自定义时再展开，默认无需调整。',
+          child: Material(
+            color: Colors.transparent,
+            child: Theme(
+              data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+              child: ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: const EdgeInsets.only(top: 12),
+                title: const Text(
+                  '展开高级设置',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                ),
+                subtitle: const Text('协议、Base URL 与补充说明默认收起。'),
+                children: [
+                  SettingsLabeledDropdownField<String>(
+                    label: '协议',
+                    value: _protocol,
+                    options: protocolOptions,
+                    onChanged: (value) {
+                      if (value == null) {
+                        return;
+                      }
+                      setState(() {
+                        _protocol = value;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  SettingsLabeledTextField(
+                    label: 'Base URL',
+                    controller: _baseUrlController,
+                    hintText: '例如 https://api.deepseek.com',
+                  ),
+                  const SizedBox(height: 12),
+                  SettingsLabeledTextField(
+                    label: '说明',
+                    controller: _descriptionController,
+                    maxLines: 3,
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
         const SizedBox(height: 16),
@@ -255,6 +298,7 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
     _modelIdController.text = '';
     _selectedDirectoryProviderId = _directoryProviderIdFor(provider);
     _revealApiKey = false;
+    _connectionValidationResult = null;
   }
 
   void _save() {
@@ -290,6 +334,7 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
           widget.provider?.baseUrl.trim() == _baseUrlController.text.trim()) {
         _baseUrlController.text = option.defaultBaseUrl;
       }
+      _connectionValidationResult = null;
     });
   }
 
@@ -309,4 +354,82 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
     return null;
   }
 
+  void _testConnection() {
+    setState(() {
+      _connectionValidationResult = _connectionValidationService.validate(
+        title: _titleController.text,
+        protocol: _protocol,
+        baseUrl: _baseUrlController.text,
+        apiKey: _apiKeyController.text,
+        modelId: _modelIdController.text,
+      );
+    });
+  }
+}
+
+class _ProviderConnectionStatusCard extends StatelessWidget {
+  const _ProviderConnectionStatusCard({
+    super.key,
+    required this.result,
+  });
+
+  final ProviderConnectionValidationResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    final foregroundColor = result.isSuccess
+        ? const Color(0xFF23663A)
+        : const Color(0xFF8A5A12);
+    final backgroundColor = result.isSuccess
+        ? const Color(0xFFE8F5EC)
+        : const Color(0xFFFCF2DD);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        border: Border.all(color: foregroundColor.withValues(alpha: 0.28)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                result.isSuccess
+                    ? Icons.check_circle_outline_rounded
+                    : Icons.error_outline_rounded,
+                size: 18,
+                color: foregroundColor,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  result.summary,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: foregroundColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          for (final detail in result.details) ...[
+            const SizedBox(height: 6),
+            Text(
+              '• $detail',
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.45,
+                color: foregroundColor,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }

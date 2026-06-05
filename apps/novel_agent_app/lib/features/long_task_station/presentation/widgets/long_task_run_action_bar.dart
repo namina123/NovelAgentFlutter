@@ -15,6 +15,8 @@ class LongTaskRunActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final recentOutput = run.preferredRecentOutput;
+    final pendingUserAction = run.pendingUserAction;
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -31,16 +33,27 @@ class LongTaskRunActionBar extends StatelessWidget {
                   run.id,
                   run.activeTaskPath,
                 ),
-          child: const Text('打开当前任务'),
+          child: const Text('查看当前任务'),
         ),
         OutlinedButton(
-          onPressed: run.latestReviewReport == null
+          onPressed: recentOutput == null
               ? null
               : () => actionHandler.onLongTaskStationResourceRequested(
                   run.id,
-                  run.latestReviewReport!.relativePath,
+                  recentOutput.relativePath,
                 ),
-          child: const Text('查看审稿结果'),
+          child: const Text('查看最近产物'),
+        ),
+        OutlinedButton(
+          onPressed:
+              pendingUserAction == null ||
+                  pendingUserAction.relativePath.trim().isEmpty
+              ? null
+              : () => actionHandler.onLongTaskStationResourceRequested(
+                  run.id,
+                  pendingUserAction.relativePath,
+                ),
+          child: Text(run.pendingUserActionLabel),
         ),
         OutlinedButton(
           onPressed: run.canPause
@@ -52,7 +65,7 @@ class LongTaskRunActionBar extends StatelessWidget {
           onPressed: run.canResume
               ? () => actionHandler.onLongTaskStationResumeRequested(run.id)
               : null,
-          child: Text(run.requiresManualAttention ? '重试推进' : '恢复'),
+          child: Text(run.resumeActionLabel),
         ),
         OutlinedButton(
           onPressed: run.canStop

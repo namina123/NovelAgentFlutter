@@ -5,51 +5,60 @@ void main() {
   group('WritingExecutionConstraintBridgeService', () {
     const service = WritingExecutionConstraintBridgeService();
 
-    test('binding chapter length overrides legacy metadata and reports source', () {
-      final result = service.bridge(
-        appliesTo: ConstraintBindingAppliesTo.writing,
-        projectTypeId: 'long_novel',
-        stageId: 'draft',
-        legacyChapterLengthOptions: const <String, Object?>{
-          'enable_chapter_word_constraints': true,
-          'chapter_word_target': 1800,
-          'chapter_word_min': 1500,
-        },
-        narrativeBindings: <NarrativeConstraintBindingProposal>[
-          NarrativeConstraintBindingProposal(
-            bindingId: 'binding_length_main',
-            constraintType: 'chapter_length',
-            scope: const ConstraintBindingScope(
-              appliesTo: <String>[ConstraintBindingAppliesTo.writing],
-              stageIds: <String>['draft'],
-            ),
-            policy: const ConstraintBindingPolicy(
-              hardExecutionPolicy: <String, Object?>{
+    test(
+      'binding chapter length overrides legacy metadata and reports source',
+      () {
+        final result = service.bridge(
+          appliesTo: ConstraintBindingAppliesTo.writing,
+          projectTypeId: 'long_novel',
+          stageId: 'draft',
+          intent: 'workflow_task',
+          taskType: 'chapter',
+          legacyChapterLengthOptions: const <String, Object?>{
+            'enable_chapter_word_constraints': true,
+            'chapter_word_target': 1800,
+            'chapter_word_min': 1500,
+          },
+          narrativeBindings: <NarrativeConstraintBindingProposal>[
+            NarrativeConstraintBindingProposal(
+              bindingId: 'binding_length_main',
+              constraintType: 'chapter_length',
+              scope: const ConstraintBindingScope(
+                appliesTo: <String>[ConstraintBindingAppliesTo.writing],
+                stageIds: <String>['draft'],
+              ),
+              policy: const ConstraintBindingPolicy(
+                hardExecutionPolicy: <String, Object?>{
+                  'target_word_count': 2600,
+                },
+              ),
+              source: const NarrativeSourceRef(sourceType: 'user'),
+              constraintPayload: const <String, Object?>{
                 'target_word_count': 2600,
+                'preferred_min': 2300,
+                'preferred_max': 2900,
               },
             ),
-            source: const NarrativeSourceRef(sourceType: 'user'),
-            constraintPayload: const <String, Object?>{
-              'target_word_count': 2600,
-              'preferred_min': 2300,
-              'preferred_max': 2900,
-            },
-          ),
-        ],
-      );
+          ],
+        );
 
-      final profile = ValueReaders.mapValue(
-        result.chapterLengthMetadata['chapter_length_profile'],
-      );
-      expect(ValueReaders.intValue(profile['target_length']), 2600);
-      expect(ValueReaders.intValue(profile['preferred_min']), 2300);
-      expect(
-        ValueReaders.stringValue(
-          ValueReaders.mapValue(result.runtimeReport['chapter_length'])['source'],
-        ),
-        'binding',
-      );
-    });
+        final profile = ValueReaders.mapValue(
+          result.chapterLengthMetadata['chapter_length_profile'],
+        );
+        expect(ValueReaders.intValue(profile['target_length']), 2600);
+        expect(ValueReaders.intValue(profile['preferred_min']), 2300);
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(
+              result.runtimeReport['chapter_length'],
+            )['source'],
+          ),
+          'binding',
+        );
+        expect(result.expressionConstraintInjectionMode, 'brief_and_sections');
+        expect(result.expressionConstraintReviewRequired, isFalse);
+      },
+    );
 
     test(
       'expression bindings preserve legacy profiles and synthesize project level rules',
@@ -59,6 +68,7 @@ void main() {
           projectTypeId: 'long_novel',
           agentId: 'writer',
           stageId: 'draft',
+          intent: 'draft',
           legacyExpressionConstraintProfiles: const <Object?>[
             <String, Object?>{
               'id': 'de_ai',
@@ -88,10 +98,7 @@ void main() {
               source: const NarrativeSourceRef(sourceType: 'user'),
               constraintPayload: const <String, Object?>{
                 'profile_id': 'de_ai',
-                'project_level_rules': <Object?>[
-                  '避免模板化总结句。',
-                  '收束段保持角色体感。',
-                ],
+                'project_level_rules': <Object?>['避免模板化总结句。', '收束段保持角色体感。'],
                 'risk_signals': <Object?>['总而言之'],
               },
             ),
@@ -121,6 +128,18 @@ void main() {
             )['binding_profile_count'],
           ),
           1,
+        );
+        expect(result.expressionConstraintInjectionMode, 'brief_and_sections');
+        expect(result.expressionConstraintReviewRequired, isTrue);
+        expect(
+          ValueReaders.boolValue(
+            ValueReaders.mapValue(
+              ValueReaders.mapValue(
+                result.runtimeReport['execution_gate'],
+              )['expression_constraints'],
+            )['review_required'],
+          ),
+          isTrue,
         );
       },
     );

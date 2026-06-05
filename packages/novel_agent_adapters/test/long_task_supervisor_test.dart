@@ -135,6 +135,82 @@ void main() {
         }
       },
     );
+
+    test(
+      'applyWritingExecutionResult maps shared category into run metadata',
+      () async {
+        final tempRoot = await Directory.systemTemp.createTemp(
+          'novel-agent-supervisor-writing-result-',
+        );
+        try {
+          final registry = LocalLongTaskRunRegistry(
+            settingsRootPath: tempRoot.path,
+          );
+          final scheduler = LongTaskHeartbeatScheduler(
+            runRegistry: registry,
+            runtimeBaselineCatalogService:
+                const RuntimeBaselineCatalogService(),
+          );
+          final supervisor = LongTaskSupervisor(
+            runRegistry: registry,
+            heartbeatScheduler: scheduler,
+          );
+          final now = DateTime.parse('2026-05-25T14:00:00.000Z');
+          final instance = _runInstance(
+            runId: 'run_writing_execution',
+            projectId: 'project_writing_execution',
+            projectName: '项目 Shared Result',
+            projectRootPath: 'D:/projects/shared-result',
+            status: LongTaskRunStatus.running,
+            now: now,
+          );
+          await supervisor.trackRun(instance);
+
+          final updated = await supervisor.applyWritingExecutionResult(
+            'run_writing_execution',
+            <String, Object?>{
+              'execution_id': 'task_001',
+              'workflow_kind': 'workflow_task',
+              'overall_status':
+                  WritingExecutionOutcomeStatuses.contentQualityIssue,
+              'summary': '正文质量不达标，需要人工复核。',
+              'delivery': const <String, Object?>{
+                'present': true,
+                'state': 'invalid_output_rewrite_required',
+                'summary': '正文质量不达标，需要人工复核。',
+                'blocks_progress': true,
+              },
+              'constraints': const <String, Object?>{},
+              'information': const <String, Object?>{},
+              'collaboration': const <String, Object?>{},
+              'recovery': const <String, Object?>{},
+              'next_action': '',
+              'blocks_progress': true,
+              'retryable': false,
+              'requires_user_action': false,
+              'schema_version': 1,
+              'metadata': const <String, Object?>{},
+            },
+          );
+
+          expect(updated, isNotNull);
+          expect(updated!.status, LongTaskRunStatus.failedManualAttention);
+          expect(updated.note, contains('人工复核'));
+          expect(
+            ValueReaders.mapValue(
+              ValueReaders.mapValue(
+                updated.metadata,
+              )['writing_execution_signal'],
+            ).isNotEmpty,
+            isTrue,
+          );
+        } finally {
+          if (tempRoot.existsSync()) {
+            await tempRoot.delete(recursive: true);
+          }
+        }
+      },
+    );
   });
 }
 

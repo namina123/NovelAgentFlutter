@@ -1,19 +1,25 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import '../agents/skill_capability_catalog_service.dart';
 import 'agent_package_metadata_profile_service.dart';
 
 class AgentPackageValidatorService {
   AgentPackageValidatorService({
     AgentPackageMetadataProfileService? metadataProfileService,
+    SkillCapabilityCatalogService? capabilityCatalogService,
   }) : _metadataProfileService =
-           metadataProfileService ?? const AgentPackageMetadataProfileService();
+           metadataProfileService ?? const AgentPackageMetadataProfileService(),
+       _capabilityCatalogService =
+           capabilityCatalogService ?? const SkillCapabilityCatalogService();
 
   final AgentPackageMetadataProfileService _metadataProfileService;
+  final SkillCapabilityCatalogService _capabilityCatalogService;
 
   JsonMap validate(JsonMap agent) {
     // 中文注释: 这里集中校验智能体包的目标、边界、能力和输出合同，避免“只有人设没有约束”的空壳智能体混进项目。
     final errors = <String>[];
     final warnings = <String>[];
+    final version = ValueReaders.stringValue(agent['version'], '1').trim();
     final name = ValueReaders.stringValue(agent['name']).trim();
     final description = ValueReaders.stringValue(agent['description']).trim();
     final role = ValueReaders.stringValue(agent['role']).trim();
@@ -39,6 +45,9 @@ class AgentPackageValidatorService {
     if (description.isEmpty) {
       errors.add('智能体缺少 description。');
     }
+    if (version.isEmpty) {
+      errors.add('智能体缺少 version。');
+    }
     if (role.isEmpty) {
       errors.add('智能体缺少 role。');
     }
@@ -57,6 +66,19 @@ class AgentPackageValidatorService {
     if (overlap.isNotEmpty) {
       errors.add(
         'required_capabilities 与 optional_capabilities 不能重复：${overlap.join('、')}',
+      );
+    }
+    final unknownCapabilities =
+        <String>[...requiredCapabilities, ...optionalCapabilities]
+            .where(
+              (capabilityId) =>
+                  !_capabilityCatalogService.isKnownCapability(capabilityId),
+            )
+            .toSet()
+            .toList(growable: false);
+    if (unknownCapabilities.isNotEmpty) {
+      warnings.add(
+        '存在未识别的 capability requirement：${unknownCapabilities.join('、')}；请先确认宿主是否真的支持这些能力。',
       );
     }
     if (ValueReaders.stringValue(agent['preferred_output']).trim().isEmpty &&

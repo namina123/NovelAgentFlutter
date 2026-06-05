@@ -244,7 +244,7 @@ class TemplateCommand {
       [
         'template list [--project 路径]',
         'template show --id review_report [--project 路径]',
-        'template preview --id review_report --vars "{\"review_goal\":\"检查连续性\"}" [--project 路径]',
+        "template preview --id review_report --vars '{\"review_goal\":\"检查连续性\"}' [--project 路径]",
         'template save --id my_template --name 我的模板 --content "正文" [--description 说明] [--scope project] [--project 路径]',
         'template delete --id my_template [--project 路径]',
         'template restore --id review_report [--project 路径]',

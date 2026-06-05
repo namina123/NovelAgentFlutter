@@ -3,11 +3,13 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 import '../storage/local_semantic_review_repository.dart';
 import '../storage/open_narrative_state_path_service.dart';
 import '../storage/project_task_repository.dart';
+import 'project_semantic_review_information_service.dart';
 
 class ProjectWorkflowReviewRuntimeService {
   ProjectWorkflowReviewRuntimeService({
     required ProjectTaskRepository taskRepository,
     SemanticReviewRepository? reviewRepository,
+    ProjectSemanticReviewInformationService? semanticReviewInformationService,
     ChapterDeliveryStateMachine? chapterDeliveryStateMachine,
     OpenNarrativeStatePathService? pathService,
     ReviewReportNormalizerService? reviewReportNormalizerService,
@@ -20,6 +22,11 @@ class ProjectWorkflowReviewRuntimeService {
            ),
        _chapterDeliveryStateMachine =
            chapterDeliveryStateMachine ?? const ChapterDeliveryStateMachine(),
+       _semanticReviewInformationService =
+           semanticReviewInformationService ??
+           ProjectSemanticReviewInformationService(
+             workspacePort: taskRepository.workspacePort,
+           ),
        _pathService = pathService ?? OpenNarrativeStatePathService(),
        _reviewReportNormalizerService =
            reviewReportNormalizerService ?? ReviewReportNormalizerService(),
@@ -29,6 +36,8 @@ class ProjectWorkflowReviewRuntimeService {
   final ProjectTaskRepository _taskRepository;
   final SemanticReviewRepository _reviewRepository;
   final ChapterDeliveryStateMachine _chapterDeliveryStateMachine;
+  final ProjectSemanticReviewInformationService
+  _semanticReviewInformationService;
   final OpenNarrativeStatePathService _pathService;
   final ReviewReportNormalizerService _reviewReportNormalizerService;
   final ReviewPathPolicyService _reviewPathPolicyService;
@@ -123,6 +132,11 @@ class ProjectWorkflowReviewRuntimeService {
       );
       changedPaths.add(markdownPath);
     }
+    final informationArtifacts = await _semanticReviewInformationService
+        .persist(project: project, reviews: reviews);
+    changedPaths.addAll(
+      ValueReaders.stringList(informationArtifacts['changed_paths']),
+    );
     return <String, Object?>{
       'ok': true,
       'review_ids': reviews
@@ -136,7 +150,9 @@ class ProjectWorkflowReviewRuntimeService {
       'output_paths': <Object?>[
         if (markdownPath.isNotEmpty) markdownPath,
         if (jsonPath.isNotEmpty) jsonPath,
+        ...ValueReaders.stringList(informationArtifacts['output_paths']),
       ],
+      'analysis_information': informationArtifacts,
       'changed_paths': changedPaths,
     };
   }
@@ -157,6 +173,17 @@ class ProjectWorkflowReviewRuntimeService {
       );
       next['semantic_review'] = ValueReaders.deepCopyMap(
         ValueReaders.mapValue(artifacts['primary_review']),
+      );
+    }
+    final analysisInformation = ValueReaders.mapValue(
+      artifacts['analysis_information'],
+    );
+    if (analysisInformation.isNotEmpty) {
+      next['analysis_information'] = ValueReaders.deepCopyMap(
+        analysisInformation,
+      );
+      next['analysis_information_changed_paths'] = ValueReaders.stringList(
+        analysisInformation['changed_paths'],
       );
     }
     return next;

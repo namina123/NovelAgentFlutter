@@ -64,39 +64,58 @@ class EcosystemDetailPanel extends StatelessWidget {
 
     // 中文注释: 生态详情和新建入口独立成 pane，避免把列表浏览和自定义入口全部塞进同一块。
     return PanelSurface(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SectionHeading(
-            title: entry.title,
-            subtitle: identifier.isEmpty ? null : identifier,
-          ),
-          if (summary.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              summary,
-              style: TextStyle(
-                fontSize: 13,
-                height: 1.4,
-                color: colors.mutedTextColor,
-              ),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SectionHeading(
+              title: entry.title,
+              subtitle: identifier.isEmpty ? null : identifier,
             ),
-          ],
-          if (metadata.isNotEmpty) ...[
+            if (summary.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                summary,
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.4,
+                  color: colors.mutedTextColor,
+                ),
+              ),
+            ],
+            if (metadata.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              _buildMetadataPanel(context, metadata),
+            ],
+            if (entry.memberLabels.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              _buildMemberPanel(context),
+            ],
+            if (entry.permissionBoundarySummary.trim().isNotEmpty) ...[
+              const SizedBox(height: 14),
+              _buildCalloutPanel(
+                context,
+                title: '权限边界',
+                icon: Icons.shield_outlined,
+                body: entry.permissionBoundarySummary,
+              ),
+            ],
+            if (entry.validationIssues.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              _buildIssuePanel(context),
+            ],
+            if (actionButtons.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              _buildActionSection(
+                context,
+                title: '当前操作',
+                actions: actionButtons,
+              ),
+            ],
             const SizedBox(height: 14),
-            _buildMetadataPanel(context, metadata),
+            _buildActionSection(context, title: '新建条目', actions: createButtons),
           ],
-          if (entry.memberLabels.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            _buildMemberPanel(context),
-          ],
-          if (actionButtons.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            _buildActionSection(context, title: '当前操作', actions: actionButtons),
-          ],
-          const SizedBox(height: 14),
-          _buildActionSection(context, title: '新建条目', actions: createButtons),
-        ],
+        ),
       ),
     );
   }
@@ -127,14 +146,15 @@ class EcosystemDetailPanel extends StatelessWidget {
     if (entry.isEditable && onEditRequested != null) {
       actions.add(
         ActionButton(
-          label: '编辑条目',
+          label: entry.canDuplicateBuiltin ? '复制为项目草案' : '编辑条目',
           icon: Icons.edit_outlined,
           compact: true,
           onPressed: onEditRequested!,
         ),
       );
     }
-    if (entry.isEditable && onOpenSourceRequested != null) {
+    if (entry.projectRelativePath.trim().isNotEmpty &&
+        onOpenSourceRequested != null) {
       actions.add(
         ActionButton(
           label: '打开源文件',
@@ -302,6 +322,113 @@ class EcosystemDetailPanel extends StatelessWidget {
                   )
                   .toList(growable: false),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCalloutPanel(
+    BuildContext context, {
+    required String title,
+    required IconData icon,
+    required String body,
+  }) {
+    final surface = context.novelThemeSurfaces.inputDock;
+    final colors = context.novelThemeColors;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: surface.backgroundColor.withValues(alpha: 0.52),
+        borderRadius: BorderRadius.circular(surface.radius),
+        border: Border.all(color: surface.borderColor),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 18, color: colors.mutedTextColor),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: colors.textColor,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    body,
+                    style: TextStyle(
+                      fontSize: 12,
+                      height: 1.45,
+                      color: colors.mutedTextColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildIssuePanel(BuildContext context) {
+    final surface = context.novelThemeSurfaces.inputDock;
+    final colors = context.novelThemeColors;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: surface.backgroundColor.withValues(alpha: 0.52),
+        borderRadius: BorderRadius.circular(surface.radius),
+        border: Border.all(
+          color: colors.warmStrongColor.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '配置提示',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: colors.textColor,
+              ),
+            ),
+            const SizedBox(height: 8),
+            for (final issue in entry.validationIssues) ...[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.error_outline_rounded,
+                    size: 16,
+                    color: colors.warmStrongColor,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      issue,
+                      style: TextStyle(
+                        fontSize: 12,
+                        height: 1.45,
+                        color: colors.mutedTextColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (issue != entry.validationIssues.last)
+                const SizedBox(height: 8),
+            ],
           ],
         ),
       ),

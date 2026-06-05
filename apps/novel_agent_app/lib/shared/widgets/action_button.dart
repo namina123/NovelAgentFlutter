@@ -63,12 +63,14 @@ class ActionButton extends StatelessWidget {
             ),
             SizedBox(width: compact ? 4 : 8),
           ],
-          Text(
-            label,
-            maxLines: labelMaxLines,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            softWrap: labelMaxLines > 1,
+          Flexible(
+            child: Text(
+              label,
+              maxLines: labelMaxLines,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              softWrap: labelMaxLines > 1,
+            ),
           ),
         ],
       ),

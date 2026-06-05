@@ -96,6 +96,32 @@ void main() {
     );
 
     test(
+      'treats too-short body as rewrite-required content quality failure',
+      () {
+        const machine = ChapterDeliveryStateMachine();
+
+        final result = machine.evaluate(
+          ChapterDeliveryStateRequest(
+            deliveryId: 'delivery-too-short',
+            chapterPath: 'chapters/第05A章.md',
+            title: '第05A章',
+            chapterContent: '# 第05A章\n\n太短了。',
+            minimumBodyLength: 80,
+            submission: _validSubmission(chapterId: 'chapter-005A'),
+          ),
+        );
+
+        expect(
+          result.state,
+          ChapterDeliveryStateStatuses.invalidOutputRewriteRequired,
+        );
+        expect(result.reason, 'chapter_body_too_short');
+        expect(result.chapterBodyDelivered, isFalse);
+        expect(result.metadata['minimum_body_length'], 80);
+      },
+    );
+
+    test(
       'invalid submission still keeps delivered_needs_repair rather than failing chapter body',
       () {
         const machine = ChapterDeliveryStateMachine();
@@ -120,6 +146,29 @@ void main() {
         expect(result.chapterBodyDelivered, isTrue);
         expect(result.submissionAccepted, isFalse);
         expect(result.metadata['submission_validation_errors'], isNotEmpty);
+      },
+    );
+
+    test(
+      'missing evidence keeps delivered body but marks sidecar repair required',
+      () {
+        const machine = ChapterDeliveryStateMachine();
+
+        final result = machine.evaluate(
+          ChapterDeliveryStateRequest(
+            deliveryId: 'delivery-missing-evidence',
+            chapterPath: 'chapters/第06A章.md',
+            title: '第06A章',
+            chapterContent: '# 第06A章\n\n正文有效且有完整段落。',
+            submission: _validSubmission(chapterId: 'chapter-006A'),
+            requireEvidence: true,
+          ),
+        );
+
+        expect(result.state, ChapterDeliveryStateStatuses.deliveredNeedsRepair);
+        expect(result.reason, 'submission_evidence_missing');
+        expect(result.chapterBodyDelivered, isTrue);
+        expect(result.submissionAccepted, isFalse);
       },
     );
 
@@ -195,11 +244,124 @@ void main() {
       expect(hardFailure.state, ChapterDeliveryStateStatuses.hardFailure);
       expect(hardFailure.retryable, isFalse);
     });
+
+    test(
+      'treats severe chapter-length drift as content-quality rewrite requirement for ordinary and long-task shaped requests',
+      () {
+        const machine = ChapterDeliveryStateMachine();
+        final evaluation = ChapterLengthEvaluation(
+          profile: const ChapterLengthProfile(
+            enabled: true,
+            targetLength: 2200,
+            preferredMin: 1800,
+            preferredMax: 2600,
+            stage: 'draft',
+          ),
+          policy: const ChapterLengthDistributionPolicy(),
+          currentRecord: const ChapterLengthRecord(
+            length: 700,
+            sortOrder: 1,
+            relativePath: 'chapters/第11章.md',
+          ),
+          level: 'severely_off',
+          recommendedAction: 'review_or_repair',
+          notes: const <String>['偏离已经明显。'],
+          targetDeviation: 1500,
+          targetDeviationRatio: 0.68,
+        );
+
+        final ordinary = machine.evaluate(
+          ChapterDeliveryStateRequest(
+            deliveryId: 'delivery-ordinary-length',
+            chapterPath: 'chapters/第11章.md',
+            title: '第11章',
+            chapterContent: '# 第11章\n\n正文有效但字数严重不足。',
+            submission: _validSubmission(chapterId: 'chapter-011'),
+            chapterLengthEvaluation: evaluation,
+            metadata: const <String, Object?>{
+              'runtime_source': 'ordinary_conversation_runtime',
+            },
+          ),
+        );
+        final longTask = machine.evaluate(
+          ChapterDeliveryStateRequest(
+            deliveryId: 'delivery-longtask-length',
+            chapterPath: 'chapters/第12章.md',
+            title: '第12章',
+            chapterContent: '# 第12章\n\n正文有效但字数严重不足。',
+            submission: _validSubmission(chapterId: 'chapter-012'),
+            chapterLengthEvaluation: evaluation,
+            metadata: const <String, Object?>{
+              'runtime_source': 'long_task_runtime',
+            },
+          ),
+        );
+
+        expect(
+          ordinary.state,
+          ChapterDeliveryStateStatuses.invalidOutputRewriteRequired,
+        );
+        expect(
+          longTask.state,
+          ChapterDeliveryStateStatuses.invalidOutputRewriteRequired,
+        );
+        expect(ordinary.reason, 'chapter_length_severely_off');
+        expect(longTask.reason, 'chapter_length_severely_off');
+      },
+    );
+
+    test(
+      'marks missing expression-constraint review as delivered_needs_repair',
+      () {
+        const machine = ChapterDeliveryStateMachine();
+
+        final missingReview = machine.evaluate(
+          ChapterDeliveryStateRequest(
+            deliveryId: 'delivery-missing-review',
+            chapterPath: 'chapters/第13章.md',
+            title: '第13章',
+            chapterContent: '# 第13章\n\n正文有效且结构完整。',
+            submission: _validSubmission(
+              chapterId: 'chapter-013',
+              withEvidence: true,
+            ),
+            requireExpressionConstraintReview: true,
+          ),
+        );
+        final reviewed = machine.evaluate(
+          ChapterDeliveryStateRequest(
+            deliveryId: 'delivery-reviewed',
+            chapterPath: 'chapters/第14章.md',
+            title: '第14章',
+            chapterContent: '# 第14章\n\n正文有效且结构完整。',
+            submission: _validSubmission(
+              chapterId: 'chapter-014',
+              withEvidence: true,
+            ),
+            requireExpressionConstraintReview: true,
+            expressionConstraintReview:
+                const ExpressionConstraintReviewProjection(
+                  authenticityPassLevel:
+                      ExpressionConstraintReviewProjection.authenticityLight,
+                  reviewFocuses: <String>['控制解释腔'],
+                ),
+          ),
+        );
+
+        expect(
+          missingReview.state,
+          ChapterDeliveryStateStatuses.deliveredNeedsRepair,
+        );
+        expect(missingReview.reason, 'expression_constraint_review_missing');
+        expect(reviewed.state, ChapterDeliveryStateStatuses.delivered);
+      },
+    );
   });
 }
 
 ChapterNarrativeSubmission _validSubmission({
   String chapterId = 'chapter-001',
+  bool withEvidence = false,
 }) {
   return ChapterNarrativeSubmission.fromJson(<String, Object?>{
     'submission_id': 'submission-$chapterId',
@@ -214,5 +376,12 @@ ChapterNarrativeSubmission _validSubmission({
         'summary': '有效片段。',
       },
     ],
+    if (withEvidence)
+      'evidence_refs': <Object?>[
+        <String, Object?>{
+          'evidence_type': NarrativeEvidenceTypes.assistantTranscript,
+          'evidence_id': 'evidence-$chapterId',
+        },
+      ],
   });
 }

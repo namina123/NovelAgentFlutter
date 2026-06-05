@@ -336,5 +336,76 @@ void main() {
         contains('长任务后台调度'),
       );
     });
+
+    test(
+      'builds scheduler tick plan for shared repair and manual attention actions',
+      () {
+        final repairPlan = schedulerTickPlanService.schedulerTickPlan(
+          <String, Object?>{
+            'id': 'run_repair',
+            'mode': TaskRuntimeConstants.modeHumanOutlineAiDraft,
+            'status': TaskRuntimeConstants.statusPaused,
+            'last_writing_execution_result': <String, Object?>{
+              'execution_id': 'task_repair',
+              'workflow_kind': 'workflow_task',
+              'overall_status':
+                  WritingExecutionOutcomeStatuses.recoverableFailure,
+              'summary': '正文未真正落盘，需要补写。',
+              'delivery': const <String, Object?>{
+                'present': true,
+                'state': 'missing_output_recoverable',
+                'summary': '正文未真正落盘，需要补写。',
+                'blocks_progress': true,
+              },
+              'constraints': const <String, Object?>{},
+              'information': const <String, Object?>{},
+              'collaboration': const <String, Object?>{},
+              'recovery': const <String, Object?>{},
+              'next_action': '',
+              'blocks_progress': true,
+              'retryable': true,
+              'requires_user_action': false,
+              'schema_version': 1,
+              'metadata': const <String, Object?>{},
+            },
+          },
+          const <Object?>[],
+        );
+        final manualAttentionPlan = schedulerTickPlanService.schedulerTickPlan(
+          <String, Object?>{
+            'id': 'run_manual_attention',
+            'mode': TaskRuntimeConstants.modeHumanOutlineAiDraft,
+            'status': TaskRuntimeConstants.statusPaused,
+            'last_writing_execution_result': <String, Object?>{
+              'execution_id': 'task_manual',
+              'workflow_kind': 'workflow_task',
+              'overall_status':
+                  WritingExecutionOutcomeStatuses.contentQualityIssue,
+              'summary': '正文质量不达标，需要人工复核。',
+              'delivery': const <String, Object?>{
+                'present': true,
+                'state': 'invalid_output_rewrite_required',
+                'summary': '正文质量不达标，需要人工复核。',
+                'blocks_progress': true,
+              },
+              'constraints': const <String, Object?>{},
+              'information': const <String, Object?>{},
+              'collaboration': const <String, Object?>{},
+              'recovery': const <String, Object?>{},
+              'next_action': '',
+              'blocks_progress': true,
+              'retryable': false,
+              'requires_user_action': false,
+              'schema_version': 1,
+              'metadata': const <String, Object?>{},
+            },
+          },
+          const <Object?>[],
+        );
+
+        expect(repairPlan['action'], 'pause_for_repair');
+        expect(manualAttentionPlan['action'], 'pause_for_manual_attention');
+      },
+    );
   });
 }

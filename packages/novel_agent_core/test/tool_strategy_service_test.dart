@@ -12,6 +12,11 @@ void main() {
 
       expect(toolEnabled['delete_project_file'], isFalse);
       expect(toolEnabled['restore_backup'], isFalse);
+      expect(
+        toolEnabled[NarrativeDomainToolNames.requestExternalResearch],
+        isFalse,
+      );
+      expect(toolEnabled[NarrativeDomainToolNames.submitResearchNote], isTrue);
     });
 
     test('forces present_user_options only for matching intent', () {

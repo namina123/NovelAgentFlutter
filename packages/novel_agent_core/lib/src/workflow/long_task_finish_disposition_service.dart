@@ -59,6 +59,9 @@ class LongTaskFinishDispositionService {
       'delivery_repair_required',
       'delivery_manual_attention',
       'delivery_waiting_user_choice',
+      'information_repair_required',
+      'information_manual_attention',
+      'information_waiting_user',
       'max_steps',
       'max_seconds',
       'record_missing',
@@ -85,6 +88,12 @@ class LongTaskFinishDispositionService {
         return '章节交付状态要求人工介入，长任务已暂停。';
       case 'delivery_waiting_user_choice':
         return '章节交付状态正在等待用户确认，长任务已暂停。';
+      case 'information_repair_required':
+        return '信息层信号要求先补研究、补上下文或处理设计冲突，长任务已暂停。';
+      case 'information_manual_attention':
+        return '信息层信号要求人工介入，长任务已暂停。';
+      case 'information_waiting_user':
+        return '信息层信号建议先停在用户确认点，长任务已暂停。';
       default:
         return '长任务已停止。';
     }

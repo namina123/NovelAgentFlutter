@@ -74,6 +74,12 @@ class LongTaskRunMarkdownRenderer {
       if (checkpointActionSummary.isNotEmpty) {
         lines.add('  动作建议：$checkpointActionSummary');
       }
+      final informationSummary = ValueReaders.stringValue(
+        step['information_summary'],
+      ).trim();
+      if (informationSummary.isNotEmpty) {
+        lines.add('  Information：$informationSummary');
+      }
     }
     return lines.join('\n');
   }

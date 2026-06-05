@@ -37,9 +37,9 @@ void main() {
                   projectAgentGroupPanel: ProjectAgentGroupPanelViewData(
                     currentGroupLabel: '长篇总控组',
                     primaryAgentLabel: '综合创作智能体',
-                    summary: '当前默认组：长篇总控组；主智能体：综合创作智能体。',
+                    summary: '当前项目已确定默认协作组，写作时会沿用这套协作摘要。',
                     actionTitle: '项目智能体组',
-                    actionDescription: '查看当前项目支持的智能体组，并调整默认协作基线。',
+                    actionDescription: '查看当前项目协作摘要，并按需调整默认协作组。',
                     canConfigure: true,
                   ),
                   agentWorkspaceActions: [
@@ -66,9 +66,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('项目智能体组'), findsWidgets);
+      expect(find.text('当前协作摘要'), findsOneWidget);
       expect(find.text('项目协作基线'), findsNothing);
-      expect(find.text('当前会话智能体'), findsOneWidget);
+      expect(find.text('当前会话分工'), findsOneWidget);
       expect(find.text('当前智能体'), findsOneWidget);
       expect(find.text('审阅智能体'), findsOneWidget);
       expect(find.text('项目基线组'), findsOneWidget);
@@ -77,13 +77,14 @@ void main() {
       expect(find.text('综合创作智能体'), findsWidgets);
       expect(find.text('当前项目已接入 2 个可供会话使用的智能体。'), findsOneWidget);
       expect(find.text('智能体工作入口'), findsOneWidget);
+      expect(find.text('协作设置'), findsOneWidget);
       expect(find.text('技能装载'), findsOneWidget);
       expect(find.text('表达限制'), findsOneWidget);
       expect(find.textContaining('项目级写作约束系统'), findsOneWidget);
       expect(find.text('项目资料'), findsNothing);
       expect(find.text('项目信息'), findsNothing);
 
-      await tester.tap(find.text('项目智能体组').last);
+      await tester.tap(find.text('协作设置'));
       await tester.pumpAndSettle();
 
       expect(handler.projectAgentGroupRequestedCount, 1);

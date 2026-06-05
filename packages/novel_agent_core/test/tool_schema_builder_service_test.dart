@@ -41,5 +41,25 @@ void main() {
         isNotEmpty,
       );
     });
+
+    test(
+      'keeps information tool schemas aligned with narrative domain catalog',
+      () {
+        final service = ToolSchemaBuilderService();
+        final domainCatalog = NarrativeDomainToolCatalog();
+
+        final builtSchemas = service.buildOpenAiSchemas(<String>[
+          NarrativeDomainToolNames.requestExternalResearch,
+          NarrativeDomainToolNames.proposeDesignElement,
+        ]);
+        final domainSchemas = domainCatalog.buildOpenAiSchemas(<String>[
+          NarrativeDomainToolNames.requestExternalResearch,
+          NarrativeDomainToolNames.proposeDesignElement,
+        ]);
+
+        expect(builtSchemas, hasLength(2));
+        expect(builtSchemas, domainSchemas);
+      },
+    );
   });
 }

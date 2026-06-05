@@ -2,6 +2,7 @@ import '../../common/json_types.dart';
 import '../../common/open_json_contract_codec_service.dart';
 import '../../common/value_readers.dart';
 import '../../continuity/narrative_state.dart';
+import '../../information.dart';
 import '../../runtime/tool_round_evidence.dart';
 import 'domain_tool_request.dart';
 import 'narrative_domain_tool_definition.dart';
@@ -49,45 +50,83 @@ class NarrativeDomainToolCatalog {
   static const OpenJsonContractCodecService _codecService =
       OpenJsonContractCodecService();
 
-  static const List<NarrativeDomainToolDefinition> definitions =
-      <NarrativeDomainToolDefinition>[
-        NarrativeDomainToolDefinition(
-          toolName: NarrativeDomainToolNames.submitChapterDelivery,
-          displayName: '提交章节交付',
-          description: '一次性提交章节正文、目标路径和结构化提交包，用统一交付合同替代零散文件写入。',
-          parametersSchema: _submitChapterDeliverySchema,
-        ),
-        NarrativeDomainToolDefinition(
-          toolName: NarrativeDomainToolNames.submitNarrativeStateClaims,
-          displayName: '提交叙事状态声明',
-          description: '提交开放叙事状态 claims，保留未知 namespace 和 payload，不做文学语义判断。',
-          parametersSchema: _submitNarrativeStateClaimsSchema,
-        ),
-        NarrativeDomainToolDefinition(
-          toolName: NarrativeDomainToolNames.proposeNarrativeProfileUpdate,
-          displayName: '提出项目叙事解释器更新',
-          description: '提出项目级 narrative profile 更新提案，只做开放结构校验，不直接改长期规则。',
-          parametersSchema: _proposeNarrativeProfileUpdateSchema,
-        ),
-        NarrativeDomainToolDefinition(
-          toolName: NarrativeDomainToolNames.submitSemanticReview,
-          displayName: '提交语义复核',
-          description: '提交 reviewer 的结构化 findings 和 disposition 建议，建议不等于最终调度。',
-          parametersSchema: _submitSemanticReviewSchema,
-        ),
-        NarrativeDomainToolDefinition(
-          toolName: NarrativeDomainToolNames.proposeConstraintBinding,
-          displayName: '提出约束绑定',
-          description: '提出项目级或阶段级约束绑定，保留开放 constraint payload，不内置题材枚举。',
-          parametersSchema: _proposeConstraintBindingSchema,
-        ),
-        NarrativeDomainToolDefinition(
-          toolName: NarrativeDomainToolNames.requestProfileClarification,
-          displayName: '请求规则澄清',
-          description: '在缺少关键信息时提出一个小而具体的澄清问题，不把普通偏好展开成大型表单。',
-          parametersSchema: _requestProfileClarificationSchema,
-        ),
-      ];
+  static const List<NarrativeDomainToolDefinition>
+  definitions = <NarrativeDomainToolDefinition>[
+    NarrativeDomainToolDefinition(
+      toolName: NarrativeDomainToolNames.submitChapterDelivery,
+      displayName: '提交章节交付',
+      description: '一次性提交章节正文、目标路径和结构化提交包，用统一交付合同替代零散文件写入。',
+      parametersSchema: _submitChapterDeliverySchema,
+    ),
+    NarrativeDomainToolDefinition(
+      toolName: NarrativeDomainToolNames.submitNarrativeStateClaims,
+      displayName: '提交叙事状态声明',
+      description: '提交开放叙事状态 claims，保留未知 namespace 和 payload，不做文学语义判断。',
+      parametersSchema: _submitNarrativeStateClaimsSchema,
+    ),
+    NarrativeDomainToolDefinition(
+      toolName: NarrativeDomainToolNames.proposeNarrativeProfileUpdate,
+      displayName: '提出项目叙事解释器更新',
+      description: '提出项目级 narrative profile 更新提案，只做开放结构校验，不直接改长期规则。',
+      parametersSchema: _proposeNarrativeProfileUpdateSchema,
+    ),
+    NarrativeDomainToolDefinition(
+      toolName: NarrativeDomainToolNames.submitSemanticReview,
+      displayName: '提交语义复核',
+      description: '提交 reviewer 的结构化 findings 和 disposition 建议，建议不等于最终调度。',
+      parametersSchema: _submitSemanticReviewSchema,
+    ),
+    NarrativeDomainToolDefinition(
+      toolName: NarrativeDomainToolNames.proposeConstraintBinding,
+      displayName: '提出约束绑定',
+      description: '提出项目级或阶段级约束绑定，保留开放 constraint payload，不内置题材枚举。',
+      parametersSchema: _proposeConstraintBindingSchema,
+    ),
+    NarrativeDomainToolDefinition(
+      toolName: NarrativeDomainToolNames.requestProfileClarification,
+      displayName: '请求规则澄清',
+      description: '在缺少关键信息时提出一个小而具体的澄清问题，不把普通偏好展开成大型表单。',
+      parametersSchema: _requestProfileClarificationSchema,
+    ),
+    NarrativeDomainToolDefinition(
+      toolName: NarrativeDomainToolNames.requestExternalResearch,
+      displayName: '请求外部研究',
+      description: '提出受控的外部研究请求，只形成结构化 request，不在 core 直接联网。',
+      parametersSchema: _requestExternalResearchSchema,
+    ),
+    NarrativeDomainToolDefinition(
+      toolName: NarrativeDomainToolNames.submitResearchNote,
+      displayName: '提交研究笔记',
+      description:
+          '提交结构化 research note，保留来源、citation、usable facts 和 creative suggestions。',
+      parametersSchema: _submitResearchNoteSchema,
+    ),
+    NarrativeDomainToolDefinition(
+      toolName: NarrativeDomainToolNames.proposeKnowledgeCard,
+      displayName: '提出知识卡',
+      description: '提出项目知识卡提案，保持开放 payload，不把未知题材或文化类型写死成枚举。',
+      parametersSchema: _proposeKnowledgeCardSchema,
+    ),
+    NarrativeDomainToolDefinition(
+      toolName: NarrativeDomainToolNames.proposeDesignElement,
+      displayName: '提出设计元素',
+      description: '提出作品巧思、符号系统或结构设计提案，保持开放 payload 和 linked refs。',
+      parametersSchema: _proposeDesignElementSchema,
+    ),
+    NarrativeDomainToolDefinition(
+      toolName: NarrativeDomainToolNames.linkInformationEvidence,
+      displayName: '链接信息证据',
+      description:
+          '在 knowledge/design/research/reference/claim 之间建立结构化链路，不直接解释正文语义。',
+      parametersSchema: _linkInformationEvidenceSchema,
+    ),
+    NarrativeDomainToolDefinition(
+      toolName: NarrativeDomainToolNames.proposeReferenceWork,
+      displayName: '提出引用作品边界',
+      description: '提出引用作品或来源作品边界记录，支持开放 relationship 字符串和风险备注。',
+      parametersSchema: _proposeReferenceWorkSchema,
+    ),
+  ];
 
   List<JsonMap> buildOpenAiSchemas([List<String>? toolNames]) {
     final allowed = (toolNames == null || toolNames.isEmpty)
@@ -197,6 +236,24 @@ class NarrativeDomainToolCatalog {
           arguments: arguments,
           issues: issues,
         );
+      case NarrativeDomainToolNames.requestExternalResearch:
+        return _parseRequestExternalResearch(
+          arguments: arguments,
+          issues: issues,
+        );
+      case NarrativeDomainToolNames.submitResearchNote:
+        return _parseSubmitResearchNote(arguments: arguments, issues: issues);
+      case NarrativeDomainToolNames.proposeKnowledgeCard:
+        return _parseProposeKnowledgeCard(arguments: arguments, issues: issues);
+      case NarrativeDomainToolNames.proposeDesignElement:
+        return _parseProposeDesignElement(arguments: arguments, issues: issues);
+      case NarrativeDomainToolNames.linkInformationEvidence:
+        return _parseLinkInformationEvidence(
+          arguments: arguments,
+          issues: issues,
+        );
+      case NarrativeDomainToolNames.proposeReferenceWork:
+        return _parseProposeReferenceWork(arguments: arguments, issues: issues);
     }
     return null;
   }
@@ -676,6 +733,156 @@ class NarrativeDomainToolCatalog {
     };
   }
 
+  JsonMap? _parseRequestExternalResearch({
+    required JsonMap arguments,
+    required List<NarrativeDomainToolParseIssue> issues,
+  }) {
+    final query = _requiredString(arguments, 'query', issues);
+    if (query == null) {
+      return null;
+    }
+    final metadata = _metadataWithUnknowns(
+      arguments,
+      knownFields: const <String>{
+        'query',
+        'purpose',
+        'requested_depth',
+        'reference_relationship',
+        'target_refs',
+        'user_granted_network_access',
+        'metadata',
+      },
+    );
+    return <String, Object?>{
+      'query': query,
+      'purpose': ValueReaders.stringValue(arguments['purpose']).trim(),
+      'requested_depth': ValueReaders.stringValue(
+        arguments['requested_depth'],
+      ).trim(),
+      'reference_relationship': ValueReaders.stringValue(
+        arguments['reference_relationship'],
+      ).trim(),
+      'target_refs': _canonicalRefs(
+        arguments['target_refs'],
+        fieldPath: 'target_refs',
+        issues: issues,
+      ),
+      'user_granted_network_access': ValueReaders.boolValue(
+        arguments['user_granted_network_access'],
+      ),
+      'metadata': metadata,
+    };
+  }
+
+  JsonMap? _parseSubmitResearchNote({
+    required JsonMap arguments,
+    required List<NarrativeDomainToolParseIssue> issues,
+  }) {
+    final note = ResearchNote.fromJson(arguments);
+    final validationErrors = note.validateBasics();
+    if (validationErrors.isNotEmpty) {
+      issues.add(
+        NarrativeDomainToolParseIssue(
+          code: NarrativeDomainToolValidationCodes.invalidNestedContract,
+          fieldPath: 'research_note',
+          message: validationErrors.join(', '),
+        ),
+      );
+      return null;
+    }
+    return note.toJson();
+  }
+
+  JsonMap? _parseProposeKnowledgeCard({
+    required JsonMap arguments,
+    required List<NarrativeDomainToolParseIssue> issues,
+  }) {
+    final normalized = <String, Object?>{
+      ...arguments,
+      'lifecycle_status': ValueReaders.stringValue(
+        arguments['lifecycle_status'],
+        InformationLifecycleStatuses.proposed,
+      ).trim(),
+    };
+    final card = ProjectKnowledgeCard.fromJson(normalized);
+    final validationErrors = card.validateBasics();
+    if (validationErrors.isNotEmpty) {
+      issues.add(
+        NarrativeDomainToolParseIssue(
+          code: NarrativeDomainToolValidationCodes.invalidNestedContract,
+          fieldPath: 'knowledge_card',
+          message: validationErrors.join(', '),
+        ),
+      );
+      return null;
+    }
+    return card.toJson();
+  }
+
+  JsonMap? _parseProposeDesignElement({
+    required JsonMap arguments,
+    required List<NarrativeDomainToolParseIssue> issues,
+  }) {
+    final normalized = <String, Object?>{
+      ...arguments,
+      'lifecycle_status': ValueReaders.stringValue(
+        arguments['lifecycle_status'],
+        InformationLifecycleStatuses.proposed,
+      ).trim(),
+    };
+    final card = DesignElementCard.fromJson(normalized);
+    final validationErrors = card.validateBasics();
+    if (validationErrors.isNotEmpty) {
+      issues.add(
+        NarrativeDomainToolParseIssue(
+          code: NarrativeDomainToolValidationCodes.invalidNestedContract,
+          fieldPath: 'design_element',
+          message: validationErrors.join(', '),
+        ),
+      );
+      return null;
+    }
+    return card.toJson();
+  }
+
+  JsonMap? _parseLinkInformationEvidence({
+    required JsonMap arguments,
+    required List<NarrativeDomainToolParseIssue> issues,
+  }) {
+    final link = InformationLink.fromJson(arguments);
+    final validationErrors = link.validateBasics();
+    if (validationErrors.isNotEmpty) {
+      issues.add(
+        NarrativeDomainToolParseIssue(
+          code: NarrativeDomainToolValidationCodes.invalidNestedContract,
+          fieldPath: 'information_link',
+          message: validationErrors.join(', '),
+        ),
+      );
+      return null;
+    }
+    return link.toJson();
+  }
+
+  JsonMap? _parseProposeReferenceWork({
+    required JsonMap arguments,
+    required List<NarrativeDomainToolParseIssue> issues,
+  }) {
+    final record = ReferenceWorkRecord.fromJson(arguments);
+    final validationErrors = record.validateBasics();
+    if (validationErrors.isNotEmpty) {
+      issues.add(
+        NarrativeDomainToolParseIssue(
+          code: NarrativeDomainToolValidationCodes.invalidNestedContract,
+          fieldPath: 'reference_work',
+          message: validationErrors.join(', '),
+        ),
+      );
+      return null;
+    }
+    return record.toJson();
+  }
+
   List<JsonMap> _canonicalClaimJsonList(
     Object? rawClaims, {
     required String fallbackSourceType,
@@ -1077,6 +1284,272 @@ class NarrativeDomainToolCatalog {
       'freeform_allowed': <String, Object?>{'type': 'boolean'},
       'reason': <String, Object?>{'type': 'string'},
       'blocking': <String, Object?>{'type': 'boolean'},
+      'metadata': <String, Object?>{
+        'type': 'object',
+        'additionalProperties': true,
+      },
+    },
+    'additionalProperties': true,
+  };
+
+  static const JsonMap _requestExternalResearchSchema = <String, Object?>{
+    'type': 'object',
+    'required': <String>['query'],
+    'properties': <String, Object?>{
+      'query': <String, Object?>{'type': 'string'},
+      'purpose': <String, Object?>{'type': 'string'},
+      'requested_depth': <String, Object?>{'type': 'string'},
+      'reference_relationship': <String, Object?>{'type': 'string'},
+      'target_refs': <String, Object?>{
+        'type': 'array',
+        'items': <String, Object?>{
+          'type': 'object',
+          'additionalProperties': true,
+        },
+      },
+      'user_granted_network_access': <String, Object?>{'type': 'boolean'},
+      'metadata': <String, Object?>{
+        'type': 'object',
+        'additionalProperties': true,
+      },
+    },
+    'additionalProperties': true,
+  };
+
+  static const JsonMap _submitResearchNoteSchema = <String, Object?>{
+    'type': 'object',
+    'required': <String>[
+      'research_id',
+      'query',
+      'source_kind',
+      'source_url_or_ref',
+      'citation',
+      'summary',
+      'created_by',
+      'usage_policy',
+    ],
+    'properties': <String, Object?>{
+      'research_id': <String, Object?>{'type': 'string'},
+      'query': <String, Object?>{'type': 'string'},
+      'source_kind': <String, Object?>{'type': 'string'},
+      'source_url_or_ref': <String, Object?>{'type': 'string'},
+      'citation': <String, Object?>{'type': 'string'},
+      'summary': <String, Object?>{'type': 'string'},
+      'usable_facts': <String, Object?>{
+        'type': 'array',
+        'items': <String, Object?>{},
+      },
+      'creative_suggestions': <String, Object?>{
+        'type': 'array',
+        'items': <String, Object?>{},
+      },
+      'uncertainty': <String, Object?>{'type': 'string'},
+      'license_or_usage_note': <String, Object?>{'type': 'string'},
+      'created_by': <String, Object?>{'type': 'string'},
+      'linked_cards': <String, Object?>{
+        'type': 'array',
+        'items': <String, Object?>{
+          'type': 'object',
+          'additionalProperties': true,
+        },
+      },
+      'usage_policy': <String, Object?>{
+        'type': 'object',
+        'additionalProperties': true,
+      },
+      'schema_version': <String, Object?>{'type': 'string'},
+      'metadata': <String, Object?>{
+        'type': 'object',
+        'additionalProperties': true,
+      },
+    },
+    'additionalProperties': true,
+  };
+
+  static const JsonMap _proposeKnowledgeCardSchema = <String, Object?>{
+    'type': 'object',
+    'required': <String>[
+      'card_id',
+      'card_namespace',
+      'card_type',
+      'title',
+      'content_payload',
+      'source_refs',
+      'activation_policy',
+      'usage_policy',
+    ],
+    'properties': <String, Object?>{
+      'card_id': <String, Object?>{'type': 'string'},
+      'card_namespace': <String, Object?>{'type': 'string'},
+      'card_type': <String, Object?>{'type': 'string'},
+      'title': <String, Object?>{'type': 'string'},
+      'summary': <String, Object?>{'type': 'string'},
+      'content_payload': <String, Object?>{
+        'type': 'object',
+        'additionalProperties': true,
+      },
+      'source_refs': <String, Object?>{
+        'type': 'array',
+        'items': <String, Object?>{
+          'type': 'object',
+          'additionalProperties': true,
+        },
+      },
+      'evidence_refs': <String, Object?>{
+        'type': 'array',
+        'items': <String, Object?>{
+          'type': 'object',
+          'additionalProperties': true,
+        },
+      },
+      'scope_refs': <String, Object?>{
+        'type': 'array',
+        'items': <String, Object?>{
+          'type': 'object',
+          'additionalProperties': true,
+        },
+      },
+      'activation_policy': <String, Object?>{
+        'type': 'object',
+        'additionalProperties': true,
+      },
+      'usage_policy': <String, Object?>{
+        'type': 'object',
+        'additionalProperties': true,
+      },
+      'confidence': <String, Object?>{'type': 'number'},
+      'lifecycle_status': <String, Object?>{'type': 'string'},
+      'schema_version': <String, Object?>{'type': 'string'},
+      'metadata': <String, Object?>{
+        'type': 'object',
+        'additionalProperties': true,
+      },
+    },
+    'additionalProperties': true,
+  };
+
+  static const JsonMap _proposeDesignElementSchema = <String, Object?>{
+    'type': 'object',
+    'required': <String>[
+      'design_id',
+      'design_namespace',
+      'design_label',
+      'design_payload',
+      'source_refs',
+      'activation_policy',
+      'usage_policy',
+    ],
+    'properties': <String, Object?>{
+      'design_id': <String, Object?>{'type': 'string'},
+      'design_namespace': <String, Object?>{'type': 'string'},
+      'design_label': <String, Object?>{'type': 'string'},
+      'design_payload': <String, Object?>{
+        'type': 'object',
+        'additionalProperties': true,
+      },
+      'source_refs': <String, Object?>{
+        'type': 'array',
+        'items': <String, Object?>{
+          'type': 'object',
+          'additionalProperties': true,
+        },
+      },
+      'evidence_refs': <String, Object?>{
+        'type': 'array',
+        'items': <String, Object?>{
+          'type': 'object',
+          'additionalProperties': true,
+        },
+      },
+      'scope_refs': <String, Object?>{
+        'type': 'array',
+        'items': <String, Object?>{
+          'type': 'object',
+          'additionalProperties': true,
+        },
+      },
+      'linked_refs': <String, Object?>{
+        'type': 'array',
+        'items': <String, Object?>{
+          'type': 'object',
+          'additionalProperties': true,
+        },
+      },
+      'activation_policy': <String, Object?>{
+        'type': 'object',
+        'additionalProperties': true,
+      },
+      'usage_policy': <String, Object?>{
+        'type': 'object',
+        'additionalProperties': true,
+      },
+      'confidence': <String, Object?>{'type': 'number'},
+      'uncertainty': <String, Object?>{'type': 'string'},
+      'lifecycle_status': <String, Object?>{'type': 'string'},
+      'schema_version': <String, Object?>{'type': 'string'},
+      'metadata': <String, Object?>{
+        'type': 'object',
+        'additionalProperties': true,
+      },
+    },
+    'additionalProperties': true,
+  };
+
+  static const JsonMap _linkInformationEvidenceSchema = <String, Object?>{
+    'type': 'object',
+    'required': <String>['link_id', 'link_type', 'source_ref', 'target_ref'],
+    'properties': <String, Object?>{
+      'link_id': <String, Object?>{'type': 'string'},
+      'link_type': <String, Object?>{'type': 'string'},
+      'source_ref': <String, Object?>{
+        'type': 'object',
+        'additionalProperties': true,
+      },
+      'target_ref': <String, Object?>{
+        'type': 'object',
+        'additionalProperties': true,
+      },
+      'summary': <String, Object?>{'type': 'string'},
+      'created_by': <String, Object?>{'type': 'string'},
+      'schema_version': <String, Object?>{'type': 'string'},
+      'metadata': <String, Object?>{
+        'type': 'object',
+        'additionalProperties': true,
+      },
+    },
+    'additionalProperties': true,
+  };
+
+  static const JsonMap _proposeReferenceWorkSchema = <String, Object?>{
+    'type': 'object',
+    'required': <String>[
+      'reference_work_id',
+      'title',
+      'source_refs',
+      'relationship_to_project',
+      'declared_usage_intent',
+    ],
+    'properties': <String, Object?>{
+      'reference_work_id': <String, Object?>{'type': 'string'},
+      'title': <String, Object?>{'type': 'string'},
+      'creator': <String, Object?>{'type': 'string'},
+      'version': <String, Object?>{'type': 'string'},
+      'source_refs': <String, Object?>{
+        'type': 'array',
+        'items': <String, Object?>{
+          'type': 'object',
+          'additionalProperties': true,
+        },
+      },
+      'relationship_to_project': <String, Object?>{'type': 'string'},
+      'declared_usage_intent': <String, Object?>{'type': 'string'},
+      'allowed_usage_summary': <String, Object?>{'type': 'string'},
+      'risk_notes': <String, Object?>{
+        'type': 'array',
+        'items': <String, Object?>{},
+      },
+      'requires_confirmation': <String, Object?>{'type': 'boolean'},
+      'schema_version': <String, Object?>{'type': 'string'},
       'metadata': <String, Object?>{
         'type': 'object',
         'additionalProperties': true,

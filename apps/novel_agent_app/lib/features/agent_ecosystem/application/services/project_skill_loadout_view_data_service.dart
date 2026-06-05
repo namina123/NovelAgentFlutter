@@ -9,17 +9,22 @@ class ProjectSkillLoadoutViewDataService {
     AgentSkillLoadoutResolverService? resolverService,
     AgentDisplayNameResolverService? agentDisplayNameResolverService,
     SkillDisplayNameResolverService? skillDisplayNameResolverService,
+    SkillCapabilityRequirementService? skillCapabilityRequirementService,
   }) : _resolverService = resolverService ?? AgentSkillLoadoutResolverService(),
        _agentDisplayNameResolverService =
            agentDisplayNameResolverService ??
            const AgentDisplayNameResolverService(),
        _skillDisplayNameResolverService =
            skillDisplayNameResolverService ??
-           const SkillDisplayNameResolverService();
+           const SkillDisplayNameResolverService(),
+       _skillCapabilityRequirementService =
+           skillCapabilityRequirementService ??
+           SkillCapabilityRequirementService();
 
   final AgentSkillLoadoutResolverService _resolverService;
   final AgentDisplayNameResolverService _agentDisplayNameResolverService;
   final SkillDisplayNameResolverService _skillDisplayNameResolverService;
+  final SkillCapabilityRequirementService _skillCapabilityRequirementService;
 
   ProjectSkillLoadoutWorkspaceViewData build({
     required bool projectAvailable,
@@ -73,6 +78,7 @@ class ProjectSkillLoadoutViewDataService {
       snapshot: snapshot,
       skillGroups: skillGroups,
       availableSkillIds: _skillIds(skills),
+      availableSkills: skills,
       agentId: agentId,
     );
     final draft = _draftFor(snapshot, agentId);
@@ -119,6 +125,7 @@ class ProjectSkillLoadoutViewDataService {
       snapshot: snapshot,
       skillGroups: skillGroups,
       availableSkillIds: _skillIds(skills),
+      availableSkills: skills,
       agentId: cleanAgentId,
     );
     final unavailableSkillIds = _unavailableSkillIds(resolved.issues);
@@ -197,6 +204,10 @@ class ProjectSkillLoadoutViewDataService {
       ),
       historyEntries: historyEntries,
       issues: resolved.issues.map(_issueText).toList(growable: false),
+      permissionBoundarySummary: _permissionBoundarySummary(
+        resolved,
+        skills: skills,
+      ),
     );
   }
 
@@ -231,6 +242,7 @@ class ProjectSkillLoadoutViewDataService {
     required ProjectSkillLoadoutWorkspaceSnapshot snapshot,
     required List<JsonMap> skillGroups,
     required List<String> availableSkillIds,
+    required List<JsonMap> availableSkills,
     required String agentId,
   }) {
     return _resolverService.resolveAgentDocument(
@@ -238,6 +250,7 @@ class ProjectSkillLoadoutViewDataService {
       loadout: _draftFor(snapshot, agentId),
       availableSkillGroups: skillGroups,
       availableSkillIds: availableSkillIds,
+      availableSkills: availableSkills,
     );
   }
 
@@ -308,6 +321,9 @@ class ProjectSkillLoadoutViewDataService {
   }
 
   String _issueText(AgentSkillLoadoutIssue issue) {
+    if (issue.message.trim().isNotEmpty) {
+      return issue.message.trim();
+    }
     switch (issue.code) {
       case AgentSkillLoadoutIssueCode.missingSkillGroup:
         return '缺少技能组：${issue.subjectId}';
@@ -317,7 +333,58 @@ class ProjectSkillLoadoutViewDataService {
         return '已过滤内置工具技能：${issue.subjectId}';
       case AgentSkillLoadoutIssueCode.disabledSkillMissingTarget:
         return '禁用项没有命中任何技能：${issue.subjectId}';
+      case AgentSkillLoadoutIssueCode.requiredCapabilityMissing:
+        return '技能权限不匹配：${issue.subjectId}';
+      case AgentSkillLoadoutIssueCode.optionalCapabilityUnavailable:
+        return '技能可选权限当前不可用：${issue.subjectId}';
+      case AgentSkillLoadoutIssueCode.degradedCapabilityRequirement:
+        return '技能已降级为受限路径：${issue.subjectId}';
     }
+  }
+
+  String _permissionBoundarySummary(
+    ResolvedAgentSkillLoadout resolved, {
+    required List<JsonMap> skills,
+  }) {
+    final requirementBySkillId = _skillCapabilityRequirementService.indexBySkillId(
+      skills,
+    );
+    var skillsWithCapabilityRequirements = 0;
+    final requiredCapabilities = <String>{};
+    final optionalCapabilities = <String>{};
+    for (final entry in resolved.entries) {
+      final requirement = requirementBySkillId[entry.skillId];
+      if (requirement == null || requirement.isEmpty) {
+        continue;
+      }
+      final required = ValueReaders.stringList(
+        requirement['required_capabilities'],
+      );
+      final optional = ValueReaders.stringList(
+        requirement['optional_capabilities'],
+      );
+      if (required.isEmpty && optional.isEmpty) {
+        continue;
+      }
+      skillsWithCapabilityRequirements += 1;
+      requiredCapabilities.addAll(required);
+      optionalCapabilities.addAll(optional);
+    }
+    if (skillsWithCapabilityRequirements == 0) {
+      return '当前装载没有额外权限需求；绑定或解绑技能时不会扩大默认权限边界。';
+    }
+    final parts = <String>[
+      '当前装载有 $skillsWithCapabilityRequirements 个技能声明了权限边界',
+      if (requiredCapabilities.isNotEmpty)
+        '必需能力：${requiredCapabilities.map(_capabilityLabel).join('、')}',
+      if (optionalCapabilities.isNotEmpty)
+        '可选能力：${optionalCapabilities.map(_capabilityLabel).join('、')}',
+    ];
+    return '${parts.join('；')}。未授予的能力会自动转成降级或阻止装载。';
+  }
+
+  String _capabilityLabel(String capabilityId) {
+    return const SkillCapabilityCatalogService().displayLabel(capabilityId);
   }
 
   bool _sameLoadout(AgentSkillLoadout left, AgentSkillLoadout? right) {

@@ -97,6 +97,7 @@ void main() {
         );
         expect(detail.historyEntries.single.title, '历史装载');
         expect(detail.issues, isEmpty);
+        expect(detail.permissionBoundarySummary, contains('当前装载没有额外权限需求'));
 
         final disabledBaseSkill = detail.resolvedSkills.singleWhere(
           (item) => item.id == 'base_skill',
@@ -204,5 +205,41 @@ void main() {
       expect(viewData.detail!.extraSkills.single.title, '资料流转');
       expect(viewData.detail!.skillGroups.single.title, '项目资料与归档方法');
     });
+
+    test(
+      'build projects capability mismatch issues and permission boundary summary',
+      () {
+        final service = ProjectSkillLoadoutViewDataService();
+        final viewData = service.build(
+          projectAvailable: true,
+          snapshot: ProjectSkillLoadoutWorkspaceSnapshot.initial(),
+          agents: const <JsonMap>[
+            <String, Object?>{
+              'id': 'reviewer',
+              'name': '审稿智能体',
+              'description': '负责审稿',
+              'skills': <String>['external_research_strict'],
+            },
+          ],
+          skills: const <JsonMap>[
+            <String, Object?>{
+              'id': 'external_research_strict',
+              'name': '严格外部检索',
+              'source': 'builtin',
+              'required_capabilities': <String>['network_access'],
+              'safe_without_tools': false,
+            },
+          ],
+          skillGroups: const <JsonMap>[],
+          selectedAgentId: 'reviewer',
+          statusMessage: 'ok',
+        );
+
+        final detail = viewData.detail!;
+        expect(detail.issues.single, contains('需要联网权限'));
+        expect(detail.issues.single, contains('已阻止装载'));
+        expect(detail.permissionBoundarySummary, contains('必需能力：联网权限'));
+      },
+    );
   });
 }

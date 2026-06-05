@@ -20,13 +20,13 @@ class ConversationOpeningStateViewDataService {
         maturity.authoredFoundationFileCount > 0 ||
         maturity.narrativeFileCount > 0 ||
         maturity.isContinueReady;
-    final hasResolvedGroup =
-        projection == null
-            ? !maturity.shouldShowOpeningEntry
-            : projection.currentGroupDisplayName.trim().isNotEmpty ||
-                  projection.currentGroupId.trim().isNotEmpty;
+    final hasResolvedGroup = projection == null
+        ? !maturity.shouldShowOpeningEntry
+        : projection.currentGroupDisplayName.trim().isNotEmpty ||
+              projection.currentGroupId.trim().isNotEmpty;
     final missingRequirementTitles =
         projection?.orchestration.readiness.missingRequirements
+            .where((item) => item.id.trim() != 'conversation_goal')
             .map((item) => item.title.trim())
             .where((item) => item.isNotEmpty)
             .toList(growable: false) ??
@@ -77,9 +77,7 @@ class ConversationOpeningStateViewDataService {
       return '先确认一个适用于当前项目的智能体组。';
     }
     if (missingRequirementTitles.isNotEmpty) {
-      return projectType.trim() == 'long_novel'
-          ? '先补齐长任务开局缺口。'
-          : '先补齐当前开局缺口。';
+      return projectType.trim() == 'long_novel' ? '先补齐长任务开局缺口。' : '先补齐当前开局缺口。';
     }
     if (maturity.isContinueReady || hasProjectFoundation) {
       return '直接告诉智能体你现在要继续推进什么。';

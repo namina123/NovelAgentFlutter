@@ -116,7 +116,7 @@ class WorkbenchProjectPanel extends StatelessWidget {
           ),
           SizedBox(height: style.sectionGap),
           _ProjectPanelSection(
-            title: '项目协作基线',
+            title: '当前协作摘要',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -127,6 +127,14 @@ class WorkbenchProjectPanel extends StatelessWidget {
                     height: visual.bodyLineHeight,
                     color: surface.mutedForegroundColor,
                   ),
+                ),
+                const SizedBox(height: 10),
+                ProjectPanelActionTile(
+                  icon: Icons.group_work_outlined,
+                  title: '协作设置',
+                  description:
+                      viewData.projectAgentGroupPanel.actionDescription,
+                  onPressed: resourceHandler.onProjectAgentGroupRequested,
                 ),
               ],
             ),

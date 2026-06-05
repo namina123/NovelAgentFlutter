@@ -1,14 +1,19 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import '../agents/skill_capability_catalog_service.dart';
 import 'skill_package_metadata_profile_service.dart';
 
 class SkillPackageValidatorService {
   SkillPackageValidatorService({
     SkillPackageMetadataProfileService? metadataProfileService,
+    SkillCapabilityCatalogService? capabilityCatalogService,
   }) : _metadataProfileService =
-           metadataProfileService ?? const SkillPackageMetadataProfileService();
+           metadataProfileService ?? const SkillPackageMetadataProfileService(),
+       _capabilityCatalogService =
+           capabilityCatalogService ?? const SkillCapabilityCatalogService();
 
   final SkillPackageMetadataProfileService _metadataProfileService;
+  final SkillCapabilityCatalogService _capabilityCatalogService;
 
   JsonMap validate(JsonMap skill) {
     // 中文注释: 技能校验服务集中给出错误和警告，保证外部技能包进入项目前就能发现结构性问题。
@@ -17,6 +22,7 @@ class SkillPackageValidatorService {
     final id = ValueReaders.stringValue(skill['id']).trim();
     final name = ValueReaders.stringValue(skill['name']).trim();
     final description = ValueReaders.stringValue(skill['description']).trim();
+    final version = ValueReaders.stringValue(skill['version'], '1').trim();
     final instruction = ValueReaders.stringValue(
       skill['instruction_markdown'],
     ).trim();
@@ -42,6 +48,9 @@ class SkillPackageValidatorService {
     if (description.isEmpty) {
       errors.add('技能缺少 description。');
     }
+    if (version.isEmpty) {
+      errors.add('技能缺少 version。');
+    }
     if (instruction.isEmpty) {
       errors.add('技能缺少 instruction_markdown。');
     }
@@ -56,6 +65,19 @@ class SkillPackageValidatorService {
     if (!safeWithoutTools && requiredCapabilities.isEmpty) {
       warnings.add(
         'safe_without_tools=false 但未声明 required_capabilities，技能边界不够清楚。',
+      );
+    }
+    final unknownCapabilities =
+        <String>[...requiredCapabilities, ...optionalCapabilities]
+            .where(
+              (capabilityId) =>
+                  !_capabilityCatalogService.isKnownCapability(capabilityId),
+            )
+            .toSet()
+            .toList(growable: false);
+    if (unknownCapabilities.isNotEmpty) {
+      warnings.add(
+        '存在未识别的 capability requirement：${unknownCapabilities.join('、')}；如确需新增能力，请先补齐权限画像词表。',
       );
     }
     if (safeWithoutTools && requiredCapabilities.isNotEmpty) {

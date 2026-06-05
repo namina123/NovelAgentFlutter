@@ -128,6 +128,11 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        const Text(
+          '首次配置建议：先到“接口”页填写 API Key 并点击“测试连接”，确认无误后再回来保存默认模型。',
+          style: TextStyle(fontSize: 13, height: 1.5, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 16),
         ModelSettingsPrimaryPanel(
           providerOptions: providerOptions,
           providerController: _providerSearchController,

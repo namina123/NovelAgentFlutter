@@ -83,7 +83,7 @@ void main() {
       expect(viewData.projectAgentGroupPanel.primaryAgentLabel, '综合创作智能体');
       expect(
         viewData.projectAgentGroupPanel.actionDescription,
-        '查看当前项目支持的智能体组，并调整默认协作基线。',
+        '查看当前项目协作摘要，并按需调整默认协作组。',
       );
     },
   );

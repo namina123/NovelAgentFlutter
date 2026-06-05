@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../app/theme/app_palette.dart';
+import '../../../../../shared/theme/novel_theme_context.dart';
 import '../models/settings_search_option.dart';
 
 class SettingsLabeledSearchDropdownField<T> extends StatefulWidget {
@@ -69,15 +69,16 @@ class _SettingsLabeledSearchDropdownFieldState<T>
 
   @override
   Widget build(BuildContext context) {
+    final surface = context.novelThemeSurfaces.panel;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           widget.label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w700,
-            color: AppPalette.mutedText,
+            color: surface.mutedForegroundColor,
           ),
         ),
         const SizedBox(height: 6),
@@ -93,7 +94,9 @@ class _SettingsLabeledSearchDropdownFieldState<T>
               suffixIcon: IconButton(
                 onPressed: widget.enabled ? _toggleMenuFromButton : null,
                 icon: Icon(
-                  _menuRequested ? Icons.arrow_drop_up_rounded : Icons.arrow_drop_down_rounded,
+                  _menuRequested
+                      ? Icons.arrow_drop_up_rounded
+                      : Icons.arrow_drop_down_rounded,
                 ),
               ),
             ),
@@ -151,14 +154,16 @@ class _SettingsLabeledSearchDropdownFieldState<T>
           ? widget.options
           : <SettingsSearchOption<T>>[];
     } else {
-      _visibleOptions = widget.options.where((option) {
-        final haystacks = <String>[
-          option.label.toLowerCase(),
-          option.value.toString().toLowerCase(),
-          option.note.toLowerCase(),
-        ];
-        return haystacks.any((value) => value.contains(query));
-      }).toList(growable: false);
+      _visibleOptions = widget.options
+          .where((option) {
+            final haystacks = <String>[
+              option.label.toLowerCase(),
+              option.value.toString().toLowerCase(),
+              option.note.toLowerCase(),
+            ];
+            return haystacks.any((value) => value.contains(query));
+          })
+          .toList(growable: false);
     }
 
     if (_visibleOptions.isEmpty) {

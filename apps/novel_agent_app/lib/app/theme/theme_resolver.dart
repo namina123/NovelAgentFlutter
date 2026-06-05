@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'app_typography.dart';
 import 'control_style_token_set.dart';
 import 'novel_theme_extension.dart';
 import 'theme_token_set.dart';
@@ -22,6 +23,12 @@ class ThemeResolver {
         onError: colors.inverseTextColor,
         surface: colors.panelBackground,
         onSurface: colors.textColor,
+      ),
+    );
+    final textTheme = AppTypography.applyCjkFallback(
+      base.textTheme.apply(
+        bodyColor: colors.textColor,
+        displayColor: colors.textColor,
       ),
     );
 
@@ -59,10 +66,9 @@ class ThemeResolver {
           ),
         ),
       ),
-      textTheme: base.textTheme.apply(
-        bodyColor: colors.textColor,
-        displayColor: colors.textColor,
-      ),
+      primaryTextTheme: AppTypography.applyCjkFallback(base.primaryTextTheme),
+      iconTheme: IconThemeData(color: colors.textColor),
+      textTheme: textTheme,
       extensions: <ThemeExtension<dynamic>>[
         NovelThemeExtension(tokenSet: tokenSet),
       ],

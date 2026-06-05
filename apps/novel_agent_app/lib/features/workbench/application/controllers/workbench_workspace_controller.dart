@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
@@ -12,6 +13,7 @@ import '../../presentation/models/project_create_request_view_data.dart';
 import '../../presentation/models/conversation_group_selector_view_data.dart';
 import '../../presentation/models/project_agent_group_workspace_view_data.dart';
 import '../../presentation/models/selector_option_view_data.dart';
+import '../../presentation/models/workbench_information_view_data.dart';
 import '../../presentation/models/workbench_view_data.dart';
 import '../models/open_document_state.dart';
 import '../models/project_import_request.dart';
@@ -22,6 +24,7 @@ import '../services/project_import_workspace_command_view_data_service.dart';
 import '../services/project_long_task_summary_view_data_service.dart';
 import '../services/project_subtitle_view_data_service.dart';
 import '../services/workspace_command_default_target_service.dart';
+import '../services/workspace_information_projection_service.dart';
 import '../services/workspace_resource_display_service.dart';
 
 class WorkbenchWorkspaceController
@@ -84,6 +87,8 @@ class WorkbenchWorkspaceController
     ProjectImportWorkspaceCommandViewDataService?
     projectImportWorkspaceCommandViewDataService,
     ProjectImportExecutionService? projectImportExecutionService,
+    WorkspaceInformationProjectionService?
+    workspaceInformationProjectionService,
   }) : _loadProjectWorkspaceUseCase = loadProjectWorkspaceUseCase,
        _readProjectFileUseCase = readProjectFileUseCase,
        _saveDraftUseCase = saveDraftUseCase,
@@ -129,6 +134,7 @@ class WorkbenchWorkspaceController
        _desktopProjectImportFilePickerService =
            desktopProjectImportFilePickerService ??
            const DesktopProjectImportFilePickerService(),
+       _projectToolHostPort = projectToolHostPort,
        _projectImportWorkspaceCommandViewDataService =
            projectImportWorkspaceCommandViewDataService ??
            ProjectImportWorkspaceCommandViewDataService(),
@@ -139,7 +145,10 @@ class WorkbenchWorkspaceController
              projectToolHostPort: projectToolHostPort,
              writeProjectTextFileUseCase: writeProjectTextFileUseCase,
              narrativePersistenceService: narrativePersistenceService,
-           );
+           ),
+       _workspaceInformationProjectionService =
+           workspaceInformationProjectionService ??
+           const WorkspaceInformationProjectionService();
 
   final LoadProjectWorkspaceUseCase _loadProjectWorkspaceUseCase;
   final ReadProjectFileUseCase _readProjectFileUseCase;
@@ -181,6 +190,7 @@ class WorkbenchWorkspaceController
   final ProjectSubtitleViewDataService _projectSubtitleViewDataService;
   final ProjectLongTaskSummaryViewDataService
   _projectLongTaskSummaryViewDataService;
+  final ProjectToolHostPort _projectToolHostPort;
   final WorkspaceCommandDefaultTargetService
   _workspaceCommandDefaultTargetService;
   final DesktopProjectImportFilePickerService
@@ -188,8 +198,12 @@ class WorkbenchWorkspaceController
   final ProjectImportWorkspaceCommandViewDataService
   _projectImportWorkspaceCommandViewDataService;
   final ProjectImportExecutionService _projectImportExecutionService;
+  final WorkspaceInformationProjectionService
+  _workspaceInformationProjectionService;
   final WorkspaceResourceDisplayService _workspaceResourceDisplayService =
       const WorkspaceResourceDisplayService();
+  WorkbenchInformationViewData _latestInformationViewData =
+      const WorkbenchInformationViewData();
 
   ProjectCreationController? _projectCreationController;
 
@@ -307,6 +321,10 @@ class WorkbenchWorkspaceController
       ),
     );
     _resetConversationRuntimeState();
+    _latestInformationViewData = await _buildInformationViewData(
+      snapshot.project,
+      snapshot.entries,
+    );
     var workbench = _readWorkbench().copyWith(
       projectName: snapshot.project.name,
       projectSubtitle: _projectSubtitleViewDataService.build(
@@ -324,6 +342,7 @@ class WorkbenchWorkspaceController
         _resourceEntriesFrom(snapshot.entries),
         selectedId: '',
       ),
+      informationViewData: _latestInformationViewData,
       contextSummary: '资源 ${snapshot.entries.length} 项',
       generationStatus: '',
       documents: const <DocumentTabViewData>[],
@@ -405,6 +424,7 @@ class WorkbenchWorkspaceController
 
   void resetToProjectlessWorkbench({required String status}) {
     // 中文注释: 无项目工作区重置只清空工作台相关状态，不触碰其他 feature 的独立状态。
+    _latestInformationViewData = const WorkbenchInformationViewData();
     _writeProjectState(
       _readProjectState().copyWith(
         currentProject: null,
@@ -425,6 +445,7 @@ class WorkbenchWorkspaceController
           projectSubtitle: '',
           projectPath: '',
           resourceEntries: const [],
+          informationViewData: const WorkbenchInformationViewData(),
           documents: const <DocumentTabViewData>[],
           activeDocumentTitle: '',
           activeDocumentPath: '',
@@ -468,9 +489,61 @@ class WorkbenchWorkspaceController
         ),
       ),
     );
+    _latestInformationViewData = await _buildInformationViewData(
+      snapshot.project,
+      snapshot.entries,
+    );
     return _markResourceSelection(
       _resourceEntriesFrom(snapshot.entries),
       selectedId: selectedId,
+    );
+  }
+
+  Future<WorkbenchInformationViewData> _buildInformationViewData(
+    ProjectDescriptor project,
+    List<JsonMap> workspaceEntries,
+  ) async {
+    final entryByPath = <String, JsonMap>{};
+    for (final entry in workspaceEntries) {
+      final relativePath = _normalizeRelativePath(
+        _stringValue(entry['relative_path']),
+      );
+      if (relativePath.isEmpty) {
+        continue;
+      }
+      entryByPath[relativePath] = ValueReaders.deepCopyMap(entry);
+    }
+
+    for (final entry in await _scanInformationSupportEntries(
+      project.rootPath,
+    )) {
+      final relativePath = _normalizeRelativePath(
+        _stringValue(entry['relative_path']),
+      );
+      if (relativePath.isEmpty) {
+        continue;
+      }
+      entryByPath[relativePath] = entry;
+    }
+
+    final fileContents = <String, String>{};
+    for (final path in entryByPath.keys.toList()..sort()) {
+      if (!_shouldReadInformationProjectionFile(path)) {
+        continue;
+      }
+      final content = await _projectToolHostPort.readTextFile(
+        project.rootPath,
+        path,
+      );
+      if ((content ?? '').trim().isEmpty) {
+        continue;
+      }
+      fileContents[path] = content!;
+    }
+
+    return _workspaceInformationProjectionService.build(
+      workspaceEntries: entryByPath.values.toList(growable: false),
+      fileContents: fileContents,
     );
   }
 
@@ -559,6 +632,7 @@ class WorkbenchWorkspaceController
           _resourceEntriesFrom(_readProjectState().resourceSnapshotEntries),
           selectedId: '',
         ),
+        informationViewData: _latestInformationViewData,
         agentSelector: current.agentSelector.copyWith(
           currentAgentId: _stringValue(
             snapshot['selected_conversation_agent_id'],
@@ -589,6 +663,7 @@ class WorkbenchWorkspaceController
             _resourceEntriesFrom(_readProjectState().resourceSnapshotEntries),
             selectedId: activeDocumentPath,
           ),
+          informationViewData: _latestInformationViewData,
         ),
       ),
     );
@@ -1047,6 +1122,7 @@ class WorkbenchWorkspaceController
         (current) => applyWorkbenchState(
           current.copyWith(
             resourceEntries: resourceEntries,
+            informationViewData: _latestInformationViewData,
             generationStatus: '已保存到 $savedPath',
           ),
         ),
@@ -1131,6 +1207,7 @@ class WorkbenchWorkspaceController
         (current) => applyWorkbenchState(
           current.copyWith(
             resourceEntries: resourceEntries,
+            informationViewData: _latestInformationViewData,
             workspaceCommand: null,
             generationStatus: '已创建文件：$createdPath',
           ),
@@ -1173,6 +1250,7 @@ class WorkbenchWorkspaceController
       _mutateWorkbench(
         (current) => current.copyWith(
           resourceEntries: resourceEntries,
+          informationViewData: _latestInformationViewData,
           workspaceCommand: null,
           generationStatus: '已创建目录：$createdPath',
         ),
@@ -1231,6 +1309,7 @@ class WorkbenchWorkspaceController
         (current) => applyWorkbenchState(
           current.copyWith(
             resourceEntries: resourceEntries,
+            informationViewData: _latestInformationViewData,
             workspaceCommand: null,
             generationStatus: result.summary,
           ),
@@ -1523,9 +1602,135 @@ class WorkbenchWorkspaceController
     _mutateWorkbench(
       (current) => current.copyWith(
         resourceEntries: _resourceEntriesFrom(state.resourceSnapshotEntries),
+        informationViewData: _latestInformationViewData,
       ),
     );
     _persistWorkbenchSnapshot();
+  }
+
+  Future<List<JsonMap>> _scanInformationSupportEntries(String rootPath) async {
+    final entries = <JsonMap>[];
+    final seenPaths = <String>{};
+
+    Future<void> addFileIfExists(String relativePath) async {
+      final normalizedPath = _normalizeRelativePath(relativePath);
+      if (normalizedPath.isEmpty || seenPaths.contains(normalizedPath)) {
+        return;
+      }
+      final resolved = _resolveProjectFilePath(rootPath, normalizedPath);
+      if (!await File(resolved).exists()) {
+        return;
+      }
+      seenPaths.add(normalizedPath);
+      entries.add(<String, Object?>{
+        'relative_path': normalizedPath,
+        'display_name': normalizedPath.split('/').last,
+        'is_dir': false,
+      });
+    }
+
+    for (final projectionPath in _informationProjectionPaths) {
+      await addFileIfExists(projectionPath);
+    }
+
+    await for (final relativePath in _scanRelativeFilesUnder(
+      rootPath,
+      '.novel_agent/information',
+    )) {
+      if (_isPendingInformationPath(relativePath)) {
+        await addFileIfExists(relativePath);
+      }
+    }
+
+    await for (final relativePath in _scanRelativeFilesUnder(
+      rootPath,
+      'tracking',
+    )) {
+      if (relativePath.endsWith('activation_report.json')) {
+        await addFileIfExists(relativePath);
+      }
+    }
+
+    await for (final relativePath in _scanRelativeFilesUnder(
+      rootPath,
+      '.novel_agent',
+    )) {
+      if (relativePath.endsWith('activation_report.json')) {
+        await addFileIfExists(relativePath);
+      }
+    }
+
+    return entries;
+  }
+
+  Stream<String> _scanRelativeFilesUnder(
+    String rootPath,
+    String relativeRoot,
+  ) async* {
+    final directory = Directory(
+      _resolveProjectFilePath(rootPath, relativeRoot),
+    );
+    if (!await directory.exists()) {
+      return;
+    }
+    await for (final entity in directory.list(
+      recursive: true,
+      followLinks: false,
+    )) {
+      if (entity is! File) {
+        continue;
+      }
+      final relativePath = _relativePathFromAbsolute(rootPath, entity.path);
+      if (relativePath.isNotEmpty) {
+        yield relativePath;
+      }
+    }
+  }
+
+  bool _shouldReadInformationProjectionFile(String relativePath) {
+    return _informationProjectionPaths.contains(relativePath) ||
+        _isPendingInformationPath(relativePath) ||
+        relativePath.endsWith('activation_report.json');
+  }
+
+  bool _isPendingInformationPath(String relativePath) {
+    return relativePath.startsWith(
+          '.novel_agent/information/knowledge_cards/',
+        ) ||
+        relativePath.startsWith('.novel_agent/information/design_elements/') ||
+        relativePath.startsWith(
+          '.novel_agent/information/research_requests/',
+        ) ||
+        relativePath.startsWith('.novel_agent/information/reference_works/');
+  }
+
+  String _resolveProjectFilePath(String rootPath, String relativePath) {
+    final normalizedRoot = rootPath.replaceAll('\\', Platform.pathSeparator);
+    final normalizedRelative = relativePath.replaceAll(
+      '/',
+      Platform.pathSeparator,
+    );
+    return '$normalizedRoot${Platform.pathSeparator}$normalizedRelative';
+  }
+
+  String _relativePathFromAbsolute(String rootPath, String absolutePath) {
+    final normalizedRoot = _normalizeRelativePath(rootPath);
+    final normalizedAbsolute = _normalizeRelativePath(absolutePath);
+    if (normalizedRoot.isEmpty || normalizedAbsolute.isEmpty) {
+      return '';
+    }
+    if (normalizedAbsolute == normalizedRoot) {
+      return '';
+    }
+    final prefix = '$normalizedRoot/';
+    if (!normalizedAbsolute.startsWith(prefix)) {
+      return '';
+    }
+    return normalizedAbsolute.substring(prefix.length);
+  }
+
+  String _normalizeRelativePath(String value) {
+    return value.trim().replaceAll('\\', '/');
   }
 
   void _expandResourceAncestors(String relativePath) {
@@ -1726,3 +1931,10 @@ class WorkbenchWorkspaceController
     return const <String, Object?>{};
   }
 }
+
+const Set<String> _informationProjectionPaths = <String>{
+  InformationProjectionDocument.knowledgeSummaryRelativePath,
+  InformationProjectionDocument.designSummaryRelativePath,
+  InformationProjectionDocument.researchSummaryRelativePath,
+  InformationProjectionDocument.referenceBoundaryRelativePath,
+};

@@ -6,6 +6,7 @@ import '../storage/local_constraint_binding_repository.dart';
 import '../storage/local_narrative_claim_repository.dart';
 import '../storage/local_narrative_profile_repository.dart';
 import '../storage/open_narrative_state_path_service.dart';
+import 'project_information_activation_bridge_service.dart';
 
 class ProjectContextActivationService {
   ProjectContextActivationService({
@@ -16,6 +17,8 @@ class ProjectContextActivationService {
     ProjectContextFileSelectionService? fileSelectionService,
     ContextActivationPlannerService? plannerService,
     OpenNarrativeStatePathService? pathService,
+    ProjectInformationActivationBridgeService?
+    informationActivationBridgeService,
   }) : _workspacePort = workspacePort,
        _profileRepository =
            profileRepository ??
@@ -30,7 +33,12 @@ class ProjectContextActivationService {
            fileSelectionService ?? ProjectContextFileSelectionService(),
        _plannerService =
            plannerService ?? const ContextActivationPlannerService(),
-       _pathService = pathService ?? OpenNarrativeStatePathService();
+       _pathService = pathService ?? OpenNarrativeStatePathService(),
+       _informationActivationBridgeService =
+           informationActivationBridgeService ??
+           ProjectInformationActivationBridgeService(
+             workspacePort: workspacePort,
+           );
 
   final ProjectWorkspacePort _workspacePort;
   final NarrativeProfileRepository _profileRepository;
@@ -39,6 +47,8 @@ class ProjectContextActivationService {
   final ProjectContextFileSelectionService _fileSelectionService;
   final ContextActivationPlannerService _plannerService;
   final OpenNarrativeStatePathService _pathService;
+  final ProjectInformationActivationBridgeService
+  _informationActivationBridgeService;
 
   Future<ContextActivationPlan> buildPlan({
     required ProjectDescriptor project,
@@ -65,6 +75,10 @@ class ProjectContextActivationService {
       ...await _buildProfileItems(project),
       ...await _buildClaimItems(project),
       ...await _buildConstraintItems(project),
+      ...await _informationActivationBridgeService.buildItems(
+        project,
+        taskType: cleanTaskType,
+      ),
     ];
 
     final sourceCounts = _countBySource(items);
@@ -76,7 +90,7 @@ class ProjectContextActivationService {
       reservedOutputChars: reservedOutputChars < 0 ? 0 : reservedOutputChars,
       items: items,
       summary:
-          'project files ${sourceCounts['project_file'] ?? 0}, profiles ${sourceCounts['narrative_profile'] ?? 0}, claims ${sourceCounts['narrative_claim'] ?? 0}, constraints ${sourceCounts['narrative_constraint'] ?? 0}.',
+          'project files ${sourceCounts['project_file'] ?? 0}, profiles ${sourceCounts['narrative_profile'] ?? 0}, claims ${sourceCounts['narrative_claim'] ?? 0}, constraints ${sourceCounts['narrative_constraint'] ?? 0}, knowledge ${sourceCounts['project_knowledge_card'] ?? 0}, design ${sourceCounts['project_design_element'] ?? 0}, research ${sourceCounts['project_research_note'] ?? 0}, references ${sourceCounts['project_reference_work'] ?? 0}.',
       schemaVersion: '1',
       metadata: <String, Object?>{
         'project_id': project.id,
@@ -597,7 +611,7 @@ class ProjectContextActivationService {
     List<ContextActivationItem> items,
   ) {
     final kinds = _countByKind(items);
-    return '${report.summary} selected profiles ${kinds['narrative_profile_selected'] ?? 0}, claims ${kinds['narrative_claim_selected'] ?? 0}, constraints ${kinds['narrative_constraint_selected'] ?? 0}, files ${kinds['project_file_selected'] ?? 0}.';
+    return '${report.summary} selected profiles ${kinds['narrative_profile_selected'] ?? 0}, claims ${kinds['narrative_claim_selected'] ?? 0}, constraints ${kinds['narrative_constraint_selected'] ?? 0}, files ${kinds['project_file_selected'] ?? 0}, knowledge ${kinds['project_knowledge_card_selected'] ?? 0}, design ${kinds['project_design_element_selected'] ?? 0}, research ${kinds['project_research_note_selected'] ?? 0}, references ${kinds['project_reference_work_selected'] ?? 0}.';
   }
 
   Map<String, int> _countByKind(List<ContextActivationItem> items) {

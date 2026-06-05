@@ -71,6 +71,7 @@ class ConversationOpeningGuideViewDataService {
     // 中文注释: 普通协作项目先复用现有轻会话入口，只把当前智能体组与 opening 状态补进描述层。
     final orchestration = projection.orchestration;
     final missingTitles = orchestration.readiness.missingRequirements
+        .where((item) => item.id.trim() != 'conversation_goal')
         .map((item) => item.title)
         .join('、');
     final summaryLines = <String>[
@@ -92,7 +93,7 @@ class ConversationOpeningGuideViewDataService {
           '${fallbackGuide.workflowDescription}\n\n${summaryLines.join('\n')}',
       composerHint: isGenerating
           ? fallbackGuide.composerHint
-          : '${fallbackGuide.composerHint}\n\n也可以直接输入一句当前想让智能体做什么。',
+          : '可以直接说“写第一章”“续写下一章”或“先整理设定”，也可以补一句更具体的写作目标。',
       primaryActions: fallbackGuide.primaryActions,
     ).copyWith(
       openingState: _openingStateViewDataService.build(
@@ -103,7 +104,7 @@ class ConversationOpeningGuideViewDataService {
         preferredNextAction: fallbackGuide.primaryActions.isEmpty
             ? null
             : fallbackGuide.primaryActions.first,
-        firstPromptOverride: '先说一句你现在想让智能体做什么。',
+        firstPromptOverride: '先说一句你想现在写哪一章、续写哪里，或者要先整理哪部分设定。',
         nextStepLabelOverride: fallbackGuide.primaryActions.isEmpty
             ? ''
             : fallbackGuide.primaryActions.first.title,
@@ -134,7 +135,7 @@ class ConversationOpeningGuideViewDataService {
           '${fallbackGuide.workflowDescription}\n\n${summaryLines.join('\n')}',
       composerHint: isGenerating
           ? fallbackGuide.composerHint
-          : '${fallbackGuide.composerHint}\n\n直接描述当前要继续推进的内容即可。',
+          : '直接描述当前要继续推进的章节、场景或设定即可。',
       primaryActions: fallbackGuide.primaryActions,
     ).copyWith(
       openingState: _openingStateViewDataService.build(
@@ -145,7 +146,7 @@ class ConversationOpeningGuideViewDataService {
         preferredNextAction: fallbackGuide.primaryActions.isEmpty
             ? null
             : fallbackGuide.primaryActions.first,
-        firstPromptOverride: '直接描述当前要继续推进的内容即可。',
+        firstPromptOverride: '直接描述当前要继续推进的章节、场景或设定即可。',
         nextStepLabelOverride: fallbackGuide.primaryActions.isEmpty
             ? ''
             : fallbackGuide.primaryActions.first.title,

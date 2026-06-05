@@ -38,9 +38,8 @@ class ProjectDraftExecutionConstraintRuntimeService {
     writingExecutionConstraintBridgeService,
   }) {
     return ProjectDraftExecutionConstraintRuntimeService(
-      expressionConstraintProfileRepository: ExpressionConstraintProfileRepository(
-        workspacePort: workspacePort,
-      ),
+      expressionConstraintProfileRepository:
+          ExpressionConstraintProfileRepository(workspacePort: workspacePort),
       projectExpressionConstraintBindingRepository:
           ProjectExpressionConstraintBindingRepository(
             workspacePort: workspacePort,
@@ -71,6 +70,10 @@ class ProjectDraftExecutionConstraintRuntimeService {
     String agentId = '',
     String modeId = '',
     String stageId = '',
+    String intent = 'draft',
+    String taskType = '',
+    String phase = '',
+    String expressionConstraintInjectionMode = '',
     JsonMap legacyChapterLengthOptions = const <String, Object?>{},
   }) async {
     final results = await Future.wait<Object>(<Future<Object>>[
@@ -96,6 +99,10 @@ class ProjectDraftExecutionConstraintRuntimeService {
       agentId: agentId,
       modeId: modeId,
       stageId: stageId,
+      intent: intent,
+      taskType: taskType,
+      phase: phase,
+      expressionConstraintInjectionMode: expressionConstraintInjectionMode,
       legacyChapterLengthOptions: legacyChapterLengthOptions,
       legacyExpressionConstraintProfiles: profiles
           .map(_expressionConstraintProfileNormalizerService.toDocument)
@@ -115,16 +122,14 @@ class ProjectDraftExecutionConstraintRuntimeService {
       ...bridged.toJson(),
       'session_context_markdown': _sessionContextMarkdown(
         chapterLengthSummary: chapterLengthSummary,
+        bridged: bridged,
         report: bridged.runtimeReport,
       ),
       'chapter_length_summary': chapterLengthSummary,
     };
   }
 
-  String _chapterLengthSummary(
-    JsonMap metadata, {
-    required JsonMap report,
-  }) {
+  String _chapterLengthSummary(JsonMap metadata, {required JsonMap report}) {
     final profile = ValueReaders.mapValue(metadata['chapter_length_profile']);
     if (profile.isEmpty) {
       return '';
@@ -155,6 +160,7 @@ class ProjectDraftExecutionConstraintRuntimeService {
 
   String _sessionContextMarkdown({
     required String chapterLengthSummary,
+    required WritingExecutionConstraintBridgeResult bridged,
     required JsonMap report,
   }) {
     final lines = <String>[];
@@ -162,20 +168,29 @@ class ProjectDraftExecutionConstraintRuntimeService {
       lines.add('## Execution Constraints');
       lines.add('- 字数约束：$chapterLengthSummary');
     }
-    final expressionReport = ValueReaders.mapValue(report['expression_constraints']);
+    final expressionReport = ValueReaders.mapValue(
+      report['expression_constraints'],
+    );
     final appliedBindingIds = ValueReaders.stringList(
       expressionReport['applied_binding_ids'],
     );
-    final bindingCount = ValueReaders.intValue(
+    final bindingCountFromReport = ValueReaders.intValue(
       expressionReport['binding_binding_count'],
     );
-    if (bindingCount > 0 || appliedBindingIds.isNotEmpty) {
+    final activeBindingCount = bindingCountFromReport > 0
+        ? bindingCountFromReport
+        : bridged.projectExpressionConstraintBindings.length;
+    if (activeBindingCount > 0 || appliedBindingIds.isNotEmpty) {
       if (lines.isEmpty) {
         lines.add('## Execution Constraints');
       }
+      final injectionMode = bridged.expressionConstraintInjectionMode.trim();
       lines.add(
-        '- 表达限制：已接入 ${bindingCount > 0 ? bindingCount : appliedBindingIds.length} 条 binding 运行时桥接。',
+        '- 表达限制：已接入 ${activeBindingCount > 0 ? activeBindingCount : appliedBindingIds.length} 条 binding 运行时桥接。',
       );
+      if (injectionMode.isNotEmpty && injectionMode != 'disabled') {
+        lines.add('- 表达限制 gate：当前按 $injectionMode 注入，并要求保留复核证据。');
+      }
     }
     return lines.join('\n');
   }

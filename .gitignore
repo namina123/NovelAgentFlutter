@@ -29,6 +29,7 @@ logs/
 temp/
 artifacts/
 **/artifacts/
+dist/
 test_api.txt
 local/*
 !local/README.md

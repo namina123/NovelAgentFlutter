@@ -131,6 +131,62 @@ void main() {
           SemanticReviewRecommendedDisposition.acceptWithNote,
         );
         expect(bundle.semanticReviews.single.questionedClaimIds, isNotEmpty);
+        expect(bundle.knowledgeCards, isNotEmpty);
+        expect(
+          bundle.knowledgeCards.every(
+            (card) =>
+                card.cardNamespace.startsWith('analysis.') &&
+                card.lifecycleStatus == InformationLifecycleStatuses.proposed &&
+                card.evidenceRefs.isNotEmpty,
+          ),
+          isTrue,
+        );
+        expect(bundle.designElements, isNotEmpty);
+        expect(
+          bundle.designElements.map((card) => card.designNamespace),
+          containsAll(<String>[
+            'analysis.deconstruction.design.system_rule',
+            'analysis.deconstruction.design.style_pattern',
+            'analysis.explainer.design.pattern_hint',
+          ]),
+        );
+        final patternHint = bundle.designElements
+            .where(
+              (card) =>
+                  card.designNamespace ==
+                  'analysis.explainer.design.pattern_hint',
+            )
+            .single;
+        expect(patternHint.designPayload['design_kind'], 'pattern_hint');
+        expect(patternHint.designPayload['legacy_kind'], 'mechanic_hint');
+        expect(patternHint.evidenceRefs, isNotEmpty);
+        expect(
+          patternHint.lifecycleStatus,
+          InformationLifecycleStatuses.proposed,
+        );
+        expect(bundle.researchNotes, hasLength(1));
+        expect(
+          bundle
+              .researchNotes
+              .single
+              .metadata[BookDeconstructionNarrativeBridgeConstants
+              .metadataAnalysisNamespace],
+          'analysis.deconstruction.research_note',
+        );
+        expect(bundle.referenceWorks, hasLength(1));
+        expect(
+          bundle.referenceWorks.single.relationshipToProject,
+          'deconstruction_source_work',
+        );
+        expect(bundle.referenceWorks.single.requiresConfirmation, isTrue);
+        expect(
+          bundle
+              .referenceWorks
+              .single
+              .metadata[BookDeconstructionNarrativeBridgeConstants
+              .metadataAnalysisStatus],
+          BookDeconstructionNarrativeBridgeConstants.proposedStatus,
+        );
 
         final promoted = promotionService.promote(
           analysisBundle: bundle,
@@ -146,6 +202,16 @@ void main() {
         expect(
           promoted.profileProposals.single.proposalStatus,
           NarrativeProfileLifecycleStatus.accepted,
+        );
+        expect(
+          promoted.designElements
+              .singleWhere(
+                (card) =>
+                    card.designNamespace ==
+                    'analysis.explainer.design.pattern_hint',
+              )
+              .lifecycleStatus,
+          InformationLifecycleStatuses.proposed,
         );
 
         final menu = followupMenuBuilder.build(

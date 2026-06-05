@@ -50,74 +50,93 @@ void main() {
     test(
       'loads legacy expression settings and narrative bindings into runtime payload',
       () async {
-      await profileRepository.saveProjectProfiles(project, <ExpressionConstraintProfile>[
-        const ExpressionConstraintProfile(
-          id: 'project_natural_expression',
-          displayName: '项目自然表达',
-          summary: '项目级自然表达约束。',
-          kind: ExpressionConstraintKind.naturalExpression,
-          rules: <String>['压低解释腔。'],
-        ),
-      ]);
-      await bindingRepository.saveBindings(
-        project,
-        const <ProjectExpressionConstraintBinding>[
-          ProjectExpressionConstraintBinding(
-            id: 'project_binding_1',
-            profileId: 'project_natural_expression',
-            defaultForProject: true,
+        await profileRepository.saveProjectProfiles(
+          project,
+          <ExpressionConstraintProfile>[
+            const ExpressionConstraintProfile(
+              id: 'project_natural_expression',
+              displayName: '项目自然表达',
+              summary: '项目级自然表达约束。',
+              kind: ExpressionConstraintKind.naturalExpression,
+              rules: <String>['压低解释腔。'],
+            ),
+          ],
+        );
+        await bindingRepository
+            .saveBindings(project, const <ProjectExpressionConstraintBinding>[
+              ProjectExpressionConstraintBinding(
+                id: 'project_binding_1',
+                profileId: 'project_natural_expression',
+                defaultForProject: true,
+              ),
+            ]);
+        await constraintBindingRepository.appendBinding(
+          project,
+          NarrativeConstraintBindingProposal(
+            bindingId: 'binding_length_1',
+            constraintType: 'chapter_length',
+            scope: const ConstraintBindingScope(
+              appliesTo: <String>[ConstraintBindingAppliesTo.writing],
+              stageIds: <String>['draft'],
+            ),
+            policy: const ConstraintBindingPolicy(autoAccept: true),
+            source: const NarrativeSourceRef(sourceType: 'user'),
+            constraintPayload: const <String, Object?>{
+              'target_word_count': 2400,
+              'preferred_min': 2100,
+              'preferred_max': 2700,
+            },
           ),
-        ],
-      );
-      await constraintBindingRepository.appendBinding(
-        project,
-        NarrativeConstraintBindingProposal(
-          bindingId: 'binding_length_1',
-          constraintType: 'chapter_length',
-          scope: const ConstraintBindingScope(
-            appliesTo: <String>[ConstraintBindingAppliesTo.writing],
-            stageIds: <String>['draft'],
-          ),
-          policy: const ConstraintBindingPolicy(autoAccept: true),
-          source: const NarrativeSourceRef(sourceType: 'user'),
-          constraintPayload: const <String, Object?>{
-            'target_word_count': 2400,
-            'preferred_min': 2100,
-            'preferred_max': 2700,
-          },
-        ),
-      );
+        );
 
-      final resolved = await service.resolve(
-        project,
-        appliesTo: ConstraintBindingAppliesTo.writing,
-        stageId: 'draft',
-      );
+        final resolved = await service.resolve(
+          project,
+          appliesTo: ConstraintBindingAppliesTo.writing,
+          stageId: 'draft',
+          intent: 'workflow_task',
+          taskType: 'chapter',
+        );
 
-      expect(
-        ValueReaders.intValue(
-          ValueReaders.mapValue(
+        expect(
+          ValueReaders.intValue(
             ValueReaders.mapValue(
-              resolved['chapter_length_metadata'],
-            )['chapter_length_profile'],
-          )['target_length'],
-        ),
-        2400,
-      );
-      expect(
-        ValueReaders.objectList(resolved['expression_constraint_profiles']),
-        isNotEmpty,
-      );
-      expect(
-        ValueReaders.objectList(
-          resolved['project_expression_constraint_bindings'],
-        ),
-        isNotEmpty,
-      );
-      expect(
-        ValueReaders.stringValue(resolved['session_context_markdown']),
-        contains('字数约束'),
-      );
+              ValueReaders.mapValue(
+                resolved['chapter_length_metadata'],
+              )['chapter_length_profile'],
+            )['target_length'],
+          ),
+          2400,
+        );
+        expect(
+          ValueReaders.objectList(resolved['expression_constraint_profiles']),
+          isNotEmpty,
+        );
+        expect(
+          ValueReaders.objectList(
+            resolved['project_expression_constraint_bindings'],
+          ),
+          isNotEmpty,
+        );
+        expect(
+          ValueReaders.stringValue(resolved['session_context_markdown']),
+          contains('字数约束'),
+        );
+        expect(
+          ValueReaders.stringValue(
+            resolved['expression_constraint_injection_mode'],
+          ),
+          'brief_and_sections',
+        );
+        expect(
+          ValueReaders.boolValue(
+            resolved['expression_constraint_review_required'],
+          ),
+          isTrue,
+        );
+        expect(
+          ValueReaders.stringValue(resolved['session_context_markdown']),
+          contains('要求保留复核证据'),
+        );
       },
     );
   });

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../contracts/workbench_file_panel_action_handler.dart';
 import '../models/workbench_resource_view_data.dart';
 import 'file_tool_group.dart';
+import 'resource_information_section.dart';
 import 'resource_manager_header.dart';
 import 'resource_panel_section.dart';
 import 'resource_tree_card.dart';
@@ -58,6 +59,15 @@ class ResourceManagerPanel extends StatelessWidget {
                   ),
                 ),
               ),
+              if (viewData.informationViewData.hasContent) ...[
+                SliverToBoxAdapter(child: SizedBox(height: visual.sectionGap)),
+                SliverToBoxAdapter(
+                  child: ResourceInformationSection(
+                    viewData: viewData.informationViewData,
+                    actionHandler: actionHandler,
+                  ),
+                ),
+              ],
               SliverToBoxAdapter(child: SizedBox(height: visual.sectionGap)),
               SliverToBoxAdapter(
                 child: ResourceTreeCard(

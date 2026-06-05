@@ -32,12 +32,51 @@ void main() {
             'result': <String, Object?>{
               'ok': true,
               'sub_agent_run_id': 'sub_run_1',
+              'sub_session_id': 'sub_session_1',
+              'agent_id': 'style_reviewer',
               'agent_name': '风格审校员',
               'task': '压一下第二章的 AI 味',
               'summary': '已给出两条具体修改建议。',
               'result_markdown': '把过度解释的句子收短。',
               'reasoning_content': '先找共性句式。',
               'tool_count': 1,
+              'collaboration_result_package': <String, Object?>{
+                'package_id': 'pkg_1',
+                'execution_package_id': 'exec_1',
+                'child_run_package_id': 'child_1',
+                'agent_id': 'style_reviewer',
+                'agent_name': '风格审校员',
+                'status': 'success',
+                'used_tool_count': 1,
+                'merge_contract': <String, Object?>{
+                  'merge_mode': 'main_agent_merges',
+                  'parent_review_required': true,
+                  'allows_direct_delivery': false,
+                  'accepted_result_types': <Object?>['suggestion'],
+                },
+                'conflicts': <Object?>[
+                  <String, Object?>{
+                    'conflict_id': 'conflict_1',
+                    'subject': '第二章表达风格',
+                    'agent_id': 'style_reviewer',
+                    'agent_name': '风格审校员',
+                    'risk': 'low',
+                    'suggestion': '把过度解释的句子收短。',
+                    'adoption_hint': '主智能体先复核后吸收。',
+                    'confidence': 0.76,
+                    'evidence': <Object?>[
+                      <String, Object?>{'summary': '段尾解释句过密。'},
+                    ],
+                  },
+                ],
+                'arbitration_result': <String, Object?>{
+                  'arbitration_id': 'arb_1',
+                  'status': 'auto_resolved',
+                  'highest_risk': 'low',
+                  'selected_conflict_id': 'conflict_1',
+                  'summary': '主链可以先复核这条建议，再决定是否吸收。',
+                },
+              },
               'sub_agent_events': [
                 <String, Object?>{'summary': '接收任务并开始分析。'},
                 <String, Object?>{'summary': '完成建议整理。'},
@@ -51,6 +90,15 @@ void main() {
     expect(nextState.subAgentRuns, hasLength(1));
     expect(nextState.subAgentRuns.single.id, 'sub_run_1');
     expect(nextState.subAgentRuns.single.agentName, '风格审校员');
+    expect(nextState.subAgentRuns.single.expertOpinion, contains('把过度解释的句子收短'));
+    expect(
+      nextState.subAgentRuns.single.evidenceItems.single,
+      contains('段尾解释句过密'),
+    );
+    expect(
+      nextState.subAgentRuns.single.adoptionSummary,
+      contains('主链可以先复核这条建议'),
+    );
     expect(nextState.subAgentRuns.single.events, ['接收任务并开始分析。', '完成建议整理。']);
   });
 

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../app/theme/app_palette.dart';
+import '../theme/novel_theme_context.dart';
 
 class SectionHeading extends StatelessWidget {
   const SectionHeading({
@@ -17,8 +17,7 @@ class SectionHeading extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 中文注释: 通用分区标题组件统一管理标题、副标题和尾部动作的关系，减少页面头部重复代码。
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final surface = context.novelThemeSurfaces.panel;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -31,7 +30,7 @@ class SectionHeading extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w800,
-                  color: isDark ? theme.colorScheme.onSurface : AppPalette.text,
+                  color: surface.foregroundColor,
                 ),
               ),
               if (subtitle != null) ...[
@@ -40,10 +39,9 @@ class SectionHeading extends StatelessWidget {
                   subtitle!,
                   style: TextStyle(
                     fontSize: 11,
+                    height: 1.4,
                     fontWeight: FontWeight.w500,
-                    color: isDark
-                        ? theme.colorScheme.onSurface.withValues(alpha: 0.72)
-                        : AppPalette.mutedText,
+                    color: surface.mutedForegroundColor,
                   ),
                 ),
               ],

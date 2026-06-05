@@ -15,20 +15,20 @@ class AppShellNavigationCatalog {
         items: <AppShellNavigationItem>[
           AppShellNavigationItem(
             destination: AppDestination.projectOpen,
-            label: '打开项目',
-            tooltip: '打开项目',
+            label: '作品库',
+            tooltip: '作品库',
             icon: Icons.folder_open_outlined,
           ),
         ],
       ),
       AppShellNavigationSection(
         id: 'workspace',
-        label: '工作',
+        label: '创作',
         items: <AppShellNavigationItem>[
           AppShellNavigationItem(
             destination: AppDestination.workbench,
-            label: '工作台',
-            tooltip: '工作台',
+            label: '创作台',
+            tooltip: '创作台',
             icon: Icons.space_dashboard_outlined,
           ),
           AppShellNavigationItem(
@@ -78,9 +78,7 @@ class AppShellNavigationCatalog {
     return null;
   }
 
-  static AppShellNavigationSection? findSection(
-    AppDestination destination,
-  ) {
+  static AppShellNavigationSection? findSection(AppDestination destination) {
     // 中文注释: 当前页面所属分组由目录统一提供，避免顶部条和抽拉栏各自猜测分类。
     for (final section in sections()) {
       for (final item in section.items) {

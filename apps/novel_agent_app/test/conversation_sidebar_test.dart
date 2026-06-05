@@ -191,6 +191,10 @@ void main() {
               reasoning: '先校验世界观，再补齐贸易逻辑。',
               toolCount: 2,
               events: ['接收主智能体任务。', '完成资料整理并返回。'],
+              expertOpinion: '建议把贸易摩擦提前到场景开头。',
+              evidenceItems: ['第二段才出现关键贸易背景。'],
+              adoptionSummary: '主链可以先复核这条建议，再决定是否吸收。',
+              diagnosticItems: ['run_id: sub_1', 'agent_id: evidence_reader'],
             ),
           ],
         ),
@@ -205,8 +209,17 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('委派任务'), findsOneWidget);
-    expect(find.text('返回内容'), findsOneWidget);
+    expect(find.text('专家意见'), findsOneWidget);
+    expect(find.text('证据'), findsOneWidget);
+    expect(find.text('采纳情况'), findsOneWidget);
+    expect(find.text('run_id: sub_1'), findsNothing);
     expect(find.byType(ConversationComposerDockPanel), findsNothing);
+
+    await tester.tap(find.text('运行诊断'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('run_id: sub_1'), findsOneWidget);
+    expect(find.text('agent_id: evidence_reader'), findsOneWidget);
 
     await tester.tap(find.byTooltip('返回主会话'));
     await tester.pumpAndSettle();
@@ -540,7 +553,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('下一步：智能开局'), findsOneWidget);
-      expect(find.text('章节续写'), findsNothing);
+      expect(find.text('智能开局'), findsOneWidget);
+      expect(find.text('续写下一章'), findsNothing);
       expect(find.byType(PrimaryActionList), findsNothing);
     },
   );

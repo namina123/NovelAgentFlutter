@@ -12,6 +12,7 @@ import 'project_agent_skill_tool_executor.dart';
 import 'project_agent_skill_runtime_loadout_service.dart';
 import 'project_gateway_process_service.dart';
 import 'project_gateway_tool_executor.dart';
+import 'project_information_domain_tool_executor.dart';
 import 'project_long_task_tool_executor.dart';
 import 'project_management_tool_executor.dart';
 import 'project_narrative_domain_tool_executor.dart';
@@ -102,10 +103,15 @@ class ProjectToolDispatcher implements ToolExecutionPort {
        ),
        _narrativeDomainToolCatalog = NarrativeDomainToolCatalog(),
        _narrativeDomainDispatcher = _buildNarrativeDomainDispatcher(),
+       _informationDomainDispatcher = _buildInformationDomainDispatcher(),
        _narrativeDomainToolExecutor = ProjectNarrativeDomainToolExecutor(
          workspacePort: _ProjectToolHostWorkspacePortAdapter(hostPort),
          hostPort: hostPort,
          dispatcher: _buildNarrativeDomainDispatcher(),
+       ),
+       _informationDomainToolExecutor = ProjectInformationDomainToolExecutor(
+         workspacePort: _ProjectToolHostWorkspacePortAdapter(hostPort),
+         dispatcher: _buildInformationDomainDispatcher(),
        );
 
   final ToolCallNormalizerService _toolCallNormalizerService;
@@ -121,7 +127,9 @@ class ProjectToolDispatcher implements ToolExecutionPort {
   final ProjectAgentSkillToolExecutor _agentSkillToolExecutor;
   final NarrativeDomainToolCatalog _narrativeDomainToolCatalog;
   final NarrativeDomainToolDispatcher _narrativeDomainDispatcher;
+  final NarrativeDomainToolDispatcher _informationDomainDispatcher;
   final ProjectNarrativeDomainToolExecutor _narrativeDomainToolExecutor;
+  final ProjectInformationDomainToolExecutor _informationDomainToolExecutor;
 
   static NarrativeDomainToolDispatcher _buildNarrativeDomainDispatcher() {
     return NarrativeDomainToolDispatchService(
@@ -136,6 +144,19 @@ class ProjectToolDispatcher implements ToolExecutionPort {
     );
   }
 
+  static NarrativeDomainToolDispatcher _buildInformationDomainDispatcher() {
+    return NarrativeDomainToolDispatchService(
+      handlers: <NarrativeDomainToolHandler>[
+        const RequestExternalResearchHandler(),
+        const SubmitResearchNoteHandler(),
+        const ProposeKnowledgeCardHandler(),
+        const ProposeDesignElementHandler(),
+        const LinkInformationEvidenceHandler(),
+        const ProposeReferenceWorkHandler(),
+      ],
+    );
+  }
+
   static const Set<String> _domainToolNames = <String>{
     NarrativeDomainToolNames.submitChapterDelivery,
     NarrativeDomainToolNames.submitNarrativeStateClaims,
@@ -143,6 +164,12 @@ class ProjectToolDispatcher implements ToolExecutionPort {
     NarrativeDomainToolNames.submitSemanticReview,
     NarrativeDomainToolNames.proposeConstraintBinding,
     NarrativeDomainToolNames.requestProfileClarification,
+    NarrativeDomainToolNames.requestExternalResearch,
+    NarrativeDomainToolNames.submitResearchNote,
+    NarrativeDomainToolNames.proposeKnowledgeCard,
+    NarrativeDomainToolNames.proposeDesignElement,
+    NarrativeDomainToolNames.linkInformationEvidence,
+    NarrativeDomainToolNames.proposeReferenceWork,
   };
 
   static const Set<String> _lowLevelToolNames = <String>{
@@ -424,10 +451,7 @@ class ProjectToolDispatcher implements ToolExecutionPort {
       };
     }
 
-    final outcome = await _narrativeDomainToolExecutor.execute(
-      project,
-      parseResult.request!,
-    );
+    final outcome = await _executeDomainTool(project, parseResult.request!);
     final changedPaths = _domainChangedPaths(outcome);
     final waitingForUserChoice =
         outcome.outcomeStatus ==
@@ -520,17 +544,23 @@ class ProjectToolDispatcher implements ToolExecutionPort {
   }
 
   NarrativeDomainToolCapability? _domainCapabilityFor(String toolName) {
-    return _narrativeDomainDispatcher.capabilityFor(toolName);
+    return _domainDispatcherFor(toolName).capabilityFor(toolName);
   }
 
   String _defaultDomainSourceType(String toolName) {
     switch (toolName) {
       case NarrativeDomainToolNames.submitChapterDelivery:
       case NarrativeDomainToolNames.submitNarrativeStateClaims:
+      case NarrativeDomainToolNames.requestExternalResearch:
+      case NarrativeDomainToolNames.submitResearchNote:
+      case NarrativeDomainToolNames.proposeKnowledgeCard:
+      case NarrativeDomainToolNames.proposeDesignElement:
         return NarrativeSourceTypes.writer;
       case NarrativeDomainToolNames.submitSemanticReview:
+      case NarrativeDomainToolNames.linkInformationEvidence:
         return NarrativeSourceTypes.reviewer;
       case NarrativeDomainToolNames.proposeConstraintBinding:
+      case NarrativeDomainToolNames.proposeReferenceWork:
         return NarrativeSourceTypes.user;
       case NarrativeDomainToolNames.proposeNarrativeProfileUpdate:
         return NarrativeSourceTypes.deconstruction;
@@ -538,6 +568,34 @@ class ProjectToolDispatcher implements ToolExecutionPort {
       default:
         return NarrativeSourceTypes.system;
     }
+  }
+
+  NarrativeDomainToolDispatcher _domainDispatcherFor(String toolName) {
+    if (_isInformationDomainTool(toolName)) {
+      return _informationDomainDispatcher;
+    }
+    return _narrativeDomainDispatcher;
+  }
+
+  bool _isInformationDomainTool(String toolName) {
+    return const <String>{
+      NarrativeDomainToolNames.requestExternalResearch,
+      NarrativeDomainToolNames.submitResearchNote,
+      NarrativeDomainToolNames.proposeKnowledgeCard,
+      NarrativeDomainToolNames.proposeDesignElement,
+      NarrativeDomainToolNames.linkInformationEvidence,
+      NarrativeDomainToolNames.proposeReferenceWork,
+    }.contains(toolName);
+  }
+
+  Future<DomainToolOutcome> _executeDomainTool(
+    ProjectDescriptor project,
+    DomainToolRequest request,
+  ) {
+    if (_isInformationDomainTool(request.toolName)) {
+      return _informationDomainToolExecutor.execute(project, request);
+    }
+    return _narrativeDomainToolExecutor.execute(project, request);
   }
 
   List<String> _domainChangedPaths(DomainToolOutcome outcome) {

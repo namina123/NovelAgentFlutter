@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../app/theme/app_palette.dart';
+import '../../application/services/ecosystem_entry_editor_service.dart';
 import '../../../../../shared/widgets/action_button.dart';
 import '../../../../../shared/widgets/panel_surface.dart';
 import '../../../../../shared/widgets/section_heading.dart';
@@ -22,6 +23,8 @@ class EcosystemEditorOverlay extends StatefulWidget {
 }
 
 class _EcosystemEditorOverlayState extends State<EcosystemEditorOverlay> {
+  final EcosystemEntryEditorService _reviewService =
+      EcosystemEntryEditorService();
   late final TextEditingController _idController;
   late final TextEditingController _nameController;
   late final TextEditingController _descriptionController;
@@ -40,6 +43,9 @@ class _EcosystemEditorOverlayState extends State<EcosystemEditorOverlay> {
   late final TextEditingController _requiredCapabilitiesController;
   late final TextEditingController _optionalCapabilitiesController;
   late final TextEditingController _preferredOutputController;
+  late final TextEditingController _primaryAgentIdController;
+  late final TextEditingController _requiredAgentIdsController;
+  late final TextEditingController _optionalAgentIdsController;
   late String _orchestration;
   late bool _enabled;
 
@@ -64,6 +70,9 @@ class _EcosystemEditorOverlayState extends State<EcosystemEditorOverlay> {
     _requiredCapabilitiesController = TextEditingController();
     _optionalCapabilitiesController = TextEditingController();
     _preferredOutputController = TextEditingController();
+    _primaryAgentIdController = TextEditingController();
+    _requiredAgentIdsController = TextEditingController();
+    _optionalAgentIdsController = TextEditingController();
     _apply(widget.viewData);
   }
 
@@ -98,11 +107,25 @@ class _EcosystemEditorOverlayState extends State<EcosystemEditorOverlay> {
     _requiredCapabilitiesController.dispose();
     _optionalCapabilitiesController.dispose();
     _preferredOutputController.dispose();
+    _primaryAgentIdController.dispose();
+    _requiredAgentIdsController.dispose();
+    _optionalAgentIdsController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final liveReview = _reviewService.reviewRequest(_request());
+    final mergedIssues = <String>[
+      ...widget.viewData.validationIssues,
+      ...liveReview.validationIssues.where(
+        (issue) => !widget.viewData.validationIssues.contains(issue),
+      ),
+    ];
+    final permissionSummary =
+        liveReview.permissionBoundarySummary.trim().isNotEmpty
+        ? liveReview.permissionBoundarySummary
+        : widget.viewData.permissionBoundarySummary;
     return Positioned.fill(
       child: ColoredBox(
         color: Colors.black.withValues(alpha: 0.28),
@@ -121,7 +144,7 @@ class _EcosystemEditorOverlayState extends State<EcosystemEditorOverlay> {
                           title: widget.viewData.title,
                           subtitle:
                               widget.viewData.projectRelativePath.trim().isEmpty
-                              ? '保存后会写入项目级覆盖文件'
+                              ? '保存后会写入项目草案，仍需确认安装'
                               : widget.viewData.projectRelativePath,
                         ),
                       ),
@@ -142,6 +165,26 @@ class _EcosystemEditorOverlayState extends State<EcosystemEditorOverlay> {
                         color: AppPalette.mutedText,
                       ),
                     ),
+                  ],
+                  if (widget.viewData.sourceSummary.trim().isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    _infoBlock(
+                      icon: Icons.inventory_2_outlined,
+                      title: '来源说明',
+                      body: widget.viewData.sourceSummary,
+                    ),
+                  ],
+                  if (permissionSummary.trim().isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    _infoBlock(
+                      icon: Icons.shield_outlined,
+                      title: '权限边界',
+                      body: permissionSummary,
+                    ),
+                  ],
+                  if (mergedIssues.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    _issueBlock(mergedIssues),
                   ],
                   const SizedBox(height: 12),
                   Expanded(
@@ -223,6 +266,21 @@ class _EcosystemEditorOverlayState extends State<EcosystemEditorOverlay> {
                                 if (_isAgentGroup) ...[
                                   _multiField(_agentsController, '智能体列表'),
                                   const SizedBox(height: 8),
+                                  _textField(
+                                    _primaryAgentIdController,
+                                    '主智能体 ID',
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _multiField(
+                                    _requiredAgentIdsController,
+                                    '必需成员',
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _multiField(
+                                    _optionalAgentIdsController,
+                                    '可选成员',
+                                  ),
+                                  const SizedBox(height: 8),
                                   DropdownButtonFormField<String>(
                                     key: ValueKey<String>(
                                       'orchestration-$_orchestration',
@@ -302,7 +360,7 @@ class _EcosystemEditorOverlayState extends State<EcosystemEditorOverlay> {
                     runSpacing: 8,
                     children: [
                       ActionButton(
-                        label: '保存',
+                        label: widget.viewData.saveActionLabel,
                         icon: Icons.save_outlined,
                         onPressed: () {
                           widget.actionHandler.onEcosystemEditorSubmitted(
@@ -312,7 +370,7 @@ class _EcosystemEditorOverlayState extends State<EcosystemEditorOverlay> {
                       ),
                       if (widget.viewData.isProjectEntry)
                         ActionButton(
-                          label: '删除项目覆盖',
+                          label: widget.viewData.deleteActionLabel,
                           icon: Icons.delete_outline,
                           tone: ActionButtonTone.danger,
                           onPressed: () {
@@ -362,6 +420,105 @@ class _EcosystemEditorOverlayState extends State<EcosystemEditorOverlay> {
     );
   }
 
+  Widget _infoBlock({
+    required IconData icon,
+    required String title,
+    required String body,
+  }) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppPalette.panel.withValues(alpha: 0.68),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppPalette.line),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 18, color: AppPalette.mutedText),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: AppPalette.text,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    body,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      height: 1.45,
+                      color: AppPalette.mutedText,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _issueBlock(List<String> issues) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppPalette.panel.withValues(alpha: 0.68),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppPalette.warmStrong),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '配置提示',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: AppPalette.text,
+              ),
+            ),
+            const SizedBox(height: 8),
+            for (final issue in issues) ...[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.error_outline_rounded,
+                    size: 16,
+                    color: AppPalette.warmStrong,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      issue,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        height: 1.45,
+                        color: AppPalette.mutedText,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (issue != issues.last) const SizedBox(height: 8),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   void _apply(EcosystemEditorViewData viewData) {
     _idController.text = viewData.entryId;
     _nameController.text = viewData.name;
@@ -381,6 +538,9 @@ class _EcosystemEditorOverlayState extends State<EcosystemEditorOverlay> {
     _requiredCapabilitiesController.text = viewData.requiredCapabilitiesText;
     _optionalCapabilitiesController.text = viewData.optionalCapabilitiesText;
     _preferredOutputController.text = viewData.preferredOutput;
+    _primaryAgentIdController.text = viewData.primaryAgentIdText;
+    _requiredAgentIdsController.text = viewData.requiredAgentIdsText;
+    _optionalAgentIdsController.text = viewData.optionalAgentIdsText;
     _orchestration = viewData.orchestration.isEmpty
         ? 'supervised'
         : viewData.orchestration;
@@ -412,6 +572,9 @@ class _EcosystemEditorOverlayState extends State<EcosystemEditorOverlay> {
       preferredOutput: _preferredOutputController.text,
       orchestration: _orchestration,
       enabled: _enabled,
+      primaryAgentIdText: _primaryAgentIdController.text,
+      requiredAgentIdsText: _requiredAgentIdsController.text,
+      optionalAgentIdsText: _optionalAgentIdsController.text,
     );
   }
 }

@@ -135,5 +135,113 @@ void main() {
         'permission_waiting_user',
       );
     });
+
+    test(
+      'builds structured information repair signal from required omitted activation and pending research request',
+      () {
+        final risk = service.assess(
+          result: const <String, Object?>{
+            'ok': true,
+            'changed_paths': <Object?>[
+              '.novel_agent/information/research_requests/research_request_call_1.json',
+            ],
+            'executed_tools': <Object?>[
+              <String, Object?>{
+                'name': 'request_external_research',
+                'result': <String, Object?>{
+                  'domain_outcome': <String, Object?>{
+                    'outcome_status': 'accepted',
+                    'outcome_payload': <String, Object?>{
+                      'request_registered': true,
+                      'network_execution_performed': false,
+                      'research_request': <String, Object?>{
+                        'query': '潮汐意象与回京叙事',
+                      },
+                    },
+                  },
+                },
+              },
+            ],
+            'response': <String, Object?>{},
+          },
+          execution: const <String, Object?>{
+            'activation_report': <String, Object?>{
+              'items': <Object?>[
+                <String, Object?>{
+                  'title': '轮回规则',
+                  'omitted': true,
+                  'metadata': <String, Object?>{
+                    'source_kind': 'project_knowledge_card',
+                    'required': true,
+                  },
+                },
+              ],
+            },
+          },
+        );
+
+        final informationRisk = ValueReaders.mapValue(risk['information']);
+        expect(ValueReaders.stringValue(informationRisk['category']), 'repair');
+        expect(ValueReaders.intValue(informationRisk['pending_research_count']), 1);
+        expect(ValueReaders.intValue(informationRisk['required_omitted_count']), 1);
+        expect(
+          ValueReaders.stringList(informationRisk['changed_paths']),
+          contains(
+            '.novel_agent/information/research_requests/research_request_call_1.json',
+          ),
+        );
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(risk['overall'])['category'],
+          ),
+          'repair',
+        );
+      },
+    );
+
+    test('treats high risk reference boundary as manual attention information signal', () {
+      final risk = service.assess(
+        result: const <String, Object?>{
+          'ok': true,
+          'executed_tools': <Object?>[
+            <String, Object?>{
+              'name': 'propose_reference_work',
+              'result': <String, Object?>{
+                'domain_outcome': <String, Object?>{
+                  'outcome_status': 'needs_user_confirmation',
+                  'outcome_payload': <String, Object?>{
+                    'requires_user_confirmation': true,
+                    'risk_note_count': 2,
+                    'relationship_to_project': 'source_work',
+                    'reference_work': <String, Object?>{
+                      'reference_work_id': 'ref_source_1',
+                      'title': '原著边界',
+                      'requires_confirmation': true,
+                    },
+                  },
+                },
+              },
+            },
+          ],
+          'response': <String, Object?>{},
+        },
+      );
+
+      final informationRisk = ValueReaders.mapValue(risk['information']);
+      expect(
+        ValueReaders.stringValue(informationRisk['category']),
+        'manual_attention',
+      );
+      expect(
+        ValueReaders.intValue(informationRisk['high_risk_reference_count']),
+        1,
+      );
+      expect(
+        ValueReaders.stringValue(
+          ValueReaders.mapValue(risk['overall'])['category'],
+        ),
+        'manual_attention',
+      );
+    });
   });
 }

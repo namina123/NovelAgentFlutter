@@ -98,6 +98,9 @@ class EcosystemEntryViewData {
     this.isSelected = false,
     this.metadataRows = const <EcosystemMetadataRow>[],
     this.memberLabels = const <String>[],
+    this.permissionBoundarySummary = '',
+    this.validationIssues = const <String>[],
+    this.canDuplicateBuiltin = false,
   });
 
   final String id;
@@ -112,6 +115,9 @@ class EcosystemEntryViewData {
   final bool isSelected;
   final List<EcosystemMetadataRow> metadataRows;
   final List<String> memberLabels;
+  final String permissionBoundarySummary;
+  final List<String> validationIssues;
+  final bool canDuplicateBuiltin;
 }
 
 class EcosystemMetadataRow {

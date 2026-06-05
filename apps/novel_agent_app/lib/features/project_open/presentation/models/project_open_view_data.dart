@@ -21,8 +21,8 @@ class ProjectOpenViewData {
 
   factory ProjectOpenViewData.initial() {
     return const ProjectOpenViewData(
-      title: '打开项目',
-      description: '选择已有项目，或新建一个项目继续工作。',
+      title: '作品库',
+      description: '选择已有作品，或新建一部作品继续创作。',
       projectsRootPath: '',
       currentProjectPath: '',
       allowImportLocal: true,

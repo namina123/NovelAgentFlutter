@@ -45,6 +45,8 @@ class ThemeOptionTile extends StatelessWidget {
                         Expanded(
                           child: Text(
                             option.label,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w800,
@@ -68,6 +70,8 @@ class ThemeOptionTile extends StatelessWidget {
                           ),
                           child: Text(
                             option.badgeLabel,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w800,
@@ -80,6 +84,8 @@ class ThemeOptionTile extends StatelessWidget {
                     const SizedBox(height: 8),
                     Text(
                       option.description,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 12,
                         height: 1.45,

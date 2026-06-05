@@ -35,5 +35,24 @@ void main() {
         isFalse,
       );
     });
+
+    test('keeps external research tool behind platform policy', () {
+      expect(
+        service.isToolExposed(
+          NarrativeDomainToolNames.requestExternalResearch,
+          hostPlatform: HostPlatform.windows,
+          projectType: 'novel',
+        ),
+        isTrue,
+      );
+      expect(
+        service.isToolExposed(
+          NarrativeDomainToolNames.requestExternalResearch,
+          hostPlatform: HostPlatform.android,
+          projectType: 'novel',
+        ),
+        isFalse,
+      );
+    });
   });
 }

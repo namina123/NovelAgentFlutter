@@ -1,0 +1,35 @@
+/// 共享信息基座命名空间的聚合导出。
+///
+/// 这里只导出当前已经稳定的 core 合同与校验入口，不放 repository、runtime bridge 或业务算法。
+export 'information/information_contract_typedefs.dart';
+export 'information/information_markdown_bridge_service.dart';
+export 'information/information_markdown_projection_service.dart';
+export 'information/information_policy_constants.dart';
+export 'information/information_projection_document.dart';
+export 'information/information_projection_draft_bundle.dart';
+export 'information/information_projection_source.dart';
+export 'information/information_linked_ref_types.dart';
+export 'information/information_lifecycle_statuses.dart';
+export 'information/information_link.dart';
+export 'information/information_event.dart';
+export 'information/information_lifecycle_status.dart';
+export 'information/information_lifecycle_service.dart';
+export 'information/information_permission_decision.dart';
+export 'information/information_permission_dispositions.dart';
+export 'information/information_permission_policy_service.dart';
+export 'information/information_source_ref.dart';
+export 'information/information_usage_policy.dart';
+export 'information/information_activation_policy.dart';
+export 'information/information_validation_codes.dart';
+export 'information/design_element_card.dart';
+export 'information/design_element_card_codec_service.dart';
+export 'information/design_element_card_validator.dart';
+export 'information/project_knowledge_card.dart';
+export 'information/project_knowledge_card_codec_service.dart';
+export 'information/project_knowledge_card_validator.dart';
+export 'information/research_note.dart';
+export 'information/research_note_codec_service.dart';
+export 'information/research_note_validator.dart';
+export 'information/reference_work_record.dart';
+export 'information/reference_work_record_codec_service.dart';
+export 'information/reference_work_record_validator.dart';

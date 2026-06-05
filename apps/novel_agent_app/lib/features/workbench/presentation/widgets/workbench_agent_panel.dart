@@ -29,7 +29,7 @@ class WorkbenchAgentPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '智能体',
+            '协作',
             style: TextStyle(
               fontSize: visual.titleFontSize,
               height: visual.titleLineHeight,
@@ -50,7 +50,7 @@ class WorkbenchAgentPanel extends StatelessWidget {
           ),
           SizedBox(height: style.headerGap),
           ResourcePanelSection(
-            title: '项目智能体组',
+            title: '当前协作摘要',
             emphasized: true,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -66,7 +66,7 @@ class WorkbenchAgentPanel extends StatelessWidget {
                 const SizedBox(height: 10),
                 ProjectPanelActionTile(
                   icon: Icons.group_work_outlined,
-                  title: viewData.projectAgentGroupPanel.actionTitle,
+                  title: '协作设置',
                   description:
                       viewData.projectAgentGroupPanel.actionDescription,
                   onPressed: viewData.projectAgentGroupPanel.canConfigure
@@ -78,7 +78,7 @@ class WorkbenchAgentPanel extends StatelessWidget {
           ),
           SizedBox(height: style.sectionGap),
           ResourcePanelSection(
-            title: '当前会话智能体',
+            title: '当前会话分工',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

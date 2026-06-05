@@ -71,8 +71,8 @@ class ProjectCreationController {
     if (settings == null) {
       _resetToProjectlessWorkbench(status: '请先创建项目，或在桌面端打开一个已有项目。');
       await showLauncher(
-        ProjectLauncherMode.guard,
-        status: '当前还没有可恢复的有效项目。请先创建项目，或打开已有项目。',
+        ProjectLauncherMode.create,
+        status: '当前还没有可恢复的有效项目。先创建一部新作品，或打开已有项目。',
         canDismiss: false,
       );
       return;
@@ -81,8 +81,8 @@ class ProjectCreationController {
     if (defaultPath.isEmpty) {
       _resetToProjectlessWorkbench(status: '请先创建项目，或在桌面端打开一个已有项目。');
       await showLauncher(
-        ProjectLauncherMode.guard,
-        status: '当前还没有有效项目。请先创建项目，或打开已有项目。',
+        ProjectLauncherMode.create,
+        status: '当前还没有有效项目。先创建一部新作品，或打开已有项目。',
         canDismiss: false,
       );
       return;
@@ -91,8 +91,8 @@ class ProjectCreationController {
     if (!loaded) {
       _resetToProjectlessWorkbench(status: '当前没有有效项目。请先创建项目，或打开已有项目。');
       await showLauncher(
-        ProjectLauncherMode.guard,
-        status: '未识别到有效项目：$defaultPath',
+        ProjectLauncherMode.create,
+        status: '上次打开的项目不可用：$defaultPath。请创建新作品，或重新打开已有项目。',
         canDismiss: false,
       );
     }

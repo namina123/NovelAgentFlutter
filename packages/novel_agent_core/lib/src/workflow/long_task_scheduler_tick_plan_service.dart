@@ -212,6 +212,29 @@ class LongTaskSchedulerTickPlanService {
       );
       plan['requires_user'] = true;
       plan['should_persist_record'] = true;
+    } else if (recoveryAction == 'pause_for_repair') {
+      plan = _basePlan(
+        'pause_for_repair',
+        'blocked',
+        ValueReaders.stringValue(recovery['reason'], 'repair_required'),
+        ValueReaders.stringValue(recovery['note'], '检测到可恢复失败，暂停等待修补。'),
+        hostCommand: 'pause_long_task_run',
+      );
+      plan['requires_user'] = true;
+      plan['should_persist_record'] = true;
+    } else if (recoveryAction == 'pause_for_manual_attention') {
+      plan = _basePlan(
+        'pause_for_manual_attention',
+        'blocked',
+        ValueReaders.stringValue(recovery['reason'], 'manual_attention_required'),
+        ValueReaders.stringValue(
+          recovery['note'],
+          '检测到需要人工介入的内容质量或交付风险。',
+        ),
+        hostCommand: 'pause_long_task_run',
+      );
+      plan['requires_user'] = true;
+      plan['should_persist_record'] = true;
     } else if (recoveryAction == 'pause_for_review') {
       plan = _basePlan(
         'pause_for_review',

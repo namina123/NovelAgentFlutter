@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../presentation/contracts/book_deconstruction_action_handler.dart';
 import '../models/book_deconstruction_continuity_view_data.dart';
+import '../models/book_deconstruction_information_bridge_view_data.dart';
 import '../models/book_deconstruction_followup_group_view_data.dart';
 import '../models/book_deconstruction_followup_option_view_data.dart';
 import '../models/book_deconstruction_plan_group_view_data.dart';
@@ -58,6 +59,10 @@ class BookDeconstructionPreviewPanel extends StatelessWidget {
             children: [
               if (viewData.continuity != null) ...[
                 _ContinuitySummarySection(continuity: viewData.continuity!),
+                const SizedBox(height: 16),
+              ],
+              if (viewData.informationBridge != null) ...[
+                _InformationBridgeSection(bridge: viewData.informationBridge!),
                 const SizedBox(height: 16),
               ],
               ...viewData.previewSections.map((section) {
@@ -136,6 +141,73 @@ class BookDeconstructionPreviewPanel extends StatelessWidget {
             ],
           ),
         ),
+      ],
+    );
+  }
+}
+
+class _InformationBridgeSection extends StatelessWidget {
+  const _InformationBridgeSection({required this.bridge});
+
+  final BookDeconstructionInformationBridgeViewData bridge;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('后续用途与共享资料桥', style: textTheme.titleSmall),
+        const SizedBox(height: 4),
+        Text(bridge.summary, style: textTheme.bodySmall),
+        const SizedBox(height: 10),
+        ...bridge.followupRoutes.map(
+          (route) => Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              border: Border.all(color: Theme.of(context).dividerColor),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(route.title, style: textTheme.bodyLarge),
+                const SizedBox(height: 4),
+                Text(route.summary, style: textTheme.bodySmall),
+                const SizedBox(height: 4),
+                Text(route.statusLabel, style: textTheme.bodySmall),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text('本次已生成的可复用资料', style: textTheme.titleSmall),
+        const SizedBox(height: 6),
+        ...bridge.assetStatuses.map(
+          (item) => Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              border: Border.all(color: Theme.of(context).dividerColor),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${item.title} · ${item.count}',
+                  style: textTheme.bodyLarge,
+                ),
+                const SizedBox(height: 4),
+                Text(item.statusLabel, style: textTheme.bodySmall),
+                const SizedBox(height: 4),
+                Text(item.summary, style: textTheme.bodySmall),
+              ],
+            ),
+          ),
+        ),
+        Text(bridge.reuseSummary, style: textTheme.bodySmall),
       ],
     );
   }

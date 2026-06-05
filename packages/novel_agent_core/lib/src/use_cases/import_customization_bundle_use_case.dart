@@ -11,6 +11,10 @@ import '../packages/agent_markdown_package_renderer_service.dart';
 import '../packages/skill_markdown_package_renderer_service.dart';
 import '../ports/project_tool_host_port.dart';
 import '../project/project_descriptor.dart';
+import '../ecosystem/ecosystem_asset_kind.dart';
+import '../ecosystem/ecosystem_asset_path_service.dart';
+import '../ecosystem/ecosystem_asset_proposal.dart';
+import '../ecosystem/ecosystem_asset_proposal_service.dart';
 import 'generate_customization_indexes_use_case.dart';
 
 class ImportCustomizationBundleUseCase {
@@ -24,6 +28,8 @@ class ImportCustomizationBundleUseCase {
     SkillGroupFileCodecService? skillGroupCodecService,
     AgentGroupNormalizerService? agentGroupNormalizerService,
     SkillGroupNormalizerService? skillGroupNormalizerService,
+    EcosystemAssetProposalService? proposalService,
+    EcosystemAssetPathService? pathService,
   }) : _projectToolHostPort = projectToolHostPort,
        _generateCustomizationIndexesUseCase =
            generateCustomizationIndexesUseCase,
@@ -38,7 +44,9 @@ class ImportCustomizationBundleUseCase {
        _agentGroupNormalizerService =
            agentGroupNormalizerService ?? AgentGroupNormalizerService(),
        _skillGroupNormalizerService =
-           skillGroupNormalizerService ?? SkillGroupNormalizerService();
+           skillGroupNormalizerService ?? SkillGroupNormalizerService(),
+       _proposalService = proposalService ?? EcosystemAssetProposalService(),
+       _pathService = pathService ?? EcosystemAssetPathService();
 
   final ProjectToolHostPort _projectToolHostPort;
   final GenerateCustomizationIndexesUseCase
@@ -49,6 +57,8 @@ class ImportCustomizationBundleUseCase {
   final SkillGroupFileCodecService _skillGroupCodecService;
   final AgentGroupNormalizerService _agentGroupNormalizerService;
   final SkillGroupNormalizerService _skillGroupNormalizerService;
+  final EcosystemAssetProposalService _proposalService;
+  final EcosystemAssetPathService _pathService;
 
   Future<JsonMap> execute({
     required ProjectDescriptor project,
@@ -108,14 +118,11 @@ class ImportCustomizationBundleUseCase {
       changedPaths: changedPaths,
       skippedPaths: skippedPaths,
     );
-    changedPaths.addAll(
-      await _generateCustomizationIndexesUseCase.execute(project),
-    );
     return <String, Object?>{
       'ok': changedPaths.isNotEmpty,
       'summary': changedPaths.isEmpty
-          ? '没有导入任何生态条目。'
-          : '已导入 ${changedPaths.length} 个生态文件。',
+          ? '没有导入任何生态 proposal。'
+          : '已导入 ${changedPaths.length} 个生态 proposal 文件。',
       'changed_paths': changedPaths,
       'skipped_paths': skippedPaths,
     };
@@ -157,9 +164,35 @@ class ImportCustomizationBundleUseCase {
       }
       await _writeCanonicalEntry(
         project: project,
-        relativePath:
-            '${CustomizationRootCatalogService.skillsRoot}/$id/SKILL.md',
-        content: _skillRendererService.renderPackage(item),
+        relativePath: _pathService.proposalPath(
+          kind: EcosystemAssetKind.skill,
+          proposalId: _pathService.defaultProposalId(
+            kind: EcosystemAssetKind.skill,
+            assetId: id,
+          ),
+        ),
+        content: _encodeProposal(
+          _proposalService
+              .review(
+                _proposalService.createDraft(
+                  assetKind: EcosystemAssetKind.skill,
+                  assetId: id,
+                  version: ValueReaders.stringValue(item['version'], '1'),
+                  summary: _summaryFor(item, fallbackLabel: '技能 $id'),
+                  riskNote: _riskNoteFor(
+                    label: '技能',
+                    capabilityIds: ValueReaders.stringList(
+                      item['required_capabilities'],
+                    ),
+                  ),
+                  assetPayload: item,
+                  requiredCapabilities: ValueReaders.stringList(
+                    item['required_capabilities'],
+                  ),
+                ),
+              )
+              .proposal,
+        ),
         overwrite: overwrite,
         changedPaths: changedPaths,
         skippedPaths: skippedPaths,
@@ -197,8 +230,27 @@ class ImportCustomizationBundleUseCase {
       }
       await _writeCanonicalEntry(
         project: project,
-        relativePath: relativePath,
-        content: _skillGroupCodecService.encodeSkillGroup(item),
+        relativePath: _pathService.proposalPath(
+          kind: EcosystemAssetKind.skillGroup,
+          proposalId: _pathService.defaultProposalId(
+            kind: EcosystemAssetKind.skillGroup,
+            assetId: id,
+          ),
+        ),
+        content: _encodeProposal(
+          _proposalService
+              .review(
+                _proposalService.createDraft(
+                  assetKind: EcosystemAssetKind.skillGroup,
+                  assetId: id,
+                  version: ValueReaders.stringValue(item['version'], '1'),
+                  summary: _summaryFor(item, fallbackLabel: '技能组 $id'),
+                  riskNote: _riskNoteFor(label: '技能组'),
+                  assetPayload: item,
+                ),
+              )
+              .proposal,
+        ),
         overwrite: overwrite,
         changedPaths: changedPaths,
         skippedPaths: skippedPaths,
@@ -234,8 +286,35 @@ class ImportCustomizationBundleUseCase {
       }
       await _writeCanonicalEntry(
         project: project,
-        relativePath: relativePath,
-        content: _agentRendererService.renderPackage(item),
+        relativePath: _pathService.proposalPath(
+          kind: EcosystemAssetKind.agent,
+          proposalId: _pathService.defaultProposalId(
+            kind: EcosystemAssetKind.agent,
+            assetId: id,
+          ),
+        ),
+        content: _encodeProposal(
+          _proposalService
+              .review(
+                _proposalService.createDraft(
+                  assetKind: EcosystemAssetKind.agent,
+                  assetId: id,
+                  version: ValueReaders.stringValue(item['version'], '1'),
+                  summary: _summaryFor(item, fallbackLabel: '智能体 $id'),
+                  riskNote: _riskNoteFor(
+                    label: '智能体',
+                    capabilityIds: ValueReaders.stringList(
+                      item['required_capabilities'],
+                    ),
+                  ),
+                  assetPayload: item,
+                  requiredCapabilities: ValueReaders.stringList(
+                    item['required_capabilities'],
+                  ),
+                ),
+              )
+              .proposal,
+        ),
         overwrite: overwrite,
         changedPaths: changedPaths,
         skippedPaths: skippedPaths,
@@ -273,8 +352,27 @@ class ImportCustomizationBundleUseCase {
       }
       await _writeCanonicalEntry(
         project: project,
-        relativePath: relativePath,
-        content: _agentGroupCodecService.encodeAgentGroup(item),
+        relativePath: _pathService.proposalPath(
+          kind: EcosystemAssetKind.agentGroup,
+          proposalId: _pathService.defaultProposalId(
+            kind: EcosystemAssetKind.agentGroup,
+            assetId: id,
+          ),
+        ),
+        content: _encodeProposal(
+          _proposalService
+              .review(
+                _proposalService.createDraft(
+                  assetKind: EcosystemAssetKind.agentGroup,
+                  assetId: id,
+                  version: ValueReaders.stringValue(item['version'], '1'),
+                  summary: _summaryFor(item, fallbackLabel: '智能体组 $id'),
+                  riskNote: _riskNoteFor(label: '智能体组'),
+                  assetPayload: item,
+                ),
+              )
+              .proposal,
+        ),
         overwrite: overwrite,
         changedPaths: changedPaths,
         skippedPaths: skippedPaths,
@@ -308,5 +406,31 @@ class ImportCustomizationBundleUseCase {
 
   JsonMap _error(String error) {
     return <String, Object?>{'ok': false, 'error': error};
+  }
+
+  String _encodeProposal(EcosystemAssetProposal proposal) {
+    return const JsonEncoder.withIndent('  ').convert(proposal.toJson());
+  }
+
+  String _summaryFor(JsonMap item, {required String fallbackLabel}) {
+    final description = ValueReaders.stringValue(item['description']).trim();
+    if (description.isNotEmpty) {
+      return description;
+    }
+    final name = ValueReaders.stringValue(item['name']).trim();
+    if (name.isNotEmpty) {
+      return name;
+    }
+    return fallbackLabel;
+  }
+
+  String _riskNoteFor({
+    required String label,
+    List<String> capabilityIds = const <String>[],
+  }) {
+    final capabilityLabel = capabilityIds.isEmpty
+        ? '未声明额外能力需求'
+        : '声明能力需求：${capabilityIds.join('、')}';
+    return '导入的非内置$label会先进入 proposal 生命周期，安装前需要人工确认；$capabilityLabel，且不会自动授予高风险权限。';
   }
 }

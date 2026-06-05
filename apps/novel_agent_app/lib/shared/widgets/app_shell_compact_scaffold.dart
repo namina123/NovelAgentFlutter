@@ -14,11 +14,13 @@ class AppShellCompactScaffold extends StatefulWidget {
     required this.page,
     required this.selectedDestination,
     required this.actionHandler,
+    required this.onSystemBackRequested,
   });
 
   final Widget page;
   final AppDestination selectedDestination;
   final AppShellNavigationActionHandler actionHandler;
+  final Future<void> Function() onSystemBackRequested;
 
   @override
   State<AppShellCompactScaffold> createState() =>
@@ -49,38 +51,51 @@ class _AppShellCompactScaffoldState extends State<AppShellCompactScaffold> {
     final dockLayout = AppShellCompactDockLayout.fromMediaQuery(
       MediaQuery.of(context),
     );
-    return Column(
-      children: [
-        AppShellCompactBar(
-          selectedDestination: widget.selectedDestination,
-          onMenuRequested: _drawerController.toggle,
-        ),
-        Expanded(
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: AppShellCompactPageFrame(
-                  bottomInset: dockLayout.pageBottomInset,
-                  child: widget.page,
-                ),
-              ),
-              Positioned.fill(
-                child: AppShellCompactDrawerHost(
-                  selectedDestination: widget.selectedDestination,
-                  actionHandler: widget.actionHandler,
-                  controller: _drawerController,
-                  dockLayout: dockLayout,
-                ),
-              ),
-            ],
+    return PopScope<Object?>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) {
+          return;
+        }
+        if (_drawerController.isOpen) {
+          _drawerController.close();
+          return;
+        }
+        await widget.onSystemBackRequested();
+      },
+      child: Column(
+        children: [
+          AppShellCompactBar(
+            selectedDestination: widget.selectedDestination,
+            onMenuRequested: _drawerController.toggle,
           ),
-        ),
-        AppShellCompactLauncherDock(
-          selectedDestination: widget.selectedDestination,
-          controller: _drawerController,
-          dockLayout: dockLayout,
-        ),
-      ],
+          Expanded(
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: AppShellCompactPageFrame(
+                    bottomInset: dockLayout.pageBottomInset,
+                    child: widget.page,
+                  ),
+                ),
+                Positioned.fill(
+                  child: AppShellCompactDrawerHost(
+                    selectedDestination: widget.selectedDestination,
+                    actionHandler: widget.actionHandler,
+                    controller: _drawerController,
+                    dockLayout: dockLayout,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          AppShellCompactLauncherDock(
+            selectedDestination: widget.selectedDestination,
+            controller: _drawerController,
+            dockLayout: dockLayout,
+          ),
+        ],
+      ),
     );
   }
 }

@@ -66,6 +66,7 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
   late String _selectedStorageStrategyId;
   late String _selectedRuntimeBaselineId;
   late ProjectContinuityInputProfile _continuityInput;
+  late bool _showAdvancedContinuity;
   String _lastDefaultTitle = '';
 
   @override
@@ -75,6 +76,7 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
     _selectedStorageStrategyId = _resolvedSelectedStorageStrategyId();
     _selectedRuntimeBaselineId = _resolvedSelectedRuntimeBaselineId();
     _continuityInput = widget.continuityInput;
+    _showAdvancedContinuity = _hasContinuityInput(_continuityInput);
     _lastDefaultTitle = _defaultTitleOf(_selectedProjectTypeId);
     _scrollController = ScrollController();
     _controller = TextEditingController(
@@ -151,6 +153,8 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
                   const SizedBox(height: 10),
                   Text(
                     '创建位置：${widget.projectsRootPath}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: colors.mutedTextColor,
                       fontSize: 12,
@@ -177,18 +181,20 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
                   ..._buildPhaseContent(selectedOption),
                   if (_supportsContinuityInput()) ...[
                     const SizedBox(height: 12),
-                    if (widget.creationPhase ==
-                        ProjectCreationPhase.projectType)
-                      ProjectContinuityInputPanel(
-                        input: _continuityInput,
-                        onChanged: _handleContinuityInputChanged,
-                      )
-                    else
-                      ProjectContinuityInputPanel(
-                        input: _continuityInput,
-                        onChanged: _handleContinuityInputChanged,
-                        compact: true,
-                      ),
+                    _AdvancedContinuitySection(
+                      expanded: _showAdvancedContinuity,
+                      hasUserInput: _hasContinuityInput(_continuityInput),
+                      compact:
+                          widget.creationPhase !=
+                          ProjectCreationPhase.projectType,
+                      input: _continuityInput,
+                      onToggle: () {
+                        setState(() {
+                          _showAdvancedContinuity = !_showAdvancedContinuity;
+                        });
+                      },
+                      onChanged: _handleContinuityInputChanged,
+                    ),
                   ],
                   if ((selectedOption?.description ?? '').trim().isNotEmpty &&
                       widget.creationPhase ==
@@ -489,6 +495,90 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
   bool _supportsContinuityInput() {
     return _selectedProjectTypeId == 'novel' ||
         _selectedProjectTypeId == 'long_novel';
+  }
+
+  bool _hasContinuityInput(ProjectContinuityInputProfile input) {
+    return input.usesMultipleWorlds ||
+        input.usesBranchingRoutes ||
+        input.usesReplayResets ||
+        input.requiresScopedIdentityOverlays ||
+        input.worldLabels.isNotEmpty ||
+        input.notes.trim().isNotEmpty;
+  }
+}
+
+class _AdvancedContinuitySection extends StatelessWidget {
+  const _AdvancedContinuitySection({
+    required this.expanded,
+    required this.hasUserInput,
+    required this.compact,
+    required this.input,
+    required this.onToggle,
+    required this.onChanged,
+  });
+
+  final bool expanded;
+  final bool hasUserInput;
+  final bool compact;
+  final ProjectContinuityInputProfile input;
+  final VoidCallback onToggle;
+  final ValueChanged<ProjectContinuityInputProfile> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.novelThemeColors;
+    return DecoratedBox(
+      decoration: BoxDecoration(border: Border.all(color: colors.lineColor)),
+      child: Column(
+        children: [
+          InkWell(
+            onTap: onToggle,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
+                children: [
+                  Icon(
+                    expanded
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                    size: 18,
+                    color: colors.mutedTextColor,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '高级设置',
+                      style: TextStyle(
+                        color: colors.textColor,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    hasUserInput ? '已配置' : '可选',
+                    style: TextStyle(
+                      color: colors.mutedTextColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (expanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: ProjectContinuityInputPanel(
+                input: input,
+                onChanged: onChanged,
+                compact: compact,
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
 

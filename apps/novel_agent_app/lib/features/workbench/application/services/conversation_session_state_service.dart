@@ -8,6 +8,7 @@ import '../../presentation/models/session_history_entry_view_data.dart';
 import '../../presentation/models/sub_agent_run_view_data.dart';
 import '../../presentation/models/user_option_view_data.dart';
 import 'conversation_tool_entry_projection_service.dart';
+import 'sub_agent_run_projection_service.dart';
 
 class ConversationSessionStateService {
   ConversationSessionStateService({
@@ -19,6 +20,7 @@ class ConversationSessionStateService {
     SessionContextRendererService? contextRendererService,
     ToolEventPresenterService? toolEventPresenterService,
     ConversationToolEntryProjectionService? toolEntryProjectionService,
+    SubAgentRunProjectionService? subAgentRunProjectionService,
     SessionMessageInclusionStrategy? messageInclusionStrategy,
     SessionCompressionStrategyService? compressionStrategyService,
   }) : _normalizerService =
@@ -62,6 +64,8 @@ class ConversationSessionStateService {
              toolEventPresenterService:
                  toolEventPresenterService ?? ToolEventPresenterService(),
            ),
+       _subAgentRunProjectionService =
+           subAgentRunProjectionService ?? const SubAgentRunProjectionService(),
        _messageInclusionStrategy =
            messageInclusionStrategy ?? DefaultSessionMessageInclusionStrategy(),
        _compressionStrategyService =
@@ -72,6 +76,7 @@ class ConversationSessionStateService {
   final SessionHistoryService _historyService;
   final SessionContextRendererService _contextRendererService;
   final ConversationToolEntryProjectionService _toolEntryProjectionService;
+  final SubAgentRunProjectionService _subAgentRunProjectionService;
   final SessionMessageInclusionStrategy _messageInclusionStrategy;
   final SessionCompressionStrategyService _compressionStrategyService;
 
@@ -554,21 +559,10 @@ class ConversationSessionStateService {
       if (runId.isEmpty) {
         continue;
       }
-      final run = SubAgentRunViewData(
-        id: runId,
-        agentName: ValueReaders.stringValue(result['agent_name'], '子智能体'),
-        task: ValueReaders.stringValue(result['task']),
-        status: ValueReaders.boolValue(result['ok'], true) ? '完成' : '异常',
-        summary: ValueReaders.stringValue(result['summary'], '子智能体已返回。'),
-        content: ValueReaders.stringValue(result['result_markdown']),
-        reasoning: ValueReaders.stringValue(result['reasoning_content']),
-        toolCount: ValueReaders.intValue(result['tool_count']),
-        events: ValueReaders.objectList(result['sub_agent_events'])
-            .map(ValueReaders.mapValue)
-            .map((event) => ValueReaders.stringValue(event['summary']))
-            .where((summary) => summary.trim().isNotEmpty)
-            .toList(growable: false),
-      );
+      final run = _subAgentRunProjectionService.projectFromToolResult(result);
+      if (run == null) {
+        continue;
+      }
       byId[runId] = run;
       if (!orderedIds.contains(runId)) {
         orderedIds.add(runId);

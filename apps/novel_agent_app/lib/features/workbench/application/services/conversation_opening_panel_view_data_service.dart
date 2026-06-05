@@ -63,20 +63,27 @@ class ConversationOpeningPanelViewDataService {
 
   String _summaryOf(OpeningSessionProjection projection) {
     final readiness = projection.orchestration.readiness;
+    final visibleMissingRequirements = readiness.missingRequirements
+        .where(
+          (item) =>
+              projection.projectTypeId == 'long_novel' ||
+              item.id.trim() != 'conversation_goal',
+        )
+        .toList(growable: false);
     final currentGroupText = projection.currentGroupDisplayName.trim().isEmpty
         ? '当前还没有确定项目默认智能体组。'
         : '当前默认组：${projection.currentGroupDisplayName}。';
     final readinessText = projection.projectTypeId == 'long_novel'
         ? readiness.canStartLongTask
               ? '当前已可直接启动长任务。'
-              : readiness.missingRequirements.isEmpty
+              : visibleMissingRequirements.isEmpty
               ? '当前仍需补充长任务开局信息。'
-              : '仍需补充：${readiness.missingRequirements.map((item) => item.title).join('、')}。'
+              : '仍需补充：${visibleMissingRequirements.map((item) => item.title).join('、')}。'
         : readiness.canStartInteractiveSession
         ? '当前已可直接进入协作对话。'
-        : readiness.missingRequirements.isEmpty
-        ? '当前仍需补充少量开局信息。'
-        : '当前还缺：${readiness.missingRequirements.map((item) => item.title).join('、')}。';
+        : visibleMissingRequirements.isEmpty
+        ? '可以直接输入你现在想写什么。'
+        : '当前还需要确认：${visibleMissingRequirements.map((item) => item.title).join('、')}。';
     if (projection.derivedFromAgentBinding) {
       return '$currentGroupText 当前默认组来自旧项目智能体绑定，可在这里切换到正式项目组。 $readinessText';
     }

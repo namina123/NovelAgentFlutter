@@ -1,9 +1,18 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
 import 'chapter_delivery_state_statuses.dart';
+import 'long_task_writing_execution_signal_service.dart';
 import 'task_runtime_constants.dart';
 
 class LongTaskRecoveryService {
+  LongTaskRecoveryService({
+    LongTaskWritingExecutionSignalService? writingExecutionSignalService,
+  }) : _writingExecutionSignalService =
+           writingExecutionSignalService ??
+           const LongTaskWritingExecutionSignalService();
+
+  final LongTaskWritingExecutionSignalService _writingExecutionSignalService;
+
   JsonMap recoveryPlan(
     JsonMap record,
     List<Object?> tasks, {
@@ -31,11 +40,35 @@ class LongTaskRecoveryService {
       record['status'],
       TaskRuntimeConstants.statusRunning,
     );
+    final writingExecutionRecovery = _writingExecutionRecoveryPlan(
+      record,
+      result,
+    );
+    if (writingExecutionRecovery.isNotEmpty) {
+      return writingExecutionRecovery;
+    }
     final deliveryRecovery = _deliveryRecoveryPlan(record, result);
     if (deliveryRecovery.isNotEmpty) {
       return deliveryRecovery;
     }
+    final informationRecovery = _informationRecoveryPlan(record, result);
+    if (informationRecovery.isNotEmpty) {
+      return informationRecovery;
+    }
     if (status == TaskRuntimeConstants.statusPaused) {
+      final pausedStopReason = ValueReaders.stringValue(
+        record['stop_reason'],
+      ).trim();
+      if (pausedStopReason == 'max_steps' || pausedStopReason == 'max_seconds') {
+        return <String, Object?>{
+          ...result,
+          'action': 'resume_dispatch',
+          'reason': 'budget_failed',
+          'note': pausedStopReason == 'max_seconds'
+              ? '上次运行达到时长预算边界，可从当前任务状态继续调度。'
+              : '上次运行达到步数预算边界，可从当前任务状态继续调度。',
+        };
+      }
       return <String, Object?>{
         ...result,
         'action': 'resume_when_user_confirms',
@@ -90,6 +123,44 @@ class LongTaskRecoveryService {
     };
   }
 
+  JsonMap _writingExecutionRecoveryPlan(JsonMap record, JsonMap result) {
+    final signal = _writingExecutionSignalService.signalFromPayload(
+      record: record,
+      stopReason: ValueReaders.stringValue(record['stop_reason']),
+      fallbackNote: ValueReaders.stringValue(record['stop_note']),
+    );
+    if (!ValueReaders.boolValue(signal['present'])) {
+      return const <String, Object?>{};
+    }
+    final category = ValueReaders.stringValue(signal['category']).trim();
+    if (category == 'success') {
+      return const <String, Object?>{};
+    }
+    final recoveryAction = ValueReaders.stringValue(
+      signal['recovery_action'],
+    ).trim();
+    if (recoveryAction.isEmpty) {
+      return const <String, Object?>{};
+    }
+    final reason = switch (category) {
+      'waiting_user' => 'writing_execution_waiting_user',
+      'recoverable' => 'writing_execution_recoverable_failure',
+      'content_quality_failed' => 'writing_execution_content_quality_failed',
+      'technical_failed' => 'writing_execution_technical_failure',
+      'budget_failed' => 'budget_failed',
+      _ => 'writing_execution_signal',
+    };
+    return <String, Object?>{
+      ...result,
+      'action': recoveryAction,
+      'reason': reason,
+      'note': ValueReaders.stringValue(
+        signal['note'],
+        '共享写作结果要求当前长任务先停下处理。',
+      ),
+    };
+  }
+
   JsonMap _deliveryRecoveryPlan(JsonMap record, JsonMap result) {
     final deliveryState = ValueReaders.stringValue(
       record['last_chapter_delivery_state'],
@@ -122,6 +193,51 @@ class LongTaskRecoveryService {
           'action': 'pause_for_manual_attention',
           'reason': 'delivery_manual_attention',
           'note': '最近一步的章节交付状态要求人工介入。',
+        };
+    }
+    return const <String, Object?>{};
+  }
+
+  JsonMap _informationRecoveryPlan(JsonMap record, JsonMap result) {
+    final informationCategory = ValueReaders.stringValue(
+      record['last_information_risk_category'],
+      ValueReaders.stringValue(
+        ValueReaders.mapValue(_lastStep(record))['information_risk_category'],
+      ),
+    ).trim();
+    final informationSummary = ValueReaders.stringValue(
+      record['last_information_summary'],
+      ValueReaders.stringValue(
+        ValueReaders.mapValue(_lastStep(record))['information_summary'],
+      ),
+    ).trim();
+    switch (informationCategory) {
+      case 'repair':
+        return <String, Object?>{
+          ...result,
+          'action': 'pause_for_repair',
+          'reason': 'information_repair_required',
+          'note': informationSummary.isEmpty
+              ? '最近一步的信息层信号要求先补研究、补上下文或处理设计冲突。'
+              : informationSummary,
+        };
+      case 'manual_attention':
+        return <String, Object?>{
+          ...result,
+          'action': 'pause_for_manual_attention',
+          'reason': 'information_manual_attention',
+          'note': informationSummary.isEmpty
+              ? '最近一步的信息层信号要求人工介入。'
+              : informationSummary,
+        };
+      case 'checkpoint_user':
+        return <String, Object?>{
+          ...result,
+          'action': 'resume_when_user_confirms',
+          'reason': 'information_waiting_user',
+          'note': informationSummary.isEmpty
+              ? '最近一步的信息层信号建议先停在用户确认点。'
+              : informationSummary,
         };
     }
     return const <String, Object?>{};

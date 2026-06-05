@@ -68,9 +68,9 @@ WorkbenchWorkspaceShellViewData _shellViewData({
     projectAgentGroupPanel: const ProjectAgentGroupPanelViewData(
       currentGroupLabel: '长篇总控组',
       primaryAgentLabel: '综合创作智能体',
-      summary: '当前项目已绑定默认协作组，新会话会沿用这套协作基线。',
+      summary: '当前项目已确定默认协作组，写作时会沿用这套协作摘要。',
       actionTitle: '项目智能体组',
-      actionDescription: '查看当前项目支持的智能体组，并调整默认协作基线。',
+      actionDescription: '查看当前项目协作摘要，并按需调整默认协作组。',
       canConfigure: true,
     ),
   );

@@ -1,14 +1,21 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
 import 'chapter_delivery_state_statuses.dart';
+import 'long_task_writing_execution_signal_service.dart';
 import 'task_queue_option_service.dart';
 import 'task_runtime_constants.dart';
 
 class TaskQueueStopPolicyService {
-  TaskQueueStopPolicyService({required TaskQueueOptionService optionService})
-    : _optionService = optionService;
+  TaskQueueStopPolicyService({
+    required TaskQueueOptionService optionService,
+    LongTaskWritingExecutionSignalService? writingExecutionSignalService,
+  }) : _optionService = optionService,
+       _writingExecutionSignalService =
+           writingExecutionSignalService ??
+           const LongTaskWritingExecutionSignalService();
 
   final TaskQueueOptionService _optionService;
+  final LongTaskWritingExecutionSignalService _writingExecutionSignalService;
 
   JsonMap stopAfterStep(
     JsonMap result,
@@ -42,6 +49,25 @@ class TaskQueueStopPolicyService {
         'note': '任务进入等待用户确认状态，队列已暂停。',
       };
     }
+    final writingExecutionSignal = _writingExecutionSignalService
+        .signalFromPayload(result: result);
+    if (ValueReaders.boolValue(writingExecutionSignal['present']) &&
+        ValueReaders.stringValue(writingExecutionSignal['category']) !=
+            'success') {
+      return <String, Object?>{
+        'stop': true,
+        'reason': ValueReaders.stringValue(
+          writingExecutionSignal['legacy_stop_reason'],
+        ),
+        'note': ValueReaders.stringValue(
+          writingExecutionSignal['note'],
+          '共享写作结果要求当前队列暂停。',
+        ),
+        'writing_execution_category': ValueReaders.stringValue(
+          writingExecutionSignal['category'],
+        ),
+      };
+    }
     final deliveryState = ValueReaders.stringValue(
       result['chapter_delivery_state'],
       ValueReaders.stringValue(
@@ -51,6 +77,10 @@ class TaskQueueStopPolicyService {
     final deliveryDecision = _deliveryStopDecision(deliveryState);
     if (deliveryDecision.isNotEmpty) {
       return deliveryDecision;
+    }
+    final informationDecision = _informationStopDecision(result);
+    if (informationDecision.isNotEmpty) {
+      return informationDecision;
     }
     final outputPaths = ValueReaders.stringList(result['output_paths']);
     if (outputPaths.isEmpty &&
@@ -99,6 +129,56 @@ class TaskQueueStopPolicyService {
           'stop': true,
           'reason': 'delivery_waiting_user_choice',
           'note': '章节交付状态正在等待用户确认，队列已暂停。',
+        };
+    }
+    return const <String, Object?>{};
+  }
+
+  JsonMap _informationStopDecision(JsonMap result) {
+    final checkpointReview = ValueReaders.mapValue(
+      ValueReaders.mapValue(result['checkpoint_review'])['review'],
+    );
+    final informationSignal = ValueReaders.mapValue(
+      checkpointReview['information_signal'],
+    ).isNotEmpty
+        ? ValueReaders.mapValue(checkpointReview['information_signal'])
+        : ValueReaders.mapValue(
+            ValueReaders.mapValue(
+              ValueReaders.mapValue(
+                checkpointReview['narrative_supervisor_risk'],
+              )['information'],
+            ),
+          );
+    final category = ValueReaders.stringValue(
+      informationSignal['category'],
+    ).trim();
+    switch (category) {
+      case 'manual_attention':
+        return <String, Object?>{
+          'stop': true,
+          'reason': 'information_manual_attention',
+          'note': ValueReaders.stringValue(
+            informationSignal['summary'],
+            '信息层信号要求人工介入，队列已暂停。',
+          ),
+        };
+      case 'repair':
+        return <String, Object?>{
+          'stop': true,
+          'reason': 'information_repair_required',
+          'note': ValueReaders.stringValue(
+            informationSignal['summary'],
+            '信息层信号要求先补研究、补上下文或处理设计冲突，队列已暂停。',
+          ),
+        };
+      case 'checkpoint_user':
+        return <String, Object?>{
+          'stop': true,
+          'reason': 'information_waiting_user',
+          'note': ValueReaders.stringValue(
+            informationSignal['summary'],
+            '信息层信号要求先停在用户确认点，队列已暂停。',
+          ),
         };
     }
     return const <String, Object?>{};

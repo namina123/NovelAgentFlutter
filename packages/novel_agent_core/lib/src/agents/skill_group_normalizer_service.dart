@@ -22,6 +22,7 @@ class SkillGroupNormalizerService {
       ...group,
       'schema_version': ValueReaders.intValue(group['schema_version'], 1),
       'id': id,
+      'version': ValueReaders.stringValue(group['version'], '1').trim(),
       'name': ValueReaders.stringValue(
         group['name'],
         id.isEmpty ? '未命名技能组' : id,

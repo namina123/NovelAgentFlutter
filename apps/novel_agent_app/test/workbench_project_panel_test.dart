@@ -36,23 +36,29 @@ void main() {
                 projectAgentGroupPanel: ProjectAgentGroupPanelViewData(
                   currentGroupLabel: '长篇总控组',
                   primaryAgentLabel: '综合创作智能体',
-                  summary: '当前默认组：长篇总控组；主智能体：综合创作智能体。',
+                  summary: '当前项目已确定默认协作组，写作时会沿用这套协作摘要。',
                   actionTitle: '项目智能体组',
-                  actionDescription: '调整当前项目默认智能体组，并查看当前不适用组的原因。',
+                  actionDescription: '查看当前项目协作摘要，并按需调整默认协作组。',
                   canConfigure: true,
                 ),
                 hasActiveProject: true,
                 primaryActions: [
                   WorkbenchProjectPanelActionViewData(
                     icon: Icons.badge_outlined,
-                    title: '项目信息',
-                    description: '查看或调整当前项目基础信息与关键元数据。',
+                    title: '整理设定',
+                    description: '查看或调整当前项目的基础信息、设定摘要和关键元数据。',
                     actionId: 'edit_project_info',
                   ),
                   WorkbenchProjectPanelActionViewData(
-                    icon: Icons.refresh_rounded,
-                    title: '刷新项目',
-                    description: '重新读取当前项目资源树、文档与相关状态。',
+                    icon: Icons.edit_note_rounded,
+                    title: '写作准备',
+                    description: '确认当前作品的资料、文档和写作上下文已经同步到最新状态。',
+                    actionId: 'refresh_project',
+                  ),
+                  WorkbenchProjectPanelActionViewData(
+                    icon: Icons.play_circle_outline_rounded,
+                    title: '开始写作',
+                    description: '从当前作品继续写第一章、续写下一章或进入新的章节草稿。',
                     actionId: 'refresh_project',
                   ),
                 ],
@@ -75,12 +81,14 @@ void main() {
 
     expect(find.text('项目摘要'), findsOneWidget);
     expect(find.text('当前项目动作'), findsOneWidget);
-    expect(find.text('项目协作基线'), findsOneWidget);
+    expect(find.text('当前协作摘要'), findsOneWidget);
     expect(find.text('项目资料'), findsOneWidget);
     expect(find.text('项目资产'), findsOneWidget);
     expect(find.text('项目智能体组'), findsNothing);
-    expect(find.text('项目信息'), findsOneWidget);
-    expect(find.text('刷新项目'), findsOneWidget);
+    expect(find.text('整理设定'), findsOneWidget);
+    expect(find.text('写作准备'), findsOneWidget);
+    expect(find.text('开始写作'), findsOneWidget);
+    expect(find.text('协作设置'), findsOneWidget);
     expect(find.text('当前会话智能体'), findsNothing);
     expect(find.text('审阅智能体'), findsNothing);
     expect(find.text('智能体生态'), findsNothing);
@@ -88,18 +96,28 @@ void main() {
     expect(find.text('项目资料与规则'), findsNothing);
     expect(find.text('打开项目'), findsNothing);
     expect(find.text('新建项目'), findsNothing);
+    expect(find.textContaining('run_center_contract'), findsNothing);
+    expect(find.textContaining('workflowStrategyId'), findsNothing);
+    expect(find.textContaining('tool_call'), findsNothing);
+    expect(find.textContaining('session.goal'), findsNothing);
 
-    await tester.tap(find.text('项目信息'));
+    await tester.tap(find.text('整理设定'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('刷新项目'));
+    await tester.tap(find.text('写作准备'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('开始写作'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('协作设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('协作设置'));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('项目资产'));
     await tester.tap(find.text('项目资产'));
     await tester.pumpAndSettle();
 
     expect(handler.editProjectInfoRequestedCount, 1);
-    expect(handler.refreshFilesRequestedCount, 1);
-    expect(handler.projectAgentGroupRequestedCount, 0);
+    expect(handler.refreshFilesRequestedCount, 2);
+    expect(handler.projectAgentGroupRequestedCount, 1);
     expect(handler.projectAssetsRequestedCount, 1);
     expect(handler.templatesRequestedCount, 0);
     expect(handler.agentEcosystemRequestedCount, 0);

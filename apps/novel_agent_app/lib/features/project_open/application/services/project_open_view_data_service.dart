@@ -27,13 +27,6 @@ class ProjectOpenViewDataService {
     final descriptors = <String, _ProjectOpenRecord>{};
     final normalizedProjectsRootPath = projectsRootPath.trim();
     if (normalizedProjectsRootPath.isNotEmpty) {
-      await _tryCollectProject(
-        normalizedProjectsRootPath,
-        descriptors,
-        sourceLabel: '默认目录',
-        loadWorkspace: loadWorkspace,
-        currentProjectPath: currentProjectPath,
-      );
       final rootDirectory = Directory(normalizedProjectsRootPath);
       if (await rootDirectory.exists()) {
         await for (final entity in rootDirectory.list(followLinks: false)) {
@@ -67,8 +60,8 @@ class ProjectOpenViewDataService {
       records: entries,
     );
     return ProjectOpenViewData(
-      title: '打开项目',
-      description: '从默认项目目录继续工作，或导入一个本地已有项目。',
+      title: '作品库',
+      description: '先新建作品，或从默认项目目录继续打开已有作品。',
       projectsRootPath: normalizedProjectsRootPath,
       currentProjectPath: currentProjectPath.trim(),
       allowImportLocal: allowImportLocal,
@@ -96,15 +89,12 @@ class ProjectOpenViewDataService {
       status: status.trim().isNotEmpty
           ? status.trim()
           : entries.isEmpty
-          ? '默认项目目录下还没有可打开的项目。'
+          ? '还没有可继续的作品。'
           : '',
     );
   }
 
-  ProjectOpenViewData selectEntry(
-    ProjectOpenViewData current,
-    String entryId,
-  ) {
+  ProjectOpenViewData selectEntry(ProjectOpenViewData current, String entryId) {
     final cleanId = entryId.trim();
     return current.copyWith(
       selectedEntryId: cleanId,
@@ -221,10 +211,10 @@ class ProjectOpenViewDataService {
   }
 
   String _pathKey(String path) {
-    final normalized = path.trim().replaceAll('\\', '/').replaceAll(
-      RegExp(r'/+$'),
-      '',
-    );
+    final normalized = path
+        .trim()
+        .replaceAll('\\', '/')
+        .replaceAll(RegExp(r'/+$'), '');
     if (Platform.isWindows) {
       return normalized.toLowerCase();
     }

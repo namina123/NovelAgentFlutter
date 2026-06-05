@@ -15,9 +15,9 @@ void main() {
 
       expect(viewData.currentGroupLabel, '长篇总控组');
       expect(viewData.primaryAgentLabel, '综合创作智能体');
-      expect(viewData.summary, '当前项目已绑定默认协作组，新会话会沿用这套协作基线。');
+      expect(viewData.summary, '当前项目已确定默认协作组，写作时会沿用这套协作摘要。');
       expect(viewData.actionTitle, '项目智能体组');
-      expect(viewData.actionDescription, '查看当前项目支持的智能体组，并调整默认协作基线。');
+      expect(viewData.actionDescription, '查看当前项目协作摘要，并按需调整默认协作组。');
       expect(viewData.canConfigure, isTrue);
     },
   );
@@ -44,7 +44,7 @@ void main() {
 
     expect(viewData.currentGroupLabel, '未确定智能体组');
     expect(viewData.primaryAgentLabel, '综合创作智能体');
-    expect(viewData.summary, '当前项目还没有确定默认协作组。');
-    expect(viewData.actionDescription, '查看当前项目支持的智能体组，并确定默认协作基线。');
+    expect(viewData.summary, '当前项目还没有确定默认协作组，建议先补上再开始正式写作。');
+    expect(viewData.actionDescription, '先确认当前项目该由哪组协作方式负责开局和后续写作。');
   });
 }

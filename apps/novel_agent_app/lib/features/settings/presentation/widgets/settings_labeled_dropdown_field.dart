@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../app/theme/app_palette.dart';
+import '../../../../../shared/theme/novel_theme_context.dart';
 
 class SettingsDropdownOption<T> {
   const SettingsDropdownOption({required this.value, required this.label});
@@ -26,15 +26,16 @@ class SettingsLabeledDropdownField<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 中文注释: 设置下拉框独立封装，后续替换成搜索选择器时不用改各个设置页本身的结构。
+    final surface = context.novelThemeSurfaces.panel;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w700,
-            color: AppPalette.mutedText,
+            color: surface.mutedForegroundColor,
           ),
         ),
         const SizedBox(height: 6),

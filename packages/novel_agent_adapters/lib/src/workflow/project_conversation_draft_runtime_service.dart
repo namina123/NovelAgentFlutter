@@ -40,6 +40,20 @@ class ProjectConversationDraftRuntimeArtifacts {
 }
 
 class ProjectConversationDraftRuntimeService {
+  static const Set<String> _conversationBlockedToolIds = <String>{
+    'set_agent_tasks',
+    'call_sub_agent',
+    NarrativeDomainToolNames.requestExternalResearch,
+  };
+
+  static const List<String> _conversationInformationToolIds = <String>[
+    NarrativeDomainToolNames.proposeDesignElement,
+    NarrativeDomainToolNames.proposeKnowledgeCard,
+    NarrativeDomainToolNames.submitResearchNote,
+    NarrativeDomainToolNames.linkInformationEvidence,
+    NarrativeDomainToolNames.proposeReferenceWork,
+  ];
+
   ProjectConversationDraftRuntimeService({
     required ProjectWorkspacePort workspacePort,
     required ProjectToolHostPort hostPort,
@@ -108,14 +122,17 @@ class ProjectConversationDraftRuntimeService {
     if (!_requiresFormalChapterDelivery(taskType)) {
       return toolIds;
     }
-    return toolIds
-        .where(
-          (toolId) => !const <String>{
-            'set_agent_tasks',
-            'call_sub_agent',
-          }.contains(toolId),
-        )
-        .toList(growable: false);
+    final filtered = toolIds
+        .where((toolId) => !_conversationBlockedToolIds.contains(toolId))
+        .toList(growable: true);
+    // 中文注释: 普通章节/修订允许低成本提交 knowledge/design/research/reference delta，
+    // 但不应该顺手把外部联网研究权限暴露出去。
+    for (final toolId in _conversationInformationToolIds) {
+      if (!filtered.contains(toolId)) {
+        filtered.add(toolId);
+      }
+    }
+    return List<String>.unmodifiable(filtered);
   }
 
   Future<ProjectConversationDraftRuntimeArtifacts> finalizeDraftRun({
@@ -126,13 +143,15 @@ class ProjectConversationDraftRuntimeService {
     String fallbackSavedPath = '',
   }) async {
     final changedPaths = <String>[];
+    _appendChangedPaths(changedPaths, result.changedPaths);
+    _appendChangedPaths(changedPaths, _toolChangedPaths(result.executedTools));
     if (preparation.activationReport.isNotEmpty) {
       await _taskRepository.saveRecord(
         project,
         preparation.activationReportPath,
         preparation.activationReport,
       );
-      changedPaths.add(preparation.activationReportPath);
+      _appendChangedPaths(changedPaths, <String>[preparation.activationReportPath]);
     }
 
     var delivery = _workflowRuntimeBridgeService.latestChapterDeliveryOutcome(
@@ -152,11 +171,7 @@ class ProjectConversationDraftRuntimeService {
         fallbackSavedPath: fallbackSavedPath,
       );
       delivery = ensured.delivery;
-      for (final path in ensured.changedPaths) {
-        if (!changedPaths.contains(path)) {
-          changedPaths.add(path);
-        }
-      }
+      _appendChangedPaths(changedPaths, ensured.changedPaths);
     }
 
     final outputPath = _resolveOutputPath(
@@ -400,6 +415,34 @@ class ProjectConversationDraftRuntimeService {
       'list_project_files',
       'search_project_files',
     }.contains(toolName);
+  }
+
+  List<String> _toolChangedPaths(List<Object?> executedTools) {
+    final changedPaths = <String>[];
+    for (final rawTool in executedTools) {
+      final tool = ValueReaders.mapValue(rawTool);
+      final result = ValueReaders.mapValue(tool['result']);
+      _appendChangedPaths(changedPaths, ValueReaders.stringList(result['changed_paths']));
+      final domainOutcome = ValueReaders.mapValue(result['domain_outcome']);
+      final persistence = ValueReaders.mapValue(
+        ValueReaders.mapValue(domainOutcome['metadata'])['adapter_persistence'],
+      );
+      _appendChangedPaths(
+        changedPaths,
+        ValueReaders.stringList(persistence['changed_paths']),
+      );
+    }
+    return List<String>.unmodifiable(changedPaths);
+  }
+
+  void _appendChangedPaths(List<String> target, Iterable<String> paths) {
+    for (final rawPath in paths) {
+      final path = rawPath.trim();
+      if (path.isEmpty || target.contains(path)) {
+        continue;
+      }
+      target.add(path);
+    }
   }
 
   String _chapterPathCandidate({

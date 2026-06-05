@@ -62,7 +62,7 @@ class LongTaskTransactionContextService {
     }
     _addUnique(
       needs,
-      '需要时读取 specs/project_spec.md、styles/、knowledge/ 和相关人物/世界状态。',
+      '需要时读取 specs/project_spec.md、styles/、knowledge/ 等只读信息投影和相关人物/世界状态；长期事实仍以结构化 information/continuity 合同为准。',
     );
     if (taskType == 'chapter') {
       _addUnique(needs, '读取 summaries/ 中与本章相邻或最近的章节摘要，避免遗忘前文状态。');

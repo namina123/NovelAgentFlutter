@@ -118,6 +118,8 @@ class AppBootstrap {
     final workflowRuntimeService = ProjectWorkflowRuntimeService(
       taskRepository: projectTaskRepository,
       promptTemplateService: promptTemplateService,
+      loadProjectAgentGroupSelections: (project) =>
+          bundle.projectAgentGroupBindingRepository.loadSelections(project),
       generateDraftUseCaseFactory: (provider, networkSettings) {
         return GenerateDraftUseCase(
           projectWorkspacePort: bundle.projectWorkspacePort,

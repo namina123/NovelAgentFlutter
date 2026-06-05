@@ -25,214 +25,230 @@ class ProjectOpenPage extends StatelessWidget {
     final optionTile = context.novelThemeSurfaces.optionTile;
     final colors = context.novelThemeColors;
     return AdaptivePageFrame(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: SectionHeading(
-                  title: viewData.title,
-                  subtitle: viewData.description,
-                ),
-              ),
-              const SizedBox(width: 12),
-              ActionButton(
-                label: '刷新',
-                icon: Icons.refresh_rounded,
-                tone: ActionButtonTone.neutral,
-                compact: true,
-                onPressed: actionHandler.onProjectOpenRefreshRequested,
-              ),
-              if (viewData.allowImportLocal) ...[
-                const SizedBox(width: 8),
-                ActionButton(
-                  label: '导入本地项目',
-                  icon: Icons.folder_open_rounded,
-                  tone: ActionButtonTone.neutral,
-                  compact: true,
-                  onPressed: actionHandler.onProjectOpenImportRequested,
-                ),
-              ],
-              const SizedBox(width: 8),
-              ActionButton(
-                label: '新建项目',
-                icon: Icons.add_rounded,
-                compact: true,
-                onPressed: actionHandler.onProjectOpenCreateRequested,
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          if (viewData.projectsRootPath.trim().isNotEmpty)
-            Text(
-              '默认项目目录：${viewData.projectsRootPath}',
-              style: TextStyle(
-                color: panel.mutedForegroundColor,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          if (viewData.status.trim().isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              viewData.status,
-              style: TextStyle(
-                color: colors.lineStrongColor,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-          const SizedBox(height: 16),
-          Expanded(
-            child: Row(
-              children: [
-                Expanded(
-                  flex: 5,
-                  child: PanelSurface(
-                    child: viewData.entries.isEmpty
-                        ? Center(
-                            child: Text(
-                              '当前还没有可打开的项目。',
-                              style: TextStyle(
-                                color: panel.mutedForegroundColor,
-                                fontSize: 13,
-                              ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 760;
+          final listPanel = PanelSurface(
+            child: viewData.entries.isEmpty
+                ? Center(
+                    child: Text(
+                      '还没有作品。先新建一部，或导入已有项目。',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: panel.mutedForegroundColor,
+                        fontSize: 13,
+                      ),
+                    ),
+                  )
+                : ListView.separated(
+                    itemCount: viewData.entries.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 10),
+                    itemBuilder: (context, index) {
+                      final entry = viewData.entries[index];
+                      return Material(
+                        color: entry.isSelected
+                            ? optionTile.highlightBackgroundColor
+                            : optionTile.backgroundColor,
+                        child: ListTile(
+                          title: Text(
+                            entry.title,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: optionTile.foregroundColor,
                             ),
-                          )
-                        : ListView.separated(
-                            itemCount: viewData.entries.length,
-                            separatorBuilder: (_, _) =>
-                                const SizedBox(height: 10),
-                            itemBuilder: (context, index) {
-                              final entry = viewData.entries[index];
-                              return Material(
-                                color: entry.isSelected
-                                    ? optionTile.highlightBackgroundColor
-                                    : optionTile.backgroundColor,
-                                child: ListTile(
-                                  title: Text(
-                                    entry.title,
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w800,
-                                      color: optionTile.foregroundColor,
-                                    ),
-                                  ),
-                                  subtitle: Padding(
-                                    padding: const EdgeInsets.only(top: 6),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Wrap(
-                                          spacing: 6,
-                                          runSpacing: 6,
-                                          children: [
-                                            for (final badge in entry.sourceBadges)
-                                              _BadgeChip(label: badge),
-                                            if (entry.isCurrentProject)
-                                              const _BadgeChip(label: '当前项目'),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          '${entry.projectTypeLabel} · ${entry.storageLabel}',
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600,
-                                            color: optionTile.mutedForegroundColor,
-                                          ),
-                                        ),
-                                        if (entry.lastModifiedLabel != '未知')
-                                          Text(
-                                            '最近修改：${entry.lastModifiedLabel}',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: optionTile.mutedForegroundColor,
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                  trailing: IconButton(
-                                    onPressed: () {
-                                      actionHandler.onProjectOpenOpenRequested(
-                                        entry.path,
-                                      );
-                                    },
-                                    icon: const Icon(Icons.open_in_new_rounded),
-                                  ),
-                                  onTap: () {
-                                    actionHandler.onProjectOpenEntrySelected(
-                                      entry.id,
-                                    );
-                                  },
+                          ),
+                          subtitle: Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Wrap(
+                                  spacing: 6,
+                                  runSpacing: 6,
+                                  children: [
+                                    if (!isNarrow)
+                                      for (final badge in entry.sourceBadges)
+                                        _BadgeChip(label: badge),
+                                    if (entry.isCurrentProject)
+                                      const _BadgeChip(label: '当前'),
+                                  ],
                                 ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  '${entry.projectTypeLabel} · ${entry.storageLabel}',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: optionTile.mutedForegroundColor,
+                                  ),
+                                ),
+                                if (entry.lastModifiedLabel != '未知')
+                                  Text(
+                                    '最近修改：${entry.lastModifiedLabel}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: optionTile.mutedForegroundColor,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          trailing: IconButton(
+                            tooltip: '进入作品',
+                            onPressed: () {
+                              actionHandler.onProjectOpenOpenRequested(
+                                entry.path,
                               );
                             },
+                            icon: const Icon(Icons.open_in_new_rounded),
                           ),
+                          onTap: () {
+                            actionHandler.onProjectOpenEntrySelected(entry.id);
+                          },
+                        ),
+                      );
+                    },
                   ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  flex: 4,
-                  child: PanelSurface(
-                    child: selected == null
-                        ? const Center(child: Text('请选择一个项目'))
-                        : Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              SectionHeading(
-                                title: selected.title,
-                                subtitle:
-                                    '${selected.projectTypeLabel} · ${selected.storageLabel}',
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                selected.path,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: panel.mutedForegroundColor,
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              _DetailRow(
-                                label: '运行基准',
-                                value: selected.runtimeBaselineLabel,
-                              ),
-                              _DetailRow(
-                                label: '最近修改',
-                                value: selected.lastModifiedLabel,
-                              ),
-                              _DetailRow(
-                                label: '来源',
-                                value: selected.sourceBadges.join(' / '),
-                              ),
-                              const Spacer(),
-                              Align(
-                                alignment: Alignment.bottomRight,
-                                child: ActionButton(
-                                  label: '打开项目',
-                                  icon: Icons.arrow_forward_rounded,
-                                  compact: true,
-                                  onPressed: () {
-                                    actionHandler.onProjectOpenOpenRequested(
-                                      selected.path,
-                                    );
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
+          );
+          final detailPanel = PanelSurface(
+            child: selected == null
+                ? const Center(child: Text('请选择一个作品'))
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SectionHeading(
+                        title: selected.title,
+                        subtitle:
+                            '${selected.projectTypeLabel} · ${selected.storageLabel}',
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        selected.path,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: panel.mutedForegroundColor,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      _DetailRow(
+                        label: '运行基准',
+                        value: selected.runtimeBaselineLabel,
+                      ),
+                      _DetailRow(
+                        label: '最近修改',
+                        value: selected.lastModifiedLabel,
+                      ),
+                      _DetailRow(
+                        label: '来源',
+                        value: selected.sourceBadges.join(' / '),
+                      ),
+                      const Spacer(),
+                      Align(
+                        alignment: Alignment.bottomRight,
+                        child: ActionButton(
+                          label: '进入作品',
+                          icon: Icons.arrow_forward_rounded,
+                          compact: true,
+                          onPressed: () {
+                            actionHandler.onProjectOpenOpenRequested(
+                              selected.path,
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+          );
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Flex(
+                direction: isNarrow ? Axis.vertical : Axis.horizontal,
+                crossAxisAlignment: isNarrow
+                    ? CrossAxisAlignment.start
+                    : CrossAxisAlignment.center,
+                children: [
+                  if (isNarrow)
+                    SectionHeading(
+                      title: viewData.title,
+                      subtitle: viewData.description,
+                    )
+                  else
+                    Expanded(
+                      child: SectionHeading(
+                        title: viewData.title,
+                        subtitle: viewData.description,
+                      ),
+                    ),
+                  SizedBox(width: isNarrow ? 0 : 12, height: isNarrow ? 10 : 0),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      ActionButton(
+                        label: '刷新',
+                        icon: Icons.refresh_rounded,
+                        tone: ActionButtonTone.neutral,
+                        compact: true,
+                        onPressed: actionHandler.onProjectOpenRefreshRequested,
+                      ),
+                      if (viewData.allowImportLocal)
+                        ActionButton(
+                          label: '导入',
+                          icon: Icons.folder_open_rounded,
+                          tone: ActionButtonTone.neutral,
+                          compact: true,
+                          onPressed: actionHandler.onProjectOpenImportRequested,
+                        ),
+                      ActionButton(
+                        label: '新建作品',
+                        icon: Icons.add_rounded,
+                        compact: true,
+                        onPressed: actionHandler.onProjectOpenCreateRequested,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              if (!isNarrow && viewData.projectsRootPath.trim().isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  '项目目录：${viewData.projectsRootPath}',
+                  style: TextStyle(
+                    color: panel.mutedForegroundColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
-            ),
-          ),
-        ],
+              if (viewData.status.trim().isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  viewData.status,
+                  style: TextStyle(
+                    color: colors.lineStrongColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              Expanded(
+                child: isNarrow
+                    ? listPanel
+                    : Row(
+                        children: [
+                          Expanded(flex: 5, child: listPanel),
+                          const SizedBox(width: 16),
+                          Expanded(flex: 4, child: detailPanel),
+                        ],
+                      ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -274,10 +290,7 @@ class _BadgeChip extends StatelessWidget {
 }
 
 class _DetailRow extends StatelessWidget {
-  const _DetailRow({
-    required this.label,
-    required this.value,
-  });
+  const _DetailRow({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -304,10 +317,7 @@ class _DetailRow extends StatelessWidget {
           Expanded(
             child: Text(
               value,
-              style: TextStyle(
-                fontSize: 13,
-                color: surface.foregroundColor,
-              ),
+              style: TextStyle(fontSize: 13, color: surface.foregroundColor),
             ),
           ),
         ],

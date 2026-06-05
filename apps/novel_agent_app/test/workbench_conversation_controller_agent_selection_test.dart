@@ -41,6 +41,194 @@ void main() {
     );
 
     test(
+      'passes the current opening collaboration group into ordinary conversation runtime',
+      () async {
+        final harness = _ConversationControllerHarness();
+
+        await harness.controller.onSendRequested('继续推进正文。');
+
+        expect(
+          ValueReaders.stringValue(
+            harness.generateDraftUseCase.lastSelectedCollaborationGroup['id'],
+          ),
+          'starter_novel_writer_room',
+        );
+        expect(
+          ValueReaders.stringList(
+            harness
+                .generateDraftUseCase
+                .lastSelectedCollaborationGroup['agents'],
+          ),
+          containsAll(<String>['writer', 'reviewer']),
+        );
+      },
+    );
+
+    test(
+      'projects two child collaboration runs and keeps degraded child recoverable in GUI state',
+      () async {
+        final harness = _ConversationControllerHarness(
+          generateDraftUseCase: _RecordingGenerateDraftUseCase(
+            scriptedResult: DraftGenerationResult(
+              project: _project(),
+              projectInfo: <String, Object?>{
+                'id': _project().id,
+                'title': _project().name,
+                'path': _project().rootPath,
+                'project_type': _project().projectType,
+              },
+              userPrompt: '继续推进正文。',
+              prompt: '继续推进正文。',
+              modelId: 'selected-model',
+              draftMarkdown: '主智能体已综合专家意见完成当前段落。',
+              contextPack: const <String, Object?>{},
+              selectedPaths: const <String>[],
+              executedTools: const <Object?>[
+                <String, Object?>{
+                  'id': 'tool_sub_1',
+                  'name': 'call_sub_agent',
+                  'ok': true,
+                  'result': <String, Object?>{
+                    'ok': true,
+                    'sub_agent_run_id': 'sub_run_1',
+                    'sub_session_id': 'sub_session_1',
+                    'agent_id': 'reviewer',
+                    'agent_name': '审稿员',
+                    'task': '审一下第一章冲突是否立得住。',
+                    'summary': '已给出一条主修建议。',
+                    'result_markdown': '建议把冲突前置到第一段。',
+                    'reasoning_content': '先看冲突是否太晚出现。',
+                    'tool_count': 1,
+                    'sub_agent_events': <Object?>[
+                      <String, Object?>{'summary': '接收任务。'},
+                      <String, Object?>{'summary': '返回审稿建议。'},
+                    ],
+                    'collaboration_result_package': <String, Object?>{
+                      'package_id': 'pkg_1',
+                      'execution_package_id': 'exec_1',
+                      'child_run_package_id': 'child_1',
+                      'agent_id': 'reviewer',
+                      'agent_name': '审稿员',
+                      'status': 'success',
+                      'used_tool_count': 1,
+                      'result_summary': '已给出一条主修建议。',
+                      'result_markdown': '建议把冲突前置到第一段。',
+                      'merge_contract': <String, Object?>{
+                        'merge_mode': 'main_agent_merges',
+                        'parent_review_required': true,
+                        'allows_direct_delivery': false,
+                        'accepted_result_types': <Object?>['suggestion'],
+                      },
+                      'conflicts': <Object?>[
+                        <String, Object?>{
+                          'conflict_id': 'conflict_1',
+                          'subject': '第一章冲突露出',
+                          'agent_id': 'reviewer',
+                          'agent_name': '审稿员',
+                          'risk': 'low',
+                          'suggestion': '建议把冲突前置到第一段。',
+                          'adoption_hint': '先由主智能体复核后再吸收。',
+                          'confidence': 0.84,
+                          'evidence': <Object?>[
+                            <String, Object?>{
+                              'summary': '第二段之前还没有明确外部阻力。',
+                              'reference': 'chapter_01#p1',
+                            },
+                          ],
+                        },
+                      ],
+                      'arbitration_result': <String, Object?>{
+                        'arbitration_id': 'arb_1',
+                        'status': 'auto_resolved',
+                        'highest_risk': 'low',
+                        'selected_conflict_id': 'conflict_1',
+                        'summary': '主链可以先复核这条建议，再决定是否吸收。',
+                        'accepted_conflict_ids': <Object?>['conflict_1'],
+                      },
+                    },
+                  },
+                },
+                <String, Object?>{
+                  'id': 'tool_sub_2',
+                  'name': 'call_sub_agent',
+                  'ok': false,
+                  'result': <String, Object?>{
+                    'ok': false,
+                    'sub_agent_run_id': 'sub_run_2',
+                    'sub_session_id': 'sub_session_2',
+                    'agent_id': 'evidence_reader',
+                    'agent_name': '资料考据员',
+                    'task': '补齐时代背景证据。',
+                    'summary': '子智能体模型失败，建议退回单主链继续：上下文不足。',
+                    'failure_disposition': 'fallback_single_main',
+                    'tool_count': 0,
+                    'sub_agent_events': <Object?>[
+                      <String, Object?>{'summary': '接收任务。'},
+                      <String, Object?>{'summary': '转回单主链继续。'},
+                    ],
+                    'collaboration_result_package': <String, Object?>{
+                      'package_id': 'pkg_2',
+                      'execution_package_id': 'exec_2',
+                      'child_run_package_id': 'child_2',
+                      'agent_id': 'evidence_reader',
+                      'agent_name': '资料考据员',
+                      'status': 'failed',
+                      'retryable': false,
+                      'used_tool_count': 0,
+                      'merge_contract': <String, Object?>{
+                        'merge_mode': 'main_agent_merges',
+                        'parent_review_required': true,
+                        'allows_direct_delivery': false,
+                        'accepted_result_types': <Object?>['suggestion'],
+                      },
+                      'metadata': <String, Object?>{
+                        'failure_disposition': 'fallback_single_main',
+                      },
+                    },
+                  },
+                },
+              ],
+              writtenPaths: const <String>[],
+              changedPaths: const <String>[],
+              transcriptMessages: const <JsonMap>[],
+              waitingForUserChoice: false,
+              reasoningContent: '',
+              stoppedByToolError: false,
+              toolErrorSummary: '',
+            ),
+          ),
+        );
+
+        await harness.controller.onSendRequested('继续推进正文。');
+
+        expect(
+          ValueReaders.stringValue(
+            harness.generateDraftUseCase.lastSelectedCollaborationGroup['id'],
+          ),
+          'starter_novel_writer_room',
+        );
+        expect(harness.workbench.subAgentRuns, hasLength(2));
+
+        final reviewerRun = harness.workbench.subAgentRuns.singleWhere(
+          (run) => run.agentName == '审稿员',
+        );
+        expect(reviewerRun.expertOpinion, contains('建议把冲突前置到第一段'));
+        expect(reviewerRun.evidenceItems.single, contains('chapter_01#p1'));
+        expect(reviewerRun.adoptionSummary, contains('主链可以先复核这条建议'));
+        expect(
+          reviewerRun.diagnosticItems.join('\n'),
+          contains('agent_id: reviewer'),
+        );
+
+        final degradedRun = harness.workbench.subAgentRuns.singleWhere(
+          (run) => run.agentName == '资料考据员',
+        );
+        expect(degradedRun.status, '已降级返回');
+        expect(degradedRun.degradationSummary, contains('已退回单主链继续'));
+      },
+    );
+
+    test(
       'falls back to primary agent when selected agent is no longer valid',
       () async {
         final harness = _ConversationControllerHarness(
@@ -128,18 +316,30 @@ void main() {
 
         await harness.controller.onSendRequested('继续写第一章。');
 
-        expect(harness.generateDraftUseCase.lastSessionContext, contains('字数约束'));
-        expect(harness.generateDraftUseCase.lastExpressionConstraintProfiles.length, 1);
+        expect(
+          harness.generateDraftUseCase.lastSessionContext,
+          contains('字数约束'),
+        );
+        expect(
+          harness.generateDraftUseCase.lastExpressionConstraintProfiles.length,
+          1,
+        );
         expect(
           ValueReaders.stringValue(
             ValueReaders.mapValue(
-              harness.generateDraftUseCase.lastExpressionConstraintProfiles.first,
+              harness
+                  .generateDraftUseCase
+                  .lastExpressionConstraintProfiles
+                  .first,
             )['id'],
           ),
           'de_ai',
         );
         expect(
-          harness.generateDraftUseCase.lastProjectExpressionConstraintBindings.length,
+          harness
+              .generateDraftUseCase
+              .lastProjectExpressionConstraintBindings
+              .length,
           1,
         );
       },
@@ -155,7 +355,8 @@ void main() {
             activationReportPath:
                 'tracking/conversation_draft/conversation_run_1.activation_report.json',
             activationReport: <String, Object?>{
-              'summary': 'selected profiles 1, claims 0, constraints 1, files 2.',
+              'summary':
+                  'selected profiles 1, claims 0, constraints 1, files 2.',
             },
             sessionContextMarkdown:
                 '## Activation Report\n- summary: selected profiles 1, claims 0, constraints 1, files 2.',
@@ -195,7 +396,8 @@ void main() {
             activationReportPath:
                 'tracking/conversation_draft/conversation_run_2.activation_report.json',
             activationReport: <String, Object?>{
-              'summary': 'selected profiles 1, claims 0, constraints 1, files 2.',
+              'summary':
+                  'selected profiles 1, claims 0, constraints 1, files 2.',
             },
             sessionContextMarkdown: '## Activation Report',
             exposedToolIds: <String>[
@@ -254,25 +456,24 @@ class _ConversationControllerHarness {
     ProjectDraftExecutionConstraintRuntimeService?
     draftExecutionConstraintRuntimeService,
     _RecordingGenerateDraftUseCase? generateDraftUseCase,
-  })
-    : _settings = _buildSettings(),
-      _workbench = initialWorkbench ?? WorkbenchViewData.initial(),
-      _projectState = WorkbenchProjectRuntimeState(
-        currentProject: _project(),
-        currentRuntimeProfile: const ProjectRuntimeProfile(
-          projectType: 'novel',
-          runtimeBaselineId: '',
-          runtimeMode: '',
-          initialRunOptions: <String, Object?>{},
-        ),
-        openDocuments: const <OpenDocumentState>[],
-      ),
-      _runtimeState = WorkbenchConversationRuntimeState(
-        openingProjection: _projection(),
-      ),
-      generateDraftUseCase =
-          generateDraftUseCase ?? _RecordingGenerateDraftUseCase(),
-      modelExecutionProfileService = _RecordingModelExecutionProfileService() {
+  }) : _settings = _buildSettings(),
+       _workbench = initialWorkbench ?? WorkbenchViewData.initial(),
+       _projectState = WorkbenchProjectRuntimeState(
+         currentProject: _project(),
+         currentRuntimeProfile: const ProjectRuntimeProfile(
+           projectType: 'novel',
+           runtimeBaselineId: '',
+           runtimeMode: '',
+           initialRunOptions: <String, Object?>{},
+         ),
+         openDocuments: const <OpenDocumentState>[],
+       ),
+       _runtimeState = WorkbenchConversationRuntimeState(
+         openingProjection: _projection(),
+       ),
+       generateDraftUseCase =
+           generateDraftUseCase ?? _RecordingGenerateDraftUseCase(),
+       modelExecutionProfileService = _RecordingModelExecutionProfileService() {
     final workspacePort = _NoopProjectWorkspacePort();
     final toolHostPort = _NoopProjectToolHostPort();
     workspaceController = WorkbenchWorkspaceController(
@@ -453,22 +654,21 @@ class _RecordingModelExecutionProfileService
 }
 
 class _RecordingGenerateDraftUseCase extends GenerateDraftUseCase {
-  _RecordingGenerateDraftUseCase({
-    DraftGenerationResult? scriptedResult,
-  }) : _scriptedResult = scriptedResult,
-       super(
-         projectWorkspacePort: _NoopProjectWorkspacePort(),
-         llmGateway: _NoopLlmGateway(),
-         toolExecutionPort: _NoopToolExecutionPort(),
-         contextAssemblerService: ContextAssemblerService(
-           budgetService: ContextBudgetService(),
-           staticSectionService: ContextStaticSectionService(
-             projectPromptContract: ProjectPromptContract(),
-           ),
-           projectFileSectionService: ContextProjectFileSectionService(),
-         ),
-         projectPromptContract: ProjectPromptContract(),
-       );
+  _RecordingGenerateDraftUseCase({DraftGenerationResult? scriptedResult})
+    : _scriptedResult = scriptedResult,
+      super(
+        projectWorkspacePort: _NoopProjectWorkspacePort(),
+        llmGateway: _NoopLlmGateway(),
+        toolExecutionPort: _NoopToolExecutionPort(),
+        contextAssemblerService: ContextAssemblerService(
+          budgetService: ContextBudgetService(),
+          staticSectionService: ContextStaticSectionService(
+            projectPromptContract: ProjectPromptContract(),
+          ),
+          projectFileSectionService: ContextProjectFileSectionService(),
+        ),
+        projectPromptContract: ProjectPromptContract(),
+      );
 
   final DraftGenerationResult? _scriptedResult;
 
@@ -477,6 +677,7 @@ class _RecordingGenerateDraftUseCase extends GenerateDraftUseCase {
   List<String> lastExposedToolIds = const <String>[];
   List<Object?> lastExpressionConstraintProfiles = const <Object?>[];
   List<Object?> lastProjectExpressionConstraintBindings = const <Object?>[];
+  JsonMap lastSelectedCollaborationGroup = const <String, Object?>{};
 
   @override
   Future<DraftGenerationResult> execute({
@@ -486,11 +687,16 @@ class _RecordingGenerateDraftUseCase extends GenerateDraftUseCase {
     String title = '',
     String intent = 'draft',
     JsonMap agent = const <String, Object?>{},
+    JsonMap selectedCollaborationGroup = const <String, Object?>{},
     String sessionContext = '',
     JsonMap requestOptions = const <String, Object?>{},
     JsonMap contextSettings = const <String, Object?>{},
     JsonMap modelProfile = const <String, Object?>{},
     JsonMap skillRoutingContext = const <String, Object?>{},
+    AppSettings? subAgentRuntimeSettings,
+    List<ProjectAgentBinding> subAgentBindings = const <ProjectAgentBinding>[],
+    String subAgentBindingModeId = '',
+    String subAgentBindingStageId = '',
     List<String> exposedToolIds = const <String>[],
     List<Object?> memorySections = const <Object?>[],
     List<Object?> expressionConstraintProfiles = const <Object?>[],
@@ -503,6 +709,9 @@ class _RecordingGenerateDraftUseCase extends GenerateDraftUseCase {
     void Function(DraftGenerationProgress progress)? onProgress,
   }) async {
     lastAgentId = ValueReaders.stringValue(agent['id']);
+    lastSelectedCollaborationGroup = ValueReaders.deepCopyMap(
+      selectedCollaborationGroup,
+    );
     lastSessionContext = sessionContext;
     lastExposedToolIds = List<String>.from(exposedToolIds, growable: false);
     lastExpressionConstraintProfiles = List<Object?>.from(
@@ -515,28 +724,28 @@ class _RecordingGenerateDraftUseCase extends GenerateDraftUseCase {
     );
     return _scriptedResult ??
         DraftGenerationResult(
-      project: project,
-      projectInfo: <String, Object?>{
-        'id': project.id,
-        'title': project.name,
-        'path': project.rootPath,
-        'project_type': project.projectType,
-      },
-      userPrompt: userPrompt,
-      prompt: userPrompt,
-      modelId: modelId,
-      draftMarkdown: '测试输出',
-      contextPack: const <String, Object?>{},
-      selectedPaths: const <String>[],
-      executedTools: const <Object?>[],
-      writtenPaths: const <String>[],
-      changedPaths: const <String>[],
-      transcriptMessages: const <JsonMap>[],
-      waitingForUserChoice: false,
-      reasoningContent: '',
-      stoppedByToolError: false,
-      toolErrorSummary: '',
-    );
+          project: project,
+          projectInfo: <String, Object?>{
+            'id': project.id,
+            'title': project.name,
+            'path': project.rootPath,
+            'project_type': project.projectType,
+          },
+          userPrompt: userPrompt,
+          prompt: userPrompt,
+          modelId: modelId,
+          draftMarkdown: '测试输出',
+          contextPack: const <String, Object?>{},
+          selectedPaths: const <String>[],
+          executedTools: const <Object?>[],
+          writtenPaths: const <String>[],
+          changedPaths: const <String>[],
+          transcriptMessages: const <JsonMap>[],
+          waitingForUserChoice: false,
+          reasoningContent: '',
+          stoppedByToolError: false,
+          toolErrorSummary: '',
+        );
   }
 }
 
@@ -582,9 +791,10 @@ class _FakeProjectDraftExecutionConstraintRuntimeService
     extends ProjectDraftExecutionConstraintRuntimeService {
   _FakeProjectDraftExecutionConstraintRuntimeService({required this.response})
     : super(
-        expressionConstraintProfileRepository: ExpressionConstraintProfileRepository(
-          workspacePort: _NoopProjectWorkspacePort(),
-        ),
+        expressionConstraintProfileRepository:
+            ExpressionConstraintProfileRepository(
+              workspacePort: _NoopProjectWorkspacePort(),
+            ),
         projectExpressionConstraintBindingRepository:
             ProjectExpressionConstraintBindingRepository(
               workspacePort: _NoopProjectWorkspacePort(),
@@ -603,6 +813,10 @@ class _FakeProjectDraftExecutionConstraintRuntimeService
     String agentId = '',
     String modeId = '',
     String stageId = '',
+    String intent = 'draft',
+    String taskType = '',
+    String phase = '',
+    String expressionConstraintInjectionMode = '',
     JsonMap legacyChapterLengthOptions = const <String, Object?>{},
   }) async {
     return ValueReaders.deepCopyMap(response);

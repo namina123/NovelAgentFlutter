@@ -82,10 +82,18 @@ class LongTaskTransactionContractService {
         contracts,
         '本轮 reviewer 的正式结论必须通过 submit_semantic_review 提交；不要把自然语言点评、修文建议或任务调度冒充为已完成的审稿交付。',
       );
+      _addUnique(
+        contracts,
+        '如果本轮发现来源证据、引用边界或资料缺口，优先用 link_information_evidence、submit_research_note 或 propose_reference_work 收口；不要只把证据缺口留在散文评语里。',
+      );
     } else if (taskType == 'planning') {
       _addUnique(
         contracts,
         '如果本轮承担 profile architect / 规则架构职责，使用 propose_narrative_profile_update 提交长期规则提案；适用范围、保留策略或未知字段存在关键歧义时改用 request_profile_clarification。',
+      );
+      _addUnique(
+        contracts,
+        '如果本轮沉淀的是长期设定，用 propose_knowledge_card；如果沉淀的是结构巧思、象征系统、命名暗线或章节回扣，用 propose_design_element；外部资料先 request_external_research / submit_research_note，再决定是否提升。',
       );
     } else if (taskType == 'revision') {
       _addUnique(
@@ -96,6 +104,10 @@ class LongTaskTransactionContractService {
       _addUnique(
         contracts,
         '本轮 writer 的正式章节收口必须调用 submit_chapter_delivery；不要只靠 write_project_file、散文说明或多文件拼装来冒充交付成功。',
+      );
+      _addUnique(
+        contracts,
+        '如果写作中确定了新的长期世界事实，用 propose_knowledge_card；如果确定了可复用巧思、结构回扣或符号系统，必须用 propose_design_element；没有显著信息变化时不要编造信息卡。',
       );
     }
     return contracts;

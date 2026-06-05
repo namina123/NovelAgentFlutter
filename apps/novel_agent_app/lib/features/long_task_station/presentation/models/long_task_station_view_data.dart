@@ -122,12 +122,34 @@ class LongTaskRunDetailViewData {
     required this.narrativeDelivery,
     required this.narrativeReview,
     required this.narrativeContinuity,
+    required this.informationSummary,
     required this.narrativeProjectionItems,
     required this.narrativePermissionItems,
+    required this.informationProjectionItems,
+    required this.informationPermissionItems,
     required this.requiresManualAttention,
     required this.canPause,
     required this.canResume,
     required this.canStop,
+    this.overviewBlocks = const <LongTaskRunOverviewBlockViewData>[],
+    this.primaryMetadata = const <LongTaskRunMetaItemViewData>[],
+    this.diagnosticMetadata = const <LongTaskRunMetaItemViewData>[],
+    this.resumeActionLabel = '继续推进',
+    this.pendingUserActionLabel = '等待确认',
+    this.pendingUserAction,
+    this.preferredRecentOutput,
+    this.narrativeSectionTitle = '开放叙事摘要',
+    this.narrativeActivationLabel = 'Activation',
+    this.narrativeDeliveryLabel = 'Delivery',
+    this.narrativeReviewLabel = 'Review',
+    this.narrativeContinuityLabel = 'Continuity',
+    this.informationSummaryLabel = 'Information',
+    this.narrativeProjectionSectionTitle = '开放叙事投影',
+    this.informationProjectionSectionTitle = '信息投影',
+    this.narrativePermissionSectionTitle = '权限确认',
+    this.informationPermissionSectionTitle = '信息待确认',
+    this.relatedResultsSectionTitle = '最近关联结果',
+    this.diagnosticSectionTitle = '运行诊断',
   });
 
   final String id;
@@ -168,12 +190,55 @@ class LongTaskRunDetailViewData {
   final LongTaskRunRelatedItemViewData? narrativeDelivery;
   final LongTaskRunRelatedItemViewData? narrativeReview;
   final LongTaskRunRelatedItemViewData? narrativeContinuity;
+  final LongTaskRunRelatedItemViewData? informationSummary;
   final List<LongTaskRunRelatedItemViewData> narrativeProjectionItems;
   final List<LongTaskRunRelatedItemViewData> narrativePermissionItems;
+  final List<LongTaskRunRelatedItemViewData> informationProjectionItems;
+  final List<LongTaskRunRelatedItemViewData> informationPermissionItems;
   final bool requiresManualAttention;
   final bool canPause;
   final bool canResume;
   final bool canStop;
+  final List<LongTaskRunOverviewBlockViewData> overviewBlocks;
+  final List<LongTaskRunMetaItemViewData> primaryMetadata;
+  final List<LongTaskRunMetaItemViewData> diagnosticMetadata;
+  final String resumeActionLabel;
+  final String pendingUserActionLabel;
+  final LongTaskRunRelatedItemViewData? pendingUserAction;
+  final LongTaskRunRelatedItemViewData? preferredRecentOutput;
+  final String narrativeSectionTitle;
+  final String narrativeActivationLabel;
+  final String narrativeDeliveryLabel;
+  final String narrativeReviewLabel;
+  final String narrativeContinuityLabel;
+  final String informationSummaryLabel;
+  final String narrativeProjectionSectionTitle;
+  final String informationProjectionSectionTitle;
+  final String narrativePermissionSectionTitle;
+  final String informationPermissionSectionTitle;
+  final String relatedResultsSectionTitle;
+  final String diagnosticSectionTitle;
+}
+
+class LongTaskRunOverviewBlockViewData {
+  const LongTaskRunOverviewBlockViewData({
+    required this.title,
+    this.summary = '',
+    this.entries = const <LongTaskRunMetaItemViewData>[],
+    this.resources = const <LongTaskRunRelatedItemViewData>[],
+  });
+
+  final String title;
+  final String summary;
+  final List<LongTaskRunMetaItemViewData> entries;
+  final List<LongTaskRunRelatedItemViewData> resources;
+}
+
+class LongTaskRunMetaItemViewData {
+  const LongTaskRunMetaItemViewData({required this.label, required this.value});
+
+  final String label;
+  final String value;
 }
 
 class LongTaskRunChainItemViewData {

@@ -50,6 +50,14 @@ class LongTaskCheckpointReviewMarkdownRenderer {
       ValueReaders.stringList(review['mini_recheck_items']),
     );
     _appendDriftSignals(lines, ValueReaders.mapList(review['drift_signals']));
+    _appendInformationSignal(
+      lines,
+      ValueReaders.mapValue(review['information_signal']),
+    );
+    _appendCollaborationSignal(
+      lines,
+      ValueReaders.mapValue(review['collaboration_signal']),
+    );
     _appendList(
       lines,
       '风险依据',
@@ -171,6 +179,81 @@ class LongTaskCheckpointReviewMarkdownRenderer {
     }
     if (summary.isNotEmpty) {
       lines.add('- 说明：$summary');
+    }
+  }
+
+  void _appendInformationSignal(List<String> lines, JsonMap signal) {
+    if (signal.isEmpty || !ValueReaders.boolValue(signal['present'])) {
+      return;
+    }
+    lines
+      ..add('')
+      ..add('## Information 信号');
+    final summary = ValueReaders.stringValue(signal['summary']).trim();
+    if (summary.isNotEmpty) {
+      lines.add('- 摘要：$summary');
+    }
+    final category = ValueReaders.stringValue(signal['category']).trim();
+    if (category.isNotEmpty) {
+      lines.add('- 类别：$category');
+    }
+    _appendList(
+      lines,
+      '待研究请求',
+      ValueReaders.stringList(signal['pending_research_requests']),
+    );
+    _appendList(
+      lines,
+      '高风险引用',
+      ValueReaders.stringList(signal['high_risk_reference_ids']),
+    );
+    _appendList(
+      lines,
+      '设计冲突',
+      ValueReaders.stringList(signal['design_conflict_ids']),
+    );
+    _appendList(
+      lines,
+      'Required 信息省略',
+      ValueReaders.stringList(signal['required_omitted_titles']),
+    );
+    _appendList(
+      lines,
+      'Information 改动路径',
+      ValueReaders.stringList(signal['changed_paths']),
+    );
+  }
+
+  void _appendCollaborationSignal(List<String> lines, JsonMap signal) {
+    if (signal.isEmpty || !ValueReaders.boolValue(signal['present'])) {
+      return;
+    }
+    lines
+      ..add('')
+      ..add('## 协作冲突');
+    final summary = ValueReaders.stringValue(signal['summary']).trim();
+    if (summary.isNotEmpty) {
+      lines.add('- 摘要：$summary');
+    }
+    final highestRisk = ValueReaders.stringValue(signal['highest_risk']).trim();
+    if (highestRisk.isNotEmpty) {
+      lines.add('- 最高风险：$highestRisk');
+    }
+    final category = ValueReaders.stringValue(signal['category']).trim();
+    if (category.isNotEmpty) {
+      lines.add('- 处理类型：$category');
+    }
+    final arbitrationResults = ValueReaders.mapList(
+      signal['arbitration_results'],
+    );
+    if (arbitrationResults.isNotEmpty) {
+      lines.add('- 仲裁结果：');
+      for (final item in arbitrationResults) {
+        final summary = ValueReaders.stringValue(item['summary']).trim();
+        if (summary.isNotEmpty) {
+          lines.add('  - $summary');
+        }
+      }
     }
   }
 

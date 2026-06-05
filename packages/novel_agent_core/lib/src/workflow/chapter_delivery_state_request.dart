@@ -1,6 +1,8 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
 import '../continuity/narrative_state/chapter_narrative_submission.dart';
+import '../creative/expression_constraint_review_projection.dart';
+import 'chapter_length_evaluation.dart';
 
 class ChapterDeliveryStateRequest {
   const ChapterDeliveryStateRequest({
@@ -13,6 +15,11 @@ class ChapterDeliveryStateRequest {
     this.writeSucceeded = true,
     this.retryableFailure = false,
     this.failureReason = '',
+    this.minimumBodyLength = 0,
+    this.requireEvidence = false,
+    this.requireExpressionConstraintReview = false,
+    this.chapterLengthEvaluation,
+    this.expressionConstraintReview,
     this.gateDecision = const <String, Object?>{},
     this.metadata = const <String, Object?>{},
   });
@@ -26,6 +33,11 @@ class ChapterDeliveryStateRequest {
   final bool writeSucceeded;
   final bool retryableFailure;
   final String failureReason;
+  final int minimumBodyLength;
+  final bool requireEvidence;
+  final bool requireExpressionConstraintReview;
+  final ChapterLengthEvaluation? chapterLengthEvaluation;
+  final ExpressionConstraintReviewProjection? expressionConstraintReview;
   final JsonMap gateDecision;
   final JsonMap metadata;
 
@@ -41,6 +53,11 @@ class ChapterDeliveryStateRequest {
       'write_succeeded': writeSucceeded,
       'retryable_failure': retryableFailure,
       'failure_reason': failureReason,
+      'minimum_body_length': minimumBodyLength,
+      'require_evidence': requireEvidence,
+      'require_expression_constraint_review': requireExpressionConstraintReview,
+      'chapter_length_evaluation': chapterLengthEvaluation?.toJson(),
+      'expression_constraint_review': expressionConstraintReview?.toJson(),
       'gate_decision': ValueReaders.deepCopyMap(gateDecision),
       'metadata': ValueReaders.deepCopyMap(metadata),
     };

@@ -108,7 +108,7 @@ class SessionGoalPromptBuilderService {
       case SessionRecordConstants.modeImportArticle:
         return const <String>[
           '判断当前是否已有打开文件、导入文件或我直接粘贴的内容。',
-          '没有材料时，说明可以使用导入入口或直接粘贴文本，并建议归档到 knowledge/、scenes/ 或 chapters/。',
+          '没有材料时，说明可以使用导入入口或直接粘贴文本；正文/片段仍归档到 chapters/ 或 scenes/，抽取出的长期设定与巧思应保存为结构化结果，不要直接归档到 knowledge/ 投影。',
           '有材料时，先分类、摘要、抽取可复用设定，再询问是否保存结构化结果。',
         ];
       case SessionRecordConstants.modeContinueWriting:

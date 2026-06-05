@@ -48,7 +48,7 @@ class AppShellCompactDrawer extends StatelessWidget {
                   AppShellCompactDockLayout.screenEdgePadding,
                   dockLayout.launcherBottomInset,
                 ),
-            child: _CompactDrawerDock(
+                child: _CompactDrawerDock(
                   isOpen: isOpen,
                   selectedDestination: selectedDestination,
                   actionHandler: actionHandler,
@@ -92,7 +92,7 @@ class _CompactDrawerDock extends StatelessWidget {
           Padding(
             key: const ValueKey('compact-drawer-panel'),
             padding: const EdgeInsets.only(bottom: 10),
-              child: AppShellCompactDrawerPanel(
+            child: AppShellCompactDrawerPanel(
               width: dockLayout.panelWidth,
               selectedDestination: selectedDestination,
               actionHandler: actionHandler,
@@ -330,8 +330,6 @@ class AppShellCompactDrawerLauncher extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sidebarSurface = context.novelThemeSurfaces.sidebar;
-    final item = AppShellNavigationCatalog.findItem(selectedDestination);
-    final label = item?.label ?? '菜单';
     final icon = isOpen ? Icons.close_rounded : Icons.menu_rounded;
     return Material(
       color: Colors.transparent,
@@ -371,7 +369,7 @@ class AppShellCompactDrawerLauncher extends StatelessWidget {
               const SizedBox(width: 8),
               Flexible(
                 child: Text(
-                  label,
+                  isOpen ? '收起菜单' : '菜单',
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 13,

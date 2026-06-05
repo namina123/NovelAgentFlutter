@@ -52,6 +52,8 @@ void main() {
         );
 
         expect(viewData.entries, hasLength(2));
+        expect(viewData.title, '作品库');
+        expect(viewData.description, '先新建作品，或从默认项目目录继续打开已有作品。');
         expect(viewData.entries.first.title, 'Alpha Project');
         expect(viewData.entries.first.isCurrentProject, isTrue);
         expect(viewData.selectedEntryId, viewData.entries.first.id);
@@ -68,7 +70,7 @@ void main() {
       () {
         final service = ProjectOpenViewDataService();
         final viewData = ProjectOpenViewData(
-          title: '打开项目',
+          title: '作品库',
           description: 'desc',
           projectsRootPath: 'D:/Projects',
           currentProjectPath: '',

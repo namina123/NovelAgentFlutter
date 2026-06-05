@@ -45,5 +45,29 @@ void main() {
       expect(preview.statusTone, SubAgentRunPreviewTone.danger);
       expect(preview.summaryPreview, '上下文不足。');
     });
+
+    test(
+      'treats degraded continuation as success-like recovery and prefers expert opinion preview',
+      () {
+        const run = SubAgentRunViewData(
+          id: 'sub_3',
+          agentName: '资料考据员',
+          task: '补齐背景证据',
+          status: '已降级返回',
+          summary: '',
+          content: '',
+          reasoning: '',
+          toolCount: 0,
+          events: ['转回单主链继续。'],
+          expertOpinion: '建议先按现有主链推进，不阻塞本轮写作。',
+          degradationSummary: '该子智能体未能独立完成，本轮已退回单主链继续。',
+        );
+
+        final preview = service.build(run);
+
+        expect(preview.statusTone, SubAgentRunPreviewTone.success);
+        expect(preview.summaryPreview, '建议先按现有主链推进，不阻塞本轮写作。');
+      },
+    );
   });
 }

@@ -197,6 +197,43 @@ void main() {
     );
   });
 
+  test('项目没有默认智能体文件时仍会用内置默认组进入普通开局', () async {
+    final service = ProjectOpeningSessionProjectionService(
+      loadAgentPackages: (_) async => const <JsonMap>[],
+      loadAgentGroups: (_) async => <JsonMap>[_starterNovelGroup()],
+      loadProjectAgentGroupSelections: (_) async =>
+          const <ProjectAgentGroupSelection>[],
+    );
+    final projection = await service.build(
+      project: const ProjectDescriptor(
+        id: 'project-fallback-default-agent',
+        name: '默认智能体兜底项目',
+        rootPath: 'D:/Projects/fallback_default_agent_project',
+        projectType: 'novel',
+      ),
+      runtimeProfile: const ProjectRuntimeProfile(
+        projectType: 'novel',
+        runtimeBaselineId: '',
+        runtimeMode: '',
+        initialRunOptions: <String, Object?>{},
+      ),
+      modeGuidanceState: null,
+    );
+
+    expect(projection.currentGroupId, 'starter_novel_generalist');
+    expect(
+      projection.currentPrimaryAgentSummary?.agentId,
+      'default_generalist',
+    );
+    expect(projection.supportedGroups, hasLength(1));
+    expect(
+      projection.orchestration.readiness.missingRequirements.map(
+        (item) => item.id,
+      ),
+      isNot(contains('agent_group')),
+    );
+  });
+
   test('拆书项目会识别拆书 starter group 并进入普通会话 ready', () async {
     final service = ProjectOpeningSessionProjectionService(
       loadAgentPackages: (_) async => <JsonMap>[_generalistAgent()],

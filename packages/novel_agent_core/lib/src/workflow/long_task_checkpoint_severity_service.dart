@@ -18,10 +18,15 @@ class LongTaskCheckpointSeverityService {
     );
     final toolNames = ValueReaders.stringList(review['tool_names']);
     final error = ValueReaders.stringValue(review['error']).trim();
-    final narrativeRisk = ValueReaders.mapValue(review['narrative_supervisor_risk']);
+    final narrativeRisk = ValueReaders.mapValue(
+      review['narrative_supervisor_risk'],
+    );
     final overallRisk = ValueReaders.mapValue(narrativeRisk['overall']);
     final reviewRisk = ValueReaders.mapValue(narrativeRisk['review']);
     final permissionRisk = ValueReaders.mapValue(narrativeRisk['permission']);
+    final collaborationSignal = ValueReaders.mapValue(
+      review['collaboration_signal'],
+    );
 
     var severity = 'low';
     if (!resultOk || error.isNotEmpty) {
@@ -45,15 +50,21 @@ class LongTaskCheckpointSeverityService {
         severity = 'medium';
       }
     }
-    severity = _maxSeverity(
-      severity,
-      switch (ValueReaders.stringValue(overallRisk['category'])) {
-        'manual_attention' => 'critical',
-        'repair' => 'high',
-        'checkpoint_user' => 'medium',
-        _ => 'low',
-      },
-    );
+    severity = _maxSeverity(severity, switch (ValueReaders.stringValue(
+      overallRisk['category'],
+    )) {
+      'manual_attention' => 'critical',
+      'repair' => 'high',
+      'checkpoint_user' => 'medium',
+      _ => 'low',
+    });
+    severity = _maxSeverity(severity, switch (ValueReaders.stringValue(
+      collaborationSignal['category'],
+    )) {
+      'checkpoint_user' => 'high',
+      'repair' => 'high',
+      _ => 'low',
+    });
 
     if (taskType == 'chapter' && stage == 'sample') {
       reasons.add('样章阶段决定长期可写性，建议提高人工确认强度。');
@@ -85,6 +96,12 @@ class LongTaskCheckpointSeverityService {
     final riskSummary = ValueReaders.stringValue(overallRisk['summary']).trim();
     if (riskSummary.isNotEmpty) {
       reasons.add(riskSummary);
+    }
+    final collaborationSummary = ValueReaders.stringValue(
+      collaborationSignal['summary'],
+    ).trim();
+    if (collaborationSummary.isNotEmpty) {
+      reasons.add(collaborationSummary);
     }
     if (ValueReaders.boolValue(permissionRisk['waiting_for_user'])) {
       reasons.add('本轮存在真实权限确认等待，waiting_user 应只保留给这种用户确认场景。');

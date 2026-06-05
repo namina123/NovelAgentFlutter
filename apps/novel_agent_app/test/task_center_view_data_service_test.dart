@@ -80,5 +80,9 @@ void main() {
     expect(body, contains('最近停在：检查点'));
     expect(body, contains('建议下一步：处理检查点'));
     expect(body, contains('检查点动作包'));
+    expect(body, isNot(contains('run_center_contract')));
+    expect(body, isNot(contains('requires_user_action')));
+    expect(body, isNot(contains('action_package_available')));
+    expect(body, isNot(contains('revision_resolution_available')));
   });
 }

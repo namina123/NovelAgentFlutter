@@ -16,6 +16,7 @@ import 'selector_option_view_data.dart';
 import 'session_history_entry_view_data.dart';
 import 'sub_agent_run_view_data.dart';
 import 'user_option_view_data.dart';
+import 'workbench_information_view_data.dart';
 import 'workspace_command_request_view_data.dart';
 
 export 'document_tab_view_data.dart';
@@ -33,6 +34,7 @@ class WorkbenchViewData {
     required this.projectLongTaskSummary,
     required this.documents,
     required this.resourceEntries,
+    required this.informationViewData,
     required this.modelLabel,
     required this.modelOptions,
     required this.groupSelector,
@@ -74,6 +76,7 @@ class WorkbenchViewData {
   final ProjectLongTaskSummaryViewData? projectLongTaskSummary;
   final List<DocumentTabViewData> documents;
   final List<ResourceEntryViewData> resourceEntries;
+  final WorkbenchInformationViewData informationViewData;
   final String modelLabel;
   final List<SelectorOptionViewData> modelOptions;
   final ConversationGroupSelectorViewData groupSelector;
@@ -116,6 +119,7 @@ class WorkbenchViewData {
       projectLongTaskSummary: null,
       documents: [],
       resourceEntries: [],
+      informationViewData: WorkbenchInformationViewData(),
       modelLabel: '未加载模型',
       modelOptions: [],
       groupSelector: ConversationGroupSelectorViewData.initial(),
@@ -176,6 +180,7 @@ class WorkbenchViewData {
     Object? projectLongTaskSummary = _projectLongTaskSummarySentinel,
     List<DocumentTabViewData>? documents,
     List<ResourceEntryViewData>? resourceEntries,
+    WorkbenchInformationViewData? informationViewData,
     String? modelLabel,
     List<SelectorOptionViewData>? modelOptions,
     ConversationGroupSelectorViewData? groupSelector,
@@ -223,6 +228,7 @@ class WorkbenchViewData {
           : projectLongTaskSummary as ProjectLongTaskSummaryViewData?,
       documents: documents ?? this.documents,
       resourceEntries: resourceEntries ?? this.resourceEntries,
+      informationViewData: informationViewData ?? this.informationViewData,
       modelLabel: modelLabel ?? this.modelLabel,
       modelOptions: modelOptions ?? this.modelOptions,
       groupSelector: groupSelector ?? this.groupSelector,

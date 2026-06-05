@@ -17,6 +17,8 @@ class LongTaskRunAttentionCallout extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!run.requiresManualAttention &&
+        run.pendingUserAction == null &&
+        run.preferredRecentOutput == null &&
         run.latestRepairTask == null &&
         run.latestReviewReport == null &&
         run.blockerActionHint.trim().isEmpty) {
@@ -63,7 +65,27 @@ class LongTaskRunAttentionCallout extends StatelessWidget {
                 FilledButton.tonal(
                   onPressed: () =>
                       actionHandler.onLongTaskStationResumeRequested(run.id),
-                  child: Text(run.requiresManualAttention ? '重试推进' : '继续推进'),
+                  child: Text(run.resumeActionLabel),
+                ),
+              if (run.pendingUserAction != null &&
+                  run.pendingUserAction!.relativePath.trim().isNotEmpty)
+                OutlinedButton(
+                  onPressed: () =>
+                      actionHandler.onLongTaskStationResourceRequested(
+                        run.id,
+                        run.pendingUserAction!.relativePath,
+                      ),
+                  child: Text(run.pendingUserActionLabel),
+                ),
+              if (run.preferredRecentOutput != null &&
+                  run.preferredRecentOutput!.relativePath.trim().isNotEmpty)
+                OutlinedButton(
+                  onPressed: () =>
+                      actionHandler.onLongTaskStationResourceRequested(
+                        run.id,
+                        run.preferredRecentOutput!.relativePath,
+                      ),
+                  child: const Text('查看最近产物'),
                 ),
               if (run.latestRepairTask != null)
                 OutlinedButton(

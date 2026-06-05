@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../../../app/theme/app_palette.dart';
+import '../../../../../shared/theme/novel_theme_context.dart';
 
 class SettingsLabeledTextField extends StatelessWidget {
   const SettingsLabeledTextField({
@@ -32,15 +32,16 @@ class SettingsLabeledTextField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 中文注释: 设置文本输入统一在这里处理标签和输入框的排布，减少每个设置面板的重复样板代码。
+    final surface = context.novelThemeSurfaces.panel;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w700,
-            color: AppPalette.mutedText,
+            color: surface.mutedForegroundColor,
           ),
         ),
         const SizedBox(height: 6),

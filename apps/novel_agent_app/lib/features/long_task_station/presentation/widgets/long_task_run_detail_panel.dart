@@ -36,9 +36,11 @@ class LongTaskRunDetailPanel extends StatelessWidget {
           runSpacing: 6,
           children: [
             _Badge(text: run.statusLabel),
-            _Badge(text: run.runtimeBaselineTitle),
+            if (run.runtimeBaselineTitle.trim().isNotEmpty)
+              _Badge(text: run.runtimeBaselineTitle),
             _Badge(text: run.runtimeModeLabel),
-            _Badge(text: run.storageStrategyLabel),
+            if (run.storageStrategyLabel.trim().isNotEmpty)
+              _Badge(text: run.storageStrategyLabel),
             ...run.policyBadges.map((item) => _Badge(text: item)),
           ],
         ),
@@ -46,24 +48,18 @@ class LongTaskRunDetailPanel extends StatelessWidget {
         LongTaskRunActionBar(run: run, actionHandler: actionHandler),
         LongTaskRunAttentionCallout(run: run, actionHandler: actionHandler),
         const SizedBox(height: 16),
-        _MetaLine(label: '项目路径', value: run.projectPath),
-        _MetaLine(label: '基准说明', value: run.runtimeBaselineDescription),
-        _MetaLine(label: '运行模式', value: run.runtimeModeLabel),
-        _MetaLine(label: '工作流 ID', value: run.workflowStrategyId),
-        _MetaLine(label: '活动任务', value: run.activeTaskLabel),
-        if (run.activeTaskPath.trim().isNotEmpty)
-          _MetaLine(label: '活动任务路径', value: run.activeTaskPath),
-        if (run.activeTaskStatusLabel.trim().isNotEmpty)
-          _MetaLine(label: '活动任务状态', value: run.activeTaskStatusLabel),
-        if (run.activeTaskSummary.trim().isNotEmpty)
-          _MetaLine(label: '活动任务摘要', value: run.activeTaskSummary),
-        _SectionTitle(title: '当前阻塞'),
-        _MetaLine(label: '阻塞标签', value: run.blockerLabel),
-        _MetaLine(label: '阻塞说明', value: run.blockerNote),
-        if (run.blockerDetail.trim().isNotEmpty)
-          _MetaLine(label: '阻塞细节', value: run.blockerDetail),
-        if (run.blockerActionHint.trim().isNotEmpty)
-          _MetaLine(label: '建议动作', value: run.blockerActionHint),
+        if (run.overviewBlocks.isNotEmpty)
+          ...run.overviewBlocks.map(
+            (block) => _OverviewBlock(
+              runId: run.id,
+              block: block,
+              actionHandler: actionHandler,
+            ),
+          )
+        else if (run.primaryMetadata.isNotEmpty)
+          ...run.primaryMetadata.map(
+            (item) => _MetaLine(label: item.label, value: item.value),
+          ),
         _SectionTitle(title: '当前链路'),
         if (run.isDetailLoading)
           const Padding(
@@ -92,19 +88,23 @@ class LongTaskRunDetailPanel extends StatelessWidget {
                       run.id,
                       item.relativePath,
                     ),
-                  ),
             ),
+          ),
         if (run.narrativeActivation != null ||
             run.narrativeDelivery != null ||
             run.narrativeReview != null ||
             run.narrativeContinuity != null ||
+            run.informationSummary != null ||
             run.narrativeProjectionItems.isNotEmpty ||
-            run.narrativePermissionItems.isNotEmpty) ...[
-          _SectionTitle(title: '开放叙事摘要'),
+            run.narrativePermissionItems.isNotEmpty ||
+            run.informationProjectionItems.isNotEmpty ||
+            run.informationPermissionItems.isNotEmpty) ...[
+          _SectionTitle(title: run.narrativeSectionTitle),
           _RelatedItemSection(
-            title: 'Activation',
+            title: run.narrativeActivationLabel,
             item: run.narrativeActivation,
-            onOpenRequested: run.narrativeActivation == null ||
+            onOpenRequested:
+                run.narrativeActivation == null ||
                     run.narrativeActivation!.relativePath.trim().isEmpty
                 ? null
                 : () => actionHandler.onLongTaskStationResourceRequested(
@@ -113,9 +113,10 @@ class LongTaskRunDetailPanel extends StatelessWidget {
                   ),
           ),
           _RelatedItemSection(
-            title: 'Delivery',
+            title: run.narrativeDeliveryLabel,
             item: run.narrativeDelivery,
-            onOpenRequested: run.narrativeDelivery == null ||
+            onOpenRequested:
+                run.narrativeDelivery == null ||
                     run.narrativeDelivery!.relativePath.trim().isEmpty
                 ? null
                 : () => actionHandler.onLongTaskStationResourceRequested(
@@ -124,9 +125,10 @@ class LongTaskRunDetailPanel extends StatelessWidget {
                   ),
           ),
           _RelatedItemSection(
-            title: 'Review',
+            title: run.narrativeReviewLabel,
             item: run.narrativeReview,
-            onOpenRequested: run.narrativeReview == null ||
+            onOpenRequested:
+                run.narrativeReview == null ||
                     run.narrativeReview!.relativePath.trim().isEmpty
                 ? null
                 : () => actionHandler.onLongTaskStationResourceRequested(
@@ -135,9 +137,10 @@ class LongTaskRunDetailPanel extends StatelessWidget {
                   ),
           ),
           _RelatedItemSection(
-            title: 'Continuity',
+            title: run.narrativeContinuityLabel,
             item: run.narrativeContinuity,
-            onOpenRequested: run.narrativeContinuity == null ||
+            onOpenRequested:
+                run.narrativeContinuity == null ||
                     run.narrativeContinuity!.relativePath.trim().isEmpty
                 ? null
                 : () => actionHandler.onLongTaskStationResourceRequested(
@@ -145,8 +148,20 @@ class LongTaskRunDetailPanel extends StatelessWidget {
                     run.narrativeContinuity!.relativePath,
                   ),
           ),
+          _RelatedItemSection(
+            title: run.informationSummaryLabel,
+            item: run.informationSummary,
+            onOpenRequested:
+                run.informationSummary == null ||
+                    run.informationSummary!.relativePath.trim().isEmpty
+                ? null
+                : () => actionHandler.onLongTaskStationResourceRequested(
+                    run.id,
+                    run.informationSummary!.relativePath,
+                  ),
+          ),
           if (run.narrativeProjectionItems.isNotEmpty) ...[
-            const SizedBox(height: 4),
+            _SectionTitle(title: run.narrativeProjectionSectionTitle),
             ...run.narrativeProjectionItems.map(
               (item) => _RelatedItemSection(
                 title: item.title,
@@ -160,8 +175,23 @@ class LongTaskRunDetailPanel extends StatelessWidget {
               ),
             ),
           ],
+          if (run.informationProjectionItems.isNotEmpty) ...[
+            _SectionTitle(title: run.informationProjectionSectionTitle),
+            ...run.informationProjectionItems.map(
+              (item) => _RelatedItemSection(
+                title: item.title,
+                item: item,
+                onOpenRequested: item.relativePath.trim().isEmpty
+                    ? null
+                    : () => actionHandler.onLongTaskStationResourceRequested(
+                        run.id,
+                        item.relativePath,
+                      ),
+              ),
+            ),
+          ],
           if (run.narrativePermissionItems.isNotEmpty) ...[
-            _SectionTitle(title: '权限确认'),
+            _SectionTitle(title: run.narrativePermissionSectionTitle),
             ...run.narrativePermissionItems.map(
               (item) => _RelatedItemSection(
                 title: item.title,
@@ -175,8 +205,38 @@ class LongTaskRunDetailPanel extends StatelessWidget {
               ),
             ),
           ],
+          if (run.informationPermissionItems.isNotEmpty) ...[
+            _SectionTitle(title: run.informationPermissionSectionTitle),
+            ...run.informationPermissionItems.map(
+              (item) => _RelatedItemSection(
+                title: item.title,
+                item: item,
+                onOpenRequested: item.relativePath.trim().isEmpty
+                    ? null
+                    : () => actionHandler.onLongTaskStationResourceRequested(
+                        run.id,
+                        item.relativePath,
+                      ),
+              ),
+            ),
+          ],
         ],
-        _SectionTitle(title: '最近关联结果'),
+        if (run.diagnosticMetadata.isNotEmpty) ...[
+          _SectionTitle(title: '高级信息'),
+          ...run.primaryMetadata.map(
+            (item) => _MetaLine(label: item.label, value: item.value),
+          ),
+          ExpansionTile(
+            title: Text(run.diagnosticSectionTitle),
+            tilePadding: EdgeInsets.zero,
+            childrenPadding: EdgeInsets.zero,
+            initiallyExpanded: false,
+            children: run.diagnosticMetadata
+                .map((item) => _MetaLine(label: item.label, value: item.value))
+                .toList(growable: false),
+          ),
+        ],
+        _SectionTitle(title: run.relatedResultsSectionTitle),
         _RelatedItemSection(
           title: '最近检查点',
           item: run.latestCheckpointReview,
@@ -234,6 +294,65 @@ class _SectionTitle extends StatelessWidget {
         style: Theme.of(
           context,
         ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
+      ),
+    );
+  }
+}
+
+class _OverviewBlock extends StatelessWidget {
+  const _OverviewBlock({
+    required this.runId,
+    required this.block,
+    required this.actionHandler,
+  });
+
+  final String runId;
+  final LongTaskRunOverviewBlockViewData block;
+  final LongTaskStationActionHandler actionHandler;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: Theme.of(context).colorScheme.outline),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            block.title,
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          if (block.summary.trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(block.summary, style: Theme.of(context).textTheme.bodyMedium),
+          ],
+          if (block.entries.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            ...block.entries.map(
+              (item) => _MetaLine(label: item.label, value: item.value),
+            ),
+          ],
+          if (block.resources.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            ...block.resources.map(
+              (item) => _RelatedItemSection(
+                title: item.title,
+                item: item,
+                onOpenRequested: item.relativePath.trim().isEmpty
+                    ? null
+                    : () => actionHandler.onLongTaskStationResourceRequested(
+                        runId,
+                        item.relativePath,
+                      ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -318,7 +437,9 @@ class _RelatedItemSection extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  '$title：${item!.title}',
+                  item!.title.trim() == title.trim()
+                      ? item!.title
+                      : '$title：${item!.title}',
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w800,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../app/layout/app_layout_metrics.dart';
 import '../../app/layout/app_layout_scope.dart';
@@ -61,20 +62,60 @@ class _AppShellState extends State<AppShell> {
                 ? AppShellCompactScaffold(
                     selectedDestination: destination,
                     actionHandler: widget.controller,
+                    onSystemBackRequested: () =>
+                        _handleSystemBackRequested(context),
                     page: page,
                   )
-                : Row(
-                    children: [
-                      AppShellActivityRail(
-                        selectedDestination: destination,
-                        actionHandler: widget.controller,
-                      ),
-                      Expanded(child: page),
-                    ],
+                : PopScope<Object?>(
+                    canPop: false,
+                    onPopInvokedWithResult: (didPop, _) async {
+                      if (didPop) {
+                        return;
+                      }
+                      await _handleSystemBackRequested(context);
+                    },
+                    child: Row(
+                      children: [
+                        AppShellActivityRail(
+                          selectedDestination: destination,
+                          actionHandler: widget.controller,
+                        ),
+                        Expanded(child: page),
+                      ],
+                    ),
                   ),
           ),
         );
       },
     );
+  }
+
+  Future<void> _handleSystemBackRequested(BuildContext context) async {
+    final shouldAskExit = await widget.controller.handleSystemBackRequested();
+    if (!shouldAskExit || !context.mounted) {
+      return;
+    }
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('退出应用？'),
+          content: const Text('当前操作已停在这里。确定要退出吗？'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('退出'),
+            ),
+          ],
+        );
+      },
+    );
+    if (result == true) {
+      await SystemNavigator.pop();
+    }
   }
 }

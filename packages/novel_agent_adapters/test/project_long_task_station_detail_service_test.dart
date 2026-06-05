@@ -41,102 +41,151 @@ void main() {
       }
     });
 
-    test('loads active chain and recent checkpoint review/repair signals', () async {
-      final baseline = const RuntimeBaselineCatalogService().byId(
-        'continuous_autonomous',
-      )!;
-      final run = const RunInstanceFactoryService()
-          .createLongTaskInstance(
-            runId: 'run_station_demo',
-            project: project,
-            runtimeBaseline: baseline,
-            modeId: TaskRuntimeConstants.modeSeedToFullNovel,
-            workflowStrategyId: 'resumable_long_task',
-            initialStatus: LongTaskRunStatus.waitingGate,
-            now: DateTime.parse('2026-05-26T08:00:00.000Z'),
-          )
-          .copyWith(
-            activeTaskId: 'checkpoint_001',
-            activeTaskTitle: '检查点：第一卷收束',
-            stopReason: 'waiting_user_checkpoint',
-            note: 'checkpoint waiting for user decision',
-          );
+    test(
+      'loads active chain and recent checkpoint review/repair signals',
+      () async {
+        final baseline = const RuntimeBaselineCatalogService().byId(
+          'continuous_autonomous',
+        )!;
+        final run = const RunInstanceFactoryService()
+            .createLongTaskInstance(
+              runId: 'run_station_demo',
+              project: project,
+              runtimeBaseline: baseline,
+              modeId: TaskRuntimeConstants.modeSeedToFullNovel,
+              workflowStrategyId: 'resumable_long_task',
+              initialStatus: LongTaskRunStatus.waitingGate,
+              now: DateTime.parse('2026-05-26T08:00:00.000Z'),
+            )
+            .copyWith(
+              activeTaskId: 'checkpoint_001',
+              activeTaskTitle: '检查点：第一卷收束',
+              stopReason: 'waiting_user_checkpoint',
+              note: 'checkpoint waiting for user decision',
+            );
 
-      final detail = await service.loadForRun(run);
+        final detail = await service.loadForRun(run);
 
-      expect(detail.activeTask, isNotNull);
-      expect(detail.activeTask!.id, 'checkpoint_001');
-      expect(detail.chain, isNotNull);
-      expect(detail.chain!.items, hasLength(3));
-      expect(detail.chain!.blockingCheckpointTitles, contains('检查点：第一卷收束'));
+        expect(detail.activeTask, isNotNull);
+        expect(detail.activeTask!.id, 'checkpoint_001');
+        expect(detail.chain, isNotNull);
+        expect(detail.chain!.items, hasLength(3));
+        expect(detail.chain!.blockingCheckpointTitles, contains('检查点：第一卷收束'));
 
-      expect(detail.latestCheckpointReview, isNotNull);
-      expect(
-        detail.latestCheckpointReview!.relativePath,
-        'tracking/checkpoint_reviews/ch01_checkpoint.json',
-      );
-      expect(detail.latestCheckpointReview!.status, 'high');
+        expect(detail.latestCheckpointReview, isNotNull);
+        expect(
+          detail.latestCheckpointReview!.relativePath,
+          'tracking/checkpoint_reviews/ch01_checkpoint.json',
+        );
+        expect(detail.latestCheckpointReview!.status, 'high');
 
-      expect(detail.latestReviewReport, isNotNull);
-      expect(
-        detail.latestReviewReport!.relativePath,
-        'reviews/continuity/ch01_gate.md',
-      );
-      expect(detail.latestReviewReport!.title, '第01章连贯性审稿');
+        expect(detail.latestReviewReport, isNotNull);
+        expect(
+          detail.latestReviewReport!.relativePath,
+          'reviews/continuity/ch01_gate.md',
+        );
+        expect(detail.latestReviewReport!.title, '第01章连贯性审稿');
 
-      expect(detail.latestRepairTask, isNotNull);
-      expect(detail.latestRepairTask!.id, 'revision_001');
-      expect(detail.latestRepairTask!.relativePath, 'tasks/revision_001.json');
-      expect(detail.narrativeSummary, isNotNull);
-      expect(
-        detail.narrativeSummary!.activation?.relativePath,
-        'tracking/chapter_atomic/chapter_001.activation_report.json',
-      );
-      expect(
-        detail.narrativeSummary!.activation?.summary,
-        'selected 8, omitted 2, files 8.',
-      );
-      expect(detail.narrativeSummary!.delivery, isNotNull);
-      expect(detail.narrativeSummary!.delivery?.status, 'delivered');
-      expect(
-        detail.narrativeSummary!.delivery?.relativePath,
-        'chapters/ch01.md',
-      );
-      expect(detail.narrativeSummary!.review, isNotNull);
-      expect(
-        detail.narrativeSummary!.review?.relativePath,
-        'reviews/continuity/ch01_gate.md',
-      );
-      expect(detail.narrativeSummary!.continuity, isNotNull);
-      expect(detail.narrativeSummary!.continuity?.summary, 'ledger 1 | reviews 1');
-      expect(detail.narrativeSummary!.continuity?.subtitle, '更新 2 项');
-      expect(detail.narrativeSummary!.projectionItems, hasLength(2));
-      expect(
-        detail.narrativeSummary!.projectionItems.map((item) => item.relativePath),
-        containsAll(<String>[
-          'continuity/最近状态变化.md',
-          'reviews/语义复核摘要.md',
-        ]),
-      );
-      expect(detail.narrativeSummary!.permissionItems, hasLength(2));
-      expect(
-        detail.narrativeSummary!.permissionItems.map((item) => item.relativePath),
-        containsAll(<String>[
-          '.novel_agent/continuity/clarifications/clarification_call-5.json',
-          '.novel_agent/continuity/profile_proposals/proposal-1.json',
-        ]),
-      );
-      expect(
-        detail.narrativeSummary!.permissionItems
-            .firstWhere((item) => item.title == 'Clarification')
-            .summary,
-        '这个机制是否长期生效？',
-      );
+        expect(detail.latestRepairTask, isNotNull);
+        expect(detail.latestRepairTask!.id, 'revision_001');
+        expect(
+          detail.latestRepairTask!.relativePath,
+          'tasks/revision_001.json',
+        );
+        expect(detail.narrativeSummary, isNotNull);
+        expect(
+          detail.narrativeSummary!.activation?.relativePath,
+          'tracking/chapter_atomic/chapter_001.activation_report.json',
+        );
+        expect(
+          detail.narrativeSummary!.activation?.summary,
+          'selected 8, omitted 2, files 8.',
+        );
+        expect(detail.narrativeSummary!.delivery, isNotNull);
+        expect(detail.narrativeSummary!.delivery?.status, 'delivered');
+        expect(
+          detail.narrativeSummary!.delivery?.relativePath,
+          'chapters/ch01.md',
+        );
+        expect(detail.narrativeSummary!.review, isNotNull);
+        expect(
+          detail.narrativeSummary!.review?.relativePath,
+          'reviews/continuity/ch01_gate.md',
+        );
+        expect(detail.narrativeSummary!.continuity, isNotNull);
+        expect(
+          detail.narrativeSummary!.continuity?.summary,
+          'ledger 1 | reviews 1',
+        );
+        expect(detail.narrativeSummary!.continuity?.subtitle, '更新 2 项');
+        expect(detail.narrativeSummary!.information, isNotNull);
+        expect(
+          detail.narrativeSummary!.information?.subtitle,
+          contains('knowledge 1 | design 1 | research 0 | reference 1'),
+        );
+        expect(
+          detail.narrativeSummary!.information?.summary,
+          contains('待研究 1 项'),
+        );
+        expect(detail.narrativeSummary!.projectionItems, hasLength(2));
+        expect(
+          detail.narrativeSummary!.projectionItems.map(
+            (item) => item.relativePath,
+          ),
+          containsAll(<String>['continuity/最近状态变化.md', 'reviews/语义复核摘要.md']),
+        );
+        expect(
+          detail.narrativeSummary!.informationProjectionItems,
+          hasLength(4),
+        );
+        expect(
+          detail.narrativeSummary!.informationProjectionItems.map(
+            (item) => item.relativePath,
+          ),
+          containsAll(<String>[
+            'knowledge/项目知识摘要.md',
+            'knowledge/设计元素摘要.md',
+            'research/资料研究摘要.md',
+            'references/引用作品边界.md',
+          ]),
+        );
+        expect(detail.narrativeSummary!.permissionItems, hasLength(2));
+        expect(
+          detail.narrativeSummary!.permissionItems.map(
+            (item) => item.relativePath,
+          ),
+          containsAll(<String>[
+            '.novel_agent/continuity/clarifications/clarification_call-5.json',
+            '.novel_agent/continuity/profile_proposals/proposal-1.json',
+          ]),
+        );
+        expect(
+          detail.narrativeSummary!.permissionItems
+              .firstWhere((item) => item.title == 'Clarification')
+              .summary,
+          '这个机制是否长期生效？',
+        );
+        expect(
+          detail.narrativeSummary!.informationPermissionItems,
+          hasLength(4),
+        );
+        expect(
+          detail.narrativeSummary!.informationPermissionItems.map(
+            (item) => item.title,
+          ),
+          containsAll(<String>[
+            'Knowledge Confirmation',
+            'Design Confirmation',
+            'Research Pending',
+            'Reference Confirmation',
+          ]),
+        );
 
-      expect(detail.blocker.code, 'waiting_user_checkpoint');
-      expect(detail.blocker.note, isNotEmpty);
-      expect(detail.blocker.detail, contains('当前任务'));
-    });
+        expect(detail.blocker.code, 'waiting_user_checkpoint');
+        expect(detail.blocker.note, isNotEmpty);
+        expect(detail.blocker.detail, contains('当前任务'));
+      },
+    );
   });
 }
 
@@ -153,7 +202,8 @@ Future<void> _seedProject(
       'status': TaskRuntimeConstants.statusSucceeded,
       'relative_path': 'tasks/chapter_001.json',
       'output_paths': <Object?>['chapters/ch01.md'],
-      'atomic_execution_path': 'tracking/chapter_atomic/chapter_001.execution.json',
+      'atomic_execution_path':
+          'tracking/chapter_atomic/chapter_001.execution.json',
       'activation_report_path':
           'tracking/chapter_atomic/chapter_001.activation_report.json',
       'activation_report_summary': 'selected 8, omitted 2, files 8.',
@@ -218,9 +268,110 @@ Future<void> _seedProject(
         '.novel_agent/continuity/reviews/review-001.json',
         '.novel_agent/continuity/profile_proposals/proposal-1.json',
         '.novel_agent/continuity/clarifications/clarification_call-5.json',
+        '.novel_agent/information/knowledge_cards/knowledge_card_1.json',
+        '.novel_agent/information/design_elements/design_element_1.json',
+        '.novel_agent/information/research_requests/research_request_1.json',
+        '.novel_agent/information/reference_works/reference_work_1.json',
         'continuity/最近状态变化.md',
         'reviews/语义复核摘要.md',
+        'knowledge/项目知识摘要.md',
+        'knowledge/设计元素摘要.md',
+        'research/资料研究摘要.md',
+        'references/引用作品边界.md',
       ],
+    },
+  );
+  await taskRepository.saveRecord(
+    project,
+    '.novel_agent/information/knowledge_cards/knowledge_card_1.json',
+    <String, Object?>{
+      'card_id': 'knowledge_card_1',
+      'card_namespace': 'project.world',
+      'card_type': 'setting_fact',
+      'title': '风雪旧城传送门规则',
+      'summary': '这条长期设定需要用户确认是否进入主知识层。',
+      'content_payload': <String, Object?>{'rule': '夜晚才可开启'},
+      'source_refs': <Object?>[
+        <String, Object?>{
+          'source_type': 'assistant_proposal',
+          'source_id': 'call_knowledge_1',
+          'source_authority': 'assistant',
+          'role_authority': 'writer',
+        },
+      ],
+      'activation_policy': <String, Object?>{
+        'priority': 'normal',
+        'required': false,
+        'pinned': false,
+      },
+      'usage_policy': <String, Object?>{
+        'permission_mode': 'proposal_required',
+        'requires_confirmation': true,
+      },
+      'confidence': 0.72,
+      'lifecycle_status': 'proposed',
+    },
+  );
+  await taskRepository.saveRecord(
+    project,
+    '.novel_agent/information/design_elements/design_element_1.json',
+    <String, Object?>{
+      'design_id': 'design_element_1',
+      'design_namespace': 'project.symbol',
+      'design_label': '风雪钟声意象',
+      'design_payload': <String, Object?>{'motif': '钟声先于危机出现'},
+      'source_refs': <Object?>[
+        <String, Object?>{
+          'source_type': 'assistant_proposal',
+          'source_id': 'call_design_1',
+          'source_authority': 'assistant',
+          'role_authority': 'writer',
+        },
+      ],
+      'activation_policy': <String, Object?>{
+        'priority': 'reference',
+        'required': false,
+        'pinned': false,
+      },
+      'usage_policy': <String, Object?>{
+        'permission_mode': 'proposal_required',
+        'requires_confirmation': true,
+      },
+      'confidence': 0.61,
+      'uncertainty': '需要确认是否升级为长期设计规则',
+      'lifecycle_status': 'proposed',
+    },
+  );
+  await taskRepository.saveRecord(
+    project,
+    '.novel_agent/information/research_requests/research_request_1.json',
+    <String, Object?>{
+      'request_id': 'research_request_1',
+      'research_request': <String, Object?>{'query': '旧城钟楼在北境民俗中的象征意义'},
+      'permission_decision': <String, Object?>{
+        'disposition': 'needs_user_confirmation',
+      },
+      'request_state': 'awaiting_user_confirmation',
+    },
+  );
+  await taskRepository.saveRecord(
+    project,
+    '.novel_agent/information/reference_works/reference_work_1.json',
+    <String, Object?>{
+      'reference_work_id': 'reference_work_1',
+      'title': '北境神话设定集',
+      'source_refs': <Object?>[
+        <String, Object?>{
+          'source_type': 'external_research',
+          'source_id': 'ref_source_1',
+          'source_authority': 'external',
+          'role_authority': 'researcher',
+        },
+      ],
+      'relationship_to_project': 'source_work_reference',
+      'declared_usage_intent': '只复用象征边界，不直接复制设定文本',
+      'allowed_usage_summary': '需要先确认可借用范围，再决定是否转成正式边界。',
+      'requires_confirmation': true,
     },
   );
   await taskRepository.saveRecord(
@@ -292,10 +443,7 @@ Future<void> _seedProject(
       'review_type': 'continuity',
       'scope': 'chapters/ch01.md',
       'issues': <Object?>[
-        <String, Object?>{
-          'id': 'issue_1',
-          'title': '角色动机衔接偏弱',
-        },
+        <String, Object?>{'id': 'issue_1', 'title': '角色动机衔接偏弱'},
       ],
       'created_at': '2026-05-26T08:10:30.000Z',
       'updated_at': '2026-05-26T08:10:30.000Z',
@@ -324,9 +472,29 @@ Future<void> _seedProject(
         '.novel_agent/continuity/reviews/review-001.json',
         '.novel_agent/continuity/profile_proposals/proposal-1.json',
         '.novel_agent/continuity/clarifications/clarification_call-5.json',
+        '.novel_agent/information/knowledge_cards/knowledge_card_1.json',
+        '.novel_agent/information/design_elements/design_element_1.json',
+        '.novel_agent/information/research_requests/research_request_1.json',
+        '.novel_agent/information/reference_works/reference_work_1.json',
         'continuity/最近状态变化.md',
         'reviews/语义复核摘要.md',
+        'knowledge/项目知识摘要.md',
+        'knowledge/设计元素摘要.md',
+        'research/资料研究摘要.md',
+        'references/引用作品边界.md',
       ],
+      'last_information_changed_paths': <Object?>[
+        '.novel_agent/information/knowledge_cards/knowledge_card_1.json',
+        '.novel_agent/information/design_elements/design_element_1.json',
+        '.novel_agent/information/research_requests/research_request_1.json',
+        '.novel_agent/information/reference_works/reference_work_1.json',
+        'knowledge/项目知识摘要.md',
+        'knowledge/设计元素摘要.md',
+        'research/资料研究摘要.md',
+        'references/引用作品边界.md',
+      ],
+      'last_information_summary': '待研究 1 项，高风险引用 1 项，information 改动 8 项',
+      'last_information_risk_category': 'manual_attention',
       'last_checkpoint_review_path':
           'tracking/checkpoint_reviews/ch01_checkpoint.json',
       'steps': <Object?>[
@@ -343,9 +511,29 @@ Future<void> _seedProject(
             '.novel_agent/continuity/reviews/review-001.json',
             '.novel_agent/continuity/profile_proposals/proposal-1.json',
             '.novel_agent/continuity/clarifications/clarification_call-5.json',
+            '.novel_agent/information/knowledge_cards/knowledge_card_1.json',
+            '.novel_agent/information/design_elements/design_element_1.json',
+            '.novel_agent/information/research_requests/research_request_1.json',
+            '.novel_agent/information/reference_works/reference_work_1.json',
             'continuity/最近状态变化.md',
             'reviews/语义复核摘要.md',
+            'knowledge/项目知识摘要.md',
+            'knowledge/设计元素摘要.md',
+            'research/资料研究摘要.md',
+            'references/引用作品边界.md',
           ],
+          'information_changed_paths': <Object?>[
+            '.novel_agent/information/knowledge_cards/knowledge_card_1.json',
+            '.novel_agent/information/design_elements/design_element_1.json',
+            '.novel_agent/information/research_requests/research_request_1.json',
+            '.novel_agent/information/reference_works/reference_work_1.json',
+            'knowledge/项目知识摘要.md',
+            'knowledge/设计元素摘要.md',
+            'research/资料研究摘要.md',
+            'references/引用作品边界.md',
+          ],
+          'information_summary': '待研究 1 项，高风险引用 1 项，information 改动 8 项',
+          'information_risk_category': 'manual_attention',
           'created_at': '2026-05-26T08:06:30.000Z',
         },
       ],

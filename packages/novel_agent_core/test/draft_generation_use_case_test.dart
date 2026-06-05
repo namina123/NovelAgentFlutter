@@ -351,7 +351,9 @@ void main() {
         expect(
           ValueReaders.stringValue(
             ValueReaders.mapValue(
-              ValueReaders.mapValue(gateway.lastOptions['tool_choice'])['function'],
+              ValueReaders.mapValue(
+                gateway.lastOptions['tool_choice'],
+              )['function'],
             )['name'],
           ),
           'present_user_options',
@@ -473,6 +475,16 @@ void main() {
           gateway.lastSystemPrompt,
           contains('不要只靠 write_project_file 冒充正式章节交付'),
         );
+        expect(gateway.lastSystemPrompt, contains('propose_design_element'));
+        expect(
+          gateway.lastSystemPrompt,
+          contains('外部资料、网页摘录、检索结论和来源说明不能直接冒充长期设定'),
+        );
+        expect(
+          gateway.lastSystemPrompt,
+          contains('knowledge/、research/、references/ 下的信息摘要是只读 projection 入口'),
+        );
+        expect(gateway.lastSystemPrompt, isNot(contains('知识库写入 knowledge/')));
         expect(
           result.executedTools
               .map(ValueReaders.mapValue)
@@ -823,6 +835,231 @@ void main() {
             )['relative_path'],
           ),
           'specs/project_brief.md',
+        );
+      },
+    );
+
+    test(
+      'generate draft prefers the selected collaboration group for child run packages',
+      () async {
+        final workspacePort = _FakeProjectWorkspacePort(entries: [], files: {});
+        final gateway = _FakeLlmGateway(
+          scriptedResults: <JsonMap>[
+            <String, Object?>{
+              'ok': true,
+              'content': '',
+              'tool_calls': <Object?>[
+                <String, Object?>{
+                  'id': 'call_sub_1',
+                  'name': 'call_sub_agent',
+                  'arguments': <String, Object?>{
+                    'agent_id': 'reviewer',
+                    'task': '请先审稿，再返回结构化建议。',
+                  },
+                },
+              ],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '',
+              },
+            },
+            <String, Object?>{
+              'ok': true,
+              'content': '建议先强化第一段冲突。',
+              'tool_calls': const <Object?>[],
+            },
+            <String, Object?>{
+              'ok': true,
+              'content': '已收到审稿建议。',
+              'tool_calls': const <Object?>[],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '已收到审稿建议。',
+              },
+            },
+          ],
+        );
+        final useCase = GenerateDraftUseCase(
+          projectWorkspacePort: workspacePort,
+          llmGateway: gateway,
+          toolExecutionPort: _FakeToolExecutionPort(),
+          contextAssemblerService: ContextAssemblerService(
+            budgetService: ContextBudgetService(),
+            staticSectionService: ContextStaticSectionService(
+              projectPromptContract: ProjectPromptContract(),
+            ),
+            projectFileSectionService: ContextProjectFileSectionService(),
+          ),
+          projectPromptContract: ProjectPromptContract(),
+          loadAvailableAgents: (_) async => <JsonMap>[
+            const <String, Object?>{
+              'id': 'writer',
+              'name': '正文智能体',
+              'role': '负责主写',
+            },
+            const <String, Object?>{
+              'id': 'reviewer',
+              'name': '审稿智能体',
+              'role': '负责审稿',
+            },
+          ],
+          loadAvailableAgentGroups: (_) async => <JsonMap>[
+            const <String, Object?>{
+              'id': 'optional_review_room',
+              'name': '审稿组',
+              'agents': <String>['reviewer'],
+            },
+            const <String, Object?>{
+              'id': 'starter_story_room',
+              'name': '正文协作组',
+              'agents': <String>['writer', 'reviewer'],
+              'primary_agent_id': 'writer',
+            },
+          ],
+        );
+
+        final result = await useCase.execute(
+          project: const ProjectDescriptor(
+            id: 'demo',
+            name: '示例项目',
+            rootPath: 'D:/demo',
+          ),
+          userPrompt: '继续写',
+          modelId: 'test-model',
+          agent: const <String, Object?>{
+            'id': 'writer',
+            'name': '正文智能体',
+            'role': '负责主写',
+          },
+          selectedCollaborationGroup: const <String, Object?>{
+            'id': 'starter_story_room',
+            'name': '正文协作组',
+            'agents': <String>['writer', 'reviewer'],
+            'primary_agent_id': 'writer',
+          },
+        );
+
+        final subAgentTool = result.executedTools
+            .map(ValueReaders.mapValue)
+            .firstWhere(
+              (tool) =>
+                  ValueReaders.stringValue(tool['name']) == 'call_sub_agent',
+            );
+        final subAgentResult = ValueReaders.mapValue(subAgentTool['result']);
+        expect(
+          ValueReaders.stringValue(subAgentResult['group_id']),
+          'starter_story_room',
+        );
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(
+              subAgentResult['child_run_package'],
+            )['group_id'],
+          ),
+          'starter_story_room',
+        );
+      },
+    );
+
+    test(
+      'generate draft derives a single-member collaboration group when no groups are available',
+      () async {
+        final workspacePort = _FakeProjectWorkspacePort(entries: [], files: {});
+        final gateway = _FakeLlmGateway(
+          scriptedResults: <JsonMap>[
+            <String, Object?>{
+              'ok': true,
+              'content': '',
+              'tool_calls': <Object?>[
+                <String, Object?>{
+                  'id': 'call_sub_1',
+                  'name': 'call_sub_agent',
+                  'arguments': <String, Object?>{
+                    'agent_id': 'writer',
+                    'task': '请先自查这一段。',
+                  },
+                },
+              ],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '',
+              },
+            },
+            <String, Object?>{
+              'ok': true,
+              'content': '建议先补一句承接。',
+              'tool_calls': const <Object?>[],
+            },
+            <String, Object?>{
+              'ok': true,
+              'content': '已完成自查。',
+              'tool_calls': const <Object?>[],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '已完成自查。',
+              },
+            },
+          ],
+        );
+        final useCase = GenerateDraftUseCase(
+          projectWorkspacePort: workspacePort,
+          llmGateway: gateway,
+          toolExecutionPort: _FakeToolExecutionPort(),
+          contextAssemblerService: ContextAssemblerService(
+            budgetService: ContextBudgetService(),
+            staticSectionService: ContextStaticSectionService(
+              projectPromptContract: ProjectPromptContract(),
+            ),
+            projectFileSectionService: ContextProjectFileSectionService(),
+          ),
+          projectPromptContract: ProjectPromptContract(),
+          loadAvailableAgents: (_) async => <JsonMap>[
+            const <String, Object?>{
+              'id': 'writer',
+              'name': '正文智能体',
+              'role': '负责主写',
+            },
+          ],
+          loadAvailableAgentGroups: (_) async => const <JsonMap>[],
+        );
+
+        final result = await useCase.execute(
+          project: const ProjectDescriptor(
+            id: 'demo',
+            name: '示例项目',
+            rootPath: 'D:/demo',
+          ),
+          userPrompt: '继续写',
+          modelId: 'test-model',
+          agent: const <String, Object?>{
+            'id': 'writer',
+            'name': '正文智能体',
+            'role': '负责主写',
+          },
+        );
+
+        final subAgentTool = result.executedTools
+            .map(ValueReaders.mapValue)
+            .firstWhere(
+              (tool) =>
+                  ValueReaders.stringValue(tool['name']) == 'call_sub_agent',
+            );
+        final subAgentResult = ValueReaders.mapValue(subAgentTool['result']);
+        expect(
+          ValueReaders.stringValue(subAgentResult['group_id']),
+          'single_agent_writer',
+        );
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(
+              subAgentResult['child_run_package'],
+            )['group_id'],
+          ),
+          'single_agent_writer',
+        );
+        expect(
+          ValueReaders.objectList(subAgentResult['available_children']),
+          hasLength(1),
         );
       },
     );

@@ -8,13 +8,18 @@ class LongTaskSupervisor {
     required LongTaskRunRegistry runRegistry,
     required LongTaskHeartbeatScheduler heartbeatScheduler,
     LongTaskRunStateMachine? runStateMachine,
+    LongTaskWritingExecutionSignalService? writingExecutionSignalService,
   }) : _runRegistry = runRegistry,
        _heartbeatScheduler = heartbeatScheduler,
-       _runStateMachine = runStateMachine ?? const LongTaskRunStateMachine();
+       _runStateMachine = runStateMachine ?? const LongTaskRunStateMachine(),
+       _writingExecutionSignalService =
+           writingExecutionSignalService ??
+           const LongTaskWritingExecutionSignalService();
 
   final LongTaskRunRegistry _runRegistry;
   final LongTaskHeartbeatScheduler _heartbeatScheduler;
   final LongTaskRunStateMachine _runStateMachine;
+  final LongTaskWritingExecutionSignalService _writingExecutionSignalService;
 
   bool get isRunning => _heartbeatScheduler.isRunning;
 
@@ -109,6 +114,62 @@ class LongTaskSupervisor {
     );
   }
 
+  Future<RunInstance?> applyWritingExecutionResult(
+    String runId,
+    JsonMap writingExecutionResult, {
+    DateTime? occurredAt,
+    String fallbackNote = '',
+  }) async {
+    final instance = await _runRegistry.findById(runId);
+    if (instance == null) {
+      return null;
+    }
+    final signal = _writingExecutionSignalService.signalFromPayload(
+      result: <String, Object?>{
+        'writing_execution_result': writingExecutionResult,
+      },
+      fallbackNote: fallbackNote,
+    );
+    if (!ValueReaders.boolValue(signal['present'])) {
+      return instance;
+    }
+    final nextStatus = _statusFromSignal(
+      signal,
+      current: instance.status,
+    );
+    final now = occurredAt ?? DateTime.now();
+    final next = nextStatus == instance.status
+        ? instance.copyWith(
+            updatedAt: now,
+            note: ValueReaders.stringValue(signal['note'], instance.note),
+            stopReason: nextStatus == LongTaskRunStatus.stopped
+                ? ValueReaders.stringValue(
+                    signal['legacy_stop_reason'],
+                    instance.stopReason,
+                  )
+                : instance.stopReason,
+            metadata: <String, Object?>{
+              ...ValueReaders.deepCopyMap(instance.metadata),
+              'writing_execution_signal': signal,
+            },
+          )
+        : _runStateMachine.transition(
+            instance,
+            nextStatus,
+            occurredAt: now,
+            note: ValueReaders.stringValue(signal['note']),
+            stopReason: ValueReaders.stringValue(signal['legacy_stop_reason']),
+          ).copyWith(
+            metadata: <String, Object?>{
+              ...ValueReaders.deepCopyMap(instance.metadata),
+              'writing_execution_signal': signal,
+            },
+          );
+    await _runRegistry.save(next);
+    _heartbeatScheduler.clearDispatchState(runId);
+    return next;
+  }
+
   void start({
     Duration pollInterval = const Duration(seconds: 10),
     LongTaskHeartbeatEventHandler? onHeartbeatEvent,
@@ -151,5 +212,26 @@ class LongTaskSupervisor {
     await _runRegistry.save(next);
     _heartbeatScheduler.clearDispatchState(runId);
     return next;
+  }
+
+  LongTaskRunStatus _statusFromSignal(
+    JsonMap signal, {
+    required LongTaskRunStatus current,
+  }) {
+    final desired = LongTaskRunStatus.fromId(
+      ValueReaders.stringValue(signal['run_status']),
+    );
+    if (_runStateMachine.canTransition(current, desired)) {
+      return desired;
+    }
+    if (current == LongTaskRunStatus.paused &&
+        desired == LongTaskRunStatus.waitingGate) {
+      return LongTaskRunStatus.paused;
+    }
+    if (current == LongTaskRunStatus.paused &&
+        desired == LongTaskRunStatus.failedManualAttention) {
+      return LongTaskRunStatus.paused;
+    }
+    return current;
   }
 }

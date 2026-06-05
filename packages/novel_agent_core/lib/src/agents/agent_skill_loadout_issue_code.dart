@@ -3,4 +3,7 @@ enum AgentSkillLoadoutIssueCode {
   unavailableSkill,
   builtinToolFiltered,
   disabledSkillMissingTarget,
+  requiredCapabilityMissing,
+  optionalCapabilityUnavailable,
+  degradedCapabilityRequirement,
 }

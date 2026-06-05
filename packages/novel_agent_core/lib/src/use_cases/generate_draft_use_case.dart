@@ -29,11 +29,13 @@ import '../runtime/draft_prompt_builder_service.dart';
 import '../runtime/project_context_file_selection_service.dart';
 import '../runtime/tool_execution_round_result.dart';
 import '../runtime/tool_execution_service.dart';
+import '../settings/app_settings.dart';
 import '../tools/tool_call_parser_service.dart';
 import '../tools/tool_exposure_policy_service.dart';
 import '../tools/tool_schema_builder_service.dart';
 import '../tools/tool_strategy_prompt_builder.dart';
 import '../tools/tool_strategy_service.dart';
+import '../agents/project_agent_binding.dart';
 
 class GenerateDraftUseCase {
   GenerateDraftUseCase({
@@ -147,6 +149,7 @@ class GenerateDraftUseCase {
     String title = '',
     String intent = 'draft',
     JsonMap agent = const <String, Object?>{},
+    JsonMap selectedCollaborationGroup = const <String, Object?>{},
     String sessionContext = '',
     JsonMap requestOptions = const <String, Object?>{},
     JsonMap contextSettings = const <String, Object?>{},
@@ -157,6 +160,10 @@ class GenerateDraftUseCase {
     List<Object?> projectExpressionConstraintBindings = const <Object?>[],
     List<Object?> projectFileSectionPlan = const <Object?>[],
     JsonMap projectFileContents = const <String, Object?>{},
+    AppSettings? subAgentRuntimeSettings,
+    List<ProjectAgentBinding> subAgentBindings = const <ProjectAgentBinding>[],
+    String subAgentBindingModeId = '',
+    String subAgentBindingStageId = '',
     List<String> exposedToolIds = const <String>[],
     String activeDocumentPath = '',
     String activeDocumentBody = '',
@@ -266,13 +273,22 @@ class GenerateDraftUseCase {
     final resolvedAgent = agent.isEmpty
         ? _agentProfileCatalogService.fallbackDefaultAgent()
         : ValueReaders.deepCopyMap(agent);
+    final projectAvailableAgents = await _loadAvailableAgentsSafe(project);
     final optionalAgents = _mergeEntriesById(
-      await _loadAvailableAgentsSafe(project),
+      projectAvailableAgents,
       _collaboratorCatalogService.optionalCollaboratorProfiles(),
     );
+    final projectAvailableGroups = await _loadAvailableAgentGroupsSafe(project);
     final optionalGroups = _mergeEntriesById(
-      await _loadAvailableAgentGroupsSafe(project),
+      projectAvailableGroups,
       _collaboratorCatalogService.optionalCollaboratorGroups(),
+    );
+    final collaborationGroup = _resolveCollaborationGroup(
+      preferredGroup: selectedCollaborationGroup,
+      projectAvailableAgents: projectAvailableAgents,
+      projectAvailableGroups: projectAvailableGroups,
+      availableGroups: optionalGroups,
+      fallbackAgent: resolvedAgent,
     );
     final routingSignal = _skillRoutingPolicyService.buildActivationSignal(
       intent: intent,
@@ -297,6 +313,8 @@ class GenerateDraftUseCase {
       'intent': intent,
       'agent': resolvedAgent,
       'optional_agents': optionalAgents,
+      'selected_collaboration_group': collaborationGroup,
+      'optional_agent_groups': optionalGroups,
       'context_settings': contextSettings,
       'model_profile': modelProfile,
       'memory_sections': memorySections,
@@ -334,9 +352,6 @@ class GenerateDraftUseCase {
       toolSettings: toolSettings,
       hasTools: toolSchemas.isNotEmpty,
     );
-    final collaborationGroup = optionalGroups.isEmpty
-        ? <String, Object?>{}
-        : optionalGroups.first;
     final collaborationBrief = collaborationGroup.isEmpty
         ? ''
         : _collaborationBriefService.collaborationBrief(
@@ -349,9 +364,29 @@ class GenerateDraftUseCase {
       'project_tree_note': _projectPromptContract.projectTreeSummary(entries),
       'active_document_path': activeDocumentPath,
       'active_document_body': activeDocumentBody,
+      'selected_collaboration_group': ValueReaders.deepCopyMap(
+        collaborationGroup,
+      ),
+      'selected_collaboration_group_id': ValueReaders.stringValue(
+        collaborationGroup['id'],
+      ),
+      'selected_collaboration_group_name': ValueReaders.stringValue(
+        collaborationGroup['name'],
+      ),
+      'selected_collaboration_group_member_ids': ValueReaders.stringList(
+        collaborationGroup['agents'],
+      ),
       'style_note': '当前请求已经附带上下文包；如需更多文件，请调用项目工具按需读取。',
       'skill_routing_stage': routingPolicy.stageId,
       'skill_routing_flags': routingSignal.flags,
+      if (subAgentRuntimeSettings != null)
+        'sub_agent_runtime_settings': subAgentRuntimeSettings,
+      if (subAgentBindings.isNotEmpty)
+        'sub_agent_bindings': List<ProjectAgentBinding>.unmodifiable(
+          subAgentBindings,
+        ),
+      'sub_agent_binding_mode_id': subAgentBindingModeId,
+      'sub_agent_binding_stage_id': subAgentBindingStageId,
     };
     final preloadRound = await _preloadRoutedSkills(
       project: project,
@@ -696,6 +731,61 @@ class GenerateDraftUseCase {
     } catch (_) {
       return const <JsonMap>[];
     }
+  }
+
+  JsonMap _resolveCollaborationGroup({
+    required JsonMap preferredGroup,
+    required List<JsonMap> projectAvailableAgents,
+    required List<JsonMap> projectAvailableGroups,
+    required List<JsonMap> availableGroups,
+    required JsonMap fallbackAgent,
+  }) {
+    // 中文注释: 当前项目显式选择的协作组优先进入运行链；只有缺失时才退回可用组或单成员兜底。
+    final preferredId = ValueReaders.stringValue(preferredGroup['id']).trim();
+    if (preferredId.isNotEmpty) {
+      for (final group in availableGroups) {
+        if (ValueReaders.stringValue(group['id']).trim() == preferredId) {
+          return ValueReaders.deepCopyMap(group);
+        }
+      }
+    }
+    if (preferredGroup.isNotEmpty) {
+      return ValueReaders.deepCopyMap(preferredGroup);
+    }
+    final projectAgentIds = projectAvailableAgents
+        .map((agent) => ValueReaders.stringValue(agent['id']).trim())
+        .where((agentId) => agentId.isNotEmpty)
+        .toSet();
+    if (projectAvailableGroups.isEmpty && projectAgentIds.length <= 1) {
+      return _singleMemberCollaborationGroup(fallbackAgent);
+    }
+    if (availableGroups.isNotEmpty) {
+      return ValueReaders.deepCopyMap(availableGroups.first);
+    }
+    return _singleMemberCollaborationGroup(fallbackAgent);
+  }
+
+  JsonMap _singleMemberCollaborationGroup(JsonMap agent) {
+    // 中文注释: 单智能体项目统一包装成单成员协作组，避免运行时再走“有组/无组”双轨。
+    final agentId = ValueReaders.stringValue(agent['id']).trim();
+    if (agentId.isEmpty) {
+      return <String, Object?>{};
+    }
+    final groupName = ValueReaders.stringValue(agent['name'], agentId).trim();
+    return <String, Object?>{
+      'id': 'single_agent_$agentId',
+      'name': groupName,
+      'description': '由当前主智能体自动包装得到的单成员协作组。',
+      'orchestration': 'main_with_children',
+      'source': 'derived_single_agent_group',
+      'enabled': true,
+      'agents': <String>[agentId],
+      'primary_agent_id': agentId,
+      'metadata': <String, Object?>{
+        'derived_from_single_agent': true,
+        'agent_id': agentId,
+      },
+    };
   }
 
   List<JsonMap> _mergeEntriesById(

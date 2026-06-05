@@ -31,6 +31,8 @@ class AgentSkillLoadoutResolverService {
     AgentSkillLoadout? loadout,
     List<Object?> availableSkillGroups = const <Object?>[],
     List<String> availableSkillIds = const <String>[],
+    List<Object?> availableSkills = const <Object?>[],
+    JsonMap toolPermissionProfile = const <String, Object?>{},
   }) {
     // 中文注释: resolver 作为薄编排层，把 build -> expand -> conflict 三步串起来，不在这里埋额外规则。
     final contract = _builderService.build(profile: profile, loadout: loadout);
@@ -42,6 +44,9 @@ class AgentSkillLoadoutResolverService {
       loadout: contract,
       expansion: expansion,
       availableSkillIds: availableSkillIds,
+      availableSkills: availableSkills,
+      toolPermissionProfile: toolPermissionProfile,
+      agent: _agentProfileMapperService.toDocument(profile),
     );
     return contract.copyWith(
       entries: conflictResult.entries,
@@ -54,12 +59,16 @@ class AgentSkillLoadoutResolverService {
     AgentSkillLoadout? loadout,
     List<Object?> availableSkillGroups = const <Object?>[],
     List<String> availableSkillIds = const <String>[],
+    List<Object?> availableSkills = const <Object?>[],
+    JsonMap toolPermissionProfile = const <String, Object?>{},
   }) {
     return resolve(
       profile: _agentProfileMapperService.fromDocument(agent),
       loadout: loadout,
       availableSkillGroups: availableSkillGroups,
       availableSkillIds: availableSkillIds,
+      availableSkills: availableSkills,
+      toolPermissionProfile: toolPermissionProfile,
     );
   }
 }

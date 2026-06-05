@@ -194,6 +194,7 @@ Future<void> _captureSkillLoadoutDetail(WidgetTester tester) async {
                   agentDescription: '负责当前项目的结构与表达修订。',
                   sourceLabel: '项目装载',
                   summary: '技能组 0 个，额外技能 0 个，禁用技能 0 个。',
+                  permissionBoundarySummary: '当前装载没有额外权限需求；绑定或解绑技能时不会扩大默认权限边界。',
                   expressionConstraintSummary:
                       '去 AI / 真实性 / 叙事边界这类内容不属于技能装载，请从“表达限制”进入项目级约束系统，并可继续按当前智能体定向绑定。',
                   hasPendingChanges: true,

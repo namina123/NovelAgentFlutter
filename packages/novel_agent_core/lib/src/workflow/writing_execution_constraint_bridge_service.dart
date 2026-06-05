@@ -3,6 +3,7 @@ import '../common/value_readers.dart';
 import '../continuity/narrative_state/constraint_binding_applies_to.dart';
 import '../continuity/narrative_state/narrative_constraint_binding_proposal.dart';
 import '../creative/expression_constraint_kind.dart';
+import '../creative/expression_constraint_injection_policy_service.dart';
 import '../creative/expression_constraint_profile.dart';
 import '../creative/expression_constraint_profile_normalizer_service.dart';
 import '../creative/project_expression_constraint_binding.dart';
@@ -13,6 +14,8 @@ import 'writing_execution_constraint_bridge_result.dart';
 class WritingExecutionConstraintBridgeService {
   const WritingExecutionConstraintBridgeService({
     ChapterLengthProfileResolverService? chapterLengthProfileResolverService,
+    ExpressionConstraintInjectionPolicyService?
+    expressionConstraintInjectionPolicyService,
     ExpressionConstraintProfileNormalizerService?
     expressionConstraintProfileNormalizerService,
     ProjectExpressionConstraintBindingNormalizerService?
@@ -20,6 +23,9 @@ class WritingExecutionConstraintBridgeService {
   }) : _chapterLengthProfileResolverService =
            chapterLengthProfileResolverService ??
            const ChapterLengthProfileResolverService(),
+       _expressionConstraintInjectionPolicyService =
+           expressionConstraintInjectionPolicyService ??
+           const ExpressionConstraintInjectionPolicyService(),
        _expressionConstraintProfileNormalizerService =
            expressionConstraintProfileNormalizerService ??
            const ExpressionConstraintProfileNormalizerService(),
@@ -27,7 +33,10 @@ class WritingExecutionConstraintBridgeService {
            projectExpressionConstraintBindingNormalizerService ??
            const ProjectExpressionConstraintBindingNormalizerService();
 
-  final ChapterLengthProfileResolverService _chapterLengthProfileResolverService;
+  final ChapterLengthProfileResolverService
+  _chapterLengthProfileResolverService;
+  final ExpressionConstraintInjectionPolicyService
+  _expressionConstraintInjectionPolicyService;
   final ExpressionConstraintProfileNormalizerService
   _expressionConstraintProfileNormalizerService;
   final ProjectExpressionConstraintBindingNormalizerService
@@ -39,6 +48,10 @@ class WritingExecutionConstraintBridgeService {
     String agentId = '',
     String modeId = '',
     String stageId = '',
+    String intent = 'draft',
+    String taskType = '',
+    String phase = '',
+    String expressionConstraintInjectionMode = '',
     JsonMap legacyChapterLengthOptions = const <String, Object?>{},
     List<Object?> legacyExpressionConstraintProfiles = const <Object?>[],
     List<Object?> legacyProjectExpressionConstraintBindings = const <Object?>[],
@@ -52,6 +65,16 @@ class WritingExecutionConstraintBridgeService {
     final cleanModeId = modeId.trim();
     final cleanAgentId = agentId.trim();
     final cleanProjectTypeId = projectTypeId.trim();
+    final cleanIntent = intent.trim().isEmpty ? 'draft' : intent.trim();
+    final resolvedExpressionConstraintInjectionMode =
+        _expressionConstraintInjectionPolicyService.modeId(
+          _expressionConstraintInjectionPolicyService.resolveMode(
+            intent: cleanIntent,
+            taskType: taskType,
+            phase: phase,
+            overrideModeId: expressionConstraintInjectionMode,
+          ),
+        );
 
     final legacyProfiles = legacyExpressionConstraintProfiles
         .map(ValueReaders.mapValue)
@@ -110,7 +133,8 @@ class WritingExecutionConstraintBridgeService {
             chapterLengthCandidates.last,
             stageId: cleanStageId,
           );
-    final effectiveChapterLengthMetadata = bindingChapterLengthMetadata.isNotEmpty
+    final effectiveChapterLengthMetadata =
+        bindingChapterLengthMetadata.isNotEmpty
         ? bindingChapterLengthMetadata
         : legacyChapterLengthMetadata;
 
@@ -150,20 +174,28 @@ class WritingExecutionConstraintBridgeService {
       ...legacyBindings,
       ...bindingDerivedBindings,
     ];
+    final expressionConstraintReviewRequired =
+        allBindings.isNotEmpty &&
+        resolvedExpressionConstraintInjectionMode != 'disabled';
 
     return WritingExecutionConstraintBridgeResult(
       chapterLengthMetadata: effectiveChapterLengthMetadata,
-      expressionConstraintProfiles: List<ExpressionConstraintProfile>.unmodifiable(
-        allProfiles,
-      ),
+      expressionConstraintProfiles:
+          List<ExpressionConstraintProfile>.unmodifiable(allProfiles),
       projectExpressionConstraintBindings:
           List<ProjectExpressionConstraintBinding>.unmodifiable(allBindings),
+      expressionConstraintInjectionMode:
+          resolvedExpressionConstraintInjectionMode,
+      expressionConstraintReviewRequired: expressionConstraintReviewRequired,
       runtimeReport: <String, Object?>{
         'applies_to': cleanAppliesTo,
         'project_type_id': cleanProjectTypeId,
         'agent_id': cleanAgentId,
         'mode_id': cleanModeId,
         'stage_id': cleanStageId,
+        'intent': cleanIntent,
+        'task_type': taskType.trim(),
+        'phase': phase.trim(),
         'chapter_length': <String, Object?>{
           'applied': effectiveChapterLengthMetadata.isNotEmpty,
           'source': bindingChapterLengthMetadata.isNotEmpty
@@ -187,6 +219,24 @@ class WritingExecutionConstraintBridgeService {
           'binding_profile_count': bindingDerivedProfiles.length,
           'binding_binding_count': bindingDerivedBindings.length,
           'applied_binding_ids': appliedExpressionBindingIds,
+          'injection_mode': resolvedExpressionConstraintInjectionMode,
+          'review_required': expressionConstraintReviewRequired,
+        },
+        'execution_gate': <String, Object?>{
+          'chapter_length': <String, Object?>{
+            'configured': effectiveChapterLengthMetadata.isNotEmpty,
+            'soft_action': 'adjust_next_chapter',
+            'reminder_action': 'remind',
+            'hard_action': 'review_or_repair',
+          },
+          'expression_constraints': <String, Object?>{
+            'active': allBindings.isNotEmpty,
+            'injection_mode': resolvedExpressionConstraintInjectionMode,
+            'review_required': expressionConstraintReviewRequired,
+            'profile_count': allProfiles.length,
+            'binding_count': allBindings.length,
+            'applied_binding_ids': appliedExpressionBindingIds,
+          },
         },
       },
     );
@@ -228,7 +278,8 @@ class WritingExecutionConstraintBridgeService {
         profileId: directProfileId,
         displayName: displayName,
         enabled: true,
-        defaultForProject: scopedAgentIds.isEmpty &&
+        defaultForProject:
+            scopedAgentIds.isEmpty &&
             scopedModeIds.isEmpty &&
             scopedStageIds.isEmpty,
         targetAgentIds: List<String>.unmodifiable(scopedAgentIds),
@@ -270,10 +321,7 @@ class WritingExecutionConstraintBridgeService {
       riskSignals: List<String>.unmodifiable(
         ValueReaders.stringList(payload['risk_signals']),
       ),
-      metadata: <String, Object?>{
-        ...baseMetadata,
-        'synthetic_profile': true,
-      },
+      metadata: <String, Object?>{...baseMetadata, 'synthetic_profile': true},
     );
     sinkProfiles.add(profile);
     final syntheticBinding = ProjectExpressionConstraintBinding(
@@ -281,20 +329,20 @@ class WritingExecutionConstraintBridgeService {
       profileId: syntheticProfileId,
       displayName: displayName,
       enabled: true,
-      defaultForProject: scopedAgentIds.isEmpty &&
+      defaultForProject:
+          scopedAgentIds.isEmpty &&
           scopedModeIds.isEmpty &&
           scopedStageIds.isEmpty,
       targetAgentIds: List<String>.unmodifiable(scopedAgentIds),
       targetModeIds: List<String>.unmodifiable(scopedModeIds),
       targetStageIds: List<String>.unmodifiable(scopedStageIds),
       weight: ValueReaders.intValue(
-        payload['rule_weight'] ?? payload['weight'] ?? binding.metadata['weight'],
+        payload['rule_weight'] ??
+            payload['weight'] ??
+            binding.metadata['weight'],
         140,
       ),
-      metadata: <String, Object?>{
-        ...baseMetadata,
-        'synthetic_profile': true,
-      },
+      metadata: <String, Object?>{...baseMetadata, 'synthetic_profile': true},
     );
     final syntheticIdentity = _bindingIdentity(syntheticBinding);
     if (!bindingIdentities.contains(syntheticIdentity)) {
@@ -343,7 +391,9 @@ class WritingExecutionConstraintBridgeService {
     addRules(payload['rules']);
     addRules(payload['project_level_rules']);
     addRules(
-      ValueReaders.mapValue(payload['soft_review_policy'])['project_level_rules'],
+      ValueReaders.mapValue(
+        payload['soft_review_policy'],
+      )['project_level_rules'],
     );
     return result;
   }
@@ -480,10 +530,12 @@ class WritingExecutionConstraintBridgeService {
     if (!_matchesScope(binding.scope.projectTypeIds, projectTypeId)) {
       return false;
     }
-    if (binding.scope.agentIds.isNotEmpty && !_matchesScope(binding.scope.agentIds, agentId)) {
+    if (binding.scope.agentIds.isNotEmpty &&
+        !_matchesScope(binding.scope.agentIds, agentId)) {
       return false;
     }
-    if (binding.scope.modeIds.isNotEmpty && !_matchesScope(binding.scope.modeIds, modeId)) {
+    if (binding.scope.modeIds.isNotEmpty &&
+        !_matchesScope(binding.scope.modeIds, modeId)) {
       return false;
     }
     if (requireImmediateStageMatch &&
@@ -527,10 +579,13 @@ class WritingExecutionConstraintBridgeService {
   }
 
   String _nextUniqueProfileId(Set<String> existingIds, String baseId) {
-    var candidate = baseId.trim().isEmpty ? 'expression_constraint' : baseId.trim();
+    var candidate = baseId.trim().isEmpty
+        ? 'expression_constraint'
+        : baseId.trim();
     var index = 1;
     while (existingIds.contains(candidate)) {
-      candidate = '${baseId.trim().isEmpty ? 'expression_constraint' : baseId.trim()}_$index';
+      candidate =
+          '${baseId.trim().isEmpty ? 'expression_constraint' : baseId.trim()}_$index';
       index += 1;
     }
     existingIds.add(candidate);
@@ -538,7 +593,9 @@ class WritingExecutionConstraintBridgeService {
   }
 
   String _nextUniqueBindingId(Set<String> existingIds, String baseId) {
-    var candidate = baseId.trim().isEmpty ? 'expression_binding' : baseId.trim();
+    var candidate = baseId.trim().isEmpty
+        ? 'expression_binding'
+        : baseId.trim();
     var index = 1;
     while (existingIds.contains(candidate)) {
       candidate =

@@ -57,13 +57,14 @@ class ToolStrategyPromptBuilder {
         : '当前工具调用策略关闭。不要声称已经读取、写入、修改或删除项目文件；只能给出文本建议。';
 
     return '''你是 NOVEL Agent 的综合创作智能体，服务中文小说创作。
-你需要区分自己正在创作的是：大纲 outline、卷纲 volume_outline、章纲 chapter_outline、章节正文 chapter、场景片段 scene、设定 setting、角色 character、风格 style、摘要 summary、知识库 knowledge。
+你需要区分自己正在创作的是：大纲 outline、卷纲 volume_outline、章纲 chapter_outline、章节正文 chapter、场景片段 scene、设定 setting、角色 character、风格 style、摘要 summary、信息投影 information_projection。
 $toolIntro
 $fallbackNote
 当前工具策略：${_toolStrategyService.modeLabel(mode)}。$modeNote
 可用工具：
 $toolLines
 ${_projectPromptContract.toolDecisionContract()}
+${_projectPromptContract.informationToolGuidance(intent)}
 工具决策流程：
 1. 先做 pre-flight：判断用户要的是闲聊建议、选项澄清、读取上下文、修订已有内容，还是生成可保存的正式产物。不是每次都必须调用工具。
 2. $listRule
@@ -75,7 +76,8 @@ ${_projectPromptContract.toolDecisionContract()}
 8. 长任务、连续创作或章节队列应使用 create_chapter_task/mark_task_status 记录任务状态；重要覆盖或恢复前先 create_backup，restore_backup 只在用户明确要求回滚时使用。
 9. $editRule
 ${_projectPromptContract.directoryMappingLine()}
-章节正文、样章和连续正文写入 chapters/；局部片段、独立场景和实验段落写入 scenes/；大纲写入 outline/，卷纲写入 volume_outlines/，章纲写入 chapter_outlines/，设定写入 world/ 或 assets/characters/，风格写入 styles/，总结写入 summaries/，知识库写入 knowledge/。
+章节正文、样章和连续正文写入 chapters/；局部片段、独立场景和实验段落写入 scenes/；大纲写入 outline/，卷纲写入 volume_outlines/，章纲写入 chapter_outlines/，设定写入 world/ 或 assets/characters/，风格写入 styles/，总结写入 summaries/。
+knowledge/、research/、references/ 下的信息摘要是只读 projection 入口，不是正式事实写入目标；长期知识、设计元素、研究结论和引用边界必须分别通过 propose_knowledge_card、propose_design_element、submit_research_note、propose_reference_work 收口。
 所有读写改删都只能操作当前项目内的相对路径。桌面端和 Android/iOS 均按应用项目目录执行，不要请求终端命令或外部绝对路径权限。
 如果用户要求创作章节、样章或连续正文，content_type 使用 chapter；如果用户要求局部片段、场景补写或实验段落，content_type 使用 scene。如果用户要求风格规范或文风模仿，content_type 使用 style。
 子智能体由主智能体按需调用，不需要用户手动选择。调用 call_sub_agent 时必须传 agent_id 和 task；agent_id 只能来自下方协作视角素材。子智能体只接收你传递的任务、摘录和约束，不享有主会话完整上下文；工具返回后你要综合结果再回复用户。

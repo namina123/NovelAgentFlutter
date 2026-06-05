@@ -41,7 +41,7 @@ class SubAgentRunPreviewProjectionService {
         isRunning: true,
       );
     }
-    if (_containsAny(text, const ['完成', '已完成', '成功'])) {
+    if (_containsAny(text, const ['完成', '已完成', '成功', '降级'])) {
       return _ResolvedPreviewStatus(
         label: text,
         tone: SubAgentRunPreviewTone.success,
@@ -59,6 +59,18 @@ class SubAgentRunPreviewProjectionService {
     final summary = run.summary.trim();
     if (summary.isNotEmpty) {
       return summary;
+    }
+    final expertOpinion = run.expertOpinion.trim();
+    if (expertOpinion.isNotEmpty) {
+      return expertOpinion;
+    }
+    final degradationSummary = run.degradationSummary.trim();
+    if (degradationSummary.isNotEmpty) {
+      return degradationSummary;
+    }
+    final adoptionSummary = run.adoptionSummary.trim();
+    if (adoptionSummary.isNotEmpty) {
+      return adoptionSummary;
     }
     for (final event in run.events.reversed) {
       final normalized = event.trim();

@@ -26,6 +26,15 @@ class EcosystemEditorViewData {
     required this.enabled,
     required this.statusMessage,
     required this.isProjectEntry,
+    this.isBuiltinEntry = false,
+    this.sourceSummary = '',
+    this.permissionBoundarySummary = '',
+    this.validationIssues = const <String>[],
+    this.primaryAgentIdText = '',
+    this.requiredAgentIdsText = '',
+    this.optionalAgentIdsText = '',
+    this.saveActionLabel = '保存',
+    this.deleteActionLabel = '删除项目覆盖',
   });
 
   final String kind;
@@ -54,6 +63,15 @@ class EcosystemEditorViewData {
   final bool enabled;
   final String statusMessage;
   final bool isProjectEntry;
+  final bool isBuiltinEntry;
+  final String sourceSummary;
+  final String permissionBoundarySummary;
+  final List<String> validationIssues;
+  final String primaryAgentIdText;
+  final String requiredAgentIdsText;
+  final String optionalAgentIdsText;
+  final String saveActionLabel;
+  final String deleteActionLabel;
 
   EcosystemEditorViewData copyWith({
     String? kind,
@@ -82,6 +100,15 @@ class EcosystemEditorViewData {
     bool? enabled,
     String? statusMessage,
     bool? isProjectEntry,
+    bool? isBuiltinEntry,
+    String? sourceSummary,
+    String? permissionBoundarySummary,
+    List<String>? validationIssues,
+    String? primaryAgentIdText,
+    String? requiredAgentIdsText,
+    String? optionalAgentIdsText,
+    String? saveActionLabel,
+    String? deleteActionLabel,
   }) {
     // 中文注释: 编辑器状态允许只替换局部字段，避免每次提交前都整体重建表单默认值。
     return EcosystemEditorViewData(
@@ -113,6 +140,16 @@ class EcosystemEditorViewData {
       enabled: enabled ?? this.enabled,
       statusMessage: statusMessage ?? this.statusMessage,
       isProjectEntry: isProjectEntry ?? this.isProjectEntry,
+      isBuiltinEntry: isBuiltinEntry ?? this.isBuiltinEntry,
+      sourceSummary: sourceSummary ?? this.sourceSummary,
+      permissionBoundarySummary:
+          permissionBoundarySummary ?? this.permissionBoundarySummary,
+      validationIssues: validationIssues ?? this.validationIssues,
+      primaryAgentIdText: primaryAgentIdText ?? this.primaryAgentIdText,
+      requiredAgentIdsText: requiredAgentIdsText ?? this.requiredAgentIdsText,
+      optionalAgentIdsText: optionalAgentIdsText ?? this.optionalAgentIdsText,
+      saveActionLabel: saveActionLabel ?? this.saveActionLabel,
+      deleteActionLabel: deleteActionLabel ?? this.deleteActionLabel,
     );
   }
 }
@@ -142,6 +179,9 @@ class EcosystemEditorRequestViewData {
     required this.preferredOutput,
     required this.orchestration,
     required this.enabled,
+    this.primaryAgentIdText = '',
+    this.requiredAgentIdsText = '',
+    this.optionalAgentIdsText = '',
   });
 
   final String kind;
@@ -167,4 +207,7 @@ class EcosystemEditorRequestViewData {
   final String preferredOutput;
   final String orchestration;
   final bool enabled;
+  final String primaryAgentIdText;
+  final String requiredAgentIdsText;
+  final String optionalAgentIdsText;
 }

@@ -147,6 +147,35 @@ void main() {
           ),
           recommendedDisposition: SemanticReviewRecommendedDisposition.repair,
           summary: '存在需要返工的问题。',
+          suggestedClaims: <NarrativeStateClaim>[
+            NarrativeStateClaim(
+              claimId: 'claim-review-knowledge',
+              claimNamespace: 'analysis.review.patch',
+              claimLabel: '誓约代价规则',
+              claimPayload: const <String, Object?>{
+                'summary': '誓约代价需要前后统一，不应在结尾突然消失。',
+              },
+              source: const NarrativeSourceRef(
+                sourceType: NarrativeSourceTypes.reviewer,
+                sourceId: 'reviewer-agent',
+              ),
+              confidence: 0.83,
+            ),
+            NarrativeStateClaim(
+              claimId: 'claim-review-design',
+              claimNamespace: 'analysis.review.design.structure',
+              claimLabel: '回环结构',
+              claimPayload: const <String, Object?>{
+                'summary': '章首与章末应保持同一誓约意象回环。',
+                'design_kind': 'structure_pattern',
+              },
+              source: const NarrativeSourceRef(
+                sourceType: NarrativeSourceTypes.reviewer,
+                sourceId: 'reviewer-agent',
+              ),
+              confidence: 0.79,
+            ),
+          ],
           findings: const <SemanticReviewFinding>[
             SemanticReviewFinding(
               findingId: 'finding-1',
@@ -207,6 +236,57 @@ void main() {
             ValueReaders.mapValue(mirrored['metadata'])['semantic_review_id'],
           ),
           'semantic-review-1',
+        );
+        final informationArtifacts = ValueReaders.mapValue(
+          artifacts['analysis_information'],
+        );
+        expect(
+          ValueReaders.stringList(informationArtifacts['knowledge_card_ids']),
+          contains('knowledge_semantic-review-1_claim-review-knowledge'),
+        );
+        expect(
+          ValueReaders.stringList(informationArtifacts['design_element_ids']),
+          contains('design_semantic-review-1_claim-review-design'),
+        );
+        expect(
+          ValueReaders.stringList(informationArtifacts['research_note_ids']),
+          contains('research_semantic-review-1_finding-1'),
+        );
+        final knowledgeFile = File(
+          '${tempDirectory.path}${Platform.pathSeparator}.novel_agent${Platform.pathSeparator}information${Platform.pathSeparator}knowledge_cards${Platform.pathSeparator}knowledge_semantic-review-1_claim-review-knowledge.json',
+        );
+        final designFile = File(
+          '${tempDirectory.path}${Platform.pathSeparator}.novel_agent${Platform.pathSeparator}information${Platform.pathSeparator}design_elements${Platform.pathSeparator}design_semantic-review-1_claim-review-design.json',
+        );
+        final researchFile = File(
+          '${tempDirectory.path}${Platform.pathSeparator}.novel_agent${Platform.pathSeparator}information${Platform.pathSeparator}research_notes${Platform.pathSeparator}research_semantic-review-1_finding-1.json',
+        );
+        expect(await knowledgeFile.exists(), isTrue);
+        expect(await designFile.exists(), isTrue);
+        expect(await researchFile.exists(), isTrue);
+        expect(
+          await knowledgeFile.readAsString(),
+          contains('"card_namespace": "analysis.review.knowledge.patch"'),
+        );
+        expect(
+          await designFile.readAsString(),
+          contains('"design_namespace": "analysis.review.design.structure"'),
+        );
+        expect(
+          await researchFile.readAsString(),
+          contains('"source_kind": "analysis_review_finding"'),
+        );
+        final executionWithInformation = service.attachReviewArtifacts(
+          <String, Object?>{},
+          artifacts,
+        );
+        expect(
+          ValueReaders.stringList(
+            ValueReaders.mapValue(
+              executionWithInformation['analysis_information'],
+            )['knowledge_card_ids'],
+          ),
+          contains('knowledge_semantic-review-1_claim-review-knowledge'),
         );
       },
     );

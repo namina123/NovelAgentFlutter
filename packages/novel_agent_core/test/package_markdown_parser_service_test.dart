@@ -233,6 +233,24 @@ metadata:
       expect((result['errors'] as List<Object?>).join('\n'), contains('不能重复'));
     });
 
+    test('skill validator warns on unknown capability requirements', () {
+      // 中文注释: 未登记的能力需求必须被提示出来，避免技能绑定阶段出现“静默放行但没人知道怎么授权”的状态。
+      final validator = SkillPackageValidatorService();
+      final result = validator.validate(<String, Object?>{
+        'id': 'unknown-capability-skill',
+        'name': '未知能力技能',
+        'description': '说明',
+        'instruction_markdown': '正文',
+        'required_capabilities': <String>['project_read', 'edit_file'],
+      });
+
+      expect(result['ok'], isTrue);
+      expect(
+        (result['warnings'] as List<Object?>).join('\n'),
+        contains('未识别的 capability requirement'),
+      );
+    });
+
     test('agent validator requires role objective and prompt', () {
       // 中文注释: 智能体校验会拒绝只有名字却没有目标、边界和操作说明的空壳包。
       final validator = AgentPackageValidatorService();

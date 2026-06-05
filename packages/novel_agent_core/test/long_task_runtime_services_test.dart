@@ -160,6 +160,12 @@ guardrails:
         ValueReaders.stringList(transaction['context_needs']),
         contains('把长期约束路径中的风格、世界、角色与模式摘要视为持续硬约束；除非用户明确改动，否则不要自行漂移。'),
       );
+      expect(
+        ValueReaders.stringList(transaction['context_needs']),
+        contains(
+          '需要时读取 specs/project_spec.md、styles/、knowledge/ 等只读信息投影和相关人物/世界状态；长期事实仍以结构化 information/continuity 合同为准。',
+        ),
+      );
     });
 
     test(
@@ -204,6 +210,15 @@ guardrails:
               'summary': '需要人工判断是否重试。',
               'severity': 'critical',
               'action_summary': '建议动作：回看长期约束、生成后续审稿',
+              'information_signal': <String, Object?>{
+                'present': true,
+                'category': 'repair',
+                'summary': '待研究 1 项，required 信息省略 1 项，information 改动 2 项',
+                'changed_paths': <Object?>[
+                  '.novel_agent/information/research_requests/request_1.json',
+                  'knowledge/项目知识摘要.md',
+                ],
+              },
             },
           },
           'response': <String, Object?>{},
@@ -260,10 +275,26 @@ guardrails:
           contains('.novel_agent/continuity/ledgers/main/entries.jsonl'),
         );
         expect(
+          ValueReaders.stringList(stepped['last_information_changed_paths']),
+          contains('.novel_agent/information/research_requests/request_1.json'),
+        );
+        expect(
+          ValueReaders.stringValue(stepped['last_information_risk_category']),
+          'repair',
+        );
+        expect(
           ValueReaders.stringList(
             ValueReaders.mapList(stepped['steps']).single['changed_paths'],
           ),
           contains('.novel_agent/continuity/reviews/review_001.json'),
+        );
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapList(
+              stepped['steps'],
+            ).single['information_summary'],
+          ),
+          contains('待研究 1 项'),
         );
         expect(postPrompt, contains('修复任务后处理'));
         expect(postPrompt, contains('创作约束栈'));
@@ -278,10 +309,136 @@ guardrails:
         );
         expect(
           markdown.renderMarkdown(stepped),
+          contains('Information：待研究 1 项'),
+        );
+        expect(
+          markdown.renderMarkdown(stepped),
           contains('tracking/checkpoint_reviews/rev.json'),
         );
         expect(markdown.renderMarkdown(stepped), contains('风险级别：critical'));
         expect(markdown.renderMarkdown(stepped), contains('动作建议：建议动作'));
+      },
+    );
+
+    test(
+      'recovery pauses for information waiting user signal without reading正文',
+      () {
+        final recoveryPlan = recovery.recoveryPlan(
+          <String, Object?>{
+            'id': 'run_info_wait',
+            'mode': TaskRuntimeConstants.modeHumanOutlineAiDraft,
+            'status': TaskRuntimeConstants.statusRunning,
+            'steps': <Object?>[
+              <String, Object?>{
+                'information_risk_category': 'checkpoint_user',
+                'information_summary': '待研究 1 项，建议先确认是否补研究。',
+              },
+            ],
+          },
+          const <Object?>[
+            <String, Object?>{
+              'id': 'chapter_001',
+              'title': '第一章',
+              'task_type': 'chapter',
+              'status': TaskRuntimeConstants.statusSucceeded,
+            },
+          ],
+        );
+
+        expect(recoveryPlan['action'], 'resume_when_user_confirms');
+        expect(recoveryPlan['reason'], 'information_waiting_user');
+        expect(
+          ValueReaders.stringValue(recoveryPlan['note']),
+          contains('待研究 1 项'),
+        );
+      },
+    );
+
+    test('recovery prioritizes shared writing execution budget boundary', () {
+      final recoveryPlan = recovery.recoveryPlan(<String, Object?>{
+        'id': 'run_budget',
+        'mode': TaskRuntimeConstants.modeHumanOutlineAiDraft,
+        'status': TaskRuntimeConstants.statusPaused,
+        'stop_reason': 'max_steps',
+      }, const <Object?>[]);
+
+      expect(recoveryPlan['action'], 'resume_dispatch');
+      expect(recoveryPlan['reason'], 'budget_failed');
+    });
+
+    test('recovery pauses for shared collaboration failure signal', () {
+      final recoveryPlan = recovery.recoveryPlan(<String, Object?>{
+        'id': 'run_collaboration_fail',
+        'mode': TaskRuntimeConstants.modeHumanOutlineAiDraft,
+        'status': TaskRuntimeConstants.statusPaused,
+        'last_writing_execution_result': <String, Object?>{
+          'execution_id': 'task_002',
+          'workflow_kind': 'workflow_task',
+          'overall_status': WritingExecutionOutcomeStatuses.recoverableFailure,
+          'summary': '协作结果：失败 1 项',
+          'delivery': const <String, Object?>{},
+          'constraints': const <String, Object?>{},
+          'information': const <String, Object?>{},
+          'collaboration': const <String, Object?>{
+            'present': true,
+            'failed_collaborator_count': 1,
+            'failed_agent_names': <Object?>['审稿员'],
+            'summary': '协作结果：失败 1 项',
+          },
+          'recovery': const <String, Object?>{},
+          'next_action': '',
+          'blocks_progress': true,
+          'retryable': true,
+          'requires_user_action': false,
+          'schema_version': 1,
+          'metadata': const <String, Object?>{},
+        },
+      }, const <Object?>[]);
+
+      expect(recoveryPlan['action'], 'pause_for_repair');
+      expect(
+        ValueReaders.stringValue(recoveryPlan['note']),
+        contains('协作结果：失败 1 项'),
+      );
+    });
+
+    test(
+      'recovery waits for high-risk collaboration conflict confirmation',
+      () {
+        final recoveryPlan = recovery.recoveryPlan(<String, Object?>{
+          'id': 'run_collaboration_conflict',
+          'mode': TaskRuntimeConstants.modeHumanOutlineAiDraft,
+          'status': TaskRuntimeConstants.statusWaitingUser,
+          'last_writing_execution_result': <String, Object?>{
+            'execution_id': 'task_conflict_001',
+            'workflow_kind': 'workflow_task',
+            'overall_status':
+                WritingExecutionOutcomeStatuses.userActionRequired,
+            'summary': '协作冲突：待用户确认 1 项',
+            'delivery': const <String, Object?>{},
+            'constraints': const <String, Object?>{},
+            'information': const <String, Object?>{},
+            'collaboration': const <String, Object?>{
+              'present': true,
+              'total_conflict_count': 1,
+              'user_confirmation_conflict_count': 1,
+              'conflict_summary': '协作冲突：待用户确认 1 项',
+            },
+            'recovery': const <String, Object?>{},
+            'next_action': 'confirm_collaboration_conflict',
+            'blocks_progress': true,
+            'retryable': false,
+            'requires_user_action': true,
+            'schema_version': 1,
+            'metadata': const <String, Object?>{},
+          },
+        }, const <Object?>[]);
+
+        expect(recoveryPlan['action'], 'resume_when_user_confirms');
+        expect(
+          ValueReaders.stringValue(recoveryPlan['note']),
+          contains('待用户确认 1 项'),
+        );
       },
     );
   });

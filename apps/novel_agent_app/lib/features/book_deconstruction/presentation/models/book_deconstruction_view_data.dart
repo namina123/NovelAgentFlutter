@@ -1,3 +1,4 @@
+import 'book_deconstruction_information_bridge_view_data.dart';
 import 'book_deconstruction_plan_group_view_data.dart';
 import 'book_deconstruction_continuity_view_data.dart';
 import 'book_deconstruction_preview_section_view_data.dart';
@@ -25,6 +26,7 @@ class BookDeconstructionViewData {
     required this.confirmedPreviewPath,
     required this.canBuildPreview,
     required this.canConfirmSelection,
+    required this.informationBridge,
     this.continuity,
   });
 
@@ -50,6 +52,7 @@ class BookDeconstructionViewData {
       confirmedPreviewPath: '',
       canBuildPreview: false,
       canConfirmSelection: false,
+      informationBridge: null,
       continuity: null,
     );
   }
@@ -74,5 +77,6 @@ class BookDeconstructionViewData {
   final String confirmedPreviewPath;
   final bool canBuildPreview;
   final bool canConfirmSelection;
+  final BookDeconstructionInformationBridgeViewData? informationBridge;
   final BookDeconstructionContinuityViewData? continuity;
 }

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../app/theme/app_palette.dart';
+import '../../../../../shared/theme/novel_theme_context.dart';
 
 class SettingsSwitchRow extends StatelessWidget {
   const SettingsSwitchRow({
@@ -19,6 +19,7 @@ class SettingsSwitchRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 中文注释: 布尔型设置统一使用这一层，保证说明文字、开关和间距在不同页签里一致。
+    final surface = context.novelThemeSurfaces.panel;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -28,21 +29,21 @@ class SettingsSwitchRow extends StatelessWidget {
             children: [
               Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
-                  color: AppPalette.text,
+                  color: surface.foregroundColor,
                 ),
               ),
               if (note.trim().isNotEmpty) ...[
                 const SizedBox(height: 4),
                 Text(
                   note,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
                     height: 1.45,
                     fontWeight: FontWeight.w500,
-                    color: AppPalette.mutedText,
+                    color: surface.mutedForegroundColor,
                   ),
                 ),
               ],

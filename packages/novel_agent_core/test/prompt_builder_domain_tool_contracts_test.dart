@@ -40,6 +40,8 @@ void main() {
         );
 
         expect(prompt, contains('submit_chapter_delivery'));
+        expect(prompt, contains('propose_design_element'));
+        expect(prompt, contains('不要为了显得积极而强行调用信息工具'));
         expect(prompt, contains('示例只用于说明调用形态'));
         expect(prompt, isNot(contains('快穿')));
         expect(prompt, isNot(contains('死亡回归')));
@@ -75,8 +77,48 @@ void main() {
         );
 
         expect(reviewerPrompt, contains('submit_semantic_review'));
+        expect(reviewerPrompt, contains('link_information_evidence'));
+        expect(reviewerPrompt, contains('propose_reference_work'));
         expect(recoveryPrompt, contains('本轮目标只能有一个'));
         expect(recoveryPrompt, contains('submit_chapter_delivery'));
+      },
+    );
+
+    test(
+      'draft prompt gives researcher and deconstructor distinct information tool contracts',
+      () {
+        final researcherPrompt = draftPromptBuilder.build(
+          project: const <String, Object?>{'title': '项目研究'},
+          agent: const <String, Object?>{
+            'id': 'researcher',
+            'name': '研究员',
+            'role': '负责资料研究',
+          },
+          contextPack: const <String, Object?>{'context_text': '上下文摘要'},
+          userPrompt: '查证钟楼回声母题',
+          title: '',
+          intent: 'research',
+        );
+        final deconstructorPrompt = draftPromptBuilder.build(
+          project: const <String, Object?>{'title': '项目拆书'},
+          agent: const <String, Object?>{
+            'id': 'deconstructor',
+            'name': '拆书分析师',
+            'role': '负责原文解构',
+          },
+          contextPack: const <String, Object?>{'context_text': '上下文摘要'},
+          userPrompt: '提炼原作里的象征系统和命名暗线',
+          title: '',
+          intent: 'deconstruction',
+        );
+
+        expect(researcherPrompt, contains('request_external_research'));
+        expect(researcherPrompt, contains('submit_research_note'));
+        expect(researcherPrompt, contains('再 submit_research_note'));
+        expect(researcherPrompt, contains('不要把联网摘录'));
+        expect(deconstructorPrompt, contains('propose_design_element'));
+        expect(deconstructorPrompt, contains('命名暗线'));
+        expect(deconstructorPrompt, contains('不要冒充成已确认设计规则'));
       },
     );
 
@@ -143,9 +185,16 @@ void main() {
         );
 
         expect(chapterPrompt, contains('submit_chapter_delivery'));
+        expect(chapterPrompt, contains('propose_design_element'));
         expect(reviewPrompt, contains('submit_semantic_review'));
+        expect(reviewPrompt, contains('link_information_evidence'));
         expect(planningPrompt, contains('propose_narrative_profile_update'));
         expect(planningPrompt, contains('request_profile_clarification'));
+        expect(planningPrompt, contains('propose_knowledge_card'));
+        expect(
+          planningPrompt,
+          contains('request_external_research / submit_research_note'),
+        );
       },
     );
 

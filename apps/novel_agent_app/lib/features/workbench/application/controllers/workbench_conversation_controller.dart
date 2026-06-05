@@ -17,6 +17,7 @@ import '../models/conversation_attachment_draft.dart';
 import '../models/conversation_session_state.dart';
 import '../models/workbench_conversation_runtime_state.dart';
 import '../models/workbench_primary_action_plan.dart';
+import '../models/opening_agent_member_summary.dart';
 import '../services/conversation_attachment_draft_service.dart';
 import '../services/conversation_attachment_picker_service.dart';
 import '../services/conversation_input_capability_service.dart';
@@ -38,6 +39,7 @@ import '../services/conversation_streaming_state_service.dart';
 import '../services/conversation_user_visible_text_service.dart';
 import '../services/workbench_primary_action_service.dart';
 import 'workbench_workspace_controller.dart';
+import '../models/opening_agent_group_summary.dart';
 import '../models/opening_session_projection.dart';
 
 class WorkbenchConversationController implements ConversationActionHandler {
@@ -978,11 +980,10 @@ class WorkbenchConversationController implements ConversationActionHandler {
           }
 
           cancellationToken.addListener(syncCancellation);
-          final executionConstraints =
-              await _resolveExecutionConstraints(
-                project: project,
-                agent: requestAgent.agent,
-              );
+          final executionConstraints = await _resolveExecutionConstraints(
+            project: project,
+            agent: requestAgent.agent,
+          );
           conversationDraftRuntime = await _prepareConversationDraftRuntime(
             project: project,
             agent: requestAgent.agent,
@@ -991,6 +992,10 @@ class WorkbenchConversationController implements ConversationActionHandler {
             provider,
             settings.networkSettings,
           );
+          final selectedCollaborationGroup =
+              _selectedCollaborationGroupForRuntime(
+                _readRuntimeState().openingProjection,
+              );
           try {
             return useCase.execute(
               project: project,
@@ -998,6 +1003,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
               modelId: resolvedModelId,
               title: title,
               agent: requestAgent.agent,
+              selectedCollaborationGroup: selectedCollaborationGroup,
               sessionContext: _mergeSessionContext(
                 _mergeSessionContext(
                   sessionContext,
@@ -1077,6 +1083,8 @@ class WorkbenchConversationController implements ConversationActionHandler {
       appliesTo: ConstraintBindingAppliesTo.writing,
       agentId: ValueReaders.stringValue(agent['id']),
       stageId: 'draft',
+      intent: 'draft',
+      taskType: _ordinaryConversationTaskType(agent),
     );
   }
 
@@ -1091,7 +1099,8 @@ class WorkbenchConversationController implements ConversationActionHandler {
     return _conversationDraftRuntimeService.prepareDraftRun(
       project,
       taskType: _ordinaryConversationTaskType(agent),
-      pinnedRelativePaths: _workspaceController.activeDocumentPath.trim().isEmpty
+      pinnedRelativePaths:
+          _workspaceController.activeDocumentPath.trim().isEmpty
           ? const <String>[]
           : <String>[_workspaceController.activeDocumentPath],
     );
@@ -1612,6 +1621,90 @@ class WorkbenchConversationController implements ConversationActionHandler {
       return id;
     }
     return _stringValue(state.sessionRecord['id']);
+  }
+
+  JsonMap _selectedCollaborationGroupForRuntime(
+    OpeningSessionProjection? projection,
+  ) {
+    // 中文注释: 会话运行只消费 application service 投影出的当前组快照，不在 widget 或底层工具里重新猜组。
+    if (projection == null) {
+      return const <String, Object?>{};
+    }
+    for (final summary in projection.supportedGroups) {
+      if (summary.groupId != projection.currentGroupId.trim()) {
+        continue;
+      }
+      return _openingGroupSummaryToDocument(
+        projection,
+        summary: summary,
+        fallbackPrimaryAgentId: projection.currentPrimaryAgentSummary?.agentId,
+      );
+    }
+    final fallbackAgentId =
+        projection.currentPrimaryAgentSummary?.agentId ?? '';
+    if (projection.currentGroupId.trim().isEmpty || fallbackAgentId.isEmpty) {
+      return const <String, Object?>{};
+    }
+    return <String, Object?>{
+      'id': projection.currentGroupId.trim(),
+      'name': projection.currentGroupDisplayName.trim().isNotEmpty
+          ? projection.currentGroupDisplayName.trim()
+          : projection.currentGroupId.trim(),
+      'description': projection.derivedFromAgentBinding
+          ? '由项目当前主智能体自动包装得到的单成员协作组。'
+          : '',
+      'orchestration': 'main_with_children',
+      'source': projection.derivedFromAgentBinding
+          ? 'derived_single_agent_group'
+          : 'opening_projection',
+      'enabled': true,
+      'agents': <String>[fallbackAgentId],
+      'primary_agent_id': fallbackAgentId,
+      'metadata': <String, Object?>{
+        'derived_from_agent_binding': projection.derivedFromAgentBinding,
+      },
+    };
+  }
+
+  JsonMap _openingGroupSummaryToDocument(
+    OpeningSessionProjection projection, {
+    required OpeningAgentGroupSummary summary,
+    required String? fallbackPrimaryAgentId,
+  }) {
+    final sourceMembers = summary.members.isNotEmpty
+        ? summary.members
+        : (summary.groupId == projection.currentGroupId.trim()
+              ? projection.availableAgentSummaries
+              : const <OpeningAgentMemberSummary>[]);
+    final memberIds = sourceMembers
+        .map((member) => member.agentId.trim())
+        .where((agentId) => agentId.isNotEmpty)
+        .toList(growable: false);
+    final primaryAgentId = sourceMembers
+        .where((member) => member.isPrimary)
+        .map((member) => member.agentId.trim())
+        .firstWhere(
+          (agentId) => agentId.isNotEmpty,
+          orElse: () => fallbackPrimaryAgentId?.trim() ?? '',
+        );
+    return <String, Object?>{
+      'id': summary.groupId,
+      'name': summary.displayName,
+      'description': summary.description,
+      'orchestration': 'main_with_children',
+      'source': projection.derivedFromAgentBinding
+          ? 'derived_single_agent_group'
+          : 'opening_projection',
+      'enabled': summary.isSupported,
+      'agents': memberIds,
+      if (primaryAgentId.isNotEmpty) 'primary_agent_id': primaryAgentId,
+      'metadata': <String, Object?>{
+        'is_current_group': summary.isCurrent,
+        'is_degraded': summary.isDegraded,
+        'is_starter_group': summary.isStarterGroup,
+        'derived_from_agent_binding': projection.derivedFromAgentBinding,
+      },
+    };
   }
 
   String _conversationSummary(

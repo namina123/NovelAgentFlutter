@@ -48,6 +48,10 @@ class BookDeconstructionNarrativePromotionService {
                 )
                 .toList(growable: false)
           : const <NarrativeSemanticReview>[],
+      knowledgeCards: analysisBundle.knowledgeCards,
+      designElements: analysisBundle.designElements,
+      researchNotes: analysisBundle.researchNotes,
+      referenceWorks: analysisBundle.referenceWorks,
       metadata: <String, Object?>{
         ...analysisBundle.metadata,
         BookDeconstructionNarrativeBridgeConstants.metadataAnalysisStatus:

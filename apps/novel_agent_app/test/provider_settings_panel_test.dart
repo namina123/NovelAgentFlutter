@@ -105,6 +105,26 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('接口/厂商名称'), findsOneWidget);
     expect(find.text('模型 ID'), findsOneWidget);
+    expect(find.text('测试连接'), findsOneWidget);
+    expect(find.text('协议'), findsNothing);
+    expect(find.text('Base URL'), findsNothing);
+
+    await tester.tap(find.text('测试连接'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('当前配置还不能稳定发起连接测试。'), findsOneWidget);
+    expect(find.textContaining('还没有填写 API Key'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('展开高级设置'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('展开高级设置'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('协议'), findsOneWidget);
+    expect(find.text('Base URL'), findsOneWidget);
 
     await tester.drag(find.byType(Scrollable).first, const Offset(0, 400));
     await tester.pumpAndSettle();

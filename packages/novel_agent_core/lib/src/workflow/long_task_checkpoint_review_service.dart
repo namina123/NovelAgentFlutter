@@ -3,6 +3,8 @@ import '../common/value_readers.dart';
 import '../creative/expression_constraint_review_projection.dart';
 import '../creative/expression_constraint_review_projection_service.dart';
 import 'long_task_checkpoint_drift_signal_service.dart';
+import 'writing_execution_result.dart';
+import 'writing_execution_result_codec_service.dart';
 import 'narrative_supervisor_risk_policy_service.dart';
 import 'long_task_task_summary_service.dart';
 import 'task_runtime_constants.dart';
@@ -14,6 +16,7 @@ class LongTaskCheckpointReviewService {
     NarrativeSupervisorRiskPolicyService? narrativeSupervisorRiskPolicyService,
     ExpressionConstraintReviewProjectionService?
     expressionConstraintReviewProjectionService,
+    WritingExecutionResultCodecService? writingExecutionResultCodecService,
   }) : _taskSummaryService = taskSummaryService,
        _driftSignalService =
            driftSignalService ?? LongTaskCheckpointDriftSignalService(),
@@ -22,7 +25,10 @@ class LongTaskCheckpointReviewService {
            const NarrativeSupervisorRiskPolicyService(),
        _expressionConstraintReviewProjectionService =
            expressionConstraintReviewProjectionService ??
-           const ExpressionConstraintReviewProjectionService();
+           const ExpressionConstraintReviewProjectionService(),
+       _writingExecutionResultCodecService =
+           writingExecutionResultCodecService ??
+           const WritingExecutionResultCodecService();
 
   final LongTaskTaskSummaryService _taskSummaryService;
   final LongTaskCheckpointDriftSignalService _driftSignalService;
@@ -30,6 +36,7 @@ class LongTaskCheckpointReviewService {
   _narrativeSupervisorRiskPolicyService;
   final ExpressionConstraintReviewProjectionService
   _expressionConstraintReviewProjectionService;
+  final WritingExecutionResultCodecService _writingExecutionResultCodecService;
 
   JsonMap buildReview({
     required JsonMap task,
@@ -90,9 +97,14 @@ class LongTaskCheckpointReviewService {
       result: result,
       chapterLengthEvaluation: chapterLengthEvaluation,
       miniRecheckItems: miniRecheckItems,
+      collaborationSignal: _collaborationSignal(result, execution),
     );
     final narrativeSupervisorRisk = _narrativeSupervisorRiskPolicyService
         .assess(result: result, execution: execution);
+    final informationSignal = ValueReaders.mapValue(
+      narrativeSupervisorRisk['information'],
+    );
+    final collaborationSignal = _collaborationSignal(result, execution);
     final now = createdAt.isEmpty
         ? DateTime.now().toIso8601String()
         : createdAt;
@@ -110,6 +122,7 @@ class LongTaskCheckpointReviewService {
         cleanOutputs,
         confirmationFocus,
         chapterLengthEvaluation,
+        collaborationSignal,
       ),
       'persistent_context_paths': ValueReaders.stringList(
         metadata['persistent_context_paths'],
@@ -125,6 +138,17 @@ class LongTaskCheckpointReviewService {
       'mini_recheck_items': miniRecheckItems,
       'next_actions': nextActions,
       'narrative_supervisor_risk': narrativeSupervisorRisk,
+      'information_signal': informationSignal,
+      'information_summary': ValueReaders.stringValue(
+        informationSignal['summary'],
+      ),
+      'information_changed_paths': ValueReaders.stringList(
+        informationSignal['changed_paths'],
+      ),
+      'collaboration_signal': collaborationSignal,
+      'collaboration_summary': ValueReaders.stringValue(
+        collaborationSignal['summary'],
+      ),
       'output_paths': cleanOutputs,
       'tool_names': _toolNames(result),
       'changed_paths': ValueReaders.stringList(result['changed_paths']),
@@ -145,6 +169,7 @@ class LongTaskCheckpointReviewService {
     List<String> outputPaths,
     List<String> confirmationFocus,
     JsonMap chapterLengthEvaluation,
+    JsonMap collaborationSignal,
   ) {
     final title = ValueReaders.stringValue(task['title'], '当前任务');
     final outputText = outputPaths.isEmpty
@@ -154,7 +179,10 @@ class LongTaskCheckpointReviewService {
         ? '建议继续人工确认。'
         : '当前最该确认：${confirmationFocus.first}';
     final lengthText = _chapterLengthSummary(chapterLengthEvaluation);
-    return '$title 已结束当前单步，$outputText。$focusText${lengthText.isEmpty ? '' : ' $lengthText'}';
+    final collaborationText = ValueReaders.stringValue(
+      collaborationSignal['summary'],
+    ).trim();
+    return '$title 已结束当前单步，$outputText。$focusText${lengthText.isEmpty ? '' : ' $lengthText'}${collaborationText.isEmpty ? '' : ' $collaborationText'}';
   }
 
   List<String> _confirmationFocus({
@@ -236,6 +264,7 @@ class LongTaskCheckpointReviewService {
     required JsonMap result,
     required JsonMap chapterLengthEvaluation,
     required List<String> miniRecheckItems,
+    required JsonMap collaborationSignal,
   }) {
     final items = <String>[];
     if (!ValueReaders.boolValue(result['ok'])) {
@@ -258,10 +287,75 @@ class LongTaskCheckpointReviewService {
       items.add('先审阅本轮实际写出的文件，再决定是否标记任务完成。');
     }
     items.addAll(_chapterLengthActions(chapterLengthEvaluation));
+    final collaborationCategory = ValueReaders.stringValue(
+      collaborationSignal['category'],
+    ).trim();
+    if (collaborationCategory == 'checkpoint_user') {
+      items.add('先确认高风险协作冲突的采纳方向，再决定是否继续长任务主链。');
+    } else if (collaborationCategory == 'repair') {
+      items.add('先处理协作冲突对应的修订项，再继续后续队列。');
+    }
     if (miniRecheckItems.isNotEmpty) {
       items.add('若本轮要做真实性/去 AI 修订，结尾再跑一轮 mini recheck，重点复核角色声音与连续性。');
     }
     return items;
+  }
+
+  JsonMap _collaborationSignal(JsonMap result, JsonMap execution) {
+    final sharedResult = _sharedWritingExecutionResult(result, execution);
+    if (sharedResult == null || !sharedResult.collaboration.present) {
+      return const <String, Object?>{'present': false};
+    }
+    final collaboration = sharedResult.collaboration;
+    final category = collaboration.userConfirmationConflictCount > 0
+        ? 'checkpoint_user'
+        : collaboration.repairRequiredConflictCount > 0
+        ? 'repair'
+        : collaboration.totalConflictCount > 0
+        ? 'accept'
+        : '';
+    return <String, Object?>{
+      'present': collaboration.totalConflictCount > 0,
+      'category': category,
+      'summary': collaboration.conflictSummary.isNotEmpty
+          ? collaboration.conflictSummary
+          : collaboration.summary,
+      'highest_risk': collaboration.highestConflictRisk,
+      'total_conflict_count': collaboration.totalConflictCount,
+      'auto_resolved_conflict_count': collaboration.autoResolvedConflictCount,
+      'repair_required_conflict_count':
+          collaboration.repairRequiredConflictCount,
+      'user_confirmation_conflict_count':
+          collaboration.userConfirmationConflictCount,
+      'requires_repair': collaboration.repairRequiredConflictCount > 0,
+      'requires_user_confirmation':
+          collaboration.userConfirmationConflictCount > 0,
+      'conflicts': collaboration.conflicts
+          .map((entry) => entry.toJson())
+          .cast<Object?>()
+          .toList(growable: false),
+      'arbitration_results': collaboration.arbitrationResults
+          .map((entry) => entry.toJson())
+          .cast<Object?>()
+          .toList(growable: false),
+    };
+  }
+
+  WritingExecutionResult? _sharedWritingExecutionResult(
+    JsonMap result,
+    JsonMap execution,
+  ) {
+    final direct = ValueReaders.mapValue(result['writing_execution_result']);
+    if (direct.isNotEmpty) {
+      return _writingExecutionResultCodecService.fromJson(direct);
+    }
+    final executionShared = ValueReaders.mapValue(
+      execution['writing_execution_result'],
+    );
+    if (executionShared.isNotEmpty) {
+      return _writingExecutionResultCodecService.fromJson(executionShared);
+    }
+    return null;
   }
 
   JsonMap _creativeRuleStack(JsonMap execution) {

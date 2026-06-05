@@ -1,7 +1,9 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
 import '../continuity/narrative_state/chapter_narrative_submission_validator.dart';
+import '../creative/expression_constraint_review_projection.dart';
 import '../tools/domain/domain_tool_outcome_statuses.dart';
+import 'chapter_length_evaluation.dart';
 import 'chapter_delivery_state_request.dart';
 import 'chapter_delivery_state_result.dart';
 import 'chapter_delivery_state_statuses.dart';
@@ -69,6 +71,11 @@ class ChapterDeliveryStateMachine {
       );
     }
 
+    final tooShortState = _tooShortBodyState(request, cleanContent);
+    if (tooShortState != null) {
+      return tooShortState;
+    }
+
     if (_hasPathMismatch(request)) {
       return _result(
         request: request,
@@ -87,6 +94,11 @@ class ChapterDeliveryStateMachine {
     final submissionState = _submissionState(request);
     if (submissionState != null) {
       return submissionState;
+    }
+
+    final qualityState = _qualityState(request);
+    if (qualityState != null) {
+      return qualityState;
     }
 
     final gateState = _gateState(request);
@@ -129,6 +141,20 @@ class ChapterDeliveryStateMachine {
 
     final validationErrors = _submissionValidator.validate(submission);
     if (validationErrors.isEmpty) {
+      if (_evidenceMissing(request, submission)) {
+        return _result(
+          request: request,
+          state: ChapterDeliveryStateStatuses.deliveredNeedsRepair,
+          recommendedAction: 'request_sidecar_repair',
+          suggestedOutcomeStatus: DomainToolOutcomeStatuses.accepted,
+          reason: 'submission_evidence_missing',
+          summary: '章节正文已交付，但缺少最小 evidence 记录。',
+          blocksProgress: true,
+          chapterBodyDelivered: true,
+          submissionAccepted: false,
+          retryable: true,
+        );
+      }
       return null;
     }
 
@@ -147,6 +173,80 @@ class ChapterDeliveryStateMachine {
         'submission_validation_errors': validationErrors,
       },
     );
+  }
+
+  ChapterDeliveryStateResult? _tooShortBodyState(
+    ChapterDeliveryStateRequest request,
+    String chapterContent,
+  ) {
+    final minimumBodyLength = request.minimumBodyLength;
+    if (minimumBodyLength <= 0) {
+      return null;
+    }
+    final effectiveLength = _effectiveBodyLength(request, chapterContent);
+    if (effectiveLength >= minimumBodyLength) {
+      return null;
+    }
+    return _result(
+      request: request,
+      state: ChapterDeliveryStateStatuses.invalidOutputRewriteRequired,
+      recommendedAction: 'request_chapter_repair',
+      suggestedOutcomeStatus: DomainToolOutcomeStatuses.invalidPayload,
+      reason: 'chapter_body_too_short',
+      summary: '章节正文长度低于当前任务允许的最小正文阈值。',
+      blocksProgress: true,
+      chapterBodyDelivered: false,
+      submissionAccepted: false,
+      retryable: false,
+      metadata: <String, Object?>{
+        'body_length': effectiveLength,
+        'minimum_body_length': minimumBodyLength,
+      },
+    );
+  }
+
+  ChapterDeliveryStateResult? _qualityState(
+    ChapterDeliveryStateRequest request,
+  ) {
+    final chapterLengthEvaluation = request.chapterLengthEvaluation;
+    if (_isSeverelyOffLength(chapterLengthEvaluation)) {
+      return _result(
+        request: request,
+        state: ChapterDeliveryStateStatuses.invalidOutputRewriteRequired,
+        recommendedAction: 'request_chapter_repair',
+        suggestedOutcomeStatus: DomainToolOutcomeStatuses.invalidPayload,
+        reason: 'chapter_length_severely_off',
+        summary: '章节字数严重偏离当前任务目标，要求先返修或重写。',
+        blocksProgress: true,
+        chapterBodyDelivered: false,
+        submissionAccepted: false,
+        retryable: false,
+        metadata: <String, Object?>{
+          'chapter_length_level': chapterLengthEvaluation?.level,
+          'chapter_length_recommended_action':
+              chapterLengthEvaluation?.recommendedAction,
+          'current_length': chapterLengthEvaluation?.currentRecord.length,
+          'target_length': chapterLengthEvaluation?.profile.targetLength,
+        },
+      );
+    }
+
+    if (_missingExpressionConstraintReview(request)) {
+      return _result(
+        request: request,
+        state: ChapterDeliveryStateStatuses.deliveredNeedsRepair,
+        recommendedAction: 'request_chapter_repair',
+        suggestedOutcomeStatus: DomainToolOutcomeStatuses.accepted,
+        reason: 'expression_constraint_review_missing',
+        summary: '章节正文已交付，但缺少表达限制复核信号，暂不应视为稳定交付。',
+        blocksProgress: true,
+        chapterBodyDelivered: true,
+        submissionAccepted: true,
+        retryable: true,
+      );
+    }
+
+    return null;
   }
 
   ChapterDeliveryStateResult? _gateState(ChapterDeliveryStateRequest request) {
@@ -235,6 +335,31 @@ class ChapterDeliveryStateMachine {
     return expected.isNotEmpty && actual.isNotEmpty && expected != actual;
   }
 
+  bool _evidenceMissing(
+    ChapterDeliveryStateRequest request,
+    dynamic submission,
+  ) {
+    return request.requireEvidence && submission.evidenceRefs.isEmpty;
+  }
+
+  bool _isSeverelyOffLength(ChapterLengthEvaluation? evaluation) {
+    if (evaluation == null) {
+      return false;
+    }
+    return evaluation.level == 'severely_off' ||
+        evaluation.recommendedAction == 'review_or_repair';
+  }
+
+  bool _missingExpressionConstraintReview(ChapterDeliveryStateRequest request) {
+    if (!request.requireExpressionConstraintReview) {
+      return false;
+    }
+    final review =
+        request.expressionConstraintReview ??
+        const ExpressionConstraintReviewProjection();
+    return review.isEmpty;
+  }
+
   bool _isTitleOnly(String chapterContent, String title) {
     final normalizedContent = _normalizeLines(chapterContent);
     final normalizedTitle = title.trim();
@@ -269,6 +394,18 @@ class ChapterDeliveryStateMachine {
       return content;
     }
     return lines.skip(1).join('\n');
+  }
+
+  int _effectiveBodyLength(
+    ChapterDeliveryStateRequest request,
+    String chapterContent,
+  ) {
+    final chapterLengthEvaluation = request.chapterLengthEvaluation;
+    if (chapterLengthEvaluation != null &&
+        chapterLengthEvaluation.currentRecord.length > 0) {
+      return chapterLengthEvaluation.currentRecord.length;
+    }
+    return chapterContent.trim().length;
   }
 
   ChapterDeliveryStateResult _result({

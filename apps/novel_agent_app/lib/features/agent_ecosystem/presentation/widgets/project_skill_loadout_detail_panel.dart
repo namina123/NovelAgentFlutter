@@ -133,6 +133,102 @@ class ProjectSkillLoadoutDetailPanel extends StatelessWidget {
               ),
             ),
           ),
+          if (detail.permissionBoundarySummary.trim().isNotEmpty) ...[
+            const SizedBox(height: 12),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: context.novelThemeSurfaces.inputDock.backgroundColor
+                    .withValues(alpha: 0.48),
+                borderRadius: BorderRadius.circular(
+                  context.novelThemeSurfaces.inputDock.radius,
+                ),
+                border: Border.all(
+                  color: context.novelThemeSurfaces.inputDock.borderColor,
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.shield_outlined,
+                      size: 18,
+                      color: colors.mutedTextColor,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        detail.permissionBoundarySummary,
+                        style: TextStyle(
+                          fontSize: 12,
+                          height: 1.45,
+                          color: colors.mutedTextColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+          if (detail.issues.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: context.novelThemeSurfaces.inputDock.backgroundColor
+                    .withValues(alpha: 0.48),
+                borderRadius: BorderRadius.circular(
+                  context.novelThemeSurfaces.inputDock.radius,
+                ),
+                border: Border.all(
+                  color: colors.warmStrongColor.withValues(alpha: 0.45),
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '装载提示',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: colors.textColor,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    for (final issue in detail.issues) ...[
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.error_outline_rounded,
+                            size: 16,
+                            color: colors.warmStrongColor,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              issue,
+                              style: TextStyle(
+                                fontSize: 12,
+                                height: 1.45,
+                                color: colors.mutedTextColor,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (issue != detail.issues.last)
+                        const SizedBox(height: 8),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           Expanded(
             child: SingleChildScrollView(

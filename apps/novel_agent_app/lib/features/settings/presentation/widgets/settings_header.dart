@@ -12,36 +12,50 @@ class SettingsHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     // 中文注释: 设置页头部独立出来，后续扩展搜索、说明或导出按钮时不会继续挤大整页文件。
     final surface = context.novelThemeSurfaces.panel;
-    return Row(
-      children: [
-        ActionButton(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 560;
+        final titleBlock = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '设置',
+              style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '接口、模型、上下文、主题与工具策略都会直接保存到本地设置。',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: surface.mutedForegroundColor,
+              ),
+            ),
+          ],
+        );
+        final backButton = ActionButton(
           label: '返回工作台',
+          labelMaxLines: 2,
           icon: Icons.arrow_back_rounded,
           tone: ActionButtonTone.neutral,
           onPressed: onBackRequested,
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
+        );
+
+        if (isNarrow) {
+          return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                '设置',
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '接口、模型、上下文、主题与工具策略都会直接保存到本地设置。',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: surface.mutedForegroundColor,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+            children: [backButton, const SizedBox(height: 12), titleBlock],
+          );
+        }
+
+        return Row(
+          children: [
+            backButton,
+            const SizedBox(width: 14),
+            Expanded(child: titleBlock),
+          ],
+        );
+      },
     );
   }
 }

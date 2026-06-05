@@ -19,6 +19,9 @@ class LongTaskCheckpointDispositionService {
       review['narrative_supervisor_risk'],
     );
     final overallRisk = ValueReaders.mapValue(narrativeRisk['overall']);
+    final collaborationSignal = ValueReaders.mapValue(
+      review['collaboration_signal'],
+    );
     final overallCategory = ValueReaders.stringValue(
       overallRisk['category'],
     ).trim();
@@ -28,6 +31,48 @@ class LongTaskCheckpointDispositionService {
     final overallReason = ValueReaders.stringValue(
       overallRisk['reason'],
     ).trim();
+    final collaborationCategory = ValueReaders.stringValue(
+      collaborationSignal['category'],
+    ).trim();
+    final collaborationSummary = ValueReaders.stringValue(
+      collaborationSignal['summary'],
+    ).trim();
+
+    if (collaborationCategory == 'checkpoint_user') {
+      return _result(
+        disposition: 'blocked_wait_user',
+        reason: 'collaboration_conflict_requires_user_confirmation',
+        summary: collaborationSummary.isEmpty
+            ? '当前存在高风险协作冲突，需要用户确认采纳方向后再继续。'
+            : collaborationSummary,
+        blocksAutoContinue: true,
+        manualAttentionRequired: false,
+        allowContinue: false,
+        allowConfirmCheckpoint: false,
+        createFollowupReviewTasks: false,
+        requestRevisionFollowup: false,
+        revisitModeGuidance: false,
+        recommendedActionId: '',
+      );
+    }
+
+    if (collaborationCategory == 'repair') {
+      return _result(
+        disposition: 'blocked_wait_user',
+        reason: 'collaboration_conflict_requires_repair',
+        summary: collaborationSummary.isEmpty
+            ? '当前存在中风险协作冲突，建议先修订再决定是否继续。'
+            : collaborationSummary,
+        blocksAutoContinue: true,
+        manualAttentionRequired: false,
+        allowContinue: false,
+        allowConfirmCheckpoint: false,
+        createFollowupReviewTasks: false,
+        requestRevisionFollowup: true,
+        revisitModeGuidance: false,
+        recommendedActionId: 'request_revision_followup',
+      );
+    }
 
     if (overallCategory == 'manual_attention') {
       return _result(

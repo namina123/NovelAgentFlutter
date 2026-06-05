@@ -35,6 +35,7 @@ class ProjectOpeningSessionProjectionService {
     projectAgentGroupCandidateResolverService,
     ProjectTraitResolverService? projectTraitResolverService,
     ProjectTypeCatalogService? projectTypeCatalogService,
+    AgentProfileCatalogService? agentProfileCatalogService,
     OpeningOrchestrationService? openingOrchestrationService,
   }) : _loadAgentPackages = loadAgentPackages,
        _loadAgentGroups = loadAgentGroups,
@@ -67,6 +68,8 @@ class ProjectOpeningSessionProjectionService {
            projectTraitResolverService ?? ProjectTraitResolverService(),
        _projectTypeCatalogService =
            projectTypeCatalogService ?? const ProjectTypeCatalogService(),
+       _agentProfileCatalogService =
+           agentProfileCatalogService ?? AgentProfileCatalogService(),
        _openingOrchestrationService =
            openingOrchestrationService ?? OpeningOrchestrationService();
 
@@ -89,6 +92,7 @@ class ProjectOpeningSessionProjectionService {
   _projectAgentGroupCandidateResolverService;
   final ProjectTraitResolverService _projectTraitResolverService;
   final ProjectTypeCatalogService _projectTypeCatalogService;
+  final AgentProfileCatalogService _agentProfileCatalogService;
   final OpeningOrchestrationService _openingOrchestrationService;
 
   Future<OpeningSessionProjection> build({
@@ -196,12 +200,21 @@ class ProjectOpeningSessionProjectionService {
     ProjectDescriptor project,
   ) async {
     final documents = await _loadAgentPackages(project);
-    return documents
+    final normalized = documents
         .map(_agentProfileNormalizerService.normalizeAgentProfile)
         .where(
           (document) => ValueReaders.stringValue(document['id']).isNotEmpty,
         )
-        .toList(growable: false);
+        .toList(growable: true);
+    final hasDefaultGeneralist = normalized.any(
+      (document) =>
+          ValueReaders.stringValue(document['id']).trim() ==
+          'default_generalist',
+    );
+    if (!hasDefaultGeneralist) {
+      normalized.add(_agentProfileCatalogService.fallbackDefaultAgent());
+    }
+    return normalized;
   }
 
   List<AgentAvailabilityAssessment> _buildAgentAssessments({

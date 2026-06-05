@@ -108,6 +108,8 @@ class CliBootstrap {
     final workflowRuntimeService = ProjectWorkflowRuntimeService(
       taskRepository: projectTaskRepository,
       promptTemplateService: promptTemplateService,
+      loadProjectAgentGroupSelections: (project) =>
+          bundle.projectAgentGroupBindingRepository.loadSelections(project),
       generateDraftUseCaseFactory: (provider, networkSettings) {
         return GenerateDraftUseCase(
           projectWorkspacePort: bundle.projectWorkspacePort,
@@ -119,6 +121,10 @@ class CliBootstrap {
           contextAssemblerService: contextAssemblerService,
           projectPromptContract: ProjectPromptContract(),
           hostPlatform: hostPlatform,
+          loadAvailableAgents: (project) =>
+              bundle.agentPackageCatalog.loadAgentPackages(project),
+          loadAvailableAgentGroups: (project) =>
+              bundle.agentGroupCatalog.loadAgentGroups(project),
         );
       },
     );
@@ -147,6 +153,10 @@ class CliBootstrap {
           contextAssemblerService: contextAssemblerService,
           projectPromptContract: ProjectPromptContract(),
           hostPlatform: hostPlatform,
+          loadAvailableAgents: (project) =>
+              bundle.agentPackageCatalog.loadAgentPackages(project),
+          loadAvailableAgentGroups: (project) =>
+              bundle.agentGroupCatalog.loadAgentGroups(project),
         );
       },
       printer: printer,

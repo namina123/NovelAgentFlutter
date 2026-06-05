@@ -291,6 +291,9 @@ class ProjectAgentSkillToolExecutor {
               'code': issue.code.name,
               'subject_id': issue.subjectId,
               'detail_ids': issue.detailIds,
+              if (issue.message.trim().isNotEmpty) 'message': issue.message,
+              if (issue.metadata.isNotEmpty)
+                'metadata': ValueReaders.deepCopyMap(issue.metadata),
             },
           )
           .cast<Object?>()

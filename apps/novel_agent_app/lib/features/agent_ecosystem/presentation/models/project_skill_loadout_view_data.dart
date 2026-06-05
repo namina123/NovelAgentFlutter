@@ -44,6 +44,7 @@ class ProjectSkillLoadoutDetailViewData {
     required this.resolvedSkills,
     required this.historyEntries,
     required this.issues,
+    required this.permissionBoundarySummary,
   });
 
   final String agentId;
@@ -58,6 +59,7 @@ class ProjectSkillLoadoutDetailViewData {
   final List<ProjectSkillLoadoutResolvedSkillViewData> resolvedSkills;
   final List<ProjectSkillLoadoutHistoryItemViewData> historyEntries;
   final List<String> issues;
+  final String permissionBoundarySummary;
 }
 
 class ProjectSkillLoadoutSelectableItemViewData {
