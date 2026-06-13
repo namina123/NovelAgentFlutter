@@ -301,7 +301,23 @@ guardrails:
         expect(postPrompt, contains('Mini Recheck'));
         expect(postPrompt, contains('真实性复核强度'));
         expect(recoveryPlan['action'], 'pause_for_repair');
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(recoveryPlan['recovery_state'])['state'],
+          ),
+          'repair_required',
+        );
         expect(failureAction['task_status'], TaskRuntimeConstants.statusQueued);
+        expect(
+          ValueReaders.intValue(
+            ValueReaders.mapValue(
+              ValueReaders.mapValue(
+                failureAction['record'],
+              )['recovery_retry_counts'],
+            )['task_revision'],
+          ),
+          1,
+        );
         expect(markdown.renderMarkdown(stepped), contains('模型失败'));
         expect(
           markdown.renderMarkdown(stepped),
@@ -364,6 +380,207 @@ guardrails:
 
       expect(recoveryPlan['action'], 'resume_dispatch');
       expect(recoveryPlan['reason'], 'budget_failed');
+    });
+
+    test(
+      'resume after checkpoint confirmation clears stale waiting user recovery signal',
+      () {
+        final resumed = lifecycle.resumeRecordAfterCheckpointConfirmation(
+          <String, Object?>{
+            'id': 'run_checkpoint_wait',
+            'mode': TaskRuntimeConstants.modeSeedToFullNovel,
+            'status': TaskRuntimeConstants.statusPaused,
+            'pause_requested': true,
+            'last_information_risk_category': 'checkpoint_user',
+            'last_writing_execution_next_action': 'resume_when_user_confirms',
+            'last_writing_execution_result': <String, Object?>{
+              'execution_id': 'task_review_wait',
+              'workflow_kind': 'workflow_task',
+              'overall_status':
+                  WritingExecutionOutcomeStatuses.userActionRequired,
+              'summary': '当前节点需要用户确认后再继续。',
+              'delivery': const <String, Object?>{},
+              'constraints': const <String, Object?>{},
+              'information': const <String, Object?>{
+                'present': true,
+                'risk_category': 'checkpoint_user',
+                'summary': '语义复核希望用户确认当前风险结论后再继续推进。',
+              },
+              'collaboration': const <String, Object?>{},
+              'recovery': const <String, Object?>{
+                'present': true,
+                'recommended_action': 'resume_when_user_confirms',
+                'reason': 'gate_waiting_user',
+                'note': '当前节点需要用户确认后再继续。',
+              },
+              'next_action': 'resume_when_user_confirms',
+              'blocks_progress': true,
+              'retryable': false,
+              'requires_user_action': true,
+              'schema_version': 1,
+              'metadata': const <String, Object?>{},
+            },
+            'steps': const <Object?>[
+              <String, Object?>{
+                'writing_execution_next_action': 'resume_when_user_confirms',
+                'information_risk_category': 'checkpoint_user',
+              },
+            ],
+          },
+          checkpointReviewPath:
+              'tracking/checkpoint_reviews/review_wait_checkpoint.json',
+        );
+        final recoveryPlan = recovery.recoveryPlan(resumed, const <Object?>[
+          <String, Object?>{
+            'id': 'chapter_002',
+            'title': '第二章',
+            'task_type': 'chapter',
+            'status': TaskRuntimeConstants.statusQueued,
+            'relative_path': 'tasks/chapter_002.json',
+          },
+        ]);
+
+        expect(
+          ValueReaders.stringValue(resumed['status']),
+          TaskRuntimeConstants.statusRunning,
+        );
+        expect(
+          ValueReaders.stringValue(resumed['last_information_risk_category']),
+          'accept',
+        );
+        expect(
+          ValueReaders.stringValue(resumed['last_writing_execution_next_action']),
+          'resume_dispatch',
+        );
+        expect(recoveryPlan['action'], 'resume_dispatch');
+        expect(
+          ValueReaders.stringValue(recoveryPlan['reason']),
+          'record_running',
+        );
+      },
+    );
+
+    test('recovery promotes retryable failed task into auto retry state', () {
+      final recoveryPlan = recovery.recoveryPlan(
+        <String, Object?>{
+          'id': 'run_retry_ready',
+          'mode': TaskRuntimeConstants.modeHumanOutlineAiDraft,
+          'status': TaskRuntimeConstants.statusRunning,
+          'last_writing_execution_result': <String, Object?>{
+            'execution_id': 'task_retry_001',
+            'workflow_kind': 'workflow_task',
+            'overall_status': WritingExecutionOutcomeStatuses.technicalFailure,
+            'summary': '模型临时失败，可自动重试。',
+            'delivery': const <String, Object?>{},
+            'constraints': const <String, Object?>{},
+            'information': const <String, Object?>{},
+            'collaboration': const <String, Object?>{},
+            'recovery': const <String, Object?>{
+              'present': true,
+              'recommended_action': 'pause_for_failure',
+              'reason': 'technical_retryable',
+              'note': '模型临时失败，可自动重试。',
+              'retryable': true,
+            },
+            'next_action': '',
+            'blocks_progress': true,
+            'retryable': true,
+            'requires_user_action': false,
+            'schema_version': 1,
+            'metadata': const <String, Object?>{},
+          },
+          'recovery_retry_counts': const <String, Object?>{
+            'chapter_fail': 0,
+          },
+        },
+        const <Object?>[
+          <String, Object?>{
+            'id': 'chapter_fail',
+            'title': '失败章节',
+            'task_type': 'chapter',
+            'status': TaskRuntimeConstants.statusFailed,
+            'relative_path': 'tasks/chapter_fail.json',
+          },
+        ],
+        options: const <String, Object?>{
+          'auto_retry_failed_task': true,
+          'recovery_retry_budget': 2,
+        },
+      );
+
+      expect(recoveryPlan['action'], 'auto_retry_failed_task');
+      expect(ValueReaders.intValue(recoveryPlan['retry_budget']), 2);
+      expect(ValueReaders.intValue(recoveryPlan['retries_remaining']), 2);
+      expect(
+        ValueReaders.stringValue(
+          ValueReaders.mapValue(recoveryPlan['recovery_state'])['state'],
+        ),
+        'ready_retry',
+      );
+    });
+
+    test('recovery marks retry budget exhausted with explicit disposition', () {
+      final recoveryPlan = recovery.recoveryPlan(
+        <String, Object?>{
+          'id': 'run_retry_exhausted',
+          'mode': TaskRuntimeConstants.modeHumanOutlineAiDraft,
+          'status': TaskRuntimeConstants.statusRunning,
+          'last_writing_execution_result': <String, Object?>{
+            'execution_id': 'task_retry_002',
+            'workflow_kind': 'workflow_task',
+            'overall_status': WritingExecutionOutcomeStatuses.technicalFailure,
+            'summary': '模型持续失败。',
+            'delivery': const <String, Object?>{},
+            'constraints': const <String, Object?>{},
+            'information': const <String, Object?>{},
+            'collaboration': const <String, Object?>{},
+            'recovery': const <String, Object?>{
+              'present': true,
+              'recommended_action': 'pause_for_failure',
+              'reason': 'technical_retryable',
+              'note': '模型持续失败。',
+              'retryable': true,
+            },
+            'next_action': '',
+            'blocks_progress': true,
+            'retryable': true,
+            'requires_user_action': false,
+            'schema_version': 1,
+            'metadata': const <String, Object?>{},
+          },
+          'recovery_retry_counts': const <String, Object?>{
+            'chapter_fail': 2,
+          },
+        },
+        const <Object?>[
+          <String, Object?>{
+            'id': 'chapter_fail',
+            'title': '失败章节',
+            'task_type': 'chapter',
+            'status': TaskRuntimeConstants.statusFailed,
+            'relative_path': 'tasks/chapter_fail.json',
+          },
+        ],
+        options: const <String, Object?>{
+          'auto_retry_failed_task': true,
+          'recovery_retry_budget': 2,
+          'recovery_exhausted_disposition': 'manual_attention',
+        },
+      );
+
+      expect(recoveryPlan['reason'], 'recovery_exhausted');
+      expect(ValueReaders.boolValue(recoveryPlan['exhausted']), isTrue);
+      expect(recoveryPlan['action'], 'pause_for_manual_attention');
+      expect(
+        ValueReaders.stringValue(recoveryPlan['exhausted_disposition']),
+        'manual_attention',
+      );
+      expect(
+        ValueReaders.stringValue(
+          ValueReaders.mapValue(recoveryPlan['stop_outcome'])['category'],
+        ),
+        LongTaskStopOutcomeCategories.recoveryExhausted,
+      );
     });
 
     test('recovery pauses for shared collaboration failure signal', () {

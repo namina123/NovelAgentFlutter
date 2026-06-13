@@ -37,6 +37,19 @@ class LongTaskCheckpointDispositionService {
     final collaborationSummary = ValueReaders.stringValue(
       collaborationSignal['summary'],
     ).trim();
+    final mode = ValueReaders.stringValue(review['mode']).trim();
+    final informationSignal = ValueReaders.mapValue(
+      review['information_signal'],
+    );
+    final informationCategory = ValueReaders.stringValue(
+      informationSignal['category'],
+    ).trim();
+    final expressionConstraintSignal = ValueReaders.mapValue(
+      review['expression_constraint_signal'],
+    );
+    final expressionConstraintCategory = ValueReaders.stringValue(
+      expressionConstraintSignal['category'],
+    ).trim();
 
     if (collaborationCategory == 'checkpoint_user') {
       return _result(
@@ -167,8 +180,79 @@ class LongTaskCheckpointDispositionService {
       );
     }
 
+    if (_shouldAutoContinueContinuousAgentTask(
+      taskType: taskType,
+      mode: mode,
+      overallCategory: overallCategory,
+      collaborationCategory: collaborationCategory,
+      informationCategory: informationCategory,
+      expressionConstraintCategory: expressionConstraintCategory,
+    )) {
+      return _result(
+        disposition: 'auto_continue',
+        reason: 'continuous_agent_task_advisory_only',
+        summary: '连续自治内部 agent task 已稳定完成，提醒信号保留给后续章节观察即可，不应把主链停在这里。',
+        blocksAutoContinue: false,
+        manualAttentionRequired: false,
+        allowContinue: true,
+        allowConfirmCheckpoint: false,
+        createFollowupReviewTasks: false,
+        requestRevisionFollowup: false,
+        revisitModeGuidance: false,
+        recommendedActionId: 'continue_long_task',
+      );
+    }
+
+    if (taskType == 'review') {
+      if (severity == 'critical') {
+        return _result(
+          disposition: 'manual_attention',
+          reason: 'critical_review_risk',
+          summary: '当前审稿结果风险已到关键级，建议先人工处理或明确返工策略。',
+          blocksAutoContinue: true,
+          manualAttentionRequired: true,
+          allowContinue: false,
+          allowConfirmCheckpoint: false,
+          createFollowupReviewTasks: false,
+          requestRevisionFollowup: false,
+          revisitModeGuidance: persistentContextPaths.isNotEmpty,
+          recommendedActionId: persistentContextPaths.isNotEmpty
+              ? 'revisit_mode_guidance'
+              : '',
+        );
+      }
+      if (severity == 'high') {
+        return _result(
+          disposition: 'blocked_wait_user',
+          reason: 'high_review_risk_needs_revision',
+          summary: '当前审稿已经明确给出较高风险，建议先派生返工再恢复主链。',
+          blocksAutoContinue: true,
+          manualAttentionRequired: false,
+          allowContinue: false,
+          allowConfirmCheckpoint: false,
+          createFollowupReviewTasks: false,
+          requestRevisionFollowup: true,
+          revisitModeGuidance: false,
+          recommendedActionId: 'request_revision_followup',
+        );
+      }
+      return _result(
+        disposition: 'auto_continue',
+        reason: 'review_result_ready',
+        summary: '当前审稿结果已形成，可继续主链；若后续需要修复，应派生返工而不是继续卡在 review 自身。',
+        blocksAutoContinue: false,
+        manualAttentionRequired: false,
+        allowContinue: true,
+        allowConfirmCheckpoint: false,
+        createFollowupReviewTasks: false,
+        requestRevisionFollowup: false,
+        revisitModeGuidance: false,
+        recommendedActionId: 'continue_long_task',
+      );
+    }
+
     if (outputPaths.isEmpty &&
-        <String>{'planning', 'chapter', 'checkpoint'}.contains(taskType)) {
+        <String>{'planning', 'chapter'}.contains(taskType)) {
       return _result(
         disposition: 'manual_attention',
         reason: 'missing_output_paths',
@@ -296,5 +380,43 @@ class LongTaskCheckpointDispositionService {
       'revisit_mode_guidance': revisitModeGuidance,
       'recommended_action_id': recommendedActionId,
     };
+  }
+
+  bool _shouldAutoContinueContinuousAgentTask({
+    required String taskType,
+    required String mode,
+    required String overallCategory,
+    required String collaborationCategory,
+    required String informationCategory,
+    required String expressionConstraintCategory,
+  }) {
+    if (taskType != 'agent_task' || !_isContinuousLongTaskMode(mode)) {
+      return false;
+    }
+    if (!_isAdvisoryOnlyCategory(overallCategory) ||
+        !_isAdvisoryOnlyCategory(collaborationCategory) ||
+        !_isAdvisoryOnlyCategory(informationCategory) ||
+        !_isAdvisoryExpressionCategory(expressionConstraintCategory)) {
+      return false;
+    }
+    return true;
+  }
+
+  bool _isContinuousLongTaskMode(String mode) {
+    return mode == 'human_outline_ai_draft' || mode == 'seed_to_full_novel';
+  }
+
+  bool _isAdvisoryOnlyCategory(String category) {
+    return category.isEmpty || category == 'accept';
+  }
+
+  bool _isAdvisoryExpressionCategory(String category) {
+    return category.isEmpty ||
+        category == 'accept' ||
+        category == 'suggest_strengthen' ||
+        category == 'policy_disabled' ||
+        category == 'applied' ||
+        category == 'skipped' ||
+        category == 'inactive';
   }
 }

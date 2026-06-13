@@ -106,7 +106,8 @@ void main() {
           },
         );
 
-        expect(ValueReaders.mapList(second['tasks']), isEmpty);
+        expect(ValueReaders.mapList(second['created_tasks']), isEmpty);
+        expect(ValueReaders.mapList(second['tasks']), hasLength(3));
         expect(
           ValueReaders.mapList(second['skipped']).every(
             (item) =>
@@ -155,4 +156,3 @@ void main() {
     );
   });
 }
-

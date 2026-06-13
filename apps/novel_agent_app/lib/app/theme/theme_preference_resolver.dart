@@ -29,7 +29,7 @@ class ThemePreferenceResolver {
   }) {
     final resolvedThemeId = _registry.contains(selectedThemeId)
         ? selectedThemeId
-        : lightThemeId;
+        : darkThemeId;
     return <String, Object?>{
       ...?base,
       selectedThemeIdKey: resolvedThemeId,
@@ -59,7 +59,7 @@ class ThemePreferenceResolver {
   String labelOf(String selectedThemeId) {
     return _registry
         .requireColorTokenSet(
-          _registry.contains(selectedThemeId) ? selectedThemeId : lightThemeId,
+          _registry.contains(selectedThemeId) ? selectedThemeId : darkThemeId,
         )
         .descriptor
         .label;
@@ -75,12 +75,14 @@ class ThemePreferenceResolver {
       case 'light':
       case 'day':
       default:
-        return lightThemeId;
+        return darkThemeId;
     }
   }
 
   String _legacyModeOf(String selectedThemeId) {
-    final descriptor = _registry.requireColorTokenSet(selectedThemeId).descriptor;
+    final descriptor = _registry
+        .requireColorTokenSet(selectedThemeId)
+        .descriptor;
     return descriptor.brightness == Brightness.dark ? 'dark' : 'light';
   }
 

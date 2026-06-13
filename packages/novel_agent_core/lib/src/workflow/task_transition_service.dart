@@ -12,6 +12,7 @@ class TaskTransitionService {
     if (currentStatus == TaskRuntimeConstants.statusPaused) {
       return <String>[
         TaskRuntimeConstants.statusQueued,
+        TaskRuntimeConstants.statusSucceeded,
         TaskRuntimeConstants.statusCancelled,
       ].contains(nextStatus);
     }

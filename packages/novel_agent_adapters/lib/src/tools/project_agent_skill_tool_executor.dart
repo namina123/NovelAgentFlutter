@@ -3,6 +3,7 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 import '../packages/local_skill_group_catalog.dart';
 import '../packages/local_package_resource_reader.dart';
 import '../packages/local_skill_package_catalog.dart';
+import '../storage/project_relative_path_resolver.dart';
 import 'project_agent_skill_runtime_loadout_service.dart';
 import 'project_tool_result_factory.dart';
 
@@ -15,6 +16,7 @@ class ProjectAgentSkillToolExecutor {
     AgentProfileCatalogService? agentProfileCatalogService,
     SkillInstructionDigestService? skillInstructionDigestService,
     LocalPackageResourceReader? packageResourceReader,
+    ProjectRelativePathResolver? projectRelativePathResolver,
     ProjectAgentSkillRuntimeLoadoutService? runtimeLoadoutService,
   }) : _skillPackageCatalog = skillPackageCatalog ?? LocalSkillPackageCatalog(),
        _skillGroupCatalog = skillGroupCatalog ?? LocalSkillGroupCatalog(),
@@ -27,6 +29,8 @@ class ProjectAgentSkillToolExecutor {
            const SkillInstructionDigestService(),
        _packageResourceReader =
            packageResourceReader ?? const LocalPackageResourceReader(),
+       _projectRelativePathResolver =
+           projectRelativePathResolver ?? ProjectRelativePathResolver(),
        _runtimeLoadoutService = runtimeLoadoutService;
 
   final LocalSkillPackageCatalog _skillPackageCatalog;
@@ -36,6 +40,7 @@ class ProjectAgentSkillToolExecutor {
   final AgentProfileCatalogService _agentProfileCatalogService;
   final SkillInstructionDigestService _skillInstructionDigestService;
   final LocalPackageResourceReader _packageResourceReader;
+  final ProjectRelativePathResolver _projectRelativePathResolver;
   final ProjectAgentSkillRuntimeLoadoutService? _runtimeLoadoutService;
 
   Future<JsonMap> loadAgentSkill(
@@ -140,6 +145,10 @@ class ProjectAgentSkillToolExecutor {
       'summary',
     ).trim().toLowerCase();
     final useFullText = detailLevel == 'full';
+    final projectedEntryPath = _projectedSkillEntryPath(
+      project: project,
+      skillPackage: skillPackage,
+    );
     final instructionText = useFullText
         ? (instructionMarkdown.isNotEmpty
               ? instructionMarkdown
@@ -184,9 +193,8 @@ class ProjectAgentSkillToolExecutor {
         ),
         'source': ValueReaders.stringValue(skillPackage['source']),
         'source_scope': ValueReaders.stringValue(skillPackage['source_scope']),
-        'entry_file_path': ValueReaders.stringValue(
-          skillPackage['entry_file_path'],
-        ),
+        if (projectedEntryPath.isNotEmpty)
+          'entry_file_path': projectedEntryPath,
         ...runtimeLoadoutData,
       },
     );
@@ -326,5 +334,80 @@ class ProjectAgentSkillToolExecutor {
       lines.add('优先输出：$preferredOutput');
     }
     return lines.join('\n');
+  }
+
+  String _projectedSkillEntryPath({
+    required ProjectDescriptor project,
+    required JsonMap skillPackage,
+  }) {
+    final entryFilePath = ValueReaders.stringValue(
+      skillPackage['entry_file_path'],
+    ).trim();
+    if (entryFilePath.isEmpty) {
+      return '';
+    }
+    final builtinPath = _builtinSkillEntryPath(skillPackage);
+    if (builtinPath.isNotEmpty) {
+      return builtinPath;
+    }
+    final projectPath = _projectSkillEntryPath(project, entryFilePath);
+    if (projectPath.isNotEmpty) {
+      return projectPath;
+    }
+    final skillId = ValueReaders.stringValue(skillPackage['id']).trim();
+    if (skillId.isEmpty) {
+      return 'package://skill/SKILL.md';
+    }
+    return 'package://skills/$skillId/SKILL.md';
+  }
+
+  String _builtinSkillEntryPath(JsonMap skillPackage) {
+    final entryFilePath = ValueReaders.stringValue(
+      skillPackage['entry_file_path'],
+    ).trim();
+    final packageRootPath = ValueReaders.stringValue(
+      skillPackage['package_root_path'],
+    ).trim();
+    final normalizedRoot = packageRootPath.replaceAll('\\', '/').toLowerCase();
+    if (!normalizedRoot.endsWith('/builtin_packages/skills')) {
+      return '';
+    }
+    final relativePath = _safeRelativePath(
+      rootPath: packageRootPath,
+      absolutePath: entryFilePath,
+    );
+    if (relativePath.isEmpty) {
+      return '';
+    }
+    return 'builtin://skills/$relativePath';
+  }
+
+  String _projectSkillEntryPath(
+    ProjectDescriptor project,
+    String entryFilePath,
+  ) {
+    return _safeRelativePath(
+      rootPath: project.rootPath,
+      absolutePath: entryFilePath,
+    );
+  }
+
+  String _safeRelativePath({
+    required String rootPath,
+    required String absolutePath,
+  }) {
+    final cleanRootPath = rootPath.trim();
+    final cleanAbsolutePath = absolutePath.trim();
+    if (cleanRootPath.isEmpty || cleanAbsolutePath.isEmpty) {
+      return '';
+    }
+    try {
+      return _projectRelativePathResolver.relative(
+        rootPath: cleanRootPath,
+        absolutePath: cleanAbsolutePath,
+      );
+    } on ArgumentError {
+      return '';
+    }
   }
 }

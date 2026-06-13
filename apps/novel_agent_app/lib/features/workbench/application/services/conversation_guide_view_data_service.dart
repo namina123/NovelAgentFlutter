@@ -90,6 +90,7 @@ class ConversationGuideViewDataService {
     final longTaskStartAction = _longTaskStartActionPolicyService.build(
       projectType: projectType,
       openingProjection: openingProjection,
+      openingMaturity: openingMaturity,
     );
     final fallbackGuide = ConversationGuideViewData(
       workflowTitle: profile.title,
@@ -127,6 +128,7 @@ class ConversationGuideViewDataService {
         openingProjection,
         isGenerating: isGenerating,
         startAction: longTaskStartAction ?? fallbackGuide.primaryActions.first,
+        maturity: openingMaturity,
       );
     }
     if (openingProjection.currentGroupDisplayName.trim().isEmpty &&
@@ -136,13 +138,13 @@ class ConversationGuideViewDataService {
         isGenerating: isGenerating,
       );
     }
-      return _conversationOpeningGuideViewDataService.decorateInteractiveGuide(
-        fallbackGuide: fallbackGuide,
-        projection: openingProjection,
-        maturity: openingMaturity,
-        isGenerating: isGenerating,
-      );
-    }
+    return _conversationOpeningGuideViewDataService.decorateInteractiveGuide(
+      fallbackGuide: fallbackGuide,
+      projection: openingProjection,
+      maturity: openingMaturity,
+      isGenerating: isGenerating,
+    );
+  }
 
   ConversationGuideViewData _longTaskModesGuide() {
     // 中文注释: 长任务模式细分页独立生成，避免把模式定义和普通入口按钮揉在一起。

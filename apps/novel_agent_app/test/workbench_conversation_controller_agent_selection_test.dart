@@ -289,28 +289,49 @@ void main() {
       'injects bridged execution constraints into ordinary conversation generation',
       () async {
         final harness = _ConversationControllerHarness(
-          draftExecutionConstraintRuntimeService:
-              _FakeProjectDraftExecutionConstraintRuntimeService(
-                response: const <String, Object?>{
-                  'session_context_markdown':
+          conversationDraftRuntimeService:
+              _FakeProjectConversationDraftRuntimeService(
+                preparation: const ProjectConversationDraftRuntimePreparation(
+                  runId: 'conversation_constraint_run',
+                  taskType: 'chapter',
+                  activationReportPath:
+                      'tracking/conversation_draft/conversation_constraint_run.activation_report.json',
+                  activationReport: <String, Object?>{
+                    'summary':
+                        'selected profiles 1, claims 0, constraints 1, files 1.',
+                  },
+                  sessionContextMarkdown:
                       '## Execution Constraints\n- 字数约束：目标约 2400 字',
-                  'expression_constraint_profiles': <Object?>[
-                    <String, Object?>{
-                      'id': 'de_ai',
-                      'display_name': '去 AI 风',
-                      'summary': '降低模板化表达。',
-                      'kind': 'natural_expression',
-                      'rules': <Object?>['减少总结句。'],
+                  exposedToolIds: <String>['submit_chapter_delivery'],
+                  executionConstraints: <String, Object?>{
+                    'session_context_markdown':
+                        '## Execution Constraints\n- 字数约束：目标约 2400 字',
+                    'chapter_length_metadata': <String, Object?>{
+                      'chapter_length_profile': <String, Object?>{
+                        'enabled': true,
+                        'target_length': 2400,
+                        'preferred_min': 2000,
+                        'preferred_max': 2800,
+                      },
                     },
-                  ],
-                  'project_expression_constraint_bindings': <Object?>[
-                    <String, Object?>{
-                      'id': 'binding_1',
-                      'profile_id': 'de_ai',
-                      'default_for_project': true,
-                    },
-                  ],
-                },
+                    'expression_constraint_profiles': <Object?>[
+                      <String, Object?>{
+                        'id': 'de_ai',
+                        'display_name': '去 AI 风',
+                        'summary': '降低模板化表达。',
+                        'kind': 'natural_expression',
+                        'rules': <Object?>['减少总结句。'],
+                      },
+                    ],
+                    'project_expression_constraint_bindings': <Object?>[
+                      <String, Object?>{
+                        'id': 'binding_1',
+                        'profile_id': 'de_ai',
+                        'default_for_project': true,
+                      },
+                    ],
+                  },
+                ),
               ),
         );
 
@@ -341,6 +362,21 @@ void main() {
               .lastProjectExpressionConstraintBindings
               .length,
           1,
+        );
+        final chapterLengthProfile = ValueReaders.mapValue(
+          ValueReaders.mapValue(
+            harness
+                .generateDraftUseCase
+                .lastWritingExecutionConstraints['chapter_length_metadata'],
+          )['chapter_length_profile'],
+        );
+        expect(
+          ValueReaders.intValue(chapterLengthProfile['preferred_min']),
+          2000,
+        );
+        expect(
+          ValueReaders.intValue(chapterLengthProfile['preferred_max']),
+          2800,
         );
       },
     );
@@ -383,6 +419,101 @@ void main() {
         );
         expect(runtimeService.prepareCallCount, 1);
         expect(runtimeService.finalizeCallCount, 1);
+      },
+    );
+
+    test(
+      'passes full user prompt into ordinary chapter runtime preparation instead of truncated title',
+      () async {
+        final runtimeService = _FakeProjectConversationDraftRuntimeService(
+          preparation: const ProjectConversationDraftRuntimePreparation(
+            runId: 'conversation_run_chapter_hint',
+            taskType: 'chapter',
+            activationReportPath:
+                'tracking/conversation_draft/conversation_run_chapter_hint.activation_report.json',
+            activationReport: <String, Object?>{
+              'summary':
+                  'selected profiles 0, claims 0, constraints 0, files 0.',
+            },
+            sessionContextMarkdown: '## Activation Report',
+            exposedToolIds: <String>['submit_chapter_delivery'],
+          ),
+        );
+        final harness = _ConversationControllerHarness(
+          conversationDraftRuntimeService: runtimeService,
+        );
+        const prompt = '先承接前文已经落定的门后回应，不要回退铺垫，直接把第三章写出来。';
+
+        await harness.controller.onSendRequested(prompt);
+
+        expect(runtimeService.lastChapterLabelHint, prompt);
+      },
+    );
+
+    test(
+      'passes host information permission context into ordinary conversation factory',
+      () async {
+        final harness = _ConversationControllerHarness(
+          initialSettings: _buildSettings().copyWith(
+            permissionSettings: const <String, Object?>{
+              'mode': 'safe',
+              'allow_network': false,
+            },
+          ),
+        );
+
+        await harness.controller.onSendRequested('继续写第一章。');
+
+        expect(harness.lastHostInformationPermissionContext, isNotNull);
+        expect(
+          harness.lastHostInformationPermissionContext!.permissionMode,
+          HostInformationPermissionModes.safe,
+        );
+        expect(
+          harness.lastHostInformationPermissionContext!.allowNetwork,
+          isFalse,
+        );
+      },
+    );
+
+    test(
+      'projects ordinary runtime information summary back into workbench status',
+      () async {
+        final runtimeService = _FakeProjectConversationDraftRuntimeService(
+          preparation: const ProjectConversationDraftRuntimePreparation(
+            runId: 'conversation_run_information',
+            taskType: 'chapter',
+            activationReportPath:
+                'tracking/conversation_draft/conversation_run_information.activation_report.json',
+            activationReport: <String, Object?>{
+              'summary':
+                  'selected profiles 1, claims 0, constraints 0, files 1.',
+            },
+            sessionContextMarkdown: '## Activation Report',
+            exposedToolIds: <String>[
+              'submit_chapter_delivery',
+              NarrativeDomainToolNames.requestExternalResearch,
+            ],
+          ),
+          finalization: const ProjectConversationDraftRuntimeArtifacts(
+            informationStatus: 'executed_research',
+            informationSummary: '已自动补齐回京礼制资料。information 改动 3 项。',
+            informationChangedPaths: <String>[
+              '.novel_agent/information/research_requests/research_request_1.json',
+              '.novel_agent/information/research_notes/gateway_1.json',
+              'research/研究摘要.md',
+            ],
+          ),
+        );
+        final harness = _ConversationControllerHarness(
+          conversationDraftRuntimeService: runtimeService,
+        );
+
+        await harness.controller.onSendRequested('继续写第一章。');
+
+        expect(harness.workbench.toolCoreStatus, contains('资料研究已执行'));
+        expect(harness.workbench.contextSummary, contains('已自动补齐回京礼制资料'));
+        expect(harness.workbench.generationStatus, contains('信息状态'));
       },
     );
 
@@ -442,7 +573,7 @@ void main() {
 
         expect(
           harness.workbench.generationStatus,
-          '内容生成完成，并已保存到 chapters/第01章.md，但部分工具失败：submit_chapter_delivery：领域工具参数不合法。',
+          '工具执行失败：submit_chapter_delivery：领域工具参数不合法。',
         );
       },
     );
@@ -452,11 +583,12 @@ void main() {
 class _ConversationControllerHarness {
   _ConversationControllerHarness({
     WorkbenchViewData? initialWorkbench,
+    AppSettings? initialSettings,
     ProjectConversationDraftRuntimeService? conversationDraftRuntimeService,
     ProjectDraftExecutionConstraintRuntimeService?
     draftExecutionConstraintRuntimeService,
     _RecordingGenerateDraftUseCase? generateDraftUseCase,
-  }) : _settings = _buildSettings(),
+  }) : _settings = initialSettings ?? _buildSettings(),
        _workbench = initialWorkbench ?? WorkbenchViewData.initial(),
        _projectState = WorkbenchProjectRuntimeState(
          currentProject: _project(),
@@ -550,6 +682,12 @@ class _ConversationControllerHarness {
     controller = WorkbenchConversationController(
       saveDraftUseCase: SaveDraftUseCase(projectWorkspacePort: workspacePort),
       generateDraftUseCaseFactory: (_, _) => this.generateDraftUseCase,
+      hostAwareGenerateDraftUseCaseFactory:
+          (_, _, {hostInformationPermissionContext}) {
+            lastHostInformationPermissionContext =
+                hostInformationPermissionContext;
+            return this.generateDraftUseCase;
+          },
       modelExecutionProfileService: modelExecutionProfileService,
       conversationSessionStateService: ConversationSessionStateService(),
       conversationStreamingStateService: ConversationStreamingStateService(
@@ -617,6 +755,7 @@ class _ConversationControllerHarness {
   WorkbenchViewData _workbench;
   WorkbenchProjectRuntimeState _projectState;
   WorkbenchConversationRuntimeState _runtimeState;
+  HostInformationPermissionContext? lastHostInformationPermissionContext;
 
   final _RecordingGenerateDraftUseCase generateDraftUseCase;
   final _RecordingModelExecutionProfileService modelExecutionProfileService;
@@ -677,6 +816,7 @@ class _RecordingGenerateDraftUseCase extends GenerateDraftUseCase {
   List<String> lastExposedToolIds = const <String>[];
   List<Object?> lastExpressionConstraintProfiles = const <Object?>[];
   List<Object?> lastProjectExpressionConstraintBindings = const <Object?>[];
+  JsonMap lastWritingExecutionConstraints = const <String, Object?>{};
   JsonMap lastSelectedCollaborationGroup = const <String, Object?>{};
 
   @override
@@ -701,6 +841,7 @@ class _RecordingGenerateDraftUseCase extends GenerateDraftUseCase {
     List<Object?> memorySections = const <Object?>[],
     List<Object?> expressionConstraintProfiles = const <Object?>[],
     List<Object?> projectExpressionConstraintBindings = const <Object?>[],
+    JsonMap writingExecutionConstraints = const <String, Object?>{},
     List<Object?> projectFileSectionPlan = const <Object?>[],
     JsonMap projectFileContents = const <String, Object?>{},
     String activeDocumentPath = '',
@@ -721,6 +862,9 @@ class _RecordingGenerateDraftUseCase extends GenerateDraftUseCase {
     lastProjectExpressionConstraintBindings = List<Object?>.from(
       projectExpressionConstraintBindings,
       growable: false,
+    );
+    lastWritingExecutionConstraints = ValueReaders.deepCopyMap(
+      writingExecutionConstraints,
     );
     return _scriptedResult ??
         DraftGenerationResult(
@@ -763,14 +907,25 @@ class _FakeProjectConversationDraftRuntimeService
   final ProjectConversationDraftRuntimeArtifacts finalization;
   int prepareCallCount = 0;
   int finalizeCallCount = 0;
+  String lastChapterLabelHint = '';
 
   @override
   Future<ProjectConversationDraftRuntimePreparation> prepareDraftRun(
     ProjectDescriptor project, {
     required String taskType,
     List<String> pinnedRelativePaths = const <String>[],
+    String chapterLabelHint = '',
+    String activeDocumentPath = '',
+    String agentId = '',
+    String modeId = '',
+    String stageId = '',
+    String intent = '',
+    String phase = '',
+    String expressionConstraintPolicyMode = '',
+    String expressionConstraintInjectionMode = '',
   }) async {
     prepareCallCount += 1;
+    lastChapterLabelHint = chapterLabelHint;
     return preparation;
   }
 
@@ -784,42 +939,6 @@ class _FakeProjectConversationDraftRuntimeService
   }) async {
     finalizeCallCount += 1;
     return finalization;
-  }
-}
-
-class _FakeProjectDraftExecutionConstraintRuntimeService
-    extends ProjectDraftExecutionConstraintRuntimeService {
-  _FakeProjectDraftExecutionConstraintRuntimeService({required this.response})
-    : super(
-        expressionConstraintProfileRepository:
-            ExpressionConstraintProfileRepository(
-              workspacePort: _NoopProjectWorkspacePort(),
-            ),
-        projectExpressionConstraintBindingRepository:
-            ProjectExpressionConstraintBindingRepository(
-              workspacePort: _NoopProjectWorkspacePort(),
-            ),
-        constraintBindingRepository: LocalConstraintBindingRepository(
-          workspacePort: _NoopProjectWorkspacePort(),
-        ),
-      );
-
-  final JsonMap response;
-
-  @override
-  Future<JsonMap> resolve(
-    ProjectDescriptor project, {
-    required String appliesTo,
-    String agentId = '',
-    String modeId = '',
-    String stageId = '',
-    String intent = 'draft',
-    String taskType = '',
-    String phase = '',
-    String expressionConstraintInjectionMode = '',
-    JsonMap legacyChapterLengthOptions = const <String, Object?>{},
-  }) async {
-    return ValueReaders.deepCopyMap(response);
   }
 }
 

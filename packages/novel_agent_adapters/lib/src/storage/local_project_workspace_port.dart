@@ -14,6 +14,7 @@ class LocalProjectWorkspacePort implements ProjectWorkspacePort {
 
   final ProjectRelativePathResolver _pathResolver;
   final ProjectTreeOrderService _treeOrderService;
+  static const int _maxListEntriesAttempts = 3;
 
   @override
   Future<List<JsonMap>> listEntries(
@@ -25,14 +26,47 @@ class LocalProjectWorkspacePort implements ProjectWorkspacePort {
     if (!await root.exists()) {
       return const <JsonMap>[];
     }
-    final entries = <JsonMap>[];
-    await for (final entity in root.list(
-      recursive: recursive,
+    FileSystemException? lastError;
+    for (var attempt = 1; attempt <= _maxListEntriesAttempts; attempt++) {
+      final entries = <JsonMap>[];
+      try {
+        await _collectEntries(
+          rootPath: root.path,
+          directory: root,
+          recursive: recursive,
+          entries: entries,
+        );
+        entries.sort((left, right) {
+          // 中文注释: 列表稳定排序可以让 CLI 输出、GUI 资源树和测试结果都保持一致。
+          final leftPath = left['relative_path']?.toString() ?? '';
+          final rightPath = right['relative_path']?.toString() ?? '';
+          return leftPath.compareTo(rightPath);
+        });
+        return _treeOrderService.sortEntries(root.path, entries);
+      } on FileSystemException catch (error) {
+        lastError = error;
+        if (attempt >= _maxListEntriesAttempts) {
+          rethrow;
+        }
+        await Future<void>.delayed(Duration(milliseconds: 80 * attempt));
+      }
+    }
+    throw lastError ?? FileSystemException('列举项目目录失败。', root.path);
+  }
+
+  Future<void> _collectEntries({
+    required String rootPath,
+    required Directory directory,
+    required bool recursive,
+    required List<JsonMap> entries,
+  }) async {
+    await for (final entity in directory.list(
+      recursive: false,
       followLinks: false,
     )) {
       final absolutePath = entity.absolute.path;
       final relativePath = _pathResolver.relative(
-        rootPath: root.path,
+        rootPath: rootPath,
         absolutePath: absolutePath,
       );
       if (relativePath.trim().isEmpty) {
@@ -47,14 +81,15 @@ class LocalProjectWorkspacePort implements ProjectWorkspacePort {
         'display_name': displayName,
         'is_dir': entity is Directory,
       });
+      if (recursive && entity is Directory) {
+        await _collectEntries(
+          rootPath: rootPath,
+          directory: entity,
+          recursive: true,
+          entries: entries,
+        );
+      }
     }
-    entries.sort((left, right) {
-      // 中文注释: 列表稳定排序可以让 CLI 输出、GUI 资源树和测试结果都保持一致。
-      final leftPath = left['relative_path']?.toString() ?? '';
-      final rightPath = right['relative_path']?.toString() ?? '';
-      return leftPath.compareTo(rightPath);
-    });
-    return _treeOrderService.sortEntries(root.path, entries);
   }
 
   @override

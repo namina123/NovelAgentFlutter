@@ -1,5 +1,6 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import '../tools/tool_capability_family_catalog_service.dart';
 import 'agent_group_normalizer_service.dart';
 import 'agent_profile_normalizer_service.dart';
 
@@ -268,6 +269,14 @@ class BuiltinCollaboratorCatalogService {
         'reader_lens',
         'workflow_keeper',
       ],
+      'metadata': <String, Object?>{
+        'tool_capability_family_ids': <String>[
+          ToolCapabilityFamilyCatalogService.mountedReferenceConsumption,
+          ToolCapabilityFamilyCatalogService.writing,
+          ToolCapabilityFamilyCatalogService.review,
+          ToolCapabilityFamilyCatalogService.research,
+        ],
+      },
     },
     <String, Object?>{
       'id': 'optional_review_room',
@@ -282,6 +291,12 @@ class BuiltinCollaboratorCatalogService {
         'prose_reviewer',
         'reader_lens',
       ],
+      'metadata': <String, Object?>{
+        'tool_capability_family_ids': <String>[
+          ToolCapabilityFamilyCatalogService.mountedReferenceConsumption,
+          ToolCapabilityFamilyCatalogService.review,
+        ],
+      },
     },
   ];
 }

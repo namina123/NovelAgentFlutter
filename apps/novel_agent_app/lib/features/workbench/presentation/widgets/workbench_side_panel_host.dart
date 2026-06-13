@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../application/services/workbench_project_panel_view_data_service.dart';
+import '../contracts/pending_research_action_handler.dart';
 import '../contracts/resource_manager_action_handler.dart';
 import '../models/workbench_agent_panel_view_data.dart';
 import '../models/workbench_navigation_panel_id.dart';
@@ -35,6 +36,10 @@ class WorkbenchSidePanelHost extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pendingResearchActionHandler =
+        resourceHandler is PendingResearchActionHandler
+        ? resourceHandler as PendingResearchActionHandler
+        : null;
     return WorkbenchObjectPanelBody(
       semanticsLabel: '${selectedContract.objectTitle}对象面板',
       child: AnimatedSwitcher(
@@ -47,6 +52,7 @@ class WorkbenchSidePanelHost extends StatelessWidget {
             WorkbenchNavigationPanelId.files => ResourceManagerPanel(
               viewData: resourceViewData,
               actionHandler: resourceHandler,
+              pendingResearchActionHandler: pendingResearchActionHandler,
             ),
             WorkbenchNavigationPanelId.project => WorkbenchProjectPanel(
               viewData: _projectPanelViewDataService.build(shellViewData),

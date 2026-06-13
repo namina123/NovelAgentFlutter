@@ -97,6 +97,7 @@ void main() {
                   defaultForProject: true,
                   targetModeIds: <String>['full_outline_consensus'],
                   targetStageIds: <String>['book_premise'],
+                  metadata: <String, Object?>{'policy_mode': 'adaptive'},
                 ),
               ],
           foreshadows: const <ForeshadowRecord>[
@@ -130,12 +131,23 @@ void main() {
         ]),
       );
       expect(viewData.entries.single.id, 'de_ai');
-      expect(viewData.entries.single.meta, contains('内置预设'));
+      expect(viewData.entries.single.meta, contains('内置方案'));
       expect(viewData.description, contains('表达限制是项目级写作约束系统'));
       expect(viewData.description, contains('智能体 reviewer'));
       expect(viewData.expressionConstraintEditor.displayName, '去 AI 风');
       expect(viewData.expressionConstraintEditor.profileId, 'de_ai');
+      expect(viewData.expressionConstraintEditor.originLabel, '内置方案');
       expect(viewData.expressionConstraintEditor.enabled, isTrue);
+      expect(
+        viewData.expressionConstraintEditor.selectedPolicyMode,
+        'adaptive',
+      );
+      expect(
+        viewData.expressionConstraintEditor.availablePolicyOptions.map(
+          (item) => item.label,
+        ),
+        containsAll(<String>['关闭', '智能使用', '强力约束']),
+      );
       expect(
         viewData.expressionConstraintEditor.selectedAgentIds,
         contains('reviewer'),
@@ -146,23 +158,46 @@ void main() {
         ),
         containsAll(<String>['reviewer', 'writer']),
       );
-      expect(
-        viewData.expressionConstraintEditor.selectedModeIds,
-        <String>['full_outline_consensus'],
-      );
-      expect(
-        viewData.expressionConstraintEditor.selectedStageIds,
-        <String>['book_premise'],
-      );
+      expect(viewData.expressionConstraintEditor.selectedModeIds, <String>[
+        'full_outline_consensus',
+      ]);
+      expect(viewData.expressionConstraintEditor.selectedStageIds, <String>[
+        'book_premise',
+      ]);
       expect(
         viewData.expressionConstraintEditor.availableStageOptions.map(
           (item) => item.id,
         ),
         contains('book_premise'),
       );
+      expect(
+        viewData.expressionConstraintEditor.scopeSummary,
+        contains('全项目默认启用'),
+      );
+      expect(viewData.expressionConstraintEditor.strengthSummary, isNotEmpty);
+      expect(
+        viewData.expressionConstraintEditor.usageStrategySummary,
+        contains('智能使用'),
+      );
+      expect(
+        viewData.expressionConstraintEditor.diagnosticFields.map(
+          (item) => item.label,
+        ),
+        containsAll(<String>['策略模式标识', '规则方案标识', '注入方式']),
+      );
       expect(viewData.graph.totalNodeCount, 3);
       expect(viewData.graph.relatedAssets, isNotEmpty);
       expect(viewData.timeline.items.single.id, 'event-1');
+      expect(
+        viewData.referenceExtractionStrategyPicker.selectedProfileId,
+        ReferenceExtractionBuiltinStrategyProfileIds.standard,
+      );
+      expect(
+        viewData.referenceExtractionStrategyPicker.options.map(
+          (item) => item.displayName,
+        ),
+        containsAll(<String>['标准提取', '事实优先', '探索扩展']),
+      );
     },
   );
 }

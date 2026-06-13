@@ -12,6 +12,7 @@ class SelectorField extends StatelessWidget {
     required this.options,
     required this.onSelected,
     this.enabled = true,
+    this.showLabel = true,
   });
 
   final String label;
@@ -19,18 +20,22 @@ class SelectorField extends StatelessWidget {
   final List<SelectorOptionViewData> options;
   final ValueChanged<String> onSelected;
   final bool enabled;
+  final bool showLabel;
 
   @override
   Widget build(BuildContext context) {
-    // 中文注释: 右栏选择器拆成独立控件，后续替换成真正下拉或搜索选择器时不动侧栏布局。
+    // 中文注释: 选择器继续向 IDE 侧栏字段靠拢，弱化表单输入框感。
     final colors = context.novelThemeColors;
     final surface = context.novelThemeSurfaces.inputDock;
     final labelStyle = TextStyle(
-      fontSize: 10,
-      fontWeight: FontWeight.w700,
+      fontSize: 9.5,
+      fontWeight: FontWeight.w800,
+      letterSpacing: 0.2,
       color: colors.mutedTextColor,
     );
-    final labelWidth = _labelWidth(context, label, labelStyle);
+    final labelWidth = showLabel
+        ? _labelWidth(context, label, labelStyle)
+        : 0.0;
     return PopupMenuButton<String>(
       enabled: enabled && options.isNotEmpty,
       tooltip: label,
@@ -61,43 +66,47 @@ class SelectorField extends StatelessWidget {
       },
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: surface.backgroundColor.withValues(alpha: 0.84),
-          border: Border.all(
-            color: surface.borderColor,
-            width: AppChrome.borderWidth,
+          color: surface.backgroundColor.withValues(alpha: 0.66),
+          borderRadius: BorderRadius.circular(8),
+          border: Border(
+            top: BorderSide(
+              color: surface.borderColor.withValues(alpha: 0.34),
+              width: AppChrome.borderWidth,
+            ),
           ),
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              SizedBox(
-                width: labelWidth,
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  softWrap: false,
-                  overflow: TextOverflow.visible,
-                  style: labelStyle,
+              if (showLabel)
+                SizedBox(
+                  width: labelWidth,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.visible,
+                    style: labelStyle,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 5),
+              if (showLabel) const SizedBox(width: 5),
               Expanded(
                 child: Text(
                   value,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 11.4,
+                    fontWeight: FontWeight.w800,
                     color: colors.textColor,
                   ),
                 ),
               ),
               Icon(
                 Icons.keyboard_arrow_down_rounded,
-                size: 16,
+                size: 14,
                 color: enabled && options.isNotEmpty
                     ? colors.lineStrongColor
                     : colors.mutedTextColor,

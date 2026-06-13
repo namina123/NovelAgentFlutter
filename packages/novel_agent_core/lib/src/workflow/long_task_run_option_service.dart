@@ -31,9 +31,25 @@ class LongTaskRunOptionService {
         options['allow_stream_guidance'],
         true,
       ),
+      'safe_after_crash': ValueReaders.boolValue(
+        options['safe_after_crash'],
+        ValueReaders.boolValue(options['resume_after_crash'], true),
+      ),
       'resume_after_crash': ValueReaders.boolValue(
         options['resume_after_crash'],
         true,
+      ),
+      'auto_retry_failed_task': ValueReaders.boolValue(
+        options['auto_retry_failed_task'],
+        true,
+      ),
+      'recovery_retry_budget': ValueReaders.intValue(
+        options['recovery_retry_budget'],
+        1,
+      ).clamp(0, 10),
+      'recovery_exhausted_disposition': ValueReaders.stringValue(
+        options['recovery_exhausted_disposition'],
+        'manual_attention',
       ),
       'auto_start_on_create': ValueReaders.boolValue(
         options['auto_start_on_create'],

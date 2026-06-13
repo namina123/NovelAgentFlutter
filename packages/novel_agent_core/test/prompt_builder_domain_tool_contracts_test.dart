@@ -40,6 +40,8 @@ void main() {
         );
 
         expect(prompt, contains('submit_chapter_delivery'));
+        expect(prompt, contains('submission.claims'));
+        expect(prompt, contains('final_state_summary'));
         expect(prompt, contains('propose_design_element'));
         expect(prompt, contains('不要为了显得积极而强行调用信息工具'));
         expect(prompt, contains('示例只用于说明调用形态'));
@@ -77,6 +79,13 @@ void main() {
         );
 
         expect(reviewerPrompt, contains('submit_semantic_review'));
+        expect(
+          reviewerPrompt,
+          contains(
+            'accepted_claim_ids / questioned_claim_ids / suggested_claims',
+          ),
+        );
+        expect(reviewerPrompt, contains('正文、已知 claims 和 evidence'));
         expect(reviewerPrompt, contains('link_information_evidence'));
         expect(reviewerPrompt, contains('propose_reference_work'));
         expect(recoveryPrompt, contains('本轮目标只能有一个'));
@@ -185,8 +194,13 @@ void main() {
         );
 
         expect(chapterPrompt, contains('submit_chapter_delivery'));
+        expect(chapterPrompt, contains('submission.claims'));
+        expect(chapterPrompt, contains('final_state_summary'));
+        expect(chapterPrompt, contains('倒带重演'));
         expect(chapterPrompt, contains('propose_design_element'));
         expect(reviewPrompt, contains('submit_semantic_review'));
+        expect(reviewPrompt, contains('题材关键词直接推断通过或失败'));
+        expect(reviewPrompt, contains('submit_narrative_state_claims'));
         expect(reviewPrompt, contains('link_information_evidence'));
         expect(planningPrompt, contains('propose_narrative_profile_update'));
         expect(planningPrompt, contains('request_profile_clarification'));
@@ -195,6 +209,61 @@ void main() {
           planningPrompt,
           contains('request_external_research / submit_research_note'),
         );
+      },
+    );
+
+    test(
+      'continuous autonomous seed planning prompt prefers drafting artifacts before user choice',
+      () {
+        final planningPrompt = taskPromptRenderer.renderTaskPrompt(
+          _taskTransaction(
+            contractService: contractService,
+            task: const <String, Object?>{
+              'task_type': 'planning',
+              'mode': TaskRuntimeConstants.modeSeedToFullNovel,
+              'metadata': <String, Object?>{
+                'runtime_baseline_id': 'continuous_autonomous',
+              },
+            },
+            taskTitle: '规划项目规则',
+            goal: '扩展项目规格与叙事规则',
+            agentRole: 'planner',
+          ),
+        );
+
+        expect(planningPrompt, contains('先落可修订草案'));
+        expect(planningPrompt, contains('不要退回 present_user_options'));
+        expect(planningPrompt, contains('不要因为存在多个可选方向就停回用户选择'));
+      },
+    );
+
+    test(
+      'continuous autonomous formal chapter prompt prefers direct delivery before user choice',
+      () {
+        final chapterPrompt = taskPromptRenderer.renderTaskPrompt(
+          _taskTransaction(
+            contractService: contractService,
+            task: const <String, Object?>{
+              'task_type': 'chapter',
+              'mode': TaskRuntimeConstants.modeSeedToFullNovel,
+              'metadata': <String, Object?>{
+                'runtime_baseline_id': 'continuous_autonomous',
+              },
+            },
+            taskTitle: '写第一章',
+            goal: '完成第一章',
+            agentRole: 'chapter_writer',
+          ),
+        );
+
+        expect(chapterPrompt, contains('不要退回 present_user_options'));
+        expect(
+          chapterPrompt,
+          contains(
+            '只要 specs/project_spec.md、outlines/story/总纲.md、outlines/chapters/章节任务清单.md',
+          ),
+        );
+        expect(chapterPrompt, contains('继续写作并通过 submit_chapter_delivery 收口'));
       },
     );
 
@@ -249,6 +318,7 @@ Map<String, Object?> _taskTransaction({
     'skill_routing': const <String>[],
     'postprocess_plan': const <String>[],
     'project_templates': const <String, Object?>{},
+    'metadata': ValueReaders.mapValue(task['metadata']),
     'single_step_boundary': '本次只执行一个安全单步。',
   };
 }

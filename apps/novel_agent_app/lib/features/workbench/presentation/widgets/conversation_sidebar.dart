@@ -1,13 +1,19 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../shared/theme/novel_theme_context.dart';
+import '../../application/models/conversation_tool_lifecycle_status.dart';
 import '../../application/services/conversation_input_capability_service.dart';
 import '../layout/conversation_section_id.dart';
 import '../layout/conversation_section_layout.dart';
 import '../layout/conversation_section_layout_policy.dart';
 import '../contracts/conversation_action_handler.dart';
 import '../models/conversation_input_capability_state.dart';
+import '../models/conversation_opening_state_view_data.dart';
 import '../models/conversation_pending_input_preview_view_data.dart';
+import '../models/conversation_entry_view_data.dart';
+import '../models/conversation_status_summary_view_data.dart';
 import '../models/conversation_sub_agent_detail_route_state.dart';
+import '../models/primary_action_view_data.dart';
 import '../models/sub_agent_run_view_data.dart';
 import '../models/user_option_view_data.dart';
 import '../models/workbench_conversation_view_data.dart';
@@ -19,6 +25,8 @@ import 'conversation_composer_panel.dart';
 import 'conversation_empty_state_panel.dart';
 import 'conversation_fullscreen_host.dart';
 import 'conversation_panel_header.dart';
+import 'conversation_panel_status_group.dart';
+import 'conversation_runtime_status_strip.dart';
 import 'conversation_section_host.dart';
 import 'conversation_panel_style.dart';
 import 'conversation_timeline.dart';
@@ -95,48 +103,105 @@ class _ConversationSidebarState extends State<ConversationSidebar> {
 
   @override
   Widget build(BuildContext context) {
-    // 中文注释: 智能体侧栏只承接会话相关信息与输入链路，不进入资源树和正文区的职责边界。
-    final style = ConversationPanelStyle.of(context);
-    final hasConversation =
-        widget.viewData.conversationEntries.isNotEmpty ||
-        widget.viewData.pendingOptions.isNotEmpty ||
-        widget.viewData.subAgentRuns.isNotEmpty ||
-        widget.viewData.isGenerating;
-    return Padding(
-      padding: style.outerPadding,
-      child: ValueListenableBuilder<ConversationSubAgentDetailRouteState>(
-        valueListenable: _detailRoute,
-        builder: (context, routeState, _) {
-          final activeSubAgentRun = _detailRouteService.resolveActiveRun(
-            routeState,
-            widget.viewData.subAgentRuns,
-          );
-          return ConversationFullscreenHost(
-            isActive: activeSubAgentRun != null,
-            fullscreenChild: activeSubAgentRun == null
-                ? null
-                : SubAgentRunDetailView(
-                    run: activeSubAgentRun,
-                    onBack: _clearActiveSubAgentRun,
-                  ),
-            primaryChild: ConversationSectionHost(
-              layout: widget.sectionLayout,
-              slotGap: style.bodyGap,
-              sectionGap: style.sectionGap,
-              entries: _buildSectionEntries(
-                hasConversation: hasConversation,
-                activeSubAgentRunId: routeState.activeRunId,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final style = ConversationPanelStyle.of(context);
+        final panelSurface = context.novelThemeSurfaces.panel;
+        final sidebarSurface = context.novelThemeSurfaces.sidebar;
+        final isMinimalSurface = constraints.maxWidth <= 430;
+        final hasConversation =
+            widget.viewData.conversationEntries.isNotEmpty ||
+            widget.viewData.pendingOptions.isNotEmpty ||
+            widget.viewData.subAgentRuns.isNotEmpty ||
+            widget.viewData.isGenerating;
+        final statusSummary = _statusSummaryService.build(
+          viewData: widget.viewData,
+        );
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+            style.outerPadding.left,
+            isMinimalSurface ? 4 : style.outerPadding.top,
+            style.outerPadding.right,
+            isMinimalSurface ? 4 : style.outerPadding.bottom,
+          ),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: panelSurface.backgroundColor.withValues(
+                alpha: isMinimalSurface ? 0.08 : 0.14,
               ),
+              gradient: isMinimalSurface
+                  ? null
+                  : LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        panelSurface.backgroundColor.withValues(alpha: 0.18),
+                        sidebarSurface.backgroundColor.withValues(alpha: 0.08),
+                      ],
+                    ),
+              borderRadius: BorderRadius.circular(
+                isMinimalSurface
+                    ? style.sectionRadius
+                    : style.sectionRadius + 2,
+              ),
+              border: isMinimalSurface
+                  ? null
+                  : Border(
+                      top: BorderSide(
+                        color: panelSurface.borderColor.withValues(alpha: 0.12),
+                      ),
+                    ),
             ),
-          );
-        },
-      ),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                style.surfacePadding.left,
+                isMinimalSurface ? 4 : style.surfacePadding.top,
+                style.surfacePadding.right,
+                isMinimalSurface ? 4 : style.surfacePadding.bottom,
+              ),
+              child:
+                  ValueListenableBuilder<ConversationSubAgentDetailRouteState>(
+                    valueListenable: _detailRoute,
+                    builder: (context, routeState, _) {
+                      final activeSubAgentRun = _detailRouteService
+                          .resolveActiveRun(
+                            routeState,
+                            widget.viewData.subAgentRuns,
+                          );
+                      return ConversationFullscreenHost(
+                        isActive: activeSubAgentRun != null,
+                        fullscreenChild: activeSubAgentRun == null
+                            ? null
+                            : SubAgentRunDetailView(
+                                run: activeSubAgentRun,
+                                onBack: _clearActiveSubAgentRun,
+                              ),
+                        primaryChild: ConversationSectionHost(
+                          layout: widget.sectionLayout,
+                          slotGap: style.bodyGap,
+                          sectionGap: style.sectionGap,
+                          entries: _buildSectionEntries(
+                            hasConversation: hasConversation,
+                            activeSubAgentRunId: routeState.activeRunId,
+                            statusSummary: statusSummary,
+                            isMinimalSurface: isMinimalSurface,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+            ),
+          ),
+        );
+      },
     );
   }
 
   List<ConversationSectionEntry> _buildSectionEntries({
     required bool hasConversation,
     required String? activeSubAgentRunId,
+    required ConversationStatusSummaryViewData statusSummary,
+    required bool isMinimalSurface,
   }) {
     final entries = <ConversationSectionEntry>[
       ConversationSectionEntry(
@@ -150,11 +215,24 @@ class _ConversationSidebarState extends State<ConversationSidebar> {
               widget.actionHandler.onConversationAgentSelected,
           onDocumentsRequested:
               widget.actionHandler.onDocumentsWorkspaceRequested,
+          minimal: isMinimalSurface,
+        ),
+      ),
+      ConversationSectionEntry(
+        sectionId: ConversationSectionId.runtimeStatus,
+        child: _ConversationStatusDeck(
+          viewData: widget.viewData,
+          statusSummary: statusSummary,
+          minimal: isMinimalSurface,
         ),
       ),
       ConversationSectionEntry(
         sectionId: ConversationSectionId.timeline,
-        child: _buildMainBody(hasConversation, activeSubAgentRunId),
+        child: _buildMainBody(
+          hasConversation,
+          activeSubAgentRunId,
+          isMinimalSurface,
+        ),
       ),
     ];
     if (widget.viewData.isGenerating) {
@@ -193,12 +271,24 @@ class _ConversationSidebarState extends State<ConversationSidebar> {
     return entries;
   }
 
-  Widget _buildMainBody(bool hasConversation, String? activeSubAgentRunId) {
-    // 中文注释: 空态和会话态拆成两种主体布局，避免只有空态时留下一整块无法利用的滚动空白。
+  Widget _buildMainBody(
+    bool hasConversation,
+    String? activeSubAgentRunId,
+    bool isMinimalSurface,
+  ) {
     final emptyStateActions = _emptyStateActionService.visibleActions(
       widget.viewData,
     );
     if (!hasConversation && !widget.viewData.showSessionHistory) {
+      if (isMinimalSurface) {
+        return _MinimalConversationEmptyState(
+          title: widget.viewData.workflowTitle,
+          description: widget.viewData.workflowDescription,
+          openingState: widget.viewData.openingState,
+          actions: emptyStateActions,
+          actionHandler: widget.actionHandler,
+        );
+      }
       return ConversationEmptyStatePanel(
         title: widget.viewData.workflowTitle,
         description: widget.viewData.workflowDescription,
@@ -215,7 +305,7 @@ class _ConversationSidebarState extends State<ConversationSidebar> {
             entries: widget.viewData.sessionHistoryEntries,
             onSelected: widget.actionHandler.onSessionHistorySelected,
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: ConversationPanelStyle.of(context).bodyGap),
         ],
         Expanded(
           child: hasConversation
@@ -242,7 +332,7 @@ class _ConversationSidebarState extends State<ConversationSidebar> {
         if (!hasConversation &&
             widget.viewData.openingState == null &&
             emptyStateActions.isNotEmpty) ...[
-          const SizedBox(height: 8),
+          SizedBox(height: ConversationPanelStyle.of(context).sectionGap),
           PrimaryActionList(
             actions: emptyStateActions,
             actionHandler: widget.actionHandler,
@@ -295,6 +385,157 @@ class _ConversationSidebarState extends State<ConversationSidebar> {
     return _pendingInputPreviewService.build(
       rawText: _pendingPreviewText.value,
       isGenerating: widget.viewData.isGenerating,
+    );
+  }
+}
+
+class _ConversationStatusDeck extends StatelessWidget {
+  const _ConversationStatusDeck({
+    required this.viewData,
+    required this.statusSummary,
+    required this.minimal,
+  });
+
+  final WorkbenchConversationViewData viewData;
+  final ConversationStatusSummaryViewData statusSummary;
+  final bool minimal;
+
+  @override
+  Widget build(BuildContext context) {
+    final runtimeText = _runtimeText();
+    final runtimeStatus = _runtimeStatus();
+    final cleanRuntimeText = runtimeText.trim();
+    if (statusSummary.items.isEmpty && cleanRuntimeText.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    if (minimal) {
+      if (cleanRuntimeText.isEmpty) {
+        return const SizedBox.shrink();
+      }
+      return ConversationRuntimeStatusStrip(
+        text: cleanRuntimeText,
+        status: runtimeStatus,
+      );
+    }
+    final style = ConversationPanelStyle.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (statusSummary.items.isNotEmpty) ...[
+          ConversationPanelStatusGroup(
+            viewData: statusSummary,
+            onItemPressed: (_) {},
+          ),
+        ],
+        if (cleanRuntimeText.isNotEmpty) ...[
+          if (statusSummary.items.isNotEmpty)
+            SizedBox(height: style.gap(-0.5, min: 3)),
+          ConversationRuntimeStatusStrip(
+            text: cleanRuntimeText,
+            status: runtimeStatus,
+          ),
+        ],
+      ],
+    );
+  }
+
+  String _runtimeText() {
+    final toolText = viewData.toolCoreStatus.trim();
+    if (toolText.isNotEmpty) {
+      return toolText;
+    }
+    return viewData.generationStatus.trim();
+  }
+
+  ConversationToolLifecycleStatus _runtimeStatus() {
+    if (viewData.pendingOptions.isNotEmpty) {
+      return ConversationToolLifecycleStatus.pendingConfirmation;
+    }
+    final latestToolStatus = _latestToolLifecycleStatus();
+    if (latestToolStatus != null) {
+      return latestToolStatus;
+    }
+    if (viewData.retryRequest != null) {
+      return ConversationToolLifecycleStatus.failed;
+    }
+    if (viewData.isGenerating) {
+      return ConversationToolLifecycleStatus.running;
+    }
+    return ConversationToolLifecycleStatus.completed;
+  }
+
+  ConversationToolLifecycleStatus? _latestToolLifecycleStatus() {
+    for (final entry in viewData.conversationEntries.reversed) {
+      if (entry.kind != ConversationEntryKind.tool ||
+          entry.toolLifecycleStatus == null) {
+        continue;
+      }
+      return entry.toolLifecycleStatus;
+    }
+    return null;
+  }
+}
+
+class _MinimalConversationEmptyState extends StatelessWidget {
+  const _MinimalConversationEmptyState({
+    required this.title,
+    required this.description,
+    required this.openingState,
+    required this.actions,
+    required this.actionHandler,
+  });
+
+  final String title;
+  final String description;
+  final ConversationOpeningStateViewData? openingState;
+  final List<PrimaryActionViewData> actions;
+  final ConversationActionHandler actionHandler;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = ConversationPanelStyle.of(context);
+    final theme = context.novelThemeColors;
+    final prompt = openingState?.firstPrompt.trim().isNotEmpty == true
+        ? openingState!.firstPrompt.trim()
+        : description.trim();
+    final visibleActions =
+        openingState?.preferSingleAction == true &&
+            openingState?.nextAction != null
+        ? [openingState!.nextAction!]
+        : actions;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: style.titleFontSize - 0.4,
+            fontWeight: FontWeight.w800,
+            color: theme.textColor,
+          ),
+        ),
+        if (prompt.isNotEmpty) ...[
+          SizedBox(height: style.gap(-1.2, min: 6)),
+          Text(
+            prompt,
+            maxLines: 4,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: style.bodyFontSize,
+              height: style.bodyLineHeight,
+              fontWeight: FontWeight.w500,
+              color: theme.mutedTextColor,
+            ),
+          ),
+        ],
+        if (visibleActions.isNotEmpty) ...[
+          SizedBox(height: style.gap(2.5, min: 10)),
+          PrimaryActionList(
+            actions: visibleActions,
+            actionHandler: actionHandler,
+          ),
+        ],
+      ],
     );
   }
 }

@@ -63,16 +63,17 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('工作台对象'), findsOneWidget);
+    expect(find.text('文件'), findsWidgets);
     expect(find.byType(WorkbenchObjectPanelBody), findsOneWidget);
-    expect(find.textContaining('只承接文件动作和资源树'), findsOneWidget);
+    expect(find.textContaining('只承接文件动作和资源树'), findsNothing);
     expect(find.byTooltip('导入文件'), findsOneWidget);
     expect(find.text('项目资料'), findsNothing);
 
     await tester.tap(find.text('项目'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('只承接当前项目摘要'), findsOneWidget);
+    expect(find.text('项目'), findsWidgets);
+    expect(find.text('3 视图'), findsOneWidget);
     expect(find.text('当前协作摘要'), findsOneWidget);
     expect(find.text('项目智能体组'), findsNothing);
     expect(find.text('项目资料'), findsOneWidget);
@@ -84,10 +85,10 @@ void main() {
     await tester.tap(find.text('智能体'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('只承接当前会话智能体摘要'), findsOneWidget);
+    expect(find.text('智能体'), findsWidgets);
     expect(find.text('当前会话分工'), findsOneWidget);
     expect(find.text('当前智能体'), findsOneWidget);
-    expect(find.text('审阅智能体'), findsOneWidget);
+    expect(find.text('审阅智能体'), findsWidgets);
     expect(find.text('项目基线组'), findsOneWidget);
     expect(find.text('当前协作摘要'), findsOneWidget);
     expect(find.text('项目资料'), findsNothing);

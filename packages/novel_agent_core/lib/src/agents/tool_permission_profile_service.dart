@@ -3,12 +3,7 @@ import '../common/value_readers.dart';
 import 'skill_capability_catalog_service.dart';
 
 class ToolPermissionProfileService {
-  ToolPermissionProfileService({
-    SkillCapabilityCatalogService? capabilityCatalogService,
-  }) : _capabilityCatalogService =
-           capabilityCatalogService ?? const SkillCapabilityCatalogService();
-
-  final SkillCapabilityCatalogService _capabilityCatalogService;
+  ToolPermissionProfileService();
 
   JsonMap resolve({
     JsonMap profile = const <String, Object?>{},
@@ -44,7 +39,9 @@ class ToolPermissionProfileService {
     if (value.isNotEmpty) {
       return value;
     }
-    return _summaryLabel(ValueReaders.stringList(profile['granted_capabilities']));
+    return _summaryLabel(
+      ValueReaders.stringList(profile['granted_capabilities']),
+    );
   }
 
   JsonMap _toolPolicyOf(JsonMap agent) {

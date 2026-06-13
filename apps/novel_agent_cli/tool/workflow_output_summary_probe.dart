@@ -1,9 +1,11 @@
 import 'dart:io';
 
+import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_cli/commands/workflow/workflow_output_summary_service.dart';
+import 'package:novel_agent_core/novel_agent_core.dart';
 
 void main() {
-  const service = WorkflowOutputSummaryService();
+  final service = WorkflowOutputSummaryService();
   final contract = service.extractRunCenterContract(const <String, Object?>{
     'long_task_run_center_contract': <String, Object?>{
       'status_label': '已暂停',
@@ -47,9 +49,7 @@ void main() {
       'chapter_delivery_path': 'chapters/ch01.md',
       'checkpoint_review': <String, Object?>{
         'relative_path': 'tracking/checkpoint_reviews/ch01.json',
-        'review': <String, Object?>{
-          'summary': '当前章已通过检查点复核。',
-        },
+        'review': <String, Object?>{'summary': '当前章已通过检查点复核。'},
       },
       'changed_paths': <Object?>[
         '.novel_agent/continuity/ledgers/main-ledger/entries.jsonl',
@@ -67,8 +67,62 @@ void main() {
   ];
   for (final item in narrativeExpected) {
     if (!narrativeLines.contains(item)) {
-      stderr.writeln('workflow_output_summary_probe: missing narrative line -> $item');
+      stderr.writeln(
+        'workflow_output_summary_probe: missing narrative line -> $item',
+      );
       stderr.writeln(narrativeLines.join('\n'));
+      exitCode = 1;
+      return;
+    }
+  }
+  final referenceLines = service.referenceExtractionBriefLines(
+    const ProjectReferenceExtractionResult(
+      runId: 'reference_run_1',
+      packageId: 'hp_volume1',
+      packageVersionId: 'v20260609',
+      sourceFilePath: 'D:/reference_source.txt',
+      sourceDecodeMode: 'utf8',
+      groupResolutionKind: 'single_agent_fallback',
+      selectedGroupId: 'reference_extraction_group',
+      strategyProfileId: 'reference_extraction.standard',
+      executionConcurrencyMode: ReferenceExtractionConcurrencyModes.single,
+      proposalCount: 12,
+      acceptedProposalCount: 5,
+      finalizedEntryCount: 9,
+      batchCount: 4,
+      completedBatchCount: 4,
+      batchCoverageRatio: 1.0,
+      runStatus: ReferenceExtractionRunStatuses.completedPublishable,
+      publishedSnapshotAvailable: true,
+      attachToProjectRequested: true,
+      projectMountedEntriesRequested: true,
+      projectMountStatus: ProjectReferenceMountStatuses.applied,
+      conflictClusterCount: 1,
+      canonDecisionCount: 1,
+      reviewAlertCount: 0,
+      knowledgeCardIds: <String>['knowledge_1'],
+      researchNoteIds: <String>['research_1'],
+      referenceWorkIds: <String>['reference_1'],
+      generatedProjectionPaths: <String>[
+        'knowledge/项目知识摘要.md',
+        'references/引用作品边界.md',
+      ],
+    ),
+    strategyLabel: '标准提取 (reference_extraction.standard)',
+  );
+  final referenceExpected = <String>[
+    '控制面：已完成',
+    '停止原因：publishable 结果已完成（completed_publishable）',
+    '挂载：已挂载到项目 | 投影 2 个',
+    '连续性：conflicts 1 | decisions 1 | alerts 0',
+    '轻投影：knowledge/项目知识摘要.md | references/引用作品边界.md',
+  ];
+  for (final item in referenceExpected) {
+    if (!referenceLines.contains(item)) {
+      stderr.writeln(
+        'workflow_output_summary_probe: missing reference line -> $item',
+      );
+      stderr.writeln(referenceLines.join('\n'));
       exitCode = 1;
       return;
     }

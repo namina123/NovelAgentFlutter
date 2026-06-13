@@ -55,7 +55,24 @@ void main() {
           ),
           'binding',
         );
-        expect(result.expressionConstraintInjectionMode, 'brief_and_sections');
+        expect(
+          result.expressionConstraintPolicyMode,
+          ExpressionConstraintExecutionPolicyModes.adaptive,
+        );
+        expect(
+          result.expressionConstraintInjectionStrength,
+          ExpressionConstraintInjectionStrengths.sections,
+        );
+        expect(
+          result.expressionConstraintReviewRequirement,
+          ExpressionConstraintReviewRequirements.whenApplied,
+        );
+        expect(result.expressionConstraintApplied, isFalse);
+        expect(
+          result.expressionConstraintSkippedReasons,
+          contains('no_expression_constraint_bindings'),
+        );
+        expect(result.expressionConstraintInjectionMode, 'disabled');
         expect(result.expressionConstraintReviewRequired, isFalse);
       },
     );
@@ -129,6 +146,23 @@ void main() {
           ),
           1,
         );
+        expect(
+          result.expressionConstraintPolicyMode,
+          ExpressionConstraintExecutionPolicyModes.adaptive,
+        );
+        expect(
+          result.expressionConstraintInjectionStrength,
+          ExpressionConstraintInjectionStrengths.sections,
+        );
+        expect(
+          result.expressionConstraintReviewRequirement,
+          ExpressionConstraintReviewRequirements.whenApplied,
+        );
+        expect(result.expressionConstraintApplied, isTrue);
+        expect(
+          result.expressionConstraintAppliedReasons,
+          contains('primary_writing_turn'),
+        );
         expect(result.expressionConstraintInjectionMode, 'brief_and_sections');
         expect(result.expressionConstraintReviewRequired, isTrue);
         expect(
@@ -140,6 +174,160 @@ void main() {
             )['review_required'],
           ),
           isTrue,
+        );
+      },
+    );
+
+    test(
+      'policy override disabled keeps bindings explainable without requiring review',
+      () {
+        final result = service.bridge(
+          appliesTo: ConstraintBindingAppliesTo.writing,
+          projectTypeId: 'long_novel',
+          stageId: 'draft',
+          intent: 'draft',
+          expressionConstraintPolicyMode:
+              ExpressionConstraintExecutionPolicyModes.disabled,
+          legacyExpressionConstraintProfiles: const <Object?>[
+            <String, Object?>{
+              'id': 'de_ai',
+              'display_name': '去 AI 风',
+              'summary': '降低模板腔。',
+              'kind': 'natural_expression',
+              'rules': <Object?>['减少模板化收束句。'],
+            },
+          ],
+          legacyProjectExpressionConstraintBindings: const <Object?>[
+            <String, Object?>{
+              'id': 'legacy_default',
+              'profile_id': 'de_ai',
+              'default_for_project': true,
+            },
+          ],
+        );
+
+        expect(
+          result.expressionConstraintPolicyMode,
+          ExpressionConstraintExecutionPolicyModes.disabled,
+        );
+        expect(result.expressionConstraintApplied, isFalse);
+        expect(result.expressionConstraintInjectionMode, 'disabled');
+        expect(result.expressionConstraintReviewRequired, isFalse);
+        expect(
+          result.expressionConstraintSkippedReasons,
+          contains('policy_disabled'),
+        );
+        expect(
+          ValueReaders.boolValue(
+            ValueReaders.mapValue(
+              ValueReaders.mapValue(
+                result.runtimeReport['execution_gate'],
+              )['expression_constraints'],
+            )['disabled'],
+          ),
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'force policy skips workflow planning orchestration without review gate',
+      () {
+        final result = service.bridge(
+          appliesTo: ConstraintBindingAppliesTo.writing,
+          projectTypeId: 'long_novel',
+          stageId: 'planning',
+          intent: 'workflow_task',
+          taskType: 'planning',
+          expressionConstraintPolicyMode:
+              ExpressionConstraintExecutionPolicyModes.force,
+          legacyExpressionConstraintProfiles: const <Object?>[
+            <String, Object?>{
+              'id': 'de_ai',
+              'display_name': '去 AI 风',
+              'summary': '降低模板腔。',
+              'kind': 'natural_expression',
+              'rules': <Object?>['减少模板化收束句。'],
+            },
+          ],
+          legacyProjectExpressionConstraintBindings: const <Object?>[
+            <String, Object?>{
+              'id': 'legacy_default',
+              'profile_id': 'de_ai',
+              'default_for_project': true,
+            },
+          ],
+        );
+
+        expect(
+          result.expressionConstraintPolicyMode,
+          ExpressionConstraintExecutionPolicyModes.force,
+        );
+        expect(result.expressionConstraintApplied, isFalse);
+        expect(result.expressionConstraintTechnicalTurnExcluded, isTrue);
+        expect(
+          result.expressionConstraintSkippedReasons,
+          contains('workflow_orchestration_turn'),
+        );
+        expect(result.expressionConstraintInjectionMode, 'disabled');
+        expect(result.expressionConstraintReviewRequired, isFalse);
+        final gate = ValueReaders.mapValue(
+          ValueReaders.mapValue(
+            result.runtimeReport['execution_gate'],
+          )['expression_constraints'],
+        );
+        expect(ValueReaders.boolValue(gate['applied']), isFalse);
+        expect(ValueReaders.boolValue(gate['review_required']), isFalse);
+      },
+    );
+
+    test(
+      'force policy keeps chapter injection full without missing review gate',
+      () {
+        final result = service.bridge(
+          appliesTo: ConstraintBindingAppliesTo.writing,
+          projectTypeId: 'long_novel',
+          stageId: 'draft',
+          intent: 'workflow_task',
+          taskType: 'chapter',
+          expressionConstraintPolicyMode:
+              ExpressionConstraintExecutionPolicyModes.force,
+          legacyExpressionConstraintProfiles: const <Object?>[
+            <String, Object?>{
+              'id': 'de_ai',
+              'display_name': '去 AI 风',
+              'summary': '降低模板腔。',
+              'kind': 'natural_expression',
+              'rules': <Object?>['减少模板化收束句。'],
+            },
+          ],
+          legacyProjectExpressionConstraintBindings: const <Object?>[
+            <String, Object?>{
+              'id': 'legacy_default',
+              'profile_id': 'de_ai',
+              'default_for_project': true,
+            },
+          ],
+        );
+
+        expect(result.expressionConstraintApplied, isTrue);
+        expect(
+          result.expressionConstraintInjectionStrength,
+          ExpressionConstraintInjectionStrengths.full,
+        );
+        expect(
+          result.expressionConstraintViolationDisposition,
+          ExpressionConstraintViolationDispositions.repair,
+        );
+        expect(
+          result.expressionConstraintReviewRequirement,
+          ExpressionConstraintReviewRequirements.none,
+        );
+        expect(result.expressionConstraintInjectionMode, 'brief_and_sections');
+        expect(result.expressionConstraintReviewRequired, isFalse);
+        expect(
+          result.expressionConstraintAppliedReasons,
+          contains('primary_writing_turn'),
         );
       },
     );

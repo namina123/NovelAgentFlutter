@@ -38,7 +38,7 @@ class ToolStrategyPromptBuilder {
         ? '多步骤任务、长篇创作、续写或修订前，可以先用 set_agent_tasks 声明你自己的任务目标、阶段、顺序和需要的工具。'
         : '任务计划工具已弱化；除非用户明确要求，不要额外展示任务清单。';
     final delegationRule = enabledTools.contains('call_sub_agent')
-        ? '当任务明显需要不同视角（资料、剧情结构、正文写作、润色、审核、读者反馈）时，可调用 call_sub_agent；必须从协作视角清单选择 agent_id，并只传任务摘录、约束和期望产物，不传完整主会话。'
+        ? '当任务明显需要不同视角（资料、剧情结构、正文写作、润色、审核、读者反馈）时，可调用 call_sub_agent；优先从协作视角清单选择 agent_id，并只传任务摘录、约束和期望产物，不传完整主会话。若一时拿不准精确 agent_id，可把 agent_id 传空字符串，运行时会按 task 自动兜底选取最匹配的子智能体。'
         : '当前没有开放子智能体委派工具；如需多视角，请在主回复中自行综合。';
     final longTaskLaunchRule = enabledTools.contains('start_long_task_run')
         ? '如果当前项目是长任务项目，且用户明确表达“开始长任务/直接跑/按当前灵感开跑”，优先调用 start_long_task_run；不要自己假装已经建好长任务队列。'
@@ -80,7 +80,7 @@ ${_projectPromptContract.directoryMappingLine()}
 knowledge/、research/、references/ 下的信息摘要是只读 projection 入口，不是正式事实写入目标；长期知识、设计元素、研究结论和引用边界必须分别通过 propose_knowledge_card、propose_design_element、submit_research_note、propose_reference_work 收口。
 所有读写改删都只能操作当前项目内的相对路径。桌面端和 Android/iOS 均按应用项目目录执行，不要请求终端命令或外部绝对路径权限。
 如果用户要求创作章节、样章或连续正文，content_type 使用 chapter；如果用户要求局部片段、场景补写或实验段落，content_type 使用 scene。如果用户要求风格规范或文风模仿，content_type 使用 style。
-子智能体由主智能体按需调用，不需要用户手动选择。调用 call_sub_agent 时必须传 agent_id 和 task；agent_id 只能来自下方协作视角素材。子智能体只接收你传递的任务、摘录和约束，不享有主会话完整上下文；工具返回后你要综合结果再回复用户。
+子智能体由主智能体按需调用，不需要用户手动选择。调用 call_sub_agent 时必须传 agent_id 和 task；agent_id 优先来自下方协作视角素材。如果一时拿不准精确 agent_id，可传空字符串，由运行时按 task 自动兜底选取最匹配的子智能体。子智能体只接收你传递的任务、摘录和约束，不享有主会话完整上下文；工具返回后你要综合结果再回复用户。
 当前判断内容类型：$intent
 
 $projectNote

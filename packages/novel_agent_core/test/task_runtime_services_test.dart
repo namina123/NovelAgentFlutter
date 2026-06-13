@@ -42,6 +42,16 @@ void main() {
       );
     });
 
+    test('allows paused task to complete after explicit confirmation', () {
+      expect(
+        transitionService.canTransition(
+          TaskRuntimeConstants.statusPaused,
+          TaskRuntimeConstants.statusSucceeded,
+        ),
+        isTrue,
+      );
+    });
+
     test('builds planning execution plan with planning-specific steps', () {
       // 中文注释: 这里验证不同任务类型会产出对应的步骤模板，而不是套用统一正文流程。
       final plan = planService.executionPlan(<String, Object?>{
@@ -55,6 +65,39 @@ void main() {
         'read_seed',
       );
     });
+
+    test(
+      'normalizes summary-like workflow task away from chapter semantics',
+      () {
+        final normalized = definitionService.normalizeTask(<String, Object?>{
+          'id': 'save_summary',
+          'title': '保存章节摘要',
+          'task_type': 'chapter',
+          'mode': TaskRuntimeConstants.modeSeedToFullNovel,
+          'goal': '将本章摘要写入 summaries/',
+          'output_paths': <Object?>['summaries/保存章节摘要.summary.md'],
+          'metadata': <String, Object?>{'stage': 'sample'},
+        });
+
+        expect(ValueReaders.stringValue(normalized['task_type']), 'summary');
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(normalized['metadata'])['stage'],
+          ),
+          'summary',
+        );
+
+        final plan = planService.executionPlan(normalized);
+        final stepIds = (plan['steps'] as List<Object?>)
+            .whereType<Map<String, Object?>>()
+            .map((item) => ValueReaders.stringValue(item['id']))
+            .toList(growable: false);
+        expect(stepIds, contains('read_sources'));
+        expect(stepIds, contains('save_summary'));
+        expect(stepIds, isNot(contains('draft_chapter')));
+        expect(stepIds, isNot(contains('run_chapter_gate_review')));
+      },
+    );
 
     test('adds chapter gate steps for autorun baseline chapter task', () {
       final plan = planService.executionPlan(<String, Object?>{
@@ -106,4 +149,3 @@ void main() {
     );
   });
 }
-

@@ -33,6 +33,12 @@ class BuiltinStarterAgentGroupRegistrationService {
       'metadata': <String, Object?>{
         'starter_group': true,
         'starter_kind': 'single_agent',
+        'tool_capability_family_ids': <String>[
+          ToolCapabilityFamilyCatalogService.mountedReferenceConsumption,
+          ToolCapabilityFamilyCatalogService.writing,
+          ToolCapabilityFamilyCatalogService.review,
+          ToolCapabilityFamilyCatalogService.research,
+        ],
       },
     },
     <String, Object?>{
@@ -54,6 +60,12 @@ class BuiltinStarterAgentGroupRegistrationService {
       'metadata': <String, Object?>{
         'starter_group': true,
         'starter_kind': 'single_agent',
+        'tool_capability_family_ids': <String>[
+          ToolCapabilityFamilyCatalogService.mountedReferenceConsumption,
+          ToolCapabilityFamilyCatalogService.writing,
+          ToolCapabilityFamilyCatalogService.review,
+          ToolCapabilityFamilyCatalogService.research,
+        ],
       },
     },
     <String, Object?>{
@@ -75,6 +87,12 @@ class BuiltinStarterAgentGroupRegistrationService {
       'metadata': <String, Object?>{
         'starter_group': true,
         'starter_kind': 'single_agent',
+        'tool_capability_family_ids': <String>[
+          ToolCapabilityFamilyCatalogService.mountedReferenceConsumption,
+          ToolCapabilityFamilyCatalogService.writing,
+          ToolCapabilityFamilyCatalogService.review,
+          ToolCapabilityFamilyCatalogService.research,
+        ],
       },
     },
     <String, Object?>{
@@ -95,6 +113,12 @@ class BuiltinStarterAgentGroupRegistrationService {
       'metadata': <String, Object?>{
         'starter_group': true,
         'starter_kind': 'single_agent',
+        'tool_capability_family_ids': <String>[
+          ToolCapabilityFamilyCatalogService.mountedReferenceConsumption,
+          ToolCapabilityFamilyCatalogService.review,
+          ToolCapabilityFamilyCatalogService.research,
+          ToolCapabilityFamilyCatalogService.referenceExtraction,
+        ],
       },
     },
     <String, Object?>{
@@ -115,6 +139,12 @@ class BuiltinStarterAgentGroupRegistrationService {
       'metadata': <String, Object?>{
         'starter_group': true,
         'starter_kind': 'single_agent',
+        'tool_capability_family_ids': <String>[
+          ToolCapabilityFamilyCatalogService.mountedReferenceConsumption,
+          ToolCapabilityFamilyCatalogService.writing,
+          ToolCapabilityFamilyCatalogService.review,
+          ToolCapabilityFamilyCatalogService.research,
+        ],
       },
     },
     <String, Object?>{
@@ -135,6 +165,12 @@ class BuiltinStarterAgentGroupRegistrationService {
       'metadata': <String, Object?>{
         'starter_group': true,
         'starter_kind': 'single_agent',
+        'tool_capability_family_ids': <String>[
+          ToolCapabilityFamilyCatalogService.mountedReferenceConsumption,
+          ToolCapabilityFamilyCatalogService.review,
+          ToolCapabilityFamilyCatalogService.research,
+          ToolCapabilityFamilyCatalogService.referenceExtraction,
+        ],
       },
     },
   ];

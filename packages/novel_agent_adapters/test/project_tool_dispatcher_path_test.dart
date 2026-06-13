@@ -1,4 +1,5 @@
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
+import 'package:novel_agent_adapters/src/tools/project_tool_path_policy.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 import 'package:test/test.dart';
 
@@ -9,7 +10,7 @@ void main() {
       () async {
         // 中文注释: 这里验证中文目录标签只在工具入口归一化一次，执行器收到的仍是英文相对路径。
         final hostPort = _FakeProjectToolHostPort(
-          files: <String, String>{'chapter_outlines/ch1.md': '# 第一章'},
+          files: <String, String>{'outlines/chapters/ch1.md': '# 第一章'},
         );
         final dispatcher = ProjectToolDispatcher(hostPort: hostPort);
         final result = await dispatcher.execute(
@@ -24,7 +25,7 @@ void main() {
           },
         );
         expect(result['ok'], isTrue);
-        expect(result['relative_path'], 'chapter_outlines/ch1.md');
+        expect(result['relative_path'], 'outlines/chapters/ch1.md');
         expect(result['content'], contains('第一章'));
       },
     );
@@ -76,6 +77,121 @@ void main() {
         );
         expect(result['ok'], isTrue);
         expect(result['content'], contains('总纲'));
+      },
+    );
+
+    test(
+      'read_project_file accepts continuity and constraints projection roots',
+      () async {
+        // 中文注释: 开放叙事状态投影属于真实项目资源，工具层必须能直接读取，不能因为白名单漂移被误判成缺路径。
+        final hostPort = _FakeProjectToolHostPort(
+          files: <String, String>{
+            'continuity/最近状态变化.md': '# 最近状态变化',
+            'constraints/项目约束摘要.md': '# 项目约束摘要',
+          },
+        );
+        final dispatcher = ProjectToolDispatcher(hostPort: hostPort);
+        final continuityResult = await dispatcher.execute(
+          project: const ProjectDescriptor(
+            id: 'demo',
+            name: '示例项目',
+            rootPath: 'D:/demo',
+          ),
+          toolCall: const <String, Object?>{
+            'name': 'read_project_file',
+            'arguments': <String, Object?>{
+              'relative_path': 'continuity/最近状态变化.md',
+            },
+          },
+        );
+        final constraintsResult = await dispatcher.execute(
+          project: const ProjectDescriptor(
+            id: 'demo',
+            name: '示例项目',
+            rootPath: 'D:/demo',
+          ),
+          toolCall: const <String, Object?>{
+            'name': 'read_project_file',
+            'arguments': <String, Object?>{
+              'relative_path': 'constraints/项目约束摘要.md',
+            },
+          },
+        );
+        expect(continuityResult['ok'], isTrue);
+        expect(continuityResult['content'], contains('最近状态变化'));
+        expect(constraintsResult['ok'], isTrue);
+        expect(constraintsResult['content'], contains('项目约束摘要'));
+      },
+    );
+
+    test('list_project_files accepts specs and inspiration scopes', () async {
+      // 中文注释: 规划链路会先列 specs/inspiration，再决定落盘；这些 scope 不能被工具白名单误伤。
+      final hostPort = _FakeProjectToolHostPort(
+        files: <String, String>{
+          'specs/project_spec.md': '# 规格',
+          'inspiration/seed_autopilot_seed.md': '# 种子',
+        },
+      );
+      final dispatcher = ProjectToolDispatcher(hostPort: hostPort);
+      final specsResult = await dispatcher.execute(
+        project: const ProjectDescriptor(
+          id: 'demo',
+          name: '示例项目',
+          rootPath: 'D:/demo',
+        ),
+        toolCall: const <String, Object?>{
+          'name': 'list_project_files',
+          'arguments': <String, Object?>{'relative_path': 'specs'},
+        },
+      );
+      final inspirationResult = await dispatcher.execute(
+        project: const ProjectDescriptor(
+          id: 'demo',
+          name: '示例项目',
+          rootPath: 'D:/demo',
+        ),
+        toolCall: const <String, Object?>{
+          'name': 'list_project_files',
+          'arguments': <String, Object?>{'relative_path': 'inspiration'},
+        },
+      );
+      expect(specsResult['ok'], isTrue);
+      expect(specsResult['entries_preview'], contains('specs/project_spec.md'));
+      expect(inspirationResult['ok'], isTrue);
+      expect(
+        inspirationResult['entries_preview'],
+        contains('inspiration/seed_autopilot_seed.md'),
+      );
+    });
+
+    test(
+      'read_project_file reports invalid path when entry exists but policy rejects it',
+      () async {
+        // 中文注释: 真实命中但被策略拒绝时，应明确报无效路径，而不是误导成缺少 relative_path。
+        final hostPort = _FakeProjectToolHostPort(
+          files: <String, String>{'tracking/private.md': 'hidden'},
+        );
+        final dispatcher = ProjectToolDispatcher(
+          hostPort: hostPort,
+          pathPolicy: _RestrictedProjectToolPathPolicy(),
+        );
+        final result = await dispatcher.execute(
+          project: const ProjectDescriptor(
+            id: 'demo',
+            name: '示例项目',
+            rootPath: 'D:/demo',
+          ),
+          toolCall: const <String, Object?>{
+            'name': 'read_project_file',
+            'arguments': <String, Object?>{
+              'relative_path': 'tracking/private.md',
+            },
+          },
+        );
+        expect(result['ok'], isFalse);
+        expect(result['not_executed'], isTrue);
+        expect(result['error'], contains('relative_path 无效'));
+        expect(result['error'], isNot(contains('缺少 relative_path')));
       },
     );
 
@@ -148,37 +264,34 @@ void main() {
       },
     );
 
-    test(
-      'present_user_options accepts plain string suggestions',
-      () async {
-        // 中文注释: 即使模型只给出字符串数组，入口层也应尽量长出按钮而不是整轮失效。
-        final hostPort = _FakeProjectToolHostPort(
-          files: const <String, String>{},
-        );
-        final dispatcher = ProjectToolDispatcher(hostPort: hostPort);
-        final result = await dispatcher.execute(
-          project: const ProjectDescriptor(
-            id: 'demo',
-            name: '示例项目',
-            rootPath: 'D:/demo',
-          ),
-          toolCall: const <String, Object?>{
-            'name': 'present_user_options',
-            'arguments': <String, Object?>{
-              'question': '先选一个方向',
-              'suggestions': <Object?>['偏悬疑开局', '偏热血开局'],
-            },
+    test('present_user_options accepts plain string suggestions', () async {
+      // 中文注释: 即使模型只给出字符串数组，入口层也应尽量长出按钮而不是整轮失效。
+      final hostPort = _FakeProjectToolHostPort(
+        files: const <String, String>{},
+      );
+      final dispatcher = ProjectToolDispatcher(hostPort: hostPort);
+      final result = await dispatcher.execute(
+        project: const ProjectDescriptor(
+          id: 'demo',
+          name: '示例项目',
+          rootPath: 'D:/demo',
+        ),
+        toolCall: const <String, Object?>{
+          'name': 'present_user_options',
+          'arguments': <String, Object?>{
+            'question': '先选一个方向',
+            'suggestions': <Object?>['偏悬疑开局', '偏热血开局'],
           },
-        );
-        expect(result['ok'], isTrue);
-        final options = ValueReaders.objectList(
-          result['options'],
-        ).map(ValueReaders.mapValue).toList(growable: false);
-        expect(options, hasLength(2));
-        expect(options.first['label'], '偏悬疑开局');
-        expect(options.last['prompt'], '偏热血开局');
-      },
-    );
+        },
+      );
+      expect(result['ok'], isTrue);
+      final options = ValueReaders.objectList(
+        result['options'],
+      ).map(ValueReaders.mapValue).toList(growable: false);
+      expect(options, hasLength(2));
+      expect(options.first['label'], '偏悬疑开局');
+      expect(options.last['prompt'], '偏热血开局');
+    });
 
     test(
       'run_continuity_check returns markdown and json sibling paths',
@@ -370,7 +483,10 @@ class _FakeProjectToolHostPort implements ProjectToolHostPort {
   }
 
   @override
-  Future<void> writeExternalTextFile(String absolutePath, String content) async {}
+  Future<void> writeExternalTextFile(
+    String absolutePath,
+    String content,
+  ) async {}
 
   @override
   Future<String?> readTextFile(String rootPath, String relativePath) async {
@@ -387,3 +503,13 @@ class _FakeProjectToolHostPort implements ProjectToolHostPort {
   }
 }
 
+class _RestrictedProjectToolPathPolicy extends ProjectToolPathPolicy {
+  @override
+  bool isSafeFilePath(String relativePath, {bool allowSessions = false}) {
+    final clean = cleanRelativePath(relativePath);
+    if (clean == 'tracking/private.md') {
+      return false;
+    }
+    return super.isSafeFilePath(relativePath, allowSessions: allowSessions);
+  }
+}

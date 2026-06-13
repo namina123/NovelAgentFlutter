@@ -1,4 +1,5 @@
 import 'model_editor_view_data.dart';
+import 'project_creation_expression_constraint_defaults_view_data.dart';
 import 'theme_settings_view_data.dart';
 
 class SettingsViewData {
@@ -16,6 +17,7 @@ class SettingsViewData {
     required this.defaultProjectPath,
     required this.permissionSettings,
     required this.toolStrategySettings,
+    required this.projectCreationExpressionConstraintDefaults,
     required this.networkSettings,
     required this.contextSettings,
     required this.themeSettings,
@@ -39,6 +41,8 @@ class SettingsViewData {
   final String defaultProjectPath;
   final Map<String, Object?> permissionSettings;
   final Map<String, Object?> toolStrategySettings;
+  final ProjectCreationExpressionConstraintDefaultsViewData
+  projectCreationExpressionConstraintDefaults;
   final Map<String, Object?> networkSettings;
   final Map<String, Object?> contextSettings;
   final Map<String, Object?> themeSettings;
@@ -72,6 +76,8 @@ class SettingsViewData {
       defaultProjectPath: '',
       permissionSettings: <String, Object?>{},
       toolStrategySettings: <String, Object?>{},
+      projectCreationExpressionConstraintDefaults:
+          ProjectCreationExpressionConstraintDefaultsViewData.initial(),
       networkSettings: <String, Object?>{},
       contextSettings: <String, Object?>{},
       themeSettings: <String, Object?>{},
@@ -101,6 +107,8 @@ class SettingsViewData {
     String? defaultProjectPath,
     Map<String, Object?>? permissionSettings,
     Map<String, Object?>? toolStrategySettings,
+    ProjectCreationExpressionConstraintDefaultsViewData?
+    projectCreationExpressionConstraintDefaults,
     Map<String, Object?>? networkSettings,
     Map<String, Object?>? contextSettings,
     Map<String, Object?>? themeSettings,
@@ -126,6 +134,9 @@ class SettingsViewData {
       defaultProjectPath: defaultProjectPath ?? this.defaultProjectPath,
       permissionSettings: permissionSettings ?? this.permissionSettings,
       toolStrategySettings: toolStrategySettings ?? this.toolStrategySettings,
+      projectCreationExpressionConstraintDefaults:
+          projectCreationExpressionConstraintDefaults ??
+          this.projectCreationExpressionConstraintDefaults,
       networkSettings: networkSettings ?? this.networkSettings,
       contextSettings: contextSettings ?? this.contextSettings,
       themeSettings: themeSettings ?? this.themeSettings,

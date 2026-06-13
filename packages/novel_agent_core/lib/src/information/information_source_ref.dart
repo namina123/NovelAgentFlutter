@@ -1,6 +1,7 @@
 import '../common/json_types.dart';
 import '../common/open_json_contract_codec_service.dart';
 import '../common/open_json_structure_validator_service.dart';
+import '../common/source_asset_identity.dart';
 import '../common/value_readers.dart';
 import '../continuity/narrative_state/narrative_source_ref.dart';
 import 'information_validation_codes.dart';
@@ -23,6 +24,8 @@ class InformationSourceRef {
   final String roleAuthority;
   final String researchDepth;
   final JsonMap metadata;
+
+  SourceAssetIdentity get sourceIdentity => sourceRef.sourceIdentity;
 
   InformationSourceRef copyWith({
     NarrativeSourceRef? sourceRef,
@@ -79,7 +82,7 @@ class InformationSourceRef {
     final result = <String>[];
     result.addAll(
       _informationSourceRefValidatorService.requireNonBlankString(
-        sourceRef.sourceType,
+        sourceIdentity.sourceKind,
         InformationValidationCodes.missingInformationSourceType,
       ),
     );

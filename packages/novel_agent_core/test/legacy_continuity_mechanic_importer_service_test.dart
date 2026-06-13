@@ -74,6 +74,13 @@ void main() {
         package.profile.lifecycleStatus,
         NarrativeProfileLifecycleStatus.deprecated,
       );
+      expect(package.profile.profileLabel, contains('Legacy continuity bridge'));
+      expect(
+        ValueReaders.stringList(
+          package.profile.profileExtensions['compatibility_aliases'],
+        ),
+        contains('legacy.special_mechanic'),
+      );
       expect(
         ValueReaders.mapValue(
           package.profile.profileExtensions['legacy_special_mechanic_bundle'],
@@ -103,6 +110,12 @@ void main() {
             .single
             .claimPayload['causal_mode'],
         'replayAware',
+      );
+      expect(
+        ValueReaders.stringValue(
+          package.profile.profileExtensions['pressure_probe_note'],
+        ),
+        contains('Historical special-mechanic labels remain readable'),
       );
     });
   });

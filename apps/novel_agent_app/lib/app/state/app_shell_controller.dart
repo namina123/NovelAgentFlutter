@@ -29,8 +29,11 @@ import '../../features/inspiration_workbench/application/controllers/inspiration
 import '../../features/long_task_station/application/controllers/long_task_station_controller.dart';
 import '../../features/project_assets/application/controllers/project_assets_controller.dart';
 import '../../features/project_assets/application/services/project_assets_loader_service.dart';
+import '../../features/project_assets/application/services/project_reference_extraction_execution_service.dart';
 import '../../features/project_assets/application/services/project_expression_constraint_workspace_service.dart';
 import '../../features/project_creation/application/controllers/project_creation_controller.dart';
+import '../../features/project_creation/application/services/project_creation_expression_constraint_defaults_service.dart';
+import '../../features/project_creation/application/services/project_creation_expression_constraint_defaults_settings_service.dart';
 import '../../features/prompt_templates/application/services/prompt_templates_view_data_service.dart';
 import '../../features/prompt_templates/presentation/contracts/prompt_templates_action_handler.dart';
 import '../../features/prompt_templates/presentation/models/prompt_templates_view_data.dart';
@@ -48,14 +51,17 @@ import '../../features/review_center/application/services/review_center_playback
 import '../../features/review_center/presentation/contracts/review_center_action_handler.dart';
 import '../../features/review_center/presentation/models/review_center_view_data.dart';
 import '../../features/settings/application/services/model_settings_view_data_service.dart';
+import '../../features/settings/application/services/project_creation_expression_constraint_defaults_view_data_service.dart';
 import '../../features/settings/application/services/provider_settings_directory_service.dart';
 import '../../features/settings/application/services/theme_settings_view_data_service.dart';
 import '../../features/settings/presentation/contracts/settings_action_handler.dart';
 import '../../features/settings/presentation/models/settings_view_data.dart';
 import '../../features/task_center/application/services/task_center_view_data_service.dart';
+import '../../features/task_center/application/services/task_center_workflow_create_option_mapper_service.dart';
 import '../../features/task_center/application/services/task_center_action_execution_outcome_service.dart';
 import '../../features/task_center/application/services/task_center_guidance_revisit_markdown_service.dart';
 import '../../features/task_center/presentation/contracts/task_center_action_handler.dart';
+import '../../features/task_center/presentation/models/task_center_action_group_view_data.dart';
 import '../../features/task_center/presentation/models/task_center_contract_action_view_data.dart';
 import '../../features/task_center/presentation/models/task_center_view_data.dart';
 import '../../features/workbench/application/controllers/generate_draft_use_case_factory.dart';
@@ -185,7 +191,17 @@ class AppShellController extends ChangeNotifier
     required SaveProjectSkillLoadoutAsGroup saveProjectSkillLoadoutAsGroup,
     required WriteProjectTextFileUseCase writeProjectTextFileUseCase,
     required GenerateDraftUseCaseFactory generateDraftUseCaseFactory,
+    required LlmGateway Function(
+      ProviderEndpointSettings provider,
+      JsonMap networkSettings,
+    )
+    llmGatewayFactory,
+    HostAwareGenerateDraftUseCaseFactory? hostAwareGenerateDraftUseCaseFactory,
     required ProjectWorkflowRuntimeService workflowRuntimeService,
+    required ProjectReferenceExtractionRuntimeService
+    referenceExtractionRuntimeService,
+    ProjectReferenceExtractionExecutionService?
+    projectReferenceExtractionExecutionService,
     required ProjectConversationDraftRuntimeService
     conversationDraftRuntimeService,
     required ProjectDraftExecutionConstraintRuntimeService
@@ -200,6 +216,7 @@ class AppShellController extends ChangeNotifier
     projectExpressionConstraintWorkspaceService,
     required ProjectGeneralContinuitySetupService
     projectGeneralContinuitySetupService,
+    ProjectPendingResearchActionService? pendingResearchActionService,
     required LongTaskSupervisor longTaskSupervisor,
     required LongTaskStationController longTaskStationController,
     DesktopBookDeconstructionSourcePickerService?
@@ -222,6 +239,8 @@ class AppShellController extends ChangeNotifier
     ProjectOpenViewDataService? projectOpenViewDataService,
     ProjectCollectionLoaderService? projectCollectionLoaderService,
     TaskCenterViewDataService? taskCenterViewDataService,
+    TaskCenterWorkflowCreateOptionMapperService?
+    taskCenterWorkflowCreateOptionMapperService,
     TaskCenterActionExecutionOutcomeService?
     taskCenterActionExecutionOutcomeService,
     TaskCenterGuidanceRevisitMarkdownService?
@@ -233,6 +252,8 @@ class AppShellController extends ChangeNotifier
     PromptTemplatePreviewService? promptTemplatePreviewService,
     PromptTemplateNormalizerService? promptTemplateNormalizerService,
     ModelSettingsViewDataService? modelSettingsViewDataService,
+    ProjectCreationExpressionConstraintDefaultsViewDataService?
+    projectCreationExpressionConstraintDefaultsViewDataService,
     ConversationInputCapabilityContextBuilderService?
     conversationInputCapabilityContextBuilderService,
     ThemeSettingsViewDataService? themeSettingsViewDataService,
@@ -269,7 +290,13 @@ class AppShellController extends ChangeNotifier
        _loadSkillGroups = loadSkillGroups,
        _writeProjectTextFileUseCase = writeProjectTextFileUseCase,
        _generateDraftUseCaseFactory = generateDraftUseCaseFactory,
+       _llmGatewayFactory = llmGatewayFactory,
+       _hostAwareGenerateDraftUseCaseFactory =
+           hostAwareGenerateDraftUseCaseFactory,
        _workflowRuntimeService = workflowRuntimeService,
+       _referenceExtractionRuntimeService = referenceExtractionRuntimeService,
+       _injectedProjectReferenceExtractionExecutionService =
+           projectReferenceExtractionExecutionService,
        _conversationDraftRuntimeService = conversationDraftRuntimeService,
        _reviewReportService = reviewReportService,
        _projectChapterRewriteTaskService = projectChapterRewriteTaskService,
@@ -334,6 +361,9 @@ class AppShellController extends ChangeNotifier
            projectCollectionLoaderService ?? ProjectCollectionLoaderService(),
        _taskCenterViewDataService =
            taskCenterViewDataService ?? const TaskCenterViewDataService(),
+       _taskCenterWorkflowCreateOptionMapperService =
+           taskCenterWorkflowCreateOptionMapperService ??
+           const TaskCenterWorkflowCreateOptionMapperService(),
        _taskCenterActionExecutionOutcomeService =
            taskCenterActionExecutionOutcomeService ??
            const TaskCenterActionExecutionOutcomeService(),
@@ -357,12 +387,17 @@ class AppShellController extends ChangeNotifier
            promptTemplateNormalizerService ?? PromptTemplateNormalizerService(),
        _modelSettingsViewDataService =
            modelSettingsViewDataService ?? ModelSettingsViewDataService(),
+       _projectCreationExpressionConstraintDefaultsViewDataService =
+           projectCreationExpressionConstraintDefaultsViewDataService ??
+           ProjectCreationExpressionConstraintDefaultsViewDataService(),
        _providerSettingsDirectoryService = ProviderSettingsDirectoryService(),
        _conversationInputCapabilityContextBuilderService =
            conversationInputCapabilityContextBuilderService ??
            const ConversationInputCapabilityContextBuilderService(),
        _themeSettingsViewDataService =
            themeSettingsViewDataService ?? ThemeSettingsViewDataService(),
+       _projectCreationExpressionConstraintDefaultsSettingsService =
+           const ProjectCreationExpressionConstraintDefaultsSettingsService(),
        _modelExecutionProfileService =
            modelExecutionProfileService ?? ModelExecutionProfileService(),
        _modeGuidanceTransitionService =
@@ -426,6 +461,8 @@ class AppShellController extends ChangeNotifier
       showCurrentAgentExpressionConstraints:
           _showCurrentAgentExpressionConstraints,
       announce: _announce,
+      pendingResearchActionService: pendingResearchActionService,
+      projectLongTaskDetailLoader: longTaskStationController.loadDetailForRun,
     );
     _workbenchConversationController = WorkbenchConversationController(
       openingSessionProjectionService: ProjectOpeningSessionProjectionService(
@@ -448,6 +485,8 @@ class AppShellController extends ChangeNotifier
           ),
       saveDraftUseCase: _saveDraftUseCase,
       generateDraftUseCaseFactory: _generateDraftUseCaseFactory,
+      hostAwareGenerateDraftUseCaseFactory:
+          _hostAwareGenerateDraftUseCaseFactory,
       modelExecutionProfileService: _modelExecutionProfileService,
       conversationSessionStateService: _conversationSessionStateService,
       conversationStreamingStateService: _conversationStreamingStateService,
@@ -497,6 +536,10 @@ class AppShellController extends ChangeNotifier
       readSettings: () => _settings,
       projectGeneralContinuitySetupService:
           _projectGeneralContinuitySetupService,
+      projectCreationExpressionConstraintDefaultsService:
+          ProjectCreationExpressionConstraintDefaultsService(
+            workspaceService: _projectExpressionConstraintWorkspaceService,
+          ),
       defaultProjectsRootPath: _defaultProjectsRootPath,
       isMobileProjectRootLocked: _isMobileProjectRootLocked,
     );
@@ -520,6 +563,25 @@ class AppShellController extends ChangeNotifier
             List<JsonMap>.from(_agentEcosystemSnapshot.agents.map(_mapValue)),
         syncWorkbenchResources: _syncWorkbenchResources,
         onBackRequested: showWorkbench,
+        referenceExtractionExecutionService:
+            _injectedProjectReferenceExtractionExecutionService ??
+            ProjectReferenceExtractionExecutionService(
+              readSettings: () => _settings,
+              llmGatewayFactory: _llmGatewayFactory,
+              executeReferenceExtraction:
+                  ({
+                    required project,
+                    required llmGateway,
+                    required modelId,
+                    required request,
+                  }) => _referenceExtractionRuntimeService.execute(
+                    project: project,
+                    llmGateway: llmGateway,
+                    modelId: modelId,
+                    request: request,
+                  ),
+              modelExecutionProfileService: _modelExecutionProfileService,
+            ),
       ),
       createBookDeconstructionController: () => BookDeconstructionController(
         projectToolHostPort: _projectToolHostPort,
@@ -549,6 +611,9 @@ class AppShellController extends ChangeNotifier
       openProjectRequested: _openLongTaskStationProject,
       openResourceRequested: _openLongTaskStationRunResource,
       readCurrentProjectPathRequested: () => _currentProject?.rootPath ?? '',
+    );
+    _longTaskStationController.attachRefreshCompletedCallback(
+      _refreshTaskCenterFromLongTaskStation,
     );
   }
 
@@ -583,7 +648,18 @@ class AppShellController extends ChangeNotifier
   final LoadSkillGroups _loadSkillGroups;
   final WriteProjectTextFileUseCase _writeProjectTextFileUseCase;
   final GenerateDraftUseCaseFactory _generateDraftUseCaseFactory;
+  final LlmGateway Function(
+    ProviderEndpointSettings provider,
+    JsonMap networkSettings,
+  )
+  _llmGatewayFactory;
+  final HostAwareGenerateDraftUseCaseFactory?
+  _hostAwareGenerateDraftUseCaseFactory;
   final ProjectWorkflowRuntimeService _workflowRuntimeService;
+  final ProjectReferenceExtractionRuntimeService
+  _referenceExtractionRuntimeService;
+  final ProjectReferenceExtractionExecutionService?
+  _injectedProjectReferenceExtractionExecutionService;
   final ProjectConversationDraftRuntimeService _conversationDraftRuntimeService;
   final ProjectReviewReportService _reviewReportService;
   final ProjectChapterRewriteTaskService _projectChapterRewriteTaskService;
@@ -616,6 +692,8 @@ class AppShellController extends ChangeNotifier
   final ProjectOpenViewDataService _projectOpenViewDataService;
   final ProjectCollectionLoaderService _projectCollectionLoaderService;
   final TaskCenterViewDataService _taskCenterViewDataService;
+  final TaskCenterWorkflowCreateOptionMapperService
+  _taskCenterWorkflowCreateOptionMapperService;
   final TaskCenterActionExecutionOutcomeService
   _taskCenterActionExecutionOutcomeService;
   final TaskCenterGuidanceRevisitMarkdownService
@@ -627,6 +705,8 @@ class AppShellController extends ChangeNotifier
   final PromptTemplatePreviewService _promptTemplatePreviewService;
   final PromptTemplateNormalizerService _promptTemplateNormalizerService;
   final ModelSettingsViewDataService _modelSettingsViewDataService;
+  final ProjectCreationExpressionConstraintDefaultsViewDataService
+  _projectCreationExpressionConstraintDefaultsViewDataService;
   final ProviderSettingsDirectoryService _providerSettingsDirectoryService;
   final ConversationInputCapabilityContextBuilderService
   _conversationInputCapabilityContextBuilderService;
@@ -637,6 +717,8 @@ class AppShellController extends ChangeNotifier
   _projectAgentGroupWorkspaceViewDataService =
       const ProjectAgentGroupWorkspaceViewDataService();
   final ThemeSettingsViewDataService _themeSettingsViewDataService;
+  final ProjectCreationExpressionConstraintDefaultsSettingsService
+  _projectCreationExpressionConstraintDefaultsSettingsService;
   final ModelExecutionProfileService _modelExecutionProfileService;
   final ModeGuidanceTransitionService _modeGuidanceTransitionService;
   final DesktopBookDeconstructionSourcePickerService
@@ -659,7 +741,7 @@ class AppShellController extends ChangeNotifier
       const WorkbenchConversationRuntimeState();
   final ThemePreferenceResolver _themePreferenceResolver =
       ThemePreferenceResolver();
-  String _activeThemeId = ThemePreferenceResolver.lightThemeId;
+  String _activeThemeId = ThemePreferenceResolver.darkThemeId;
   bool _disposed = false;
   bool _initialized = false;
   AgentEcosystemSnapshot _agentEcosystemSnapshot =
@@ -676,6 +758,9 @@ class AppShellController extends ChangeNotifier
   String _selectedLongTaskRunPath = '';
   String _selectedTaskQueueRunPath = '';
   String _taskCenterStatusMessage = '';
+  bool _taskCenterCommandInFlight = false;
+  bool _taskCenterLongTaskPulseInFlight = false;
+  int _taskCenterRefreshGeneration = 0;
   List<JsonMap> _reviewCenterEntries = const <JsonMap>[];
   String _selectedReviewEntryId = '';
   String _reviewCenterStatusMessage = '';
@@ -1419,6 +1504,41 @@ class AppShellController extends ChangeNotifier
         },
       ),
       successMessage: '工具策略已保存。',
+    );
+  }
+
+  @override
+  void onProjectCreationExpressionConstraintDefaultsSaved(
+    Map<String, Object?> payload,
+  ) {
+    final settings = _settings;
+    if (settings == null) {
+      return;
+    }
+    final modeName = _stringValue(
+      payload['mode'],
+      ProjectCreationExpressionConstraintDefaultsMode.builtinFallback.name,
+    );
+    final mode = ProjectCreationExpressionConstraintDefaultsMode.values
+        .firstWhere(
+          (entry) => entry.name == modeName,
+          orElse: () =>
+              ProjectCreationExpressionConstraintDefaultsMode.builtinFallback,
+        );
+    final selection = ProjectCreationExpressionConstraintDefaultsSelection(
+      mode: mode,
+      profileIds: ValueReaders.stringList(payload['profile_ids']),
+    );
+    _persistSettings(
+      settings.copyWith(
+        extraSettings:
+            _projectCreationExpressionConstraintDefaultsSettingsService
+                .mergedExtraSettingsForSelection(
+                  settings: settings,
+                  selection: selection,
+                ),
+      ),
+      successMessage: '项目创建默认表达限制已保存。',
     );
   }
 
@@ -2438,45 +2558,50 @@ class AppShellController extends ChangeNotifier
       await _refreshTaskCenter(status: '请先创建或打开项目。');
       return;
     }
-    _taskCenterStatusMessage = '正在生成长任务队列...';
-    await _refreshTaskCenterView();
-    final runtimeProfile =
-        _workbenchWorkspaceController.currentProjectRuntimeProfile;
-    final initialRunOptions = runtimeProfile == null
-        ? const <String, Object?>{}
-        : ValueReaders.deepCopyMap(runtimeProfile.initialRunOptions);
-    final runtimeMode = request.mode.trim().isEmpty
-        ? (runtimeProfile?.runtimeMode.trim().isEmpty ?? true
-              ? TaskRuntimeConstants.modeHumanOutlineAiDraft
-              : runtimeProfile!.runtimeMode.trim())
-        : request.mode.trim();
-    final result = await _workflowRuntimeService.createLongTaskWorkflow(
-      project,
-      runtimeMode,
-      options: <String, Object?>{
-        ...initialRunOptions,
-        'runtime_baseline_id': ValueReaders.stringValue(
-          initialRunOptions['runtime_baseline_id'],
-          runtimeProfile?.runtimeBaselineId ?? project.runtimeBaselineId,
+    _taskCenterCommandInFlight = true;
+    try {
+      _taskCenterStatusMessage = '正在生成长任务队列...';
+      await _refreshTaskCenterView();
+      _requestTaskCenterLongTaskPulse();
+      final runtimeProfile =
+          _workbenchWorkspaceController.currentProjectRuntimeProfile;
+      final initialRunOptions = runtimeProfile == null
+          ? const <String, Object?>{}
+          : ValueReaders.deepCopyMap(runtimeProfile.initialRunOptions);
+      final runtimeMode = request.mode.trim().isEmpty
+          ? (runtimeProfile?.runtimeMode.trim().isEmpty ?? true
+                ? TaskRuntimeConstants.modeHumanOutlineAiDraft
+                : runtimeProfile!.runtimeMode.trim())
+          : request.mode.trim();
+      final result = await _workflowRuntimeService.createLongTaskWorkflow(
+        project,
+        runtimeMode,
+        options: _taskCenterWorkflowCreateOptionMapperService.buildOptions(
+          request: request,
+          initialRunOptions: initialRunOptions,
+          runtimeMode: runtimeMode,
+          runtimeBaselineId: ValueReaders.stringValue(
+            initialRunOptions['runtime_baseline_id'],
+            runtimeProfile?.runtimeBaselineId ?? project.runtimeBaselineId,
+          ),
         ),
-        'runtime_mode': runtimeMode,
-        'outline_path': request.outlinePath.trim(),
-        'seed_prompt': request.seedPrompt.trim(),
-        'chapter_count': request.chapterCount,
-        'checkpoint_interval': request.checkpointInterval,
-      },
-    );
-    await _syncWorkbenchResources();
-    _selectedTaskId = ValueReaders.stringValue(
-      ValueReaders.objectList(result['created_tasks']).isEmpty
-          ? ''
-          : ValueReaders.mapValue(
-              ValueReaders.objectList(result['created_tasks']).first,
-            )['relative_path'],
-    );
-    await _refreshTaskCenter(
-      status: _resultMessage(result, success: '长任务队列已生成。'),
-    );
+      );
+      await _syncWorkbenchResources();
+      _selectedTaskId = ValueReaders.stringValue(
+        ValueReaders.objectList(result['created_tasks']).isEmpty
+            ? ''
+            : ValueReaders.mapValue(
+                ValueReaders.objectList(result['created_tasks']).first,
+              )['relative_path'],
+      );
+      _adoptTaskCenterRunSelectionsFromResult(result);
+      _taskCenterCommandInFlight = false;
+      await _refreshTaskCenter(
+        status: _resultMessage(result, success: '长任务队列已生成。'),
+      );
+    } finally {
+      _taskCenterCommandInFlight = false;
+    }
   }
 
   @override
@@ -2774,6 +2899,12 @@ class AppShellController extends ChangeNotifier
         return;
       case 'revision_resolution':
         _runTaskCenterRevisionResolutionAction(action);
+        return;
+      case 'run_center_control':
+        _runTaskCenterRunControlAction(action);
+        return;
+      case 'task_user_option':
+        _runTaskCenterTaskUserOptionAction(action);
         return;
       default:
         _announce('当前动作类型尚未支持。');
@@ -3117,147 +3248,369 @@ class AppShellController extends ChangeNotifier
     if (project == null) {
       return;
     }
-    final chainView = await _workflowRuntimeService.workflowChainView(project);
-    final preflight = await _workflowRuntimeService.taskQueuePreflight(project);
-    final scheduler = await _workflowRuntimeService.longTaskSchedulerPlan(
-      project,
-    );
-    final longTaskRuns = await _workflowRuntimeService.listLongTaskRuns(
-      project,
-      limit: 12,
-    );
-    final taskQueueRuns = await _workflowRuntimeService.listTaskQueueRuns(
-      project,
-      limit: 12,
-    );
-    if (_selectedLongTaskRunPath.trim().isNotEmpty &&
-        !longTaskRuns.any(
-          (record) =>
-              ValueReaders.stringValue(record['relative_path']) ==
-              _selectedLongTaskRunPath,
-        )) {
-      _selectedLongTaskRunPath = '';
-    }
-    if (_selectedTaskQueueRunPath.trim().isNotEmpty &&
-        !taskQueueRuns.any(
-          (record) =>
-              ValueReaders.stringValue(record['relative_path']) ==
-              _selectedTaskQueueRunPath,
-        )) {
-      _selectedTaskQueueRunPath = '';
-    }
-    if (_selectedLongTaskRunPath.trim().isEmpty && longTaskRuns.isNotEmpty) {
-      _selectedLongTaskRunPath = ValueReaders.stringValue(
-        longTaskRuns.first['relative_path'],
-      );
-    }
-    if (_selectedTaskQueueRunPath.trim().isEmpty && taskQueueRuns.isNotEmpty) {
-      _selectedTaskQueueRunPath = ValueReaders.stringValue(
-        taskQueueRuns.first['relative_path'],
-      );
-    }
-    final selectedTask = _taskByPath(_selectedTaskId);
-    JsonMap execution = const <String, Object?>{};
-    if (selectedTask.isNotEmpty) {
-      execution = await _workflowRuntimeService.loadWorkflowTaskExecution(
+    final projectRootPath = project.rootPath;
+    final refreshGeneration = ++_taskCenterRefreshGeneration;
+    try {
+      final chainView = await _workflowRuntimeService.workflowChainView(
         project,
-        _taskSelector(selectedTask),
       );
-    }
-    final checkpointActionPackage = selectedTask.isEmpty
-        ? const <String, Object?>{}
-        : await _loadTaskCenterCheckpointActionPackage(
-            project,
-            selectedTask,
-            execution,
+      final preflight = await _workflowRuntimeService.taskQueuePreflight(
+        project,
+      );
+      final scheduler = await _workflowRuntimeService.longTaskSchedulerPlan(
+        project,
+      );
+      final longTaskRuns = await _workflowRuntimeService.listLongTaskRuns(
+        project,
+        limit: 12,
+      );
+      final taskQueueRuns = await _workflowRuntimeService.listTaskQueueRuns(
+        project,
+        limit: 12,
+      );
+      if (_isTaskCenterRefreshStale(
+        generation: refreshGeneration,
+        projectRootPath: projectRootPath,
+      )) {
+        return;
+      }
+      if (_selectedLongTaskRunPath.trim().isNotEmpty &&
+          !longTaskRuns.any(
+            (record) =>
+                ValueReaders.stringValue(record['relative_path']) ==
+                _selectedLongTaskRunPath,
+          )) {
+        _selectedLongTaskRunPath = '';
+      }
+      if (_selectedTaskQueueRunPath.trim().isNotEmpty &&
+          !taskQueueRuns.any(
+            (record) =>
+                ValueReaders.stringValue(record['relative_path']) ==
+                _selectedTaskQueueRunPath,
+          )) {
+        _selectedTaskQueueRunPath = '';
+      }
+      if (_selectedLongTaskRunPath.trim().isEmpty && longTaskRuns.isNotEmpty) {
+        _selectedLongTaskRunPath = ValueReaders.stringValue(
+          longTaskRuns.first['relative_path'],
+        );
+      }
+      _selectedTaskQueueRunPath = _taskCenterViewDataService
+          .resolveSelectedTaskQueueRunPath(
+            taskQueueRuns: taskQueueRuns,
+            selectedTaskQueueRunPath: _selectedTaskQueueRunPath,
           );
-    final guidanceRevisitPackage = checkpointActionPackage.isEmpty
-        ? const <String, Object?>{}
-        : await _loadTaskCenterGuidanceRevisitPackage(
-            project,
-            checkpointActionPackage,
-          );
-    final revisionResolution = selectedTask.isEmpty
-        ? const <String, Object?>{}
-        : await _loadTaskCenterRevisionResolution(project, selectedTask);
-    final selectedLongRun = _selectedLongTaskRunPath.trim().isEmpty
-        ? const <String, Object?>{}
-        : await _workflowRuntimeService.loadLongTaskRun(
-            project,
-            _selectedLongTaskRunPath,
-          );
-    final longTaskRunsForViewData = selectedLongRun.isEmpty
-        ? longTaskRuns
-        : longTaskRuns
-              .map(
-                (record) =>
-                    ValueReaders.stringValue(record['relative_path']) ==
-                        _selectedLongTaskRunPath
-                    ? selectedLongRun
-                    : record,
-              )
-              .toList(growable: false);
-    final selectedQueueRun = _selectedTaskQueueRunPath.trim().isEmpty
-        ? const <String, Object?>{}
-        : await _workflowRuntimeService.loadTaskQueueRun(
-            project,
-            _selectedTaskQueueRunPath,
-          );
-    _viewModel = _viewModel.copyWith(
-      taskCenter: _taskCenterViewDataService.build(
+      final selectedLongRun = _selectedLongTaskRunPath.trim().isEmpty
+          ? const <String, Object?>{}
+          : await _workflowRuntimeService.loadLongTaskRun(
+              project,
+              _selectedLongTaskRunPath,
+            );
+      if (_isTaskCenterRefreshStale(
+        generation: refreshGeneration,
+        projectRootPath: projectRootPath,
+      )) {
+        return;
+      }
+      final selectedQueueRun = _selectedTaskQueueRunPath.trim().isEmpty
+          ? const <String, Object?>{}
+          : await _workflowRuntimeService.loadTaskQueueRun(
+              project,
+              _selectedTaskQueueRunPath,
+            );
+      if (_isTaskCenterRefreshStale(
+        generation: refreshGeneration,
+        projectRootPath: projectRootPath,
+      )) {
+        return;
+      }
+      _selectedTaskId = _taskCenterViewDataService.resolveSelectedTaskId(
         tasks: _taskCenterTasks,
-        modeDefinitions: _workflowRuntimeService.listTaskRuntimeModes(),
         selectedTaskId: _selectedTaskId,
-        detailBody: _taskCenterViewDataService.buildDetailBody(
-          selectedTask,
-          execution: execution,
+        selectedLongTaskRun: selectedLongRun,
+        selectedTaskQueueRun: selectedQueueRun,
+      );
+      final selectedTask = _taskByPath(_selectedTaskId);
+      JsonMap execution = const <String, Object?>{};
+      if (selectedTask.isNotEmpty) {
+        execution = await _workflowRuntimeService.loadWorkflowTaskExecution(
+          project,
+          _taskSelector(selectedTask),
+        );
+      }
+      final checkpointActionPackage = selectedTask.isEmpty
+          ? const <String, Object?>{}
+          : await _loadTaskCenterCheckpointActionPackage(
+              project,
+              selectedTask,
+              execution,
+            );
+      final guidanceRevisitPackage = checkpointActionPackage.isEmpty
+          ? const <String, Object?>{}
+          : await _loadTaskCenterGuidanceRevisitPackage(
+              project,
+              checkpointActionPackage,
+            );
+      final revisionResolution = selectedTask.isEmpty
+          ? const <String, Object?>{}
+          : await _loadTaskCenterRevisionResolution(project, selectedTask);
+      final taskRunControlGroup = _taskCenterViewDataService
+          .buildRunControlActionGroup(
+            longTaskRun: selectedLongRun,
+            task: selectedTask,
+            selectedLongTaskRunPath: _selectedLongTaskRunPath,
+          );
+      final taskUserOptionGroup = _taskCenterViewDataService
+          .buildUserOptionActionGroup(task: selectedTask, execution: execution);
+      final longTaskRunsForViewData = selectedLongRun.isEmpty
+          ? longTaskRuns
+          : longTaskRuns
+                .map(
+                  (record) =>
+                      ValueReaders.stringValue(record['relative_path']) ==
+                          _selectedLongTaskRunPath
+                      ? selectedLongRun
+                      : record,
+                )
+                .toList(growable: false);
+      _settleTaskCenterPendingStatusIfNeeded(
+        selectedTask: selectedTask,
+        selectedLongRun: selectedLongRun,
+        selectedQueueRun: selectedQueueRun,
+      );
+      _viewModel = _viewModel.copyWith(
+        taskCenter: _taskCenterViewDataService.build(
+          tasks: _taskCenterTasks,
+          modeDefinitions: _workflowRuntimeService.listTaskRuntimeModes(),
+          selectedTaskId: _selectedTaskId,
+          detailBody: _taskCenterViewDataService.buildDetailBody(
+            selectedTask,
+            execution: execution,
+          ),
+          queueSummary: _taskCenterViewDataService.buildQueueSummary(preflight),
+          schedulerSummary: _taskCenterViewDataService.buildSchedulerSummary(
+            scheduler,
+          ),
+          chainMarkdown: _taskCenterViewDataService.buildChainMarkdown(
+            chainView,
+          ),
+          longTaskRuns: longTaskRunsForViewData,
+          taskQueueRuns: taskQueueRuns,
+          selectedLongTaskRunPath: _selectedLongTaskRunPath,
+          selectedTaskQueueRunPath: _selectedTaskQueueRunPath,
+          longTaskRunLog: selectedLongRun.isEmpty
+              ? ''
+              : _workflowRuntimeService.renderLongTaskRunMarkdown(
+                  selectedLongRun,
+                ),
+          resumeBriefBody: selectedLongRun.isEmpty
+              ? ''
+              : _taskCenterViewDataService.buildResumeBriefBody(
+                  selectedLongRun,
+                  checkpointActionPackage: checkpointActionPackage,
+                  revisionResolution: revisionResolution,
+                  selectedTask: selectedTask,
+                  selectedTaskExecution: execution,
+                ),
+          taskQueueRunLog: selectedQueueRun.isEmpty
+              ? ''
+              : _workflowRuntimeService.renderTaskQueueRunMarkdown(
+                  selectedQueueRun,
+                ),
+          runtimeProfile:
+              _workbenchWorkspaceController.currentProjectRuntimeProfile,
+          projectStorageStrategy: project.storageStrategy,
+          nextTaskPath: ValueReaders.stringValue(
+            ValueReaders.mapValue(chainView['next_task'])['relative_path'],
+          ),
+          nextPostprocessPath: ValueReaders.stringValue(
+            ValueReaders.mapValue(
+              chainView['next_postprocess_task'],
+            )['relative_path'],
+          ),
+          checkpointActionPackage: checkpointActionPackage,
+          revisionResolution: revisionResolution,
+          guidanceRevisitBody: _taskCenterGuidanceRevisitMarkdownService.render(
+            guidanceRevisitPackage,
+          ),
+          status: _taskCenterStatusMessage,
+          supplementalActionGroups: <TaskCenterActionGroupViewData>[
+            ...?taskRunControlGroup == null
+                ? null
+                : <TaskCenterActionGroupViewData>[taskRunControlGroup],
+            ...?taskUserOptionGroup == null
+                ? null
+                : <TaskCenterActionGroupViewData>[taskUserOptionGroup],
+          ],
         ),
-        queueSummary: _taskCenterViewDataService.buildQueueSummary(preflight),
-        schedulerSummary: _taskCenterViewDataService.buildSchedulerSummary(
-          scheduler,
-        ),
-        chainMarkdown: _taskCenterViewDataService.buildChainMarkdown(chainView),
-        longTaskRuns: longTaskRunsForViewData,
-        taskQueueRuns: taskQueueRuns,
-        selectedLongTaskRunPath: _selectedLongTaskRunPath,
-        selectedTaskQueueRunPath: _selectedTaskQueueRunPath,
-        longTaskRunLog: selectedLongRun.isEmpty
-            ? ''
-            : _workflowRuntimeService.renderLongTaskRunMarkdown(
-                selectedLongRun,
-              ),
-        resumeBriefBody: selectedLongRun.isEmpty
-            ? ''
-            : _taskCenterViewDataService.buildResumeBriefBody(
-                selectedLongRun,
-                checkpointActionPackage: checkpointActionPackage,
-                revisionResolution: revisionResolution,
-              ),
-        taskQueueRunLog: selectedQueueRun.isEmpty
-            ? ''
-            : _workflowRuntimeService.renderTaskQueueRunMarkdown(
-                selectedQueueRun,
-              ),
-        runtimeProfile:
-            _workbenchWorkspaceController.currentProjectRuntimeProfile,
-        projectStorageStrategy: project.storageStrategy,
-        nextTaskPath: ValueReaders.stringValue(
-          ValueReaders.mapValue(chainView['next_task'])['relative_path'],
-        ),
-        nextPostprocessPath: ValueReaders.stringValue(
-          ValueReaders.mapValue(
-            chainView['next_postprocess_task'],
-          )['relative_path'],
-        ),
-        checkpointActionPackage: checkpointActionPackage,
-        revisionResolution: revisionResolution,
-        guidanceRevisitBody: _taskCenterGuidanceRevisitMarkdownService.render(
-          guidanceRevisitPackage,
-        ),
-        status: _taskCenterStatusMessage,
-      ),
-    );
-    _safeNotifyListeners();
+      );
+      if (_isTaskCenterRefreshStale(
+        generation: refreshGeneration,
+        projectRootPath: projectRootPath,
+      )) {
+        return;
+      }
+      _safeNotifyListeners();
+    } on FileSystemException {
+      if (_shouldSilenceTaskCenterRefreshFileSystemError(projectRootPath)) {
+        return;
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> _refreshTaskCenterFromLongTaskStation() async {
+    if (_disposed ||
+        _currentProject == null ||
+        _viewModel.destination != AppDestination.longTaskStation) {
+      return;
+    }
+    await _refreshTaskCenter();
+  }
+
+  Future<void> _refreshLongTaskStationAfterTaskCenterMutation() async {
+    if (_disposed || _currentProject == null) {
+      return;
+    }
+    await _longTaskStationController.refresh();
+  }
+
+  void _requestTaskCenterLongTaskPulse({
+    Duration delay = const Duration(milliseconds: 50),
+    Duration interval = const Duration(milliseconds: 250),
+  }) {
+    if (_taskCenterLongTaskPulseInFlight ||
+        _disposed ||
+        _currentProject == null) {
+      return;
+    }
+    final projectRootPath = _currentProject!.rootPath;
+    _taskCenterLongTaskPulseInFlight = true;
+    unawaited(() async {
+      try {
+        var nextDelay = delay;
+        while (_shouldContinueTaskCenterLongTaskPulse(projectRootPath)) {
+          await Future<void>.delayed(nextDelay);
+          if (!_shouldContinueTaskCenterLongTaskPulse(projectRootPath)) {
+            return;
+          }
+          await _longTaskStationController.refresh();
+          if (!_shouldContinueTaskCenterLongTaskPulse(projectRootPath)) {
+            return;
+          }
+          await _refreshTaskCenterView();
+          nextDelay = interval;
+        }
+      } finally {
+        _taskCenterLongTaskPulseInFlight = false;
+      }
+    }());
+  }
+
+  bool _shouldContinueTaskCenterLongTaskPulse(String projectRootPath) {
+    final currentProject = _currentProject;
+    if (_disposed || !_taskCenterCommandInFlight || currentProject == null) {
+      return false;
+    }
+    return currentProject.rootPath == projectRootPath;
+  }
+
+  bool _isTaskCenterRefreshStale({
+    required int generation,
+    required String projectRootPath,
+  }) {
+    final currentProject = _currentProject;
+    if (_disposed) {
+      return true;
+    }
+    if (generation != _taskCenterRefreshGeneration) {
+      return true;
+    }
+    if (currentProject == null) {
+      return true;
+    }
+    return currentProject.rootPath != projectRootPath;
+  }
+
+  bool _shouldSilenceTaskCenterRefreshFileSystemError(String projectRootPath) {
+    if (_disposed) {
+      return true;
+    }
+    final currentProject = _currentProject;
+    if (currentProject == null) {
+      return true;
+    }
+    if (currentProject.rootPath != projectRootPath) {
+      return true;
+    }
+    return !Directory(projectRootPath).existsSync();
+  }
+
+  void _settleTaskCenterPendingStatusIfNeeded({
+    required JsonMap selectedTask,
+    required JsonMap selectedLongRun,
+    required JsonMap selectedQueueRun,
+  }) {
+    if (_taskCenterCommandInFlight ||
+        !_taskCenterStatusMessage.startsWith('正在')) {
+      return;
+    }
+    final taskStatus = ValueReaders.stringValue(selectedTask['status']).trim();
+    if (taskStatus == TaskRuntimeConstants.statusWaitingUser) {
+      _taskCenterStatusMessage = '当前任务已进入等待确认，可使用右侧动作继续。';
+      return;
+    }
+    if (taskStatus == TaskRuntimeConstants.statusFailed) {
+      _taskCenterStatusMessage = '当前任务执行失败，请查看诊断并选择恢复动作。';
+      return;
+    }
+    final queueStatus = ValueReaders.stringValue(
+      selectedQueueRun['status'],
+    ).trim();
+    if (const <String>{
+      'stopped',
+      'paused',
+      'completed',
+      'failed',
+      'waiting_user',
+    }.contains(queueStatus)) {
+      _taskCenterStatusMessage = '队列运行已推进。';
+      return;
+    }
+    final longRunStatus = ValueReaders.stringValue(
+      selectedLongRun['status'],
+    ).trim();
+    if (<String>{
+      LongTaskRunStatus.waitingGate.id,
+      LongTaskRunStatus.paused.id,
+      LongTaskRunStatus.stopped.id,
+      LongTaskRunStatus.failedManualAttention.id,
+    }.contains(longRunStatus)) {
+      _taskCenterStatusMessage = '长任务运行已进入下一状态。';
+    }
+  }
+
+  void _adoptTaskCenterRunSelectionsFromResult(JsonMap result) {
+    final longRunPath = ValueReaders.stringValue(
+      result['long_task_run_path'],
+    ).trim();
+    if (longRunPath.isNotEmpty) {
+      _selectedLongTaskRunPath = longRunPath;
+    }
+    final directQueuePath = ValueReaders.stringValue(
+      result['relative_path'],
+    ).trim();
+    final explicitQueuePath = ValueReaders.stringValue(
+      result['task_queue_run_path'],
+    ).trim();
+    final queuePath = explicitQueuePath.isNotEmpty
+        ? explicitQueuePath
+        : (directQueuePath.startsWith('tracking/task_queue_runs/')
+              ? directQueuePath
+              : '');
+    if (queuePath.isNotEmpty) {
+      _selectedTaskQueueRunPath = queuePath;
+    }
   }
 
   Future<void> _refreshReviewCenter({String? status}) async {
@@ -3578,13 +3931,22 @@ class AppShellController extends ChangeNotifier
       await _refreshTaskCenter(status: '设置尚未加载完成。');
       return;
     }
-    _taskCenterStatusMessage = pendingMessage;
-    await _refreshTaskCenterView();
-    final result = await operation(project, selector, settings);
-    await _syncWorkbenchResources();
-    await _refreshTaskCenter(
-      status: _resultMessage(result, success: successMessage),
-    );
+    _taskCenterCommandInFlight = true;
+    try {
+      _taskCenterStatusMessage = pendingMessage;
+      await _refreshTaskCenterView();
+      _requestTaskCenterLongTaskPulse();
+      final result = await operation(project, selector, settings);
+      await _syncWorkbenchResources();
+      _adoptTaskCenterRunSelectionsFromResult(result);
+      await _refreshLongTaskStationAfterTaskCenterMutation();
+      _taskCenterCommandInFlight = false;
+      await _refreshTaskCenter(
+        status: _resultMessage(result, success: successMessage),
+      );
+    } finally {
+      _taskCenterCommandInFlight = false;
+    }
   }
 
   Future<void> _runTaskCenterProjectCommand({
@@ -3608,13 +3970,22 @@ class AppShellController extends ChangeNotifier
       await _refreshTaskCenter(status: '设置尚未加载完成。');
       return;
     }
-    _taskCenterStatusMessage = pendingMessage;
-    await _refreshTaskCenterView();
-    final result = await operation(project, settings);
-    await _syncWorkbenchResources();
-    await _refreshTaskCenter(
-      status: _resultMessage(result, success: successMessage),
-    );
+    _taskCenterCommandInFlight = true;
+    try {
+      _taskCenterStatusMessage = pendingMessage;
+      await _refreshTaskCenterView();
+      _requestTaskCenterLongTaskPulse();
+      final result = await operation(project, settings);
+      await _syncWorkbenchResources();
+      _adoptTaskCenterRunSelectionsFromResult(result);
+      await _refreshLongTaskStationAfterTaskCenterMutation();
+      _taskCenterCommandInFlight = false;
+      await _refreshTaskCenter(
+        status: _resultMessage(result, success: successMessage),
+      );
+    } finally {
+      _taskCenterCommandInFlight = false;
+    }
   }
 
   Future<void> _runTaskCenterRecentRunCommand({
@@ -3650,13 +4021,22 @@ class AppShellController extends ChangeNotifier
       await _refreshTaskCenter(status: '设置尚未加载完成。');
       return;
     }
-    _taskCenterStatusMessage = pendingMessage;
-    await _refreshTaskCenterView();
-    final result = await operation(project, settings, runPath);
-    await _syncWorkbenchResources();
-    await _refreshTaskCenter(
-      status: _resultMessage(result, success: successMessage),
-    );
+    _taskCenterCommandInFlight = true;
+    try {
+      _taskCenterStatusMessage = pendingMessage;
+      await _refreshTaskCenterView();
+      _requestTaskCenterLongTaskPulse();
+      final result = await operation(project, settings, runPath);
+      await _syncWorkbenchResources();
+      _adoptTaskCenterRunSelectionsFromResult(result);
+      await _refreshLongTaskStationAfterTaskCenterMutation();
+      _taskCenterCommandInFlight = false;
+      await _refreshTaskCenter(
+        status: _resultMessage(result, success: successMessage),
+      );
+    } finally {
+      _taskCenterCommandInFlight = false;
+    }
   }
 
   Future<void> _syncWorkbenchResources({String selectedId = ''}) async {
@@ -3666,7 +4046,9 @@ class AppShellController extends ChangeNotifier
         : selectedId.trim();
     final entries = await _reloadResourceEntries(selectedId: currentSelectedId);
     _viewModel = _viewModel.copyWith(
-      workbench: _viewModel.workbench.copyWith(resourceEntries: entries),
+      workbench: _workbenchConversationController.applyConversationState(
+        _viewModel.workbench.copyWith(resourceEntries: entries),
+      ),
     );
     _safeNotifyListeners();
   }
@@ -3724,6 +4106,11 @@ class AppShellController extends ChangeNotifier
   ) async {
     // 中文注释: 普通任务优先显示检查点动作，revision 任务则交给修订收口合同单独处理。
     if (ValueReaders.stringValue(task['task_type']) == 'revision') {
+      return const <String, Object?>{};
+    }
+    if (ValueReaders.stringValue(
+      task['selected_user_option_prompt'],
+    ).trim().isNotEmpty) {
       return const <String, Object?>{};
     }
     final checkpointReviewPath = _taskCenterCheckpointReviewPath(
@@ -3830,6 +4217,134 @@ class AppShellController extends ChangeNotifier
     );
   }
 
+  void _runTaskCenterTaskUserOptionAction(
+    TaskCenterContractActionViewData action,
+  ) {
+    _runTaskCenterSharedActionCommand(
+      action: action,
+      pendingMessage: '正在记录用户选择并准备继续当前任务...',
+      successMessage: '已记录用户选择，可继续当前任务。',
+      operation: (project, settings) {
+        return _workflowRuntimeService.applyWorkflowTaskUserChoice(
+          project,
+          <String, Object?>{'relative_path': action.ownerTaskPath},
+          prompt: action.userOptionPrompt,
+          label: action.label,
+          description: action.userOptionDescription,
+          sourceQuestion: action.userOptionQuestion,
+        );
+      },
+    );
+  }
+
+  void _runTaskCenterRunControlAction(TaskCenterContractActionViewData action) {
+    switch (action.id) {
+      case 'pause':
+        _runTaskCenterSharedActionCommand(
+          action: action,
+          pendingMessage: '正在暂停长任务运行...',
+          successMessage: '长任务运行已暂停。',
+          operation: (project, settings) {
+            return _workflowRuntimeService.pauseLongTaskRun(
+              project,
+              action.longTaskRunPath,
+            );
+          },
+        );
+        return;
+      case 'resume':
+        _runTaskCenterSharedActionCommand(
+          action: action,
+          pendingMessage: '正在恢复长任务运行...',
+          successMessage: '长任务运行已恢复推进。',
+          operation: (project, settings) {
+            if (settings == null) {
+              return Future<JsonMap>.value(<String, Object?>{
+                'ok': false,
+                'error': '设置尚未加载完成。',
+              });
+            }
+            return _workflowRuntimeService.resumeLongTaskRun(
+              project,
+              settings,
+              action.longTaskRunPath,
+            );
+          },
+        );
+        return;
+      case 'stop':
+        _runTaskCenterSharedActionCommand(
+          action: action,
+          pendingMessage: '正在停止长任务运行...',
+          successMessage: '长任务运行已停止。',
+          operation: (project, settings) {
+            return _workflowRuntimeService.stopLongTaskRun(
+              project,
+              action.longTaskRunPath,
+            );
+          },
+        );
+        return;
+      case 'confirm_checkpoint':
+        _runTaskCenterSharedActionCommand(
+          action: action,
+          pendingMessage: '正在确认检查点并准备继续长任务...',
+          successMessage: '已确认检查点，长任务可继续推进。',
+          operation: (project, settings) async {
+            final revision = await _workflowRuntimeService
+                .buildLongTaskRevisionPlan(
+                  project,
+                  'confirm_checkpoint',
+                  runPath: action.longTaskRunPath,
+                  arguments: <String, Object?>{
+                    if (action.ownerTaskId.trim().isNotEmpty)
+                      'task_id': action.ownerTaskId,
+                    'note': '用户在任务中心确认检查点，允许长任务继续。',
+                  },
+                );
+            if (!ValueReaders.boolValue(revision['ok'])) {
+              return revision;
+            }
+            return _workflowRuntimeService.applyLongTaskRevisionPlan(
+              project,
+              revision,
+            );
+          },
+        );
+        return;
+      case 'retry_failed':
+      case 'skip_failed':
+        final command = action.id == 'retry_failed' ? 'retry' : 'skip';
+        final pendingMessage = action.id == 'retry_failed'
+            ? '正在恢复失败任务并准备继续长任务...'
+            : '正在跳过失败任务并尝试恢复长任务...';
+        final successMessage = action.id == 'retry_failed'
+            ? '已将失败任务重新排队，长任务可继续推进。'
+            : '已跳过失败任务，长任务可尝试继续推进。';
+        _runTaskCenterSharedActionCommand(
+          action: action,
+          pendingMessage: pendingMessage,
+          successMessage: successMessage,
+          operation: (project, settings) {
+            return _workflowRuntimeService.applyLongTaskFailureAction(
+              project,
+              selector: <String, Object?>{
+                'relative_path': action.ownerTaskPath,
+                if (action.ownerTaskId.trim().isNotEmpty)
+                  'task_id': action.ownerTaskId,
+              },
+              command: command,
+              runPath: action.longTaskRunPath,
+            );
+          },
+        );
+        return;
+      default:
+        unawaited(_refreshTaskCenter(status: '当前图形界面还未接通该运行控制动作。'));
+        return;
+    }
+  }
+
   Future<void> _runTaskCenterSharedActionCommand({
     required TaskCenterContractActionViewData action,
     required String pendingMessage,
@@ -3852,18 +4367,27 @@ class AppShellController extends ChangeNotifier
       await _refreshTaskCenter(status: '设置尚未加载完成。');
       return;
     }
-    _taskCenterStatusMessage = pendingMessage;
-    await _refreshTaskCenterView();
-    final result = await operation(project, settings);
-    final outcome = _taskCenterActionExecutionOutcomeService.resolve(
-      action: action,
-      result: result,
-      defaultSuccessMessage: successMessage,
-      currentSelectedTaskId: _selectedTaskId,
-    );
-    _selectedTaskId = outcome.nextSelectedTaskId;
-    await _syncWorkbenchResources();
-    await _refreshTaskCenter(status: outcome.statusMessage);
+    _taskCenterCommandInFlight = true;
+    try {
+      _taskCenterStatusMessage = pendingMessage;
+      await _refreshTaskCenterView();
+      _requestTaskCenterLongTaskPulse();
+      final result = await operation(project, settings);
+      final outcome = _taskCenterActionExecutionOutcomeService.resolve(
+        action: action,
+        result: result,
+        defaultSuccessMessage: successMessage,
+        currentSelectedTaskId: _selectedTaskId,
+      );
+      _selectedTaskId = outcome.nextSelectedTaskId;
+      await _syncWorkbenchResources();
+      _adoptTaskCenterRunSelectionsFromResult(result);
+      await _refreshLongTaskStationAfterTaskCenterMutation();
+      _taskCenterCommandInFlight = false;
+      await _refreshTaskCenter(status: outcome.statusMessage);
+    } finally {
+      _taskCenterCommandInFlight = false;
+    }
   }
 
   JsonMap _taskSelector(JsonMap task) {
@@ -4248,6 +4772,10 @@ class AppShellController extends ChangeNotifier
       defaultProjectPath: settings.defaultProjectPath,
       permissionSettings: settings.permissionSettings,
       toolStrategySettings: _toolStrategySettingsView(settings),
+      projectCreationExpressionConstraintDefaults:
+          _projectCreationExpressionConstraintDefaultsViewDataService.build(
+            settings,
+          ),
       networkSettings: settings.networkSettings,
       contextSettings: settings.contextSettings,
       themeSettings: settings.themeSettings,

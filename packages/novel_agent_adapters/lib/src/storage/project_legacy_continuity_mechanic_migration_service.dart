@@ -119,8 +119,9 @@ class ProjectLegacyContinuityMechanicMigrationService {
       'profile_id': package.profile.profileId,
       'claim_ids': importedClaimIds,
       'legacy_namespace_root': 'legacy.special_mechanic',
+      'compatibility_aliases': const <Object?>['legacy.special_mechanic'],
       'pressure_probe_note':
-          'Legacy special mechanic labels remain readable as probe input only.',
+          'Historical special-mechanic labels remain readable as probe input only.',
       'changed_paths': changedPaths.toSet().toList(growable: false),
     };
   }

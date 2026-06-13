@@ -24,8 +24,8 @@ class SubAgentRunPreviewCard extends StatelessWidget {
         ? colors.accentColor
         : surfaces.panel.borderColor;
     final backgroundColor = isActive
-        ? colors.accentSoftColor.withValues(alpha: 0.26)
-        : surfaces.panel.backgroundColor;
+        ? colors.accentSoftColor.withValues(alpha: 0.18)
+        : surfaces.panel.backgroundColor.withValues(alpha: 0.08);
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -34,7 +34,7 @@ class SubAgentRunPreviewCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: backgroundColor,
             border: Border.all(
-              color: borderColor,
+              color: borderColor.withValues(alpha: isActive ? 0.58 : 0.18),
               width: AppChrome.borderWidth,
             ),
             borderRadius: BorderRadius.circular(surfaces.panel.radius),
@@ -58,7 +58,7 @@ class SubAgentRunPreviewCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: colors.textColor,
-                          fontSize: 13,
+                          fontSize: 12.8,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -68,7 +68,7 @@ class SubAgentRunPreviewCard extends StatelessWidget {
                       viewData.toolCountLabel,
                       style: TextStyle(
                         color: colors.mutedTextColor,
-                        fontSize: 11,
+                        fontSize: 10.6,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -88,8 +88,8 @@ class SubAgentRunPreviewCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: colors.textColor,
-                      fontSize: 12,
-                      height: 1.35,
+                      fontSize: 11.9,
+                      height: 1.42,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -102,8 +102,8 @@ class SubAgentRunPreviewCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: colors.mutedTextColor,
-                      fontSize: 12,
-                      height: 1.35,
+                      fontSize: 11.7,
+                      height: 1.42,
                     ),
                   ),
                 ],
@@ -117,10 +117,7 @@ class SubAgentRunPreviewCard extends StatelessWidget {
 }
 
 class _RunKindBadge extends StatelessWidget {
-  const _RunKindBadge({
-    required this.label,
-    required this.tone,
-  });
+  const _RunKindBadge({required this.label, required this.tone});
 
   final String label;
   final SubAgentRunPreviewTone tone;
@@ -135,15 +132,24 @@ class _RunKindBadge extends StatelessWidget {
       SubAgentRunPreviewTone.neutral => colors.lineStrongColor,
     };
     final background = switch (tone) {
-      SubAgentRunPreviewTone.active => colors.accentSoftColor.withValues(alpha: 0.35),
-      SubAgentRunPreviewTone.success => colors.warmColor.withValues(alpha: 0.22),
-      SubAgentRunPreviewTone.danger => colors.dangerSoftColor.withValues(alpha: 0.32),
-      SubAgentRunPreviewTone.neutral => colors.panelBackground.withValues(alpha: 0.72),
+      SubAgentRunPreviewTone.active => colors.accentSoftColor.withValues(
+        alpha: 0.26,
+      ),
+      SubAgentRunPreviewTone.success => colors.warmColor.withValues(
+        alpha: 0.18,
+      ),
+      SubAgentRunPreviewTone.danger => colors.dangerSoftColor.withValues(
+        alpha: 0.24,
+      ),
+      SubAgentRunPreviewTone.neutral => colors.panelBackground.withValues(
+        alpha: 0.52,
+      ),
     };
     return DecoratedBox(
       decoration: BoxDecoration(
         color: background,
-        border: Border.all(color: foreground.withValues(alpha: 0.5)),
+        border: Border.all(color: foreground.withValues(alpha: 0.24)),
+        borderRadius: BorderRadius.circular(999),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),

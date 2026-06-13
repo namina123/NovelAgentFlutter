@@ -44,6 +44,11 @@ class LongTaskCheckpointReviewMarkdownRenderer {
       lines,
       ValueReaders.mapValue(review['expression_constraint_review']),
     );
+    _appendWritingExecutionConstraints(
+      lines,
+      ValueReaders.mapValue(review['writing_execution_constraints']),
+      ValueReaders.mapValue(review['expression_constraint_signal']),
+    );
     _appendList(
       lines,
       'Mini Recheck',
@@ -335,5 +340,68 @@ class LongTaskCheckpointReviewMarkdownRenderer {
         lines.add('- 保真提醒：$text');
       }
     }
+  }
+
+  void _appendWritingExecutionConstraints(
+    List<String> lines,
+    JsonMap constraints,
+    JsonMap signal,
+  ) {
+    if (constraints.isEmpty && signal.isEmpty) {
+      return;
+    }
+    lines
+      ..add('')
+      ..add('## 表达限制执行策略');
+    final policyMode = ValueReaders.stringValue(
+      constraints['policy_mode'],
+    ).trim();
+    if (policyMode.isNotEmpty) {
+      lines.add('- 策略模式：$policyMode');
+    }
+    final injectionStrength = ValueReaders.stringValue(
+      constraints['injection_strength'],
+    ).trim();
+    if (injectionStrength.isNotEmpty) {
+      lines.add('- 注入强度：$injectionStrength');
+    }
+    final injectionMode = ValueReaders.stringValue(
+      constraints['injection_mode'],
+    ).trim();
+    if (injectionMode.isNotEmpty) {
+      lines.add('- 注入形态：$injectionMode');
+    }
+    final reviewRequirement = ValueReaders.stringValue(
+      constraints['review_requirement'],
+    ).trim();
+    if (reviewRequirement.isNotEmpty) {
+      lines.add('- 复核要求：$reviewRequirement');
+    }
+    if (ValueReaders.boolValue(constraints['runtime_escalated'])) {
+      lines.add('- 连续风险升级：已触发');
+    }
+    final signalCategory = ValueReaders.stringValue(signal['category']).trim();
+    if (signalCategory.isNotEmpty) {
+      lines.add('- Supervisor 信号：$signalCategory');
+    }
+    final signalSummary = ValueReaders.stringValue(signal['summary']).trim();
+    if (signalSummary.isNotEmpty) {
+      lines.add('- 信号摘要：$signalSummary');
+    }
+    _appendList(
+      lines,
+      '策略命中原因',
+      ValueReaders.stringList(signal['applied_reasons']),
+    );
+    _appendList(
+      lines,
+      '策略跳过原因',
+      ValueReaders.stringList(signal['skipped_reasons']),
+    );
+    _appendList(
+      lines,
+      '表达限制风险',
+      ValueReaders.stringList(signal['risk_signals']),
+    );
   }
 }

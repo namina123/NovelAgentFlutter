@@ -2,17 +2,19 @@ import 'dart:convert';
 
 import 'package:novel_agent_core/novel_agent_core.dart';
 
-import '../storage/local_design_element_repository.dart';
-import '../storage/local_knowledge_card_repository.dart';
-import '../storage/local_reference_work_repository.dart';
-import '../storage/local_research_note_repository.dart';
 import '../storage/project_information_path_service.dart';
+import '../storage/sqlite_design_element_repository.dart';
+import '../storage/sqlite_knowledge_card_repository.dart';
+import '../storage/sqlite_project_information_record_store.dart';
+import '../storage/sqlite_reference_work_repository.dart';
+import '../storage/sqlite_research_note_repository.dart';
 
 const _informationPolicyReason = 'information_policy';
 
 class ProjectInformationActivationBridgeService {
   ProjectInformationActivationBridgeService({
     required ProjectWorkspacePort workspacePort,
+    SqliteProjectInformationRecordStore? recordStore,
     KnowledgeCardRepository? knowledgeCardRepository,
     DesignElementRepository? designElementRepository,
     ResearchNoteRepository? researchNoteRepository,
@@ -20,16 +22,16 @@ class ProjectInformationActivationBridgeService {
     ProjectInformationPathService? pathService,
   }) : _knowledgeCardRepository =
            knowledgeCardRepository ??
-           LocalKnowledgeCardRepository(workspacePort: workspacePort),
+           _defaultKnowledgeCardRepository(recordStore),
        _designElementRepository =
            designElementRepository ??
-           LocalDesignElementRepository(workspacePort: workspacePort),
+           _defaultDesignElementRepository(recordStore),
        _researchNoteRepository =
            researchNoteRepository ??
-           LocalResearchNoteRepository(workspacePort: workspacePort),
+           _defaultResearchNoteRepository(recordStore),
        _referenceWorkRepository =
            referenceWorkRepository ??
-           LocalReferenceWorkRepository(workspacePort: workspacePort),
+           _defaultReferenceWorkRepository(recordStore),
        _pathService = pathService ?? ProjectInformationPathService();
 
   final KnowledgeCardRepository _knowledgeCardRepository;
@@ -37,6 +39,38 @@ class ProjectInformationActivationBridgeService {
   final ResearchNoteRepository _researchNoteRepository;
   final ReferenceWorkRepository _referenceWorkRepository;
   final ProjectInformationPathService _pathService;
+
+  static KnowledgeCardRepository _defaultKnowledgeCardRepository(
+    SqliteProjectInformationRecordStore? recordStore,
+  ) {
+    return SqliteKnowledgeCardRepository(
+      recordStore: recordStore ?? SqliteProjectInformationRecordStore(),
+    );
+  }
+
+  static DesignElementRepository _defaultDesignElementRepository(
+    SqliteProjectInformationRecordStore? recordStore,
+  ) {
+    return SqliteDesignElementRepository(
+      recordStore: recordStore ?? SqliteProjectInformationRecordStore(),
+    );
+  }
+
+  static ResearchNoteRepository _defaultResearchNoteRepository(
+    SqliteProjectInformationRecordStore? recordStore,
+  ) {
+    return SqliteResearchNoteRepository(
+      recordStore: recordStore ?? SqliteProjectInformationRecordStore(),
+    );
+  }
+
+  static ReferenceWorkRepository _defaultReferenceWorkRepository(
+    SqliteProjectInformationRecordStore? recordStore,
+  ) {
+    return SqliteReferenceWorkRepository(
+      recordStore: recordStore ?? SqliteProjectInformationRecordStore(),
+    );
+  }
 
   Future<List<ContextActivationItem>> buildItems(
     ProjectDescriptor project, {
@@ -111,8 +145,9 @@ class ProjectInformationActivationBridgeService {
         card.metadata,
       ),
     );
+    final targetPath = _pathService.knowledgeCardLocator(card.cardId);
     final refs = _fallbackRefs(
-      targetPath: _pathService.knowledgeCardPath(card.cardId),
+      targetPath: targetPath,
       targetId: card.cardId,
       title: label,
       refs: card.scopeRefs,
@@ -127,7 +162,7 @@ class ProjectInformationActivationBridgeService {
       itemId: 'knowledge:${card.cardId}',
       source: 'project_knowledge_card',
       title: label,
-      targetPath: _pathService.knowledgeCardPath(card.cardId),
+      targetPath: targetPath,
       refs: refs,
       activationReasons: <String>[
         if (pinned) ContextActivationReasonCodes.manualPin,
@@ -157,7 +192,10 @@ class ProjectInformationActivationBridgeService {
         'card_type': card.cardType,
         'lifecycle_status': card.lifecycleStatus,
         'confidence': card.confidence,
+        'source_of_truth_locator': targetPath,
+        'source_display': _sourceDisplayFromRefs(card.sourceRefs),
         'source_refs': _sourceRefsJson(card.sourceRefs),
+        'evidence_refs': _evidenceRefsJson(card.evidenceRefs),
         'activation_priority': priority,
         'required': required,
         'pinned': pinned,
@@ -197,8 +235,9 @@ class ProjectInformationActivationBridgeService {
         card.metadata,
       ),
     );
+    final targetPath = _pathService.designElementLocator(card.designId);
     final refs = _fallbackRefs(
-      targetPath: _pathService.designElementPath(card.designId),
+      targetPath: targetPath,
       targetId: card.designId,
       title: label,
       refs: _dedupeRefs(<NarrativeRef>[...card.scopeRefs, ...card.linkedRefs]),
@@ -213,7 +252,7 @@ class ProjectInformationActivationBridgeService {
       itemId: 'design:${card.designId}',
       source: 'project_design_element',
       title: label,
-      targetPath: _pathService.designElementPath(card.designId),
+      targetPath: targetPath,
       refs: refs,
       activationReasons: <String>[
         if (pinned) ContextActivationReasonCodes.manualPin,
@@ -242,7 +281,10 @@ class ProjectInformationActivationBridgeService {
         'lifecycle_status': card.lifecycleStatus,
         'confidence': card.confidence,
         'uncertainty': card.uncertainty,
+        'source_of_truth_locator': targetPath,
+        'source_display': _sourceDisplayFromRefs(card.sourceRefs),
         'source_refs': _sourceRefsJson(card.sourceRefs),
+        'evidence_refs': _evidenceRefsJson(card.evidenceRefs),
         'activation_priority': priority,
         'required': required,
         'pinned': pinned,
@@ -278,15 +320,15 @@ class ProjectInformationActivationBridgeService {
     final required = _isRequired(
       priority: priority,
       metadata: note.metadata,
-      policyRequiresConfirmation: note.usagePolicy.requiresConfirmation,
     );
     final pinned = _isPinned(priority: priority, metadata: note.metadata);
     final activationTextDraft = _applyPreferredBudget(
       _researchNoteActivationText(note, priority: priority),
       _preferredBudgetChars(0, note.metadata),
     );
+    final targetPath = _pathService.researchNoteLocator(note.researchId);
     final refs = _fallbackRefs(
-      targetPath: _pathService.researchNotePath(note.researchId),
+      targetPath: targetPath,
       targetId: note.researchId,
       title: label,
       refs: note.linkedCards,
@@ -295,7 +337,7 @@ class ProjectInformationActivationBridgeService {
       itemId: 'research:${note.researchId}',
       source: 'project_research_note',
       title: label,
-      targetPath: _pathService.researchNotePath(note.researchId),
+      targetPath: targetPath,
       refs: refs,
       activationReasons: <String>[
         if (pinned) ContextActivationReasonCodes.manualPin,
@@ -322,6 +364,10 @@ class ProjectInformationActivationBridgeService {
         'research_source_kind': note.sourceKind,
         'source_url_or_ref': note.sourceUrlOrRef,
         'citation': note.citation,
+        'source_of_truth_locator': targetPath,
+        'source_display': _sourceDisplayForResearchNote(note),
+        'source_refs': const <JsonMap>[],
+        'evidence_refs': const <JsonMap>[],
         'usage_mode': note.usagePolicy.usageMode,
         'citation_risk_level': note.usagePolicy.citationRiskLevel,
         'activation_priority': priority,
@@ -356,15 +402,17 @@ class ProjectInformationActivationBridgeService {
     final required = _isRequired(
       priority: priority,
       metadata: record.metadata,
-      policyRequiresConfirmation: record.requiresConfirmation,
     );
     final pinned = _isPinned(priority: priority, metadata: record.metadata);
     final activationTextDraft = _applyPreferredBudget(
       _referenceWorkActivationText(record, priority: priority),
       _preferredBudgetChars(0, record.metadata),
     );
+    final targetPath = _pathService.referenceWorkLocator(
+      record.referenceWorkId,
+    );
     final refs = _fallbackRefs(
-      targetPath: _pathService.referenceWorkPath(record.referenceWorkId),
+      targetPath: targetPath,
       targetId: record.referenceWorkId,
       title: label,
       refs: const <NarrativeRef>[],
@@ -373,7 +421,7 @@ class ProjectInformationActivationBridgeService {
       itemId: 'reference:${record.referenceWorkId}',
       source: 'project_reference_work',
       title: label,
-      targetPath: _pathService.referenceWorkPath(record.referenceWorkId),
+      targetPath: targetPath,
       refs: refs,
       activationReasons: <String>[
         if (pinned) ContextActivationReasonCodes.manualPin,
@@ -400,7 +448,10 @@ class ProjectInformationActivationBridgeService {
         'relationship_to_project': record.relationshipToProject,
         'declared_usage_intent': record.declaredUsageIntent,
         'requires_confirmation': record.requiresConfirmation,
+        'source_of_truth_locator': targetPath,
+        'source_display': _sourceDisplayFromRefs(record.sourceRefs),
         'source_refs': _sourceRefsJson(record.sourceRefs),
+        'evidence_refs': const <JsonMap>[],
         'activation_priority': priority,
         'required': required,
         'pinned': pinned,
@@ -444,6 +495,14 @@ class ProjectInformationActivationBridgeService {
         ..add('source_refs:')
         ..add(_prettyObject(_sourceRefsJson(card.sourceRefs)));
     }
+    if (card.evidenceRefs.isNotEmpty) {
+      lines
+        ..add('evidence_refs:')
+        ..add(_prettyObject(_evidenceRefsJson(card.evidenceRefs)));
+    }
+    if (card.sourceRefs.isNotEmpty) {
+      lines.add('source_display: ${_sourceDisplayFromRefs(card.sourceRefs)}');
+    }
     if (card.contentPayload.isNotEmpty) {
       lines
         ..add('content_payload:')
@@ -483,6 +542,14 @@ class ProjectInformationActivationBridgeService {
         ..add('source_refs:')
         ..add(_prettyObject(_sourceRefsJson(card.sourceRefs)));
     }
+    if (card.evidenceRefs.isNotEmpty) {
+      lines
+        ..add('evidence_refs:')
+        ..add(_prettyObject(_evidenceRefsJson(card.evidenceRefs)));
+    }
+    if (card.sourceRefs.isNotEmpty) {
+      lines.add('source_display: ${_sourceDisplayFromRefs(card.sourceRefs)}');
+    }
     if (card.designPayload.isNotEmpty) {
       lines
         ..add('design_payload:')
@@ -502,6 +569,7 @@ class ProjectInformationActivationBridgeService {
       'source_kind: ${note.sourceKind}',
       'source_url_or_ref: ${note.sourceUrlOrRef}',
       'citation: ${note.citation}',
+      'source_display: ${_sourceDisplayForResearchNote(note)}',
       'activation_priority: $priority',
       'usage_mode: ${note.usagePolicy.usageMode}',
       'citation_risk_level: ${note.usagePolicy.citationRiskLevel}',
@@ -566,9 +634,8 @@ class ProjectInformationActivationBridgeService {
       lines.add('allowed_usage_summary: ${record.allowedUsageSummary.trim()}');
     }
     if (record.sourceRefs.isNotEmpty) {
-      lines
-        ..add('source_refs:')
-        ..add(_prettyObject(_sourceRefsJson(record.sourceRefs)));
+      lines.add('source_display: ${_sourceDisplayFromRefs(record.sourceRefs)}');
+      lines.add('source_ref_count: ${record.sourceRefs.length}');
     }
     if (record.riskNotes.isNotEmpty) {
       lines
@@ -601,11 +668,9 @@ class ProjectInformationActivationBridgeService {
   bool _isRequired({
     required String priority,
     required JsonMap metadata,
-    bool policyRequiresConfirmation = false,
   }) {
     // 中文注释: required 只表达上下文注入优先级，不代替 permission policy 的审批语义。
     return priority == InformationActivationPriorities.required ||
-        policyRequiresConfirmation ||
         _boolFlags(
           metadata['required'],
           metadata['is_required'],
@@ -736,6 +801,54 @@ class ProjectInformationActivationBridgeService {
         .take(4)
         .map(ValueReaders.deepCopyMap)
         .toList(growable: false);
+  }
+
+  List<JsonMap> _evidenceRefsJson(List<NarrativeEvidenceRef> refs) {
+    return refs
+        .take(4)
+        .map((ref) => ValueReaders.deepCopyMap(ref.toJson()))
+        .toList(growable: false);
+  }
+
+  String _sourceDisplayFromRefs(List<InformationSourceRef> refs) {
+    final labels = refs
+        .map((ref) => _sourceIdentityDisplay(ref.sourceIdentity))
+        .where((label) => label.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    return labels.isEmpty ? '未记录来源身份' : labels.join('；');
+  }
+
+  String _sourceDisplayForResearchNote(ResearchNote note) {
+    final citation = note.citation.trim();
+    if (citation.isNotEmpty) {
+      return citation;
+    }
+    final sourceRef = note.sourceUrlOrRef.trim();
+    if (sourceRef.isNotEmpty) {
+      return sourceRef;
+    }
+    return note.sourceKind.trim().isEmpty ? '未记录研究来源' : note.sourceKind;
+  }
+
+  String _sourceIdentityDisplay(SourceAssetIdentity identity) {
+    final displayName = identity.displayName.trim();
+    if (displayName.isNotEmpty) {
+      return displayName;
+    }
+    final sourceAssetId = identity.sourceAssetId.trim();
+    if (sourceAssetId.isNotEmpty) {
+      return sourceAssetId;
+    }
+    final resolverUri = identity.resolverUri.trim();
+    if (resolverUri.isNotEmpty) {
+      return resolverUri;
+    }
+    final localHintPath = identity.localHintPath.trim();
+    if (localHintPath.isNotEmpty) {
+      return localHintPath;
+    }
+    return identity.sourceKind.trim();
   }
 
   String _metadataString(JsonMap metadata, String key) {

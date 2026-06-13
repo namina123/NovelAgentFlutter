@@ -21,13 +21,13 @@ class ToolbarIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 中文注释: 顶部工具按钮统一收敛到同一组件，避免头部小按钮在多个页面里各长各的样子。
+    // 中文注释: 工具按钮整体改得更像 IDE 命令按钮，保留语义色但降低“实心按钮”感。
     final colors = context.novelThemeColors;
     final chrome = context.novelToolbarChrome;
     final isEnabled = onPressed != null;
     return Tooltip(
       message: tooltip,
-      child: IconButton.filledTonal(
+      child: IconButton(
         onPressed: onPressed,
         style: IconButton.styleFrom(
           foregroundColor: isEnabled
@@ -59,11 +59,11 @@ class ToolbarIconButton extends StatelessWidget {
     // 中文注释: 工具按钮底色保持克制，但为主题、危险等动作留出语义色空间。
     switch (tone) {
       case ToolbarIconTone.neutral:
-        return themeColors.panelBackground;
+        return themeColors.panelBackground.withValues(alpha: 0.42);
       case ToolbarIconTone.accent:
-        return themeColors.accentSoftColor;
+        return themeColors.accentSoftColor.withValues(alpha: 0.6);
       case ToolbarIconTone.warm:
-        return themeColors.warmColor;
+        return themeColors.warmColor.withValues(alpha: 0.62);
     }
   }
 
@@ -83,11 +83,11 @@ class ToolbarIconButton extends StatelessWidget {
     // 中文注释: 边框颜色和工具按钮语义配套，避免大面积浅色背景下按钮边界模糊。
     switch (tone) {
       case ToolbarIconTone.neutral:
-        return themeColors.lineColor;
+        return themeColors.lineColor.withValues(alpha: 0.76);
       case ToolbarIconTone.accent:
-        return themeColors.lineColor;
+        return themeColors.lineColor.withValues(alpha: 0.72);
       case ToolbarIconTone.warm:
-        return themeColors.warmStrongColor.withValues(alpha: 0.7);
+        return themeColors.warmStrongColor.withValues(alpha: 0.58);
     }
   }
 }

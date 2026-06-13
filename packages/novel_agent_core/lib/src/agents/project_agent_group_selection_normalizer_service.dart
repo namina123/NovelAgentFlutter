@@ -16,6 +16,9 @@ class ProjectAgentGroupSelectionNormalizerService {
       selectedByDefault: ValueReaders.boolValue(
         raw['selected_by_default'] ?? raw['default'],
       ),
+      taskFamilyIds: ValueReaders.stringList(
+        raw['task_family_ids'] ?? raw['task_families'],
+      ),
       modeIds: ValueReaders.stringList(raw['mode_ids'] ?? raw['modes']),
       stageIds: ValueReaders.stringList(raw['stage_ids'] ?? raw['stages']),
       metadata: ValueReaders.deepCopyMap(
@@ -30,6 +33,9 @@ class ProjectAgentGroupSelectionNormalizerService {
       'display_name': selection.displayName,
       'enabled': selection.enabled,
       'selected_by_default': selection.selectedByDefault,
+      'task_family_ids': ValueReaders.deepCopyList(
+        selection.taskFamilyIds.cast<Object?>(),
+      ),
       'mode_ids': ValueReaders.deepCopyList(selection.modeIds.cast<Object?>()),
       'stage_ids': ValueReaders.deepCopyList(
         selection.stageIds.cast<Object?>(),

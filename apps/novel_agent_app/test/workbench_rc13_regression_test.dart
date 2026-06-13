@@ -141,7 +141,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('工作台对象'), findsOneWidget);
+    expect(find.text('当前对象'), findsOneWidget);
     expect(find.text('正文工作区'), findsOneWidget);
     expect(find.text('会话'), findsOneWidget);
     expect(find.text('综合创作智能体'), findsWidgets);

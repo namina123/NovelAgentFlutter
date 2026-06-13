@@ -1,5 +1,6 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import 'chapter_delivery_failure.dart';
 
 class ChapterDeliveryStateResult {
   const ChapterDeliveryStateResult({
@@ -13,6 +14,7 @@ class ChapterDeliveryStateResult {
     this.chapterBodyDelivered = false,
     this.submissionAccepted = false,
     this.retryable = false,
+    this.deliveryFailure,
     this.metadata = const <String, Object?>{},
   });
 
@@ -26,6 +28,7 @@ class ChapterDeliveryStateResult {
   final bool chapterBodyDelivered;
   final bool submissionAccepted;
   final bool retryable;
+  final ChapterDeliveryFailure? deliveryFailure;
   final JsonMap metadata;
 
   JsonMap toJson() {
@@ -41,6 +44,8 @@ class ChapterDeliveryStateResult {
       'chapter_body_delivered': chapterBodyDelivered,
       'submission_accepted': submissionAccepted,
       'retryable': retryable,
+      if (deliveryFailure != null)
+        'delivery_failure': deliveryFailure!.toJson(),
       'metadata': ValueReaders.deepCopyMap(metadata),
     };
   }

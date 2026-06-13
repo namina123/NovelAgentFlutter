@@ -55,7 +55,8 @@ class NarrativeDomainToolCatalog {
     NarrativeDomainToolDefinition(
       toolName: NarrativeDomainToolNames.submitChapterDelivery,
       displayName: '提交章节交付',
-      description: '一次性提交章节正文、目标路径和结构化提交包，用统一交付合同替代零散文件写入。',
+      description:
+          '一次性提交章节正文、目标路径和结构化提交包，用统一交付合同替代零散文件写入。提交前必须满足当前执行约束；如果本章形成了稳定 continuity/state 变化，可在 submission.claims 或顶层 claims 中一并提交。连续章节建议至少填写 submission.summary，并在 submission.final_state_summary 中记录章末状态与下一章承接锚点，避免下一章开头倒带重演。若上下文列出表达风险信号，应先自行改写 chapter_content，避免带风险信号交付。',
       parametersSchema: _submitChapterDeliverySchema,
     ),
     NarrativeDomainToolDefinition(
@@ -204,6 +205,7 @@ class NarrativeDomainToolCatalog {
     switch (toolName) {
       case NarrativeDomainToolNames.submitChapterDelivery:
         return _parseSubmitChapterDelivery(
+          source: source,
           arguments: arguments,
           issues: issues,
         );
@@ -259,6 +261,7 @@ class NarrativeDomainToolCatalog {
   }
 
   JsonMap? _parseSubmitChapterDelivery({
+    required NarrativeSourceRef source,
     required JsonMap arguments,
     required List<NarrativeDomainToolParseIssue> issues,
   }) {
@@ -272,27 +275,40 @@ class NarrativeDomainToolCatalog {
       return null;
     }
 
+    final topLevelClaims = _canonicalClaims(
+      rawClaims: arguments['claims'],
+      source: source,
+      fieldPath: 'claims',
+      issues: issues,
+    );
+    if (issues.isNotEmpty) {
+      return null;
+    }
     final submissionJson = _optionalMap(arguments, 'submission', issues);
     ChapterNarrativeSubmission? submission;
-    if (submissionJson != null) {
+    if (submissionJson != null || topLevelClaims.isNotEmpty) {
       final chapterRef = <String, Object?>{
         'ref_type': NarrativeRefTypes.chapter,
         'ref_id': ValueReaders.stringValue(
-          submissionJson['chapter_id'],
+          ValueReaders.mapValue(submissionJson)['chapter_id'],
           ValueReaders.stringValue(
-            ValueReaders.mapValue(submissionJson['chapter_ref'])['ref_id'],
+            ValueReaders.mapValue(
+              ValueReaders.mapValue(submissionJson)['chapter_ref'],
+            )['ref_id'],
             chapterPath,
           ),
         ).trim(),
         'relative_path': chapterPath,
       };
       final canonicalSubmission = <String, Object?>{
-        ...submissionJson,
+        ...ValueReaders.mapValue(submissionJson),
         'submission_id': ValueReaders.stringValue(
-          submissionJson['submission_id'],
+          ValueReaders.mapValue(submissionJson)['submission_id'],
           'submission:$chapterPath',
         ),
         'chapter_ref': chapterRef,
+        if (topLevelClaims.isNotEmpty)
+          'claims': _claimCodecService.toJsonList(topLevelClaims),
       };
       submission = _submissionCodecService.fromJson(canonicalSubmission);
     }
@@ -303,6 +319,7 @@ class NarrativeDomainToolCatalog {
         'chapter_path',
         'chapter_content',
         'title',
+        'claims',
         'submission',
         'constraint_coverage',
         'confidence',
@@ -334,52 +351,15 @@ class NarrativeDomainToolCatalog {
     required JsonMap arguments,
     required List<NarrativeDomainToolParseIssue> issues,
   }) {
-    final rawClaims = arguments['claims'];
-    if (rawClaims is! List) {
-      issues.add(
-        const NarrativeDomainToolParseIssue(
-          code: NarrativeDomainToolValidationCodes.invalidArrayField,
-          fieldPath: 'claims',
-          message: 'claims 必须是对象数组。',
-        ),
-      );
-      return null;
-    }
     final sourceHint = ValueReaders.stringValue(arguments['source']).trim();
-    final claimSourceType = sourceHint.isEmpty ? source.sourceType : sourceHint;
-    final canonicalClaims = <NarrativeStateClaim>[];
-    for (var index = 0; index < rawClaims.length; index += 1) {
-      final claimMap = ValueReaders.mapValue(rawClaims[index]);
-      if (claimMap.isEmpty) {
-        issues.add(
-          NarrativeDomainToolParseIssue(
-            code: NarrativeDomainToolValidationCodes.invalidObjectField,
-            fieldPath: 'claims[$index]',
-            message: 'claim 必须是对象。',
-          ),
-        );
-        continue;
-      }
-      final canonicalClaim = <String, Object?>{
-        ...claimMap,
-        'source': ValueReaders.mapValue(claimMap['source']).isNotEmpty
-            ? ValueReaders.mapValue(claimMap['source'])
-            : <String, Object?>{'source_type': claimSourceType},
-      };
-      final claim = _claimCodecService.fromJson(canonicalClaim);
-      final validationErrors = claim.validateBasics();
-      if (validationErrors.isNotEmpty) {
-        issues.add(
-          NarrativeDomainToolParseIssue(
-            code: NarrativeDomainToolValidationCodes.invalidNestedContract,
-            fieldPath: 'claims[$index]',
-            message: validationErrors.join(', '),
-          ),
-        );
-        continue;
-      }
-      canonicalClaims.add(claim);
-    }
+    final canonicalClaims = _canonicalClaims(
+      rawClaims: arguments['claims'],
+      source: source.copyWith(
+        sourceType: sourceHint.isEmpty ? source.sourceType : sourceHint,
+      ),
+      fieldPath: 'claims',
+      issues: issues,
+    );
     if (issues.isNotEmpty) {
       return null;
     }
@@ -392,6 +372,61 @@ class NarrativeDomainToolCatalog {
       'claims': _claimCodecService.toJsonList(canonicalClaims),
       'metadata': metadata,
     };
+  }
+
+  List<NarrativeStateClaim> _canonicalClaims({
+    required Object? rawClaims,
+    required NarrativeSourceRef source,
+    required String fieldPath,
+    required List<NarrativeDomainToolParseIssue> issues,
+  }) {
+    if (rawClaims == null) {
+      return const <NarrativeStateClaim>[];
+    }
+    if (rawClaims is! List) {
+      issues.add(
+        NarrativeDomainToolParseIssue(
+          code: NarrativeDomainToolValidationCodes.invalidArrayField,
+          fieldPath: fieldPath,
+          message: 'claims 必须是对象数组。',
+        ),
+      );
+      return const <NarrativeStateClaim>[];
+    }
+    final canonicalClaims = <NarrativeStateClaim>[];
+    for (var index = 0; index < rawClaims.length; index += 1) {
+      final claimMap = ValueReaders.mapValue(rawClaims[index]);
+      if (claimMap.isEmpty) {
+        issues.add(
+          NarrativeDomainToolParseIssue(
+            code: NarrativeDomainToolValidationCodes.invalidObjectField,
+            fieldPath: '$fieldPath[$index]',
+            message: 'claim 必须是对象。',
+          ),
+        );
+        continue;
+      }
+      final canonicalClaim = <String, Object?>{
+        ...claimMap,
+        'source': ValueReaders.mapValue(claimMap['source']).isNotEmpty
+            ? ValueReaders.mapValue(claimMap['source'])
+            : source.toJson(),
+      };
+      final claim = _claimCodecService.fromJson(canonicalClaim);
+      final validationErrors = claim.validateBasics();
+      if (validationErrors.isNotEmpty) {
+        issues.add(
+          NarrativeDomainToolParseIssue(
+            code: NarrativeDomainToolValidationCodes.invalidNestedContract,
+            fieldPath: '$fieldPath[$index]',
+            message: validationErrors.join(', '),
+          ),
+        );
+        continue;
+      }
+      canonicalClaims.add(claim);
+    }
+    return canonicalClaims;
   }
 
   JsonMap? _parseProposeNarrativeProfileUpdate({
@@ -748,8 +783,12 @@ class NarrativeDomainToolCatalog {
         'purpose',
         'requested_depth',
         'reference_relationship',
+        'collection_mode',
+        'information_domain',
         'target_refs',
         'user_granted_network_access',
+        'source_requirements',
+        'extraction_policy',
         'metadata',
       },
     );
@@ -762,6 +801,12 @@ class NarrativeDomainToolCatalog {
       'reference_relationship': ValueReaders.stringValue(
         arguments['reference_relationship'],
       ).trim(),
+      'collection_mode': ValueReaders.stringValue(
+        arguments['collection_mode'],
+      ).trim(),
+      'information_domain': ValueReaders.stringValue(
+        arguments['information_domain'],
+      ).trim(),
       'target_refs': _canonicalRefs(
         arguments['target_refs'],
         fieldPath: 'target_refs',
@@ -769,6 +814,12 @@ class NarrativeDomainToolCatalog {
       ),
       'user_granted_network_access': ValueReaders.boolValue(
         arguments['user_granted_network_access'],
+      ),
+      'source_requirements': ValueReaders.deepCopyMap(
+        ValueReaders.mapValue(arguments['source_requirements']),
+      ),
+      'extraction_policy': ValueReaders.deepCopyMap(
+        ValueReaders.mapValue(arguments['extraction_policy']),
       ),
       'metadata': metadata,
     };
@@ -910,6 +961,26 @@ class NarrativeDomainToolCatalog {
       }
       final canonicalClaim = <String, Object?>{
         ...claimMap,
+        'claim_id': ValueReaders.stringValue(
+          claimMap['claim_id'],
+          ValueReaders.stringValue(claimMap['id']),
+        ).trim(),
+        'claim_namespace': ValueReaders.stringValue(
+          claimMap['claim_namespace'],
+          ValueReaders.stringValue(claimMap['namespace']),
+        ).trim(),
+        'claim_label': ValueReaders.stringValue(
+          claimMap['claim_label'],
+          ValueReaders.stringValue(
+            claimMap['label'],
+            ValueReaders.stringValue(claimMap['title']),
+          ),
+        ).trim(),
+        'claim_payload': ValueReaders.mapValue(
+          claimMap['claim_payload'].runtimeType == Null
+              ? claimMap['payload']
+              : claimMap['claim_payload'],
+        ),
         'source': ValueReaders.mapValue(claimMap['source']).isNotEmpty
             ? ValueReaders.mapValue(claimMap['source'])
             : <String, Object?>{'source_type': fallbackSourceType},
@@ -950,7 +1021,45 @@ class NarrativeDomainToolCatalog {
         );
         continue;
       }
-      result.add(ValueReaders.deepCopyMap(finding));
+      final evidenceOrReason = ValueReaders.stringValue(
+        finding['evidence_or_unlocatable_reason'],
+        ValueReaders.stringValue(
+          finding['evidence'],
+          ValueReaders.stringValue(finding['detail']),
+        ),
+      ).trim();
+      final explicitReason = ValueReaders.stringValue(
+        finding['unlocatable_reason'],
+      ).trim();
+      final canonicalFinding = <String, Object?>{
+        ...finding,
+        'finding_id': ValueReaders.stringValue(
+          finding['finding_id'],
+          ValueReaders.stringValue(finding['id']),
+        ).trim(),
+        'summary': ValueReaders.stringValue(
+          finding['summary'],
+          ValueReaders.stringValue(finding['title']),
+        ).trim(),
+        'suggested_action': ValueReaders.stringValue(
+          finding['suggested_action'],
+          ValueReaders.stringValue(
+            finding['suggestedAction'],
+            ValueReaders.stringValue(finding['action']),
+          ),
+        ).trim(),
+        'unable_to_locate_evidence':
+            ValueReaders.boolValue(finding['unable_to_locate_evidence']) ||
+            explicitReason.isNotEmpty ||
+            (ValueReaders.mapList(finding['evidence_refs']).isEmpty &&
+                evidenceOrReason.isNotEmpty),
+        'unlocatable_reason': explicitReason.isNotEmpty
+            ? explicitReason
+            : (ValueReaders.mapList(finding['evidence_refs']).isEmpty
+                  ? evidenceOrReason
+                  : ''),
+      };
+      result.add(canonicalFinding);
     }
     return result;
   }
@@ -1094,10 +1203,23 @@ class NarrativeDomainToolCatalog {
     'required': <String>['chapter_path', 'chapter_content'],
     'properties': <String, Object?>{
       'chapter_path': <String, Object?>{'type': 'string'},
-      'chapter_content': <String, Object?>{'type': 'string'},
+      'chapter_content': <String, Object?>{
+        'type': 'string',
+        'description':
+            '正式章节正文。连续章节第一段应直接承接上一章已落定状态，先推进新的回应、动作或结果，不要把上一章末尾已发生的寻路、敲门、到达、开门或发问整段倒带重演。',
+      },
       'title': <String, Object?>{'type': 'string'},
+      'claims': <String, Object?>{
+        'type': 'array',
+        'items': <String, Object?>{
+          'type': 'object',
+          'additionalProperties': true,
+        },
+      },
       'submission': <String, Object?>{
         'type': 'object',
+        'description':
+            '结构化章节 sidecar。连续章节至少应填写 summary，并在 final_state_summary 中写明章末位置、即时目标/动作、未完成悬念和下一章入口；不要提交空壳 submission。',
         'additionalProperties': true,
       },
       'constraint_coverage': <String, Object?>{
@@ -1300,6 +1422,8 @@ class NarrativeDomainToolCatalog {
       'purpose': <String, Object?>{'type': 'string'},
       'requested_depth': <String, Object?>{'type': 'string'},
       'reference_relationship': <String, Object?>{'type': 'string'},
+      'collection_mode': <String, Object?>{'type': 'string'},
+      'information_domain': <String, Object?>{'type': 'string'},
       'target_refs': <String, Object?>{
         'type': 'array',
         'items': <String, Object?>{
@@ -1308,6 +1432,14 @@ class NarrativeDomainToolCatalog {
         },
       },
       'user_granted_network_access': <String, Object?>{'type': 'boolean'},
+      'source_requirements': <String, Object?>{
+        'type': 'object',
+        'additionalProperties': true,
+      },
+      'extraction_policy': <String, Object?>{
+        'type': 'object',
+        'additionalProperties': true,
+      },
       'metadata': <String, Object?>{
         'type': 'object',
         'additionalProperties': true,

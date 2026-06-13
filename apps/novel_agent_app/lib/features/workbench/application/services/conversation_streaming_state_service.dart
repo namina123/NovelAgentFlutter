@@ -22,6 +22,9 @@ class ConversationStreamingStateService {
         progress.executedTools,
         includeDetailBodies: false,
       ),
+      ..._sessionStateService.toolEntriesFromPendingCalls(
+        progress.pendingToolCalls,
+      ),
     ];
     final assistantEntry = _sessionStateService.assistantEntryFromContent(
       content: progress.draftMarkdown,

@@ -25,85 +25,121 @@ class DocumentToolbarBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 中文注释: 这一轮先削弱顶部“工具台”感，只保留轻量查看方式和少量必要动作。
     final surface = context.novelThemeSurfaces.panel;
     final visual = WorkbenchVisualStyle.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    final statusLabel = !hasDocument
+        ? '空白'
+        : canRender
+        ? 'Markdown'
+        : 'Text';
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final actions = [
+          ToolbarIconButton(
+            icon: Icons.save_outlined,
+            tooltip: '保存',
+            dense: true,
+            onPressed: () => onActionRequested(DocumentToolbarAction.save),
+          ),
+          ToolbarIconButton(
+            icon: Icons.rate_review_outlined,
+            tooltip: '审稿',
+            tone: ToolbarIconTone.warm,
+            dense: true,
+            onPressed: () => onActionRequested(DocumentToolbarAction.review),
+          ),
+        ];
+        final compact = constraints.maxWidth < 520;
+        final trailing = Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '正文工作区',
-                    style: TextStyle(
-                      fontSize: visual.sectionTitleFontSize,
-                      height: visual.titleLineHeight,
-                      fontWeight: FontWeight.w800,
-                      color: surface.foregroundColor,
-                    ),
-                  ),
-                  SizedBox(height: visual.microGap - 2),
-                  Text(
-                    '围绕当前文档继续写作、预览或检查结构。',
-                    style: TextStyle(
-                      fontSize: visual.metaFontSize,
-                      height: visual.bodyLineHeight,
-                      fontWeight: FontWeight.w600,
-                      color: surface.mutedForegroundColor,
-                    ),
-                  ),
-                ],
+            _ToolbarStatusPill(label: statusLabel, emphasized: hasDocument),
+            SizedBox(width: visual.compactGap + 1),
+            ...actions,
+          ],
+        );
+        return Container(
+          padding: EdgeInsets.fromLTRB(
+            visual.compactGap + 1,
+            visual.microGap + 2,
+            visual.compactGap + 1,
+            visual.microGap + 2,
+          ),
+          decoration: BoxDecoration(
+            color: surface.backgroundColor.withValues(alpha: 0.025),
+            border: Border(
+              top: BorderSide(
+                color: surface.borderColor.withValues(alpha: 0.08),
+                width: surface.borderWidth,
               ),
             ),
-            const SizedBox(width: 8),
-            Wrap(
-              spacing: visual.compactGap,
-              runSpacing: visual.compactGap,
-              children: [
-                ToolbarIconButton(
-                  icon: Icons.save_outlined,
-                  tooltip: '保存',
-                  onPressed: () =>
-                      onActionRequested(DocumentToolbarAction.save),
+          ),
+          child: compact
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    DocumentWorkspaceDisplayModeBar(
+                      selectedMode: selectedMode,
+                      canRender: canRender,
+                      hasDocument: hasDocument,
+                      onModeSelected: onDisplayModeSelected,
+                    ),
+                    SizedBox(height: visual.compactGap + 1),
+                    trailing,
+                  ],
+                )
+              : Row(
+                  children: [
+                    Expanded(
+                      child: DocumentWorkspaceDisplayModeBar(
+                        selectedMode: selectedMode,
+                        canRender: canRender,
+                        hasDocument: hasDocument,
+                        onModeSelected: onDisplayModeSelected,
+                      ),
+                    ),
+                    SizedBox(width: visual.compactGap + 2),
+                    trailing,
+                  ],
                 ),
-                ToolbarIconButton(
-                  icon: Icons.rate_review_outlined,
-                  tooltip: '审稿',
-                  tone: ToolbarIconTone.warm,
-                  onPressed: () =>
-                      onActionRequested(DocumentToolbarAction.review),
-                ),
-              ],
-            ),
-          ],
+        );
+      },
+    );
+  }
+}
+
+class _ToolbarStatusPill extends StatelessWidget {
+  const _ToolbarStatusPill({required this.label, required this.emphasized});
+
+  final String label;
+  final bool emphasized;
+
+  @override
+  Widget build(BuildContext context) {
+    final surface = context.novelThemeSurfaces.optionTile;
+    final colors = context.novelThemeColors;
+    final visual = WorkbenchVisualStyle.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: emphasized
+            ? surface.highlightBackgroundColor.withValues(alpha: 0.18)
+            : surface.backgroundColor.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(visual.sectionRadius),
+        border: Border.all(
+          color: emphasized
+              ? surface.highlightBorderColor.withValues(alpha: 0.18)
+              : surface.borderColor.withValues(alpha: 0.08),
         ),
-        const SizedBox(height: 8),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '查看方式',
-              style: TextStyle(
-                fontSize: visual.metaFontSize,
-                fontWeight: FontWeight.w700,
-                color: surface.mutedForegroundColor,
-              ),
-            ),
-            SizedBox(height: visual.compactGap),
-            DocumentWorkspaceDisplayModeBar(
-              selectedMode: selectedMode,
-              canRender: canRender,
-              hasDocument: hasDocument,
-              onModeSelected: onDisplayModeSelected,
-            ),
-          ],
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: visual.compactLabelFontSize - 0.4,
+          fontWeight: FontWeight.w700,
+          color: emphasized ? colors.textColor : colors.mutedTextColor,
         ),
-      ],
+      ),
     );
   }
 }

@@ -65,6 +65,7 @@ class LongTaskStopAfterStepService {
 
     final outputPaths = ValueReaders.stringList(result['output_paths']);
     if (outputPaths.isEmpty &&
+        !_shouldIgnoreNoOutputForContinuousAgentTask(taskAfterStep) &&
         ValueReaders.boolValue(profile['stop_on_no_output'], true)) {
       return _decision(
         true,
@@ -136,6 +137,24 @@ class LongTaskStopAfterStepService {
     // 中文注释: checkpoint 既可能由 task_type 表达，也可能由 metadata.stage 表达。
     return ValueReaders.stringValue(task['task_type']).trim() == 'checkpoint' ||
         _taskStage(task) == 'checkpoint';
+  }
+
+  bool _shouldIgnoreNoOutputForContinuousAgentTask(JsonMap task) {
+    if (ValueReaders.stringValue(task['task_type']).trim() != 'agent_task') {
+      return false;
+    }
+    final mode = _modeService.normalizeMode(
+      ValueReaders.stringValue(task['mode']),
+    );
+    if (mode != TaskRuntimeConstants.modeSeedToFullNovel &&
+        mode != TaskRuntimeConstants.modeHumanOutlineAiDraft) {
+      return false;
+    }
+    final metadata = ValueReaders.mapValue(task['metadata']);
+    return ValueReaders.stringValue(metadata['runtime_baseline_id']).trim() ==
+            'continuous_autonomous' &&
+        ValueReaders.stringValue(metadata['generated_by']).trim() ==
+            'LongTaskRevision';
   }
 
   JsonMap _decision(

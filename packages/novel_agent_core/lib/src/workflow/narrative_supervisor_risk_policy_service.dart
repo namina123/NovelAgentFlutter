@@ -7,38 +7,59 @@ import '../continuity/narrative_state/semantic_review_severity.dart';
 import '../tools/domain/domain_tool_outcome_statuses.dart';
 import '../tools/domain/narrative_domain_tool_names.dart';
 import 'chapter_delivery_state_statuses.dart';
+import 'expression_constraint_supervisor_signal_service.dart';
+import 'information_evidence_gate_signal.dart';
+import 'writing_execution_constraint_summary.dart';
 
 class NarrativeSupervisorRiskPolicyService {
-  const NarrativeSupervisorRiskPolicyService();
+  const NarrativeSupervisorRiskPolicyService({
+    ExpressionConstraintSupervisorSignalService?
+    expressionConstraintSupervisorSignalService,
+  }) : _expressionConstraintSupervisorSignalService =
+           expressionConstraintSupervisorSignalService ??
+           const ExpressionConstraintSupervisorSignalService();
+
+  final ExpressionConstraintSupervisorSignalService
+  _expressionConstraintSupervisorSignalService;
 
   JsonMap assess({
     required JsonMap result,
     JsonMap execution = const <String, Object?>{},
+    JsonMap expressionConstraintSignal = const <String, Object?>{},
   }) {
     // 中文注释: supervisor 风险策略只消费结构化 runtime/tool 结果，不读取正文也不判断题材语义。
     final delivery = _deliverySignal(result, execution);
     final review = _reviewSignal(result, execution);
     final permission = _permissionSignal(result, execution);
     final information = _informationSignal(result, execution);
+    final expressionConstraints = expressionConstraintSignal.isNotEmpty
+        ? ValueReaders.deepCopyMap(expressionConstraintSignal)
+        : _expressionConstraintSignal(result, execution);
     final overall = _overallSignal(
       delivery: delivery,
       review: review,
       permission: permission,
       information: information,
+      expressionConstraints: expressionConstraints,
     );
     return <String, Object?>{
       'delivery': delivery,
       'review': review,
       'permission': permission,
       'information': information,
+      'expression_constraints': expressionConstraints,
       'overall': overall,
     };
   }
 
   JsonMap _deliverySignal(JsonMap result, JsonMap execution) {
-    final chapterDelivery = ValueReaders.mapValue(execution['chapter_delivery']);
+    final chapterDelivery = ValueReaders.mapValue(
+      execution['chapter_delivery'],
+    );
     final latestToolDelivery = _latestChapterDeliveryPayload(result);
-    final source = chapterDelivery.isNotEmpty ? chapterDelivery : latestToolDelivery;
+    final source = chapterDelivery.isNotEmpty
+        ? chapterDelivery
+        : latestToolDelivery;
     final state = ValueReaders.stringValue(
       source['delivery_state'],
       ValueReaders.stringValue(execution['chapter_delivery_state']),
@@ -63,7 +84,9 @@ class NarrativeSupervisorRiskPolicyService {
       'reason': reason,
       'category': category,
       'chapter_path': ValueReaders.stringValue(source['chapter_path']),
-      'chapter_body_state': ValueReaders.stringValue(source['chapter_body_state']),
+      'chapter_body_state': ValueReaders.stringValue(
+        source['chapter_body_state'],
+      ),
       'sidecar_state': ValueReaders.stringValue(source['sidecar_state']),
       'waiting_user': category == 'checkpoint_user',
       'manual_attention_required': category == 'manual_attention',
@@ -103,7 +126,8 @@ class NarrativeSupervisorRiskPolicyService {
         )
         .length;
     var category = switch (review.recommendedDisposition) {
-      SemanticReviewRecommendedDisposition.manualAttention => 'manual_attention',
+      SemanticReviewRecommendedDisposition.manualAttention =>
+        'manual_attention',
       SemanticReviewRecommendedDisposition.checkpointUser => 'checkpoint_user',
       SemanticReviewRecommendedDisposition.repair => 'repair',
       _ => 'accept',
@@ -153,7 +177,8 @@ class NarrativeSupervisorRiskPolicyService {
       ).trim();
       final waiting =
           outcomeStatus == DomainToolOutcomeStatuses.needsUserConfirmation ||
-          permissionDisposition == DomainToolOutcomeStatuses.needsUserConfirmation ||
+          permissionDisposition ==
+              DomainToolOutcomeStatuses.needsUserConfirmation ||
           ValueReaders.boolValue(toolResult['waiting_for_user_choice']);
       if (waiting && toolName.isNotEmpty && !waitingTools.contains(toolName)) {
         waitingTools.add(toolName);
@@ -176,8 +201,15 @@ class NarrativeSupervisorRiskPolicyService {
   }
 
   JsonMap _informationSignal(JsonMap result, JsonMap execution) {
+    final providedSignal = _providedInformationSignal(result, execution);
+    final providedGate = InformationEvidenceGateSignal.fromJson(
+      ValueReaders.mapValue(providedSignal['evidence_gate']).isNotEmpty
+          ? ValueReaders.mapValue(providedSignal['evidence_gate'])
+          : providedSignal,
+    );
     final changedPaths = _informationChangedPaths(result);
     final pendingResearchRequests = <String>[];
+    final awaitingConfirmationRequests = <String>[];
     final highRiskReferences = <String>[];
     final designConflicts = <String>[];
     final reasons = <String>[];
@@ -186,6 +218,16 @@ class NarrativeSupervisorRiskPolicyService {
       final toolName = ValueReaders.stringValue(tool['name']).trim();
       final toolResult = ValueReaders.mapValue(tool['result']);
       final domainOutcome = ValueReaders.mapValue(toolResult['domain_outcome']);
+      final outcomeStatus = ValueReaders.stringValue(
+        domainOutcome['outcome_status'],
+        ValueReaders.stringValue(toolResult['domain_outcome_status']),
+      ).trim();
+      final permissionDecision = ValueReaders.mapValue(
+        domainOutcome['permission_decision'],
+      );
+      final permissionDisposition = ValueReaders.stringValue(
+        permissionDecision['disposition'],
+      ).trim();
       final payload = ValueReaders.mapValue(domainOutcome['outcome_payload']);
       switch (toolName) {
         case NarrativeDomainToolNames.requestExternalResearch:
@@ -194,17 +236,32 @@ class NarrativeSupervisorRiskPolicyService {
             final query = ValueReaders.stringValue(
               ValueReaders.mapValue(payload['research_request'])['query'],
             ).trim();
-            pendingResearchRequests.add(
-              query.isEmpty ? 'external_research_request' : query,
-            );
+            final descriptor = query.isEmpty
+                ? 'external_research_request'
+                : query;
+            final awaitingConfirmation =
+                outcomeStatus ==
+                    DomainToolOutcomeStatuses.needsUserConfirmation ||
+                permissionDisposition ==
+                    DomainToolOutcomeStatuses.needsUserConfirmation ||
+                ValueReaders.boolValue(toolResult['waiting_for_user_choice']);
+            if (awaitingConfirmation) {
+              awaitingConfirmationRequests.add(descriptor);
+            } else {
+              pendingResearchRequests.add(descriptor);
+            }
           }
           break;
         case NarrativeDomainToolNames.proposeReferenceWork:
-          final referenceWork = ValueReaders.mapValue(payload['reference_work']);
+          final referenceWork = ValueReaders.mapValue(
+            payload['reference_work'],
+          );
           final requiresConfirmation =
               ValueReaders.boolValue(payload['requires_user_confirmation']) ||
               ValueReaders.boolValue(referenceWork['requires_confirmation']);
-          final riskNoteCount = ValueReaders.intValue(payload['risk_note_count']);
+          final riskNoteCount = ValueReaders.intValue(
+            payload['risk_note_count'],
+          );
           final relationshipToProject = ValueReaders.stringValue(
             payload['relationship_to_project'],
             ValueReaders.stringValue(referenceWork['relationship_to_project']),
@@ -215,87 +272,200 @@ class NarrativeSupervisorRiskPolicyService {
             highRiskReferences.add(
               ValueReaders.stringValue(
                 referenceWork['reference_work_id'],
-                ValueReaders.stringValue(referenceWork['title'], 'reference_work'),
+                ValueReaders.stringValue(
+                  referenceWork['title'],
+                  'reference_work',
+                ),
               ),
             );
           }
           break;
         case NarrativeDomainToolNames.proposeDesignElement:
-          final designElement = ValueReaders.mapValue(payload['design_element']);
+          final designElement = ValueReaders.mapValue(
+            payload['design_element'],
+          );
           final metadata = ValueReaders.mapValue(designElement['metadata']);
           if (_modifiesActiveInformation(metadata)) {
             designConflicts.add(
               ValueReaders.stringValue(
                 designElement['design_id'],
-                ValueReaders.stringValue(designElement['design_label'], 'design_element'),
+                ValueReaders.stringValue(
+                  designElement['design_label'],
+                  'design_element',
+                ),
               ),
             );
           }
           break;
       }
     }
-    final requiredOmittedItems = _requiredOmittedInformationItems(execution, result);
+    final requiredOmittedItems = _requiredOmittedInformationItems(
+      execution,
+      result,
+    );
+    final awaitingConfirmationCount = _maxInt(
+      awaitingConfirmationRequests.length,
+      providedGate.awaitingConfirmationCount,
+    );
+    final pendingResearchCount = _maxInt(
+      pendingResearchRequests.length,
+      providedGate.pendingResearchCount,
+    );
+    final gatewayFailureCount = _maxInt(
+      _providedCount(
+        providedSignal,
+        'gateway_failure_count',
+        fallbackKey: 'gateway_failed_count',
+      ),
+      providedGate.gatewayFailureCount,
+    );
+    final rigorousSourceInsufficientCount = _maxInt(
+      _providedCount(providedSignal, 'rigorous_source_insufficient_count'),
+      providedGate.rigorousSourceInsufficientCount,
+    );
+    final requiredInformationOmittedCount = _maxInt(
+      _providedCount(
+        providedSignal,
+        'required_information_omitted_count',
+        fallbackKey: 'required_omitted_count',
+      ),
+      _maxInt(
+        providedGate.requiredInformationOmittedCount,
+        requiredOmittedItems.length,
+      ),
+    );
+    final externalFactUnverifiedCount = _maxInt(
+      _providedCount(providedSignal, 'external_fact_unverified_count'),
+      providedGate.externalFactUnverifiedCount,
+    );
     var category = 'accept';
     if (highRiskReferences.isNotEmpty) {
       category = 'manual_attention';
       reasons.add('检测到高风险引用作品边界，建议先人工确认引用范围与使用边界。');
-    } else if (designConflicts.isNotEmpty || requiredOmittedItems.isNotEmpty) {
+    } else if (awaitingConfirmationCount > 0) {
+      category = 'checkpoint_user';
+      reasons.add('检测到资料请求正在等待用户确认，当前节点应停在真实确认点。');
+    } else if (gatewayFailureCount > 0) {
+      category = 'repair';
+      reasons.add('资料网关执行失败，建议先修复网关或重试研究链路。');
+    } else if (designConflicts.isNotEmpty ||
+        requiredInformationOmittedCount > 0 ||
+        rigorousSourceInsufficientCount > 0 ||
+        externalFactUnverifiedCount > 0) {
       category = 'repair';
       if (designConflicts.isNotEmpty) {
         reasons.add('检测到可能覆盖现有长期信息的设计提案，建议先返工或确认冲突。');
       }
-      if (requiredOmittedItems.isNotEmpty) {
+      if (requiredInformationOmittedCount > 0) {
         reasons.add('本轮有 required information 因预算或选择被省略，建议先补上下文再继续。');
       }
-    } else if (pendingResearchRequests.isNotEmpty) {
-      category = 'checkpoint_user';
-      reasons.add('检测到待处理的外部研究请求，建议在继续前确认是否补研究。');
+      if (rigorousSourceInsufficientCount > 0) {
+        reasons.add('当前资料来源未达到严谨来源要求，建议先补充权威来源或保留不确定性。');
+      }
+      if (externalFactUnverifiedCount > 0) {
+        reasons.add('当前存在未核验的外部事实，建议在继续前补交叉核验。');
+      }
+    } else if (pendingResearchCount > 0) {
+      category = 'accept';
+      reasons.add('检测到待执行的研究请求，继续前建议关注资料缺口是否需要补齐。');
     }
     if (changedPaths.isNotEmpty) {
       reasons.add('本轮已写入 information 层结构化记录，可在 checkpoint 中复核这些改动。');
     }
+    final evidenceGate = InformationEvidenceGateSignal.fromJson(
+      <String, Object?>{
+        'present':
+            pendingResearchCount > 0 ||
+            awaitingConfirmationCount > 0 ||
+            gatewayFailureCount > 0 ||
+            rigorousSourceInsufficientCount > 0 ||
+            requiredInformationOmittedCount > 0 ||
+            externalFactUnverifiedCount > 0 ||
+            highRiskReferences.isNotEmpty ||
+            designConflicts.isNotEmpty ||
+            changedPaths.isNotEmpty ||
+            providedGate.present,
+        'recommended_disposition': category,
+        'reason': ValueReaders.stringValue(
+          category == 'manual_attention'
+              ? 'information_high_risk_reference'
+              : category == 'checkpoint_user'
+              ? 'information_awaiting_confirmation'
+              : category == 'repair'
+              ? (gatewayFailureCount > 0
+                    ? 'information_gateway_failed'
+                    : designConflicts.isNotEmpty
+                    ? 'information_design_conflict'
+                    : rigorousSourceInsufficientCount > 0
+                    ? 'information_rigorous_source_insufficient'
+                    : externalFactUnverifiedCount > 0
+                    ? 'information_external_fact_unverified'
+                    : 'information_required_omitted')
+              : pendingResearchCount > 0
+              ? 'information_pending_research'
+              : '',
+        ),
+        'changed_paths': changedPaths,
+        'pending_research_count': pendingResearchCount,
+        'awaiting_confirmation_count': awaitingConfirmationCount,
+        'gateway_failure_count': gatewayFailureCount,
+        'rigorous_source_insufficient_count': rigorousSourceInsufficientCount,
+        'required_information_omitted_count': requiredInformationOmittedCount,
+        'external_fact_unverified_count': externalFactUnverifiedCount,
+        'waiting_user': category == 'checkpoint_user',
+        'manual_attention_required': category == 'manual_attention',
+        'requires_repair': category == 'repair',
+        'metadata': <String, Object?>{
+          ...ValueReaders.deepCopyMap(providedGate.metadata),
+          'pending_research_requests': pendingResearchRequests,
+          'awaiting_confirmation_requests': awaitingConfirmationRequests,
+          'high_risk_reference_ids': highRiskReferences,
+          'design_conflict_ids': designConflicts,
+          'required_omitted_titles': requiredOmittedItems,
+          'reasons': reasons,
+        },
+      },
+    );
     final summary = _informationSummary(
-      pendingResearchRequests: pendingResearchRequests,
+      pendingResearchCount: pendingResearchCount,
+      awaitingConfirmationCount: awaitingConfirmationCount,
+      gatewayFailureCount: gatewayFailureCount,
+      rigorousSourceInsufficientCount: rigorousSourceInsufficientCount,
+      externalFactUnverifiedCount: externalFactUnverifiedCount,
       highRiskReferences: highRiskReferences,
       designConflicts: designConflicts,
-      requiredOmittedItems: requiredOmittedItems,
+      requiredInformationOmittedCount: requiredInformationOmittedCount,
       changedPaths: changedPaths,
       category: category,
     );
     return <String, Object?>{
-      'present':
-          pendingResearchRequests.isNotEmpty ||
-          highRiskReferences.isNotEmpty ||
-          designConflicts.isNotEmpty ||
-          requiredOmittedItems.isNotEmpty ||
-          changedPaths.isNotEmpty,
+      'present': evidenceGate.present,
+      'severity': evidenceGate.severity,
+      'recommended_disposition': evidenceGate.recommendedDisposition,
       'category': category,
       'summary': summary,
-      'reason': ValueReaders.stringValue(
-        category == 'manual_attention'
-            ? 'information_high_risk_reference'
-            : category == 'repair'
-            ? (designConflicts.isNotEmpty
-                  ? 'information_design_conflict'
-                  : 'information_required_omitted')
-            : category == 'checkpoint_user'
-            ? 'information_pending_research'
-            : '',
-      ),
-      'pending_research_count': pendingResearchRequests.length,
+      'reason': evidenceGate.reason,
+      'pending_research_count': pendingResearchCount,
       'pending_research_requests': pendingResearchRequests,
+      'awaiting_confirmation_count': awaitingConfirmationCount,
+      'awaiting_confirmation_requests': awaitingConfirmationRequests,
+      'gateway_failure_count': gatewayFailureCount,
+      'rigorous_source_insufficient_count': rigorousSourceInsufficientCount,
+      'external_fact_unverified_count': externalFactUnverifiedCount,
       'high_risk_reference_count': highRiskReferences.length,
       'high_risk_reference_ids': highRiskReferences,
       'design_conflict_count': designConflicts.length,
       'design_conflict_ids': designConflicts,
-      'required_omitted_count': requiredOmittedItems.length,
+      'required_omitted_count': requiredInformationOmittedCount,
+      'required_information_omitted_count': requiredInformationOmittedCount,
       'required_omitted_titles': requiredOmittedItems,
       'changed_path_count': changedPaths.length,
       'changed_paths': changedPaths,
       'reasons': reasons,
-      'waiting_user': category == 'checkpoint_user',
-      'manual_attention_required': category == 'manual_attention',
-      'requires_repair': category == 'repair',
+      'waiting_user': evidenceGate.waitingUser,
+      'manual_attention_required': evidenceGate.manualAttentionRequired,
+      'requires_repair': evidenceGate.requiresRepair,
+      'evidence_gate': evidenceGate.toJson(),
     };
   }
 
@@ -304,6 +474,7 @@ class NarrativeSupervisorRiskPolicyService {
     required JsonMap review,
     required JsonMap permission,
     required JsonMap information,
+    required JsonMap expressionConstraints,
   }) {
     if (ValueReaders.boolValue(information['manual_attention_required'])) {
       return <String, Object?>{
@@ -349,6 +520,40 @@ class NarrativeSupervisorRiskPolicyService {
         'waiting_user': false,
         'manual_attention_required': true,
         'requires_repair': false,
+      };
+    }
+    if (ValueReaders.stringValue(expressionConstraints['category']).trim() ==
+        'light_repair') {
+      return <String, Object?>{
+        'category': 'repair',
+        'reason': ValueReaders.stringValue(
+          expressionConstraints['gate_reason'],
+          'expression_constraint_light_repair',
+        ),
+        'summary': ValueReaders.stringValue(
+          expressionConstraints['summary'],
+          '表达限制已出现轻量风险，建议先做小修再继续。',
+        ),
+        'waiting_user': false,
+        'manual_attention_required': false,
+        'requires_repair': true,
+      };
+    }
+    if (ValueReaders.stringValue(expressionConstraints['category']).trim() ==
+        'waiting_review_evidence') {
+      return <String, Object?>{
+        'category': 'repair',
+        'reason': ValueReaders.stringValue(
+          expressionConstraints['gate_reason'],
+          'expression_constraint_review_missing',
+        ),
+        'summary': ValueReaders.stringValue(
+          expressionConstraints['summary'],
+          '表达限制当前缺少复核证据，建议先补证据再继续。',
+        ),
+        'waiting_user': false,
+        'manual_attention_required': false,
+        'requires_repair': true,
       };
     }
     if (ValueReaders.boolValue(information['requires_repair'])) {
@@ -433,8 +638,23 @@ class NarrativeSupervisorRiskPolicyService {
     };
   }
 
+  JsonMap _expressionConstraintSignal(JsonMap result, JsonMap execution) {
+    final shared = _sharedWritingExecutionResult(result, execution);
+    if (shared.isNotEmpty) {
+      final constraints = WritingExecutionConstraintSummary.fromJson(
+        ValueReaders.mapValue(shared['constraints']),
+      );
+      return _expressionConstraintSupervisorSignalService.signalFromSummary(
+        constraints,
+      );
+    }
+    return const <String, Object?>{};
+  }
+
   JsonMap _latestChapterDeliveryPayload(JsonMap result) {
-    for (final rawTool in ValueReaders.objectList(result['executed_tools']).reversed) {
+    for (final rawTool in ValueReaders.objectList(
+      result['executed_tools'],
+    ).reversed) {
       final tool = ValueReaders.mapValue(rawTool);
       if (ValueReaders.stringValue(tool['name']) != 'submit_chapter_delivery') {
         continue;
@@ -455,7 +675,9 @@ class NarrativeSupervisorRiskPolicyService {
     if (executionReview.isNotEmpty) {
       return executionReview;
     }
-    for (final rawTool in ValueReaders.objectList(result['executed_tools']).reversed) {
+    for (final rawTool in ValueReaders.objectList(
+      result['executed_tools'],
+    ).reversed) {
       final tool = ValueReaders.mapValue(rawTool);
       if (ValueReaders.stringValue(tool['name']) != 'submit_semantic_review') {
         continue;
@@ -512,9 +734,8 @@ class NarrativeSupervisorRiskPolicyService {
     JsonMap execution,
     JsonMap result,
   ) {
-    final activationReport = ValueReaders.mapValue(
-      execution['activation_report'],
-    ).isNotEmpty
+    final activationReport =
+        ValueReaders.mapValue(execution['activation_report']).isNotEmpty
         ? ValueReaders.mapValue(execution['activation_report'])
         : ValueReaders.mapValue(result['activation_report']);
     final omitted = <String>[];
@@ -524,7 +745,9 @@ class NarrativeSupervisorRiskPolicyService {
         continue;
       }
       final metadata = ValueReaders.mapValue(item['metadata']);
-      final sourceKind = ValueReaders.stringValue(metadata['source_kind']).trim();
+      final sourceKind = ValueReaders.stringValue(
+        metadata['source_kind'],
+      ).trim();
       if (!sourceKind.startsWith('project_')) {
         continue;
       }
@@ -565,10 +788,14 @@ class NarrativeSupervisorRiskPolicyService {
   }
 
   String _informationSummary({
-    required List<String> pendingResearchRequests,
+    required int pendingResearchCount,
+    required int awaitingConfirmationCount,
+    required int gatewayFailureCount,
+    required int rigorousSourceInsufficientCount,
+    required int externalFactUnverifiedCount,
     required List<String> highRiskReferences,
     required List<String> designConflicts,
-    required List<String> requiredOmittedItems,
+    required int requiredInformationOmittedCount,
     required List<String> changedPaths,
     required String category,
   }) {
@@ -576,8 +803,20 @@ class NarrativeSupervisorRiskPolicyService {
       return '当前没有新的 information 风险信号。';
     }
     final parts = <String>[];
-    if (pendingResearchRequests.isNotEmpty) {
-      parts.add('待研究 ${pendingResearchRequests.length} 项');
+    if (pendingResearchCount > 0) {
+      parts.add('待研究 $pendingResearchCount 项');
+    }
+    if (awaitingConfirmationCount > 0) {
+      parts.add('待确认研究 $awaitingConfirmationCount 项');
+    }
+    if (gatewayFailureCount > 0) {
+      parts.add('研究网关失败 $gatewayFailureCount 项');
+    }
+    if (rigorousSourceInsufficientCount > 0) {
+      parts.add('严谨来源不足 $rigorousSourceInsufficientCount 项');
+    }
+    if (externalFactUnverifiedCount > 0) {
+      parts.add('外部事实未核验 $externalFactUnverifiedCount 项');
     }
     if (highRiskReferences.isNotEmpty) {
       parts.add('高风险引用 ${highRiskReferences.length} 项');
@@ -585,12 +824,74 @@ class NarrativeSupervisorRiskPolicyService {
     if (designConflicts.isNotEmpty) {
       parts.add('设计冲突 ${designConflicts.length} 项');
     }
-    if (requiredOmittedItems.isNotEmpty) {
-      parts.add('required 信息省略 ${requiredOmittedItems.length} 项');
+    if (requiredInformationOmittedCount > 0) {
+      parts.add('required 信息省略 $requiredInformationOmittedCount 项');
     }
     if (changedPaths.isNotEmpty) {
       parts.add('information 改动 ${changedPaths.length} 项');
     }
     return parts.isEmpty ? '当前没有新的 information 风险信号。' : parts.join('，');
+  }
+
+  JsonMap _providedInformationSignal(JsonMap result, JsonMap execution) {
+    final executionSignal = ValueReaders.mapValue(
+      execution['information_signal'],
+    );
+    if (executionSignal.isNotEmpty) {
+      return executionSignal;
+    }
+    final resultSignal = ValueReaders.mapValue(result['information_signal']);
+    if (resultSignal.isNotEmpty) {
+      return resultSignal;
+    }
+    final sharedResult = ValueReaders.mapValue(
+      result['writing_execution_result'],
+    );
+    if (sharedResult.isNotEmpty) {
+      return ValueReaders.mapValue(
+        ValueReaders.mapValue(sharedResult['information'])['evidence_gate'],
+      );
+    }
+    return const <String, Object?>{};
+  }
+
+  JsonMap _sharedWritingExecutionResult(JsonMap result, JsonMap execution) {
+    final direct = ValueReaders.mapValue(result['writing_execution_result']);
+    if (direct.isNotEmpty) {
+      return direct;
+    }
+    final executionShared = ValueReaders.mapValue(
+      execution['writing_execution_result'],
+    );
+    if (executionShared.isNotEmpty) {
+      return executionShared;
+    }
+    final executionPathShared = ValueReaders.mapValue(
+      ValueReaders.mapValue(execution['execution'])['writing_execution_result'],
+    );
+    if (executionPathShared.isNotEmpty) {
+      return executionPathShared;
+    }
+    return const <String, Object?>{};
+  }
+
+  int _providedCount(JsonMap signal, String key, {String fallbackKey = ''}) {
+    final direct = ValueReaders.intValue(signal[key]);
+    if (direct > 0) {
+      return direct;
+    }
+    if (fallbackKey.isNotEmpty) {
+      final fallback = ValueReaders.intValue(signal[fallbackKey]);
+      if (fallback > 0) {
+        return fallback;
+      }
+    }
+    return ValueReaders.intValue(
+      ValueReaders.mapValue(signal['evidence_gate'])[key],
+    );
+  }
+
+  int _maxInt(int left, int right) {
+    return left > right ? left : right;
   }
 }

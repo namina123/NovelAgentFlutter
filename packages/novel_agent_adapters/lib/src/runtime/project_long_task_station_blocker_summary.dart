@@ -1,6 +1,8 @@
 class ProjectLongTaskStationBlockerSummary {
   const ProjectLongTaskStationBlockerSummary({
     required this.code,
+    this.category = '',
+    this.label = '',
     required this.note,
     required this.detail,
     required this.controlSummary,
@@ -9,6 +11,8 @@ class ProjectLongTaskStationBlockerSummary {
   });
 
   final String code;
+  final String category;
+  final String label;
   final String note;
   final String detail;
   final String controlSummary;

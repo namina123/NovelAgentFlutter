@@ -19,12 +19,15 @@ class ConversationPendingInputPreviewPanel extends StatelessWidget {
     final panel = context.novelThemeSurfaces.inputDock;
     return Container(
       width: double.infinity,
-      padding: style.bandPadding,
+      padding: style.inset(left: -1, right: -1, top: -1, bottom: -1),
       decoration: BoxDecoration(
-        color: style.bandBackgroundColor,
-        border: Border.all(
-          color: style.bandBorderColor,
-          width: AppChrome.borderWidth,
+        color: style.bandBackgroundColor.withValues(alpha: 0.84),
+        borderRadius: BorderRadius.circular(8),
+        border: Border(
+          top: BorderSide(
+            color: style.bandBorderColor.withValues(alpha: 0.42),
+            width: AppChrome.borderWidth,
+          ),
         ),
       ),
       child: Column(
@@ -43,7 +46,7 @@ class ConversationPendingInputPreviewPanel extends StatelessWidget {
                   '待发送输入',
                   style: TextStyle(
                     color: style.accentBandForegroundColor,
-                    fontSize: 11,
+                    fontSize: style.metaFontSize,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -65,8 +68,8 @@ class ConversationPendingInputPreviewPanel extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: panel.foregroundColor,
-              fontSize: 12,
-              height: 1.4,
+              fontSize: style.bodyFontSize,
+              height: style.bodyLineHeight,
             ),
           ),
         ],

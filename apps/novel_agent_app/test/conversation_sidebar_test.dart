@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novel_agent_app/app/theme/app_theme.dart';
+import 'package:novel_agent_app/features/workbench/application/models/conversation_tool_lifecycle_status.dart';
 import 'package:novel_agent_app/features/workbench/application/services/workbench_pane_view_data_mapper_service.dart';
 import 'package:novel_agent_app/features/workbench/presentation/contracts/conversation_action_handler.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/conversation_agent_selector_view_data.dart';
@@ -75,13 +76,18 @@ void main() {
       expect(find.byType(ConversationComposerDockPanel), findsOneWidget);
       expect(find.byType(ConversationModelStrip), findsOneWidget);
       expect(find.byType(ConversationSendConfigBar), findsOneWidget);
-      expect(find.text('当前会话智能体'), findsOneWidget);
       expect(find.text('审阅智能体'), findsOneWidget);
       expect(find.text('主智能体'), findsNothing);
       expect(find.text('默认组'), findsNothing);
+      expect(
+        find.byKey(
+          const ValueKey<String>('conversation_header_agent_selector'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('当前协作智能体'), findsNothing);
       expect(find.textContaining('上下文 '), findsNothing);
       expect(find.textContaining('工具 '), findsNothing);
-      expect(find.textContaining('运行 '), findsNothing);
     },
   );
 
@@ -342,7 +348,6 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('当前会话智能体'), findsOneWidget);
       expect(
         find.byKey(
           const ValueKey<String>('conversation_header_agent_selector'),
@@ -500,7 +505,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('当前会话智能体'), findsOneWidget);
+      expect(find.text('当前协作智能体'), findsNothing);
       expect(find.text('审阅智能体'), findsOneWidget);
       expect(find.text('项目智能体组'), findsNothing);
       expect(find.textContaining('当前默认组：长篇总控组。'), findsNothing);
@@ -552,12 +557,48 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('下一步：智能开局'), findsOneWidget);
       expect(find.text('智能开局'), findsOneWidget);
       expect(find.text('续写下一章'), findsNothing);
-      expect(find.byType(PrimaryActionList), findsNothing);
+      expect(find.byType(PrimaryActionList), findsOneWidget);
     },
   );
+
+  testWidgets('conversation sidebar keeps runtime strip in pending state', (
+    tester,
+  ) async {
+    _setLargeTestViewport(tester);
+    await tester.pumpWidget(
+      _buildSidebarHost(
+        viewData: WorkbenchViewData.initial().copyWith(
+          pendingOptions: const [
+            UserOptionViewData(
+              label: '先补资料',
+              description: '先补资料再继续。',
+              prompt: '请先补资料',
+              sourceQuestion: '请先确认资料研究方向。',
+              allOptions: <Map<String, Object?>>[],
+            ),
+          ],
+          toolCoreStatus: '请先确认资料研究方向。',
+          generationStatus: '智能体需要你先确认下一步选项。',
+          conversationEntries: const [
+            ConversationEntryViewData(
+              id: 'tool_pending_1',
+              kind: ConversationEntryKind.tool,
+              title: '资料研究请求',
+              body: '已发起，正在整理待确认项',
+              toolLifecycleStatus:
+                  ConversationToolLifecycleStatus.pendingConfirmation,
+            ),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('待确认'), findsWidgets);
+    expect(find.text('请先确认资料研究方向。'), findsWidgets);
+  });
 }
 
 Widget _buildSidebarHost({

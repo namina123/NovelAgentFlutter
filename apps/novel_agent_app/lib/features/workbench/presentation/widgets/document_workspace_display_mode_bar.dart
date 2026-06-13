@@ -20,12 +20,10 @@ class DocumentWorkspaceDisplayModeBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 中文注释: 查看方式退成轻量 chips，让它更像“当前文档的阅读方式”，而不是一个编辑器模式总站。
     final optionSurface = context.novelThemeSurfaces.optionTile;
-    final visual = WorkbenchVisualStyle.of(context);
     return Wrap(
-      spacing: visual.compactGap,
-      runSpacing: visual.compactGap,
+      spacing: 5,
+      runSpacing: 4,
       children: [
         _DisplayModeChip(
           label: '正文',
@@ -72,28 +70,40 @@ class _DisplayModeChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final optionSurface = context.novelThemeSurfaces.optionTile;
     final visual = WorkbenchVisualStyle.of(context);
-    return ChoiceChip(
-      label: Text(label),
-      selected: selected,
-      visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      backgroundColor: visual.optionBackground(optionSurface, selected: false),
-      selectedColor: optionSurface.highlightBackgroundColor,
-      disabledColor: visual.optionBackground(optionSurface, selected: false),
-      side: BorderSide(
-        color: selected
-            ? optionSurface.highlightBorderColor
-            : optionSurface.borderColor,
-        width: optionSurface.borderWidth,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: enabled ? onSelected : null,
+        borderRadius: BorderRadius.circular(visual.sectionRadius),
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: selected
+                ? optionSurface.highlightBackgroundColor.withValues(alpha: 0.24)
+                : optionSurface.backgroundColor.withValues(alpha: 0.02),
+            borderRadius: BorderRadius.circular(visual.sectionRadius),
+            border: selected
+                ? Border.all(
+                    color: optionSurface.highlightBorderColor.withValues(
+                      alpha: 0.22,
+                    ),
+                  )
+                : Border.all(
+                    color: optionSurface.borderColor.withValues(alpha: 0.08),
+                  ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: visual.compactLabelFontSize,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+              color: enabled
+                  ? foregroundColor
+                  : visual.disabledForeground(foregroundColor),
+            ),
+          ),
+        ),
       ),
-      labelStyle: TextStyle(
-        fontSize: visual.compactLabelFontSize,
-        fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-        color: enabled
-            ? foregroundColor
-            : visual.disabledForeground(foregroundColor),
-      ),
-      onSelected: enabled ? (_) => onSelected() : null,
     );
   }
 }

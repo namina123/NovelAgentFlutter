@@ -25,12 +25,8 @@ class WorkbenchDesktopSectionSpecResolver {
         backgroundColor: style.navigationSectionColor,
         borderColor: style.navigationSectionBorderColor,
         topAccentColor: visual.strongBorder(sidebar.highlightBorderColor),
-        innerFrameColor: sidebar.backgroundColor.withValues(
-          alpha: visual.sectionFillAlpha,
-        ),
-        innerFrameBorderColor: sidebar.borderColor.withValues(
-          alpha: visual.sectionBorderAlpha,
-        ),
+        innerFrameColor: sidebar.backgroundColor.withValues(alpha: 0.9),
+        innerFrameBorderColor: sidebar.borderColor.withValues(alpha: 0.72),
         radius: style.sectionRadius,
       ),
       WorkbenchDesktopSectionId.primaryCanvas => WorkbenchDesktopSectionSpec(
@@ -39,12 +35,8 @@ class WorkbenchDesktopSectionSpecResolver {
         backgroundColor: style.canvasSectionColor,
         borderColor: style.canvasSectionBorderColor,
         topAccentColor: visual.strongBorder(panel.highlightBorderColor),
-        innerFrameColor: panel.backgroundColor.withValues(
-          alpha: visual.sectionFillAlpha,
-        ),
-        innerFrameBorderColor: panel.borderColor.withValues(
-          alpha: visual.sectionBorderAlpha,
-        ),
+        innerFrameColor: panel.backgroundColor.withValues(alpha: 0.97),
+        innerFrameBorderColor: panel.borderColor.withValues(alpha: 0.78),
         radius: style.sectionRadius,
       ),
       WorkbenchDesktopSectionId.collaboration => WorkbenchDesktopSectionSpec(
@@ -53,11 +45,11 @@ class WorkbenchDesktopSectionSpecResolver {
         backgroundColor: style.collaborationSectionColor,
         borderColor: style.collaborationSectionBorderColor,
         topAccentColor: visual.strongBorder(sidebar.highlightBorderColor),
-        innerFrameColor: sidebar.backgroundColor.withValues(
-          alpha: visual.collaborationFillAlpha,
+        innerFrameColor: style.collaborationSectionColor.withValues(
+          alpha: 0.94,
         ),
-        innerFrameBorderColor: sidebar.borderColor.withValues(
-          alpha: visual.sectionBorderAlpha,
+        innerFrameBorderColor: style.collaborationSectionBorderColor.withValues(
+          alpha: 0.72,
         ),
         radius: style.sectionRadius,
       ),

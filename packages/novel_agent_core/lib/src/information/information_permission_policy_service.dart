@@ -2,6 +2,7 @@ import '../common/json_types.dart';
 import '../common/open_json_contract_codec_service.dart';
 import '../common/value_readers.dart';
 import 'design_element_card.dart';
+import 'information_collection_constants.dart';
 import 'information_link.dart';
 import 'information_permission_decision.dart';
 import 'information_permission_dispositions.dart';
@@ -200,7 +201,12 @@ class InformationPermissionPolicyService {
     final relationshipHint = ValueReaders.stringValue(
       metadata['reference_relationship'],
     ).trim();
-    if (!userGrantedNetworkAccess) {
+    final collectionMode = ValueReaders.stringValue(
+      metadata['collection_mode'],
+      InformationCollectionModes.network,
+    ).trim();
+    final requiresNetwork = collectionMode != InformationCollectionModes.import;
+    if (requiresNetwork && !userGrantedNetworkAccess) {
       return const InformationPermissionDecision(
         disposition: InformationPermissionDispositions.needsUserConfirmation,
         reason: '默认不自动联网，外部研究请求必须先得到用户明确授权。',

@@ -35,6 +35,7 @@ class ProjectTypeCatalogService {
           name: '短篇/文集',
           description: '适合短篇合集、专题短文和统一整理。',
           defaultTitle: '未命名短文集',
+          enabled: false,
         ),
         ProjectTypeDefinition(
           id: 'book_deconstruction',

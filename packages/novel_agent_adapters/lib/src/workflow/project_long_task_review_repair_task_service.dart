@@ -56,6 +56,7 @@ class ProjectLongTaskReviewRepairTaskService {
     final created = await _reviewReportService.createReviewRepairTask(
       project,
       resolvedReportPath,
+      sourceTask: task,
     );
     var createdTask = ValueReaders.mapValue(created['task']);
     if (createdTask.isNotEmpty) {
@@ -126,7 +127,10 @@ class ProjectLongTaskReviewRepairTaskService {
         continue;
       }
       final metadata = ValueReaders.mapValue(task['metadata']);
-      if (ValueReaders.stringValue(metadata['origin']) != 'review_report') {
+      if (!<String>{
+        'review_report',
+        'review_repair_handoff',
+      }.contains(ValueReaders.stringValue(metadata['origin']))) {
         continue;
       }
       if (ValueReaders.stringValue(metadata['review_report_path']) ==

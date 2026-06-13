@@ -3,14 +3,20 @@ import '../common/value_readers.dart';
 import '../creative/expression_constraint_review_projection.dart';
 import '../review/review_type_catalog_service.dart';
 import '../review/review_type_constants.dart';
+import 'long_task_planning_artifact_path_service.dart';
 
 class LongTaskCheckpointReviewTaskSuggestionService {
   LongTaskCheckpointReviewTaskSuggestionService({
     ReviewTypeCatalogService? reviewTypeCatalogService,
+    LongTaskPlanningArtifactPathService? planningArtifactPathService,
   }) : _reviewTypeCatalogService =
-           reviewTypeCatalogService ?? ReviewTypeCatalogService();
+           reviewTypeCatalogService ?? ReviewTypeCatalogService(),
+       _planningArtifactPathService =
+           planningArtifactPathService ??
+           const LongTaskPlanningArtifactPathService();
 
   final ReviewTypeCatalogService _reviewTypeCatalogService;
+  final LongTaskPlanningArtifactPathService _planningArtifactPathService;
 
   List<JsonMap> buildSuggestions({
     required JsonMap task,
@@ -42,10 +48,20 @@ class LongTaskCheckpointReviewTaskSuggestionService {
       checkpointReview['relative_path'],
       ValueReaders.stringValue(checkpointReview['json_path']),
     );
-    final outputPaths = _cleanPaths(
-      ValueReaders.stringList(checkpointReview['output_paths']),
-      fallback: ValueReaders.stringList(task['output_paths']),
+    final outputPaths = _reviewCandidatePaths(
+      _cleanPaths(
+        ValueReaders.stringList(checkpointReview['output_paths']),
+        fallback: ValueReaders.stringList(task['output_paths']),
+      ),
+      taskType: taskType,
     );
+    if (_shouldSkipReviewFollowup(
+      taskType: taskType,
+      outputPaths: outputPaths,
+      taskMetadata: taskMetadata,
+    )) {
+      return const <JsonMap>[];
+    }
     final driftWatchItems = ValueReaders.stringList(
       checkpointReview['drift_watch_items'],
     );
@@ -165,6 +181,27 @@ class LongTaskCheckpointReviewTaskSuggestionService {
     return result;
   }
 
+  bool _shouldSkipReviewFollowup({
+    required String taskType,
+    required List<String> outputPaths,
+    required JsonMap taskMetadata,
+  }) {
+    // 中文注释: review 任务的产物不再继续派生“审稿的审稿”，否则会在 checkpoint followup 上递归膨胀并卡住主链。
+    if (taskType == 'review') {
+      return true;
+    }
+    if (ValueReaders.stringValue(taskMetadata['origin']) ==
+        'checkpoint_review_suggestion') {
+      return true;
+    }
+    if (outputPaths.isEmpty) {
+      return false;
+    }
+    return outputPaths.every(
+      (path) => path.toLowerCase().startsWith('reviews/'),
+    );
+  }
+
   List<String> _cleanPaths(
     List<String> paths, {
     List<String> fallback = const <String>[],
@@ -181,6 +218,56 @@ class LongTaskCheckpointReviewTaskSuggestionService {
       }
     }
     return result;
+  }
+
+  List<String> _reviewCandidatePaths(
+    List<String> outputPaths, {
+    required String taskType,
+  }) {
+    final filtered = outputPaths
+        .where(_isReviewableOutputPath)
+        .toList(growable: false);
+    if (taskType != 'planning') {
+      return filtered;
+    }
+    return filtered
+        .where(_isPlanningReviewCandidatePath)
+        .toList(growable: false);
+  }
+
+  bool _isReviewableOutputPath(String path) {
+    final lowerPath = path.trim().replaceAll('\\', '/').toLowerCase();
+    if (lowerPath.isEmpty) {
+      return false;
+    }
+    return !_startsWithAny(lowerPath, const <String>[
+      'tasks/',
+      'tracking/',
+      '.novel_agent/',
+      'runs/',
+      'sessions/',
+      'exports/',
+      'backups/',
+      'reviews/',
+    ]);
+  }
+
+  bool _isPlanningReviewCandidatePath(String path) {
+    final lowerPath = path.trim().replaceAll('\\', '/').toLowerCase();
+    if (lowerPath ==
+        LongTaskPlanningArtifactPathService.projectSpecPath.toLowerCase()) {
+      return true;
+    }
+    return _startsWithAny(lowerPath, <String>[
+      '${_planningArtifactPathService.storyOutlinePath().toLowerCase().split('/').first}/',
+      '${_planningArtifactPathService.chapterPlanPath().toLowerCase().split('/').first}/',
+      'outlines/story/',
+      'outlines/chapters/',
+      'outlines/volumes/',
+      'outline/',
+      'chapter_outlines/',
+      'volume_outlines/',
+    ]);
   }
 
   List<String> _reviewTypesForPath(

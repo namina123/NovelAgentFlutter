@@ -66,9 +66,7 @@ class WorkbenchDesktopStyle {
       surfaceRadius: visual.surfaceRadius,
       sectionRadius: visual.sectionRadius,
       surfaceBackgroundColor: colors.canvasBackground,
-      surfaceOverlayColor: colors.panelBackground.withValues(
-        alpha: visual.surfaceOverlayAlpha,
-      ),
+      surfaceOverlayColor: colors.accentColor.withValues(alpha: 0.024),
       paneFrameColor: panel.backgroundColor.withValues(
         alpha: visual.paneFrameAlpha,
       ),
@@ -87,16 +85,16 @@ class WorkbenchDesktopStyle {
       canvasSectionBorderColor: panel.borderColor.withValues(
         alpha: visual.sectionBorderAlpha,
       ),
-      collaborationSectionColor: sidebar.backgroundColor.withValues(
+      collaborationSectionColor: colors.inputBackground.withValues(
         alpha: visual.collaborationFillAlpha,
       ),
-      collaborationSectionBorderColor: sidebar.borderColor.withValues(
+      collaborationSectionBorderColor: colors.lineColor.withValues(
         alpha: visual.sectionBorderAlpha,
       ),
-      auxiliarySectionColor: panel.highlightBackgroundColor.withValues(
+      auxiliarySectionColor: colors.inputBackground.withValues(
         alpha: visual.auxiliaryFillAlpha,
       ),
-      auxiliarySectionBorderColor: panel.highlightBorderColor.withValues(
+      auxiliarySectionBorderColor: colors.lineColor.withValues(
         alpha: visual.auxiliaryBorderAlpha,
       ),
       dividerTrackColor: splitter.backgroundColor.withValues(

@@ -5,12 +5,15 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 import '../../presentation/contracts/project_assets_action_handler.dart';
 import '../../presentation/models/project_assets_view_data.dart';
 import '../models/project_assets_catalog.dart';
+import '../models/project_reference_extraction_execution_result.dart';
 import '../models/project_assets_snapshot.dart';
 import '../models/project_assets_tab_id.dart';
 import '../services/project_assets_loader_service.dart';
 import '../services/project_expression_constraint_binding_action_service.dart';
 import '../services/project_expression_constraint_workspace_service.dart';
 import '../services/project_assets_view_data_service.dart';
+import '../services/project_reference_extraction_execution_service.dart';
+import '../services/project_reference_extraction_strategy_picker_view_data_service.dart';
 
 typedef ReadAvailableProjectAgents = List<JsonMap> Function();
 
@@ -25,7 +28,11 @@ class ProjectAssetsController extends ChangeNotifier
     required ReadAvailableProjectAgents readAvailableProjectAgents,
     required Future<void> Function() syncWorkbenchResources,
     required VoidCallback onBackRequested,
+    required ProjectReferenceExtractionExecutionService
+    referenceExtractionExecutionService,
     ProjectAssetsViewDataService? viewDataService,
+    ProjectReferenceExtractionStrategyPickerViewDataService?
+    referenceExtractionStrategyPickerViewDataService,
     ProjectExpressionConstraintBindingActionService?
     expressionConstraintBindingActionService,
     ForeshadowRecordNormalizerService? foreshadowNormalizerService,
@@ -37,8 +44,13 @@ class ProjectAssetsController extends ChangeNotifier
        _readAvailableProjectAgents = readAvailableProjectAgents,
        _syncWorkbenchResources = syncWorkbenchResources,
        _onBackRequested = onBackRequested,
+       _referenceExtractionExecutionService =
+           referenceExtractionExecutionService,
        _viewDataService =
            viewDataService ?? const ProjectAssetsViewDataService(),
+       _referenceExtractionStrategyPickerViewDataService =
+           referenceExtractionStrategyPickerViewDataService ??
+           const ProjectReferenceExtractionStrategyPickerViewDataService(),
        _expressionConstraintBindingActionService =
            expressionConstraintBindingActionService ??
            const ProjectExpressionConstraintBindingActionService(),
@@ -56,7 +68,11 @@ class ProjectAssetsController extends ChangeNotifier
   final ReadAvailableProjectAgents _readAvailableProjectAgents;
   final Future<void> Function() _syncWorkbenchResources;
   final VoidCallback _onBackRequested;
+  final ProjectReferenceExtractionExecutionService
+  _referenceExtractionExecutionService;
   final ProjectAssetsViewDataService _viewDataService;
+  final ProjectReferenceExtractionStrategyPickerViewDataService
+  _referenceExtractionStrategyPickerViewDataService;
   final ProjectExpressionConstraintBindingActionService
   _expressionConstraintBindingActionService;
   final ForeshadowRecordNormalizerService _foreshadowNormalizerService;
@@ -117,7 +133,7 @@ class ProjectAssetsController extends ChangeNotifier
       );
       _statusMessage =
           status ??
-          '已加载 ${catalog.styles.length} 个风格、${catalog.expressionConstraints.length} 个表达限制 preset、${catalog.foreshadows.length} 个伏笔、${catalog.timelines.length} 条时间线、${catalog.relationships.length} 条关系。';
+          '已加载 ${catalog.styles.length} 个风格、${catalog.expressionConstraints.length} 个表达限制方案、${catalog.foreshadows.length} 个伏笔、${catalog.timelines.length} 条时间线、${catalog.relationships.length} 条关系。';
       _rebuildView();
     } catch (error) {
       _snapshot = _snapshot.copyWith(isLoading: false);
@@ -135,8 +151,53 @@ class ProjectAssetsController extends ChangeNotifier
   }
 
   @override
+  Future<void> onProjectAssetsExtractReferenceRequested({
+    String strategyProfileId = '',
+  }) async {
+    final project = _readCurrentProject();
+    if (project == null) {
+      await refresh(status: '请先创建或打开项目。');
+      return;
+    }
+    final normalizedStrategyProfileId =
+        _referenceExtractionStrategyPickerViewDataService
+            .normalizeSelectedProfileId(
+              strategyProfileId.trim().isEmpty
+                  ? _snapshot.selectedReferenceExtractionStrategyId
+                  : strategyProfileId.trim(),
+            );
+    _snapshot = _snapshot.copyWith(
+      selectedReferenceExtractionStrategyId: normalizedStrategyProfileId,
+    );
+    _snapshot = _snapshot.copyWith(isLoading: true);
+    final strategyName = _referenceExtractionStrategyLabel(
+      normalizedStrategyProfileId,
+    );
+    _statusMessage = '正在提取参考资料... 当前策略：$strategyName';
+    _rebuildView();
+    final result = await _referenceExtractionExecutionService.pickAndExecute(
+      project: project,
+      strategyProfileId: normalizedStrategyProfileId,
+    );
+    await _handleReferenceExtractionResult(result);
+  }
+
+  @override
   void onProjectAssetsTabSelected(String tabId) {
     _snapshot = _snapshot.copyWith(activeTabId: tabId.trim());
+    _rebuildView();
+  }
+
+  Future<void> _handleReferenceExtractionResult(
+    ProjectReferenceExtractionExecutionResult result,
+  ) async {
+    if (result.didMutateProject) {
+      await _syncWorkbenchResources();
+      await refresh(status: result.statusMessage);
+      return;
+    }
+    _snapshot = _snapshot.copyWith(isLoading: false);
+    _statusMessage = result.statusMessage;
     _rebuildView();
   }
 
@@ -181,40 +242,38 @@ class ProjectAssetsController extends ChangeNotifier
 
   @override
   void onProjectAssetsReferenceSelected(String referenceKey) {
-    final cleanKey = referenceKey.trim();
-    if (cleanKey.isEmpty) {
+    final reference = _snapshot.catalog.referenceIndex.referenceByKey(
+      referenceKey,
+    );
+    if (reference == null) {
       return;
     }
-    final segments = cleanKey.split(':');
-    if (segments.length != 2) {
-      return;
-    }
-    final kind = segments.first;
-    final assetId = segments.last;
-    switch (kind) {
+    switch (reference.assetKind) {
       case 'foreshadow':
         _snapshot = _snapshot.copyWith(
           activeTabId: ProjectAssetsTabId.foreshadows,
-          selectedForeshadowId: assetId,
-          selectedGraphReferenceKey: cleanKey,
+          selectedForeshadowId: reference.assetId,
+          selectedGraphReferenceKey: reference.referenceKey,
         );
         break;
       case 'timeline':
         _snapshot = _snapshot.copyWith(
           activeTabId: ProjectAssetsTabId.timelines,
-          selectedTimelineId: assetId,
-          selectedGraphReferenceKey: cleanKey,
+          selectedTimelineId: reference.assetId,
+          selectedGraphReferenceKey: reference.referenceKey,
         );
         break;
       case 'relationship':
         _snapshot = _snapshot.copyWith(
           activeTabId: ProjectAssetsTabId.relationships,
-          selectedRelationshipId: assetId,
-          selectedGraphReferenceKey: cleanKey,
+          selectedRelationshipId: reference.assetId,
+          selectedGraphReferenceKey: reference.referenceKey,
         );
         break;
       default:
-        _snapshot = _snapshot.copyWith(selectedGraphReferenceKey: cleanKey);
+        _snapshot = _snapshot.copyWith(
+          selectedGraphReferenceKey: reference.referenceKey,
+        );
         break;
     }
     _rebuildView();
@@ -285,7 +344,7 @@ class ProjectAssetsController extends ChangeNotifier
       (item) => item.id == request.profileId.trim(),
     );
     if (selectedProfiles.isEmpty) {
-      await refresh(status: '当前表达限制 preset 不存在或已被移除。');
+      await refresh(status: '当前表达限制方案不存在或已被移除。');
       return;
     }
     final nextBindings = _expressionConstraintBindingActionService
@@ -312,7 +371,7 @@ class ProjectAssetsController extends ChangeNotifier
     }
     final cleanProfileId = profileId.trim();
     if (cleanProfileId.isEmpty) {
-      await refresh(status: '请先选择一个表达限制 preset。');
+      await refresh(status: '请先选择一个表达限制方案。');
       return;
     }
     final nextBindings = _expressionConstraintBindingActionService
@@ -568,5 +627,26 @@ class ProjectAssetsController extends ChangeNotifier
       return errorText;
     }
     return '操作失败。';
+  }
+
+  String _referenceExtractionStrategyLabel(String profileId) {
+    final picker = _viewData.referenceExtractionStrategyPicker.options;
+    for (final option in picker) {
+      if (option.profileId == profileId.trim()) {
+        return option.displayName;
+      }
+    }
+    final fallback = _referenceExtractionStrategyPickerViewDataService.build(
+      selectedProfileId: profileId,
+    );
+    if (fallback.options.isEmpty) {
+      return profileId.trim();
+    }
+    for (final option in fallback.options) {
+      if (option.profileId == fallback.selectedProfileId) {
+        return option.displayName;
+      }
+    }
+    return profileId.trim();
   }
 }

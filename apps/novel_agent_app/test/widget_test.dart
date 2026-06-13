@@ -143,6 +143,15 @@ void main() {
           hostPort: bundle.projectToolHostPort,
           taskRepository: projectTaskRepository,
         );
+    final referenceExtractionRuntimeService =
+        ProjectReferenceExtractionRuntimeService(
+          workspacePort: bundle.projectWorkspacePort,
+          loadAvailableAgents: (project) =>
+              bundle.agentPackageCatalog.loadAgentPackages(project),
+          loadAvailableGroups: (project) =>
+              bundle.agentGroupCatalog.loadAgentGroups(project),
+          groupBindingRepository: bundle.projectAgentGroupBindingRepository,
+        );
     final longTaskStationController = LongTaskStationController(
       longTaskSupervisor: bundle.longTaskSupervisor,
       detailService: longTaskStationDetailService,
@@ -241,9 +250,12 @@ void main() {
             description: description,
           ),
       writeProjectTextFileUseCase: writeProjectTextFileUseCase,
+      llmGatewayFactory: (provider, networkSettings) =>
+          bundle.createGateway(provider, networkSettings: networkSettings),
       draftExecutionConstraintRuntimeService:
           draftExecutionConstraintRuntimeService,
       workflowRuntimeService: workflowRuntimeService,
+      referenceExtractionRuntimeService: referenceExtractionRuntimeService,
       conversationDraftRuntimeService: conversationDraftRuntimeService,
       reviewReportService: reviewReportService,
       projectChapterRewriteTaskService: projectChapterRewriteTaskService,

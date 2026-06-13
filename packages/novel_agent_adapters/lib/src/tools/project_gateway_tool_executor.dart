@@ -116,46 +116,107 @@ class ProjectGatewayToolExecutor {
         data: <String, Object?>{'gateway_tool': gatewayTool},
       );
     }
-    final limit = ValueReaders.intValue(arguments['limit'], 5).clamp(1, 10);
-    final searchUrl = ValueReaders.stringValue(
-      arguments['search_url'],
-      'https://html.duckduckgo.com/html/?q=${Uri.encodeQueryComponent(query)}',
-    );
-    try {
-      final result = await _httpService.fetchText(
-        url: searchUrl,
-        headers: const <String, Object?>{
-          'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
-        },
-        maxChars: ValueReaders.intValue(arguments['max_chars'], 32000),
-      );
-      final searchResults = _httpService.parseSearchResults(
-        result.body,
-        limit: limit,
-      );
+    final limit = ValueReaders.intValue(
+      arguments['limit'],
+      5,
+    ).clamp(1, 10).toInt();
+    final searchUrls = _searchUrlsFor(query, arguments);
+    final attemptedSearchUrls = <String>[];
+    Object? lastError;
+    GatewayHttpFetchResult? lastResult;
+    List<JsonMap> lastSearchResults = const <JsonMap>[];
+    for (final searchUrl in searchUrls) {
+      attemptedSearchUrls.add(searchUrl);
+      try {
+        final result = await _httpService.fetchText(
+          url: searchUrl,
+          headers: const <String, Object?>{
+            'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
+          },
+          maxChars: ValueReaders.intValue(arguments['max_chars'], 32000),
+        );
+        final searchResults = _httpService.parseSearchResults(
+          result.body,
+          limit: limit,
+        );
+        lastResult = result;
+        lastSearchResults = searchResults;
+        if (searchResults.isNotEmpty) {
+          return _resultFactory.success(
+            '已完成联网搜索：$query',
+            data: <String, Object?>{
+              'gateway_tool': gatewayTool,
+              'query': query,
+              'search_url': searchUrl,
+              'attempted_search_urls': attemptedSearchUrls,
+              'status_code': result.statusCode,
+              'results': searchResults,
+              'content': result.body,
+              'truncated': result.truncated,
+              'network_region_hint': arguments['network_region_hint'],
+              'preferred_languages': arguments['preferred_languages'],
+              'platform_policy': 'desktop_or_gateway_only',
+            },
+          );
+        }
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    if (lastResult != null) {
       return _resultFactory.success(
-        '已完成联网搜索：$query',
+        '已完成联网搜索但没有解析出足够结果：$query',
         data: <String, Object?>{
           'gateway_tool': gatewayTool,
           'query': query,
-          'search_url': searchUrl,
-          'status_code': result.statusCode,
-          'results': searchResults,
-          'content': result.body,
-          'truncated': result.truncated,
-          'platform_policy': 'desktop_or_gateway_only',
-        },
-      );
-    } catch (error) {
-      return _resultFactory.error(
-        '联网搜索失败：$error',
-        data: <String, Object?>{
-          'gateway_tool': gatewayTool,
-          'query': query,
+          'search_url': attemptedSearchUrls.isEmpty
+              ? ''
+              : attemptedSearchUrls.last,
+          'attempted_search_urls': attemptedSearchUrls,
+          'status_code': lastResult.statusCode,
+          'results': lastSearchResults,
+          'content': lastResult.body,
+          'truncated': lastResult.truncated,
+          'network_region_hint': arguments['network_region_hint'],
+          'preferred_languages': arguments['preferred_languages'],
           'platform_policy': 'desktop_or_gateway_only',
         },
       );
     }
+    return _resultFactory.error(
+      '联网搜索失败：$lastError',
+      data: <String, Object?>{
+        'gateway_tool': gatewayTool,
+        'query': query,
+        'attempted_search_urls': attemptedSearchUrls,
+        'network_region_hint': arguments['network_region_hint'],
+        'preferred_languages': arguments['preferred_languages'],
+        'platform_policy': 'desktop_or_gateway_only',
+      },
+    );
+  }
+
+  List<String> _searchUrlsFor(String query, JsonMap arguments) {
+    final customUrls = ValueReaders.stringList(arguments['search_urls']);
+    if (customUrls.isNotEmpty) {
+      return customUrls;
+    }
+    final customUrl = ValueReaders.stringValue(arguments['search_url']).trim();
+    if (customUrl.isNotEmpty) {
+      return <String>[customUrl];
+    }
+    final encoded = Uri.encodeQueryComponent(query);
+    final urls = <String>[
+      'https://html.duckduckgo.com/html/?q=$encoded',
+      'https://www.bing.com/search?q=$encoded',
+    ];
+    final regionHint = ValueReaders.stringValue(
+      arguments['network_region_hint'],
+    ).trim().toLowerCase();
+    if (regionHint.contains('mainland') || regionHint.contains('china')) {
+      urls.add('https://www.baidu.com/s?wd=$encoded');
+    }
+    return urls;
   }
 
   Future<JsonMap> _runCommand(String gatewayTool, JsonMap arguments) async {

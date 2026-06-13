@@ -15,6 +15,12 @@ void main() {
       );
       final deAi = profiles.firstWhere((profile) => profile.id == 'de_ai');
       expect(deAi.rules, isNotEmpty);
+      expect(
+        deAi.rules,
+        contains('少把“行，……”“行, ……”这类突兀口头起手句当作轻松感捷径；人物真要口头化时，先让语气、动作和上下文把口吻托住。'),
+      );
+      expect(deAi.riskSignals, contains('“行，'));
+      expect(deAi.riskSignals, contains('“行,'));
       expect(deAi.metadata['builtin'], isTrue);
     });
   });

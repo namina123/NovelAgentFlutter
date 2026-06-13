@@ -30,7 +30,7 @@ class AgentCollaborationBriefService {
     final lines = <String>[
       '当前可用内部协作视角（由智能体组提供，不是用户必须手动选择的主智能体）：',
       '策略：一主多子。需要不同视角时调用 call_sub_agent(agent_id, task, context_excerpt, constraints, source_paths)，'
-          'agent_id 必须来自下列清单；子智能体不接收完整主会话。',
+          'agent_id 优先来自下列清单；如果一时拿不准精确 id，可传空字符串，让运行时按 task 自动兜底选人。子智能体不接收完整主会话。',
     ];
     var count = 0;
     for (final agent in agents) {

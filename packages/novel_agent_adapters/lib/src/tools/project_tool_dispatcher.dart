@@ -25,6 +25,8 @@ import 'project_tool_result_factory.dart';
 class ProjectToolDispatcher implements ToolExecutionPort {
   ProjectToolDispatcher({
     required ProjectToolHostPort hostPort,
+    HostInformationPermissionContext? hostInformationPermissionContext,
+    ProjectInformationDomainToolExecutor? informationDomainToolExecutor,
     LocalSkillPackageCatalog? skillPackageCatalog,
     LocalSkillGroupCatalog? skillGroupCatalog,
     ToolCallNormalizerService? toolCallNormalizerService,
@@ -37,6 +39,14 @@ class ProjectToolDispatcher implements ToolExecutionPort {
     ProjectAgentSkillRuntimeLoadoutService? agentSkillRuntimeLoadoutService,
   }) : _toolCallNormalizerService =
            toolCallNormalizerService ?? ToolCallNormalizerService(),
+       _hostPort = hostPort,
+       _skillPackageCatalog = skillPackageCatalog,
+       _skillGroupCatalog = skillGroupCatalog,
+       _pathPolicy = pathPolicy,
+       _treeOrderService = treeOrderService,
+       _buildModeGuidancePlanInputUseCase = buildModeGuidancePlanInputUseCase,
+       _workflowRuntimeService = workflowRuntimeService,
+       _agentSkillRuntimeLoadoutService = agentSkillRuntimeLoadoutService,
        _resultFactory = resultFactory ?? ProjectToolResultFactory(),
        _relativePathResolver = ProjectToolRelativePathResolver(
          hostPort: hostPort,
@@ -101,6 +111,7 @@ class ProjectToolDispatcher implements ToolExecutionPort {
          resultFactory: resultFactory,
          runtimeLoadoutService: agentSkillRuntimeLoadoutService,
        ),
+       _hostInformationPermissionContext = hostInformationPermissionContext,
        _narrativeDomainToolCatalog = NarrativeDomainToolCatalog(),
        _narrativeDomainDispatcher = _buildNarrativeDomainDispatcher(),
        _informationDomainDispatcher = _buildInformationDomainDispatcher(),
@@ -109,12 +120,24 @@ class ProjectToolDispatcher implements ToolExecutionPort {
          hostPort: hostPort,
          dispatcher: _buildNarrativeDomainDispatcher(),
        ),
-       _informationDomainToolExecutor = ProjectInformationDomainToolExecutor(
-         workspacePort: _ProjectToolHostWorkspacePortAdapter(hostPort),
-         dispatcher: _buildInformationDomainDispatcher(),
-       );
+       _informationDomainToolExecutor =
+           informationDomainToolExecutor ??
+           ProjectInformationDomainToolExecutor(
+             workspacePort: _ProjectToolHostWorkspacePortAdapter(hostPort),
+             dispatcher: _buildInformationDomainDispatcher(),
+           );
 
   final ToolCallNormalizerService _toolCallNormalizerService;
+  final ProjectToolHostPort _hostPort;
+  final LocalSkillPackageCatalog? _skillPackageCatalog;
+  final LocalSkillGroupCatalog? _skillGroupCatalog;
+  final ProjectToolPathPolicy? _pathPolicy;
+  final ProjectTreeOrderService? _treeOrderService;
+  final BuildModeGuidancePlanInputUseCase?
+  _buildModeGuidancePlanInputUseCase;
+  final ProjectWorkflowRuntimeService? _workflowRuntimeService;
+  final ProjectAgentSkillRuntimeLoadoutService?
+  _agentSkillRuntimeLoadoutService;
   final ProjectToolResultFactory _resultFactory;
   final ProjectToolRelativePathResolver _relativePathResolver;
   final ProjectFileReadToolExecutor _readToolExecutor;
@@ -125,11 +148,33 @@ class ProjectToolDispatcher implements ToolExecutionPort {
   final ProjectManagementToolExecutor _managementToolExecutor;
   final ProjectLongTaskToolExecutor? _longTaskToolExecutor;
   final ProjectAgentSkillToolExecutor _agentSkillToolExecutor;
+  final HostInformationPermissionContext? _hostInformationPermissionContext;
   final NarrativeDomainToolCatalog _narrativeDomainToolCatalog;
   final NarrativeDomainToolDispatcher _narrativeDomainDispatcher;
   final NarrativeDomainToolDispatcher _informationDomainDispatcher;
   final ProjectNarrativeDomainToolExecutor _narrativeDomainToolExecutor;
   final ProjectInformationDomainToolExecutor _informationDomainToolExecutor;
+
+  ProjectToolDispatcher scopedWithHostInformationPermissionContext(
+    HostInformationPermissionContext? hostInformationPermissionContext,
+  ) {
+    return ProjectToolDispatcher(
+      hostPort: _hostPort,
+      hostInformationPermissionContext: hostInformationPermissionContext,
+      informationDomainToolExecutor: _informationDomainToolExecutor,
+      skillPackageCatalog: _skillPackageCatalog,
+      skillGroupCatalog: _skillGroupCatalog,
+      toolCallNormalizerService: _toolCallNormalizerService,
+      pathPolicy: _pathPolicy,
+      resultFactory: _resultFactory,
+      treeOrderService: _treeOrderService,
+      buildModeGuidancePlanInputUseCase:
+          _buildModeGuidancePlanInputUseCase,
+      workflowRuntimeService: _workflowRuntimeService,
+      longTaskToolExecutor: _longTaskToolExecutor,
+      agentSkillRuntimeLoadoutService: _agentSkillRuntimeLoadoutService,
+    );
+  }
 
   static NarrativeDomainToolDispatcher _buildNarrativeDomainDispatcher() {
     return NarrativeDomainToolDispatchService(
@@ -426,6 +471,8 @@ class ProjectToolDispatcher implements ToolExecutionPort {
       final capability = _domainCapabilityFor(toolName);
       return <String, Object?>{
         'ok': false,
+        'not_executed': true,
+        'retryable': true,
         'error': '领域工具参数不合法。',
         'display_text': '领域工具参数不合法：${_domainDisplayName(toolName)}',
         'changed_paths': const <String>[],
@@ -447,7 +494,7 @@ class ProjectToolDispatcher implements ToolExecutionPort {
               },
             )
             .toList(growable: false),
-        'tool_result_summary': '领域工具参数不合法，需要修正后重试。',
+        'tool_result_summary': '领域工具参数不合法，工具尚未执行；请根据 domain_parse_issues 修正参数后重试。',
       };
     }
 
@@ -593,7 +640,11 @@ class ProjectToolDispatcher implements ToolExecutionPort {
     DomainToolRequest request,
   ) {
     if (_isInformationDomainTool(request.toolName)) {
-      return _informationDomainToolExecutor.execute(project, request);
+      return _informationDomainToolExecutor.execute(
+        project,
+        request,
+        hostPermissionContext: _hostInformationPermissionContext,
+      );
     }
     return _narrativeDomainToolExecutor.execute(project, request);
   }
@@ -610,6 +661,9 @@ class ProjectToolDispatcher implements ToolExecutionPort {
     DomainToolOutcome outcome,
     List<String> changedPaths,
   ) {
+    if (toolName == NarrativeDomainToolNames.requestExternalResearch) {
+      return _requestExternalResearchSummary(outcome, changedPaths);
+    }
     final label = _domainDisplayName(toolName);
     final status = outcome.outcomeStatus;
     final pathPreview = changedPaths.isEmpty ? '' : '：${changedPaths.first}';
@@ -628,6 +682,44 @@ class ProjectToolDispatcher implements ToolExecutionPort {
       default:
         return '领域工具执行失败：$label';
     }
+  }
+
+  String _requestExternalResearchSummary(
+    DomainToolOutcome outcome,
+    List<String> changedPaths,
+  ) {
+    final label = _domainDisplayName(NarrativeDomainToolNames.requestExternalResearch);
+    final payload = ValueReaders.mapValue(outcome.outcomePayload);
+    final execution = ValueReaders.mapValue(payload['research_execution']);
+    final executedNetwork = ValueReaders.boolValue(
+      payload['network_execution_performed'],
+    );
+    final executedImport = ValueReaders.boolValue(
+      payload['import_execution_performed'],
+    );
+    final waitingForConfirmation = ValueReaders.boolValue(
+      payload['requires_user_confirmation'],
+    );
+    final blocked = ValueReaders.boolValue(execution['blocked']);
+    final pathPreview = changedPaths.isEmpty ? '' : '：${changedPaths.first}';
+
+    if (executedNetwork) {
+      return '已登记并自动执行资料研究：$label$pathPreview';
+    }
+    if (executedImport && waitingForConfirmation) {
+      return '已登记并执行导入研究，联网仍待确认：$label$pathPreview';
+    }
+    if (executedImport) {
+      return '已登记并执行导入研究：$label$pathPreview';
+    }
+    if (waitingForConfirmation ||
+        outcome.outcomeStatus == DomainToolOutcomeStatuses.needsUserConfirmation) {
+      return '已登记待研究请求，等待用户确认：$label';
+    }
+    if (blocked) {
+      return '已登记待研究请求，但当前无法执行：$label';
+    }
+    return '已登记待研究请求：$label$pathPreview';
   }
 
   String _domainDisplayName(String toolName) {

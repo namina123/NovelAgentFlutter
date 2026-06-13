@@ -2,21 +2,23 @@ import 'package:flutter/material.dart';
 
 import '../../../../../shared/theme/novel_theme_context.dart';
 import '../models/project_long_task_summary_view_data.dart';
+import 'workbench_visual_style.dart';
 
 class ProjectLongTaskSummaryPanel extends StatelessWidget {
   const ProjectLongTaskSummaryPanel({
     super.key,
     required this.summary,
-    required this.onOpenStationRequested,
+    this.onOpenStationRequested,
   });
 
   final ProjectLongTaskSummaryViewData summary;
-  final VoidCallback onOpenStationRequested;
+  final VoidCallback? onOpenStationRequested;
 
   @override
   Widget build(BuildContext context) {
     final toolSurface = context.novelThemeSurfaces.toolRow;
     final optionSurface = context.novelThemeSurfaces.optionTile;
+    final visual = WorkbenchVisualStyle.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -26,18 +28,20 @@ class ProjectLongTaskSummaryPanel extends StatelessWidget {
               child: Text(
                 summary.summary,
                 style: TextStyle(
-                  fontSize: 12,
-                  height: 1.5,
+                  fontSize: visual.bodyFontSize,
+                  height: visual.bodyLineHeight,
                   fontWeight: FontWeight.w600,
                   color: optionSurface.mutedForegroundColor,
                 ),
               ),
             ),
-            const SizedBox(width: 8),
-            TextButton(
-              onPressed: onOpenStationRequested,
-              child: const Text('打开总站'),
-            ),
+            if (onOpenStationRequested != null) ...[
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: onOpenStationRequested,
+                child: const Text('打开总站'),
+              ),
+            ],
           ],
         ),
         const SizedBox(height: 8),
@@ -58,7 +62,7 @@ class ProjectLongTaskSummaryPanel extends StatelessWidget {
           Text(
             '当前项目暂无运行实例。',
             style: TextStyle(
-              fontSize: 12,
+              fontSize: visual.bodyFontSize,
               fontWeight: FontWeight.w600,
               color: optionSurface.mutedForegroundColor,
             ),
@@ -71,13 +75,19 @@ class ProjectLongTaskSummaryPanel extends StatelessWidget {
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: run.requiresAttention
-                      ? toolSurface.highlightBackgroundColor
-                      : optionSurface.backgroundColor,
-                  border: Border.all(
-                    color: run.requiresAttention
-                        ? toolSurface.highlightBorderColor
-                        : optionSurface.borderColor,
-                    width: optionSurface.borderWidth,
+                      ? toolSurface.highlightBackgroundColor.withValues(
+                          alpha: 0.34,
+                        )
+                      : optionSurface.backgroundColor.withValues(alpha: 0.28),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border(
+                    top: BorderSide(
+                      color:
+                          (run.requiresAttention
+                                  ? toolSurface.highlightBorderColor
+                                  : optionSurface.borderColor)
+                              .withValues(alpha: 0.42),
+                    ),
                   ),
                 ),
                 child: Padding(
@@ -96,21 +106,36 @@ class ProjectLongTaskSummaryPanel extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                fontSize: 12,
+                                fontSize: visual.sectionTitleFontSize,
                                 fontWeight: FontWeight.w800,
                                 color: optionSurface.foregroundColor,
                               ),
                             ),
                           ),
                           const SizedBox(width: 8),
-                          Text(
-                            run.statusLabel,
-                            style: TextStyle(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w700,
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
                               color: run.requiresAttention
-                                  ? toolSurface.highlightForegroundColor
-                                  : optionSurface.mutedForegroundColor,
+                                  ? toolSurface.highlightBackgroundColor
+                                        .withValues(alpha: 0.36)
+                                  : optionSurface.backgroundColor.withValues(
+                                      alpha: 0.22,
+                                    ),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              run.statusLabel,
+                              style: TextStyle(
+                                fontSize: visual.metaFontSize,
+                                fontWeight: FontWeight.w700,
+                                color: run.requiresAttention
+                                    ? toolSurface.highlightForegroundColor
+                                    : optionSurface.mutedForegroundColor,
+                              ),
                             ),
                           ),
                         ],
@@ -119,7 +144,7 @@ class ProjectLongTaskSummaryPanel extends StatelessWidget {
                       Text(
                         run.subtitle,
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: visual.metaFontSize,
                           fontWeight: FontWeight.w600,
                           color: optionSurface.mutedForegroundColor,
                         ),
@@ -130,16 +155,84 @@ class ProjectLongTaskSummaryPanel extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 11.5,
+                          fontSize: visual.bodyFontSize,
                           fontWeight: FontWeight.w600,
                           color: optionSurface.foregroundColor,
                         ),
+                      ),
+                      if (run.attentionCalloutTitle.trim().isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          run.attentionCalloutTitle,
+                          style: TextStyle(
+                            fontSize: visual.metaFontSize,
+                            fontWeight: FontWeight.w700,
+                            color: run.requiresAttention
+                                ? toolSurface.highlightForegroundColor
+                                : optionSurface.foregroundColor,
+                          ),
+                        ),
+                      ],
+                      if (run.attentionCalloutSummary.trim().isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          run.attentionCalloutSummary,
+                          style: TextStyle(
+                            fontSize: visual.metaFontSize,
+                            height: visual.bodyLineHeight,
+                            color: optionSurface.mutedForegroundColor,
+                          ),
+                        ),
+                      ],
+                      if (run.diagnosisLabel.trim().isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          run.diagnosisLabel,
+                          style: TextStyle(
+                            fontSize: visual.metaFontSize,
+                            fontWeight: FontWeight.w700,
+                            color: run.requiresAttention
+                                ? toolSurface.highlightForegroundColor
+                                : optionSurface.foregroundColor,
+                          ),
+                        ),
+                      ],
+                      if (run.diagnosisSummary.trim().isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          run.diagnosisSummary,
+                          style: TextStyle(
+                            fontSize: visual.metaFontSize,
+                            height: visual.bodyLineHeight,
+                            color: optionSurface.mutedForegroundColor,
+                          ),
+                        ),
+                      ],
+                      if (run.nextStepSummary.trim().isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          run.nextStepLabel.trim().isEmpty
+                              ? run.nextStepSummary
+                              : '${run.nextStepLabel}：${run.nextStepSummary}',
+                          style: TextStyle(
+                            fontSize: visual.metaFontSize,
+                            height: visual.bodyLineHeight,
+                            fontWeight: FontWeight.w600,
+                            color: optionSurface.foregroundColor,
+                          ),
+                        ),
+                      ],
+                      ..._buildDetailLines(
+                        run,
+                        optionSurface,
+                        toolSurface,
+                        visual,
                       ),
                       const SizedBox(height: 6),
                       Text(
                         run.recentActivityLabel,
                         style: TextStyle(
-                          fontSize: 10.5,
+                          fontSize: visual.metaFontSize,
                           fontWeight: FontWeight.w700,
                           color: optionSurface.mutedForegroundColor,
                         ),
@@ -156,6 +249,37 @@ class ProjectLongTaskSummaryPanel extends StatelessWidget {
   }
 }
 
+List<Widget> _buildDetailLines(
+  ProjectLongTaskRunSummaryViewData run,
+  dynamic optionSurface,
+  dynamic toolSurface,
+  WorkbenchVisualStyle visual,
+) {
+  final lines = <String>[
+    run.reviewSummaryLine,
+    run.repairSummaryLine,
+    run.checkpointSummaryLine,
+    run.pendingSummaryLine,
+  ].where((line) => line.trim().isNotEmpty).toList(growable: false);
+  return lines
+      .map(
+        (line) => Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text(
+            line,
+            style: TextStyle(
+              fontSize: visual.metaFontSize,
+              height: visual.bodyLineHeight,
+              color: run.requiresAttention
+                  ? toolSurface.highlightForegroundColor
+                  : optionSurface.mutedForegroundColor,
+            ),
+          ),
+        ),
+      )
+      .toList(growable: false);
+}
+
 class _SummaryBadge extends StatelessWidget {
   const _SummaryBadge({required this.label, required this.value});
 
@@ -165,19 +289,17 @@ class _SummaryBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final surface = context.novelThemeSurfaces.optionTile;
+    final visual = WorkbenchVisualStyle.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: surface.backgroundColor,
-        border: Border.all(
-          color: surface.borderColor,
-          width: surface.borderWidth,
-        ),
+        color: surface.backgroundColor.withValues(alpha: 0.22),
+        borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         '$label $value',
         style: TextStyle(
-          fontSize: 10.5,
+          fontSize: visual.metaFontSize,
           fontWeight: FontWeight.w700,
           color: surface.foregroundColor,
         ),

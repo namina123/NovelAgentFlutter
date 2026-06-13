@@ -266,12 +266,22 @@ void main() {
       viewData.selectedRun!.narrativeActivation!.relativePath,
       'tracking/chapter_atomic/ch05.activation_report.json',
     );
+    expect(viewData.selectedRun!.narrativeActivation!.title, '本轮上下文');
+    expect(viewData.selectedRun!.narrativeDelivery!.title, '正文交付');
+    expect(
+      viewData.selectedRun!.narrativeDelivery!.subtitle,
+      '已交付 · chapters/ch05.md',
+    );
     expect(viewData.selectedRun!.narrativeDelivery!.summary, 'delivered');
+    expect(viewData.selectedRun!.narrativeReview!.title, '审稿结果');
+    expect(viewData.selectedRun!.narrativeReview!.subtitle, 'chapters/ch05.md');
     expect(viewData.selectedRun!.narrativeReview!.summary, '需要补强结尾钩子。');
+    expect(viewData.selectedRun!.narrativeContinuity!.title, '连续性记录');
     expect(
       viewData.selectedRun!.narrativeContinuity!.summary,
       'ledger 1 | claims 1 | reviews 1',
     );
+    expect(viewData.selectedRun!.informationSummary!.title, '资料与设定');
     expect(
       viewData.selectedRun!.informationSummary!.summary,
       '待研究 1 项，高风险引用 1 项，information 改动 8 项',
@@ -282,19 +292,50 @@ void main() {
       'continuity/最近状态变化.md',
     );
     expect(viewData.selectedRun!.narrativePermissionItems, hasLength(1));
+    expect(viewData.selectedRun!.narrativePermissionItems.single.title, '待确认问题');
+    expect(
+      viewData.selectedRun!.narrativePermissionItems.single.subtitle,
+      '待你确认 · 选项 2',
+    );
     expect(
       viewData.selectedRun!.narrativePermissionItems.single.actionLabel,
       '打开确认记录',
     );
     expect(viewData.selectedRun!.informationProjectionItems, hasLength(2));
     expect(
+      viewData.selectedRun!.narrativeProjectionItems.first.subtitle,
+      '可读投影',
+    );
+    expect(
+      viewData.selectedRun!.informationProjectionItems.first.subtitle,
+      '资料投影',
+    );
+    expect(
       viewData.selectedRun!.informationProjectionItems.first.relativePath,
       'knowledge/项目知识摘要.md',
     );
     expect(viewData.selectedRun!.informationPermissionItems, hasLength(2));
+    expect(viewData.selectedRun!.informationPermissionItems.first.title, '待确认知识卡');
+    expect(viewData.selectedRun!.informationPermissionItems.last.title, '待确认调研请求');
+    expect(
+      viewData.selectedRun!.informationPermissionItems.first.subtitle,
+      '待确认 · 设定事实 · 项目世界观',
+    );
+    expect(
+      viewData.selectedRun!.informationPermissionItems.last.subtitle,
+      '等待确认 · 待你确认',
+    );
     expect(
       viewData.selectedRun!.informationPermissionItems.first.actionLabel,
       '打开确认记录',
+    );
+    expect(
+      viewData
+          .selectedRun!
+          .informationPermissionItems
+          .last
+          .pendingResearchRequestId,
+      'research_pending',
     );
   });
 
@@ -377,6 +418,7 @@ void main() {
       expect(standard.selectedRun!.diagnosticMetadata, isEmpty);
       expect(standard.selectedRun!.narrativeSectionTitle, '运行摘要');
       expect(standard.selectedRun!.narrativeActivation!.title, '本轮上下文');
+      expect(standard.selectedRun!.narrativeActivationLabel, '本轮上下文');
 
       expect(diagnostic.selectedRun!.workflowStrategyId, 'resumable_long_task');
       expect(diagnostic.selectedRun!.diagnosticMetadata, isNotEmpty);
@@ -385,7 +427,8 @@ void main() {
         anyOf('运行基准', '工作流 ID'),
       );
       expect(diagnostic.selectedRun!.narrativeSectionTitle, '开放叙事摘要');
-      expect(diagnostic.selectedRun!.narrativeActivation!.title, 'Activation');
+      expect(diagnostic.selectedRun!.narrativeActivation!.title, '上下文激活');
+      expect(diagnostic.selectedRun!.narrativeActivationLabel, '上下文激活');
     },
   );
 
@@ -453,6 +496,14 @@ void main() {
 
       expect(failedViewData.selectedRun!.resumeActionLabel, '重试当前步骤');
       expect(
+        failedViewData.selectedRun!.attentionCalloutTitle,
+        '当前运行停在待处理节点。',
+      );
+      expect(
+        failedViewData.selectedRun!.attentionCalloutSummary,
+        '当前运行链有失败节点，需要先修复或重试。 建议先查看返工链或失败任务，再决定重试或修订。',
+      );
+      expect(
         failedViewData.selectedRun!.preferredRecentOutput!.actionLabel,
         '查看最近产物',
       );
@@ -516,10 +567,453 @@ void main() {
 
       expect(waitingViewData.selectedRun!.pendingUserActionLabel, '等待确认');
       expect(
-        waitingViewData.selectedRun!.pendingUserAction!.relativePath,
-        '.novel_agent/continuity/clarifications/clarify.json',
+        waitingViewData.selectedRun!.attentionCalloutTitle,
+        '当前运行停在待确认节点。',
+      );
+      expect(
+        waitingViewData.selectedRun!.attentionCalloutSummary,
+        '当前运行已经停在需要确认或复核的节点。 建议先跳到任务中心处理检查点或关口动作。',
+      );
+      expect(
+        waitingViewData.selectedRun!.pendingUserAction!.title,
+        '待确认问题',
       );
       expect(waitingViewData.selectedRun!.overviewBlocks, hasLength(4));
+
+      final checkpointWaitingRun = waitingRun.copyWith(
+        id: 'run-waiting-checkpoint',
+        stopReason: 'waiting_user_checkpoint',
+      );
+      final checkpointWaitingViewData = LongTaskStationViewDataService().build(
+        LongTaskStationSnapshot.initial().copyWith(
+          runs: <RunInstance>[checkpointWaitingRun],
+          selectedRunId: checkpointWaitingRun.id,
+          selectedRunDetail: waitingSnapshot.selectedRunDetail,
+          statusMessage: 'ok',
+        ),
+      );
+
+      expect(
+        checkpointWaitingViewData.selectedRun!.stopDiagnosis!.category,
+        LongTaskStopOutcomeCategories.waitingUser,
+      );
+      expect(
+        checkpointWaitingViewData.selectedRun!.stopDiagnosis!.label,
+        '等待用户确认',
+      );
+    },
+  );
+
+  test(
+    'LongTaskStationViewDataService dedupes recent output resources by underlying artifact',
+    () {
+      final now = DateTime(2026, 5, 27, 12, 0);
+      final run = RunInstance(
+        id: 'run-recent-output-dedupe',
+        project: const RunProjectReference(
+          projectId: 'project-a',
+          projectKey: 'D:/novel/project-a',
+          rootPath: 'D:/novel/project-a',
+          title: '项目 A',
+          projectTypeId: 'long_novel',
+          storageStrategy: ProjectStorageStrategy.markdownProjectStore,
+        ),
+        runtimeBaselineId: 'continuous_autonomous',
+        modeId: TaskRuntimeConstants.modeHumanOutlineAiDraft,
+        workflowStrategyId: 'resumable_long_task',
+        status: LongTaskRunStatus.failedManualAttention,
+        createdAt: now.subtract(const Duration(hours: 2)),
+        updatedAt: now.subtract(const Duration(minutes: 6)),
+        activeTaskTitle: '第 8 章审稿',
+        stopReason: 'delivery_manual_attention',
+      );
+      final snapshot = LongTaskStationSnapshot.initial().copyWith(
+        runs: <RunInstance>[run],
+        selectedRunId: run.id,
+        selectedRunDetail: const ProjectLongTaskStationDetail(
+          activeTask: null,
+          chain: null,
+          latestCheckpointReview: null,
+          latestReviewReport: null,
+          latestRepairTask: null,
+          narrativeSummary: ProjectLongTaskStationNarrativeSummary(
+            activation: null,
+            delivery: ProjectLongTaskStationItemSummary(
+              id: 'delivery-ch08',
+              title: 'Delivery',
+              relativePath: 'chapters/ch08.md',
+              status: 'delivered',
+              subtitle: 'delivered · chapters/ch08.md',
+              summary: '第 8 章正文已交付。',
+            ),
+            review: null,
+            continuity: null,
+            information: null,
+            projectionItems: <ProjectLongTaskStationItemSummary>[],
+            permissionItems: <ProjectLongTaskStationItemSummary>[],
+            informationProjectionItems: <ProjectLongTaskStationItemSummary>[],
+            informationPermissionItems: <ProjectLongTaskStationItemSummary>[],
+          ),
+          blocker: ProjectLongTaskStationBlockerSummary(
+            code: 'delivery_manual_attention',
+            category: LongTaskStopOutcomeCategories.manualAttention,
+            label: '需要人工处理',
+            note: '当前运行需要先处理交付问题。',
+            detail: '',
+            controlSummary: '建议先查看最近产物。',
+            blockingCheckpointTitles: <String>[],
+            runRecordPath: 'tracking/long_task_runs/run-recent-output-dedupe.json',
+          ),
+        ),
+        statusMessage: 'ok',
+      );
+
+      final viewData = LongTaskStationViewDataService().build(snapshot);
+      final recentOutputBlock = viewData.selectedRun!.overviewBlocks.last;
+
+      expect(recentOutputBlock.title, '最近产物');
+      expect(recentOutputBlock.resources, hasLength(1));
+      expect(recentOutputBlock.resources.single.title, '正文交付');
+      expect(recentOutputBlock.resources.single.relativePath, 'chapters/ch08.md');
+    },
+  );
+
+  test(
+    'LongTaskStationViewDataService keeps recent output block high-level when only bottom related results remain',
+    () {
+      final now = DateTime(2026, 5, 27, 12, 0);
+      final run = RunInstance(
+        id: 'run-recent-output-boundary',
+        project: const RunProjectReference(
+          projectId: 'project-a',
+          projectKey: 'D:/novel/project-a',
+          rootPath: 'D:/novel/project-a',
+          title: '项目 A',
+          projectTypeId: 'long_novel',
+          storageStrategy: ProjectStorageStrategy.markdownProjectStore,
+        ),
+        runtimeBaselineId: 'continuous_autonomous',
+        modeId: TaskRuntimeConstants.modeHumanOutlineAiDraft,
+        workflowStrategyId: 'resumable_long_task',
+        status: LongTaskRunStatus.paused,
+        createdAt: now.subtract(const Duration(hours: 2)),
+        updatedAt: now.subtract(const Duration(minutes: 5)),
+        activeTaskTitle: '检查点确认',
+        stopReason: 'waiting_user_checkpoint',
+      );
+      final snapshot = LongTaskStationSnapshot.initial().copyWith(
+        runs: <RunInstance>[run],
+        selectedRunId: run.id,
+        selectedRunDetail: const ProjectLongTaskStationDetail(
+          activeTask: null,
+          chain: null,
+          latestCheckpointReview: ProjectLongTaskStationItemSummary(
+            id: 'checkpoint-ch08',
+            title: '检查点确认',
+            relativePath: 'tracking/checkpoints/ch08.json',
+            status: 'waiting_user',
+            subtitle: 'needs_user_confirmation',
+            summary: '需要先确认本章检查点后再继续。',
+          ),
+          latestReviewReport: null,
+          latestRepairTask: null,
+          narrativeSummary: null,
+          blocker: ProjectLongTaskStationBlockerSummary(
+            code: 'waiting_user_checkpoint',
+            category: LongTaskStopOutcomeCategories.waitingUser,
+            label: '等待用户确认',
+            note: '当前运行正在等待检查点确认。',
+            detail: '',
+            controlSummary: '建议先处理当前检查点。',
+            blockingCheckpointTitles: <String>['检查点确认'],
+            runRecordPath:
+                'tracking/long_task_runs/run-recent-output-boundary.json',
+          ),
+        ),
+        statusMessage: 'ok',
+      );
+
+      final viewData = LongTaskStationViewDataService().build(snapshot);
+      final recentOutputBlock = viewData.selectedRun!.overviewBlocks.last;
+
+      expect(recentOutputBlock.title, '最近产物');
+      expect(recentOutputBlock.resources, isEmpty);
+      expect(
+        recentOutputBlock.summary,
+        '最近审稿、检查点或返工结果已整理到下方最近关联结果。',
+      );
+      expect(
+        recentOutputBlock.entries.firstWhere((item) => item.label == '最近可查看内容').value,
+        '请看下方结果区',
+      );
+      expect(
+        viewData.selectedRun!.latestCheckpointReview!.relativePath,
+        'tracking/checkpoints/ch08.json',
+      );
+    },
+  );
+
+  test(
+    'LongTaskStationViewDataService separates stop diagnosis from expression constraint status',
+    () {
+      final service = LongTaskStationViewDataService();
+      final now = DateTime(2026, 5, 27, 12, 0);
+
+      final budgetRun = RunInstance(
+        id: 'run-budget',
+        project: const RunProjectReference(
+          projectId: 'project-a',
+          projectKey: 'D:/novel/project-a',
+          rootPath: 'D:/novel/project-a',
+          title: '项目 A',
+          projectTypeId: 'long_novel',
+          storageStrategy: ProjectStorageStrategy.markdownProjectStore,
+        ),
+        runtimeBaselineId: 'continuous_autonomous',
+        modeId: TaskRuntimeConstants.modeHumanOutlineAiDraft,
+        workflowStrategyId: 'resumable_long_task',
+        status: LongTaskRunStatus.paused,
+        createdAt: now.subtract(const Duration(hours: 1)),
+        updatedAt: now.subtract(const Duration(minutes: 2)),
+        activeTaskTitle: '第 6 章',
+        stopReason: 'max_steps',
+      );
+      final budgetViewData = service.build(
+        LongTaskStationSnapshot.initial().copyWith(
+          runs: <RunInstance>[budgetRun],
+          selectedRunId: budgetRun.id,
+          statusMessage: 'ok',
+        ),
+      );
+      expect(
+        budgetViewData.selectedRun!.stopDiagnosis!.category,
+        LongTaskStopOutcomeCategories.budgetExhausted,
+      );
+      expect(budgetViewData.selectedRun!.stopDiagnosis!.label, '预算边界已到');
+
+      final contentGateRun = budgetRun.copyWith(
+        id: 'run-content-gate',
+        status: LongTaskRunStatus.failedManualAttention,
+        stopReason: 'delivery_manual_attention',
+        activeTaskTitle: '第 6 章审查',
+      );
+      final contentGateDetail = const ProjectLongTaskStationDetail(
+        activeTask: ProjectLongTaskStationItemSummary(
+          id: 'chapter_review',
+          title: '第 6 章审查',
+          relativePath: 'tasks/ch06-review.json',
+          status: 'failed',
+          subtitle: 'review',
+          summary: '当前章节需要先过内容质量关口。',
+        ),
+        chain: null,
+        latestCheckpointReview: null,
+        latestReviewReport: ProjectLongTaskStationItemSummary(
+          id: 'review-ch06',
+          title: '第06章审稿',
+          relativePath: 'reviews/ch06.md',
+          status: 'review',
+          subtitle: 'quality gate',
+          summary: '结尾冲突不足，需要人工复核。',
+        ),
+        latestRepairTask: null,
+        narrativeSummary: ProjectLongTaskStationNarrativeSummary(
+          activation: null,
+          delivery: null,
+          review: null,
+          continuity: null,
+          information: null,
+          expressionConstraint: ProjectLongTaskStationItemSummary(
+            id: 'expression-current',
+            title: '表达限制',
+            relativePath: 'tracking/ch06.execution.json',
+            status: 'suggest_strengthen',
+            subtitle: '建议加强 · adaptive · chapters/ch06.md',
+            summary: '表达限制当前建议加强后续章节执行。',
+          ),
+          projectionItems: <ProjectLongTaskStationItemSummary>[],
+          permissionItems: <ProjectLongTaskStationItemSummary>[],
+          informationProjectionItems: <ProjectLongTaskStationItemSummary>[],
+          informationPermissionItems: <ProjectLongTaskStationItemSummary>[],
+          recentExpressionConstraintItems: <ProjectLongTaskStationItemSummary>[
+            ProjectLongTaskStationItemSummary(
+              id: 'chapters/ch06.md',
+              title: '表达限制：ch06.md',
+              relativePath: 'chapters/ch06.md',
+              status: 'suggest_strengthen',
+              subtitle: 'suggest_strengthen · adaptive · chapters/ch06.md',
+              summary: '最近章节仍建议加强表达规则执行。',
+            ),
+            ProjectLongTaskStationItemSummary(
+              id: 'chapters/ch05.md',
+              title: '表达限制：ch05.md',
+              relativePath: 'chapters/ch05.md',
+              status: 'applied',
+              subtitle: 'applied · adaptive · chapters/ch05.md',
+              summary: '上一章表达规则已正常应用。',
+            ),
+          ],
+        ),
+        blocker: ProjectLongTaskStationBlockerSummary(
+          code: 'delivery_manual_attention',
+          category: LongTaskStopOutcomeCategories.manualAttention,
+          label: '需要人工处理',
+          note: '结尾冲突不足，需要人工复核。',
+          detail: '当前任务：第 6 章审查（failed）',
+          controlSummary: '建议先查看审稿结果，再决定返工或重试。',
+          blockingCheckpointTitles: <String>[],
+          runRecordPath: 'tracking/long_task_runs/run-content-gate.json',
+        ),
+      );
+      final contentGateViewData = service.build(
+        LongTaskStationSnapshot.initial().copyWith(
+          runs: <RunInstance>[contentGateRun],
+          selectedRunId: contentGateRun.id,
+          selectedRunDetail: contentGateDetail,
+          statusMessage: 'ok',
+        ),
+      );
+      expect(
+        contentGateViewData.selectedRun!.stopDiagnosis!.category,
+        LongTaskStopOutcomeCategories.manualAttention,
+      );
+      expect(
+        contentGateViewData.selectedRun!.expressionConstraintStatus!.category,
+        'suggest_strengthen',
+      );
+      expect(
+        contentGateViewData.selectedRun!.expressionConstraintStatus!.label,
+        '表达规则：建议加强',
+      );
+      expect(
+        contentGateViewData
+            .selectedRun!
+            .expressionConstraintStatus!
+            .currentItem!
+            .subtitle,
+        '建议加强 · 自适应 · chapters/ch06.md',
+      );
+      expect(
+        contentGateViewData
+            .selectedRun!
+            .expressionConstraintStatus!
+            .recentItems,
+        hasLength(2),
+      );
+      expect(
+        contentGateViewData
+            .selectedRun!
+            .expressionConstraintStatus!
+            .recentItems
+            .first
+            .subtitle,
+        '建议加强 · 自适应 · chapters/ch06.md',
+      );
+      expect(
+        contentGateViewData
+            .selectedRun!
+            .expressionConstraintStatus!
+            .recentItems
+            .last
+            .subtitle,
+        '已应用 · 自适应 · chapters/ch05.md',
+      );
+      expect(
+        contentGateViewData.selectedRun!.overviewBlocks.last.resources.any(
+          (item) => item.title == '表达规则状态',
+        ),
+        isTrue,
+      );
+
+      final repairBlockedDetail = const ProjectLongTaskStationDetail(
+        activeTask: ProjectLongTaskStationItemSummary(
+          id: 'chapter_revision',
+          title: '第 6 章返工',
+          relativePath: 'tasks/ch06-repair.json',
+          status: 'queued',
+          subtitle: 'revision',
+          summary: '需要先修复表达限制相关问题。',
+        ),
+        chain: null,
+        latestCheckpointReview: null,
+        latestReviewReport: null,
+        latestRepairTask: null,
+        narrativeSummary: ProjectLongTaskStationNarrativeSummary(
+          activation: null,
+          delivery: null,
+          review: null,
+          continuity: null,
+          information: null,
+          expressionConstraint: ProjectLongTaskStationItemSummary(
+            id: 'expression-repair',
+            title: '表达限制',
+            relativePath: 'tracking/ch06.repair.json',
+            status: 'repair_blocked',
+            subtitle: '阻塞修订 · force · chapters/ch06.md',
+            summary: '表达规则要求先修补当前章节后再继续。',
+          ),
+          projectionItems: <ProjectLongTaskStationItemSummary>[],
+          permissionItems: <ProjectLongTaskStationItemSummary>[],
+          informationProjectionItems: <ProjectLongTaskStationItemSummary>[],
+          informationPermissionItems: <ProjectLongTaskStationItemSummary>[],
+        ),
+        blocker: ProjectLongTaskStationBlockerSummary(
+          code: 'delivery_repair_required',
+          category: LongTaskStopOutcomeCategories.constraintGatePause,
+          label: '需修补后继续',
+          note: '当前节点需要先修补后再继续。',
+          detail: '当前任务：第 6 章返工（queued）',
+          controlSummary: '建议先打开返工任务处理当前问题。',
+          blockingCheckpointTitles: <String>[],
+          runRecordPath: 'tracking/long_task_runs/run-repair-blocked.json',
+        ),
+      );
+      final repairBlockedViewData = service.build(
+        LongTaskStationSnapshot.initial().copyWith(
+          runs: <RunInstance>[contentGateRun],
+          selectedRunId: contentGateRun.id,
+          selectedRunDetail: repairBlockedDetail,
+          statusMessage: 'ok',
+        ),
+      );
+      expect(
+        repairBlockedViewData
+            .selectedRun!
+            .expressionConstraintStatus!
+            .blocksRepair,
+        isTrue,
+      );
+      expect(
+        repairBlockedViewData.selectedRun!.expressionConstraintStatus!.label,
+        '表达规则：已阻塞修订',
+      );
+      expect(
+        repairBlockedViewData
+            .selectedRun!
+            .expressionConstraintStatus!
+            .currentItem!
+            .subtitle,
+        '阻塞修订 · 强制要求 · chapters/ch06.md',
+      );
+
+      final technicalRun = budgetRun.copyWith(
+        id: 'run-technical',
+        status: LongTaskRunStatus.paused,
+        stopReason: 'step_failed',
+        activeTaskTitle: '第 7 章',
+      );
+      final technicalViewData = service.build(
+        LongTaskStationSnapshot.initial().copyWith(
+          runs: <RunInstance>[technicalRun],
+          selectedRunId: technicalRun.id,
+          statusMessage: 'ok',
+        ),
+      );
+      expect(
+        technicalViewData.selectedRun!.stopDiagnosis!.category,
+        'technical_failure',
+      );
+      expect(technicalViewData.selectedRun!.stopDiagnosis!.label, '技术失败');
     },
   );
 }

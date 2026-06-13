@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../../../workbench/presentation/contracts/pending_research_action_handler.dart';
 import '../../presentation/contracts/long_task_station_action_handler.dart';
 import '../../presentation/models/long_task_station_view_data.dart';
 import '../models/long_task_station_snapshot.dart';
@@ -14,15 +15,17 @@ typedef LongTaskStationDetailLoader =
     Future<ProjectLongTaskStationDetail> Function(RunInstance run);
 
 class LongTaskStationController extends ChangeNotifier
-    implements LongTaskStationActionHandler {
+    implements LongTaskStationActionHandler, PendingResearchActionHandler {
   LongTaskStationController({
     required LongTaskSupervisor longTaskSupervisor,
     required ProjectLongTaskStationDetailService detailService,
+    ProjectPendingResearchActionService? pendingResearchActionService,
     LongTaskStationViewDataService? viewDataService,
     LongTaskStationRuntimeRefreshPolicyService? runtimeRefreshPolicyService,
     LongTaskStationDetailLoader? detailLoader,
   }) : _longTaskSupervisor = longTaskSupervisor,
        _detailService = detailService,
+       _pendingResearchActionService = pendingResearchActionService,
        _viewDataService =
            viewDataService ?? const LongTaskStationViewDataService(),
        _runtimeRefreshPolicyService =
@@ -34,6 +37,7 @@ class LongTaskStationController extends ChangeNotifier
 
   final LongTaskSupervisor _longTaskSupervisor;
   final ProjectLongTaskStationDetailService _detailService;
+  final ProjectPendingResearchActionService? _pendingResearchActionService;
   final LongTaskStationViewDataService _viewDataService;
   final LongTaskStationRuntimeRefreshPolicyService _runtimeRefreshPolicyService;
   final LongTaskStationDetailLoader? _detailLoader;
@@ -41,6 +45,7 @@ class LongTaskStationController extends ChangeNotifier
   Future<void> Function(RunInstance run, String relativePath)?
   _openResourceRequested;
   String Function()? _readCurrentProjectPathRequested;
+  Future<void> Function()? _refreshCompletedCallback;
 
   LongTaskStationSnapshot _snapshot;
   LongTaskStationViewData _viewData;
@@ -52,6 +57,10 @@ class LongTaskStationController extends ChangeNotifier
 
   LongTaskStationViewData get viewData => _viewData;
   bool get isInitialized => _initialized;
+
+  Future<ProjectLongTaskStationDetail> loadDetailForRun(RunInstance run) {
+    return (_detailLoader?.call(run) ?? _detailService.loadForRun(run));
+  }
 
   @visibleForTesting
   bool get isAutoRefreshScheduled => _autoRefreshTimer != null;
@@ -66,6 +75,11 @@ class LongTaskStationController extends ChangeNotifier
     _openProjectRequested = openProjectRequested;
     _openResourceRequested = openResourceRequested;
     _readCurrentProjectPathRequested = readCurrentProjectPathRequested;
+  }
+
+  void attachRefreshCompletedCallback(Future<void> Function() callback) {
+    // 中文注释: 总站刷新完成后允许壳层补刷其他投影视图，但仍保持总站控制器只暴露窄回调。
+    _refreshCompletedCallback = callback;
   }
 
   Future<void> initialize() async {
@@ -133,6 +147,7 @@ class LongTaskStationController extends ChangeNotifier
       );
       _rebuildView();
       await _loadSelectedRunDetail();
+      await _notifyRefreshCompleted();
       _scheduleAutoRefreshIfNeeded();
     } catch (error) {
       _snapshot = _snapshot.copyWith(
@@ -266,6 +281,34 @@ class LongTaskStationController extends ChangeNotifier
   }
 
   @override
+  Future<void> onPendingResearchApproved(String requestId) async {
+    await _applyPendingResearchAction(
+      requestId,
+      successMessage: '已确认资料请求。',
+      action: (service, project, cleanRequestId) => service.approve(
+        project,
+        requestId: cleanRequestId,
+        actorId: 'long_task_station_gui',
+        note: '在长任务总站中确认继续研究',
+      ),
+    );
+  }
+
+  @override
+  Future<void> onPendingResearchRejected(String requestId) async {
+    await _applyPendingResearchAction(
+      requestId,
+      successMessage: '已拒绝资料请求。',
+      action: (service, project, cleanRequestId) => service.reject(
+        project,
+        requestId: cleanRequestId,
+        actorId: 'long_task_station_gui',
+        note: '在长任务总站中拒绝继续研究',
+      ),
+    );
+  }
+
+  @override
   void dispose() {
     _disposed = true;
     _cancelAutoRefreshTimer();
@@ -312,6 +355,63 @@ class LongTaskStationController extends ChangeNotifier
     }
   }
 
+  Future<void> _applyPendingResearchAction(
+    String requestId, {
+    required String successMessage,
+    required Future<JsonMap> Function(
+      ProjectPendingResearchActionService service,
+      ProjectDescriptor project,
+      String requestId,
+    )
+    action,
+  }) async {
+    final cleanRequestId = requestId.trim();
+    final service = _pendingResearchActionService;
+    final run = _snapshot.selectedRun;
+    if (cleanRequestId.isEmpty || service == null || run == null) {
+      return;
+    }
+    final project = ProjectDescriptor(
+      id: run.project.projectId,
+      name: run.project.title,
+      rootPath: run.project.rootPath,
+      projectType: run.project.projectTypeId,
+      storageStrategy: run.project.storageStrategy,
+    );
+    _snapshot = _snapshot.copyWith(
+      isDetailLoading: true,
+      detailStatusMessage: '正在更新资料请求...',
+      statusMessage: '正在更新资料请求...',
+    );
+    _rebuildView();
+    try {
+      final result = await action(service, project, cleanRequestId);
+      if (!ValueReaders.boolValue(result['ok'])) {
+        final error = ValueReaders.stringValue(result['error'], '资料请求更新失败。');
+        _snapshot = _snapshot.copyWith(
+          isDetailLoading: false,
+          detailStatusMessage: error,
+          statusMessage: error,
+        );
+        _rebuildView();
+        return;
+      }
+      await refresh();
+      _snapshot = _snapshot.copyWith(
+        statusMessage: successMessage,
+        detailStatusMessage: successMessage,
+      );
+      _rebuildView();
+    } catch (error) {
+      _snapshot = _snapshot.copyWith(
+        isDetailLoading: false,
+        detailStatusMessage: '资料请求更新失败：$error',
+        statusMessage: '资料请求更新失败：$error',
+      );
+      _rebuildView();
+    }
+  }
+
   Future<void> _loadSelectedRunDetail() async {
     final run = _snapshot.selectedRun;
     if (run == null) {
@@ -325,8 +425,7 @@ class LongTaskStationController extends ChangeNotifier
     }
     final targetRunId = run.id;
     try {
-      final detail =
-          await (_detailLoader?.call(run) ?? _detailService.loadForRun(run));
+      final detail = await loadDetailForRun(run);
       if (_snapshot.selectedRunId != targetRunId) {
         return;
       }
@@ -466,5 +565,20 @@ class LongTaskStationController extends ChangeNotifier
   void _cancelAutoRefreshTimer() {
     _autoRefreshTimer?.cancel();
     _autoRefreshTimer = null;
+  }
+
+  Future<void> _notifyRefreshCompleted() async {
+    final callback = _refreshCompletedCallback;
+    if (callback == null) {
+      return;
+    }
+    try {
+      await callback();
+    } catch (error, stackTrace) {
+      debugPrint(
+        'LongTaskStationController refresh callback failed: '
+        '$error\n$stackTrace',
+      );
+    }
   }
 }

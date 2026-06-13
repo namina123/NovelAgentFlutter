@@ -103,6 +103,55 @@ void main() {
 
       controller.dispose();
     });
+
+    test('approving pending research refreshes selected run detail', () async {
+      var approved = false;
+      final run = _run(
+        runId: 'run-1',
+        projectPath: 'D:/novels/demo',
+        baselineId: 'continuous_autonomous',
+        status: LongTaskRunStatus.paused,
+      );
+      final supervisor = _FakeLongTaskSupervisor(
+        sequences: <List<RunInstance>>[
+          <RunInstance>[run],
+          <RunInstance>[run],
+        ],
+      );
+      final actionService = _FakePendingResearchActionService(
+        onApprove: (requestId) {
+          approved = requestId == 'research_request_1';
+        },
+      );
+      final controller = LongTaskStationController(
+        longTaskSupervisor: supervisor,
+        detailService: _NoopDetailService(),
+        pendingResearchActionService: actionService,
+        detailLoader: (_) async =>
+            _detailWithPendingResearch(includePendingResearch: !approved),
+      );
+      controller.attachNavigationCallbacks(
+        openProjectRequested: (_) async {},
+        openResourceRequested: (_, _) async {},
+        readCurrentProjectPathRequested: () => 'D:/novels/demo',
+      );
+
+      await controller.initialize();
+      expect(
+        controller.viewData.selectedRun!.informationPermissionItems,
+        isNotEmpty,
+      );
+
+      await controller.onPendingResearchApproved('research_request_1');
+
+      expect(actionService.approvedRequestIds, <String>['research_request_1']);
+      expect(
+        controller.viewData.selectedRun!.informationPermissionItems,
+        isEmpty,
+      );
+      expect(controller.viewData.statusMessage, '已确认资料请求。');
+      controller.dispose();
+    });
   });
 }
 
@@ -111,7 +160,7 @@ class _FakeLongTaskSupervisor extends LongTaskSupervisor {
     : _sequences = sequences,
       super(
         runRegistry: _NoopRunRegistry(),
-        heartbeatScheduler: _NoopHeartbeatScheduler(),
+        watchdogDispatchPort: _NoopWatchdogDispatchPort(),
       );
 
   final List<List<RunInstance>> _sequences;
@@ -151,27 +200,12 @@ class _NoopRunRegistry implements LongTaskRunRegistry {
   Future<void> save(RunInstance instance) async {}
 }
 
-class _NoopHeartbeatScheduler implements LongTaskHeartbeatScheduler {
+class _NoopWatchdogDispatchPort implements LongTaskWatchdogDispatchPort {
   @override
-  bool get isRunning => false;
+  bool get isWatchdogRunning => false;
 
   @override
   void clearDispatchState(String runId) {}
-
-  @override
-  Future<List<LongTaskHeartbeatEvent>> pollOnce({
-    DateTime? now,
-    LongTaskHeartbeatEventHandler? onEvent,
-  }) async => const <LongTaskHeartbeatEvent>[];
-
-  @override
-  void start({
-    Duration pollInterval = const Duration(seconds: 10),
-    LongTaskHeartbeatEventHandler? onEvent,
-  }) {}
-
-  @override
-  Future<void> stop() async {}
 }
 
 class _NoopDetailService extends ProjectLongTaskStationDetailService {
@@ -187,6 +221,29 @@ class _NoopDetailService extends ProjectLongTaskStationDetailService {
           ),
         ),
       );
+}
+
+class _FakePendingResearchActionService
+    extends ProjectPendingResearchActionService {
+  _FakePendingResearchActionService({
+    void Function(String requestId)? onApprove,
+  }) : _onApprove = onApprove,
+       super(workspacePort: _ThrowingWorkspacePort());
+
+  final void Function(String requestId)? _onApprove;
+  final List<String> approvedRequestIds = <String>[];
+
+  @override
+  Future<JsonMap> approve(
+    ProjectDescriptor project, {
+    required String requestId,
+    String actorId = 'pending_research_action_service',
+    String note = '',
+  }) async {
+    approvedRequestIds.add(requestId);
+    _onApprove?.call(requestId);
+    return <String, Object?>{'ok': true, 'request_id': requestId};
+  }
 }
 
 class _ThrowingWorkspacePort implements ProjectWorkspacePort {
@@ -228,6 +285,49 @@ Future<ProjectLongTaskStationDetail> _loadEmptyDetail(RunInstance run) async =>
         runRecordPath: '',
       ),
     );
+
+ProjectLongTaskStationDetail _detailWithPendingResearch({
+  required bool includePendingResearch,
+}) {
+  return ProjectLongTaskStationDetail(
+    activeTask: null,
+    chain: null,
+    latestCheckpointReview: null,
+    latestReviewReport: null,
+    latestRepairTask: null,
+    narrativeSummary: ProjectLongTaskStationNarrativeSummary(
+      activation: null,
+      delivery: null,
+      review: null,
+      continuity: null,
+      information: null,
+      projectionItems: const <ProjectLongTaskStationItemSummary>[],
+      permissionItems: const <ProjectLongTaskStationItemSummary>[],
+      informationProjectionItems: const <ProjectLongTaskStationItemSummary>[],
+      informationPermissionItems: includePendingResearch
+          ? const <ProjectLongTaskStationItemSummary>[
+              ProjectLongTaskStationItemSummary(
+                id: 'research_request_1',
+                title: '资料待确认',
+                relativePath:
+                    '.novel_agent/information/research_requests/research_request_1.json',
+                status: 'awaiting_user_confirmation',
+                subtitle: '等待确认',
+                summary: '旧城钟楼在北境民俗中的象征意义',
+              ),
+            ]
+          : const <ProjectLongTaskStationItemSummary>[],
+    ),
+    blocker: const ProjectLongTaskStationBlockerSummary(
+      code: 'waiting_user',
+      note: '当前运行已经停在需要确认的节点。',
+      detail: '',
+      controlSummary: '建议先确认资料请求。',
+      blockingCheckpointTitles: <String>[],
+      runRecordPath: 'tracking/long_task_runs/run-1.json',
+    ),
+  );
+}
 
 RunInstance _run({
   required String runId,

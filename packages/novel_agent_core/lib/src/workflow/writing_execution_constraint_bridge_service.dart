@@ -2,6 +2,9 @@ import '../common/json_types.dart';
 import '../common/value_readers.dart';
 import '../continuity/narrative_state/constraint_binding_applies_to.dart';
 import '../continuity/narrative_state/narrative_constraint_binding_proposal.dart';
+import '../creative/expression_constraint_execution_policy.dart';
+import '../creative/expression_constraint_execution_policy_resolution_context.dart';
+import '../creative/expression_constraint_execution_policy_resolver_service.dart';
 import '../creative/expression_constraint_kind.dart';
 import '../creative/expression_constraint_injection_policy_service.dart';
 import '../creative/expression_constraint_profile.dart';
@@ -10,10 +13,13 @@ import '../creative/project_expression_constraint_binding.dart';
 import '../creative/project_expression_constraint_binding_normalizer_service.dart';
 import 'chapter_length_profile_resolver_service.dart';
 import 'writing_execution_constraint_bridge_result.dart';
+import 'writing_execution_constraint_summary.dart';
 
 class WritingExecutionConstraintBridgeService {
   const WritingExecutionConstraintBridgeService({
     ChapterLengthProfileResolverService? chapterLengthProfileResolverService,
+    ExpressionConstraintExecutionPolicyResolverService?
+    expressionConstraintExecutionPolicyResolverService,
     ExpressionConstraintInjectionPolicyService?
     expressionConstraintInjectionPolicyService,
     ExpressionConstraintProfileNormalizerService?
@@ -23,6 +29,9 @@ class WritingExecutionConstraintBridgeService {
   }) : _chapterLengthProfileResolverService =
            chapterLengthProfileResolverService ??
            const ChapterLengthProfileResolverService(),
+       _expressionConstraintExecutionPolicyResolverService =
+           expressionConstraintExecutionPolicyResolverService ??
+           const ExpressionConstraintExecutionPolicyResolverService(),
        _expressionConstraintInjectionPolicyService =
            expressionConstraintInjectionPolicyService ??
            const ExpressionConstraintInjectionPolicyService(),
@@ -35,6 +44,8 @@ class WritingExecutionConstraintBridgeService {
 
   final ChapterLengthProfileResolverService
   _chapterLengthProfileResolverService;
+  final ExpressionConstraintExecutionPolicyResolverService
+  _expressionConstraintExecutionPolicyResolverService;
   final ExpressionConstraintInjectionPolicyService
   _expressionConstraintInjectionPolicyService;
   final ExpressionConstraintProfileNormalizerService
@@ -51,10 +62,14 @@ class WritingExecutionConstraintBridgeService {
     String intent = 'draft',
     String taskType = '',
     String phase = '',
+    String expressionConstraintPolicyMode = '',
     String expressionConstraintInjectionMode = '',
     JsonMap legacyChapterLengthOptions = const <String, Object?>{},
     List<Object?> legacyExpressionConstraintProfiles = const <Object?>[],
     List<Object?> legacyProjectExpressionConstraintBindings = const <Object?>[],
+    List<WritingExecutionConstraintSummary>
+        recentExpressionConstraintSummaries =
+        const <WritingExecutionConstraintSummary>[],
     List<NarrativeConstraintBindingProposal> narrativeBindings =
         const <NarrativeConstraintBindingProposal>[],
   }) {
@@ -66,15 +81,8 @@ class WritingExecutionConstraintBridgeService {
     final cleanAgentId = agentId.trim();
     final cleanProjectTypeId = projectTypeId.trim();
     final cleanIntent = intent.trim().isEmpty ? 'draft' : intent.trim();
-    final resolvedExpressionConstraintInjectionMode =
-        _expressionConstraintInjectionPolicyService.modeId(
-          _expressionConstraintInjectionPolicyService.resolveMode(
-            intent: cleanIntent,
-            taskType: taskType,
-            phase: phase,
-            overrideModeId: expressionConstraintInjectionMode,
-          ),
-        );
+    final cleanTaskType = taskType.trim();
+    final cleanPhase = phase.trim();
 
     final legacyProfiles = legacyExpressionConstraintProfiles
         .map(ValueReaders.mapValue)
@@ -174,9 +182,42 @@ class WritingExecutionConstraintBridgeService {
       ...legacyBindings,
       ...bindingDerivedBindings,
     ];
+    final policyResolution = _expressionConstraintExecutionPolicyResolverService
+        .resolve(
+          ExpressionConstraintExecutionPolicyResolutionContext(
+            overrideMode: _resolvePolicyModeOverride(
+              expressionConstraintPolicyMode,
+              legacyInjectionModeOverride: expressionConstraintInjectionMode,
+            ),
+            intent: cleanIntent,
+            taskType: cleanTaskType,
+            phase: cleanPhase,
+            appliesTo: cleanAppliesTo,
+            projectTypeId: cleanProjectTypeId,
+            agentId: cleanAgentId,
+            modeId: cleanModeId,
+            stageId: cleanStageId,
+            hasBindings: allBindings.isNotEmpty,
+            recentSummaries: recentExpressionConstraintSummaries,
+          ),
+        );
+    final policy = policyResolution.policy;
     final expressionConstraintReviewRequired =
-        allBindings.isNotEmpty &&
-        resolvedExpressionConstraintInjectionMode != 'disabled';
+        policyResolution.applied &&
+        policy.reviewRequirement != ExpressionConstraintReviewRequirements.none;
+    final resolvedExpressionConstraintInjectionMode = policyResolution.applied
+        ? _expressionConstraintInjectionPolicyService.modeId(
+            _expressionConstraintInjectionPolicyService.resolveMode(
+              executionPolicy: policy,
+              policyMode: policy.mode,
+              policyInjectionStrength: policy.injectionStrength,
+              intent: cleanIntent,
+              taskType: cleanTaskType,
+              phase: cleanPhase,
+              overrideModeId: expressionConstraintInjectionMode,
+            ),
+          )
+        : 'disabled';
 
     return WritingExecutionConstraintBridgeResult(
       chapterLengthMetadata: effectiveChapterLengthMetadata,
@@ -184,6 +225,20 @@ class WritingExecutionConstraintBridgeService {
           List<ExpressionConstraintProfile>.unmodifiable(allProfiles),
       projectExpressionConstraintBindings:
           List<ProjectExpressionConstraintBinding>.unmodifiable(allBindings),
+      expressionConstraintPolicyMode: policy.mode,
+      expressionConstraintInjectionStrength: policy.injectionStrength,
+      expressionConstraintReviewRequirement: policy.reviewRequirement,
+      expressionConstraintViolationDisposition: policy.violationDisposition,
+      expressionConstraintApplied: policyResolution.applied,
+      expressionConstraintRuntimeEscalated: policyResolution.runtimeEscalated,
+      expressionConstraintTechnicalTurnExcluded:
+          policyResolution.technicalTurnExcluded,
+      expressionConstraintAppliedReasons: List<String>.unmodifiable(
+        policyResolution.whyApplied,
+      ),
+      expressionConstraintSkippedReasons: List<String>.unmodifiable(
+        policyResolution.whySkipped,
+      ),
       expressionConstraintInjectionMode:
           resolvedExpressionConstraintInjectionMode,
       expressionConstraintReviewRequired: expressionConstraintReviewRequired,
@@ -194,8 +249,8 @@ class WritingExecutionConstraintBridgeService {
         'mode_id': cleanModeId,
         'stage_id': cleanStageId,
         'intent': cleanIntent,
-        'task_type': taskType.trim(),
-        'phase': phase.trim(),
+        'task_type': cleanTaskType,
+        'phase': cleanPhase,
         'chapter_length': <String, Object?>{
           'applied': effectiveChapterLengthMetadata.isNotEmpty,
           'source': bindingChapterLengthMetadata.isNotEmpty
@@ -218,9 +273,25 @@ class WritingExecutionConstraintBridgeService {
           'legacy_binding_count': legacyBindings.length,
           'binding_profile_count': bindingDerivedProfiles.length,
           'binding_binding_count': bindingDerivedBindings.length,
+          'profile_count': allProfiles.length,
+          'binding_count': allBindings.length,
           'applied_binding_ids': appliedExpressionBindingIds,
+          'policy_mode': policy.mode,
+          'policy_applied': policyResolution.applied,
+          'injection_strength': policy.injectionStrength,
           'injection_mode': resolvedExpressionConstraintInjectionMode,
+          'review_requirement': policy.reviewRequirement,
           'review_required': expressionConstraintReviewRequired,
+          'violation_disposition': policy.violationDisposition,
+          'runtime_escalated': policyResolution.runtimeEscalated,
+          'technical_turn_excluded': policyResolution.technicalTurnExcluded,
+          'why_applied': ValueReaders.deepCopyList(
+            policyResolution.whyApplied.cast<Object?>(),
+          ),
+          'why_skipped': ValueReaders.deepCopyList(
+            policyResolution.whySkipped.cast<Object?>(),
+          ),
+          'policy': policyResolution.toJson(),
         },
         'execution_gate': <String, Object?>{
           'chapter_length': <String, Object?>{
@@ -231,15 +302,48 @@ class WritingExecutionConstraintBridgeService {
           },
           'expression_constraints': <String, Object?>{
             'active': allBindings.isNotEmpty,
+            'policy_mode': policy.mode,
+            'applied': policyResolution.applied,
+            'disabled':
+                policy.mode ==
+                ExpressionConstraintExecutionPolicyModes.disabled,
+            'technical_turn_excluded': policyResolution.technicalTurnExcluded,
+            'runtime_escalated': policyResolution.runtimeEscalated,
+            'injection_strength': policy.injectionStrength,
             'injection_mode': resolvedExpressionConstraintInjectionMode,
+            'review_requirement': policy.reviewRequirement,
             'review_required': expressionConstraintReviewRequired,
+            'violation_disposition': policy.violationDisposition,
             'profile_count': allProfiles.length,
             'binding_count': allBindings.length,
             'applied_binding_ids': appliedExpressionBindingIds,
+            'why_applied': ValueReaders.deepCopyList(
+              policyResolution.whyApplied.cast<Object?>(),
+            ),
+            'why_skipped': ValueReaders.deepCopyList(
+              policyResolution.whySkipped.cast<Object?>(),
+            ),
           },
         },
       },
     );
+  }
+
+  String _resolvePolicyModeOverride(
+    String explicitPolicyMode, {
+    required String legacyInjectionModeOverride,
+  }) {
+    final cleanPolicyMode = explicitPolicyMode.trim().toLowerCase();
+    if (cleanPolicyMode.isNotEmpty) {
+      return cleanPolicyMode;
+    }
+    final cleanLegacyOverride = legacyInjectionModeOverride
+        .trim()
+        .toLowerCase();
+    if (cleanLegacyOverride == 'disabled' || cleanLegacyOverride == 'none') {
+      return ExpressionConstraintExecutionPolicyModes.disabled;
+    }
+    return '';
   }
 
   bool _appendExpressionConstraintBinding(

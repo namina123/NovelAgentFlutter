@@ -5,6 +5,10 @@ abstract class ProjectAssetsActionHandler {
 
   void onProjectAssetsRefreshRequested();
 
+  Future<void> onProjectAssetsExtractReferenceRequested({
+    String strategyProfileId = '',
+  });
+
   void onProjectAssetsTabSelected(String tabId);
 
   void onProjectAssetsEntrySelected(String entryId);

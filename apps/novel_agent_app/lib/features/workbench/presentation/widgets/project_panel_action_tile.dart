@@ -19,19 +19,39 @@ class ProjectPanelActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 中文注释: 项目动作条目统一使用轻量行项，避免左栏再长出“卡片里套卡片”的次级导航。
+    // 中文注释: 项目动作条目改成更像命令面板列表项，减少“功能卡片”味道。
     final surface = context.novelThemeSurfaces.optionTile;
     final visual = WorkbenchVisualStyle.of(context);
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onPressed,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
+        borderRadius: BorderRadius.circular(8),
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+          decoration: BoxDecoration(
+            color: surface.backgroundColor.withValues(alpha: 0.26),
+            borderRadius: BorderRadius.circular(8),
+            border: Border(
+              top: BorderSide(
+                color: surface.borderColor.withValues(alpha: 0.28),
+              ),
+            ),
+          ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(icon, size: 18, color: surface.foregroundColor),
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: surface.highlightBackgroundColor.withValues(
+                    alpha: 0.3,
+                  ),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Icon(icon, size: 14, color: surface.foregroundColor),
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -51,18 +71,18 @@ class ProjectPanelActionTile extends StatelessWidget {
                       style: TextStyle(
                         fontSize: visual.bodyFontSize,
                         height: visual.bodyLineHeight,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w500,
                         color: surface.mutedForegroundColor,
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
               Icon(
                 Icons.chevron_right_rounded,
-                size: 18,
-                color: surface.mutedForegroundColor,
+                size: 16,
+                color: surface.mutedForegroundColor.withValues(alpha: 0.82),
               ),
             ],
           ),

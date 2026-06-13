@@ -233,9 +233,59 @@ void main() {
         expect(ValueReaders.mapList(mirrored['issues']), hasLength(1));
         expect(
           ValueReaders.stringValue(
+            ValueReaders.mapValue(mirrored['review_contract'])['review_id'],
+          ),
+          'semantic-review-1',
+        );
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(mirrored['review_repair_handoff'])['action'],
+          ),
+          RepairHandoffActions.createBlockingRepair,
+        );
+        expect(
+          ValueReaders.stringValue(
             ValueReaders.mapValue(mirrored['metadata'])['semantic_review_id'],
           ),
           'semantic-review-1',
+        );
+        final sharedReview = ValueReaders.mapValue(
+          artifacts['semantic_review_contract'],
+        );
+        expect(
+          ValueReaders.stringValue(sharedReview['review_id']),
+          'semantic-review-1',
+        );
+        expect(
+          ValueReaders.stringValue(sharedReview['recommended_disposition']),
+          ReviewRecommendedDispositions.repair,
+        );
+        expect(
+          ValueReaders.stringValue(sharedReview['risk_level']),
+          ReviewRiskLevels.critical,
+        );
+        final authorityPolicy = ValueReaders.mapValue(
+          artifacts['semantic_review_authority_policy'],
+        );
+        expect(
+          ValueReaders.stringValue(authorityPolicy['trigger_authority']),
+          ReviewTriggerAuthorities.agentGroupPolicy,
+        );
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(
+              artifacts['semantic_review_summary'],
+            )['review_type'],
+          ),
+          ReviewTypeConstants.general,
+        );
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(
+              artifacts['semantic_review_repair_handoff'],
+            )['action'],
+          ),
+          RepairHandoffActions.createBlockingRepair,
         );
         final informationArtifacts = ValueReaders.mapValue(
           artifacts['analysis_information'],
@@ -287,6 +337,22 @@ void main() {
             )['knowledge_card_ids'],
           ),
           contains('knowledge_semantic-review-1_claim-review-knowledge'),
+        );
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(
+              executionWithInformation['semantic_review_contract'],
+            )['review_id'],
+          ),
+          'semantic-review-1',
+        );
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(
+              executionWithInformation['semantic_review_repair_handoff'],
+            )['action'],
+          ),
+          RepairHandoffActions.createBlockingRepair,
         );
       },
     );

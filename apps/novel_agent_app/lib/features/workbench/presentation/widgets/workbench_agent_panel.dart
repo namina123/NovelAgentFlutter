@@ -28,25 +28,19 @@ class WorkbenchAgentPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '协作',
-            style: TextStyle(
-              fontSize: visual.titleFontSize,
-              height: visual.titleLineHeight,
-              fontWeight: FontWeight.w800,
-              color: surface.foregroundColor,
-            ),
-          ),
-          SizedBox(height: visual.microGap),
-          Text(
-            viewData.projectName.trim().isEmpty
+          _AgentOverviewBlock(
+            title: viewData.currentAgentLabel.trim().isEmpty
+                ? '协作'
+                : viewData.currentAgentLabel,
+            subtitle: viewData.projectName.trim().isEmpty
                 ? '尚未打开项目'
                 : viewData.projectName,
-            style: TextStyle(
-              fontSize: visual.sectionTitleFontSize,
-              fontWeight: FontWeight.w600,
-              color: surface.mutedForegroundColor,
-            ),
+            badges: [
+              if (viewData.currentGroupLabel.trim().isNotEmpty)
+                viewData.currentGroupLabel,
+              if (viewData.primaryAgentLabel.trim().isNotEmpty)
+                viewData.primaryAgentLabel,
+            ],
           ),
           SizedBox(height: style.headerGap),
           ResourcePanelSection(
@@ -121,14 +115,22 @@ class WorkbenchAgentPanel extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: viewData.agentWorkspaceActions
+                  .asMap()
+                  .entries
                   .map(
-                    (action) => Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
+                    (entry) => Padding(
+                      padding: EdgeInsets.only(
+                        bottom:
+                            entry.key ==
+                                viewData.agentWorkspaceActions.length - 1
+                            ? 0
+                            : 8,
+                      ),
                       child: ProjectPanelActionTile(
-                        icon: action.icon,
-                        title: action.title,
-                        description: action.description,
-                        onPressed: _handlerForAction(action.actionId),
+                        icon: entry.value.icon,
+                        title: entry.value.title,
+                        description: entry.value.description,
+                        onPressed: _handlerForAction(entry.value.actionId),
                       ),
                     ),
                   )
@@ -177,11 +179,101 @@ class _AgentFact extends StatelessWidget {
           value.trim().isEmpty ? '未设置' : value,
           style: TextStyle(
             fontSize: visual.sectionTitleFontSize,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w800,
             color: surface.foregroundColor,
           ),
         ),
       ],
+    );
+  }
+}
+
+class _AgentOverviewBlock extends StatelessWidget {
+  const _AgentOverviewBlock({
+    required this.title,
+    required this.subtitle,
+    required this.badges,
+  });
+
+  final String title;
+  final String subtitle;
+  final List<String> badges;
+
+  @override
+  Widget build(BuildContext context) {
+    final surface = context.novelThemeSurfaces.sidebar;
+    final visual = WorkbenchVisualStyle.of(context);
+    final visibleBadges = badges
+        .map((badge) => badge.trim())
+        .where((badge) => badge.isNotEmpty)
+        .toList(growable: false);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 9),
+      decoration: BoxDecoration(
+        color: surface.backgroundColor.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: surface.borderColor.withValues(alpha: 0.16),
+          width: surface.borderWidth,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: visual.titleFontSize,
+              height: visual.titleLineHeight,
+              fontWeight: FontWeight.w800,
+              color: surface.foregroundColor,
+            ),
+          ),
+          if (subtitle.trim().isNotEmpty) ...[
+            SizedBox(height: visual.microGap),
+            Text(
+              subtitle,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: visual.metaFontSize,
+                height: visual.bodyLineHeight,
+                color: surface.mutedForegroundColor,
+              ),
+            ),
+          ],
+          if (visibleBadges.isNotEmpty) ...[
+            SizedBox(height: visual.compactGap + 1),
+            Wrap(
+              spacing: visual.microGap + 2,
+              runSpacing: visual.microGap + 2,
+              children: [
+                for (final badge in visibleBadges)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: surface.backgroundColor.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      badge,
+                      style: TextStyle(
+                        fontSize: visual.metaFontSize,
+                        fontWeight: FontWeight.w700,
+                        color: surface.mutedForegroundColor,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

@@ -68,7 +68,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('工作台对象'), findsOneWidget);
+    expect(find.text('当前对象'), findsOneWidget);
     expect(find.byType(WorkbenchObjectPanelBody), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('workbench_object_panel_body')),

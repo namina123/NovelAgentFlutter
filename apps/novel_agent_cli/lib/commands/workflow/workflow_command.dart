@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
@@ -8,6 +9,11 @@ import 'workflow_output_summary_service.dart';
 
 typedef CliGenerateDraftUseCaseFactory =
     GenerateDraftUseCase Function(
+      ProviderEndpointSettings provider,
+      JsonMap networkSettings,
+    );
+typedef CliLlmGatewayFactory =
+    LlmGateway Function(
       ProviderEndpointSettings provider,
       JsonMap networkSettings,
     );
@@ -21,22 +27,39 @@ class WorkflowCommand {
     buildModeGuidancePlanInputUseCase,
     required LoadModeGuidanceStateUseCase loadModeGuidanceStateUseCase,
     required CliGenerateDraftUseCaseFactory generateDraftUseCaseFactory,
+    required CliLlmGatewayFactory llmGatewayFactory,
     required ProjectWorkflowRuntimeService workflowRuntimeService,
+    required ProjectReferenceExtractionRuntimeService
+    referenceExtractionRuntimeService,
+    required ProjectPendingResearchActionService pendingResearchActionService,
     required TerminalPrinter printer,
     ModelExecutionProfileService? modelExecutionProfileService,
     WorkflowOutputSummaryService? workflowOutputSummaryService,
+    ProjectReferenceExtractionRequestBuilderService?
+    referenceExtractionRequestBuilderService,
+    ReferenceExtractionStrategyProfileOptionService?
+    referenceExtractionStrategyProfileOptionService,
   }) : _settingsRepository = settingsRepository,
        _projectRepository = projectRepository,
        _saveDraftUseCase = saveDraftUseCase,
        _buildModeGuidancePlanInputUseCase = buildModeGuidancePlanInputUseCase,
        _loadModeGuidanceStateUseCase = loadModeGuidanceStateUseCase,
        _generateDraftUseCaseFactory = generateDraftUseCaseFactory,
+       _llmGatewayFactory = llmGatewayFactory,
        _workflowRuntimeService = workflowRuntimeService,
+       _referenceExtractionRuntimeService = referenceExtractionRuntimeService,
+       _pendingResearchActionService = pendingResearchActionService,
        _printer = printer,
        _modelExecutionProfileService =
            modelExecutionProfileService ?? ModelExecutionProfileService(),
+       _referenceExtractionRequestBuilderService =
+           referenceExtractionRequestBuilderService ??
+           const ProjectReferenceExtractionRequestBuilderService(),
+       _referenceExtractionStrategyProfileOptionService =
+           referenceExtractionStrategyProfileOptionService ??
+           const ReferenceExtractionStrategyProfileOptionService(),
        _workflowOutputSummaryService =
-           workflowOutputSummaryService ?? const WorkflowOutputSummaryService();
+           workflowOutputSummaryService ?? WorkflowOutputSummaryService();
 
   final SettingsRepository _settingsRepository;
   final ProjectRepository _projectRepository;
@@ -44,9 +67,17 @@ class WorkflowCommand {
   final BuildModeGuidancePlanInputUseCase _buildModeGuidancePlanInputUseCase;
   final LoadModeGuidanceStateUseCase _loadModeGuidanceStateUseCase;
   final CliGenerateDraftUseCaseFactory _generateDraftUseCaseFactory;
+  final CliLlmGatewayFactory _llmGatewayFactory;
   final ProjectWorkflowRuntimeService _workflowRuntimeService;
+  final ProjectReferenceExtractionRuntimeService
+  _referenceExtractionRuntimeService;
+  final ProjectPendingResearchActionService _pendingResearchActionService;
   final TerminalPrinter _printer;
   final ModelExecutionProfileService _modelExecutionProfileService;
+  final ProjectReferenceExtractionRequestBuilderService
+  _referenceExtractionRequestBuilderService;
+  final ReferenceExtractionStrategyProfileOptionService
+  _referenceExtractionStrategyProfileOptionService;
   final WorkflowOutputSummaryService _workflowOutputSummaryService;
 
   Future<int> run(List<String> args) async {
@@ -58,6 +89,8 @@ class WorkflowCommand {
     switch (action) {
       case 'draft':
         return _runDraft(rest);
+      case 'extract-reference':
+        return _runExtractReference(rest);
       case 'create':
         return _runCreate(rest);
       case 'list':
@@ -104,6 +137,8 @@ class WorkflowCommand {
         return _runAcceptRevision(rest);
       case 'rollback-revision':
         return _runRollbackRevision(rest);
+      case 'pending-research':
+        return _runPendingResearch(rest);
       case 'help':
       case '--help':
       case '-h':
@@ -611,6 +646,172 @@ class WorkflowCommand {
     return _printWorkflowResult(result, success: '修订结果已回滚。');
   }
 
+  Future<int> _runPendingResearch(List<String> args) async {
+    // 中文注释: CLI 里的资料轻确认只分发到统一 action service，不新增第二套研究状态机。
+    final action = args.isEmpty ? 'list' : args.first;
+    final rest = args.isEmpty
+        ? const <String>[]
+        : args.skip(1).toList(growable: false);
+    switch (action) {
+      case 'list':
+        return _runPendingResearchList(rest);
+      case 'approve':
+        return _runPendingResearchApprove(rest);
+      case 'reject':
+        return _runPendingResearchReject(rest);
+      default:
+        _printer.error('未知 pending-research 动作: $action');
+        _printHelp();
+        return 2;
+    }
+  }
+
+  Future<int> _runExtractReference(List<String> args) async {
+    if (args.contains('--list-strategies')) {
+      _printReferenceExtractionStrategies();
+      return 0;
+    }
+    final context = await _workflowContext(args, requireProvider: true);
+    if (context == null) {
+      return 2;
+    }
+    final provider = context.settings.defaultProvider();
+    if (provider == null) {
+      _printer.error('未找到可用 provider。');
+      return 2;
+    }
+    final sourcePath =
+        _optionValue(args, '--source') ??
+        _optionValue(args, '--path') ??
+        _joinedPositional(args);
+    if (sourcePath.trim().isEmpty) {
+      _printer.error('请通过 --source 提供待提取的原始文档路径。');
+      return 2;
+    }
+    final executionProfile = _modelExecutionProfileService.resolve(
+      settings: context.settings,
+      provider: provider,
+      overrideModelId: _optionValue(args, '--model') ?? '',
+    );
+    final runtimeProfile = ValueReaders.mapValue(
+      executionProfile['runtime_profile'],
+    );
+    final resolvedModelId = ValueReaders.stringValue(
+      executionProfile['resolved_model_id'],
+    );
+    if (provider.baseUrl.trim().isEmpty || resolvedModelId.trim().isEmpty) {
+      _printer.error('请先配置真实模型接口地址和模型名。');
+      return 2;
+    }
+    try {
+      final gateway = _llmGatewayFactory(
+        provider,
+        context.settings.networkSettings,
+      );
+      final result = await _referenceExtractionRuntimeService.execute(
+        project: context.project,
+        llmGateway: gateway,
+        modelId: resolvedModelId,
+        request: _referenceExtractionRequestBuilderService.build(
+          ProjectReferenceExtractionRequestInput(
+            sourceFilePath: File(sourcePath).absolute.path,
+            packageId: _optionValue(args, '--package-id') ?? '',
+            displayName: _optionValue(args, '--display-name') ?? '',
+            packageVersionId: _optionValue(args, '--version-id') ?? '',
+            versionLabel: _optionValue(args, '--version-label') ?? '',
+            sourceLanguage: _optionValue(args, '--source-language') ?? '',
+            targetLanguage: _optionValue(args, '--target-language') ?? 'zh-CN',
+            maxChapterEntries: _intOption(args, '--max-chapters', 6),
+            maxEntityEntries: _intOption(args, '--max-entities', 6),
+            exportBundle: !args.contains('--no-export'),
+            attachToProject: !args.contains('--no-attach'),
+            projectMountedEntries: !args.contains('--no-project-mount'),
+            bundleOutputDirectory: _optionValue(args, '--bundle-dir') ?? '',
+            strategyProfileId: _optionValue(args, '--strategy-profile') ?? '',
+            availableContextChars: ValueReaders.intValue(
+              runtimeProfile['context_length'],
+            ),
+          ),
+        ),
+      );
+      _printer.success('参考资产提取完成。');
+      _printer.info('项目: ${context.project.name}');
+      _printer.info('模型: $resolvedModelId');
+      final strategyLabel = _referenceExtractionStrategyLabel(
+        result.strategyProfileId,
+      );
+      _printer.block(
+        '参考提取摘要',
+        _workflowOutputSummaryService
+            .referenceExtractionBriefLines(result, strategyLabel: strategyLabel)
+            .join('\n'),
+      );
+      if (result.bundleOutputDirectory.trim().isNotEmpty) {
+        _printer.info('Bundle: ${result.bundleOutputDirectory}');
+      }
+      if (result.stagingRunPath.trim().isNotEmpty) {
+        _printer.info('Staging: ${result.stagingRunPath}');
+      }
+      return 0;
+    } catch (error) {
+      _printer.error('参考资产提取失败: $error');
+      return 1;
+    }
+  }
+
+  Future<int> _runPendingResearchList(List<String> args) async {
+    final context = await _workflowContext(args);
+    if (context == null) {
+      return 2;
+    }
+    final records = await _pendingResearchActionService.list(context.project);
+    if (records.isEmpty) {
+      _printer.info('当前没有待处理的资料研究请求。');
+      return 0;
+    }
+    final lines = records.map(_pendingResearchRecordLine).join('\n');
+    _printer.block('待处理资料研究', lines);
+    return 0;
+  }
+
+  Future<int> _runPendingResearchApprove(List<String> args) async {
+    final context = await _workflowContext(args);
+    if (context == null) {
+      return 2;
+    }
+    final requestId = _pendingResearchRequestId(args);
+    if (requestId.isEmpty) {
+      _printer.error('请通过 --request 或 --id 指定资料请求。');
+      return 2;
+    }
+    final result = await _pendingResearchActionService.approve(
+      context.project,
+      requestId: requestId,
+      actorId: 'novel_agent_cli',
+      note: _optionValue(args, '--note') ?? '',
+    );
+    return _printPendingResearchActionResult(result, success: '资料研究请求已确认。');
+  }
+
+  Future<int> _runPendingResearchReject(List<String> args) async {
+    final context = await _workflowContext(args);
+    if (context == null) {
+      return 2;
+    }
+    final requestId = _pendingResearchRequestId(args);
+    if (requestId.isEmpty) {
+      _printer.error('请通过 --request 或 --id 指定资料请求。');
+      return 2;
+    }
+    final result = await _pendingResearchActionService.reject(
+      context.project,
+      requestId: requestId,
+      actorId: 'novel_agent_cli',
+      note: _optionValue(args, '--note') ?? '',
+    );
+    return _printPendingResearchActionResult(result, success: '资料研究请求已拒绝。');
+  }
+
   Future<_WorkflowContext?> _workflowContext(
     List<String> args, {
     bool requireProvider = false,
@@ -749,12 +950,48 @@ class WorkflowCommand {
     return 0;
   }
 
+  int _printPendingResearchActionResult(
+    JsonMap result, {
+    required String success,
+  }) {
+    if (!ValueReaders.boolValue(result['ok'])) {
+      _printer.error(ValueReaders.stringValue(result['error'], '执行失败。'));
+      return 1;
+    }
+    _printer.success(success);
+    final requestId = ValueReaders.stringValue(result['request_id']).trim();
+    final requestState = ValueReaders.stringValue(
+      result['request_state'],
+    ).trim();
+    final actionStatus = ValueReaders.stringValue(
+      result['action_status'],
+    ).trim();
+    if (requestId.isNotEmpty) {
+      _printer.info('请求: $requestId');
+    }
+    if (requestState.isNotEmpty) {
+      _printer.info('状态: ${_pendingResearchStateLabel(requestState)}');
+    }
+    if (actionStatus.isNotEmpty && actionStatus != 'updated') {
+      _printer.info('结果: $actionStatus');
+    }
+    final changedPaths = ValueReaders.stringList(result['changed_paths']);
+    if (changedPaths.isNotEmpty) {
+      for (final path in changedPaths) {
+        _printer.info('已更新: $path');
+      }
+    }
+    return 0;
+  }
+
   void _printHelp() {
     // 中文注释: workflow 帮助只展示已经接通的共享运行入口，避免 CLI 承诺不存在的子命令。
     _printer.block(
       'workflow help',
       [
         'workflow draft --prompt "写第一章开场" [--project 路径] [--title 标题] [--model 模型] [--no-save]',
+        'workflow extract-reference --list-strategies',
+        'workflow extract-reference --source D:/book.txt [--project 路径] [--model 模型] [--package-id id] [--display-name 标题] [--source-language en] [--target-language zh-CN] [--strategy-profile profile_id]',
         'workflow create --mode human_outline_ai_draft [--outline outline/outline.md] [--seed 创作说明] [--chapters 12] [--checkpoint 3] [--project 路径]',
         'workflow list [--project 路径]',
         'workflow next [--project 路径]',
@@ -778,8 +1015,40 @@ class WorkflowCommand {
         'workflow apply-revision-resolution --task tasks/xxx.json --command create_followup_review_tasks [--project 路径]',
         'workflow accept-revision --task tasks/xxx.json [--project 路径]',
         'workflow rollback-revision --task tasks/xxx.json [--project 路径]',
+        'workflow pending-research list [--project 路径]',
+        'workflow pending-research approve --request research_request_xxx [--note 备注] [--project 路径]',
+        'workflow pending-research reject --request research_request_xxx [--note 备注] [--project 路径]',
       ].join('\n'),
     );
+  }
+
+  void _printReferenceExtractionStrategies() {
+    final options = _referenceExtractionStrategyProfileOptionService
+        .listOptions();
+    if (options.isEmpty) {
+      _printer.info('当前没有可用的参考提取策略。');
+      return;
+    }
+    final lines = options
+        .map(
+          (option) =>
+              '${option.displayName}｜${option.profileId}\n'
+              '  ${option.summary}\n'
+              '  候选：${option.proposalCountLabel}｜类型：${option.entryKindsLabel}\n'
+              '  审核：${option.reviewPolicyLabel}',
+        )
+        .join('\n');
+    _printer.block('参考提取策略', lines);
+  }
+
+  String _referenceExtractionStrategyLabel(String profileId) {
+    final option = _referenceExtractionStrategyProfileOptionService.optionById(
+      profileId,
+    );
+    if (option == null) {
+      return profileId.trim();
+    }
+    return '${option.displayName} (${option.profileId})';
   }
 
   String? _optionValue(List<String> args, String name) {
@@ -822,6 +1091,55 @@ class WorkflowCommand {
       return '新正文';
     }
     return firstLine.length > 24 ? firstLine.substring(0, 24) : firstLine;
+  }
+
+  String _pendingResearchRequestId(List<String> args) {
+    final requestId =
+        _optionValue(args, '--request') ?? _optionValue(args, '--id') ?? '';
+    if (requestId.trim().isNotEmpty) {
+      return requestId.trim();
+    }
+    return _joinedPositional(args).trim();
+  }
+
+  String _pendingResearchRecordLine(JsonMap record) {
+    final requestId = ValueReaders.stringValue(record['request_id']).trim();
+    final requestState = ValueReaders.stringValue(
+      record['request_state'],
+    ).trim();
+    final researchRequest = ValueReaders.mapValue(record['research_request']);
+    final query = ValueReaders.stringValue(researchRequest['query']).trim();
+    final reason = ValueReaders.stringValue(
+      ValueReaders.mapValue(record['permission_decision'])['reason'],
+      ValueReaders.stringValue(record['resolution_note']),
+    ).trim();
+    final parts = <String>[requestId, _pendingResearchStateLabel(requestState)];
+    if (query.isNotEmpty) {
+      parts.add(query);
+    }
+    if (reason.isNotEmpty) {
+      parts.add(reason);
+    }
+    return parts.join('｜');
+  }
+
+  String _pendingResearchStateLabel(String requestState) {
+    switch (requestState) {
+      case ProjectPendingResearchRequestStates.awaitingUserConfirmation:
+        return '等待确认';
+      case ProjectPendingResearchRequestStates.pendingGatewayExecution:
+        return '待处理';
+      case ProjectPendingResearchRequestStates.pendingReview:
+        return '待审核';
+      case ProjectPendingResearchRequestStates.needsUserInfo:
+        return '待补充信息';
+      case ProjectPendingResearchRequestStates.rejected:
+        return '已拒绝';
+      case ProjectPendingResearchRequestStates.completed:
+        return '已完成';
+      default:
+        return requestState;
+    }
   }
 
   String _prettyJson(JsonMap value) {

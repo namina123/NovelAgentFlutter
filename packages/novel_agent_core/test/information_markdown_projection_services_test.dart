@@ -91,18 +91,35 @@ void main() {
         'research/资料研究摘要.md',
         'references/引用作品边界.md',
       ]);
-      expect(documents.first.markdown, contains('这份 Markdown 只是结构化信息事实源的可读投影'));
+      expect(documents.first.markdown, contains('这份 Markdown 只保留轻摘要与人工补充入口'));
       expect(
         documents.first.markdown,
         contains(InformationMarkdownProjectionService.knowledgeDraftBlockId),
       );
       expect(
-        documents[1].markdown,
+        documents.first.markdown,
+        contains('project-information://knowledge_cards'),
+      );
+      expect(
+        documents.first.markdown,
         contains(
-          '`{"pattern":"章末潮声回扣章首镜面","unknown_payload":{"phase":"vol1"}}`',
+          '来源身份：来源-source-1 / `imports/reference/source-1.txt` / kind:`user`',
         ),
       );
+      expect(documents.first.markdown, isNot(contains('结构化参考快照')));
+      expect(
+        documents.first.markdown,
+        isNot(contains(r'D:\reference\source-1.txt')),
+      );
+      expect(
+        documents[1].markdown,
+        contains('设计要点：pattern=章末潮声回扣章首镜面；unknown_payload=[map:1]'),
+      );
       expect(documents[2].markdown, contains('可用事实数：1'));
+      expect(
+        documents[2].markdown,
+        contains('来源定位：`https://example.com/mirror-tide`'),
+      );
       expect(documents[3].markdown, contains('Requires Confirmation：true'));
       expect(
         repeated.map((item) => item.markdown).toList(growable: false),
@@ -284,6 +301,11 @@ Map<String, Object?> _sourceRefJson([String sourceId = 'source-1']) {
     'source_ref': <String, Object?>{
       'source_type': NarrativeSourceTypes.user,
       'source_id': sourceId,
+      'source_asset_id': 'imports/reference/$sourceId.txt',
+      'display_name': '来源-$sourceId',
+      'source_kind': NarrativeSourceTypes.user,
+      'resolver_uri': 'project-source://$sourceId',
+      'local_hint_path': r'D:\reference\source-1.txt',
     },
     'source_authority': InformationSourceAuthorities.userDeclared,
     'role_authority': InformationRoleAuthorities.user,
@@ -315,7 +337,12 @@ String _inlineSourceRefJson(String sourceId) {
 {
   "source_ref": {
     "source_type": "${NarrativeSourceTypes.user}",
-    "source_id": "$sourceId"
+    "source_id": "$sourceId",
+    "source_asset_id": "imports/reference/$sourceId.txt",
+    "display_name": "来源-$sourceId",
+    "source_kind": "${NarrativeSourceTypes.user}",
+    "resolver_uri": "project-source://$sourceId",
+    "local_hint_path": "D:/reference/source-1.txt"
   },
   "source_authority": "${InformationSourceAuthorities.userDeclared}",
   "role_authority": "${InformationRoleAuthorities.user}",

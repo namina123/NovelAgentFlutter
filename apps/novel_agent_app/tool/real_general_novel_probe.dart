@@ -23,7 +23,8 @@ Future<void> main(List<String> arguments) async {
     baseUrl: apiConfig.baseUrl,
     apiKey: apiConfig.apiKey,
     modelId: apiConfig.modelId,
-    description: 'Shared local probe configuration for ordinary general novel validation.',
+    description:
+        'Shared local probe configuration for ordinary general novel validation.',
     isDefault: true,
   );
   final settings = AppSettings(
@@ -47,8 +48,10 @@ Future<void> main(List<String> arguments) async {
   );
   final chapterCount = _chapterCountFromArgs(arguments);
   final runId = DateTime.now().toIso8601String();
-  final workspaceRoot = Directory(
-    '$repoRoot${Platform.pathSeparator}artifacts${Platform.pathSeparator}real_general_novel_probe_workspace${Platform.pathSeparator}${_safeTimestamp(runId)}',
+  final workspaceRoot = buildProbeWorkspaceDirectory(
+    repoRoot: repoRoot,
+    probeName: 'real_general_novel_probe',
+    runId: runId,
   );
   await workspaceRoot.create(recursive: true);
 
@@ -73,11 +76,12 @@ Future<void> main(List<String> arguments) async {
       ProjectDraftExecutionConstraintRuntimeService.fromWorkspacePort(
         workspacePort: bundle.projectWorkspacePort,
       );
-  final conversationDraftRuntimeService = ProjectConversationDraftRuntimeService(
-    workspacePort: bundle.projectWorkspacePort,
-    hostPort: bundle.projectToolHostPort,
-    taskRepository: projectTaskRepository,
-  );
+  final conversationDraftRuntimeService =
+      ProjectConversationDraftRuntimeService(
+        workspacePort: bundle.projectWorkspacePort,
+        hostPort: bundle.projectToolHostPort,
+        taskRepository: projectTaskRepository,
+      );
   final chapterLengthEvaluationService = ProjectChapterLengthEvaluationService(
     taskRepository: projectTaskRepository,
   );
@@ -127,6 +131,7 @@ Future<void> main(List<String> arguments) async {
     'provider_id': provider.id,
     'model_id': resolvedModelId,
     'base_url': provider.baseUrl,
+    'probe_config_source': apiConfig.sourceLabel,
     'run_id': runId,
     'started_at': DateTime.now().toIso8601String(),
     'workspace_root': workspaceRoot.path,
@@ -158,38 +163,27 @@ Future<void> main(List<String> arguments) async {
     );
     report['project_root'] = project.rootPath;
     await _seedProject(bundle.projectWorkspacePort, project);
+    final probeExpressionBindings = defaultProbeExpressionBindings();
     await projectExpressionConstraintBindingRepository.saveBindings(
       project,
-      const <ProjectExpressionConstraintBinding>[
-        ProjectExpressionConstraintBinding(
-          id: 'probe_de_ai_binding',
-          profileId: 'de_ai',
-          displayName: 'Probe de-AI',
-          defaultForProject: true,
-          targetStageIds: <String>['draft'],
-          weight: 160,
-        ),
-        ProjectExpressionConstraintBinding(
-          id: 'probe_low_jargon_binding',
-          profileId: 'low_jargon_narration',
-          displayName: 'Probe low jargon narration',
-          defaultForProject: true,
-          targetStageIds: <String>['draft'],
-          weight: 140,
-        ),
-      ],
+      probeExpressionBindings,
     );
     final loadedProfiles = await expressionConstraintProfileRepository
         .loadProfiles(project);
     report['loaded_expression_constraint_profile_ids'] = loadedProfiles
         .map((profile) => profile.id)
         .toList(growable: false);
+    report['expression_constraint_setup'] =
+        buildProbeExpressionConstraintSetupReport(
+          loadedProfiles: loadedProfiles,
+          savedBindings: probeExpressionBindings,
+        );
 
     var successCount = 0;
     for (final guide in _chapterGuides.take(chapterCount)) {
       stdout.writeln('running ${guide.chapterLabel} ...');
-      final executionConstraints =
-          await draftExecutionConstraintRuntimeService.resolve(
+      final executionConstraints = await draftExecutionConstraintRuntimeService
+          .resolve(
             project,
             appliesTo: ConstraintBindingAppliesTo.writing,
             agentId: 'default_generalist',
@@ -212,8 +206,10 @@ Future<void> main(List<String> arguments) async {
         userPrompt: _chapterPrompt(guide),
         modelId: resolvedModelId,
         title: '${guide.chapterLabel}《${guide.title}》',
-        sessionContext: _mergeSessionContext(
-          ValueReaders.stringValue(executionConstraints['session_context_markdown']),
+        sessionContext: mergeProbeSessionContext(
+          ValueReaders.stringValue(
+            executionConstraints['session_context_markdown'],
+          ),
           preparation.sessionContextMarkdown,
         ),
         requestOptions: requestOptions,
@@ -247,17 +243,15 @@ Future<void> main(List<String> arguments) async {
           'stage': 'draft',
           'sort_order': guide.chapterNumber,
           ...ValueReaders.deepCopyMap(
-            ValueReaders.mapValue(executionConstraints['chapter_length_metadata']),
+            ValueReaders.mapValue(
+              executionConstraints['chapter_length_metadata'],
+            ),
           ),
         },
       };
       await projectTaskRepository.saveTask(project, chapterTask);
       final chapterLengthEvaluation = await chapterLengthEvaluationService
-          .evaluate(
-            project: project,
-            task: chapterTask,
-            result: result,
-          );
+          .evaluate(project: project, task: chapterTask, result: result);
       final creativeRuleStack = creativeRuleStackResolverService.resolve(
         expressionConstraintProfiles: ValueReaders.objectList(
           executionConstraints['expression_constraint_profiles'],
@@ -293,13 +287,18 @@ Future<void> main(List<String> arguments) async {
           !toolNames.contains('submit_chapter_delivery')) {
         toolNames.add('submit_chapter_delivery');
       }
+      final informationProbe = buildInformationProbeAssessment(
+        probeLabel: 'ordinary_${guide.chapterLabel}',
+        activationReport: preparation.activationReport,
+        changedPaths: _collectChangedPaths(result, artifacts),
+        toolNames: toolNames,
+      );
       final chapterReport = <String, Object?>{
-        'ok':
-            !_chapterHasBlockingFailure(
-              result: result,
-              artifacts: artifacts,
-              productionObservation: productionObservation,
-            ),
+        'ok': !_chapterHasBlockingFailure(
+          result: result,
+          artifacts: artifacts,
+          productionObservation: productionObservation,
+        ),
         'chapter_label': guide.chapterLabel,
         'chapter_title': guide.title,
         'guide_brief': guide.brief,
@@ -321,6 +320,7 @@ Future<void> main(List<String> arguments) async {
           artifacts.chapterDelivery,
           productionObservation,
         ),
+        'information_probe': informationProbe,
         'production_observation': productionObservation,
         'tool_names': toolNames,
         'waiting_for_user_choice': result.waitingForUserChoice,
@@ -345,9 +345,13 @@ Future<void> main(List<String> arguments) async {
     report['all_project_files'] = projectFiles
         .map((entry) => ValueReaders.stringValue(entry['relative_path']))
         .toList(growable: false);
+    report['information_probe'] = _summarizeInformationProbeReports(report);
     report['ok'] = successCount == chapterCount;
     report['report_category'] = classifyDraftProbeReportCategory(
       ok: successCount == chapterCount,
+      validation: <String, Object?>{
+        'information_probe': ValueReaders.mapValue(report['information_probe']),
+      },
       errorSummary: ValueReaders.stringValue(report['error']),
     );
   } catch (error, stackTrace) {
@@ -411,30 +415,15 @@ const List<_ChapterGuide> _chapterGuides = <_ChapterGuide>[
     '第二层频道',
     '把异常从单一热线扩展到更明确的“第二层频道”线索，剧情需要实质推进而不是原地解释。',
   ),
-  _ChapterGuide(
-    5,
-    '第05章',
-    '旧带里的名字',
-    '借一份旧录音带或旧节目档案挖到姐姐留下的痕迹，让角色关系和过往事件更具体。',
-  ),
+  _ChapterGuide(5, '第05章', '旧带里的名字', '借一份旧录音带或旧节目档案挖到姐姐留下的痕迹，让角色关系和过往事件更具体。'),
   _ChapterGuide(
     6,
     '第06章',
     '错误的来电时间',
     '制造一次时间记录与现实不一致的异常，继续推进主线，并让沈临川做出更主动的行动决策。',
   ),
-  _ChapterGuide(
-    7,
-    '第07章',
-    '失真段',
-    '让异常影响女主的听觉或身体状态，但不能只写症状，要推动她与陈屿的调查关系升级。',
-  ),
-  _ChapterGuide(
-    8,
-    '第08章',
-    '台阶上的回拨',
-    '安排一次危险的回拨或反向联络，让线索获得新信息，同时抛出更大的未知区域。',
-  ),
+  _ChapterGuide(7, '第07章', '失真段', '让异常影响女主的听觉或身体状态，但不能只写症状，要推动她与陈屿的调查关系升级。'),
+  _ChapterGuide(8, '第08章', '台阶上的回拨', '安排一次危险的回拨或反向联络，让线索获得新信息，同时抛出更大的未知区域。'),
   _ChapterGuide(
     9,
     '第09章',
@@ -588,7 +577,9 @@ List<String> _pinnedPathsForChapter(_ChapterGuide guide) {
     guide.summaryPath,
   ];
   if (guide.chapterNumber > 1) {
-    result.add('summaries/第${(guide.chapterNumber - 1).toString().padLeft(2, '0')}章.summary.md');
+    result.add(
+      'summaries/第${(guide.chapterNumber - 1).toString().padLeft(2, '0')}章.summary.md',
+    );
   }
   return result;
 }
@@ -608,10 +599,7 @@ List<String> _collectChangedPaths(
   DraftGenerationResult result,
   ProjectConversationDraftRuntimeArtifacts artifacts,
 ) {
-  final paths = <String>[
-    ...result.changedPaths,
-    ...artifacts.changedPaths,
-  ];
+  final paths = <String>[...result.changedPaths, ...artifacts.changedPaths];
   return paths.toSet().toList(growable: false);
 }
 
@@ -623,7 +611,8 @@ bool _chapterHasBlockingFailure({
   if (result.waitingForUserChoice) {
     return true;
   }
-  if (artifacts.outputPath.trim().isEmpty || artifacts.chapterDelivery.isEmpty) {
+  if (artifacts.outputPath.trim().isEmpty ||
+      artifacts.chapterDelivery.isEmpty) {
     return true;
   }
   final overallCategory = ValueReaders.stringValue(
@@ -638,7 +627,9 @@ bool _chapterHasBlockingFailure({
   return false;
 }
 
-bool _hasRecoveredFormalDelivery(ProjectConversationDraftRuntimeArtifacts artifacts) {
+bool _hasRecoveredFormalDelivery(
+  ProjectConversationDraftRuntimeArtifacts artifacts,
+) {
   final delivery = artifacts.chapterDelivery;
   if (delivery.isEmpty) {
     return false;
@@ -650,11 +641,10 @@ bool _hasRecoveredFormalDelivery(ProjectConversationDraftRuntimeArtifacts artifa
       ValueReaders.boolValue(stateResult['submission_accepted']);
 }
 
-JsonMap _deliveryRecoveryPlan(
-  JsonMap delivery,
-  JsonMap productionObservation,
-) {
-  final deliverySignal = ValueReaders.mapValue(productionObservation['delivery']);
+JsonMap _deliveryRecoveryPlan(JsonMap delivery, JsonMap productionObservation) {
+  final deliverySignal = ValueReaders.mapValue(
+    productionObservation['delivery'],
+  );
   final overall = ValueReaders.mapValue(productionObservation['overall']);
   final category = ValueReaders.stringValue(overall['category']);
   if (delivery.isEmpty) {
@@ -734,17 +724,6 @@ JsonMap _deliveryRecoveryPlan(
   };
 }
 
-String _mergeSessionContext(String base, String extra) {
-  final parts = <String>[];
-  if (base.trim().isNotEmpty) {
-    parts.add(base.trim());
-  }
-  if (extra.trim().isNotEmpty) {
-    parts.add(extra.trim());
-  }
-  return parts.join('\n\n');
-}
-
 int _chapterCountFromArgs(List<String> arguments) {
   for (final argument in arguments) {
     final value = argument.trim();
@@ -757,10 +736,6 @@ int _chapterCountFromArgs(List<String> arguments) {
     }
   }
   return _chapterGuides.length;
-}
-
-String _safeTimestamp(String value) {
-  return value.replaceAll(':', '-').replaceAll('.', '-');
 }
 
 HostPlatform _currentHostPlatform() {
@@ -808,4 +783,56 @@ class _ChapterGuide {
       'summary_path': summaryPath,
     };
   }
+}
+
+JsonMap _summarizeInformationProbeReports(JsonMap report) {
+  final activationSourceKinds = <String>{};
+  final changedPaths = <String>{};
+  final toolNames = <String>{};
+  final summaries = <String>[];
+  final assessments = <Map<String, Object?>>[];
+  for (final entry in report.entries) {
+    if (!entry.key.startsWith('chapter_')) {
+      continue;
+    }
+    final chapterReport = ValueReaders.mapValue(entry.value);
+    final informationProbe = ValueReaders.mapValue(
+      chapterReport['information_probe'],
+    );
+    if (informationProbe.isEmpty) {
+      continue;
+    }
+    assessments.add(informationProbe);
+    activationSourceKinds.addAll(
+      ValueReaders.stringList(informationProbe['activation_source_kinds']),
+    );
+    changedPaths.addAll(
+      ValueReaders.stringList(informationProbe['information_changed_paths']),
+    );
+    toolNames.addAll(
+      ValueReaders.stringList(informationProbe['information_tool_names']),
+    );
+    final summary = ValueReaders.stringValue(informationProbe['summary']);
+    if (summary.isNotEmpty) {
+      summaries.add(summary);
+    }
+  }
+  final ok = assessments.every(
+    (assessment) => ValueReaders.boolValue(assessment['ok'], true),
+  );
+  return <String, Object?>{
+    'ok': ok,
+    'probe_label': 'ordinary_information_probe',
+    'expectation_mode': 'observe_only',
+    'activation_source_kinds': activationSourceKinds.toList(growable: false),
+    'information_changed_paths': changedPaths.toList(growable: false),
+    'information_tool_names': toolNames.toList(growable: false),
+    'report_category': ok
+        ? ProbeReportCategories.success
+        : ProbeReportCategories.informationQualityFailure,
+    'chapter_count': assessments.length,
+    'summary': summaries.isEmpty
+        ? 'information probe observation collected'
+        : summaries.join('；'),
+  };
 }

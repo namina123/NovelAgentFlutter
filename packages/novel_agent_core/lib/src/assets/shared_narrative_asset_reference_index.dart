@@ -7,14 +7,21 @@ class SharedNarrativeAssetReferenceIndex {
 
   final List<SharedNarrativeAssetReference> references;
 
-  SharedNarrativeAssetReference? referenceOf(String assetKind, String assetId) {
-    final referenceKey = '$assetKind:$assetId';
+  SharedNarrativeAssetReference? referenceByKey(String referenceKey) {
+    final cleanKey = referenceKey.trim();
+    if (cleanKey.isEmpty) {
+      return null;
+    }
     for (final reference in references) {
-      if (reference.referenceKey == referenceKey) {
+      if (reference.referenceKey == cleanKey) {
         return reference;
       }
     }
     return null;
+  }
+
+  SharedNarrativeAssetReference? referenceOf(String assetKind, String assetId) {
+    return referenceByKey('$assetKind:$assetId');
   }
 
   List<SharedNarrativeAssetReference> neighborsOf(

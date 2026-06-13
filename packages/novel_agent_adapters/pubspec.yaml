@@ -7,6 +7,7 @@ environment:
   sdk: ^3.9.0
 
 dependencies:
+  fast_gbk: ^1.0.0
   novel_agent_core:
     path: ../novel_agent_core
   sqlite3: ^2.7.7

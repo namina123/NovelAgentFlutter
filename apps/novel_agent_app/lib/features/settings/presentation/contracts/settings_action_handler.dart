@@ -19,6 +19,10 @@ abstract class SettingsActionHandler {
 
   void onToolStrategySettingsSaved(Map<String, Object?> payload);
 
+  void onProjectCreationExpressionConstraintDefaultsSaved(
+    Map<String, Object?> payload,
+  );
+
   void onNetworkSettingsSaved(Map<String, Object?> payload);
 
   void onContextSettingsSaved(Map<String, Object?> payload);

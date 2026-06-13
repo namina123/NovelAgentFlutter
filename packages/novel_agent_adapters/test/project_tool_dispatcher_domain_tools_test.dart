@@ -9,12 +9,13 @@ void main() {
     late Directory tempDirectory;
     late ProjectDescriptor project;
     late ProjectToolDispatcher dispatcher;
+    late LocalProjectWorkspacePort workspacePort;
 
     setUp(() async {
       tempDirectory = await Directory.systemTemp.createTemp(
         'novel-agent-dispatcher-domain-',
       );
-      final workspacePort = LocalProjectWorkspacePort();
+      workspacePort = LocalProjectWorkspacePort();
       final hostPort = ProjectWorkspaceToolHostAdapter(
         workspacePort: workspacePort,
         fileMutationAdapter: LocalProjectFileMutationAdapter(),
@@ -246,6 +247,177 @@ void main() {
     );
 
     test(
+      'host permission context overrides request_external_research without affecting other information tools',
+      () async {
+        final fakeGateway = _FakeGatewayToolExecutor(
+          responses: <String, JsonMap>{
+            'search_internet': <String, Object?>{
+              'ok': true,
+              'results': <Object?>[
+                <String, Object?>{
+                  'title': 'Mirror Tide Notes',
+                  'url': 'https://example.com/mirror-tide',
+                  'snippet': '镜潮互文外部资料摘要。',
+                },
+              ],
+            },
+            'fetch_url_content': <String, Object?>{
+              'ok': true,
+              'status_code': 200,
+              'content_type': 'text/html',
+              'content': '镜潮互文可用于卷末资料补充。',
+              'truncated': false,
+            },
+          },
+        );
+        dispatcher = ProjectToolDispatcher(
+          hostPort: ProjectWorkspaceToolHostAdapter(
+            workspacePort: workspacePort,
+            fileMutationAdapter: LocalProjectFileMutationAdapter(),
+          ),
+          hostInformationPermissionContext: const HostInformationPermissionContext(
+            allowNetwork: true,
+            allowImportCollection: true,
+            permissionMode: HostInformationPermissionModes.open,
+            confirmationMode: HostInformationConfirmationModes.automatic,
+            source: 'dispatcher.test',
+          ),
+          informationDomainToolExecutor: ProjectInformationDomainToolExecutor(
+            workspacePort: workspacePort,
+            researchCoordinatorService: ProjectInformationResearchCoordinatorService(
+              workspacePort: workspacePort,
+              gatewayService: ProjectResearchGatewayService(
+                workspacePort: workspacePort,
+                gatewayToolExecutor: fakeGateway,
+              ),
+            ),
+          ),
+        );
+
+        final researchResult = await dispatcher.execute(
+          project: project,
+          toolCall: <String, Object?>{
+            'id': 'research-call-open-1',
+            'name': NarrativeDomainToolNames.requestExternalResearch,
+            'source_type': NarrativeSourceTypes.writer,
+            'arguments': <String, Object?>{
+              'query': '镜潮互文',
+              'purpose': '补充卷末资料',
+              'requested_depth': InformationResearchDepths.standard,
+              'collection_mode': InformationCollectionModes.network,
+              'user_granted_network_access': false,
+            },
+          },
+        );
+
+        expect(
+          researchResult['domain_outcome_status'],
+          DomainToolOutcomeStatuses.proposed,
+        );
+        final researchOutcome = ValueReaders.mapValue(
+          researchResult['domain_outcome'],
+        );
+        final researchRequest = ValueReaders.mapValue(
+          ValueReaders.mapValue(researchOutcome['outcome_payload'])['research_request'],
+        );
+        final metadata = ValueReaders.mapValue(researchRequest['metadata']);
+        final permissionDecision = ValueReaders.mapValue(
+          researchOutcome['permission_decision'],
+        );
+        final researchExecution = ValueReaders.mapValue(
+          ValueReaders.mapValue(researchOutcome['outcome_payload'])['research_execution'],
+        );
+        expect(
+          ValueReaders.boolValue(researchRequest['user_granted_network_access']),
+          isTrue,
+        );
+        expect(
+          ValueReaders.stringValue(permissionDecision['disposition']),
+          DomainToolPermissionDispositions.accepted,
+        );
+        expect(
+          ValueReaders.boolValue(metadata['raw_model_user_granted_network_access']),
+          isFalse,
+        );
+        expect(
+          ValueReaders.boolValue(
+            metadata['effective_user_granted_network_access'],
+          ),
+          isTrue,
+        );
+        expect(
+          ValueReaders.boolValue(
+            ValueReaders.mapValue(
+              researchOutcome['outcome_payload'],
+            )['network_execution_performed'],
+          ),
+          isTrue,
+        );
+        expect(
+          ValueReaders.boolValue(researchExecution['executed_network']),
+          isTrue,
+        );
+        expect(
+          ValueReaders.stringValue(researchResult['tool_result_summary']),
+          contains('自动执行资料研究'),
+        );
+        expect(fakeGateway.executedGatewayTools, <String>[
+          'search_internet',
+          'fetch_url_content',
+        ]);
+
+        final designResult = await dispatcher.execute(
+          project: project,
+          toolCall: <String, Object?>{
+            'id': 'design-call-open-2',
+            'name': NarrativeDomainToolNames.proposeDesignElement,
+            'source_type': NarrativeSourceTypes.user,
+            'arguments': <String, Object?>{
+              'design_id': 'design-open-1',
+              'design_namespace': 'project.structure',
+              'design_label': '镜潮回环',
+              'design_payload': <String, Object?>{'pattern': '镜与潮双重意象'},
+              'source_refs': <Object?>[
+                <String, Object?>{
+                  'source_ref': <String, Object?>{
+                    'source_type': NarrativeSourceTypes.user,
+                    'source_id': 'source-user',
+                  },
+                  'source_authority': InformationSourceAuthorities.userDeclared,
+                  'role_authority': InformationRoleAuthorities.user,
+                  'research_depth': InformationResearchDepths.none,
+                },
+              ],
+              'activation_policy': <String, Object?>{
+                'activation_priority': InformationActivationPriorities.pinned,
+                'preferred_budget_chars': 180,
+              },
+              'usage_policy': <String, Object?>{
+                'usage_mode': InformationUsageModes.normal,
+                'citation_risk_level': InformationCitationRiskLevels.low,
+                'allows_derivative_use': true,
+              },
+              'confidence': 0.8,
+              'lifecycle_status': InformationLifecycleStatuses.proposed,
+            },
+          },
+        );
+
+        expect(
+          designResult['domain_outcome_status'],
+          DomainToolOutcomeStatuses.proposed,
+        );
+        final designOutcome = ValueReaders.mapValue(designResult['domain_outcome']);
+        expect(
+          ValueReaders.mapValue(designOutcome['metadata']).containsKey(
+            'raw_model_user_granted_network_access',
+          ),
+          isFalse,
+        );
+      },
+    );
+
+    test(
       'returns structured parse issues for malformed domain tool payloads',
       () async {
         final result = await dispatcher.execute(
@@ -258,11 +430,17 @@ void main() {
         );
 
         expect(result['ok'], isFalse);
+        expect(result['not_executed'], isTrue);
+        expect(result['retryable'], isTrue);
         expect(result['tool_layer'], 'domain');
         expect(result['interaction_type'], 'domain_tool');
         expect(
           ValueReaders.objectList(result['domain_parse_issues']),
           isNotEmpty,
+        );
+        expect(
+          ValueReaders.stringValue(result['tool_result_summary']),
+          contains('工具尚未执行'),
         );
         expect(result.containsKey('domain_outcome'), isFalse);
       },
@@ -321,4 +499,27 @@ void main() {
       expect(result.containsKey('domain_outcome'), isFalse);
     });
   });
+}
+
+class _FakeGatewayToolExecutor extends ProjectGatewayToolExecutor {
+  _FakeGatewayToolExecutor({Map<String, JsonMap>? responses})
+    : _responses = responses ?? <String, JsonMap>{};
+
+  final Map<String, JsonMap> _responses;
+  final List<String> executedGatewayTools = <String>[];
+
+  @override
+  Future<JsonMap> execute(ProjectDescriptor project, JsonMap arguments) async {
+    final gatewayTool = ValueReaders.stringValue(
+      arguments['gateway_tool'],
+    ).trim();
+    executedGatewayTools.add(gatewayTool);
+    return ValueReaders.deepCopyMap(
+      _responses[gatewayTool] ??
+          <String, Object?>{
+            'ok': false,
+            'error': 'fake gateway missing response',
+          },
+    );
+  }
 }

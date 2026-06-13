@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../app/theme/app_chrome.dart';
+import '../../../../../shared/theme/novel_theme_context.dart';
 import '../../../../../shared/widgets/panel_surface.dart';
 import '../contracts/conversation_action_handler.dart';
 import '../models/conversation_input_capability_state.dart';
@@ -34,36 +36,56 @@ class ConversationInputDock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 中文注释: 输入坞负责统一文本输入表面和动作栏，后续接附件或真正停止链时不需要再改侧栏骨架。
-    final content = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ConversationSendConfigBar(
-          modelLabel: modelLabel,
-          modelOptions: modelOptions,
-          onModelSelected: actionHandler.onModelSelected,
+    final surface = context.novelThemeSurfaces.inputDock;
+    final content = DecoratedBox(
+      decoration: BoxDecoration(
+        color: surface.backgroundColor.withValues(alpha: 0.24),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: surface.borderColor.withValues(alpha: 0.12),
+          width: AppChrome.borderWidth,
         ),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ConversationComposerTextField(
-                controller: controller,
-                scrollController: scrollController,
-                hintText: hintText,
-              ),
-              const SizedBox(height: 8),
-              ConversationInputActionRow(
-                capabilities: capabilities,
-                actionHandler: actionHandler,
-                onSendRequested: onSendRequested,
-              ),
-            ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ConversationSendConfigBar(
+            modelLabel: modelLabel,
+            modelOptions: modelOptions,
+            onModelSelected: actionHandler.onModelSelected,
           ),
-        ),
-      ],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 4, 10, 0),
+            child: ConversationComposerTextField(
+              controller: controller,
+              scrollController: scrollController,
+              hintText: hintText,
+            ),
+          ),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(10, 5, 10, 8),
+            decoration: BoxDecoration(
+              color: Colors.transparent,
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(10),
+                bottomRight: Radius.circular(10),
+              ),
+              border: Border(
+                top: BorderSide(
+                  color: surface.borderColor.withValues(alpha: 0.08),
+                  width: AppChrome.borderWidth,
+                ),
+              ),
+            ),
+            child: ConversationInputActionRow(
+              capabilities: capabilities,
+              actionHandler: actionHandler,
+              onSendRequested: onSendRequested,
+            ),
+          ),
+        ],
+      ),
     );
     if (!showSurface) {
       return content;
@@ -71,6 +93,7 @@ class ConversationInputDock extends StatelessWidget {
     return PanelSurface(
       role: PanelSurfaceRole.inputDock,
       padding: EdgeInsets.zero,
+      showBorder: false,
       child: content,
     );
   }

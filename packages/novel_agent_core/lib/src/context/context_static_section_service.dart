@@ -1,13 +1,21 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
 import '../project/project_prompt_contract.dart';
+import 'session_context_specialized_section_service.dart';
 
 class ContextStaticSectionService {
   ContextStaticSectionService({
     required ProjectPromptContract projectPromptContract,
-  }) : _projectPromptContract = projectPromptContract;
+    SessionContextSpecializedSectionService?
+    sessionContextSpecializedSectionService,
+  }) : _projectPromptContract = projectPromptContract,
+       _sessionContextSpecializedSectionService =
+           sessionContextSpecializedSectionService ??
+           const SessionContextSpecializedSectionService();
 
   final ProjectPromptContract _projectPromptContract;
+  final SessionContextSpecializedSectionService
+  _sessionContextSpecializedSectionService;
 
   List<JsonMap> buildStaticSections({
     required JsonMap project,
@@ -46,6 +54,9 @@ class ContextStaticSectionService {
       });
     }
     if (sessionContext.trim().isNotEmpty) {
+      sections.addAll(
+        _sessionContextSpecializedSectionService.buildSections(sessionContext),
+      );
       sections.add(<String, Object?>{
         'id': 'session_context',
         'title': '会话上下文',

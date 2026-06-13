@@ -9,7 +9,12 @@ class TaskCenterContractActionViewData {
     required this.disabledReason,
     required this.ownerTaskPath,
     required this.checkpointReviewPath,
+    this.ownerTaskId = '',
+    this.longTaskRunPath = '',
     this.isRecommended = false,
+    this.userOptionPrompt = '',
+    this.userOptionDescription = '',
+    this.userOptionQuestion = '',
   });
 
   final String id;
@@ -21,5 +26,10 @@ class TaskCenterContractActionViewData {
   final String disabledReason;
   final String ownerTaskPath;
   final String checkpointReviewPath;
+  final String ownerTaskId;
+  final String longTaskRunPath;
   final bool isRecommended;
+  final String userOptionPrompt;
+  final String userOptionDescription;
+  final String userOptionQuestion;
 }

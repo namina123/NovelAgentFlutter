@@ -6,6 +6,7 @@ import '../models/project_assets_tab_id.dart';
 import 'project_assets_expression_constraint_view_data_service.dart';
 import 'project_assets_graph_view_data_service.dart';
 import 'project_assets_timeline_view_data_service.dart';
+import 'project_reference_extraction_strategy_picker_view_data_service.dart';
 
 class ProjectAssetsViewDataService {
   const ProjectAssetsViewDataService({
@@ -13,6 +14,8 @@ class ProjectAssetsViewDataService {
     expressionConstraintViewDataService,
     ProjectAssetsGraphViewDataService? graphViewDataService,
     ProjectAssetsTimelineViewDataService? timelineViewDataService,
+    ProjectReferenceExtractionStrategyPickerViewDataService?
+    referenceExtractionStrategyPickerViewDataService,
   }) : _expressionConstraintViewDataService =
            expressionConstraintViewDataService ??
            const ProjectAssetsExpressionConstraintViewDataService(),
@@ -20,12 +23,17 @@ class ProjectAssetsViewDataService {
            graphViewDataService ?? const ProjectAssetsGraphViewDataService(),
        _timelineViewDataService =
            timelineViewDataService ??
-           const ProjectAssetsTimelineViewDataService();
+           const ProjectAssetsTimelineViewDataService(),
+       _referenceExtractionStrategyPickerViewDataService =
+           referenceExtractionStrategyPickerViewDataService ??
+           const ProjectReferenceExtractionStrategyPickerViewDataService();
 
   final ProjectAssetsExpressionConstraintViewDataService
   _expressionConstraintViewDataService;
   final ProjectAssetsGraphViewDataService _graphViewDataService;
   final ProjectAssetsTimelineViewDataService _timelineViewDataService;
+  final ProjectReferenceExtractionStrategyPickerViewDataService
+  _referenceExtractionStrategyPickerViewDataService;
 
   ProjectAssetsViewData build({
     required ProjectAssetsSnapshot snapshot,
@@ -51,6 +59,10 @@ class ProjectAssetsViewDataService {
       expressionConstraintEditor: _expressionConstraintViewDataService
           .buildEditor(snapshot),
       foreshadowEditor: _foreshadowEditor(snapshot),
+      referenceExtractionStrategyPicker:
+          _referenceExtractionStrategyPickerViewDataService.build(
+            selectedProfileId: snapshot.selectedReferenceExtractionStrategyId,
+          ),
       isLoading: snapshot.isLoading,
     );
   }
@@ -74,9 +86,9 @@ class ProjectAssetsViewDataService {
     if (activeTabId == ProjectAssetsTabId.expressionConstraints) {
       final agentId = snapshot.entryAgentContextId.trim();
       if (agentId.isNotEmpty) {
-        return '表达限制是项目级写作约束系统；当前正从智能体 $agentId 进入，可继续为它定向绑定内置或自定义预设。';
+        return '表达限制是项目级写作约束系统；当前正从智能体 $agentId 进入，可继续为它定向绑定内置或自定义规则方案。';
       }
-      return '表达限制是项目级写作约束系统，可统一管理内置与项目自定义预设，并决定它们如何参与当前项目。';
+      return '表达限制是项目级写作约束系统，可统一管理内置与项目自定义规则方案，并决定它们如何参与当前项目。';
     }
     return ProjectAssetsViewData.initial().description;
   }

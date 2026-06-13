@@ -21,16 +21,18 @@ class ConversationReasoningToggleChip extends StatelessWidget {
     final colors = context.novelThemeColors;
     final surface = context.novelThemeSurfaces.inputDock;
     final backgroundColor = enabled
-        ? colors.accentColor
-        : surface.backgroundColor.withValues(alpha: 0.96);
-    final borderColor = enabled ? colors.accentColor : surface.borderColor;
+        ? colors.accentSoftColor.withValues(alpha: 0.68)
+        : surface.backgroundColor.withValues(alpha: 0.9);
+    final borderColor = enabled
+        ? colors.accentColor.withValues(alpha: 0.54)
+        : surface.borderColor.withValues(alpha: 0.72);
     final foregroundColor = enabled
-        ? colors.inverseTextColor
+        ? colors.lineStrongColor
         : colors.mutedTextColor;
     final iconBackgroundColor = enabled
-        ? colors.inverseTextColor.withValues(alpha: 0.18)
-        : colors.accentSoftColor.withValues(alpha: 0.72);
-    final iconColor = enabled ? colors.inverseTextColor : colors.accentColor;
+        ? colors.accentColor.withValues(alpha: 0.14)
+        : colors.panelBackground.withValues(alpha: 0.82);
+    final iconColor = enabled ? colors.accentColor : colors.lineStrongColor;
 
     return Semantics(
       button: true,
@@ -45,7 +47,7 @@ class ConversationReasoningToggleChip extends StatelessWidget {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 160),
             curve: Curves.easeOut,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
               color: backgroundColor,
               borderRadius: BorderRadius.circular(surface.radius),
@@ -62,11 +64,11 @@ class ConversationReasoningToggleChip extends StatelessWidget {
                   height: 18,
                   decoration: BoxDecoration(
                     color: iconBackgroundColor,
-                    shape: BoxShape.circle,
+                    borderRadius: BorderRadius.circular(5),
                   ),
                   child: Icon(
                     Icons.psychology_alt_rounded,
-                    size: 12,
+                    size: 13,
                     color: iconColor,
                   ),
                 ),
@@ -74,9 +76,33 @@ class ConversationReasoningToggleChip extends StatelessWidget {
                 Text(
                   '深度思考',
                   style: TextStyle(
-                    fontSize: 11,
+                    fontSize: 10.8,
                     fontWeight: FontWeight.w700,
                     color: foregroundColor,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  curve: Curves.easeOut,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 5,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: enabled
+                        ? colors.accentColor.withValues(alpha: 0.1)
+                        : colors.panelBackground.withValues(alpha: 0.58),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    enabled ? 'ON' : 'OFF',
+                    style: TextStyle(
+                      fontSize: 9.2,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.22,
+                      color: foregroundColor,
+                    ),
                   ),
                 ),
               ],

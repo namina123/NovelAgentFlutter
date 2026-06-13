@@ -1,3 +1,5 @@
+import 'package:novel_agent_core/novel_agent_core.dart';
+
 import '../models/opening_session_projection.dart';
 import '../models/project_opening_maturity_assessment.dart';
 import '../models/project_opening_maturity_stage.dart';
@@ -31,13 +33,24 @@ class ProjectOpeningMaturityAssessmentService {
   ProjectOpeningMaturityAssessment build({
     required String projectType,
     required List<ResourceEntryViewData> resourceEntries,
+    List<JsonMap> resourceSnapshotEntries = const <JsonMap>[],
     required OpeningSessionProjection? openingProjection,
   }) {
-    final foundationFileCount = resourceEntries
-        .where((entry) => _isFoundationFile(entry))
+    final effectiveEntries = _effectiveEntries(
+      resourceEntries: resourceEntries,
+      resourceSnapshotEntries: resourceSnapshotEntries,
+    );
+    final foundationFileCount = effectiveEntries
+        .where(
+          (entry) =>
+              _isFoundationFile(entry.path, isDirectory: entry.isDirectory),
+        )
         .length;
-    final narrativeFileCount = resourceEntries
-        .where((entry) => _isNarrativeFile(entry))
+    final narrativeFileCount = effectiveEntries
+        .where(
+          (entry) =>
+              _isNarrativeFile(entry.path, isDirectory: entry.isDirectory),
+        )
         .length;
     if (narrativeFileCount > 0 || foundationFileCount >= 2) {
       return ProjectOpeningMaturityAssessment(
@@ -67,19 +80,45 @@ class ProjectOpeningMaturityAssessmentService {
     );
   }
 
-  bool _isFoundationFile(ResourceEntryViewData entry) {
-    if (entry.isDirectory) {
+  List<_OpeningMaturityEntry> _effectiveEntries({
+    required List<ResourceEntryViewData> resourceEntries,
+    required List<JsonMap> resourceSnapshotEntries,
+  }) {
+    if (resourceSnapshotEntries.isNotEmpty) {
+      return resourceSnapshotEntries
+          .map(
+            (entry) => _OpeningMaturityEntry(
+              path: _normalizedPath(
+                ValueReaders.stringValue(entry['relative_path']),
+              ),
+              isDirectory: ValueReaders.boolValue(entry['is_dir']),
+            ),
+          )
+          .where((entry) => entry.path.isNotEmpty)
+          .toList(growable: false);
+    }
+    return resourceEntries
+        .map(
+          (entry) => _OpeningMaturityEntry(
+            path: _normalizedPath(entry.relativePath),
+            isDirectory: entry.isDirectory,
+          ),
+        )
+        .where((entry) => entry.path.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  bool _isFoundationFile(String path, {required bool isDirectory}) {
+    if (isDirectory) {
       return false;
     }
-    final path = _normalizedPath(entry.relativePath);
     return _foundationPrefixes.any(path.startsWith);
   }
 
-  bool _isNarrativeFile(ResourceEntryViewData entry) {
-    if (entry.isDirectory) {
+  bool _isNarrativeFile(String path, {required bool isDirectory}) {
+    if (isDirectory) {
       return false;
     }
-    final path = _normalizedPath(entry.relativePath);
     return _narrativePrefixes.any(path.startsWith);
   }
 
@@ -116,4 +155,11 @@ class ProjectOpeningMaturityAssessmentService {
   String _normalizedPath(String relativePath) {
     return relativePath.trim().replaceAll('\\', '/').toLowerCase();
   }
+}
+
+class _OpeningMaturityEntry {
+  const _OpeningMaturityEntry({required this.path, required this.isDirectory});
+
+  final String path;
+  final bool isDirectory;
 }

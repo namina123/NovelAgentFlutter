@@ -1,3 +1,5 @@
+import '../../application/models/conversation_tool_lifecycle_status.dart';
+
 enum ConversationEntryKind { user, assistant, tool, system }
 
 class ConversationEntryViewData {
@@ -12,6 +14,7 @@ class ConversationEntryViewData {
     this.detailSummary = '',
     this.detailBody = '',
     this.detailExpandedByDefault = false,
+    this.toolLifecycleStatus,
   });
 
   final String id;
@@ -24,4 +27,5 @@ class ConversationEntryViewData {
   final String detailSummary;
   final String detailBody;
   final bool detailExpandedByDefault;
+  final ConversationToolLifecycleStatus? toolLifecycleStatus;
 }

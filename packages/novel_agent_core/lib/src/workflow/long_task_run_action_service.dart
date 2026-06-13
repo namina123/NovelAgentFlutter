@@ -1,14 +1,19 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import 'long_task_covered_source_task_service.dart';
 import 'long_task_mode_strategy_service.dart';
 import 'task_runtime_constants.dart';
 
 class LongTaskRunActionService {
   LongTaskRunActionService({
     required LongTaskModeStrategyService strategyService,
-  }) : _strategyService = strategyService;
+    LongTaskCoveredSourceTaskService? coveredSourceTaskService,
+  }) : _strategyService = strategyService,
+       _coveredSourceTaskService =
+           coveredSourceTaskService ?? const LongTaskCoveredSourceTaskService();
 
   final LongTaskModeStrategyService _strategyService;
+  final LongTaskCoveredSourceTaskService _coveredSourceTaskService;
 
   JsonMap nextAction(
     JsonMap record,
@@ -42,7 +47,7 @@ class LongTaskRunActionService {
     final cleanOptions = ValueReaders.mapValue(
       record['options'].runtimeType == Map ? record['options'] : options,
     );
-    final failed = _firstTaskWithStatus(
+    final failed = _coveredSourceTaskService.firstUncoveredTaskByStatus(
       tasks,
       TaskRuntimeConstants.statusFailed,
     );
@@ -123,17 +128,6 @@ class LongTaskRunActionService {
     };
   }
 
-  JsonMap _firstTaskWithStatus(List<Object?> tasks, String status) {
-    // 中文注释: 这个查找是长任务调度的基础操作，保持为纯状态扫描即可。
-    for (final rawTask in tasks) {
-      final task = ValueReaders.mapValue(rawTask);
-      if (ValueReaders.stringValue(task['status']) == status) {
-        return task;
-      }
-    }
-    return <String, Object?>{};
-  }
-
   JsonMap _firstDependencyReadyTaskWithStatus(
     List<Object?> tasks,
     String status,
@@ -143,7 +137,8 @@ class LongTaskRunActionService {
     for (final rawTask in tasks) {
       final task = ValueReaders.mapValue(rawTask);
       if (ValueReaders.stringValue(task['status']) == status &&
-          _missingDependencies(task, succeeded).isEmpty) {
+          _missingDependencies(task, succeeded).isEmpty &&
+          !_coveredSourceTaskService.isCoveredBySucceededDependent(task, tasks)) {
         return task;
       }
     }

@@ -74,6 +74,8 @@ class LongTaskRunRecordService {
       'steps': <Object?>[],
       'completed_steps': 0,
       'failed_steps': 0,
+      'recovery_retry_counts': <String, Object?>{},
+      'last_recovery_state': <String, Object?>{},
       'pause_requested': false,
       'stop_reason': '',
       'stop_note': '',

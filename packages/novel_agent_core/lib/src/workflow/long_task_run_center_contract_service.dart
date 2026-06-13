@@ -1,7 +1,10 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import '../runtime/long_task_stop_diagnosis_projection_service.dart';
+import '../runtime/long_task_stop_outcome.dart';
 import 'long_task_next_batch_plan_service.dart';
 import 'long_task_progress_snapshot_service.dart';
+import 'long_task_recovery_state.dart';
 import 'long_task_task_summary_service.dart';
 import 'task_runtime_constants.dart';
 
@@ -10,16 +13,21 @@ class LongTaskRunCenterContractService {
     required LongTaskNextBatchPlanService nextBatchPlanService,
     required LongTaskTaskSummaryService taskSummaryService,
     LongTaskProgressSnapshotService? progressSnapshotService,
+    LongTaskStopDiagnosisProjectionService? stopDiagnosisProjectionService,
   }) : _nextBatchPlanService = nextBatchPlanService,
        _progressSnapshotService =
            progressSnapshotService ??
            LongTaskProgressSnapshotService(
              nextBatchPlanService: nextBatchPlanService,
              taskSummaryService: taskSummaryService,
-           );
+           ),
+       _stopDiagnosisProjectionService =
+           stopDiagnosisProjectionService ??
+           const LongTaskStopDiagnosisProjectionService();
 
   final LongTaskNextBatchPlanService _nextBatchPlanService;
   final LongTaskProgressSnapshotService _progressSnapshotService;
+  final LongTaskStopDiagnosisProjectionService _stopDiagnosisProjectionService;
 
   JsonMap runCenterContract(
     JsonMap record,
@@ -45,14 +53,46 @@ class LongTaskRunCenterContractService {
       tasks,
       options: options,
     );
+    final recoveryState = LongTaskRecoveryState.fromJson(
+      ValueReaders.mapValue(record['last_recovery_state']),
+    );
+    final stopOutcome = LongTaskStopOutcome.fromJson(
+      ValueReaders.mapValue(
+        ValueReaders.mapValue(record['stop_outcome']).isNotEmpty
+            ? record['stop_outcome']
+            : ValueReaders.mapValue(
+                ValueReaders.mapValue(
+                  record['last_recovery_state'],
+                )['stop_outcome'],
+              ),
+      ),
+    );
     final activeTask = ValueReaders.mapValue(snapshot['active_task']);
-    final controls = _controlsForState(status, reason, activeTask, options);
+    final controls = _controlsForState(
+      status,
+      reason,
+      activeTask,
+      snapshot,
+      options,
+    );
     final resumeBrief = _resumeBrief(
       status: status,
       reason: reason,
       snapshot: snapshot,
       activeTask: activeTask,
       controls: controls,
+    );
+    final stopDiagnosis = _stopDiagnosisProjectionService.project(
+      stopOutcome: stopOutcome,
+      recoveryState: recoveryState,
+      legacyReason: reason,
+      runStatus: status,
+      note: ValueReaders.stringValue(
+        record['stop_note'],
+        ValueReaders.stringValue(batchPlan['note']),
+      ),
+      detail: ValueReaders.stringValue(record['stop_note']),
+      metadata: <String, Object?>{'source': 'long_task_run_center_contract'},
     );
     return <String, Object?>{
       'ok': true,
@@ -67,6 +107,9 @@ class LongTaskRunCenterContractService {
       'status_label': _statusLabel(status),
       'tone': _toneForStatus(status, reason),
       'reason': reason,
+      'stop_outcome': stopOutcome.toJson(),
+      'recovery_state': recoveryState.toJson(),
+      'stop_diagnosis': stopDiagnosis.toJson(),
       'note': _noteFromBatch(batchPlan, status),
       'snapshot': snapshot,
       'progress': _progressFromSnapshot(snapshot, record, tasks),
@@ -195,6 +238,7 @@ class LongTaskRunCenterContractService {
     String status,
     String reason,
     JsonMap activeTask,
+    JsonMap snapshot,
     JsonMap options,
   ) {
     // 中文注释: 控件启用规则集中维护，避免 GUI/CLI 各自重新实现状态判断。
@@ -215,9 +259,11 @@ class LongTaskRunCenterContractService {
             TaskRuntimeConstants.statusFailed;
     final waitingUser =
         reason.startsWith('waiting_user') ||
+        ValueReaders.boolValue(snapshot['waiting_user']) ||
         ValueReaders.stringValue(activeTask['status']) ==
-            TaskRuntimeConstants.statusWaitingUser ||
-        ValueReaders.stringValue(activeTask['task_type']) == 'checkpoint';
+            TaskRuntimeConstants.statusWaitingUser;
+    final confirmCheckpointAvailable =
+        waitingUser && _canConfirmCheckpoint(activeTask);
     return <JsonMap>[
       _control(
         'pause',
@@ -246,10 +292,10 @@ class LongTaskRunCenterContractService {
       _control(
         'confirm_checkpoint',
         '确认检查点',
-        enabled: waitingUser,
+        enabled: confirmCheckpointAvailable,
         hostCommand: 'apply_long_task_revision',
         tone: 'success',
-        disabledReason: '当前没有等待确认的检查点。',
+        disabledReason: '当前没有等待确认的显式检查点。',
         arguments: <String, Object?>{
           ..._taskSelector(activeTask),
           'revision_command': 'confirm_checkpoint',
@@ -315,6 +361,11 @@ class LongTaskRunCenterContractService {
       result['task_id'] = id;
     }
     return result;
+  }
+
+  bool _canConfirmCheckpoint(JsonMap activeTask) {
+    return ValueReaders.stringValue(activeTask['task_type']).trim() ==
+        'checkpoint';
   }
 
   String _noteFromBatch(JsonMap batchPlan, String status) {

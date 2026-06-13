@@ -79,6 +79,10 @@ class SettingsPage extends StatelessWidget {
       return ToolStrategySettingsPanel(
         settings: viewData.toolStrategySettings,
         onSaved: actionHandler.onToolStrategySettingsSaved,
+        projectCreationDefaultsViewData:
+            viewData.projectCreationExpressionConstraintDefaults,
+        onProjectCreationDefaultsSaved:
+            actionHandler.onProjectCreationExpressionConstraintDefaultsSaved,
       );
     }
     if (viewData.activeTabId == 'network') {

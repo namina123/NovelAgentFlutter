@@ -17,7 +17,9 @@ class ProjectToolPathPolicy {
       ...ProjectWorkspaceCatalog.advancedWorkspaceDirs.map(
         (item) => item.path.replaceAll(RegExp(r'/$'), ''),
       ),
-      ..._compatibilityRoots,
+      ...ProjectWorkspaceCatalog.legacyResourceCompatibilityDirs.map(
+        (item) => item.path.replaceAll(RegExp(r'/$'), ''),
+      ),
       'sessions',
       'backups',
     ].toSet().toList(growable: false);
@@ -193,20 +195,4 @@ class ProjectToolPathPolicy {
     }
     return directory.isEmpty ? fileName : '$directory/$fileName';
   }
-
-  static const List<String> _compatibilityRoots = <String>[
-    'specs',
-    'outline',
-    'volume_outlines',
-    'chapter_outlines',
-    'world',
-    'characters',
-    'styles',
-    'summaries',
-    'knowledge',
-    'inspiration',
-    'reviews',
-    'tracking',
-    'runs',
-  ];
 }

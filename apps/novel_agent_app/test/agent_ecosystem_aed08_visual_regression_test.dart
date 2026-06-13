@@ -12,6 +12,7 @@ import 'package:novel_agent_app/features/agent_ecosystem/presentation/models/pro
 import 'package:novel_agent_app/features/agent_ecosystem/presentation/widgets/project_skill_loadout_detail_panel.dart';
 import 'package:novel_agent_app/features/project_assets/presentation/contracts/project_assets_action_handler.dart';
 import 'package:novel_agent_app/features/project_assets/presentation/models/project_assets_view_data.dart';
+import 'package:novel_agent_app/features/project_assets/presentation/models/project_reference_extraction_strategy_picker_view_data.dart';
 import 'package:novel_agent_app/features/project_assets/presentation/widgets/expression_constraint_binding_editor_panel.dart';
 import 'package:novel_agent_app/features/project_assets/presentation/widgets/project_assets_entry_list_panel.dart';
 import 'package:novel_agent_app/features/workbench/presentation/contracts/resource_manager_action_handler.dart';
@@ -233,8 +234,8 @@ Future<void> _captureExpressionConstraintPanel(WidgetTester tester) async {
   _setViewport(tester, const Size(1600, 1000));
   final viewData = ProjectAssetsViewData(
     title: '项目资产',
-    description: '表达限制是项目级写作约束系统；当前正从智能体 reviewer 进入，可继续为它定向绑定内置或自定义预设。',
-    status: '已加载表达限制预设。',
+    description: '表达限制是项目级写作约束系统；当前正从智能体 reviewer 进入，可继续为它定向绑定内置或自定义规则方案。',
+    status: '已加载表达限制方案。',
     activeTabId: 'expression_constraints',
     entryAgentContextId: 'reviewer',
     tabs: const <ProjectAssetsTabViewData>[
@@ -250,9 +251,9 @@ Future<void> _captureExpressionConstraintPanel(WidgetTester tester) async {
         id: 'de_ai',
         title: '去 AI 风',
         subtitle: '降低模板化表达、解释腔和过度工整的平衡句。',
-        badge: '已启用',
+        badge: '智能使用',
         relativePath: 'builtin://expression_constraints/de_ai',
-        meta: '自然表达 · 内置预设 · 全项目默认',
+        meta: '自然表达 · 内置方案 · 全项目默认',
         isSelected: true,
       ),
     ],
@@ -262,14 +263,51 @@ Future<void> _captureExpressionConstraintPanel(WidgetTester tester) async {
     styleEditor: StyleProfileEditorViewData.empty(),
     expressionConstraintEditor: const ExpressionConstraintBindingEditorViewData(
       profileId: 'de_ai',
+      bindingId: 'binding_de_ai',
       displayName: '去 AI 风',
       summary: '降低模板化表达、解释腔和过度工整的平衡句。',
       kindLabel: '自然表达',
+      originLabel: '内置方案',
       sourcePath: 'builtin://expression_constraints/de_ai',
       entryAgentContextId: 'reviewer',
+      selectedPolicyMode: 'adaptive',
+      availablePolicyOptions: <ExpressionConstraintPolicyOptionViewData>[
+        ExpressionConstraintPolicyOptionViewData(
+          id: 'disabled',
+          label: '关闭',
+          description: '保留这套规则方案，但当前项目不注入表达规则，也不要求复核。',
+        ),
+        ExpressionConstraintPolicyOptionViewData(
+          id: 'adaptive',
+          label: '智能使用',
+          description: '优先覆盖正文、修订等用户可见文本，必要时建议加强。',
+        ),
+        ExpressionConstraintPolicyOptionViewData(
+          id: 'force',
+          label: '强力约束',
+          description: '对正文与修订强执行，明显偏离时直接阻塞修订。',
+        ),
+      ],
+      scopeSummary: '全项目默认启用；定向智能体：审阅智能体；写作模式：全书共拟式长篇；执行阶段：故事总前提',
+      strengthSummary: '按写作轮次智能控制强度，常规正文以分段约束为主，并在已应用时要求复核。',
+      usageStrategySummary: '当前策略为智能使用；优先覆盖正文、修订等用户可见文本，技术轮次与研究轮次保持排除。',
       recommendedScopeText: '项目类型 novel, long_novel',
       rules: <String>['少用工整排比。'],
       riskSignals: <String>['总而言之'],
+      diagnosticFields: <ExpressionConstraintDiagnosticFieldViewData>[
+        ExpressionConstraintDiagnosticFieldViewData(
+          label: '策略模式标识',
+          value: 'adaptive',
+        ),
+        ExpressionConstraintDiagnosticFieldViewData(
+          label: '规则方案标识',
+          value: 'de_ai',
+        ),
+        ExpressionConstraintDiagnosticFieldViewData(
+          label: '注入方式',
+          value: 'brief_only / brief_and_sections（按轮次自动解析）',
+        ),
+      ],
       enabled: true,
       defaultForProject: true,
       availableAgentOptions: <ExpressionConstraintSelectableOptionViewData>[
@@ -304,6 +342,8 @@ Future<void> _captureExpressionConstraintPanel(WidgetTester tester) async {
       isBuiltin: true,
     ),
     foreshadowEditor: ForeshadowRecordEditorViewData.empty(),
+    referenceExtractionStrategyPicker:
+        ProjectReferenceExtractionStrategyPickerViewData.empty(),
     isLoading: false,
   );
   const actionHandler = _FakeProjectAssetsActionHandler();
@@ -379,8 +419,8 @@ Future<void> _captureExpressionConstraintPanel(WidgetTester tester) async {
 
   expect(find.text('表达限制'), findsWidgets);
   expect(find.textContaining('项目级写作约束系统'), findsAtLeastNWidgets(1));
-  expect(find.text('当前预设 ID：de_ai'), findsOneWidget);
-  expect(find.text('内置预设'), findsWidgets);
+  expect(find.text('使用策略'), findsWidgets);
+  expect(find.text('内置方案'), findsWidgets);
 
   await expectLater(
     find.byKey(const ValueKey<String>('aed08_expression_constraints_shell')),
@@ -638,6 +678,11 @@ class _FakeProjectAssetsActionHandler implements ProjectAssetsActionHandler {
     required String kind,
     required String id,
   }) {}
+
+  @override
+  Future<void> onProjectAssetsExtractReferenceRequested({
+    String strategyProfileId = '',
+  }) async {}
 
   @override
   void onProjectAssetsEntrySelected(String entryId) {}

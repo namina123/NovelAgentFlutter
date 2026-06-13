@@ -1,7 +1,26 @@
+import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 class WorkflowOutputSummaryService {
-  const WorkflowOutputSummaryService();
+  WorkflowOutputSummaryService({
+    InformationEvidenceProjectionService? informationEvidenceProjectionService,
+    ExpressionConstraintStatusProjectionService?
+    expressionConstraintStatusProjectionService,
+    LongTaskStopDiagnosisProjectionService? stopDiagnosisProjectionService,
+    ReferenceExtractionSupervisorSignalService?
+    referenceExtractionSupervisorSignalService,
+  }) : _informationEvidenceProjectionService =
+           informationEvidenceProjectionService ??
+           const InformationEvidenceProjectionService(),
+       _expressionConstraintStatusProjectionService =
+           expressionConstraintStatusProjectionService ??
+           const ExpressionConstraintStatusProjectionService(),
+       _stopDiagnosisProjectionService =
+           stopDiagnosisProjectionService ??
+           const LongTaskStopDiagnosisProjectionService(),
+       _referenceExtractionSupervisorSignalService =
+           referenceExtractionSupervisorSignalService ??
+           const ReferenceExtractionSupervisorSignalService();
 
   static const String _continuityRoot = '.novel_agent/continuity/';
   static const String _ledgerRoot = '.novel_agent/continuity/ledgers/';
@@ -16,6 +35,13 @@ class WorkflowOutputSummaryService {
       '.novel_agent/information/research_notes/';
   static const String _referenceWorksRoot =
       '.novel_agent/information/reference_works/';
+  final InformationEvidenceProjectionService
+  _informationEvidenceProjectionService;
+  final ExpressionConstraintStatusProjectionService
+  _expressionConstraintStatusProjectionService;
+  final LongTaskStopDiagnosisProjectionService _stopDiagnosisProjectionService;
+  final ReferenceExtractionSupervisorSignalService
+  _referenceExtractionSupervisorSignalService;
 
   JsonMap extractRunCenterContract(JsonMap result) {
     // 中文注释: CLI 只读取运行结果里已经投影好的 run center 合同，不再自己推断状态。
@@ -55,6 +81,9 @@ class WorkflowOutputSummaryService {
     );
     final blocker = ValueReaders.stringValue(contract['blocker']).trim();
     final reason = ValueReaders.stringValue(contract['reason']).trim();
+    final stopDiagnosis = LongTaskStopDiagnosisProjection.fromJson(
+      ValueReaders.mapValue(contract['stop_diagnosis']),
+    );
     final nextAction = ValueReaders.stringValue(
       contract['recommended_action_label'],
     ).trim();
@@ -71,8 +100,10 @@ class WorkflowOutputSummaryService {
     if (activeTaskTitle.isNotEmpty) {
       lines.add('当前任务：$activeTaskTitle');
     }
-    if (reason.isNotEmpty) {
-      lines.add('停止原因：$reason');
+    if (stopDiagnosis.present) {
+      lines.add(_stopDiagnosisLine(stopDiagnosis));
+    } else if (reason.isNotEmpty) {
+      lines.add(_stopReasonLine(reason));
     } else if (blocker.isNotEmpty) {
       lines.add('阻塞原因：$blocker');
     }
@@ -110,8 +141,11 @@ class WorkflowOutputSummaryService {
 
   JsonMap extractNarrativeRuntimeContract(JsonMap result) {
     final execution = ValueReaders.mapValue(result['execution']);
+    final runCenterContract = extractRunCenterContract(result);
     final checkpointReview = ValueReaders.mapValue(result['checkpoint_review']);
-    final checkpointReviewBody = ValueReaders.mapValue(checkpointReview['review']);
+    final checkpointReviewBody = ValueReaders.mapValue(
+      checkpointReview['review'],
+    );
     final gateOutcome = ValueReaders.mapValue(result['gate_outcome']);
     final changedPaths = ValueReaders.stringList(result['changed_paths']);
     final activationReportPath = ValueReaders.stringValue(
@@ -144,6 +178,39 @@ class WorkflowOutputSummaryService {
     final analysisInformation = directAnalysisInformation.isNotEmpty
         ? directAnalysisInformation
         : ValueReaders.mapValue(execution['analysis_information']);
+    final writingExecutionResult = _writingExecutionResult(
+      result,
+      execution: execution,
+    );
+    final expressionConstraint = _expressionConstraintContract(
+      writingExecutionResult,
+    );
+    final chapterDelivery = _chapterDeliveryContract(
+      result,
+      execution: execution,
+    );
+    final stopReason = _firstNonBlank(<String>[
+      ValueReaders.stringValue(result['stop_reason']),
+      ValueReaders.stringValue(execution['stop_reason']),
+      ValueReaders.stringValue(
+        ValueReaders.mapValue(result['record'])['stop_reason'],
+      ),
+    ]);
+    final informationContract = _informationContract(
+      changedPaths,
+      checkpointReviewBody,
+      analysisInformation,
+    );
+    final stopDiagnosis = _preferredNarrativeStopDiagnosis(
+      result,
+      execution: execution,
+      runCenterContract: runCenterContract,
+      stopReason: stopReason,
+      reviewSummary: reviewSummary,
+      informationSummary: ValueReaders.stringValue(
+        informationContract['information_summary'],
+      ),
+    );
     return <String, Object?>{
       'activation_report_path': activationReportPath,
       'activation_report_summary': activationReportSummary,
@@ -152,12 +219,58 @@ class WorkflowOutputSummaryService {
       'review_path': reviewPath,
       'review_summary': reviewSummary,
       'continuity_counts': _continuityCounts(changedPaths),
-      'information_contract': _informationContract(
-        changedPaths,
-        checkpointReviewBody,
-        analysisInformation,
-      ),
+      'information_contract': informationContract,
+      'expression_constraint_contract': expressionConstraint,
+      'chapter_delivery_contract': chapterDelivery,
+      'stop_reason': stopReason,
+      'stop_diagnosis': stopDiagnosis.toJson(),
     };
+  }
+
+  LongTaskStopDiagnosisProjection _preferredNarrativeStopDiagnosis(
+    JsonMap result, {
+    required JsonMap execution,
+    required JsonMap runCenterContract,
+    required String stopReason,
+    required String reviewSummary,
+    required String informationSummary,
+  }) {
+    final contractDiagnosis = LongTaskStopDiagnosisProjection.fromJson(
+      ValueReaders.mapValue(runCenterContract['stop_diagnosis']),
+    );
+    if (contractDiagnosis.present) {
+      return contractDiagnosis;
+    }
+    final directDiagnosis = LongTaskStopDiagnosisProjection.fromJson(
+      ValueReaders.mapValue(result['stop_diagnosis']),
+    );
+    if (directDiagnosis.present) {
+      return directDiagnosis;
+    }
+    final executionDiagnosis = LongTaskStopDiagnosisProjection.fromJson(
+      ValueReaders.mapValue(execution['stop_diagnosis']),
+    );
+    if (executionDiagnosis.present) {
+      return executionDiagnosis;
+    }
+    final stopOutcome = LongTaskStopOutcome.fromJson(
+      ValueReaders.mapValue(result['stop_outcome']),
+    );
+    final recoveryState = LongTaskRecoveryState.fromJson(
+      ValueReaders.mapValue(result['recovery_state']),
+    );
+    return _stopDiagnosisProjectionService.project(
+      stopOutcome: stopOutcome,
+      recoveryState: recoveryState,
+      legacyReason: stopReason,
+      note: _firstNonBlank(<String>[
+        ValueReaders.stringValue(result['stop_note']),
+        ValueReaders.stringValue(execution['stop_note']),
+      ]),
+      reviewSummary: reviewSummary,
+      informationSummary: informationSummary,
+      metadata: <String, Object?>{'source': 'workflow_output_summary'},
+    );
   }
 
   List<String> narrativeBriefLines(JsonMap contract) {
@@ -178,9 +291,21 @@ class WorkflowOutputSummaryService {
       contract['review_summary'],
     ).trim();
     final reviewPath = ValueReaders.stringValue(contract['review_path']).trim();
-    final continuityCounts = ValueReaders.mapValue(contract['continuity_counts']);
+    final continuityCounts = ValueReaders.mapValue(
+      contract['continuity_counts'],
+    );
     final informationContract = ValueReaders.mapValue(
       contract['information_contract'],
+    );
+    final expressionConstraintContract = ValueReaders.mapValue(
+      contract['expression_constraint_contract'],
+    );
+    final chapterDeliveryContract = ValueReaders.mapValue(
+      contract['chapter_delivery_contract'],
+    );
+    final stopReason = ValueReaders.stringValue(contract['stop_reason']).trim();
+    final stopDiagnosis = LongTaskStopDiagnosisProjection.fromJson(
+      ValueReaders.mapValue(contract['stop_diagnosis']),
     );
 
     if (activationSummary.isNotEmpty || activationPath.isNotEmpty) {
@@ -213,6 +338,269 @@ class WorkflowOutputSummaryService {
     }
     final informationSummary = _informationSummaryLines(informationContract);
     lines.addAll(informationSummary);
+    lines.addAll(
+      _expressionConstraintSummaryLines(expressionConstraintContract),
+    );
+    lines.addAll(_chapterDeliverySummaryLines(chapterDeliveryContract));
+    if (stopDiagnosis.present) {
+      lines.add(_stopDiagnosisLine(stopDiagnosis));
+    } else if (stopReason.isNotEmpty) {
+      lines.add(_stopReasonLine(stopReason));
+    }
+    return lines;
+  }
+
+  List<String> referenceExtractionBriefLines(
+    ProjectReferenceExtractionResult result, {
+    String strategyLabel = '',
+  }) {
+    final signal = _referenceExtractionSupervisorSignalService.build(result);
+    final lifecycle = signal.lifecycleState;
+    final lines = <String>['控制面：${_referenceLifecycleLabel(lifecycle)}'];
+    final stopReasonLine = _referenceStopReasonLine(lifecycle.reason);
+    if (stopReasonLine.isNotEmpty) {
+      lines.add(stopReasonLine);
+    }
+    if (strategyLabel.trim().isNotEmpty) {
+      lines.add('策略：$strategyLabel');
+    }
+    final packageLabel = '${result.packageId}@${result.packageVersionId}';
+    lines.add('资料包：$packageLabel');
+    lines.add('覆盖：${_referenceCoverageSummary(result)}');
+    lines.add('挂载：${_referenceMountSummary(result)}');
+    lines.add('连续性：${_referenceContinuitySummary(result)}');
+    lines.add('资料产物：${_referenceArtifactSummary(result)}');
+    final projectionSummary = _projectionSummary(
+      result.generatedProjectionPaths,
+    );
+    if (projectionSummary.isNotEmpty) {
+      lines.add('轻投影：$projectionSummary');
+    }
+    return lines;
+  }
+
+  JsonMap _writingExecutionResult(
+    JsonMap result, {
+    required JsonMap execution,
+  }) {
+    final direct = ValueReaders.mapValue(result['writing_execution_result']);
+    if (direct.isNotEmpty) {
+      return direct;
+    }
+    final nested = ValueReaders.mapValue(execution['writing_execution_result']);
+    if (nested.isNotEmpty) {
+      return nested;
+    }
+    if (ValueReaders.mapValue(result['constraints']).isNotEmpty ||
+        ValueReaders.mapValue(
+          result['expression_constraint_projection'],
+        ).isNotEmpty) {
+      return result;
+    }
+    final record = ValueReaders.mapValue(result['record']);
+    final recordResult = ValueReaders.mapValue(
+      record['writing_execution_result'],
+    );
+    if (recordResult.isNotEmpty) {
+      return recordResult;
+    }
+    return ValueReaders.mapValue(record['last_writing_execution_result']);
+  }
+
+  JsonMap _expressionConstraintContract(JsonMap writingExecutionResult) {
+    if (writingExecutionResult.isEmpty) {
+      return const <String, Object?>{};
+    }
+    final constraints = ValueReaders.mapValue(
+      writingExecutionResult['constraints'],
+    );
+    final projectionJson = ValueReaders.mapValue(
+      writingExecutionResult['expression_constraint_projection'],
+    );
+    if (constraints.isEmpty && projectionJson.isEmpty) {
+      return const <String, Object?>{};
+    }
+    final projection = projectionJson.isNotEmpty
+        ? ExpressionConstraintStatusProjection.fromJson(projectionJson)
+        : _expressionConstraintStatusProjectionService
+              .fromConstraintSummaryJson(constraints);
+    final summary = constraints.isEmpty
+        ? const WritingExecutionConstraintSummary()
+        : WritingExecutionConstraintSummary.fromJson(constraints);
+    final riskSignals = summary.expressionConstraintGate.riskSignals.isNotEmpty
+        ? summary.expressionConstraintGate.riskSignals
+        : summary.continuityWatchItems;
+    return <String, Object?>{
+      'present': projection.present || constraints.isNotEmpty,
+      'status_label': _expressionStatusLabel(projection),
+      'policy_mode': _firstNonBlank(<String>[
+        projection.policyMode,
+        summary.expressionConstraintPolicyMode,
+      ]),
+      'review_missing':
+          summary.expressionConstraintEvidenceMissing ||
+          projection.evidenceMissing,
+      'review_provided':
+          summary.expressionConstraintReviewProvided ||
+          projection.reviewProvided,
+      'review_required':
+          summary.expressionConstraintReviewRequired ||
+          projection.reviewRequired,
+      'violation_recorded':
+          summary.expressionConstraintViolationRecorded ||
+          riskSignals.isNotEmpty,
+      'risk_signals': ValueReaders.deepCopyList(riskSignals.cast<Object?>()),
+      'repair_required': summary.repairRequired || projection.blocksRepair,
+      'suggested_adjust':
+          projection.suggestStrengthen ||
+          summary.expressionConstraintGate.adjustNextChapter ||
+          (summary.reviewSuggested && !summary.repairRequired),
+      'disabled': projection.disabled || summary.expressionConstraintDisabled,
+      'summary': _firstNonBlank(<String>[projection.summary, summary.summary]),
+    };
+  }
+
+  JsonMap _chapterDeliveryContract(
+    JsonMap result, {
+    required JsonMap execution,
+  }) {
+    final directDelivery = ValueReaders.mapValue(result['chapter_delivery']);
+    final nestedDelivery = ValueReaders.mapValue(execution['chapter_delivery']);
+    final delivery = directDelivery.isNotEmpty
+        ? directDelivery
+        : nestedDelivery;
+    final pathResolution = ValueReaders.mapValue(delivery['path_resolution']);
+    final chapterPath = _firstNonBlank(<String>[
+      ValueReaders.stringValue(delivery['chapter_path']),
+      ValueReaders.stringValue(result['chapter_delivery_path']),
+      ValueReaders.stringValue(execution['chapter_delivery_path']),
+    ]);
+    final deliveryState = _firstNonBlank(<String>[
+      ValueReaders.stringValue(delivery['delivery_state']),
+      ValueReaders.stringValue(result['chapter_delivery_state']),
+      ValueReaders.stringValue(execution['chapter_delivery_state']),
+    ]);
+    final title = _firstNonBlank(<String>[
+      ValueReaders.stringValue(delivery['title']),
+      ValueReaders.stringValue(pathResolution['title']),
+      ValueReaders.stringValue(
+        ValueReaders.mapValue(delivery['submission'])['title'],
+      ),
+    ]);
+    if (delivery.isEmpty &&
+        pathResolution.isEmpty &&
+        chapterPath.isEmpty &&
+        deliveryState.isEmpty &&
+        title.isEmpty) {
+      return const <String, Object?>{};
+    }
+    return <String, Object?>{
+      'delivery_state': deliveryState,
+      'chapter_path': chapterPath,
+      'requested_path': _firstNonBlank(<String>[
+        ValueReaders.stringValue(pathResolution['requested_path']),
+        ValueReaders.stringValue(delivery['requested_chapter_path']),
+      ]),
+      'resolved_path': _firstNonBlank(<String>[
+        ValueReaders.stringValue(pathResolution['resolved_path']),
+        ValueReaders.stringValue(delivery['resolved_chapter_path']),
+        chapterPath,
+      ]),
+      'title': title,
+      'path_changed': ValueReaders.boolValue(pathResolution['path_changed']),
+      'reason': ValueReaders.stringValue(pathResolution['reason']).trim(),
+    };
+  }
+
+  List<String> _expressionConstraintSummaryLines(JsonMap contract) {
+    if (!ValueReaders.boolValue(contract['present'])) {
+      return const <String>[];
+    }
+    final lines = <String>[];
+    final policyMode = ValueReaders.stringValue(contract['policy_mode']).trim();
+    final statusLabel = ValueReaders.stringValue(
+      contract['status_label'],
+    ).trim();
+    final summary = ValueReaders.stringValue(contract['summary']).trim();
+    final riskSignals = ValueReaders.stringList(contract['risk_signals']);
+    if (statusLabel.isNotEmpty) {
+      final policyLabel = _policyModeLabel(policyMode);
+      lines.add(
+        policyLabel.isEmpty
+            ? '表达规则：$statusLabel'
+            : '表达规则：$statusLabel（$policyLabel）',
+      );
+    }
+    if (summary.isNotEmpty) {
+      lines.add('表达规则摘要：$summary');
+    }
+    if (ValueReaders.boolValue(contract['review_missing'])) {
+      lines.add('表达规则复核：缺少复核证据');
+    } else if (ValueReaders.boolValue(contract['review_provided'])) {
+      lines.add('表达规则复核：已记录复核证据');
+    } else if (ValueReaders.boolValue(contract['review_required'])) {
+      lines.add('表达规则复核：本轮要求复核');
+    }
+    if (ValueReaders.boolValue(contract['repair_required'])) {
+      lines.add('表达规则处置：需要修补后再继续');
+    } else if (ValueReaders.boolValue(contract['suggested_adjust'])) {
+      lines.add('表达规则处置：建议后续章节加强');
+    } else if (ValueReaders.boolValue(contract['disabled'])) {
+      lines.add('表达规则处置：当前策略已关闭');
+    }
+    if (ValueReaders.boolValue(contract['violation_recorded'])) {
+      lines.add(
+        riskSignals.isEmpty
+            ? '表达规则信号：已记录风险信号'
+            : '表达规则信号：已记录风险信号（${riskSignals.join('、')}）',
+      );
+    }
+    return lines;
+  }
+
+  List<String> _chapterDeliverySummaryLines(JsonMap contract) {
+    if (contract.isEmpty) {
+      return const <String>[];
+    }
+    final lines = <String>[];
+    final deliveryState = ValueReaders.stringValue(
+      contract['delivery_state'],
+    ).trim();
+    final chapterPath = ValueReaders.stringValue(
+      contract['chapter_path'],
+    ).trim();
+    final requestedPath = ValueReaders.stringValue(
+      contract['requested_path'],
+    ).trim();
+    final resolvedPath = ValueReaders.stringValue(
+      contract['resolved_path'],
+    ).trim();
+    final title = ValueReaders.stringValue(contract['title']).trim();
+    final reason = ValueReaders.stringValue(contract['reason']).trim();
+    final pathChanged = ValueReaders.boolValue(contract['path_changed']);
+    if (deliveryState.isNotEmpty || chapterPath.isNotEmpty) {
+      final parts = <String>[];
+      if (deliveryState.isNotEmpty) {
+        parts.add(_chapterDeliveryStateLabel(deliveryState));
+      }
+      if (chapterPath.isNotEmpty) {
+        parts.add(chapterPath);
+      }
+      lines.add('章节交付：${parts.join(' | ')}');
+    }
+    if (requestedPath.isNotEmpty &&
+        resolvedPath.isNotEmpty &&
+        (pathChanged || requestedPath != resolvedPath)) {
+      lines.add('路径诊断：请求 $requestedPath，已归一为 $resolvedPath');
+    } else if (resolvedPath.isNotEmpty) {
+      lines.add('章节路径：$resolvedPath');
+    }
+    if (title.isNotEmpty) {
+      lines.add('标题口径：$title');
+    }
+    if (reason.isNotEmpty) {
+      lines.add('路径说明：$reason');
+    }
     return lines;
   }
 
@@ -235,7 +623,8 @@ class WorkflowOutputSummaryService {
     }
     final total = changedPaths
         .where(
-          (path) => path.replaceAll('\\', '/').trim().startsWith(_continuityRoot),
+          (path) =>
+              path.replaceAll('\\', '/').trim().startsWith(_continuityRoot),
         )
         .length;
     return <String, Object?>{
@@ -357,27 +746,250 @@ class WorkflowOutputSummaryService {
     if (contract.isEmpty) {
       return const <String>[];
     }
-    final knowledge = ValueReaders.intValue(contract['knowledge_count']);
-    final design = ValueReaders.intValue(contract['design_count']);
-    final research = ValueReaders.intValue(contract['research_count']);
-    final reference = ValueReaders.intValue(contract['reference_count']);
-    final summary = ValueReaders.stringValue(
-      contract['information_summary'],
-    ).trim();
-    final projectionPaths = ValueReaders.stringList(contract['projection_paths']);
-    final lines = <String>[
-      'Information：knowledge $knowledge | design $design | research $research | reference $reference',
-    ];
-    if (summary.isNotEmpty) {
-      lines.add('Information Signal：$summary');
-    }
-    if (projectionPaths.isNotEmpty) {
-      lines.add('Information Projections：${projectionPaths.join(' | ')}');
-    }
-    return lines;
+    final projection = _informationEvidenceProjectionService
+        .fromWorkflowInformationContract(contract);
+    return projection.userLines;
   }
 
   int _maxCount(int left, int right) {
     return left >= right ? left : right;
+  }
+
+  String _expressionStatusLabel(
+    ExpressionConstraintStatusProjection projection,
+  ) {
+    if (projection.disabled) {
+      return '已关闭';
+    }
+    if (projection.blocksRepair) {
+      return '已阻塞修订';
+    }
+    if (projection.suggestStrengthen) {
+      return '建议加强';
+    }
+    if (projection.applied) {
+      return '已应用';
+    }
+    if (projection.technicalTurnExcluded) {
+      return '本轮跳过';
+    }
+    if (projection.active) {
+      return '已配置';
+    }
+    return projection.statusLabel.trim().isEmpty
+        ? '状态待确认'
+        : projection.statusLabel;
+  }
+
+  String _policyModeLabel(String policyMode) {
+    return switch (policyMode.trim()) {
+      ExpressionConstraintExecutionPolicyModes.disabled => '关闭',
+      ExpressionConstraintExecutionPolicyModes.force => '强力约束',
+      ExpressionConstraintExecutionPolicyModes.adaptive => '智能使用',
+      _ => '',
+    };
+  }
+
+  String _chapterDeliveryStateLabel(String state) {
+    return switch (state.trim()) {
+      ChapterDeliveryStateStatuses.delivered => '已交付',
+      ChapterDeliveryStateStatuses.deliveredNeedsRepair => '交付后需修补',
+      ChapterDeliveryStateStatuses.missingOutputRecoverable => '缺正文可恢复',
+      ChapterDeliveryStateStatuses.invalidOutputRewriteRequired => '正文需重写',
+      ChapterDeliveryStateStatuses.pathMismatchRecoverable => '路径需修正',
+      ChapterDeliveryStateStatuses.waitingUserChoice => '等待用户确认',
+      ChapterDeliveryStateStatuses.manualAttentionRequired => '需人工处理',
+      ChapterDeliveryStateStatuses.hardFailure => '交付失败',
+      _ => state.trim(),
+    };
+  }
+
+  String _stopReasonLine(String code) {
+    final label = _stopReasonLabel(code);
+    if (label.isEmpty || label == code.trim()) {
+      return '停止原因：$code';
+    }
+    return '停止原因：$label（$code）';
+  }
+
+  String _stopDiagnosisLine(LongTaskStopDiagnosisProjection projection) {
+    final label = projection.label.trim();
+    final code = projection.code.trim();
+    if (label.isEmpty) {
+      return code.isEmpty ? '' : '停止原因：$code';
+    }
+    if (code.isEmpty || code == label) {
+      return '停止原因：$label';
+    }
+    return '停止原因：$label（$code）';
+  }
+
+  String _stopReasonLabel(String code) {
+    switch (code.trim()) {
+      case 'max_steps':
+      case 'max_seconds':
+        return '预算边界已到';
+      case 'completed':
+      case 'no_runnable_task':
+        return '当前目标已收尾';
+      case 'waiting_user':
+      case 'waiting_user_checkpoint':
+      case 'waiting_user_choice':
+      case 'waiting_gate':
+      case 'information_waiting_user':
+      case 'delivery_waiting_user_choice':
+        return '等待用户确认';
+      case 'failed_task':
+      case 'delivery_repair_required':
+      case 'information_repair_required':
+        return '需修补后继续';
+      case 'delivery_manual_attention':
+      case 'content_quality_failed':
+      case 'semantic_review_manual_attention':
+      case 'chapter_gate_manual_attention':
+        return '内容质量关口';
+      case 'failed':
+      case 'step_failed':
+      case 'record_missing':
+      case 'stale_running_task':
+        return '技术失败';
+      default:
+        return code.trim();
+    }
+  }
+
+  String _firstNonBlank(Iterable<String> values) {
+    for (final value in values) {
+      final clean = value.trim();
+      if (clean.isNotEmpty) {
+        return clean;
+      }
+    }
+    return '';
+  }
+
+  String _referenceLifecycleLabel(ContinuousTaskLifecycleState lifecycle) {
+    switch (lifecycle.reason.trim()) {
+      case 'completed_publishable':
+        return '已完成';
+      case 'reference_coverage_followup_required':
+        return '覆盖未完成';
+      case 'reference_mount_confirmation_required':
+        return '挂载等待确认';
+      case 'reference_mount_incomplete':
+        return '挂载未完成';
+      case 'reference_continuity_conflict_requires_review':
+        return '连续性待复核';
+      default:
+        return switch (lifecycle.runPhase) {
+          ContinuousTaskRunPhases.running => '运行中',
+          ContinuousTaskRunPhases.paused => '已暂停',
+          ContinuousTaskRunPhases.waitingUser => '等待用户',
+          ContinuousTaskRunPhases.manualAttention => '需人工处理',
+          ContinuousTaskRunPhases.recovering => '恢复中',
+          ContinuousTaskRunPhases.stopped => '已停止',
+          _ => lifecycle.reason.trim().isEmpty ? '状态待确认' : lifecycle.reason,
+        };
+    }
+  }
+
+  String _referenceStopReasonLine(String reason) {
+    final cleanReason = reason.trim();
+    if (cleanReason.isEmpty) {
+      return '';
+    }
+    final label = switch (cleanReason) {
+      'completed_publishable' => 'publishable 结果已完成',
+      'reference_coverage_followup_required' => '覆盖不足，需继续提取',
+      'reference_mount_confirmation_required' => '挂载需要显式确认',
+      'reference_mount_incomplete' => '项目挂载未完成',
+      'reference_continuity_conflict_requires_review' => '连续性冲突需要人工复核',
+      _ => cleanReason,
+    };
+    return label == cleanReason
+        ? '停止原因：$cleanReason'
+        : '停止原因：$label（$cleanReason）';
+  }
+
+  String _referenceCoverageSummary(ProjectReferenceExtractionResult result) {
+    final parts = <String>[];
+    if (result.batchCount > 0) {
+      parts.add('批次 ${result.completedBatchCount}/${result.batchCount} 完成');
+    }
+    if (result.batchCoverageRatio > 0) {
+      parts.add('coverage ${(result.batchCoverageRatio * 100).round()}%');
+    }
+    if (result.coverageRequiresFollowup || result.needsContinuation) {
+      parts.add('待补覆盖 ${result.uncoveredCoverageDimensionIds.length} 维');
+    } else if (result.uncoveredCoverageDimensionIds.isEmpty) {
+      parts.add('当前无补提信号');
+    }
+    if (result.followupSegmentIds.isNotEmpty) {
+      parts.add('followup segment ${result.followupSegmentIds.length} 段');
+    }
+    return parts.join(' | ');
+  }
+
+  String _referenceMountSummary(ProjectReferenceExtractionResult result) {
+    if (!result.attachToProjectRequested &&
+        !result.projectMountedEntriesRequested) {
+      return '未请求挂载';
+    }
+    final parts = <String>[];
+    parts.add(switch (result.projectMountStatus) {
+      ProjectReferenceMountStatuses.applied => '已挂载到项目',
+      ProjectReferenceMountStatuses.attachedOnly => '仅登记 attachment，未生成项目投影',
+      ProjectReferenceMountStatuses.denied => '等待挂载确认',
+      ProjectReferenceMountStatuses.missingAttachment => '挂载缺少 attachment',
+      ProjectReferenceMountStatuses.missingPackage => '挂载缺少 package',
+      ProjectReferenceMountStatuses.notRequested => '未请求挂载',
+      _ => result.projectMountStatus,
+    });
+    if (result.generatedProjectionPaths.isNotEmpty) {
+      parts.add('投影 ${result.generatedProjectionPaths.length} 个');
+    }
+    if (result.projectMountWarningCodes.isNotEmpty) {
+      parts.add('warning: ${result.projectMountWarningCodes.join('、')}');
+    }
+    return parts.join(' | ');
+  }
+
+  String _referenceContinuitySummary(ProjectReferenceExtractionResult result) {
+    if (result.conflictClusterCount == 0 &&
+        result.reviewAlertCount == 0 &&
+        result.canonDecisionCount == 0) {
+      return '当前无连续性冲突或 review alert';
+    }
+    final parts = <String>[
+      'conflicts ${result.conflictClusterCount}',
+      'decisions ${result.canonDecisionCount}',
+      'alerts ${result.reviewAlertCount}',
+    ];
+    if (result.requiresManualContinuityReview) {
+      parts.add('需人工复核');
+    }
+    if (result.unresolvedConflictCount > 0) {
+      parts.add('未决 ${result.unresolvedConflictCount}');
+    }
+    return parts.join(' | ');
+  }
+
+  String _referenceArtifactSummary(ProjectReferenceExtractionResult result) {
+    return [
+      'knowledge ${result.knowledgeCardIds.length}',
+      'design ${result.designElementIds.length}',
+      'research ${result.researchNoteIds.length}',
+      'reference ${result.referenceWorkIds.length}',
+    ].join(' | ');
+  }
+
+  String _projectionSummary(List<String> paths) {
+    if (paths.isEmpty) {
+      return '';
+    }
+    if (paths.length <= 3) {
+      return paths.join(' | ');
+    }
+    return '${paths.take(2).join(' | ')} | 另 ${paths.length - 2} 个入口';
   }
 }

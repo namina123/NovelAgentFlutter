@@ -7,6 +7,7 @@ import '../../../workbench/presentation/models/project_creation_phase.dart';
 import '../../../workbench/presentation/models/project_create_request_view_data.dart';
 import '../../../workbench/presentation/models/project_launcher_view_data.dart';
 import '../../../workbench/presentation/models/workbench_view_data.dart';
+import '../services/project_creation_expression_constraint_defaults_service.dart';
 
 class ProjectCreationController {
   ProjectCreationController({
@@ -28,6 +29,8 @@ class ProjectCreationController {
     required AppSettings? Function() readSettings,
     required ProjectGeneralContinuitySetupService
     projectGeneralContinuitySetupService,
+    ProjectCreationExpressionConstraintDefaultsService?
+    projectCreationExpressionConstraintDefaultsService,
     required String defaultProjectsRootPath,
     required bool isMobileProjectRootLocked,
   }) : _loadProjectWorkspaceUseCase = loadProjectWorkspaceUseCase,
@@ -44,6 +47,8 @@ class ProjectCreationController {
        _readSettings = readSettings,
        _projectGeneralContinuitySetupService =
            projectGeneralContinuitySetupService,
+       _projectCreationExpressionConstraintDefaultsService =
+           projectCreationExpressionConstraintDefaultsService,
        _defaultProjectsRootPath = defaultProjectsRootPath,
        _isMobileProjectRootLocked = isMobileProjectRootLocked;
 
@@ -62,6 +67,8 @@ class ProjectCreationController {
   final AppSettings? Function() _readSettings;
   final ProjectGeneralContinuitySetupService
   _projectGeneralContinuitySetupService;
+  final ProjectCreationExpressionConstraintDefaultsService?
+  _projectCreationExpressionConstraintDefaultsService;
   final String _defaultProjectsRootPath;
   final bool _isMobileProjectRootLocked;
 
@@ -271,6 +278,11 @@ class ProjectCreationController {
         plan: creationPlan,
       );
       await _applyContinuityInputIfNeeded(project, request.continuityInput);
+      final settings = _readSettings();
+      if (settings != null) {
+        await _projectCreationExpressionConstraintDefaultsService
+            ?.applyDefaults(project, settings);
+      }
       _mutateWorkbench((current) => current.copyWith(projectLauncher: null));
       await _loadProject(project.rootPath);
       _announce('已创建并打开新项目：${project.name}');

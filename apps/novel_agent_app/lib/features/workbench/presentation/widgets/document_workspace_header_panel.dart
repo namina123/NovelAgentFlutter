@@ -33,38 +33,37 @@ class DocumentWorkspaceHeaderPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = WorkbenchDesktopStyle.of(context);
     final visual = WorkbenchVisualStyle.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 6, 4, 0),
+    final style = WorkbenchDesktopStyle.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: style.canvasSectionColor.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(visual.surfaceRadius),
+        border: Border.all(
+          color: style.canvasSectionBorderColor.withValues(alpha: 0.12),
+          width: AppChrome.borderWidth,
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          ClipRRect(
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(visual.surfaceRadius),
+              topRight: Radius.circular(visual.surfaceRadius),
+            ),
+            child: DocumentTabStrip(
+              documents: documents,
+              onSelected: onSelected,
+              onClosed: onClosed,
+            ),
+          ),
           DocumentToolbarBar(
             onActionRequested: onActionRequested,
             onDisplayModeSelected: onDisplayModeSelected,
             selectedMode: selectedMode,
             canRender: canRender,
             hasDocument: hasDocument,
-          ),
-          const SizedBox(height: 10),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              border: Border(
-                top: BorderSide(
-                  color: visual.strongBorder(style.canvasSectionBorderColor),
-                  width: AppChrome.borderWidth,
-                ),
-              ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.only(top: 10),
-              child: DocumentTabStrip(
-                documents: documents,
-                onSelected: onSelected,
-                onClosed: onClosed,
-              ),
-            ),
           ),
         ],
       ),

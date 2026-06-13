@@ -7,6 +7,7 @@ import '../common/json_types.dart';
 import '../common/value_readers.dart';
 import '../ports/tool_execution_port.dart';
 import '../project/project_descriptor.dart';
+import '../tools/domain/narrative_domain_tool_names.dart';
 import 'tool_execution_round_result.dart';
 
 class ToolExecutionService {
@@ -94,7 +95,8 @@ class ToolExecutionService {
           ValueReaders.boolValue(result['waiting_for_user_choice']);
       final isHardToolError =
           !ValueReaders.boolValue(result['ok'], true) &&
-          !ValueReaders.boolValue(result['not_executed']);
+          !ValueReaders.boolValue(result['not_executed']) &&
+          !_isMergeableSubAgentResult(call, result);
       if (isHardToolError) {
         stoppedByToolError = true;
       }
@@ -111,6 +113,26 @@ class ToolExecutionService {
       stoppedByToolError: stoppedByToolError,
       hadPlanTool: ValueReaders.boolValue(toolRoundState['has_plan_tool']),
     );
+  }
+
+  bool _isMergeableSubAgentResult(JsonMap call, JsonMap result) {
+    // 中文注释: 子智能体失败是协作信号，由主智能体合并或兜底；它不等同于宿主工具硬崩。
+    if (ValueReaders.stringValue(call['name']) != 'call_sub_agent') {
+      return false;
+    }
+    if (ValueReaders.boolValue(result['ok'], true)) {
+      return false;
+    }
+    final disposition = ValueReaders.stringValue(
+      result['failure_disposition'],
+    ).trim();
+    if (disposition == 'require_user') {
+      return false;
+    }
+    return disposition.isNotEmpty ||
+        ValueReaders.mapValue(
+          result['collaboration_result_package'],
+        ).isNotEmpty;
   }
 
   JsonMap? _duplicateSkillLoadResult(
@@ -130,6 +152,59 @@ class ToolExecutionService {
   JsonMap _enrichToolCallWithContext(JsonMap call, JsonMap mainContext) {
     // 中文注释: 某些模型会在“读取当前打开文件”时把 relative_path 丢成空对象，这里用宿主已知活动文档做最小兜底。
     final toolName = ValueReaders.stringValue(call['name']);
+    if (toolName == NarrativeDomainToolNames.submitChapterDelivery) {
+      final writingExecutionConstraints = ValueReaders.mapValue(
+        mainContext['writing_execution_constraints'],
+      );
+      final chapterLengthMetadata = ValueReaders.mapValue(
+        writingExecutionConstraints['chapter_length_metadata'],
+      );
+      if (chapterLengthMetadata.isEmpty) {
+        return call;
+      }
+      final arguments = ValueReaders.deepCopyMap(
+        ValueReaders.mapValue(call['arguments']),
+      );
+      final metadata = ValueReaders.deepCopyMap(
+        ValueReaders.mapValue(arguments['metadata']),
+      );
+      if (ValueReaders.mapValue(
+        metadata['chapter_length_metadata'],
+      ).isNotEmpty) {
+        return call;
+      }
+      return ValueReaders.deepCopyMap(call)
+        ..['arguments'] = <String, Object?>{
+          ...arguments,
+          'metadata': <String, Object?>{
+            ...metadata,
+            'chapter_length_metadata': ValueReaders.deepCopyMap(
+              chapterLengthMetadata,
+            ),
+          },
+        };
+    }
+    if (toolName == 'set_agent_tasks') {
+      final workflowTaskContext = ValueReaders.mapValue(
+        mainContext['workflow_task_context'],
+      );
+      if (workflowTaskContext.isEmpty) {
+        return call;
+      }
+      final arguments = ValueReaders.deepCopyMap(
+        ValueReaders.mapValue(call['arguments']),
+      );
+      if (ValueReaders.mapValue(
+        arguments['_workflow_task_context'],
+      ).isNotEmpty) {
+        return call;
+      }
+      return ValueReaders.deepCopyMap(call)
+        ..['arguments'] = <String, Object?>{
+          ...arguments,
+          '_workflow_task_context': workflowTaskContext,
+        };
+    }
     if (!const <String>{
       'read_project_file',
       'get_project_file_info',

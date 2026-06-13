@@ -1,5 +1,6 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import 'long_task_covered_source_task_service.dart';
 import 'long_task_next_batch_plan_service.dart';
 import 'long_task_task_summary_service.dart';
 import 'task_runtime_constants.dart';
@@ -8,11 +9,15 @@ class LongTaskProgressSnapshotService {
   LongTaskProgressSnapshotService({
     required LongTaskNextBatchPlanService nextBatchPlanService,
     required LongTaskTaskSummaryService taskSummaryService,
+    LongTaskCoveredSourceTaskService? coveredSourceTaskService,
   }) : _nextBatchPlanService = nextBatchPlanService,
-       _taskSummaryService = taskSummaryService;
+       _taskSummaryService = taskSummaryService,
+       _coveredSourceTaskService =
+           coveredSourceTaskService ?? const LongTaskCoveredSourceTaskService();
 
   final LongTaskNextBatchPlanService _nextBatchPlanService;
   final LongTaskTaskSummaryService _taskSummaryService;
+  final LongTaskCoveredSourceTaskService _coveredSourceTaskService;
 
   JsonMap build(
     JsonMap record,
@@ -76,37 +81,37 @@ class LongTaskProgressSnapshotService {
   }
 
   JsonMap _activeTaskFromBatchOrTasks(JsonMap batchPlan, List<Object?> tasks) {
+    final succeeded = _succeededMap(tasks);
     final batchTasks = ValueReaders.mapList(batchPlan['tasks']);
     if (batchTasks.isNotEmpty) {
       return batchTasks.first;
     }
-    final failed = _firstTaskByStatus(tasks, TaskRuntimeConstants.statusFailed);
+    final failed = _coveredSourceTaskService.firstUncoveredTaskByStatus(
+      tasks,
+      TaskRuntimeConstants.statusFailed,
+    );
     if (failed.isNotEmpty) {
       return _taskSummaryService.taskSummary(failed);
     }
-    final waiting = _firstTaskByStatus(
+    final waiting = _coveredSourceTaskService.firstUncoveredTaskByStatus(
       tasks,
       TaskRuntimeConstants.statusWaitingUser,
     );
     if (waiting.isNotEmpty) {
       return _taskSummaryService.taskSummary(waiting);
     }
+    final readyQueued = ValueReaders.mapValue(batchPlan['task']);
+    if (readyQueued.isNotEmpty) {
+      return readyQueued;
+    }
     for (final rawTask in tasks) {
       final task = ValueReaders.mapValue(rawTask);
       if (TaskRuntimeConstants.runnableStatuses.contains(
-        ValueReaders.stringValue(task['status']),
-      )) {
+            ValueReaders.stringValue(task['status']),
+          ) &&
+          _dependenciesReady(task, succeeded) &&
+          !_coveredSourceTaskService.isCoveredBySucceededDependent(task, tasks)) {
         return _taskSummaryService.taskSummary(task);
-      }
-    }
-    return <String, Object?>{};
-  }
-
-  JsonMap _firstTaskByStatus(List<Object?> tasks, String status) {
-    for (final rawTask in tasks) {
-      final task = ValueReaders.mapValue(rawTask);
-      if (ValueReaders.stringValue(task['status']) == status) {
-        return task;
       }
     }
     return <String, Object?>{};
@@ -131,8 +136,31 @@ class LongTaskProgressSnapshotService {
     return reason.startsWith('waiting_user') ||
         reason == 'checkpoint_task' ||
         ValueReaders.stringValue(activeTask['status']) ==
-            TaskRuntimeConstants.statusWaitingUser ||
-        ValueReaders.stringValue(activeTask['task_type']) == 'checkpoint';
+            TaskRuntimeConstants.statusWaitingUser;
+  }
+
+  Map<String, bool> _succeededMap(List<Object?> tasks) {
+    final result = <String, bool>{};
+    for (final rawTask in tasks) {
+      final task = ValueReaders.mapValue(rawTask);
+      if (ValueReaders.stringValue(task['status']) ==
+          TaskRuntimeConstants.statusSucceeded) {
+        final taskId = ValueReaders.stringValue(task['id']).trim();
+        if (taskId.isNotEmpty) {
+          result[taskId] = true;
+        }
+      }
+    }
+    return result;
+  }
+
+  bool _dependenciesReady(JsonMap task, Map<String, bool> succeeded) {
+    for (final dependency in ValueReaders.stringList(task['depends_on'])) {
+      if (dependency.isNotEmpty && !(succeeded[dependency] ?? false)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   bool _isBlockedReason(String reason) {

@@ -1,36 +1,49 @@
 import 'dart:convert';
 
+import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../models/conversation_tool_lifecycle_status.dart';
 import '../../../../shared/services/runtime_exposure_policy_service.dart';
 import '../../presentation/models/conversation_entry_view_data.dart';
 
 class ConversationToolEntryProjectionService {
-  static const String _knowledgeCardsRoot =
-      '.novel_agent/information/knowledge_cards/';
-  static const String _designElementsRoot =
-      '.novel_agent/information/design_elements/';
-  static const String _researchNotesRoot =
-      '.novel_agent/information/research_notes/';
-  static const String _referenceWorksRoot =
-      '.novel_agent/information/reference_works/';
-
   ConversationToolEntryProjectionService({
     ToolEventPresenterService? toolEventPresenterService,
     RuntimeExposurePolicyService? runtimeExposurePolicyService,
+    InformationEvidenceProjectionService? informationEvidenceProjectionService,
     RuntimeExposureTier exposureTier = RuntimeExposureTier.standard,
   }) : _toolEventPresenterService =
            toolEventPresenterService ?? ToolEventPresenterService(),
        _runtimeExposurePolicyService =
            runtimeExposurePolicyService ?? const RuntimeExposurePolicyService(),
+       _informationEvidenceProjectionService =
+           informationEvidenceProjectionService ??
+           const InformationEvidenceProjectionService(),
        _exposureTier = exposureTier;
 
   final ToolEventPresenterService _toolEventPresenterService;
   final RuntimeExposurePolicyService _runtimeExposurePolicyService;
+  final InformationEvidenceProjectionService
+  _informationEvidenceProjectionService;
   final RuntimeExposureTier _exposureTier;
 
   List<ConversationEntryViewData> build(List<Object?> executedTools) {
     return buildWithOptions(executedTools);
+  }
+
+  List<ConversationEntryViewData> buildPendingCallEntries(
+    List<Object?> pendingToolCalls,
+  ) {
+    final result = <ConversationEntryViewData>[];
+    for (final rawTool in pendingToolCalls) {
+      final tool = ValueReaders.mapValue(rawTool);
+      if (tool.isEmpty) {
+        continue;
+      }
+      result.add(_projectPendingCall(tool));
+    }
+    return result;
   }
 
   List<ConversationEntryViewData> buildWithOptions(
@@ -83,6 +96,7 @@ class ConversationToolEntryProjectionService {
       title: _projectedToolTitle(name),
       body: _projectedToolBody(tool),
       isError: isError,
+      toolLifecycleStatus: _toolLifecycleStatus(tool),
       detailTitle: _detailTitle(),
       detailSummary: _detailSummary(tool),
       detailBody: includeDetailBodies ? _detailBody(tool) : '',
@@ -90,10 +104,27 @@ class ConversationToolEntryProjectionService {
     );
   }
 
+  ConversationEntryViewData _projectPendingCall(JsonMap tool) {
+    final name = ValueReaders.stringValue(tool['name'], '工具');
+    final target = _primaryTarget(tool);
+    final rawId = ValueReaders.stringValue(
+      tool['id'],
+      '${name}_${target.hashCode}',
+    );
+    return ConversationEntryViewData(
+      id: 'tool_pending_$rawId',
+      kind: ConversationEntryKind.tool,
+      title: _projectedToolTitle(name),
+      body: _projectedPendingBody(name, target: target),
+      toolLifecycleStatus: ConversationToolLifecycleStatus.running,
+    );
+  }
+
   String _detailSummary(JsonMap tool) {
-    final informationSummary = _informationDetailSummary(tool);
-    if (informationSummary.isNotEmpty) {
-      return informationSummary;
+    final informationProjection = _informationProjection(tool);
+    if (informationProjection.hasContent &&
+        informationProjection.summary.isNotEmpty) {
+      return informationProjection.summary;
     }
     if (_runtimeExposurePolicyService.exposesInternalRuntimeTerms(
       _exposureTier,
@@ -119,11 +150,16 @@ class ConversationToolEntryProjectionService {
   }
 
   String _detailBody(JsonMap tool) {
-    if (!_runtimeExposurePolicyService.exposesStructuredEvidence(_exposureTier)) {
+    if (!_runtimeExposurePolicyService.exposesStructuredEvidence(
+      _exposureTier,
+    )) {
       return _standardDetailBody(tool);
     }
     final sections = <String>[];
-    final informationLines = _informationDetailLines(tool);
+    final informationProjection = _informationProjection(tool);
+    final informationLines = informationProjection.hasContent
+        ? informationProjection.userLines
+        : const <String>[];
     if (informationLines.isNotEmpty) {
       sections.add('信息摘要');
       sections.add(informationLines.join('\n'));
@@ -152,6 +188,14 @@ class ConversationToolEntryProjectionService {
       sections.add('运行证据');
       sections.add(internalLines.join('\n'));
     }
+    if (_runtimeExposurePolicyService.exposesRawJson(_exposureTier) &&
+        informationProjection.diagnosticLines.isNotEmpty) {
+      if (sections.isNotEmpty) {
+        sections.add('');
+      }
+      sections.add('信息诊断');
+      sections.add(informationProjection.diagnosticLines.join('\n'));
+    }
     if (_runtimeExposurePolicyService.exposesRawJson(_exposureTier)) {
       if (sections.isNotEmpty) {
         sections.add('');
@@ -164,7 +208,10 @@ class ConversationToolEntryProjectionService {
 
   String _standardDetailBody(JsonMap tool) {
     final sections = <String>[];
-    final informationLines = _informationDetailLines(tool);
+    final informationProjection = _informationProjection(tool);
+    final informationLines = informationProjection.hasContent
+        ? informationProjection.userLines
+        : const <String>[];
     if (informationLines.isNotEmpty) {
       sections.add('信息摘要');
       sections.add(informationLines.join('\n'));
@@ -180,55 +227,10 @@ class ConversationToolEntryProjectionService {
     return sections.join('\n');
   }
 
-  String _informationDetailSummary(JsonMap tool) {
-    final lines = _informationDetailLines(tool);
-    if (lines.isEmpty) {
-      return '';
-    }
-    return lines.first.replaceFirst('Information：', '').trim();
-  }
-
-  List<String> _informationDetailLines(JsonMap tool) {
-    final result = ValueReaders.mapValue(tool['result']);
-    final changedPaths = _informationChangedPaths(result);
-    final changedCounts = _informationChangedCounts(changedPaths);
-    final analysisInformation = _analysisInformation(result);
-    final analysisCounts = _analysisInformationCounts(analysisInformation);
-    final knowledge = _maxCount(
-      ValueReaders.intValue(changedCounts['knowledge']),
-      ValueReaders.intValue(analysisCounts['knowledge']),
+  InformationEvidenceProjection _informationProjection(JsonMap tool) {
+    return _informationEvidenceProjectionService.fromToolResult(
+      ValueReaders.mapValue(tool['result']),
     );
-    final design = _maxCount(
-      ValueReaders.intValue(changedCounts['design']),
-      ValueReaders.intValue(analysisCounts['design']),
-    );
-    final research = _maxCount(
-      ValueReaders.intValue(changedCounts['research']),
-      ValueReaders.intValue(analysisCounts['research']),
-    );
-    final reference = _maxCount(
-      ValueReaders.intValue(changedCounts['reference']),
-      ValueReaders.intValue(analysisCounts['reference']),
-    );
-    final signal = _informationSignal(result);
-    final hasInformation =
-        knowledge > 0 ||
-        design > 0 ||
-        research > 0 ||
-        reference > 0 ||
-        signal.isNotEmpty;
-    if (!hasInformation) {
-      return const <String>[];
-    }
-    return <String>[
-      'Information：knowledge $knowledge | design $design | research $research | reference $reference',
-      if (signal.isNotEmpty) 'Information Signal：$signal',
-      'Information Projections：'
-          '${InformationProjectionDocument.knowledgeSummaryRelativePath} | '
-          '${InformationProjectionDocument.designSummaryRelativePath} | '
-          '${InformationProjectionDocument.researchSummaryRelativePath} | '
-          '${InformationProjectionDocument.referenceBoundaryRelativePath}',
-    ];
   }
 
   String _primaryTarget(JsonMap tool) {
@@ -314,14 +316,84 @@ class ConversationToolEntryProjectionService {
     if (isError) {
       return '需要处理';
     }
-    switch (name) {
-      case 'submit_chapter_delivery':
+    return _projectedCompletedBody(tool, toolName: name);
+  }
+
+  ConversationToolLifecycleStatus _toolLifecycleStatus(JsonMap tool) {
+    if (ValueReaders.boolValue(tool['not_executed'])) {
+      return ConversationToolLifecycleStatus.pendingConfirmation;
+    }
+    if (!ValueReaders.boolValue(tool['ok'], true)) {
+      return ConversationToolLifecycleStatus.failed;
+    }
+    return ConversationToolLifecycleStatus.completed;
+  }
+
+  String _projectedPendingBody(String toolName, {required String target}) {
+    switch (toolName) {
+      case 'read_project_file':
+        return target.isEmpty ? '已发起，正在读取文件' : '已发起，正在读取 $target';
+      case 'list_project_files':
+      case 'search_project_files':
+        return '已发起，正在检查项目内容';
       case 'write_project_file':
       case 'edit_project_file':
       case 'create_project_entry':
       case 'rename_project_file':
       case 'manipulate_project_file_lines':
-        return '已保存正文';
+        return target.isEmpty ? '已发起，正在写入文件' : '已发起，正在写入 $target';
+      case 'load_agent_skill':
+        return '已发起，正在加载技能';
+      case 'request_external_research':
+        return '已发起，正在发起资料研究';
+      case 'request_profile_clarification':
+      case 'present_user_options':
+        return '已发起，正在整理待确认项';
+      case 'submit_chapter_delivery':
+        return '已发起，正在提交章节交付';
+      case 'submit_narrative_state_claims':
+      case 'propose_knowledge_card':
+      case 'propose_design_element':
+      case 'submit_research_note':
+      case 'propose_reference_work':
+      case 'update_world_state':
+      case 'update_character_state':
+      case 'update_foreshadow_state':
+      case 'update_timeline_state':
+      case 'update_relationship_state':
+        return '已发起，正在写回项目资料';
+      default:
+        return '已发起，正在等待工具返回';
+    }
+  }
+
+  String _projectedCompletedBody(JsonMap tool, {required String toolName}) {
+    final target = _primaryTarget(tool);
+    switch (toolName) {
+      case 'submit_chapter_delivery':
+        return '已交付章节';
+      case 'write_project_file':
+      case 'edit_project_file':
+      case 'create_project_entry':
+      case 'rename_project_file':
+      case 'manipulate_project_file_lines':
+        if (_isChapterPath(target)) {
+          return '已保存正文';
+        }
+        if (_isPlanningPath(target)) {
+          return '已更新开局资料';
+        }
+        if (_isInformationPath(target)) {
+          return '已更新资料';
+        }
+        return '已更新文件';
+      case 'read_project_file':
+        return _isChapterPath(target) ? '已读取正文' : '已读取文件';
+      case 'list_project_files':
+      case 'search_project_files':
+        return '已检查项目内容';
+      case 'load_agent_skill':
+        return '已加载技能';
       case 'submit_narrative_state_claims':
       case 'propose_knowledge_card':
       case 'propose_design_element':
@@ -333,6 +405,8 @@ class ConversationToolEntryProjectionService {
       case 'update_timeline_state':
       case 'update_relationship_state':
         return '已更新资料';
+      case 'request_external_research':
+        return '已登记资料研究';
       case 'request_profile_clarification':
       case 'present_user_options':
         return '需要确认';
@@ -376,8 +450,14 @@ class ConversationToolEntryProjectionService {
     }
 
     void readInternalFields(JsonMap source) {
-      addLine('Prompt Block', ValueReaders.stringValue(source['prompt_block_id']));
-      addLine('Tool Profile', ValueReaders.stringValue(source['tool_profile_id']));
+      addLine(
+        'Prompt Block',
+        ValueReaders.stringValue(source['prompt_block_id']),
+      );
+      addLine(
+        'Tool Profile',
+        ValueReaders.stringValue(source['tool_profile_id']),
+      );
       addLine('子任务会话', ValueReaders.stringValue(source['sub_session_id']));
       final executionConstraint = ValueReaders.mapValue(
         source['execution_constraint'],
@@ -423,73 +503,26 @@ class ConversationToolEntryProjectionService {
     return changedPaths;
   }
 
-  JsonMap _informationChangedCounts(List<String> changedPaths) {
-    var knowledge = 0;
-    var design = 0;
-    var research = 0;
-    var reference = 0;
-    for (final path in changedPaths) {
-      if (path.startsWith(_knowledgeCardsRoot)) {
-        knowledge += 1;
-      } else if (path.startsWith(_designElementsRoot)) {
-        design += 1;
-      } else if (path.startsWith(_researchNotesRoot)) {
-        research += 1;
-      } else if (path.startsWith(_referenceWorksRoot)) {
-        reference += 1;
-      }
-    }
-    return <String, Object?>{
-      'knowledge': knowledge,
-      'design': design,
-      'research': research,
-      'reference': reference,
-    };
+  bool _isChapterPath(String relativePath) {
+    final normalized = relativePath.replaceAll('\\', '/').trim().toLowerCase();
+    return normalized.startsWith('chapters/');
   }
 
-  JsonMap _analysisInformation(JsonMap result) {
-    final direct = ValueReaders.mapValue(result['analysis_information']);
-    if (direct.isNotEmpty) {
-      return direct;
-    }
-    return ValueReaders.mapValue(
-      ValueReaders.mapValue(result['execution'])['analysis_information'],
-    );
+  bool _isPlanningPath(String relativePath) {
+    final normalized = relativePath.replaceAll('\\', '/').trim().toLowerCase();
+    return normalized.startsWith('premise/') ||
+        normalized.startsWith('outlines/') ||
+        normalized.startsWith('outline/') ||
+        normalized.startsWith('chapter_outlines/') ||
+        normalized.startsWith('volume_outlines/');
   }
 
-  JsonMap _analysisInformationCounts(JsonMap analysisInformation) {
-    return <String, Object?>{
-      'knowledge': ValueReaders.stringList(
-        analysisInformation['knowledge_card_ids'],
-      ).length,
-      'design': ValueReaders.stringList(
-        analysisInformation['design_element_ids'],
-      ).length,
-      'research': ValueReaders.stringList(
-        analysisInformation['research_note_ids'],
-      ).length,
-      'reference': ValueReaders.stringList(
-        analysisInformation['reference_work_ids'],
-      ).length,
-    };
-  }
-
-  String _informationSignal(JsonMap result) {
-    final checkpointReview = ValueReaders.mapValue(result['checkpoint_review']);
-    final checkpointReviewBody = ValueReaders.mapValue(
-      checkpointReview['review'],
-    );
-    final direct = ValueReaders.stringValue(
-      checkpointReviewBody['information_summary'],
-    ).trim();
-    if (direct.isNotEmpty) {
-      return direct;
-    }
-    return ValueReaders.stringValue(result['information_summary']).trim();
-  }
-
-  int _maxCount(int left, int right) {
-    return left >= right ? left : right;
+  bool _isInformationPath(String relativePath) {
+    final normalized = relativePath.replaceAll('\\', '/').trim().toLowerCase();
+    return normalized.startsWith('assets/') ||
+        normalized.startsWith('knowledge/') ||
+        normalized.startsWith('references/') ||
+        normalized.startsWith('.novel_agent/information/');
   }
 }
 
@@ -529,6 +562,7 @@ class _ProjectedToolGroup {
       body: entry.body,
       isError: entry.isError,
       isRetryableFailure: entry.isRetryableFailure,
+      toolLifecycleStatus: entry.toolLifecycleStatus,
       detailTitle: entry.detailTitle,
       detailSummary: entry.detailSummary,
       detailBody: entry.detailBody,

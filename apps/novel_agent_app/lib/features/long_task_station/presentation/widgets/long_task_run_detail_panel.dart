@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../workbench/presentation/contracts/pending_research_action_handler.dart';
 import '../contracts/long_task_station_action_handler.dart';
 import '../models/long_task_station_view_data.dart';
 import 'long_task_run_action_bar.dart';
@@ -10,10 +11,12 @@ class LongTaskRunDetailPanel extends StatelessWidget {
     super.key,
     required this.detail,
     required this.actionHandler,
+    this.pendingResearchActionHandler,
   });
 
   final LongTaskRunDetailViewData? detail;
   final LongTaskStationActionHandler actionHandler;
+  final PendingResearchActionHandler? pendingResearchActionHandler;
 
   @override
   Widget build(BuildContext context) {
@@ -54,6 +57,7 @@ class LongTaskRunDetailPanel extends StatelessWidget {
               runId: run.id,
               block: block,
               actionHandler: actionHandler,
+              pendingResearchActionHandler: pendingResearchActionHandler,
             ),
           )
         else if (run.primaryMetadata.isNotEmpty)
@@ -103,6 +107,7 @@ class LongTaskRunDetailPanel extends StatelessWidget {
           _RelatedItemSection(
             title: run.narrativeActivationLabel,
             item: run.narrativeActivation,
+            pendingResearchActionHandler: pendingResearchActionHandler,
             onOpenRequested:
                 run.narrativeActivation == null ||
                     run.narrativeActivation!.relativePath.trim().isEmpty
@@ -115,6 +120,7 @@ class LongTaskRunDetailPanel extends StatelessWidget {
           _RelatedItemSection(
             title: run.narrativeDeliveryLabel,
             item: run.narrativeDelivery,
+            pendingResearchActionHandler: pendingResearchActionHandler,
             onOpenRequested:
                 run.narrativeDelivery == null ||
                     run.narrativeDelivery!.relativePath.trim().isEmpty
@@ -127,6 +133,7 @@ class LongTaskRunDetailPanel extends StatelessWidget {
           _RelatedItemSection(
             title: run.narrativeReviewLabel,
             item: run.narrativeReview,
+            pendingResearchActionHandler: pendingResearchActionHandler,
             onOpenRequested:
                 run.narrativeReview == null ||
                     run.narrativeReview!.relativePath.trim().isEmpty
@@ -139,6 +146,7 @@ class LongTaskRunDetailPanel extends StatelessWidget {
           _RelatedItemSection(
             title: run.narrativeContinuityLabel,
             item: run.narrativeContinuity,
+            pendingResearchActionHandler: pendingResearchActionHandler,
             onOpenRequested:
                 run.narrativeContinuity == null ||
                     run.narrativeContinuity!.relativePath.trim().isEmpty
@@ -151,6 +159,7 @@ class LongTaskRunDetailPanel extends StatelessWidget {
           _RelatedItemSection(
             title: run.informationSummaryLabel,
             item: run.informationSummary,
+            pendingResearchActionHandler: pendingResearchActionHandler,
             onOpenRequested:
                 run.informationSummary == null ||
                     run.informationSummary!.relativePath.trim().isEmpty
@@ -166,6 +175,7 @@ class LongTaskRunDetailPanel extends StatelessWidget {
               (item) => _RelatedItemSection(
                 title: item.title,
                 item: item,
+                pendingResearchActionHandler: pendingResearchActionHandler,
                 onOpenRequested: item.relativePath.trim().isEmpty
                     ? null
                     : () => actionHandler.onLongTaskStationResourceRequested(
@@ -181,6 +191,7 @@ class LongTaskRunDetailPanel extends StatelessWidget {
               (item) => _RelatedItemSection(
                 title: item.title,
                 item: item,
+                pendingResearchActionHandler: pendingResearchActionHandler,
                 onOpenRequested: item.relativePath.trim().isEmpty
                     ? null
                     : () => actionHandler.onLongTaskStationResourceRequested(
@@ -196,6 +207,7 @@ class LongTaskRunDetailPanel extends StatelessWidget {
               (item) => _RelatedItemSection(
                 title: item.title,
                 item: item,
+                pendingResearchActionHandler: pendingResearchActionHandler,
                 onOpenRequested: item.relativePath.trim().isEmpty
                     ? null
                     : () => actionHandler.onLongTaskStationResourceRequested(
@@ -211,6 +223,7 @@ class LongTaskRunDetailPanel extends StatelessWidget {
               (item) => _RelatedItemSection(
                 title: item.title,
                 item: item,
+                pendingResearchActionHandler: pendingResearchActionHandler,
                 onOpenRequested: item.relativePath.trim().isEmpty
                     ? null
                     : () => actionHandler.onLongTaskStationResourceRequested(
@@ -240,6 +253,7 @@ class LongTaskRunDetailPanel extends StatelessWidget {
         _RelatedItemSection(
           title: '最近检查点',
           item: run.latestCheckpointReview,
+          pendingResearchActionHandler: pendingResearchActionHandler,
           onOpenRequested: run.latestCheckpointReview == null
               ? null
               : () => actionHandler.onLongTaskStationResourceRequested(
@@ -250,6 +264,7 @@ class LongTaskRunDetailPanel extends StatelessWidget {
         _RelatedItemSection(
           title: '最近审稿',
           item: run.latestReviewReport,
+          pendingResearchActionHandler: pendingResearchActionHandler,
           onOpenRequested: run.latestReviewReport == null
               ? null
               : () => actionHandler.onLongTaskStationResourceRequested(
@@ -260,6 +275,7 @@ class LongTaskRunDetailPanel extends StatelessWidget {
         _RelatedItemSection(
           title: '最近返工任务',
           item: run.latestRepairTask,
+          pendingResearchActionHandler: pendingResearchActionHandler,
           onOpenRequested: run.latestRepairTask == null
               ? null
               : () => actionHandler.onLongTaskStationResourceRequested(
@@ -267,8 +283,6 @@ class LongTaskRunDetailPanel extends StatelessWidget {
                   run.latestRepairTask!.relativePath,
                 ),
         ),
-        if (run.stopReasonLabel.trim().isNotEmpty && run.stopReasonLabel != '无')
-          _MetaLine(label: '停止/阻塞原因', value: run.stopReasonLabel),
         _MetaLine(label: '备注', value: run.note),
         _MetaLine(label: '创建时间', value: run.createdAtLabel),
         _MetaLine(label: '更新时间', value: run.updatedAtLabel),
@@ -304,11 +318,13 @@ class _OverviewBlock extends StatelessWidget {
     required this.runId,
     required this.block,
     required this.actionHandler,
+    this.pendingResearchActionHandler,
   });
 
   final String runId;
   final LongTaskRunOverviewBlockViewData block;
   final LongTaskStationActionHandler actionHandler;
+  final PendingResearchActionHandler? pendingResearchActionHandler;
 
   @override
   Widget build(BuildContext context) {
@@ -343,6 +359,7 @@ class _OverviewBlock extends StatelessWidget {
               (item) => _RelatedItemSection(
                 title: item.title,
                 item: item,
+                pendingResearchActionHandler: pendingResearchActionHandler,
                 onOpenRequested: item.relativePath.trim().isEmpty
                     ? null
                     : () => actionHandler.onLongTaskStationResourceRequested(
@@ -410,11 +427,13 @@ class _RelatedItemSection extends StatelessWidget {
     required this.title,
     required this.item,
     required this.onOpenRequested,
+    this.pendingResearchActionHandler,
   });
 
   final String title;
   final LongTaskRunRelatedItemViewData? item;
   final VoidCallback? onOpenRequested;
+  final PendingResearchActionHandler? pendingResearchActionHandler;
 
   @override
   Widget build(BuildContext context) {
@@ -434,6 +453,7 @@ class _RelatedItemSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: Text(
@@ -446,13 +466,36 @@ class _RelatedItemSection extends StatelessWidget {
                   ),
                 ),
               ),
-              if (onOpenRequested != null)
-                TextButton(
-                  onPressed: onOpenRequested,
-                  child: Text(item!.actionLabel),
-                ),
             ],
           ),
+          if (onOpenRequested != null || item!.supportsPendingResearchActions) ...[
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                if (onOpenRequested != null)
+                  TextButton(
+                    onPressed: onOpenRequested,
+                    child: Text(item!.actionLabel),
+                  ),
+                if (item!.supportsPendingResearchActions &&
+                    pendingResearchActionHandler != null)
+                  TextButton(
+                    onPressed: () => pendingResearchActionHandler!
+                        .onPendingResearchApproved(item!.pendingResearchRequestId),
+                    child: const Text('确认'),
+                  ),
+                if (item!.supportsPendingResearchActions &&
+                    pendingResearchActionHandler != null)
+                  TextButton(
+                    onPressed: () => pendingResearchActionHandler!
+                        .onPendingResearchRejected(item!.pendingResearchRequestId),
+                    child: const Text('拒绝'),
+                  ),
+              ],
+            ),
+          ],
           const SizedBox(height: 4),
           Text(item!.subtitle, style: Theme.of(context).textTheme.bodySmall),
           if (item!.summary.trim().isNotEmpty) ...[

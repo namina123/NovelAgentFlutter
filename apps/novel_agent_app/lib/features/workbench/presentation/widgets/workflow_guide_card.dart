@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../app/theme/app_chrome.dart';
+import '../../../../../shared/theme/novel_theme_context.dart';
 import '../../../../../shared/widgets/panel_surface.dart';
 import '../contracts/conversation_action_handler.dart';
 import '../models/conversation_opening_state_view_data.dart';
@@ -25,41 +27,69 @@ class WorkflowGuideCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 中文注释: 工作流引导卡独立后，未来切换不同项目体验 profile 时只需替换这个信息组件。
+    final colors = context.novelThemeColors;
+    final surface = context.novelThemeSurfaces.panel;
     return PanelSurface(
       role: PanelSurfaceRole.panel,
       showBorder: false,
       padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (openingState != null && actionHandler != null)
-            ConversationOpeningStateSummary(
-              state: openingState!,
-              actionHandler: actionHandler!,
-              eyebrow: title,
-              showActionButton: false,
-            )
-          else ...[
-            Text(
-              title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              description,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontWeight: FontWeight.w500,
-                height: 1.5,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+        decoration: BoxDecoration(
+          color: surface.backgroundColor.withValues(alpha: 0.56),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: surface.borderColor.withValues(alpha: 0.64),
+            width: AppChrome.borderWidth,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (openingState != null && actionHandler != null)
+              ConversationOpeningStateSummary(
+                state: openingState!,
+                actionHandler: actionHandler!,
+                eyebrow: title,
+                showActionButton: false,
+              )
+            else ...[
+              Text(
+                '工作流建议',
+                style: TextStyle(
+                  color: colors.mutedTextColor,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.2,
+                ),
               ),
-            ),
+              const SizedBox(height: 8),
+              Text(
+                title,
+                style: TextStyle(
+                  color: colors.textColor,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                description,
+                style: TextStyle(
+                  color: colors.mutedTextColor,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w500,
+                  height: 1.5,
+                ),
+              ),
+            ],
+            if (supplement != null) ...[
+              const SizedBox(height: 10),
+              ConversationSupplementSection(child: supplement!),
+            ],
           ],
-          if (supplement != null) ...[
-            const SizedBox(height: 10),
-            ConversationSupplementSection(child: supplement!),
-          ],
-        ],
+        ),
       ),
     );
   }

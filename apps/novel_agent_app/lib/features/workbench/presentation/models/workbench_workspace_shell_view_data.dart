@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import 'project_long_task_summary_view_data.dart';
 import 'project_agent_group_panel_view_data.dart';
 
 @immutable
@@ -25,6 +26,7 @@ class WorkbenchWorkspaceShellViewData {
     required this.subAgentRunCount,
     required this.isGenerating,
     required this.projectAgentGroupPanel,
+    this.projectLongTaskSummary,
   });
 
   final String projectName;
@@ -47,6 +49,7 @@ class WorkbenchWorkspaceShellViewData {
   final int subAgentRunCount;
   final bool isGenerating;
   final ProjectAgentGroupPanelViewData projectAgentGroupPanel;
+  final ProjectLongTaskSummaryViewData? projectLongTaskSummary;
 
   bool get hasActiveDocument => activeDocumentPath.trim().isNotEmpty;
 

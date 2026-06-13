@@ -6,7 +6,7 @@ import '../settings/model_execution_profile_service.dart';
 import '../settings/provider_endpoint_settings.dart';
 import '../project/project_descriptor.dart';
 import '../tools/tool_exposure_policy_service.dart';
-import '../tools/tool_strategy_service.dart';
+import '../workflow/continuous_task_tool_exposure_runtime_resolver_service.dart';
 import 'child_run_package.dart';
 import 'project_agent_binding.dart';
 import 'project_agent_binding_normalizer_service.dart';
@@ -15,15 +15,18 @@ import 'project_agent_binding_resolver_service.dart';
 class SubAgentEffectiveExecutionProfileService {
   SubAgentEffectiveExecutionProfileService({
     ModelExecutionProfileService? modelExecutionProfileService,
-    ToolStrategyService? toolStrategyService,
     ToolExposurePolicyService? toolExposurePolicyService,
+    ContinuousTaskToolExposureRuntimeResolverService?
+    continuousTaskToolExposureRuntimeResolverService,
     ProjectAgentBindingResolverService? projectAgentBindingResolverService,
     ProjectAgentBindingNormalizerService? projectAgentBindingNormalizerService,
   }) : _modelExecutionProfileService =
            modelExecutionProfileService ?? ModelExecutionProfileService(),
-       _toolStrategyService = toolStrategyService ?? ToolStrategyService(),
        _toolExposurePolicyService =
            toolExposurePolicyService ?? const ToolExposurePolicyService(),
+       _continuousTaskToolExposureRuntimeResolverService =
+           continuousTaskToolExposureRuntimeResolverService ??
+           const ContinuousTaskToolExposureRuntimeResolverService(),
        _projectAgentBindingResolverService =
            projectAgentBindingResolverService ??
            const ProjectAgentBindingResolverService(),
@@ -32,8 +35,9 @@ class SubAgentEffectiveExecutionProfileService {
            ProjectAgentBindingNormalizerService();
 
   final ModelExecutionProfileService _modelExecutionProfileService;
-  final ToolStrategyService _toolStrategyService;
   final ToolExposurePolicyService _toolExposurePolicyService;
+  final ContinuousTaskToolExposureRuntimeResolverService
+  _continuousTaskToolExposureRuntimeResolverService;
   final ProjectAgentBindingResolverService _projectAgentBindingResolverService;
   final ProjectAgentBindingNormalizerService
   _projectAgentBindingNormalizerService;
@@ -64,8 +68,31 @@ class SubAgentEffectiveExecutionProfileService {
     );
     final blockedToolIds = _mergedBlockedToolIds(childRunPackage, childAgent);
     final requestedToolIds = _requestedToolIds(childRunPackage, childAgent);
+    final toolExposureResolution =
+        _continuousTaskToolExposureRuntimeResolverService.resolve(
+          candidateToolIds: requestedToolIds,
+          selectedCollaborationGroup: ValueReaders.mapValue(
+            mainContext['selected_collaboration_group'],
+          ),
+          runtimeContext: <String, Object?>{
+            'task_family_id': ValueReaders.stringValue(
+              mainContext['continuous_task_family_id'],
+            ),
+            'mode': ValueReaders.stringValue(
+              mainContext['sub_agent_binding_mode_id'],
+            ),
+            'task_type': ValueReaders.stringValue(mainContext['task_type']),
+          },
+          intent: ValueReaders.stringValue(mainContext['intent']),
+          explicitTaskFamilyId: ValueReaders.stringValue(
+            mainContext['continuous_task_family_id'],
+          ),
+          explicitRunKind: ValueReaders.stringValue(
+            mainContext['continuous_task_run_kind'],
+          ),
+        );
     final allowedToolIds = _toolExposurePolicyService.filterExposedToolIds(
-      requestedToolIds
+      toolExposureResolution.visibleToolIds
           .where((toolId) => !blockedToolIds.contains(toolId))
           .toList(growable: false),
       hostPlatform: hostPlatform,
@@ -87,6 +114,8 @@ class SubAgentEffectiveExecutionProfileService {
       ),
       'allowed_tool_ids': allowedToolIds,
       'blocked_tool_ids': blockedToolIds.toList(growable: false),
+      'continuous_task_tool_exposure_resolution': toolExposureResolution
+          .toJson(),
       'context_budget_chars': childRunPackage.budgetPolicy.contextBudgetChars,
       'output_budget_chars': childRunPackage.budgetPolicy.outputBudgetChars,
       'token_budget': childRunPackage.budgetPolicy.tokenBudget,
@@ -189,9 +218,7 @@ class SubAgentEffectiveExecutionProfileService {
   ) {
     final allowedToolIds = _declaredAllowedToolIds(childRunPackage, childAgent);
     if (allowedToolIds.isEmpty) {
-      return _toolStrategyService.enabledToolIds(
-        _toolStrategyService.defaultSettings(),
-      );
+      return const <String>[];
     }
     return allowedToolIds.toSet().toList(growable: false);
   }

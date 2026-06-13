@@ -87,6 +87,7 @@ void main() {
       expect(package['ok'], isTrue);
       expect((package['messages'] as List<Object?>).length, 3);
       expect(brief, contains('writer'));
+      expect(brief, contains('空字符串'));
     });
 
     test('maps normalized agent profile into typed contract', () {

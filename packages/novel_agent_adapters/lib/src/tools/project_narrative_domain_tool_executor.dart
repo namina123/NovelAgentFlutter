@@ -8,6 +8,9 @@ import '../storage/local_semantic_review_repository.dart';
 import '../storage/open_narrative_state_path_service.dart';
 import '../storage/open_narrative_state_projection_writer_service.dart';
 import '../storage/open_narrative_state_record_document_service.dart';
+import '../storage/project_task_repository.dart';
+import 'project_chapter_length_delivery_guard_service.dart';
+import 'project_chapter_opening_continuity_guard_service.dart';
 import 'project_tool_path_policy.dart';
 
 class ProjectNarrativeDomainToolExecutor {
@@ -23,6 +26,11 @@ class ProjectNarrativeDomainToolExecutor {
     OpenNarrativeStateRecordDocumentService? recordDocumentService,
     OpenNarrativeStatePathService? pathService,
     ProjectToolPathPolicy? pathPolicy,
+    ProjectTaskRepository? taskRepository,
+    ChapterOutputPathPolicyService? chapterOutputPathPolicyService,
+    ProjectChapterLengthDeliveryGuardService? chapterLengthDeliveryGuardService,
+    ProjectChapterOpeningContinuityGuardService?
+    chapterOpeningContinuityGuardService,
     NarrativeStateClaimCodecService? claimCodecService,
     NarrativeProfileCodecService? profileCodecService,
     NarrativeConstraintBindingCodecService? bindingCodecService,
@@ -55,6 +63,21 @@ class ProjectNarrativeDomainToolExecutor {
            ),
        _pathService = pathService ?? OpenNarrativeStatePathService(),
        _pathPolicy = pathPolicy ?? ProjectToolPathPolicy(),
+       _chapterOutputPathPolicyService =
+           chapterOutputPathPolicyService ??
+           const ChapterOutputPathPolicyService(),
+       _chapterLengthDeliveryGuardService =
+           chapterLengthDeliveryGuardService ??
+           ProjectChapterLengthDeliveryGuardService(
+             taskRepository:
+                 taskRepository ??
+                 ProjectTaskRepository(workspacePort: workspacePort),
+           ),
+       _chapterOpeningContinuityGuardService =
+           chapterOpeningContinuityGuardService ??
+           ProjectChapterOpeningContinuityGuardService(
+             workspacePort: workspacePort,
+           ),
        _claimCodecService =
            claimCodecService ?? const NarrativeStateClaimCodecService(),
        _profileCodecService =
@@ -92,6 +115,11 @@ class ProjectNarrativeDomainToolExecutor {
   final OpenNarrativeStateRecordDocumentService _recordDocumentService;
   final OpenNarrativeStatePathService _pathService;
   final ProjectToolPathPolicy _pathPolicy;
+  final ChapterOutputPathPolicyService _chapterOutputPathPolicyService;
+  final ProjectChapterLengthDeliveryGuardService
+  _chapterLengthDeliveryGuardService;
+  final ProjectChapterOpeningContinuityGuardService
+  _chapterOpeningContinuityGuardService;
   final NarrativeStateClaimCodecService _claimCodecService;
   final NarrativeProfileCodecService _profileCodecService;
   final NarrativeConstraintBindingCodecService _bindingCodecService;
@@ -100,7 +128,17 @@ class ProjectNarrativeDomainToolExecutor {
     ProjectDescriptor project,
     DomainToolRequest request,
   ) async {
-    final outcome = await _dispatcher.dispatch(request: request);
+    var outcome = await _dispatcher.dispatch(request: request);
+    outcome = await _applySharedChapterContinuityGuard(
+      project: project,
+      request: request,
+      outcome: outcome,
+    );
+    outcome = await _applySharedChapterLengthGuard(
+      project: project,
+      request: request,
+      outcome: outcome,
+    );
     if (!_shouldPersistOutcome(outcome)) {
       return outcome;
     }
@@ -147,6 +185,120 @@ class ProjectNarrativeDomainToolExecutor {
     }
   }
 
+  Future<DomainToolOutcome> _applySharedChapterContinuityGuard({
+    required ProjectDescriptor project,
+    required DomainToolRequest request,
+    required DomainToolOutcome outcome,
+  }) async {
+    if (request.toolName != NarrativeDomainToolNames.submitChapterDelivery ||
+        outcome.outcomeStatus != DomainToolOutcomeStatuses.accepted) {
+      return outcome;
+    }
+    final payload = ValueReaders.mapValue(outcome.outcomePayload);
+    final stateResult = ValueReaders.mapValue(payload['state_result']);
+    if (!ValueReaders.boolValue(stateResult['chapter_body_delivered'])) {
+      return outcome;
+    }
+    final chapterPath = ValueReaders.stringValue(
+      payload['chapter_path'],
+    ).trim();
+    final chapterContent = ValueReaders.stringValue(
+      request.requestPayload['chapter_content'],
+    );
+    if (chapterPath.isEmpty || chapterContent.trim().isEmpty) {
+      return outcome;
+    }
+    final guardResult = await _chapterOpeningContinuityGuardService.evaluate(
+      project: project,
+      chapterPath: chapterPath,
+      chapterContent: chapterContent,
+    );
+    if (!guardResult.blocked) {
+      return outcome;
+    }
+    return outcome.copyWith(
+      outcomeStatus: DomainToolOutcomeStatuses.invalidPayload,
+      error: DomainToolError(
+        errorCode: guardResult.reason,
+        message: guardResult.summary,
+        retryable: false,
+        errorDetails: <String, Object?>{
+          'chapter_path': chapterPath,
+          'opening_excerpt': guardResult.openingExcerpt,
+          'previous_excerpt': guardResult.previousExcerpt,
+          'longest_common_span': guardResult.longestCommonSpan,
+          'opening_coverage': guardResult.openingCoverage,
+          'previous_coverage': guardResult.previousCoverage,
+          'replayed_clauses': guardResult.replayedClauses,
+          'replayed_action_anchors': guardResult.replayedActionAnchors,
+        },
+      ),
+      metadata: ValueReaders.deepCopyMap(<String, Object?>{
+        ...outcome.metadata,
+        'continuity_guard': <String, Object?>{
+          'blocked': true,
+          'reason': guardResult.reason,
+          'summary': guardResult.summary,
+        },
+      }),
+    );
+  }
+
+  Future<DomainToolOutcome> _applySharedChapterLengthGuard({
+    required ProjectDescriptor project,
+    required DomainToolRequest request,
+    required DomainToolOutcome outcome,
+  }) async {
+    if (request.toolName != NarrativeDomainToolNames.submitChapterDelivery ||
+        outcome.outcomeStatus != DomainToolOutcomeStatuses.accepted) {
+      return outcome;
+    }
+    final payload = ValueReaders.mapValue(outcome.outcomePayload);
+    final stateResult = ValueReaders.mapValue(payload['state_result']);
+    if (!ValueReaders.boolValue(stateResult['chapter_body_delivered'])) {
+      return outcome;
+    }
+    final chapterPath = ValueReaders.stringValue(
+      payload['chapter_path'],
+    ).trim();
+    final chapterContent = ValueReaders.stringValue(
+      request.requestPayload['chapter_content'],
+    );
+    if (chapterPath.isEmpty || chapterContent.trim().isEmpty) {
+      return outcome;
+    }
+    final guardResult = await _chapterLengthDeliveryGuardService.evaluate(
+      project: project,
+      chapterPath: chapterPath,
+      chapterContent: chapterContent,
+      metadata: ValueReaders.mapValue(request.requestPayload['metadata']),
+    );
+    if (!guardResult.blocked) {
+      return outcome;
+    }
+    return outcome.copyWith(
+      outcomeStatus: DomainToolOutcomeStatuses.invalidPayload,
+      error: DomainToolError(
+        errorCode: guardResult.reason,
+        message: guardResult.summary,
+        retryable: false,
+        errorDetails: <String, Object?>{
+          'chapter_path': chapterPath,
+          'measured_length': guardResult.measuredLength,
+          'minimum_length': guardResult.minimumLength,
+          'maximum_length': guardResult.maximumLength,
+          'source': guardResult.source,
+          'task_id': guardResult.taskId,
+          'task_relative_path': guardResult.taskRelativePath,
+        },
+      ),
+      metadata: ValueReaders.deepCopyMap(<String, Object?>{
+        ...outcome.metadata,
+        'chapter_length_guard': guardResult.toJson(),
+      }),
+    );
+  }
+
   bool _shouldPersistOutcome(DomainToolOutcome outcome) {
     return outcome.outcomeStatus == DomainToolOutcomeStatuses.accepted ||
         outcome.outcomeStatus == DomainToolOutcomeStatuses.proposed ||
@@ -172,10 +324,20 @@ class ProjectNarrativeDomainToolExecutor {
       ValueReaders.stringValue(payload['chapter_path']),
       label: 'chapter_path',
     );
-    final chapterContent = ValueReaders.stringValue(
+    final chapterContent = _chapterOutputPathPolicyService
+        .normalizeChapterMarkdownHeading(
+          chapterContent: ValueReaders.stringValue(
+            request.requestPayload['chapter_content'],
+          ),
+          title: ValueReaders.stringValue(payload['title']),
+        );
+    if (chapterContent.trim().isEmpty) {
+      throw StateError('章节结果声明已交付，但 chapter_content 为空。');
+    }
+    final rawChapterContent = ValueReaders.stringValue(
       request.requestPayload['chapter_content'],
     );
-    if (chapterContent.trim().isEmpty) {
+    if (rawChapterContent.trim().isEmpty) {
       throw StateError('章节结果声明已交付，但 chapter_content 为空。');
     }
     await _hostPort.writeTextFile(
@@ -185,9 +347,7 @@ class ProjectNarrativeDomainToolExecutor {
     );
     changedPaths.add(chapterPath);
 
-    final submissionJson = ValueReaders.mapValue(
-      request.requestPayload['submission'],
-    );
+    final submissionJson = ValueReaders.mapValue(payload['submission']);
     if (submissionJson.isEmpty) {
       return;
     }
@@ -220,6 +380,20 @@ class ProjectNarrativeDomainToolExecutor {
     changedPaths
       ..add(recordPath)
       ..add(_pathService.deliveriesIndexPath());
+    final submissionClaims = ValueReaders.mapList(submissionJson['claims'])
+        .map(
+          (entry) => _claimCodecService.fromJson(ValueReaders.mapValue(entry)),
+        )
+        .where((claim) => claim.validateBasics().isEmpty)
+        .toList(growable: false);
+    if (submissionClaims.isEmpty) {
+      return;
+    }
+    for (final claim in submissionClaims) {
+      await _claimRepository.appendClaim(project, claim);
+    }
+    changedPaths.add(_pathService.claimsLogPath());
+    await _appendProjectionPaths(project, changedPaths);
   }
 
   Future<void> _persistClaims(

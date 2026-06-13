@@ -3,6 +3,76 @@ import 'package:test/test.dart';
 
 void main() {
   group('LongTaskCheckpointReviewService', () {
+    test('merges surface expression risk evidence into checkpoint signal', () {
+      final service = LongTaskCheckpointReviewService(
+        taskSummaryService: LongTaskTaskSummaryService(),
+      );
+
+      final review = service.buildReview(
+        task: <String, Object?>{
+          'id': 'chapter_001',
+          'title': '第01章',
+          'task_type': 'chapter',
+          'mode': TaskRuntimeConstants.modeSeedToFullNovel,
+          'output_paths': <Object?>['chapters/ch01.md'],
+          'metadata': <String, Object?>{'stage': 'draft'},
+        },
+        result: <String, Object?>{
+          'ok': true,
+          'output_paths': <Object?>['chapters/ch01.md'],
+          'expression_constraint_surface_review': <String, Object?>{
+            'authenticity_pass_level': 'aggressive',
+            'mini_recheck_items': <Object?>['正文表面风险命中：去 AI 风：—— x6'],
+          },
+        },
+        memorySections: const <JsonMap>[],
+        outputPaths: const <String>['chapters/ch01.md'],
+        execution: <String, Object?>{
+          'execution_constraints': <String, Object?>{
+            'expression_constraint_policy_mode': 'force',
+            'expression_constraint_injection_strength': 'full',
+            'expression_constraint_review_requirement': 'none',
+            'expression_constraint_violation_disposition': 'repair',
+            'expression_constraint_applied': true,
+            'expression_constraint_injection_mode': 'brief_and_sections',
+            'expression_constraint_profiles': <Object?>[
+              <String, Object?>{
+                'id': 'de_ai',
+                'display_name': '去 AI 风',
+                'summary': '降低模板化表达和解释腔。',
+                'kind': 'natural_expression',
+                'risk_signals': <Object?>['——'],
+              },
+            ],
+            'project_expression_constraint_bindings': <Object?>[
+              <String, Object?>{
+                'id': 'binding_de_ai',
+                'profile_id': 'de_ai',
+                'default_for_project': true,
+              },
+            ],
+          },
+        },
+      );
+
+      final expressionReview = ValueReaders.mapValue(
+        review['expression_constraint_review'],
+      );
+      final signal = ValueReaders.mapValue(
+        review['expression_constraint_signal'],
+      );
+      expect(
+        ValueReaders.stringList(expressionReview['mini_recheck_items']),
+        contains('正文表面风险命中：去 AI 风：—— x6'),
+      );
+      expect(ValueReaders.stringValue(signal['category']), 'light_repair');
+      expect(ValueReaders.boolValue(signal['repair_required']), isTrue);
+      expect(
+        ValueReaders.stringList(signal['risk_signals']),
+        contains('正文表面风险命中：去 AI 风：—— x6'),
+      );
+    });
+
     test('builds checkpoint review with drift watch items and next actions', () {
       final service = LongTaskCheckpointReviewService(
         taskSummaryService: LongTaskTaskSummaryService(),
@@ -71,6 +141,36 @@ void main() {
         ],
         outputPaths: const <String>['chapters/ch01.md'],
         execution: <String, Object?>{
+          'execution_constraints': <String, Object?>{
+            'expression_constraint_policy_mode': 'adaptive',
+            'expression_constraint_injection_strength': 'sections',
+            'expression_constraint_review_requirement': 'when_applied',
+            'expression_constraint_violation_disposition': 'adjust_next',
+            'expression_constraint_applied': true,
+            'expression_constraint_runtime_escalated': true,
+            'expression_constraint_injection_mode': 'brief_and_sections',
+            'expression_constraint_review_required': true,
+            'expression_constraint_profiles': <Object?>[
+              <String, Object?>{
+                'id': 'de_ai',
+                'display_name': '去 AI 风',
+                'summary': '降低模板化表达和解释腔。',
+                'kind': 'natural_expression',
+              },
+            ],
+            'project_expression_constraint_bindings': <Object?>[
+              <String, Object?>{
+                'id': 'binding_de_ai',
+                'profile_id': 'de_ai',
+                'default_for_project': true,
+              },
+            ],
+            'runtime_report': <String, Object?>{
+              'expression_constraints': <String, Object?>{
+                'runtime_escalated': true,
+              },
+            },
+          },
           'activation_report': <String, Object?>{
             'items': <Object?>[
               <String, Object?>{
@@ -137,7 +237,7 @@ void main() {
             review['expression_constraint_review'],
           )['authenticity_pass_level'],
         ),
-        'aggressive',
+        'medium',
       );
       expect(
         ValueReaders.stringValue(
@@ -166,12 +266,102 @@ void main() {
         contains('待研究 1 项'),
       );
       expect(
+        ValueReaders.stringValue(
+          ValueReaders.mapValue(
+            review['writing_execution_constraints'],
+          )['policy_mode'],
+        ),
+        'adaptive',
+      );
+      expect(
+        ValueReaders.stringValue(
+          ValueReaders.mapValue(
+            review['expression_constraint_signal'],
+          )['category'],
+        ),
+        'suggest_strengthen',
+      );
+      expect(
+        ValueReaders.stringValue(
+          ValueReaders.mapValue(
+            ValueReaders.mapValue(
+              review['narrative_supervisor_risk'],
+            )['expression_constraints'],
+          )['category'],
+        ),
+        'suggest_strengthen',
+      );
+      expect(
         ValueReaders.stringList(review['mini_recheck_items']),
         contains('确认真实性清理后主角与关键说话者仍然保留各自声音。'),
       );
       final severity = LongTaskCheckpointSeverityService().assess(review);
       expect(ValueReaders.stringValue(severity['severity']), 'high');
     });
+
+    test(
+      'keeps disabled expression constraint signal out of repair classification',
+      () {
+        final service = LongTaskCheckpointReviewService(
+          taskSummaryService: LongTaskTaskSummaryService(),
+        );
+
+        final review = service.buildReview(
+          task: const <String, Object?>{
+            'id': 'chapter_003',
+            'title': '正文：第03章',
+            'task_type': 'chapter',
+            'mode': TaskRuntimeConstants.modeHumanOutlineAiDraft,
+            'status': TaskRuntimeConstants.statusSucceeded,
+            'output_paths': <Object?>['chapters/ch03.md'],
+            'metadata': <String, Object?>{'stage': 'draft'},
+          },
+          result: const <String, Object?>{
+            'ok': true,
+            'output_paths': <Object?>['chapters/ch03.md'],
+            'changed_paths': <Object?>['chapters/ch03.md'],
+            'executed_tools': <Object?>[],
+            'response': <String, Object?>{'content': '已完成正文草稿。'},
+          },
+          memorySections: const <JsonMap>[
+            <String, Object?>{'title': '风格锚点'},
+          ],
+          outputPaths: const <String>['chapters/ch03.md'],
+          execution: const <String, Object?>{
+            'execution_constraints': <String, Object?>{
+              'expression_constraint_policy_mode': 'disabled',
+              'expression_constraint_injection_strength': 'none',
+              'expression_constraint_review_requirement': 'none',
+              'expression_constraint_violation_disposition': 'remind',
+              'expression_constraint_applied': false,
+              'expression_constraint_injection_mode': 'disabled',
+              'expression_constraint_review_required': false,
+              'runtime_report': <String, Object?>{},
+            },
+          },
+          createdAt: '2026-06-06T01:00:00Z',
+        );
+
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(
+              review['expression_constraint_signal'],
+            )['category'],
+          ),
+          'policy_disabled',
+        );
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(
+              ValueReaders.mapValue(
+                review['narrative_supervisor_risk'],
+              )['overall'],
+            )['category'],
+          ),
+          'accept',
+        );
+      },
+    );
 
     test(
       'projects collaboration conflict into checkpoint review and blocks high-risk silent continue',

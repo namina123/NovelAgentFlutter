@@ -11,8 +11,8 @@ import '../models/workbench_canvas_view_data.dart';
 import '../models/workbench_conversation_view_data.dart';
 import '../models/workbench_resource_view_data.dart';
 import 'workbench_auxiliary_panel_host.dart';
-import 'workbench_desktop_style.dart';
 import 'workbench_primary_canvas_host.dart';
+import 'workbench_visual_style.dart';
 
 class WorkbenchCanvasWorkspaceShell extends StatefulWidget {
   const WorkbenchCanvasWorkspaceShell({
@@ -50,7 +50,7 @@ class _WorkbenchCanvasWorkspaceShellState
 
   @override
   Widget build(BuildContext context) {
-    final style = WorkbenchDesktopStyle.of(context);
+    final visual = WorkbenchVisualStyle.of(context);
     return AnimatedBuilder(
       animation: Listenable.merge([
         widget.resourceListenable,
@@ -64,9 +64,6 @@ class _WorkbenchCanvasWorkspaceShellState
         );
         final centerPaneViewData = _centerPanePolicyService.build(
           shellViewData,
-        );
-        final selectedAuxiliaryPanel = centerPaneViewData.descriptorFor(
-          _selectedPanelId,
         );
         return LayoutBuilder(
           builder: (context, constraints) {
@@ -94,37 +91,32 @@ class _WorkbenchCanvasWorkspaceShellState
                     ),
                   ),
                 ),
-                if (centerPaneViewData.canRevealAuxiliary)
+                if (centerPaneViewData.canRevealAuxiliary && _isAuxiliaryVisible)
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 4, 10, 10),
+                    padding: EdgeInsets.fromLTRB(
+                      visual.panelPadding.left - 2,
+                      1,
+                      visual.panelPadding.right - 2,
+                      visual.compactGap + 1,
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        SizedBox(height: style.sectionGap * 0.55),
-                        _AuxiliaryPeekBar(
-                          title: centerPaneViewData.auxiliaryTitle,
-                          selectedLabel: selectedAuxiliaryPanel.label,
-                          selectedDescription:
-                              selectedAuxiliaryPanel.description,
-                          isExpanded: _isAuxiliaryVisible,
-                          onPressed: _isAuxiliaryVisible
-                              ? _hideAuxiliary
-                              : _showAuxiliary,
-                        ),
-                        if (_isAuxiliaryVisible)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: SizedBox(
-                              height: auxiliaryHeight,
-                              child: WorkbenchAuxiliaryPanelHost(
-                                selectedPanelId: _selectedPanelId,
-                                centerPaneViewData: centerPaneViewData,
-                                viewData: shellViewData,
-                                onPanelSelected: _selectAuxiliary,
-                                onDismissRequested: _hideAuxiliary,
-                              ),
+                        Padding(
+                          padding: EdgeInsets.only(
+                            top: visual.compactGap + 1,
+                          ),
+                          child: SizedBox(
+                            height: auxiliaryHeight,
+                            child: WorkbenchAuxiliaryPanelHost(
+                              selectedPanelId: _selectedPanelId,
+                              centerPaneViewData: centerPaneViewData,
+                              viewData: shellViewData,
+                              onPanelSelected: _selectAuxiliary,
+                              onDismissRequested: _hideAuxiliary,
                             ),
                           ),
+                        ),
                       ],
                     ),
                   ),
@@ -152,15 +144,6 @@ class _WorkbenchCanvasWorkspaceShellState
     });
   }
 
-  void _showAuxiliary() {
-    if (_isAuxiliaryVisible) {
-      return;
-    }
-    setState(() {
-      _isAuxiliaryVisible = true;
-    });
-  }
-
   void _hideAuxiliary() {
     if (!_isAuxiliaryVisible) {
       return;
@@ -168,71 +151,6 @@ class _WorkbenchCanvasWorkspaceShellState
     setState(() {
       _isAuxiliaryVisible = false;
     });
-  }
-}
-
-class _AuxiliaryPeekBar extends StatelessWidget {
-  const _AuxiliaryPeekBar({
-    required this.title,
-    required this.selectedLabel,
-    required this.selectedDescription,
-    required this.isExpanded,
-    required this.onPressed,
-  });
-
-  final String title;
-  final String selectedLabel;
-  final String selectedDescription;
-  final bool isExpanded;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return InkWell(
-      borderRadius: BorderRadius.circular(10),
-      onTap: onPressed,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(4, 2, 4, 2),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '$title · $selectedLabel',
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    selectedDescription,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            TextButton.icon(
-              onPressed: onPressed,
-              icon: Icon(
-                isExpanded
-                    ? Icons.expand_less_rounded
-                    : Icons.expand_more_rounded,
-                size: 16,
-              ),
-              label: Text(isExpanded ? '收起' : '展开'),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 

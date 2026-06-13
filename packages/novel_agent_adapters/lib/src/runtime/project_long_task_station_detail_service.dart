@@ -1,5 +1,10 @@
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../projection/expression_constraint_status_projection.dart';
+import '../projection/expression_constraint_status_projection_service.dart';
+import '../projection/information_evidence_projection.dart';
+import '../projection/information_evidence_projection_item.dart';
+import '../projection/information_evidence_projection_service.dart';
 import '../storage/project_review_report_service.dart';
 import '../storage/project_task_repository.dart';
 import 'project_long_task_station_blocker_summary.dart';
@@ -35,13 +40,31 @@ class ProjectLongTaskStationDetailService {
     required ProjectTaskRepository taskRepository,
     required ProjectReviewReportService reviewReportService,
     TaskChainViewService? taskChainViewService,
+    InformationEvidenceProjectionService? informationEvidenceProjectionService,
+    ExpressionConstraintStatusProjectionService?
+    expressionConstraintStatusProjectionService,
+    LongTaskStopDiagnosisProjectionService? stopDiagnosisProjectionService,
   }) : _taskRepository = taskRepository,
        _reviewReportService = reviewReportService,
-       _taskChainViewService = taskChainViewService ?? TaskChainViewService();
+       _taskChainViewService = taskChainViewService ?? TaskChainViewService(),
+       _informationEvidenceProjectionService =
+           informationEvidenceProjectionService ??
+           const InformationEvidenceProjectionService(),
+       _expressionConstraintStatusProjectionService =
+           expressionConstraintStatusProjectionService ??
+           const ExpressionConstraintStatusProjectionService(),
+       _stopDiagnosisProjectionService =
+           stopDiagnosisProjectionService ??
+           const LongTaskStopDiagnosisProjectionService();
 
   final ProjectTaskRepository _taskRepository;
   final ProjectReviewReportService _reviewReportService;
   final TaskChainViewService _taskChainViewService;
+  final InformationEvidenceProjectionService
+  _informationEvidenceProjectionService;
+  final ExpressionConstraintStatusProjectionService
+  _expressionConstraintStatusProjectionService;
+  final LongTaskStopDiagnosisProjectionService _stopDiagnosisProjectionService;
 
   Future<ProjectLongTaskStationDetail> loadForRun(RunInstance run) async {
     // 中文注释: 长任务总站详情只读项目内任务、审稿和运行记录，不在这里触发任何调度或状态迁移。
@@ -84,6 +107,9 @@ class ProjectLongTaskStationDetailService {
         activeTask: activeTask,
         chain: chain,
         runRecord: runRecord,
+        latestCheckpointReview: latestCheckpointReview,
+        latestReviewReport: latestReviewReport,
+        narrativeSummary: narrativeSummary,
       ),
     );
   }
@@ -518,9 +544,26 @@ class ProjectLongTaskStationDetailService {
       ),
     ];
     final continuity = _continuityItem(_continuityCounts(changedPaths));
+    final currentExpressionConstraint = _expressionConstraintItem(
+      _expressionConstraintProjectionFromSources(
+        execution: execution,
+        runRecord: runRecord,
+        lastStep: lastStep,
+      ),
+      relativePath: executionPath,
+      chapterPath: deliveryPath,
+      title: '表达限制',
+    );
+    final recentExpressionConstraintItems = _recentExpressionConstraintItems(
+      runRecord,
+    );
     final projectionItems = _projectionItems(changedPaths);
     final permissionItems = await _permissionItems(project, changedPaths);
-    final information = _informationItem(
+    final informationPermissionRecords = await _informationPermissionRecords(
+      project,
+      informationChangedPaths,
+    );
+    final informationProjection = _informationProjection(
       changedPaths: informationChangedPaths,
       summary: _firstNonEmptyDistinct(<String>[
         ValueReaders.stringValue(runRecord['last_information_summary']),
@@ -541,24 +584,24 @@ class ProjectLongTaskStationDetailService {
           )['category'],
         ),
       ]),
-    );
-    final informationProjectionItems = _informationProjectionItems(
-      informationChangedPaths,
-    );
-    final informationPermissionItems = await _informationPermissionItems(
-      project,
-      informationChangedPaths,
+      permissionRecords: informationPermissionRecords,
     );
     final summary = ProjectLongTaskStationNarrativeSummary(
       activation: activation,
       delivery: delivery,
       review: review,
       continuity: continuity,
-      information: information,
+      information: _informationItem(informationProjection),
+      expressionConstraint: currentExpressionConstraint,
       projectionItems: projectionItems,
       permissionItems: permissionItems,
-      informationProjectionItems: informationProjectionItems,
-      informationPermissionItems: informationPermissionItems,
+      informationProjectionItems: _summaryItemsFromProjectionItems(
+        informationProjection.projectionItems,
+      ),
+      informationPermissionItems: _summaryItemsFromProjectionItems(
+        informationProjection.userActionItems,
+      ),
+      recentExpressionConstraintItems: recentExpressionConstraintItems,
     );
     return summary.hasContent ? summary : null;
   }
@@ -593,6 +636,108 @@ class ProjectLongTaskStationDetailService {
       subtitle: resolvedSubtitle,
       summary: resolvedSummary,
     );
+  }
+
+  ExpressionConstraintStatusProjection
+  _expressionConstraintProjectionFromSources({
+    required JsonMap execution,
+    required JsonMap runRecord,
+    required JsonMap lastStep,
+  }) {
+    for (final source in <JsonMap>[
+      ValueReaders.mapValue(execution['writing_execution_result']),
+      ValueReaders.mapValue(runRecord['last_writing_execution_result']),
+      ValueReaders.mapValue(lastStep['writing_execution_result']),
+    ]) {
+      if (source.isEmpty) {
+        continue;
+      }
+      final projection = _expressionConstraintStatusProjectionService
+          .fromWritingExecutionResult(source);
+      if (projection.present) {
+        return projection;
+      }
+    }
+    return const ExpressionConstraintStatusProjection();
+  }
+
+  ProjectLongTaskStationItemSummary? _expressionConstraintItem(
+    ExpressionConstraintStatusProjection projection, {
+    required String relativePath,
+    required String chapterPath,
+    required String title,
+  }) {
+    if (!projection.present) {
+      return null;
+    }
+    final subtitleParts = <String>[
+      if (projection.statusLabel.trim().isNotEmpty) projection.statusLabel,
+      if (projection.policyMode.trim().isNotEmpty) projection.policyMode,
+      if (chapterPath.trim().isNotEmpty) chapterPath.trim(),
+    ];
+    final resolvedPath = relativePath.trim().isNotEmpty
+        ? relativePath.trim()
+        : chapterPath.trim();
+    return ProjectLongTaskStationItemSummary(
+      id: resolvedPath.isEmpty ? title : resolvedPath,
+      title: title,
+      relativePath: resolvedPath,
+      status: projection.status,
+      subtitle: subtitleParts.join(' · '),
+      summary: projection.summary,
+    );
+  }
+
+  List<ProjectLongTaskStationItemSummary> _recentExpressionConstraintItems(
+    JsonMap runRecord,
+  ) {
+    final items = <ProjectLongTaskStationItemSummary>[];
+    final seenPaths = <String>{};
+    for (final step in ValueReaders.mapList(runRecord['steps']).reversed) {
+      final writingExecutionResult = ValueReaders.mapValue(
+        step['writing_execution_result'],
+      );
+      if (writingExecutionResult.isEmpty) {
+        continue;
+      }
+      final projection = _expressionConstraintStatusProjectionService
+          .fromWritingExecutionResult(writingExecutionResult);
+      if (!projection.present) {
+        continue;
+      }
+      final chapterPath = ValueReaders.stringValue(
+        step['chapter_delivery_path'],
+        ValueReaders.stringValue(
+          ValueReaders.mapValue(
+            ValueReaders.mapValue(
+              writingExecutionResult['delivery'],
+            )['metadata'],
+          )['chapter_path'],
+        ),
+      ).trim();
+      final identity = chapterPath.isEmpty
+          ? ValueReaders.stringValue(step['task_id']).trim()
+          : chapterPath;
+      if (identity.isEmpty || !seenPaths.add(identity)) {
+        continue;
+      }
+      final title = chapterPath.isEmpty
+          ? '最近章节表达限制'
+          : '表达限制：${chapterPath.split('/').last}';
+      final item = _expressionConstraintItem(
+        projection,
+        relativePath: identity,
+        chapterPath: chapterPath,
+        title: title,
+      );
+      if (item != null) {
+        items.add(item);
+      }
+      if (items.length >= 3) {
+        break;
+      }
+    }
+    return List<ProjectLongTaskStationItemSummary>.unmodifiable(items);
   }
 
   List<ProjectLongTaskStationItemSummary> _projectionItems(
@@ -646,40 +791,84 @@ class ProjectLongTaskStationDetailService {
     return items;
   }
 
-  ProjectLongTaskStationItemSummary? _informationItem({
+  InformationEvidenceProjection _informationProjection({
     required List<String> changedPaths,
     required String summary,
     required String riskCategory,
+    required List<JsonMap> permissionRecords,
   }) {
-    final counts = _informationCounts(changedPaths);
-    final knowledge = ValueReaders.intValue(counts['knowledge']);
-    final design = ValueReaders.intValue(counts['design']);
-    final research = ValueReaders.intValue(counts['research']);
-    final reference = ValueReaders.intValue(counts['reference']);
-    final hasCounts =
-        knowledge > 0 || design > 0 || research > 0 || reference > 0;
-    final cleanSummary = summary.trim();
-    final cleanRiskCategory = riskCategory.trim();
-    if (!hasCounts && cleanSummary.isEmpty && cleanRiskCategory.isEmpty) {
+    return _informationEvidenceProjectionService
+        .fromWorkflowInformationContract(<String, Object?>{
+          ..._informationCounts(changedPaths),
+          'present': changedPaths.isNotEmpty || summary.trim().isNotEmpty,
+          'summary': summary.trim(),
+          'risk_category': riskCategory.trim(),
+          'projection_paths': _informationProjectionPaths(changedPaths),
+        }, permissionRecords: permissionRecords);
+  }
+
+  ProjectLongTaskStationItemSummary? _informationItem(
+    InformationEvidenceProjection projection,
+  ) {
+    if (!projection.hasContent) {
       return null;
-    }
-    final subtitleParts = <String>[
-      'knowledge $knowledge',
-      'design $design',
-      'research $research',
-      'reference $reference',
-    ];
-    if (cleanRiskCategory.isNotEmpty) {
-      subtitleParts.add(cleanRiskCategory);
     }
     return ProjectLongTaskStationItemSummary(
       id: 'information_summary',
-      title: 'Information',
+      title: '资料状态',
       relativePath: '',
-      status: cleanRiskCategory,
-      subtitle: subtitleParts.join(' | '),
-      summary: cleanSummary.isEmpty ? '当前没有新的 information 风险信号。' : cleanSummary,
+      status: projection.status,
+      subtitle: projection.subtitle,
+      summary: projection.summary,
     );
+  }
+
+  List<String> _informationProjectionPaths(List<String> changedPaths) {
+    final normalizedPaths = _normalizedChangedPaths(changedPaths);
+    final paths = <String>[
+      if (normalizedPaths.contains(
+        InformationProjectionDocument.knowledgeSummaryRelativePath,
+      ))
+        InformationProjectionDocument.knowledgeSummaryRelativePath,
+      if (normalizedPaths.contains(
+        InformationProjectionDocument.designSummaryRelativePath,
+      ))
+        InformationProjectionDocument.designSummaryRelativePath,
+      if (normalizedPaths.contains(
+        InformationProjectionDocument.researchSummaryRelativePath,
+      ))
+        InformationProjectionDocument.researchSummaryRelativePath,
+      if (normalizedPaths.contains(
+        InformationProjectionDocument.referenceBoundaryRelativePath,
+      ))
+        InformationProjectionDocument.referenceBoundaryRelativePath,
+    ];
+    if (paths.isNotEmpty) {
+      return paths;
+    }
+    return const <String>[
+      InformationProjectionDocument.knowledgeSummaryRelativePath,
+      InformationProjectionDocument.designSummaryRelativePath,
+      InformationProjectionDocument.researchSummaryRelativePath,
+      InformationProjectionDocument.referenceBoundaryRelativePath,
+    ];
+  }
+
+  List<ProjectLongTaskStationItemSummary> _summaryItemsFromProjectionItems(
+    List<InformationEvidenceProjectionItem> items,
+  ) {
+    return items
+        .map(
+          (item) => ProjectLongTaskStationItemSummary(
+            id: item.id,
+            title: item.title,
+            relativePath: item.relativePath,
+            status: item.status,
+            subtitle: item.subtitle,
+            summary: item.summary,
+          ),
+        )
+        .toList(growable: false);
   }
 
   JsonMap _informationCounts(List<String> changedPaths) {
@@ -704,60 +893,29 @@ class ProjectLongTaskStationDetailService {
       }
     }
     return <String, Object?>{
-      'knowledge': knowledge,
-      'design': design,
-      'research': research,
-      'reference': reference,
+      'knowledge_count': knowledge,
+      'design_count': design,
+      'research_count': research,
+      'reference_count': reference,
     };
   }
 
-  List<ProjectLongTaskStationItemSummary> _informationProjectionItems(
+  Future<List<JsonMap>> _informationPermissionRecords(
+    ProjectDescriptor project,
     List<String> changedPaths,
-  ) {
-    final normalizedPaths = _normalizedChangedPaths(changedPaths);
-    final items = <ProjectLongTaskStationItemSummary>[];
-
-    void addProjection({
-      required String title,
-      required String relativePath,
-      required String summary,
-    }) {
-      if (!normalizedPaths.contains(relativePath)) {
-        return;
+  ) async {
+    final paths = _normalizedChangedPaths(
+      changedPaths,
+    ).where(_isInformationPermissionRecordPath).toList(growable: false)..sort();
+    final records = <JsonMap>[];
+    for (final path in paths) {
+      final record = await _taskRepository.loadRecord(project, path);
+      if (record.isEmpty) {
+        continue;
       }
-      items.add(
-        ProjectLongTaskStationItemSummary(
-          id: relativePath,
-          title: title,
-          relativePath: relativePath,
-          status: 'information_projection',
-          subtitle: 'Information projection',
-          summary: summary,
-        ),
-      );
+      records.add(<String, Object?>{'relative_path': path, 'record': record});
     }
-
-    addProjection(
-      title: '项目知识摘要',
-      relativePath: InformationProjectionDocument.knowledgeSummaryRelativePath,
-      summary: '打开当前 knowledge 卡片的可读投影。',
-    );
-    addProjection(
-      title: '设计元素摘要',
-      relativePath: InformationProjectionDocument.designSummaryRelativePath,
-      summary: '打开当前 design element 的可读投影。',
-    );
-    addProjection(
-      title: '资料研究摘要',
-      relativePath: InformationProjectionDocument.researchSummaryRelativePath,
-      summary: '打开当前 research note 的可读投影。',
-    );
-    addProjection(
-      title: '引用作品边界',
-      relativePath: InformationProjectionDocument.referenceBoundaryRelativePath,
-      summary: '打开当前 reference work 边界投影。',
-    );
-    return items;
+    return records;
   }
 
   Set<String> _normalizedChangedPaths(List<String> changedPaths) {
@@ -782,24 +940,6 @@ class ProjectLongTaskStationDetailService {
     for (final path in paths) {
       final record = await _taskRepository.loadRecord(project, path);
       items.add(_permissionItem(path, record));
-    }
-    return items;
-  }
-
-  Future<List<ProjectLongTaskStationItemSummary>> _informationPermissionItems(
-    ProjectDescriptor project,
-    List<String> changedPaths,
-  ) async {
-    final paths = _normalizedChangedPaths(
-      changedPaths,
-    ).where(_isInformationPermissionRecordPath).toList(growable: false)..sort();
-    final items = <ProjectLongTaskStationItemSummary>[];
-    for (final path in paths) {
-      final record = await _taskRepository.loadRecord(project, path);
-      final item = _informationPermissionItem(path, record);
-      if (item != null) {
-        items.add(item);
-      }
     }
     return items;
   }
@@ -834,25 +974,6 @@ class ProjectLongTaskStationDetailService {
       return _clarificationPermissionItem(relativePath, record);
     }
     return _profileProposalPermissionItem(relativePath, record);
-  }
-
-  ProjectLongTaskStationItemSummary? _informationPermissionItem(
-    String relativePath,
-    JsonMap record,
-  ) {
-    if (relativePath.startsWith(_knowledgeCardsRoot)) {
-      return _knowledgePermissionItem(relativePath, record);
-    }
-    if (relativePath.startsWith(_designElementsRoot)) {
-      return _designPermissionItem(relativePath, record);
-    }
-    if (relativePath.startsWith(_researchRequestsRoot)) {
-      return _researchRequestPermissionItem(relativePath, record);
-    }
-    if (relativePath.startsWith(_referenceWorksRoot)) {
-      return _referencePermissionItem(relativePath, record);
-    }
-    return null;
   }
 
   ProjectLongTaskStationItemSummary _profileProposalPermissionItem(
@@ -912,109 +1033,6 @@ class ProjectLongTaskStationDetailService {
       ),
       subtitle: parts.join(' · '),
       summary: question.isEmpty ? '等待用户确认补充信息。' : question,
-    );
-  }
-
-  ProjectLongTaskStationItemSummary? _knowledgePermissionItem(
-    String relativePath,
-    JsonMap record,
-  ) {
-    final card = ProjectKnowledgeCard.fromJson(record);
-    if (card.lifecycleStatus != InformationLifecycleStatuses.proposed) {
-      return null;
-    }
-    final subtitleParts = <String>[
-      'proposed',
-      if (card.cardType.trim().isNotEmpty) card.cardType,
-      if (card.cardNamespace.trim().isNotEmpty) card.cardNamespace,
-    ];
-    return ProjectLongTaskStationItemSummary(
-      id: card.cardId,
-      title: 'Knowledge Confirmation',
-      relativePath: relativePath,
-      status: card.lifecycleStatus,
-      subtitle: subtitleParts.join(' · '),
-      summary: card.summary.trim().isEmpty ? card.title : card.summary.trim(),
-    );
-  }
-
-  ProjectLongTaskStationItemSummary? _designPermissionItem(
-    String relativePath,
-    JsonMap record,
-  ) {
-    final card = DesignElementCard.fromJson(record);
-    if (card.lifecycleStatus != InformationLifecycleStatuses.proposed) {
-      return null;
-    }
-    final subtitleParts = <String>[
-      'proposed',
-      if (card.designNamespace.trim().isNotEmpty) card.designNamespace,
-    ];
-    return ProjectLongTaskStationItemSummary(
-      id: card.designId,
-      title: 'Design Confirmation',
-      relativePath: relativePath,
-      status: card.lifecycleStatus,
-      subtitle: subtitleParts.join(' · '),
-      summary: card.designLabel,
-    );
-  }
-
-  ProjectLongTaskStationItemSummary? _researchRequestPermissionItem(
-    String relativePath,
-    JsonMap record,
-  ) {
-    final requestState = ValueReaders.stringValue(
-      record['request_state'],
-    ).trim();
-    if (requestState.isEmpty || requestState == 'completed') {
-      return null;
-    }
-    final researchRequest = ValueReaders.mapValue(record['research_request']);
-    final query = ValueReaders.stringValue(researchRequest['query']).trim();
-    final permissionDecision = ValueReaders.mapValue(
-      record['permission_decision'],
-    );
-    final disposition = ValueReaders.stringValue(
-      permissionDecision['disposition'],
-    ).trim();
-    final subtitleParts = <String>[
-      requestState,
-      if (disposition.isNotEmpty) disposition,
-    ];
-    return ProjectLongTaskStationItemSummary(
-      id: ValueReaders.stringValue(record['request_id'], relativePath),
-      title: 'Research Pending',
-      relativePath: relativePath,
-      status: requestState,
-      subtitle: subtitleParts.join(' · '),
-      summary: query.isEmpty ? '待处理 research request。' : query,
-    );
-  }
-
-  ProjectLongTaskStationItemSummary? _referencePermissionItem(
-    String relativePath,
-    JsonMap record,
-  ) {
-    final reference = ReferenceWorkRecord.fromJson(record);
-    if (!reference.requiresConfirmation) {
-      return null;
-    }
-    final subtitleParts = <String>[
-      'needs_user_confirmation',
-      if (reference.relationshipToProject.trim().isNotEmpty)
-        reference.relationshipToProject,
-    ];
-    final summary = reference.allowedUsageSummary.trim().isEmpty
-        ? reference.declaredUsageIntent
-        : reference.allowedUsageSummary.trim();
-    return ProjectLongTaskStationItemSummary(
-      id: reference.referenceWorkId,
-      title: 'Reference Confirmation',
-      relativePath: relativePath,
-      status: 'needs_user_confirmation',
-      subtitle: subtitleParts.join(' · '),
-      summary: summary,
     );
   }
 
@@ -1171,6 +1189,9 @@ class ProjectLongTaskStationDetailService {
     required JsonMap activeTask,
     required ProjectLongTaskStationChainSummary? chain,
     required JsonMap runRecord,
+    required ProjectLongTaskStationItemSummary? latestCheckpointReview,
+    required ProjectLongTaskStationItemSummary? latestReviewReport,
+    required ProjectLongTaskStationNarrativeSummary? narrativeSummary,
   }) {
     final code = _resolvedBlockerCode(
       run: run,
@@ -1198,13 +1219,71 @@ class ProjectLongTaskStationDetailService {
     if (blockingCheckpointTitles.isNotEmpty) {
       detailLines.add('阻塞检查点：${blockingCheckpointTitles.join('、')}');
     }
+    final diagnosis = _stopDiagnosisProjectionService.project(
+      stopOutcome: _stopOutcomeForRun(run, runRecord: runRecord),
+      recoveryState: _recoveryStateForRun(run, runRecord: runRecord),
+      legacyReason: code,
+      runStatus: run.status.id,
+      note: _firstNonEmptyDistinct(<String>[
+        ValueReaders.stringValue(runRecord['stop_note']),
+        run.note,
+      ]),
+      reviewSummary: _firstNonEmptyDistinct(<String>[
+        latestReviewReport?.summary ?? '',
+        latestCheckpointReview?.summary ?? '',
+        narrativeSummary?.review?.summary ?? '',
+      ]),
+      informationSummary: _firstNonEmptyDistinct(<String>[
+        narrativeSummary?.information?.summary ?? '',
+        ValueReaders.stringValue(runRecord['last_information_summary']),
+      ]),
+      detail: detailLines.join('\n').trim(),
+      metadata: <String, Object?>{
+        'source': 'project_long_task_station_detail',
+        'run_record_path': ValueReaders.stringValue(runRecord['relative_path']),
+      },
+    );
     return ProjectLongTaskStationBlockerSummary(
       code: code,
-      note: _blockerNote(code),
-      detail: detailLines.join('\n').trim(),
+      category: diagnosis.category,
+      label: diagnosis.label,
+      note: diagnosis.summary.isEmpty ? _blockerNote(code) : diagnosis.summary,
+      detail: diagnosis.detail,
       controlSummary: _blockerControlSummary(code),
       blockingCheckpointTitles: blockingCheckpointTitles,
       runRecordPath: ValueReaders.stringValue(runRecord['relative_path']),
+    );
+  }
+
+  LongTaskStopOutcome _stopOutcomeForRun(
+    RunInstance run, {
+    required JsonMap runRecord,
+  }) {
+    if (run.stopOutcome.present) {
+      return run.stopOutcome;
+    }
+    final recordOutcome = LongTaskStopOutcome.fromJson(
+      ValueReaders.mapValue(runRecord['stop_outcome']),
+    );
+    if (recordOutcome.present) {
+      return recordOutcome;
+    }
+    return LongTaskStopOutcome.fromJson(
+      ValueReaders.mapValue(
+        ValueReaders.mapValue(runRecord['last_recovery_state'])['stop_outcome'],
+      ),
+    );
+  }
+
+  LongTaskRecoveryState _recoveryStateForRun(
+    RunInstance run, {
+    required JsonMap runRecord,
+  }) {
+    if (run.recoveryState.present) {
+      return run.recoveryState;
+    }
+    return LongTaskRecoveryState.fromJson(
+      ValueReaders.mapValue(runRecord['last_recovery_state']),
     );
   }
 
@@ -1260,10 +1339,14 @@ class ProjectLongTaskStationDetailService {
     switch (code.trim()) {
       case 'waiting_user':
       case 'waiting_user_checkpoint':
-      case 'waiting_gate':
         return '建议先跳到任务中心处理检查点或关口动作。';
+      case 'waiting_gate':
+        return '建议先查看当前关口或复核结果，再决定是否继续推进。';
       case 'failed':
       case 'step_failed':
+      case 'failed_task':
+      case 'delivery_repair_required':
+      case 'information_repair_required':
         return '建议先查看返工链或失败任务，再决定重试或修订。';
       case 'manual_pause':
       case 'paused':

@@ -45,6 +45,7 @@ class WorkbenchWorkspaceShellViewDataService {
         currentGroupLabel: conversation.groupSelector.currentGroupLabel,
         primaryAgentLabel: conversation.groupSelector.primaryAgentLabel,
       ),
+      projectLongTaskSummary: resource.projectLongTaskSummary,
     );
   }
 }

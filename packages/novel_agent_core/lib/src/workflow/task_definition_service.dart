@@ -3,6 +3,17 @@ import '../common/value_readers.dart';
 import 'task_runtime_constants.dart';
 
 class TaskDefinitionService {
+  static const Set<String> _knownTaskTypes = <String>{
+    'chapter',
+    'summary',
+    'revision',
+    'review',
+    'planning',
+    'checkpoint',
+    'world_update',
+    'agent_task',
+  };
+
   List<JsonMap> modeDefinitions() {
     // 中文注释: 长任务模式定义集中在这里，确保 UI、CLI 和规划逻辑共用同一组枚举说明。
     return const <JsonMap>[
@@ -40,16 +51,21 @@ class TaskDefinitionService {
       normalized['title'],
       '未命名任务',
     );
-    normalized['task_type'] = ValueReaders.stringValue(
-      normalized['task_type'],
-      'chapter',
-    );
+    final normalizedTaskType = _normalizeTaskType(normalized);
+    normalized['task_type'] = normalizedTaskType;
     normalized['mode'] = normalizeMode(
       ValueReaders.stringValue(
         normalized['mode'],
         TaskRuntimeConstants.modeSingleChapterAtomic,
       ),
     );
+    final metadata = ValueReaders.deepCopyMap(
+      ValueReaders.mapValue(normalized['metadata']),
+    );
+    if (normalizedTaskType == 'summary') {
+      metadata['stage'] = 'summary';
+    }
+    normalized['metadata'] = metadata;
     var status = ValueReaders.stringValue(
       normalized['status'],
       TaskRuntimeConstants.statusQueued,
@@ -68,6 +84,59 @@ class TaskDefinitionService {
       normalized['history'] = <Object?>[];
     }
     return normalized;
+  }
+
+  String _normalizeTaskType(JsonMap task) {
+    final explicit = ValueReaders.stringValue(task['task_type']).trim();
+    if (_shouldTreatAsSummaryTask(task)) {
+      return 'summary';
+    }
+    if (_knownTaskTypes.contains(explicit)) {
+      return explicit;
+    }
+    return explicit.isEmpty ? 'chapter' : explicit;
+  }
+
+  bool _shouldTreatAsSummaryTask(JsonMap task) {
+    final outputPaths = ValueReaders.stringList(task['output_paths']);
+    final sourcePaths = ValueReaders.stringList(task['source_paths']);
+    final relativePath = ValueReaders.stringValue(
+      task['relative_path'],
+    ).trim().toLowerCase();
+    final searchText = <String>[
+      ValueReaders.stringValue(task['id']),
+      ValueReaders.stringValue(task['title']),
+      ValueReaders.stringValue(task['goal']),
+      ValueReaders.stringValue(task['description']),
+      ValueReaders.stringValue(task['brief']),
+      ValueReaders.stringValue(task['tool_hint']),
+    ].join(' ').toLowerCase();
+    final touchesSummaryPath =
+        outputPaths.any(_isSummaryPath) || sourcePaths.any(_isSummaryPath);
+    final touchesChapterOutputPath = outputPaths.any(_isChapterLikePath);
+    final hasSummaryKeyword =
+        searchText.contains('save_summary') ||
+        searchText.contains('summarize') ||
+        searchText.contains('summary') ||
+        searchText.contains('摘要') ||
+        searchText.contains('总结');
+    final summaryRelativePath = relativePath.contains('summary');
+    if (touchesSummaryPath && !touchesChapterOutputPath) {
+      return true;
+    }
+    return (summaryRelativePath || hasSummaryKeyword) &&
+        touchesSummaryPath &&
+        !touchesChapterOutputPath;
+  }
+
+  bool _isSummaryPath(String path) {
+    final clean = path.trim().toLowerCase();
+    return clean.startsWith('summaries/');
+  }
+
+  bool _isChapterLikePath(String path) {
+    final clean = path.trim().toLowerCase();
+    return clean.startsWith('chapters/') || clean.startsWith('scenes/');
   }
 
   JsonMap taskSummary(JsonMap task) {

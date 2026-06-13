@@ -105,11 +105,52 @@ class CliBootstrap {
       workspacePort: bundle.projectWorkspacePort,
       taskRepository: projectTaskRepository,
     );
+    final continuousTaskSupervisorBridgeService =
+        ContinuousTaskSupervisorBridgeService(
+          supervisor: bundle.longTaskSupervisor,
+        );
+    final referenceExtractionRuntimeService =
+        ProjectReferenceExtractionRuntimeService(
+          workspacePort: bundle.projectWorkspacePort,
+          loadAvailableAgents: (project) =>
+              bundle.agentPackageCatalog.loadAgentPackages(project),
+          loadAvailableGroups: (project) =>
+              bundle.agentGroupCatalog.loadAgentGroups(project),
+          groupBindingRepository: bundle.projectAgentGroupBindingRepository,
+          continuousTaskSyncService:
+              ReferenceExtractionContinuousTaskSyncService(
+                supervisorBridgeService: continuousTaskSupervisorBridgeService,
+              ),
+        );
     final workflowRuntimeService = ProjectWorkflowRuntimeService(
       taskRepository: projectTaskRepository,
       promptTemplateService: promptTemplateService,
       loadProjectAgentGroupSelections: (project) =>
           bundle.projectAgentGroupBindingRepository.loadSelections(project),
+      hostAwareGenerateDraftUseCaseFactory:
+          (provider, networkSettings, {hostInformationPermissionContext}) {
+            final basePort = bundle.projectToolExecutionPort;
+            final scopedToolExecutionPort = basePort is ProjectToolDispatcher
+                ? basePort.scopedWithHostInformationPermissionContext(
+                    hostInformationPermissionContext,
+                  )
+                : basePort;
+            return GenerateDraftUseCase(
+              projectWorkspacePort: bundle.projectWorkspacePort,
+              llmGateway: bundle.createGateway(
+                provider,
+                networkSettings: networkSettings,
+              ),
+              toolExecutionPort: scopedToolExecutionPort,
+              contextAssemblerService: contextAssemblerService,
+              projectPromptContract: ProjectPromptContract(),
+              hostPlatform: hostPlatform,
+              loadAvailableAgents: (project) =>
+                  bundle.agentPackageCatalog.loadAgentPackages(project),
+              loadAvailableAgentGroups: (project) =>
+                  bundle.agentGroupCatalog.loadAgentGroups(project),
+            );
+          },
       generateDraftUseCaseFactory: (provider, networkSettings) {
         return GenerateDraftUseCase(
           projectWorkspacePort: bundle.projectWorkspacePort,
@@ -140,7 +181,14 @@ class CliBootstrap {
       loadModeGuidanceStateUseCase: LoadModeGuidanceStateUseCase(
         statePort: modeGuidanceRepository,
       ),
+      llmGatewayFactory: (provider, networkSettings) {
+        return bundle.createGateway(provider, networkSettings: networkSettings);
+      },
       workflowRuntimeService: workflowRuntimeService,
+      referenceExtractionRuntimeService: referenceExtractionRuntimeService,
+      pendingResearchActionService: ProjectPendingResearchActionService(
+        workspacePort: bundle.projectWorkspacePort,
+      ),
       generateDraftUseCaseFactory: (provider, networkSettings) {
         // 中文注释: CLI 与 GUI 共用同一套生成用例装配，只在输入输出壳层上保持差异。
         return GenerateDraftUseCase(

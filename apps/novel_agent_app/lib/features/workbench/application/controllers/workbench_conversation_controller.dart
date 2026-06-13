@@ -33,6 +33,7 @@ import '../services/conversation_draft_autosave_policy_service.dart';
 import '../services/project_opening_maturity_assessment_service.dart';
 import '../services/project_opening_session_projection_service.dart';
 import '../services/project_opening_agent_group_binding_service.dart';
+import '../services/ordinary_conversation_task_profile_service.dart';
 import '../services/conversation_request_runtime_service.dart';
 import '../services/conversation_session_state_service.dart';
 import '../services/conversation_streaming_state_service.dart';
@@ -41,11 +42,13 @@ import '../services/workbench_primary_action_service.dart';
 import 'workbench_workspace_controller.dart';
 import '../models/opening_agent_group_summary.dart';
 import '../models/opening_session_projection.dart';
+import '../models/ordinary_conversation_task_profile.dart';
 
 class WorkbenchConversationController implements ConversationActionHandler {
   WorkbenchConversationController({
     required SaveDraftUseCase saveDraftUseCase,
     required GenerateDraftUseCaseFactory generateDraftUseCaseFactory,
+    HostAwareGenerateDraftUseCaseFactory? hostAwareGenerateDraftUseCaseFactory,
     required ModelExecutionProfileService modelExecutionProfileService,
     required ConversationSessionStateService conversationSessionStateService,
     required ConversationStreamingStateService
@@ -55,6 +58,8 @@ class WorkbenchConversationController implements ConversationActionHandler {
     conversationOpeningPanelViewDataService,
     ProjectOpeningMaturityAssessmentService?
     projectOpeningMaturityAssessmentService,
+    OrdinaryConversationTaskProfileService?
+    ordinaryConversationTaskProfileService,
     required ProjectOpeningSessionProjectionService
     openingSessionProjectionService,
     required ProjectOpeningAgentGroupBindingService
@@ -101,6 +106,8 @@ class WorkbenchConversationController implements ConversationActionHandler {
     required JsonMap Function(AppSettings settings) contextStrategySettingsOf,
     required ProviderEndpointSettings? Function(AppSettings settings)
     selectedModelProvider,
+    ProjectInformationPermissionSettingsResolverService?
+    informationPermissionSettingsResolverService,
     ConversationAgentSelectorViewDataService?
     conversationAgentSelectorViewDataService,
     ConversationRequestAgentResolverService?
@@ -110,6 +117,8 @@ class WorkbenchConversationController implements ConversationActionHandler {
     required void Function(String message) announce,
   }) : _saveDraftUseCase = saveDraftUseCase,
        _generateDraftUseCaseFactory = generateDraftUseCaseFactory,
+       _hostAwareGenerateDraftUseCaseFactory =
+           hostAwareGenerateDraftUseCaseFactory,
        _modelExecutionProfileService = modelExecutionProfileService,
        _conversationSessionStateService = conversationSessionStateService,
        _conversationStreamingStateService = conversationStreamingStateService,
@@ -119,6 +128,9 @@ class WorkbenchConversationController implements ConversationActionHandler {
        _projectOpeningMaturityAssessmentService =
            projectOpeningMaturityAssessmentService ??
            const ProjectOpeningMaturityAssessmentService(),
+       _ordinaryConversationTaskProfileService =
+           ordinaryConversationTaskProfileService ??
+           const OrdinaryConversationTaskProfileService(),
        _openingSessionProjectionService = openingSessionProjectionService,
        _projectOpeningAgentGroupBindingService =
            projectOpeningAgentGroupBindingService,
@@ -170,6 +182,9 @@ class WorkbenchConversationController implements ConversationActionHandler {
        _showSettings = showSettings,
        _contextStrategySettingsOf = contextStrategySettingsOf,
        _selectedModelProvider = selectedModelProvider,
+       _informationPermissionSettingsResolverService =
+           informationPermissionSettingsResolverService ??
+           const ProjectInformationPermissionSettingsResolverService(),
        _conversationAgentSelectorViewDataService =
            conversationAgentSelectorViewDataService ??
            const ConversationAgentSelectorViewDataService(),
@@ -183,6 +198,8 @@ class WorkbenchConversationController implements ConversationActionHandler {
 
   final SaveDraftUseCase _saveDraftUseCase;
   final GenerateDraftUseCaseFactory _generateDraftUseCaseFactory;
+  final HostAwareGenerateDraftUseCaseFactory?
+  _hostAwareGenerateDraftUseCaseFactory;
   final ModelExecutionProfileService _modelExecutionProfileService;
   final ConversationSessionStateService _conversationSessionStateService;
   final ConversationStreamingStateService _conversationStreamingStateService;
@@ -191,6 +208,8 @@ class WorkbenchConversationController implements ConversationActionHandler {
   _conversationOpeningPanelViewDataService;
   final ProjectOpeningMaturityAssessmentService
   _projectOpeningMaturityAssessmentService;
+  final OrdinaryConversationTaskProfileService
+  _ordinaryConversationTaskProfileService;
   final ProjectOpeningSessionProjectionService _openingSessionProjectionService;
   final ProjectOpeningAgentGroupBindingService
   _projectOpeningAgentGroupBindingService;
@@ -234,6 +253,8 @@ class WorkbenchConversationController implements ConversationActionHandler {
   final JsonMap Function(AppSettings settings) _contextStrategySettingsOf;
   final ProviderEndpointSettings? Function(AppSettings settings)
   _selectedModelProvider;
+  final ProjectInformationPermissionSettingsResolverService
+  _informationPermissionSettingsResolverService;
   final ConversationAgentSelectorViewDataService
   _conversationAgentSelectorViewDataService;
   final ConversationRequestAgentResolverService
@@ -266,6 +287,9 @@ class WorkbenchConversationController implements ConversationActionHandler {
     final openingMaturity = _projectOpeningMaturityAssessmentService.build(
       projectType: _workspaceController.currentProject?.projectType ?? 'novel',
       resourceEntries: base.resourceEntries,
+      resourceSnapshotEntries: _workspaceController
+          .currentProjectRuntimeState
+          .resourceSnapshotEntries,
       openingProjection: runtimeState.openingProjection,
     );
     final guide = _conversationGuideViewDataService.build(
@@ -952,6 +976,10 @@ class WorkbenchConversationController implements ConversationActionHandler {
     );
     var streamingBaseState = userPromptState;
     ProjectConversationDraftRuntimePreparation? conversationDraftRuntime;
+    final taskProfile = _ordinaryConversationTaskProfile(
+      agent: requestAgent.agent,
+      userPrompt: cleanText,
+    );
     late final ConversationRequestHandle requestHandle;
     try {
       requestHandle = _conversationRequestRuntimeService.start(
@@ -980,18 +1008,29 @@ class WorkbenchConversationController implements ConversationActionHandler {
           }
 
           cancellationToken.addListener(syncCancellation);
-          final executionConstraints = await _resolveExecutionConstraints(
-            project: project,
-            agent: requestAgent.agent,
-          );
           conversationDraftRuntime = await _prepareConversationDraftRuntime(
             project: project,
             agent: requestAgent.agent,
+            taskProfile: taskProfile,
+            chapterLabelHint: cleanText,
           );
-          final useCase = _generateDraftUseCaseFactory(
-            provider,
-            settings.networkSettings,
-          );
+          final executionConstraints = conversationDraftRuntime != null
+              ? conversationDraftRuntime!.executionConstraints
+              : await _resolveExecutionConstraintsFallback(
+                  project: project,
+                  agent: requestAgent.agent,
+                  taskProfile: taskProfile,
+                );
+          final hostInformationPermissionContext =
+              _hostInformationPermissionContext(settings);
+          final useCase =
+              _hostAwareGenerateDraftUseCaseFactory?.call(
+                provider,
+                settings.networkSettings,
+                hostInformationPermissionContext:
+                    hostInformationPermissionContext,
+              ) ??
+              _generateDraftUseCaseFactory(provider, settings.networkSettings);
           final selectedCollaborationGroup =
               _selectedCollaborationGroupForRuntime(
                 _readRuntimeState().openingProjection,
@@ -1002,15 +1041,11 @@ class WorkbenchConversationController implements ConversationActionHandler {
               userPrompt: cleanText,
               modelId: resolvedModelId,
               title: title,
+              intent: taskProfile.intent,
               agent: requestAgent.agent,
               selectedCollaborationGroup: selectedCollaborationGroup,
               sessionContext: _mergeSessionContext(
-                _mergeSessionContext(
-                  sessionContext,
-                  ValueReaders.stringValue(
-                    executionConstraints['session_context_markdown'],
-                  ),
-                ),
+                sessionContext,
                 conversationDraftRuntime?.sessionContextMarkdown ?? '',
               ),
               requestOptions: _mapValue(executionProfile['request_options']),
@@ -1024,6 +1059,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
               projectExpressionConstraintBindings: ValueReaders.objectList(
                 executionConstraints['project_expression_constraint_bindings'],
               ),
+              writingExecutionConstraints: executionConstraints,
               activeDocumentPath: _workspaceController.activeDocumentPath,
               activeDocumentBody: _workspaceController.activeDocumentBody,
               cancellationToken: coreCancellationToken,
@@ -1071,20 +1107,36 @@ class WorkbenchConversationController implements ConversationActionHandler {
     }
   }
 
-  Future<JsonMap> _resolveExecutionConstraints({
+  Future<JsonMap> _resolveExecutionConstraintsFallback({
     required ProjectDescriptor project,
     required JsonMap agent,
+    required OrdinaryConversationTaskProfile taskProfile,
   }) async {
     if (_draftExecutionConstraintRuntimeService == null) {
       return const <String, Object?>{};
     }
     return _draftExecutionConstraintRuntimeService.resolve(
       project,
-      appliesTo: ConstraintBindingAppliesTo.writing,
+      appliesTo: switch (taskProfile.taskType) {
+        'revision' => ConstraintBindingAppliesTo.repair,
+        'review' => ConstraintBindingAppliesTo.review,
+        'planning' => ConstraintBindingAppliesTo.explanation,
+        _ => ConstraintBindingAppliesTo.writing,
+      },
       agentId: ValueReaders.stringValue(agent['id']),
-      stageId: 'draft',
-      intent: 'draft',
-      taskType: _ordinaryConversationTaskType(agent),
+      stageId: switch (taskProfile.taskType) {
+        'revision' => 'revision',
+        'review' => 'review',
+        'planning' => 'planning',
+        _ => 'draft',
+      },
+      intent: switch (taskProfile.taskType) {
+        'revision' => 'revision',
+        'review' => 'review',
+        'planning' => 'planning',
+        _ => 'draft',
+      },
+      taskType: taskProfile.taskType,
     );
   }
 
@@ -1092,13 +1144,18 @@ class WorkbenchConversationController implements ConversationActionHandler {
   _prepareConversationDraftRuntime({
     required ProjectDescriptor project,
     required JsonMap agent,
+    required OrdinaryConversationTaskProfile taskProfile,
+    required String chapterLabelHint,
   }) async {
     if (_conversationDraftRuntimeService == null) {
       return null;
     }
     return _conversationDraftRuntimeService.prepareDraftRun(
       project,
-      taskType: _ordinaryConversationTaskType(agent),
+      taskType: taskProfile.taskType,
+      chapterLabelHint: chapterLabelHint,
+      activeDocumentPath: _workspaceController.activeDocumentPath,
+      agentId: ValueReaders.stringValue(agent['id']),
       pinnedRelativePaths:
           _workspaceController.activeDocumentPath.trim().isEmpty
           ? const <String>[]
@@ -1139,29 +1196,33 @@ class WorkbenchConversationController implements ConversationActionHandler {
     return parts.join('\n\n');
   }
 
-  String _ordinaryConversationTaskType(JsonMap agent) {
-    final tokens = <String>[
-      ValueReaders.stringValue(agent['id']),
-      ValueReaders.stringValue(agent['role']),
-      ValueReaders.stringValue(agent['name']),
-      ValueReaders.stringValue(agent['display_name']),
-      ValueReaders.stringValue(agent['description']),
-    ].join(' ').toLowerCase();
-    if (tokens.contains('review')) {
-      return 'review';
-    }
-    if (tokens.contains('recover') ||
-        tokens.contains('repair') ||
-        tokens.contains('修复') ||
-        tokens.contains('恢复')) {
-      return 'revision';
-    }
-    if (tokens.contains('profile') ||
-        tokens.contains('architect') ||
-        tokens.contains('解释器')) {
-      return 'planning';
-    }
-    return 'chapter';
+  HostInformationPermissionContext _hostInformationPermissionContext(
+    AppSettings settings,
+  ) {
+    return _informationPermissionSettingsResolverService.resolveFromAppSettings(
+      settings,
+      source: 'workbench_conversation_controller',
+    );
+  }
+
+  OrdinaryConversationTaskProfile _ordinaryConversationTaskProfile({
+    required JsonMap agent,
+    required String userPrompt,
+  }) {
+    final openingMaturity = _projectOpeningMaturityAssessmentService.build(
+      projectType: _workspaceController.currentProject?.projectType ?? 'novel',
+      resourceEntries: _readWorkbench().resourceEntries,
+      resourceSnapshotEntries: _workspaceController
+          .currentProjectRuntimeState
+          .resourceSnapshotEntries,
+      openingProjection: _readRuntimeState().openingProjection,
+    );
+    return _ordinaryConversationTaskProfileService.resolve(
+      agent: agent,
+      openingMaturity: openingMaturity,
+      userPrompt: userPrompt,
+      activeDocumentPath: _workspaceController.activeDocumentPath,
+    );
   }
 
   Future<bool> _handleGuideNavigationAction(
@@ -1784,9 +1845,11 @@ class WorkbenchConversationController implements ConversationActionHandler {
       savedPath: savedPath,
       preparation: conversationDraftRuntime,
     );
-    if (savedPath.isEmpty && runtimeArtifacts.outputPath.trim().isNotEmpty) {
-      savedPath = runtimeArtifacts.outputPath.trim();
-    }
+    savedPath = _resolvedPersistedOutputPath(
+      result: result,
+      savedPath: savedPath,
+      runtimeArtifacts: runtimeArtifacts,
+    );
     if (!_isActiveRequestHandle(handle)) {
       return;
     }
@@ -1829,20 +1892,30 @@ class WorkbenchConversationController implements ConversationActionHandler {
     if (!_isActiveRequestHandle(handle)) {
       return;
     }
-    _mutateWorkbench(
-      (current) => applyConversationState(
+    _mutateWorkbench((current) {
+      final contextSummary = _resultContextSummary(
+        result,
+        assistantState,
+        runtimeArtifacts,
+      );
+      return applyConversationState(
         _workspaceController.applyWorkbenchState(
           current.copyWith(
             resourceEntries: resourceEntries,
             modelLabel: '$providerTitle · ${result.modelId}',
-            contextSummary: _resultContextSummary(result, assistantState),
-            generationStatus: _generationStatusFor(result, savedPath),
-            toolCoreStatus: result.waitingForUserChoice ? '等待选择' : '',
+            contextSummary: contextSummary,
+            generationStatus: _generationStatusFor(
+              result,
+              savedPath,
+              runtimeArtifacts,
+            ),
+            toolCoreStatus: _toolCoreStatusFor(result, runtimeArtifacts),
             isGenerating: false,
           ),
         ),
-      ),
-    );
+        contextSummaryOverride: contextSummary,
+      );
+    });
   }
 
   void _applyRequestFailure({
@@ -1919,6 +1992,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
   String _resultContextSummary(
     DraftGenerationResult result,
     ConversationSessionState assistantState,
+    ProjectConversationDraftRuntimeArtifacts runtimeArtifacts,
   ) {
     final sessionSummary = _conversationSummary(
       assistantState,
@@ -1928,38 +2002,127 @@ class WorkbenchConversationController implements ConversationActionHandler {
       result.contextPack['summary'],
       '上下文已更新',
     );
-    return '$sessionSummary · $contextPackSummary · 读取 ${result.selectedPaths.length} 个文件 · 工具 ${result.executedTools.length} 次';
+    final infoSummary = runtimeArtifacts.informationSummary.trim();
+    final infoPart = infoSummary.isEmpty ? '' : ' · $infoSummary';
+    return '$sessionSummary · $contextPackSummary · 读取 ${result.selectedPaths.length} 个文件 · 工具 ${result.executedTools.length} 次$infoPart';
   }
 
-  String _generationStatusFor(DraftGenerationResult result, String savedPath) {
+  String _generationStatusFor(
+    DraftGenerationResult result,
+    String savedPath,
+    ProjectConversationDraftRuntimeArtifacts runtimeArtifacts,
+  ) {
+    final infoSummary = runtimeArtifacts.informationSummary.trim();
+    String withInformation(String base) {
+      if (infoSummary.isEmpty) {
+        return base;
+      }
+      return '$base 信息状态：$infoSummary';
+    }
+
     if (result.cancelledByUser) {
       if (result.partialContentAccepted) {
-        return '已停止当前生成，并保留已完成的阶段结果。';
+        return withInformation('已停止当前生成，并保留已完成的阶段结果。');
       }
-      return '已停止当前生成。';
+      return withInformation('已停止当前生成。');
     }
     if (result.stoppedByToolError && savedPath.isNotEmpty) {
       final errorSummary = result.toolErrorSummary.trim();
       final suffix = errorSummary.isEmpty ? '' : '，但部分工具失败：$errorSummary';
-      return '内容生成完成，并已保存到 $savedPath$suffix';
+      return withInformation('内容生成完成，并已保存到 $savedPath$suffix');
     }
     if (result.stoppedByToolError) {
       final errorSummary = result.toolErrorSummary.trim();
-      return errorSummary.isEmpty ? '工具执行失败。' : '工具执行失败：$errorSummary';
+      return withInformation(
+        errorSummary.isEmpty ? '工具执行失败。' : '工具执行失败：$errorSummary',
+      );
     }
     if (result.waitingForUserChoice) {
-      return '智能体需要你先确认下一步选项。';
+      return withInformation('智能体需要你先确认下一步选项。');
     }
     if (savedPath.isNotEmpty) {
-      return '内容生成完成，并已保存到 $savedPath';
+      return withInformation('内容生成完成，并已保存到 $savedPath');
     }
     if (result.draftMarkdown.trim().isNotEmpty) {
-      return '内容生成完成，尚未保存到项目目录。';
+      return withInformation('内容生成完成，尚未保存到项目目录。');
     }
     if (result.writtenPaths.isNotEmpty || result.changedPaths.isNotEmpty) {
-      return '处理完成，项目文件已更新。';
+      return withInformation('处理完成，项目文件已更新。');
     }
-    return '本轮处理完成。';
+    return withInformation('本轮处理完成。');
+  }
+
+  String _resolvedPersistedOutputPath({
+    required DraftGenerationResult result,
+    required String savedPath,
+    required ProjectConversationDraftRuntimeArtifacts runtimeArtifacts,
+  }) {
+    final explicitSavedPath = savedPath.trim();
+    if (explicitSavedPath.isNotEmpty) {
+      return explicitSavedPath;
+    }
+    final runtimeOutputPath = runtimeArtifacts.outputPath.trim();
+    if (_hasPersistedPathEvidence(
+      runtimeOutputPath,
+      result: result,
+      runtimeArtifacts: runtimeArtifacts,
+    )) {
+      return runtimeOutputPath;
+    }
+    return '';
+  }
+
+  bool _hasPersistedPathEvidence(
+    String path, {
+    required DraftGenerationResult result,
+    required ProjectConversationDraftRuntimeArtifacts runtimeArtifacts,
+  }) {
+    final normalizedPath = path.trim();
+    if (normalizedPath.isEmpty) {
+      return false;
+    }
+    if (result.writtenPaths.contains(normalizedPath) ||
+        result.changedPaths.contains(normalizedPath) ||
+        runtimeArtifacts.changedPaths.contains(normalizedPath)) {
+      return true;
+    }
+    final delivery = runtimeArtifacts.chapterDelivery;
+    if (ValueReaders.stringValue(delivery['chapter_path']).trim() !=
+        normalizedPath) {
+      return false;
+    }
+    final outcomeStatus = ValueReaders.stringValue(
+      delivery['outcome_status'],
+    ).trim();
+    if (outcomeStatus != 'accepted' &&
+        outcomeStatus != 'proposed' &&
+        outcomeStatus != 'needs_user_confirmation') {
+      return false;
+    }
+    final stateResult = ValueReaders.mapValue(delivery['state_result']);
+    return ValueReaders.boolValue(stateResult['chapter_body_delivered']);
+  }
+
+  String _toolCoreStatusFor(
+    DraftGenerationResult result,
+    ProjectConversationDraftRuntimeArtifacts runtimeArtifacts,
+  ) {
+    if (result.waitingForUserChoice) {
+      return '等待选择';
+    }
+    final infoSummary = runtimeArtifacts.informationSummary.trim();
+    if (infoSummary.isEmpty) {
+      return '';
+    }
+    return switch (runtimeArtifacts.informationStatus.trim()) {
+      'waiting_confirmation' => '资料研究待确认：$infoSummary',
+      'source_insufficient' => '资料来源不足：$infoSummary',
+      'executed_research' => '资料研究已执行：$infoSummary',
+      'blocked' => '资料研究受阻：$infoSummary',
+      'information_changed' => '资料已更新：$infoSummary',
+      'no_information_change' => '无资料变更：$infoSummary',
+      _ => infoSummary,
+    };
   }
 
   String _streamingGenerationStatus(
@@ -1979,18 +2142,23 @@ class WorkbenchConversationController implements ConversationActionHandler {
   String _streamingToolStatus(DraftGenerationProgress progress) {
     // 中文注释: 工具进行中的提示放在状态条，避免把短暂执行态挤进正文时间线。
     if (progress.pendingToolCalls.isNotEmpty) {
-      final names = progress.pendingToolCalls
-          .map((call) => _stringValue(call['name']))
-          .where((name) => name.isNotEmpty)
-          .toSet()
-          .toList(growable: false);
-      if (names.isEmpty) {
+      final entries = _conversationSessionStateService
+          .toolEntriesFromPendingCalls(progress.pendingToolCalls);
+      if (entries.isEmpty) {
         return '正在准备工具调用...';
       }
-      return '正在调用：${names.join('、')}';
+      return entries.last.body;
     }
     if (progress.executedTools.isNotEmpty &&
         progress.draftMarkdown.trim().isEmpty) {
+      final entries = _conversationSessionStateService
+          .toolEntriesFromExecutedTools(
+            progress.executedTools,
+            includeDetailBodies: false,
+          );
+      if (entries.isNotEmpty) {
+        return '${entries.last.title} 已返回，正在整理结果';
+      }
       return '正在整理工具结果...';
     }
     return '';

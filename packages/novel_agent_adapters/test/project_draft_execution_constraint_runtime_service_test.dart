@@ -59,6 +59,7 @@ void main() {
               summary: '项目级自然表达约束。',
               kind: ExpressionConstraintKind.naturalExpression,
               rules: <String>['压低解释腔。'],
+              riskSignals: <String>['——', '不是……而是……'],
             ),
           ],
         );
@@ -136,6 +137,103 @@ void main() {
         expect(
           ValueReaders.stringValue(resolved['session_context_markdown']),
           contains('要求保留复核证据'),
+        );
+      },
+    );
+
+    test(
+      'supports explicit disabled and force policy overrides for ordinary runtime resolution',
+      () async {
+        await profileRepository.saveProjectProfiles(
+          project,
+          const <ExpressionConstraintProfile>[
+            ExpressionConstraintProfile(
+              id: 'project_natural_expression',
+              displayName: '项目自然表达',
+              summary: '项目级自然表达约束。',
+              kind: ExpressionConstraintKind.naturalExpression,
+              rules: <String>['压低解释腔。'],
+              riskSignals: <String>['——', '不是……而是……'],
+            ),
+          ],
+        );
+        await bindingRepository
+            .saveBindings(project, const <ProjectExpressionConstraintBinding>[
+              ProjectExpressionConstraintBinding(
+                id: 'project_binding_1',
+                profileId: 'project_natural_expression',
+                defaultForProject: true,
+              ),
+            ]);
+
+        final disabled = await service.resolve(
+          project,
+          appliesTo: ConstraintBindingAppliesTo.writing,
+          stageId: 'draft',
+          intent: 'draft',
+          taskType: 'chapter',
+          expressionConstraintPolicyMode:
+              ExpressionConstraintExecutionPolicyModes.disabled,
+        );
+        final force = await service.resolve(
+          project,
+          appliesTo: ConstraintBindingAppliesTo.writing,
+          stageId: 'draft',
+          intent: 'draft',
+          taskType: 'chapter',
+          expressionConstraintPolicyMode:
+              ExpressionConstraintExecutionPolicyModes.force,
+        );
+
+        expect(
+          ValueReaders.stringValue(
+            disabled['expression_constraint_policy_mode'],
+          ),
+          ExpressionConstraintExecutionPolicyModes.disabled,
+        );
+        expect(
+          ValueReaders.boolValue(
+            disabled['expression_constraint_review_required'],
+          ),
+          isFalse,
+        );
+        expect(
+          ValueReaders.stringValue(disabled['session_context_markdown']),
+          contains('当前策略已关闭'),
+        );
+        expect(
+          ValueReaders.stringValue(force['expression_constraint_policy_mode']),
+          ExpressionConstraintExecutionPolicyModes.force,
+        );
+        expect(
+          ValueReaders.stringValue(
+            force['expression_constraint_injection_mode'],
+          ),
+          'brief_and_sections',
+        );
+        expect(
+          ValueReaders.boolValue(
+            force['expression_constraint_review_required'],
+          ),
+          isFalse,
+        );
+        expect(
+          ValueReaders.stringValue(force['session_context_markdown']),
+          contains('强执行'),
+        );
+        expect(
+          ValueReaders.stringValue(force['session_context_markdown']),
+          contains('——、不是……而是……'),
+        );
+        expect(
+          ValueReaders.stringValue(force['session_context_markdown']),
+          isNot(contains('要求保留复核证据')),
+        );
+        expect(
+          ValueReaders.stringValue(
+            force['expression_constraint_violation_disposition'],
+          ),
+          ExpressionConstraintViolationDispositions.repair,
         );
       },
     );

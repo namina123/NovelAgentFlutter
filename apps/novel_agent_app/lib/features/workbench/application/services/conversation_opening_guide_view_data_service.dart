@@ -20,6 +20,7 @@ class ConversationOpeningGuideViewDataService {
     OpeningSessionProjection projection, {
     required bool isGenerating,
     required PrimaryActionViewData startAction,
+    required ProjectOpeningMaturityAssessment maturity,
   }) {
     // 中文注释: 长任务默认界面只保留唯一启动动作，具体分支继续沿用 opening projection 链路。
     final orchestration = projection.orchestration;
@@ -44,12 +45,7 @@ class ConversationOpeningGuideViewDataService {
     ).copyWith(
       openingState: _openingStateViewDataService.build(
         projectType: projection.projectTypeId,
-        maturity: const ProjectOpeningMaturityAssessment(
-          stage: ProjectOpeningMaturityStage.openingInProgress,
-          summary: '',
-          authoredFoundationFileCount: 0,
-          narrativeFileCount: 0,
-        ),
+        maturity: maturity,
         primaryActions: <PrimaryActionViewData>[startAction],
         projection: projection,
         preferredNextAction: startAction,
@@ -93,7 +89,7 @@ class ConversationOpeningGuideViewDataService {
           '${fallbackGuide.workflowDescription}\n\n${summaryLines.join('\n')}',
       composerHint: isGenerating
           ? fallbackGuide.composerHint
-          : '可以直接说“写第一章”“续写下一章”或“先整理设定”，也可以补一句更具体的写作目标。',
+          : '可以先描述题材、主线、角色、世界观或想先整理的设定；等开局收束后，再继续正文或续写。',
       primaryActions: fallbackGuide.primaryActions,
     ).copyWith(
       openingState: _openingStateViewDataService.build(
@@ -104,7 +100,7 @@ class ConversationOpeningGuideViewDataService {
         preferredNextAction: fallbackGuide.primaryActions.isEmpty
             ? null
             : fallbackGuide.primaryActions.first,
-        firstPromptOverride: '先说一句你想现在写哪一章、续写哪里，或者要先整理哪部分设定。',
+        firstPromptOverride: '先说这部作品想写什么、主角和冲突大概是什么，或者你想先整理哪部分设定。',
         nextStepLabelOverride: fallbackGuide.primaryActions.isEmpty
             ? ''
             : fallbackGuide.primaryActions.first.title,

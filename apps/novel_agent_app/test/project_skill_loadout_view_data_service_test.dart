@@ -86,7 +86,7 @@ void main() {
         final detail = viewData.detail;
         expect(detail, isNotNull);
         expect(detail!.agentName, '主智能体');
-        expect(detail.expressionConstraintSummary, contains('表达限制'));
+        expect(detail.expressionConstraintSummary, contains('表达规则：已应用'));
         expect(detail.hasPendingChanges, isTrue);
         expect(detail.skillGroups.single.selected, isTrue);
         expect(

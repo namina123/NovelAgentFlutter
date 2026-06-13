@@ -2,11 +2,13 @@ import '../common/json_types.dart';
 import '../common/value_readers.dart';
 import '../runtime/runtime_baseline_execution_mode_service.dart';
 import 'chapter_length_profile_resolver_service.dart';
+import 'long_task_checkpoint_cadence_policy_service.dart';
 import 'long_task_chapter_output_policy_service.dart';
 import 'long_task_chapter_gate_review_task_factory_service.dart';
 import 'long_task_mode_context_path_service.dart';
 import 'long_task_mode_service.dart';
 import 'long_task_path_policy_service.dart';
+import 'long_task_planning_artifact_path_service.dart';
 import 'task_runtime_constants.dart';
 
 class LongTaskTaskFactoryService {
@@ -19,6 +21,8 @@ class LongTaskTaskFactoryService {
     ChapterLengthProfileResolverService? chapterLengthProfileResolverService,
     LongTaskChapterGateReviewTaskFactoryService?
     chapterGateReviewTaskFactoryService,
+    LongTaskCheckpointCadencePolicyService? checkpointCadencePolicyService,
+    LongTaskPlanningArtifactPathService? planningArtifactPathService,
   }) : _pathPolicyService = pathPolicyService,
        _chapterOutputPolicyService =
            chapterOutputPolicyService ??
@@ -37,7 +41,13 @@ class LongTaskTaskFactoryService {
            const ChapterLengthProfileResolverService(),
        _chapterGateReviewTaskFactoryService =
            chapterGateReviewTaskFactoryService ??
-           LongTaskChapterGateReviewTaskFactoryService();
+           LongTaskChapterGateReviewTaskFactoryService(),
+       _checkpointCadencePolicyService =
+           checkpointCadencePolicyService ??
+           const LongTaskCheckpointCadencePolicyService(),
+       _planningArtifactPathService =
+           planningArtifactPathService ??
+           const LongTaskPlanningArtifactPathService();
 
   final LongTaskPathPolicyService _pathPolicyService;
   final LongTaskChapterOutputPolicyService _chapterOutputPolicyService;
@@ -48,6 +58,8 @@ class LongTaskTaskFactoryService {
   _chapterLengthProfileResolverService;
   final LongTaskChapterGateReviewTaskFactoryService
   _chapterGateReviewTaskFactoryService;
+  final LongTaskCheckpointCadencePolicyService _checkpointCadencePolicyService;
+  final LongTaskPlanningArtifactPathService _planningArtifactPathService;
 
   List<JsonMap> buildTasks(
     String mode,
@@ -144,7 +156,10 @@ class LongTaskTaskFactoryService {
       outputPath = _chapterOutputPolicyService.defaultOutputPath(
         mode: TaskRuntimeConstants.modeSingleChapterAtomic,
         stage: 'atomic',
-        fileStem: _chapterFileName(1, title),
+        fileStem: _chapterOutputPolicyService.chapterFileStem(
+          chapterNumber: 1,
+          title: title,
+        ),
       );
     }
     final sourcePaths = _modeContextPathService.mergeTaskSourcePaths(
@@ -191,14 +206,15 @@ class LongTaskTaskFactoryService {
       options,
     );
     final runtimeBaselineId = _runtimeBaselineIdFromOptions(options);
+    final cadence = _checkpointCadencePolicyService.policyForMode(
+      TaskRuntimeConstants.modeSeedToFullNovel,
+      options: options,
+    );
     final chapterCount = ValueReaders.intValue(
       options['chapter_count'],
       8,
     ).clamp(1, 200);
-    final checkpointInterval = ValueReaders.intValue(
-      options['checkpoint_interval'],
-      3,
-    ).clamp(0, 30);
+    final checkpointInterval = cadence.effectiveCheckpointInterval.clamp(0, 30);
     var seedPrompt = ValueReaders.stringValue(
       options['seed_prompt'],
       ValueReaders.stringValue(options['outline_text']),
@@ -229,8 +245,15 @@ class LongTaskTaskFactoryService {
         outlineCheckpointId,
         '检查点：确认总纲与章节任务',
         planningId,
-        <Object?>['specs/project_spec.md', 'outline/总纲.md', ...persistentPaths],
-        <Object?>['outline/总纲.md', 'chapter_outlines/章节任务清单.md'],
+        <Object?>[
+          LongTaskPlanningArtifactPathService.projectSpecPath,
+          _planningArtifactPathService.storyOutlinePath(),
+          ...persistentPaths,
+        ],
+        <Object?>[
+          _planningArtifactPathService.storyOutlinePath(),
+          _planningArtifactPathService.chapterPlanPath(),
+        ],
         sortOrder,
         createdAt,
         persistentPaths,
@@ -250,7 +273,10 @@ class LongTaskTaskFactoryService {
       final outputPath = _chapterOutputPolicyService.defaultOutputPath(
         mode: TaskRuntimeConstants.modeSeedToFullNovel,
         stage: stage,
-        fileStem: _chapterFileName(chapterNumber, 'seed_to_full'),
+        fileStem: _chapterOutputPolicyService.chapterFileStem(
+          chapterNumber: chapterNumber,
+          title: 'seed_to_full',
+        ),
       );
       var brief = '根据规划任务生成的作品规格、总纲和章纲写作。初始种子：$seedPrompt';
       if (chapterNumber == 1) {
@@ -268,9 +294,9 @@ class LongTaskTaskFactoryService {
           'mode': TaskRuntimeConstants.modeSeedToFullNovel,
           'depends_on': <Object?>[previousDependency],
           'source_paths': <Object?>[
-            'specs/project_spec.md',
-            'outline/总纲.md',
-            'chapter_outlines/章节任务清单.md',
+            LongTaskPlanningArtifactPathService.projectSpecPath,
+            _planningArtifactPathService.storyOutlinePath(),
+            _planningArtifactPathService.chapterPlanPath(),
             ...persistentPaths,
           ],
           'output_paths': <Object?>[outputPath],
@@ -338,11 +364,17 @@ class LongTaskTaskFactoryService {
       defaultChapters,
     ).clamp(1, 120);
     final runtimeBaselineId = _runtimeBaselineIdFromOptions(options);
-    final gateAutorun = runtimeBaselineId == 'chapter_collaboration_autorun';
-    final checkpointInterval = ValueReaders.intValue(
-      options['checkpoint_interval'],
-      gateAutorun ? 0 : defaultCheckpointInterval,
-    ).clamp(0, 30);
+    final cadence = _checkpointCadencePolicyService.policyForMode(
+      mode,
+      options: <String, Object?>{
+        ...ValueReaders.deepCopyMap(options),
+        if (!options.containsKey('checkpoint_interval'))
+          'checkpoint_interval': defaultCheckpointInterval,
+        if (runtimeBaselineId.isNotEmpty)
+          'runtime_baseline_id': runtimeBaselineId,
+      },
+    );
+    final checkpointInterval = cadence.effectiveCheckpointInterval.clamp(0, 30);
     final outlinePath = _pathPolicyService.safeProjectPath(
       ValueReaders.stringValue(options['outline_path']),
     );
@@ -374,9 +406,9 @@ class LongTaskTaskFactoryService {
       final outputPath = _chapterOutputPolicyService.defaultOutputPath(
         mode: mode,
         stage: 'draft',
-        fileStem: _chapterFileName(
-          chapterNumber,
-          ValueReaders.stringValue(item['title']),
+        fileStem: _chapterOutputPolicyService.chapterFileStem(
+          chapterNumber: chapterNumber,
+          title: ValueReaders.stringValue(item['title']),
         ),
       );
       final depends = <Object?>[];
@@ -481,9 +513,7 @@ class LongTaskTaskFactoryService {
         ],
       ),
       'output_paths': <Object?>[
-        'specs/project_spec.md',
-        'outline/总纲.md',
-        'chapter_outlines/章节任务清单.md',
+        ..._planningArtifactPathService.planningOutputPaths(),
       ],
       'metadata': <String, Object?>{
         'plan_id': planId,
@@ -496,8 +526,9 @@ class LongTaskTaskFactoryService {
         if (runtimeBaselineId.trim().isNotEmpty)
           'runtime_baseline_id': runtimeBaselineId.trim(),
       },
-      'tool_hint':
-          '不要写正文。优先保存 specs/project_spec.md、outline/总纲.md、chapter_outlines/章节任务清单.md；如果本轮在设计项目级 narrative profile / 解释器，提案走 propose_narrative_profile_update，缺口走 request_profile_clarification；需要用户确认时调用 present_user_options。',
+      'tool_hint': runtimeBaselineId.trim() == 'continuous_autonomous'
+          ? '不要写正文。优先保存 specs/project_spec.md、outlines/story/总纲.md、outlines/chapters/章节任务清单.md；先基于现有种子落一个可修订草案，不要因为方向分叉就退回用户选择；如果本轮在设计项目级 narrative profile / 解释器，提案走 propose_narrative_profile_update；只有关键承诺缺失到无法成稿时，才走 request_profile_clarification 或 present_user_options。'
+          : '不要写正文。优先保存 specs/project_spec.md、outlines/story/总纲.md、outlines/chapters/章节任务清单.md；如果本轮在设计项目级 narrative profile / 解释器，提案走 propose_narrative_profile_update，缺口走 request_profile_clarification；需要用户确认时调用 present_user_options。',
     }, createdAt);
   }
 
@@ -562,7 +593,7 @@ class LongTaskTaskFactoryService {
       'title': title,
       'task_type': 'checkpoint',
       'mode': mode,
-      'status': TaskRuntimeConstants.statusWaitingUser,
+      'status': TaskRuntimeConstants.statusQueued,
       'goal': '等待用户检查前序输出、调整方向或确认继续。确认后把该任务标记完成，后续依赖任务才会继续执行。',
       'brief': '这是长任务流安全检查点，不会自动调用模型。用户可以修改文件、补充要求、创建修复任务，确认后继续。',
       'depends_on': dependsOn,
@@ -701,16 +732,6 @@ class LongTaskTaskFactoryService {
       text = text.substring(0, 28);
     }
     return text.isEmpty ? '未命名章节' : text;
-  }
-
-  String _chapterFileName(int chapterNumber, String title) {
-    // 中文注释: 文件名保持“第xx章_标题”风格，便于用户在项目正文目录中快速人工浏览。
-    final prefix = '第${chapterNumber.toString().padLeft(2, '0')}章';
-    final safeTitle = _pathPolicyService.safeId(title);
-    if (safeTitle.isEmpty || safeTitle == 'seed_to_full') {
-      return prefix;
-    }
-    return '${prefix}_$safeTitle';
   }
 
   JsonMap _chapterLengthMetadata(JsonMap options, {required String stage}) {

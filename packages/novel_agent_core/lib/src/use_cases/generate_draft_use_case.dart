@@ -35,6 +35,7 @@ import '../tools/tool_exposure_policy_service.dart';
 import '../tools/tool_schema_builder_service.dart';
 import '../tools/tool_strategy_prompt_builder.dart';
 import '../tools/tool_strategy_service.dart';
+import '../workflow/continuous_task_tool_exposure_runtime_resolver_service.dart';
 import '../agents/project_agent_binding.dart';
 
 class GenerateDraftUseCase {
@@ -59,9 +60,12 @@ class GenerateDraftUseCase {
     AgentToolPolicyService? agentToolPolicyService,
     SkillRoutingPolicyService? skillRoutingPolicyService,
     ToolExecutionService? toolExecutionService,
+    SubAgentExecutionService? subAgentExecutionService,
     BuiltinCollaboratorCatalogService? collaboratorCatalogService,
     AgentCollaborationBriefService? collaborationBriefService,
     ToolExposurePolicyService? toolExposurePolicyService,
+    ContinuousTaskToolExposureRuntimeResolverService?
+    continuousTaskToolExposureRuntimeResolverService,
     HostPlatform hostPlatform = HostPlatform.unknown,
   }) : _projectWorkspacePort = projectWorkspacePort,
        _llmGateway = llmGateway,
@@ -85,6 +89,9 @@ class GenerateDraftUseCase {
        _toolStrategyService = toolStrategyService ?? ToolStrategyService(),
        _toolExposurePolicyService =
            toolExposurePolicyService ?? const ToolExposurePolicyService(),
+       _continuousTaskToolExposureRuntimeResolverService =
+           continuousTaskToolExposureRuntimeResolverService ??
+           const ContinuousTaskToolExposureRuntimeResolverService(),
        _hostPlatform = hostPlatform,
        _toolCallParserService =
            toolCallParserService ?? ToolCallParserService(),
@@ -96,22 +103,35 @@ class GenerateDraftUseCase {
            agentToolPolicyService ?? AgentToolPolicyService(),
        _skillRoutingPolicyService =
            skillRoutingPolicyService ?? const SkillRoutingPolicyService(),
+       _subAgentExecutionService =
+           subAgentExecutionService ??
+           SubAgentExecutionService(
+             llmGateway: llmGateway,
+             toolExecutionPort: toolExecutionPort,
+             loadAvailableAgents: loadAvailableAgents,
+             loadAvailableGroups: loadAvailableAgentGroups,
+             hostPlatform: hostPlatform,
+             toolExposurePolicyService:
+                 toolExposurePolicyService ?? const ToolExposurePolicyService(),
+           ),
        _toolExecutionService =
            toolExecutionService ??
            ToolExecutionService(
              toolExecutionPort: toolExecutionPort,
              agentToolMessageService:
                  agentToolMessageService ?? AgentToolMessageService(),
-             subAgentExecutionService: SubAgentExecutionService(
-               llmGateway: llmGateway,
-               toolExecutionPort: toolExecutionPort,
-               loadAvailableAgents: loadAvailableAgents,
-               loadAvailableGroups: loadAvailableAgentGroups,
-               hostPlatform: hostPlatform,
-               toolExposurePolicyService:
-                   toolExposurePolicyService ??
-                   const ToolExposurePolicyService(),
-             ),
+             subAgentExecutionService:
+                 subAgentExecutionService ??
+                 SubAgentExecutionService(
+                   llmGateway: llmGateway,
+                   toolExecutionPort: toolExecutionPort,
+                   loadAvailableAgents: loadAvailableAgents,
+                   loadAvailableGroups: loadAvailableAgentGroups,
+                   hostPlatform: hostPlatform,
+                   toolExposurePolicyService:
+                       toolExposurePolicyService ??
+                       const ToolExposurePolicyService(),
+                 ),
            ),
        _toolStrategyPromptBuilder = ToolStrategyPromptBuilder(
          toolStrategyService: toolStrategyService ?? ToolStrategyService(),
@@ -133,14 +153,212 @@ class GenerateDraftUseCase {
   final AgentCollaborationBriefService _collaborationBriefService;
   final ToolStrategyService _toolStrategyService;
   final ToolExposurePolicyService _toolExposurePolicyService;
+  final ContinuousTaskToolExposureRuntimeResolverService
+  _continuousTaskToolExposureRuntimeResolverService;
   final HostPlatform _hostPlatform;
   final ToolCallParserService _toolCallParserService;
   final ToolSchemaBuilderService _toolSchemaBuilderService;
   final AgentLoopContractService _agentLoopContractService;
   final AgentToolPolicyService _agentToolPolicyService;
   final SkillRoutingPolicyService _skillRoutingPolicyService;
+  final SubAgentExecutionService _subAgentExecutionService;
   final ToolExecutionService _toolExecutionService;
   final ToolStrategyPromptBuilder _toolStrategyPromptBuilder;
+
+  Future<DraftGenerationResult> executeDelegatedSubAgentTask({
+    required ProjectDescriptor project,
+    required String userPrompt,
+    required String modelId,
+    required String childAgentId,
+    String childTask = '',
+    String title = '',
+    String intent = 'draft',
+    JsonMap parentAgent = const <String, Object?>{},
+    JsonMap selectedCollaborationGroup = const <String, Object?>{},
+    JsonMap requestOptions = const <String, Object?>{},
+    JsonMap contextSettings = const <String, Object?>{},
+    JsonMap modelProfile = const <String, Object?>{},
+    JsonMap skillRoutingContext = const <String, Object?>{},
+    List<Object?> memorySections = const <Object?>[],
+    List<Object?> expressionConstraintProfiles = const <Object?>[],
+    List<Object?> projectExpressionConstraintBindings = const <Object?>[],
+    JsonMap writingExecutionConstraints = const <String, Object?>{},
+    List<Object?> projectFileSectionPlan = const <Object?>[],
+    JsonMap projectFileContents = const <String, Object?>{},
+    AppSettings? subAgentRuntimeSettings,
+    List<ProjectAgentBinding> subAgentBindings = const <ProjectAgentBinding>[],
+    String subAgentBindingModeId = '',
+    String subAgentBindingStageId = '',
+    List<String> sourcePaths = const <String>[],
+    List<String> constraints = const <String>[],
+    String expectedOutput = '',
+    String sessionContext = '',
+  }) async {
+    final cleanPrompt = userPrompt.trim();
+    if (cleanPrompt.isEmpty) {
+      throw ArgumentError.value(userPrompt, 'userPrompt', '提示词不能为空。');
+    }
+    final projectInfo = <String, Object?>{
+      'id': project.id,
+      'title': project.name,
+      'path': project.rootPath,
+      'project_type': project.projectType,
+      'stage': 'draft',
+    };
+    final entries = await _projectWorkspacePort.listEntries(project.rootPath);
+    final selectedPaths = _fileSelectionService.select(entries);
+    final fileContents = ValueReaders.deepCopyMap(projectFileContents);
+    for (final path in selectedPaths) {
+      if (fileContents.containsKey(path)) {
+        continue;
+      }
+      final content = await _projectWorkspacePort.readTextFile(
+        project.rootPath,
+        path,
+      );
+      if (content == null || content.trim().isEmpty) {
+        continue;
+      }
+      fileContents[path] = _trimContent(content);
+    }
+    final resolvedParentAgent = parentAgent.isEmpty
+        ? _agentProfileCatalogService.fallbackDefaultAgent()
+        : ValueReaders.deepCopyMap(parentAgent);
+    final projectAvailableAgents = await _loadAvailableAgentsSafe(project);
+    final optionalAgents = _mergeEntriesById(
+      projectAvailableAgents,
+      _collaboratorCatalogService.optionalCollaboratorProfiles(),
+    );
+    final projectAvailableGroups = await _loadAvailableAgentGroupsSafe(project);
+    final optionalGroups = _mergeEntriesById(
+      projectAvailableGroups,
+      _collaboratorCatalogService.optionalCollaboratorGroups(),
+    );
+    final collaborationGroup = _resolveCollaborationGroup(
+      preferredGroup: selectedCollaborationGroup,
+      projectAvailableAgents: projectAvailableAgents,
+      projectAvailableGroups: projectAvailableGroups,
+      availableGroups: optionalGroups,
+      fallbackAgent: resolvedParentAgent,
+    );
+    final routingSignal = _skillRoutingPolicyService.buildActivationSignal(
+      intent: intent,
+      projectType: project.projectType,
+      userPrompt: cleanPrompt,
+      routeContext: skillRoutingContext,
+    );
+    final contextPack = _contextAssemblerService.assemble(<String, Object?>{
+      'project': projectInfo,
+      'project_files': entries,
+      'project_file_contents': fileContents,
+      'user_prompt': cleanPrompt,
+      'session_context': sessionContext,
+      'intent': intent,
+      'agent': resolvedParentAgent,
+      'optional_agents': optionalAgents,
+      'selected_collaboration_group': collaborationGroup,
+      'optional_agent_groups': optionalGroups,
+      'context_settings': contextSettings,
+      'model_profile': modelProfile,
+      'memory_sections': memorySections,
+      'expression_constraint_profiles': expressionConstraintProfiles,
+      'project_expression_constraint_bindings':
+          projectExpressionConstraintBindings,
+      'project_file_section_plan': projectFileSectionPlan,
+    });
+    final mainContext = <String, Object?>{
+      'intent': intent,
+      'project_title': project.name,
+      'project_tree_note': _projectPromptContract.projectTreeSummary(entries),
+      'selected_collaboration_group': ValueReaders.deepCopyMap(
+        collaborationGroup,
+      ),
+      'selected_collaboration_group_id': ValueReaders.stringValue(
+        collaborationGroup['id'],
+      ),
+      'selected_collaboration_group_name': ValueReaders.stringValue(
+        collaborationGroup['name'],
+      ),
+      'selected_collaboration_group_member_ids': ValueReaders.stringList(
+        collaborationGroup['agents'],
+      ),
+      'style_note': '当前请求已经附带上下文摘录；如需更多文件，请调用项目工具按需读取。',
+      'skill_routing_stage': routingSignal.stageId,
+      'skill_routing_flags': routingSignal.flags,
+      if (subAgentRuntimeSettings != null)
+        'sub_agent_runtime_settings': subAgentRuntimeSettings,
+      if (subAgentBindings.isNotEmpty)
+        'sub_agent_bindings': List<ProjectAgentBinding>.unmodifiable(
+          subAgentBindings,
+        ),
+      'sub_agent_binding_mode_id': subAgentBindingModeId,
+      'sub_agent_binding_stage_id': subAgentBindingStageId,
+      if (ValueReaders.mapValue(
+        skillRoutingContext['workflow_task_context'],
+      ).isNotEmpty)
+        'workflow_task_context': ValueReaders.deepCopyMap(
+          ValueReaders.mapValue(skillRoutingContext['workflow_task_context']),
+        ),
+    };
+    final toolCall = <String, Object?>{
+      'id': 'delegated_sub_agent_${DateTime.now().microsecondsSinceEpoch}',
+      'name': 'call_sub_agent',
+      'arguments': <String, Object?>{
+        'agent_id': childAgentId,
+        'task': childTask.trim().isEmpty ? cleanPrompt : childTask.trim(),
+        'context_excerpt': cleanPrompt,
+        if (sourcePaths.isNotEmpty) 'source_paths': sourcePaths,
+        if (constraints.isNotEmpty) 'constraints': constraints,
+        if (expectedOutput.trim().isNotEmpty)
+          'expected_output': expectedOutput.trim(),
+      },
+    };
+    final childResult = await _subAgentExecutionService.execute(
+      project: project,
+      parentAgent: resolvedParentAgent,
+      toolCall: toolCall,
+      modelId: modelId,
+      mainContext: mainContext,
+    );
+    final executedTools = <Object?>[
+      <String, Object?>{
+        ...toolCall,
+        'result': ValueReaders.deepCopyMap(childResult),
+      },
+    ];
+    final toolErrorSummary = ValueReaders.boolValue(childResult['ok'], true)
+        ? ''
+        : ValueReaders.stringValue(
+            childResult['error'],
+            ValueReaders.stringValue(childResult['summary']),
+          );
+    final finalContent = ValueReaders.stringValue(
+      childResult['result_markdown'],
+      ValueReaders.stringValue(childResult['summary']),
+    ).trim();
+    return DraftGenerationResult(
+      project: project,
+      projectInfo: projectInfo,
+      userPrompt: cleanPrompt,
+      prompt: cleanPrompt,
+      modelId: modelId,
+      draftMarkdown: finalContent,
+      contextPack: contextPack,
+      selectedPaths: List<String>.unmodifiable(selectedPaths),
+      executedTools: List<Object?>.unmodifiable(executedTools),
+      writtenPaths: const <String>[],
+      changedPaths: const <String>[],
+      transcriptMessages: const <JsonMap>[],
+      waitingForUserChoice: ValueReaders.boolValue(
+        childResult['waiting_for_user_choice'],
+      ),
+      reasoningContent: ValueReaders.stringValue(
+        childResult['reasoning_content'],
+      ),
+      stoppedByToolError: !ValueReaders.boolValue(childResult['ok'], true),
+      toolErrorSummary: toolErrorSummary,
+    );
+  }
 
   Future<DraftGenerationResult> execute({
     required ProjectDescriptor project,
@@ -158,6 +376,7 @@ class GenerateDraftUseCase {
     List<Object?> memorySections = const <Object?>[],
     List<Object?> expressionConstraintProfiles = const <Object?>[],
     List<Object?> projectExpressionConstraintBindings = const <Object?>[],
+    JsonMap writingExecutionConstraints = const <String, Object?>{},
     List<Object?> projectFileSectionPlan = const <Object?>[],
     JsonMap projectFileContents = const <String, Object?>{},
     AppSettings? subAgentRuntimeSettings,
@@ -338,14 +557,41 @@ class GenerateDraftUseCase {
     final requestedToolIds = exposedToolIds.isEmpty
         ? _toolStrategyService.enabledToolIds(toolSettings)
         : exposedToolIds;
+    final toolExposureResolution =
+        _continuousTaskToolExposureRuntimeResolverService.resolve(
+          candidateToolIds: requestedToolIds,
+          selectedCollaborationGroup: collaborationGroup,
+          runtimeContext: <String, Object?>{
+            'mode': ValueReaders.stringValue(skillRoutingContext['mode']),
+            'task_type': ValueReaders.stringValue(
+              skillRoutingContext['task_type'],
+            ),
+            'task_family_id': ValueReaders.stringValue(
+              skillRoutingContext['task_family_id'],
+            ),
+          },
+          intent: intent,
+        );
     final filteredToolIds = _toolExposurePolicyService.filterExposedToolIds(
-      requestedToolIds,
+      toolExposureResolution.visibleToolIds,
       hostPlatform: _hostPlatform,
       projectType: project.projectType,
     );
     final toolSchemas = _toolSchemaBuilderService.buildOpenAiSchemas(
       filteredToolIds,
     );
+    final formalDeliveryRequired =
+        exposedToolIds.isNotEmpty &&
+        filteredToolIds.contains(AgentToolPolicyService.formalDeliveryToolName);
+    final formalDeliveryRecoveryToolIds = formalDeliveryRequired
+        ? <String>[AgentToolPolicyService.formalDeliveryToolName]
+        : const <String>[];
+    final formalDeliveryRecoveryToolSchemas = formalDeliveryRequired
+        ? _toolSchemaBuilderService.buildOpenAiSchemas(
+            formalDeliveryRecoveryToolIds,
+          )
+        : const <JsonMap>[];
+    final maxLlmRounds = formalDeliveryRequired ? 12 : 8;
     final llmRequestOptions = _llmRequestOptions(
       requestOptions,
       intent: intent,
@@ -376,9 +622,17 @@ class GenerateDraftUseCase {
       'selected_collaboration_group_member_ids': ValueReaders.stringList(
         collaborationGroup['agents'],
       ),
+      'continuous_task_family_id': toolExposureResolution.taskProfile.familyId,
+      'continuous_task_run_kind': toolExposureResolution.taskProfile.runKind,
+      'continuous_task_tool_exposure_resolution': toolExposureResolution
+          .toJson(),
       'style_note': '当前请求已经附带上下文包；如需更多文件，请调用项目工具按需读取。',
       'skill_routing_stage': routingPolicy.stageId,
       'skill_routing_flags': routingSignal.flags,
+      if (writingExecutionConstraints.isNotEmpty)
+        'writing_execution_constraints': ValueReaders.deepCopyMap(
+          writingExecutionConstraints,
+        ),
       if (subAgentRuntimeSettings != null)
         'sub_agent_runtime_settings': subAgentRuntimeSettings,
       if (subAgentBindings.isNotEmpty)
@@ -387,16 +641,36 @@ class GenerateDraftUseCase {
         ),
       'sub_agent_binding_mode_id': subAgentBindingModeId,
       'sub_agent_binding_stage_id': subAgentBindingStageId,
+      if (ValueReaders.mapValue(
+        skillRoutingContext['workflow_task_context'],
+      ).isNotEmpty)
+        'workflow_task_context': ValueReaders.deepCopyMap(
+          ValueReaders.mapValue(skillRoutingContext['workflow_task_context']),
+        ),
     };
-    final preloadRound = await _preloadRoutedSkills(
-      project: project,
-      policyStageNote: routingPolicy.stageId,
-      policy: routingPolicy,
-      agent: resolvedAgent,
-      modelId: modelId,
-      mainContext: mainContext,
-      skillLoadMemory: skillLoadMemory,
-    );
+    final preloadRound =
+        _shouldPreloadRoutedSkills(
+          skillRoutingContext: skillRoutingContext,
+          exposedToolIds: exposedToolIds,
+        )
+        ? await _preloadRoutedSkills(
+            project: project,
+            policyStageNote: routingPolicy.stageId,
+            policy: routingPolicy,
+            agent: resolvedAgent,
+            modelId: modelId,
+            mainContext: mainContext,
+            skillLoadMemory: skillLoadMemory,
+          )
+        : const ToolExecutionRoundResult(
+            executedTools: <Object?>[],
+            writtenPaths: <String>[],
+            changedPaths: <String>[],
+            transcriptMessages: <JsonMap>[],
+            waitingForUserChoice: false,
+            stoppedByToolError: false,
+            hadPlanTool: false,
+          );
     if (_shouldCancel(cancellationToken)) {
       return cancelledResult(DraftGenerationStopPhase.preloadingSkills);
     }
@@ -433,18 +707,31 @@ class GenerateDraftUseCase {
     executedTools.addAll(preloadRound.executedTools);
     var previousRoundHadPlanTool = false;
     var planContinueRetryUsed = false;
+    var emptyReadOnlyRetryUsed = false;
+    var formalDeliveryContinueRetryCount = 0;
+    var formalDeliveryRecoveryMode = false;
     var previousToolFingerprint = '';
     var repeatedReadOnlyToolRounds = 0;
-    for (var roundIndex = 0; roundIndex < 8; roundIndex++) {
+    for (var roundIndex = 0; roundIndex < maxLlmRounds; roundIndex++) {
       if (_shouldCancel(cancellationToken)) {
         return cancelledResult(DraftGenerationStopPhase.llmRound);
       }
+      final currentToolIds = formalDeliveryRecoveryMode
+          ? formalDeliveryRecoveryToolIds
+          : filteredToolIds;
+      final currentToolSchemas = formalDeliveryRecoveryMode
+          ? formalDeliveryRecoveryToolSchemas
+          : toolSchemas;
       final llmResult = await _llmGateway.requestChat(
         request: ChatRequest(
           modelId: modelId,
           messages: messages,
-          tools: toolSchemas,
-          options: llmRequestOptions,
+          tools: currentToolSchemas,
+          options: _roundRequestOptions(
+            llmRequestOptions,
+            formalDeliveryRecoveryMode: formalDeliveryRecoveryMode,
+            modelProfile: modelProfile,
+          ),
           capability: ChatRequestCapability.fromModelProfile(modelProfile),
         ),
         cancellationToken: cancellationToken,
@@ -474,18 +761,35 @@ class GenerateDraftUseCase {
       if (roundReasoning.isNotEmpty) {
         reasoningContent = roundReasoning;
       }
-      final toolCalls = _toolCallParserService.parseToolCalls(
+      final parsedToolCalls = _toolCallParserService.parseToolCalls(
         llmResult,
         allowInlineFallback: ValueReaders.boolValue(
           toolSettings['allow_inline_fallback'],
           true,
         ),
       );
+      final toolCalls = _filterToolCallsByAllowedToolIds(
+        parsedToolCalls,
+        currentToolIds,
+      );
+      if (parsedToolCalls.isNotEmpty &&
+          toolCalls.isEmpty &&
+          formalDeliveryRecoveryMode) {
+        formalDeliveryContinueRetryCount += 1;
+        messages.add(<String, Object?>{
+          'role': 'user',
+          'content':
+              '当前是正式章节交付恢复轮，只允许调用 submit_chapter_delivery。'
+              '你刚才请求了当前恢复轮不允许的工具，因此没有执行。'
+              '请立刻把已经掌握的信息整理为章节正文，并调用 submit_chapter_delivery 交付；不要继续读取、研究或提交资料笔记。',
+        });
+        continue;
+      }
       final contract = _agentLoopContractService.loopStepContract(
         llmResult,
         toolCalls,
         roundIndex: roundIndex,
-        maxRounds: 8,
+        maxRounds: maxLlmRounds,
         waitingForUserChoice: waitingForUserChoice,
         stoppedByToolError: stoppedByToolError,
       );
@@ -566,30 +870,92 @@ class GenerateDraftUseCase {
             executedTools: List<Object?>.unmodifiable(executedTools),
           ),
         );
+        final afterExecutedToolRound = _agentToolPolicyService
+            .afterExecutedToolRoundDecision(
+              formalDeliveryRequired: formalDeliveryRequired,
+              formalDeliveryContinueRetryCount:
+                  formalDeliveryContinueRetryCount,
+              executedTools: executedTools,
+              recentExecutedTools: toolRound.executedTools,
+              writtenPaths: writtenPaths,
+              waitingForUserChoice: waitingForUserChoice,
+              stoppedByToolError: stoppedByToolError,
+            );
+        if (ValueReaders.boolValue(
+          afterExecutedToolRound['continue_formal_delivery'],
+        )) {
+          formalDeliveryContinueRetryCount += 1;
+          formalDeliveryRecoveryMode = ValueReaders.boolValue(
+            afterExecutedToolRound['restrict_to_formal_delivery'],
+          );
+          messages.add(<String, Object?>{
+            'role': 'user',
+            'content': ValueReaders.stringValue(
+              afterExecutedToolRound['continue_instruction'],
+            ),
+          });
+          previousRoundHadPlanTool = false;
+          stoppedByToolError = false;
+          toolErrorSummary = '';
+          continue;
+        }
+        formalDeliveryRecoveryMode = false;
         if (stoppedByToolError || waitingForUserChoice) {
           break;
         }
         continue;
       }
       final content = ValueReaders.stringValue(llmResult['content']).trim();
-      if (previousRoundHadPlanTool) {
-        final afterPlan = _agentToolPolicyService.afterToolRoundDecision(
-          llmResult,
-          roundHasPlanTool: previousRoundHadPlanTool,
-          planContinueRetryUsed: planContinueRetryUsed,
+      final afterToolRound = _agentToolPolicyService.afterToolRoundDecision(
+        llmResult,
+        roundHasPlanTool: previousRoundHadPlanTool,
+        planContinueRetryUsed: planContinueRetryUsed,
+        emptyReadOnlyRetryUsed: emptyReadOnlyRetryUsed,
+        formalDeliveryRequired: formalDeliveryRequired,
+        formalDeliveryContinueRetryCount: formalDeliveryContinueRetryCount,
+        executedTools: executedTools,
+        writtenPaths: writtenPaths,
+      );
+      if (ValueReaders.boolValue(afterToolRound['retry_after_plan']) &&
+          content.isEmpty) {
+        planContinueRetryUsed = true;
+        messages.add(<String, Object?>{
+          'role': 'user',
+          'content': ValueReaders.stringValue(
+            afterToolRound['continue_instruction'],
+          ),
+        });
+        previousRoundHadPlanTool = false;
+        continue;
+      }
+      if (ValueReaders.boolValue(
+        afterToolRound['retry_after_formal_delivery'],
+      )) {
+        formalDeliveryContinueRetryCount += 1;
+        formalDeliveryRecoveryMode = ValueReaders.boolValue(
+          afterToolRound['restrict_to_formal_delivery'],
         );
-        if (ValueReaders.boolValue(afterPlan['retry_after_plan']) &&
-            content.isEmpty) {
-          planContinueRetryUsed = true;
-          messages.add(<String, Object?>{
-            'role': 'user',
-            'content': ValueReaders.stringValue(
-              afterPlan['continue_instruction'],
-            ),
-          });
-          previousRoundHadPlanTool = false;
-          continue;
-        }
+        messages.add(<String, Object?>{
+          'role': 'user',
+          'content': ValueReaders.stringValue(
+            afterToolRound['continue_instruction'],
+          ),
+        });
+        previousRoundHadPlanTool = false;
+        continue;
+      }
+      if (ValueReaders.boolValue(
+        afterToolRound['retry_after_read_only_context'],
+      )) {
+        emptyReadOnlyRetryUsed = true;
+        messages.add(<String, Object?>{
+          'role': 'user',
+          'content': ValueReaders.stringValue(
+            afterToolRound['continue_instruction'],
+          ),
+        });
+        previousRoundHadPlanTool = false;
+        continue;
       }
       finalContent = content;
       onProgress?.call(
@@ -701,6 +1067,42 @@ class GenerateDraftUseCase {
       };
     }
     return merged;
+  }
+
+  JsonMap _roundRequestOptions(
+    JsonMap baseOptions, {
+    required bool formalDeliveryRecoveryMode,
+    required JsonMap modelProfile,
+  }) {
+    final options = ValueReaders.deepCopyMap(baseOptions);
+    if (!formalDeliveryRecoveryMode ||
+        !ValueReaders.boolValue(modelProfile['supports_tool_choice'])) {
+      return options;
+    }
+    options['tool_choice'] = <String, Object?>{
+      'type': 'function',
+      'function': <String, Object?>{
+        'name': AgentToolPolicyService.formalDeliveryToolName,
+      },
+    };
+    return options;
+  }
+
+  List<JsonMap> _filterToolCallsByAllowedToolIds(
+    List<JsonMap> toolCalls,
+    List<String> allowedToolIds,
+  ) {
+    if (toolCalls.isEmpty || allowedToolIds.isEmpty) {
+      return const <JsonMap>[];
+    }
+    final allowed = allowedToolIds.toSet();
+    return toolCalls
+        .where(
+          (call) =>
+              allowed.contains(ValueReaders.stringValue(call['name']).trim()),
+        )
+        .map(ValueReaders.deepCopyMap)
+        .toList(growable: false);
   }
 
   Future<List<JsonMap>> _loadAvailableAgentsSafe(
@@ -918,6 +1320,23 @@ class GenerateDraftUseCase {
       mainContext: mainContext,
       skillLoadMemory: skillLoadMemory,
     );
+  }
+
+  bool _shouldPreloadRoutedSkills({
+    required JsonMap skillRoutingContext,
+    required List<String> exposedToolIds,
+  }) {
+    // 中文注释: 预加载技能不能绕过宿主显式收窄的工具暴露面；必要时也允许上层直接关闭。
+    if (!ValueReaders.boolValue(
+      skillRoutingContext['allow_skill_preload'],
+      true,
+    )) {
+      return false;
+    }
+    if (exposedToolIds.isEmpty) {
+      return true;
+    }
+    return exposedToolIds.contains('load_agent_skill');
   }
 
   String _skillRoutingScopeId(

@@ -1,32 +1,63 @@
 import 'package:novel_agent_core/novel_agent_core.dart';
 
-import 'long_task_heartbeat_event.dart';
-import 'long_task_heartbeat_scheduler.dart';
+import 'long_task_watchdog_dispatch_port.dart';
 
 class LongTaskSupervisor {
   LongTaskSupervisor({
     required LongTaskRunRegistry runRegistry,
-    required LongTaskHeartbeatScheduler heartbeatScheduler,
     LongTaskRunStateMachine? runStateMachine,
     LongTaskWritingExecutionSignalService? writingExecutionSignalService,
+    LongTaskWatchdogDispatchPort? watchdogDispatchPort,
+    ContinuousTaskLifecycleStopOutcomeResolverService?
+    lifecycleStopOutcomeResolverService,
+    ContinuousTaskLongTaskStatusMapperService?
+    continuousTaskLongTaskStatusMapperService,
   }) : _runRegistry = runRegistry,
-       _heartbeatScheduler = heartbeatScheduler,
        _runStateMachine = runStateMachine ?? const LongTaskRunStateMachine(),
        _writingExecutionSignalService =
            writingExecutionSignalService ??
-           const LongTaskWritingExecutionSignalService();
+           const LongTaskWritingExecutionSignalService(),
+       _watchdogDispatchPort = watchdogDispatchPort,
+       _lifecycleStopOutcomeResolverService =
+           lifecycleStopOutcomeResolverService ??
+           const ContinuousTaskLifecycleStopOutcomeResolverService(),
+       _continuousTaskLongTaskStatusMapperService =
+           continuousTaskLongTaskStatusMapperService ??
+           const ContinuousTaskLongTaskStatusMapperService();
 
   final LongTaskRunRegistry _runRegistry;
-  final LongTaskHeartbeatScheduler _heartbeatScheduler;
   final LongTaskRunStateMachine _runStateMachine;
   final LongTaskWritingExecutionSignalService _writingExecutionSignalService;
+  final LongTaskWatchdogDispatchPort? _watchdogDispatchPort;
+  final ContinuousTaskLifecycleStopOutcomeResolverService
+  _lifecycleStopOutcomeResolverService;
+  final ContinuousTaskLongTaskStatusMapperService
+  _continuousTaskLongTaskStatusMapperService;
 
-  bool get isRunning => _heartbeatScheduler.isRunning;
+  bool get isRunning => _watchdogDispatchPort?.isWatchdogRunning ?? false;
 
   Future<void> trackRun(RunInstance instance) {
     // 中文注释: supervisor 只做“监督入口”的编排，不改变 registry 的持久化语义，也不直接推进 workflow。
-    _heartbeatScheduler.clearDispatchState(instance.id);
+    _watchdogDispatchPort?.clearDispatchState(instance.id);
     return _runRegistry.save(instance);
+  }
+
+  Future<void> trackContinuousTaskRun(
+    RunInstance instance, {
+    required ContinuousTaskControlProfile controlProfile,
+    required ContinuousTaskLifecycleState lifecycleState,
+    LongTaskRecoveryState recoveryState = const LongTaskRecoveryState(),
+    JsonMap metadata = const <String, Object?>{},
+  }) {
+    final synchronized = _enrichContinuousTaskInstance(
+      instance,
+      controlProfile: controlProfile,
+      lifecycleState: lifecycleState,
+      recoveryState: recoveryState,
+      metadata: metadata,
+      occurredAt: instance.updatedAt,
+    );
+    return trackRun(synchronized);
   }
 
   Future<RunInstance?> loadRun(String runId) {
@@ -46,28 +77,8 @@ class LongTaskSupervisor {
   }
 
   Future<void> removeRun(String runId) async {
-    _heartbeatScheduler.clearDispatchState(runId);
+    _watchdogDispatchPort?.clearDispatchState(runId);
     await _runRegistry.delete(runId);
-  }
-
-  Future<RunInstance?> markHeartbeat(
-    String runId, {
-    DateTime? occurredAt,
-    String note = '',
-  }) async {
-    final instance = await _runRegistry.findById(runId);
-    if (instance == null) {
-      return null;
-    }
-    final now = occurredAt ?? DateTime.now();
-    final next = instance.copyWith(
-      lastHeartbeatAt: now,
-      updatedAt: now,
-      note: note.trim().isEmpty ? instance.note : note.trim(),
-    );
-    await _runRegistry.save(next);
-    _heartbeatScheduler.clearDispatchState(runId);
-    return next;
   }
 
   Future<RunInstance?> pauseRun(
@@ -133,10 +144,7 @@ class LongTaskSupervisor {
     if (!ValueReaders.boolValue(signal['present'])) {
       return instance;
     }
-    final nextStatus = _statusFromSignal(
-      signal,
-      current: instance.status,
-    );
+    final nextStatus = _statusFromSignal(signal, current: instance.status);
     final now = occurredAt ?? DateTime.now();
     final next = nextStatus == instance.status
         ? instance.copyWith(
@@ -153,42 +161,106 @@ class LongTaskSupervisor {
               'writing_execution_signal': signal,
             },
           )
-        : _runStateMachine.transition(
-            instance,
-            nextStatus,
-            occurredAt: now,
-            note: ValueReaders.stringValue(signal['note']),
-            stopReason: ValueReaders.stringValue(signal['legacy_stop_reason']),
-          ).copyWith(
-            metadata: <String, Object?>{
-              ...ValueReaders.deepCopyMap(instance.metadata),
-              'writing_execution_signal': signal,
-            },
-          );
+        : _runStateMachine
+              .transition(
+                instance,
+                nextStatus,
+                occurredAt: now,
+                note: ValueReaders.stringValue(signal['note']),
+                stopReason: ValueReaders.stringValue(
+                  signal['legacy_stop_reason'],
+                ),
+              )
+              .copyWith(
+                metadata: <String, Object?>{
+                  ...ValueReaders.deepCopyMap(instance.metadata),
+                  'writing_execution_signal': signal,
+                },
+              );
     await _runRegistry.save(next);
-    _heartbeatScheduler.clearDispatchState(runId);
+    _watchdogDispatchPort?.clearDispatchState(runId);
     return next;
   }
 
-  void start({
-    Duration pollInterval = const Duration(seconds: 10),
-    LongTaskHeartbeatEventHandler? onHeartbeatEvent,
-  }) {
-    _heartbeatScheduler.start(
-      pollInterval: pollInterval,
-      onEvent: onHeartbeatEvent,
+  Future<RunInstance?> applyRecoveryState(
+    String runId,
+    JsonMap recoveryPlan, {
+    DateTime? occurredAt,
+  }) async {
+    // 中文注释: 恢复状态应用入口只消费正式 recovery_state 合同，并把运行实例切到对应 run status。
+    final instance = await _runRegistry.findById(runId);
+    if (instance == null) {
+      return null;
+    }
+    final recoveryState = LongTaskRecoveryState.fromJson(
+      ValueReaders.mapValue(recoveryPlan['recovery_state']),
     );
+    if (!recoveryState.present) {
+      return instance;
+    }
+    final desired = LongTaskRunStatus.fromId(recoveryState.runStatus);
+    final now = occurredAt ?? DateTime.now();
+    final next = _runStateMachine.canTransition(instance.status, desired)
+        ? _runStateMachine
+              .transition(
+                instance,
+                desired,
+                occurredAt: now,
+                note: recoveryState.note,
+                stopReason: recoveryState.stopOutcome.legacyStopReason,
+              )
+              .copyWith(
+                stopOutcome: recoveryState.stopOutcome.present
+                    ? recoveryState.stopOutcome
+                    : instance.stopOutcome,
+                recoveryState: recoveryState,
+                metadata: <String, Object?>{
+                  ...ValueReaders.deepCopyMap(instance.metadata),
+                  'last_recovery_plan': ValueReaders.deepCopyMap(recoveryPlan),
+                },
+              )
+        : instance.copyWith(
+            updatedAt: now,
+            note: recoveryState.note,
+            stopOutcome: recoveryState.stopOutcome.present
+                ? recoveryState.stopOutcome
+                : instance.stopOutcome,
+            recoveryState: recoveryState,
+            metadata: <String, Object?>{
+              ...ValueReaders.deepCopyMap(instance.metadata),
+              'last_recovery_plan': ValueReaders.deepCopyMap(recoveryPlan),
+            },
+          );
+    await _runRegistry.save(next);
+    _watchdogDispatchPort?.clearDispatchState(runId);
+    return next;
   }
 
-  Future<void> stop() {
-    return _heartbeatScheduler.stop();
-  }
-
-  Future<List<LongTaskHeartbeatEvent>> pulseOnce({
-    DateTime? now,
-    LongTaskHeartbeatEventHandler? onHeartbeatEvent,
-  }) {
-    return _heartbeatScheduler.pollOnce(now: now, onEvent: onHeartbeatEvent);
+  Future<RunInstance?> applyContinuousTaskState(
+    String runId, {
+    required ContinuousTaskControlProfile controlProfile,
+    required ContinuousTaskLifecycleState lifecycleState,
+    LongTaskRecoveryState recoveryState = const LongTaskRecoveryState(),
+    JsonMap metadata = const <String, Object?>{},
+    DateTime? occurredAt,
+    String note = '',
+  }) async {
+    final instance = await _runRegistry.findById(runId);
+    if (instance == null) {
+      return null;
+    }
+    final next = _transitionContinuousTaskInstance(
+      instance,
+      controlProfile: controlProfile,
+      lifecycleState: lifecycleState,
+      recoveryState: recoveryState,
+      metadata: metadata,
+      occurredAt: occurredAt ?? DateTime.now(),
+      note: note,
+    );
+    await _runRegistry.save(next);
+    _watchdogDispatchPort?.clearDispatchState(runId);
+    return next;
   }
 
   Future<RunInstance?> _transitionRun(
@@ -210,7 +282,7 @@ class LongTaskSupervisor {
       stopReason: stopReason,
     );
     await _runRegistry.save(next);
-    _heartbeatScheduler.clearDispatchState(runId);
+    _watchdogDispatchPort?.clearDispatchState(runId);
     return next;
   }
 
@@ -233,5 +305,83 @@ class LongTaskSupervisor {
       return LongTaskRunStatus.paused;
     }
     return current;
+  }
+
+  RunInstance _transitionContinuousTaskInstance(
+    RunInstance instance, {
+    required ContinuousTaskControlProfile controlProfile,
+    required ContinuousTaskLifecycleState lifecycleState,
+    required LongTaskRecoveryState recoveryState,
+    required JsonMap metadata,
+    required DateTime occurredAt,
+    required String note,
+  }) {
+    final nextStatus = _continuousTaskLongTaskStatusMapperService
+        .toLongTaskStatus(lifecycleState);
+    final transitioned = nextStatus == instance.status
+        ? instance.copyWith(updatedAt: occurredAt)
+        : _runStateMachine.transition(
+            instance,
+            nextStatus,
+            occurredAt: occurredAt,
+            note: note,
+            stopReason:
+                lifecycleState.runPhase == ContinuousTaskRunPhases.stopped
+                ? _lifecycleStopOutcomeResolverService.legacyStopReason(
+                    lifecycleState,
+                  )
+                : '',
+          );
+    return _enrichContinuousTaskInstance(
+      transitioned,
+      controlProfile: controlProfile,
+      lifecycleState: lifecycleState,
+      recoveryState: recoveryState,
+      metadata: metadata,
+      occurredAt: occurredAt,
+      note: note,
+    );
+  }
+
+  RunInstance _enrichContinuousTaskInstance(
+    RunInstance instance, {
+    required ContinuousTaskControlProfile controlProfile,
+    required ContinuousTaskLifecycleState lifecycleState,
+    required LongTaskRecoveryState recoveryState,
+    required JsonMap metadata,
+    required DateTime occurredAt,
+    String note = '',
+  }) {
+    final nextNote = note.trim().isNotEmpty
+        ? note.trim()
+        : (lifecycleState.reason.trim().isNotEmpty
+              ? lifecycleState.reason.trim()
+              : instance.note);
+    final nextStopOutcome = _lifecycleStopOutcomeResolverService.resolve(
+      lifecycleState,
+      note: nextNote,
+    );
+    return instance.copyWith(
+      updatedAt: occurredAt,
+      note: nextNote,
+      stopReason: lifecycleState.runPhase == ContinuousTaskRunPhases.stopped
+          ? _lifecycleStopOutcomeResolverService.legacyStopReason(
+              lifecycleState,
+            )
+          : instance.stopReason,
+      stopOutcome: nextStopOutcome,
+      recoveryState: recoveryState.present
+          ? recoveryState
+          : const LongTaskRecoveryState(),
+      metadata: <String, Object?>{
+        ...ValueReaders.deepCopyMap(instance.metadata),
+        ...ValueReaders.deepCopyMap(metadata),
+        'continuous_task_family_id': controlProfile.taskProfile.familyId,
+        'continuous_task_run_kind': controlProfile.taskProfile.runKind,
+        'continuous_task_profile': controlProfile.taskProfile.toJson(),
+        'continuous_task_control_profile': controlProfile.toJson(),
+        'continuous_task_lifecycle_state': lifecycleState.toJson(),
+      },
+    );
   }
 }

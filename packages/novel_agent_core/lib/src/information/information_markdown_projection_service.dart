@@ -1,7 +1,9 @@
 import 'dart:convert';
 
+import '../common/source_asset_identity.dart';
 import '../packages/frontmatter_yaml_writer_service.dart';
 import 'design_element_card.dart';
+import 'information_source_of_truth_locator_service.dart';
 import 'information_projection_document.dart';
 import 'information_projection_source.dart';
 import 'project_knowledge_card.dart';
@@ -11,8 +13,12 @@ import 'research_note.dart';
 class InformationMarkdownProjectionService {
   InformationMarkdownProjectionService({
     FrontmatterYamlWriterService? yamlWriterService,
+    InformationSourceOfTruthLocatorService? sourceOfTruthLocatorService,
   }) : _yamlWriterService =
-           yamlWriterService ?? const FrontmatterYamlWriterService();
+           yamlWriterService ?? const FrontmatterYamlWriterService(),
+       _sourceOfTruthLocatorService =
+           sourceOfTruthLocatorService ??
+           const InformationSourceOfTruthLocatorService();
 
   static const String knowledgeReferenceBlockId =
       'project_knowledge_references';
@@ -26,6 +32,7 @@ class InformationMarkdownProjectionService {
   static const String referenceWorkDraftBlockId = 'reference_work_drafts';
 
   final FrontmatterYamlWriterService _yamlWriterService;
+  final InformationSourceOfTruthLocatorService _sourceOfTruthLocatorService;
 
   List<InformationProjectionDocument> buildDocuments(
     InformationProjectionSource source,
@@ -48,19 +55,19 @@ class InformationMarkdownProjectionService {
             InformationProjectionDocument.knowledgeSummaryProjectionId,
         title: '项目知识摘要',
         sourceOfTruthPaths: <String>[
-          '.novel_agent/information/knowledge_cards/*.json',
+          _sourceOfTruthLocatorService.knowledgeCardsCollectionLocator(),
         ],
         editableDraftBlocks: <String>[knowledgeDraftBlockId],
       ),
       '# 项目知识摘要',
       '',
-      '> 这份 Markdown 只是结构化信息事实源的可读投影，不是运行时真相。',
-      '> 用户编辑只能通过文末 knowledge draft block 回流为结构化 proposal draft，不能直接覆盖隐藏 JSON 事实源。',
+      '> 这份 Markdown 只保留轻摘要与人工补充入口，不镜像完整结构化事实。',
+      '> 如需补充或修订，请只通过文末 knowledge draft block 提交结构化草案。',
       '',
       '## 当前摘要概览',
       '',
       '- 当前知识卡数：${cards.length}',
-      '- 事实源位置：`.novel_agent/information/knowledge_cards/*.json`',
+      '- 主事实源标识：`${_sourceOfTruthLocatorService.knowledgeCardsCollectionLocator()}`',
       '- 删除这份投影不会删除底层结构化事实源。',
       '',
       '## 当前知识卡明细',
@@ -75,16 +82,7 @@ class InformationMarkdownProjectionService {
     }
     lines
       ..add('')
-      ..add('## 结构化参考快照（只读参考）')
-      ..add('')
-      ..add(
-        _jsonBlock(
-          knowledgeReferenceBlockId,
-          cards.map((item) => item.toJson()).toList(growable: false),
-        ),
-      )
-      ..add('')
-      ..add('## 可编辑 Knowledge Proposal Draft')
+      ..add('## 人工补充 Knowledge Draft')
       ..add('')
       ..add(_jsonBlock(knowledgeDraftBlockId, const <Object?>[]));
     return InformationProjectionDocument(
@@ -104,19 +102,19 @@ class InformationMarkdownProjectionService {
         projectionId: InformationProjectionDocument.designSummaryProjectionId,
         title: '设计元素摘要',
         sourceOfTruthPaths: <String>[
-          '.novel_agent/information/design_elements/*.json',
+          _sourceOfTruthLocatorService.designElementsCollectionLocator(),
         ],
         editableDraftBlocks: <String>[designDraftBlockId],
       ),
       '# 设计元素摘要',
       '',
-      '> 这份 Markdown 只投影当前设计元素卡，方便人工浏览、对照和补充草案。',
-      '> 如需修订，请在文末 design draft block 中提交结构化 proposal draft，不要把 Markdown 当成事实源。',
+      '> 这份 Markdown 只保留设计元素轻摘要与人工补充入口，不回放完整结构化载荷。',
+      '> 如需修订，请在文末 design draft block 中提交结构化草案。',
       '',
       '## 当前摘要概览',
       '',
       '- 当前设计元素数：${cards.length}',
-      '- 事实源位置：`.novel_agent/information/design_elements/*.json`',
+      '- 主事实源标识：`${_sourceOfTruthLocatorService.designElementsCollectionLocator()}`',
       '- 删除这份投影不会删除底层结构化事实源。',
       '',
       '## 当前设计元素明细',
@@ -131,16 +129,7 @@ class InformationMarkdownProjectionService {
     }
     lines
       ..add('')
-      ..add('## 结构化参考快照（只读参考）')
-      ..add('')
-      ..add(
-        _jsonBlock(
-          designReferenceBlockId,
-          cards.map((item) => item.toJson()).toList(growable: false),
-        ),
-      )
-      ..add('')
-      ..add('## 可编辑 Design Proposal Draft')
+      ..add('## 人工补充 Design Draft')
       ..add('')
       ..add(_jsonBlock(designDraftBlockId, const <Object?>[]));
     return InformationProjectionDocument(
@@ -160,19 +149,19 @@ class InformationMarkdownProjectionService {
         projectionId: InformationProjectionDocument.researchSummaryProjectionId,
         title: '资料研究摘要',
         sourceOfTruthPaths: <String>[
-          '.novel_agent/information/research_notes/*.json',
+          _sourceOfTruthLocatorService.researchNotesCollectionLocator(),
         ],
         editableDraftBlocks: <String>[researchDraftBlockId],
       ),
       '# 资料研究摘要',
       '',
-      '> 这份 Markdown 只用于浏览当前研究笔记，不会替代底层研究记录。',
-      '> 如需人工补充，请在文末 research draft block 中提交结构化草案，不能直接改写隐藏事实源。',
+      '> 这份 Markdown 只保留研究摘要、来源定位与人工补充入口。',
+      '> 如需人工补充，请在文末 research draft block 中提交结构化草案。',
       '',
       '## 当前摘要概览',
       '',
       '- 当前研究笔记数：${notes.length}',
-      '- 事实源位置：`.novel_agent/information/research_notes/*.json`',
+      '- 主事实源标识：`${_sourceOfTruthLocatorService.researchNotesCollectionLocator()}`',
       '- 删除这份投影不会删除底层结构化事实源。',
       '',
       '## 当前研究笔记明细',
@@ -187,16 +176,7 @@ class InformationMarkdownProjectionService {
     }
     lines
       ..add('')
-      ..add('## 结构化参考快照（只读参考）')
-      ..add('')
-      ..add(
-        _jsonBlock(
-          researchReferenceBlockId,
-          notes.map((item) => item.toJson()).toList(growable: false),
-        ),
-      )
-      ..add('')
-      ..add('## 可编辑 Research Proposal Draft')
+      ..add('## 人工补充 Research Draft')
       ..add('')
       ..add(_jsonBlock(researchDraftBlockId, const <Object?>[]));
     return InformationProjectionDocument(
@@ -217,19 +197,19 @@ class InformationMarkdownProjectionService {
             InformationProjectionDocument.referenceBoundaryProjectionId,
         title: '引用作品边界',
         sourceOfTruthPaths: <String>[
-          '.novel_agent/information/reference_works/*.json',
+          _sourceOfTruthLocatorService.referenceWorksCollectionLocator(),
         ],
         editableDraftBlocks: <String>[referenceWorkDraftBlockId],
       ),
       '# 引用作品边界',
       '',
-      '> 这份 Markdown 只投影当前引用作品边界与使用意图，方便人工核对风险。',
-      '> 若要修订边界，请在文末 reference work draft block 中提交结构化草案，不能直接改写隐藏事实源。',
+      '> 这份 Markdown 只保留边界轻摘要、风险提示与人工补充入口。',
+      '> 若要修订边界，请在文末 reference work draft block 中提交结构化草案。',
       '',
       '## 当前摘要概览',
       '',
       '- 当前引用作品记录数：${works.length}',
-      '- 事实源位置：`.novel_agent/information/reference_works/*.json`',
+      '- 主事实源标识：`${_sourceOfTruthLocatorService.referenceWorksCollectionLocator()}`',
       '- 删除这份投影不会删除底层结构化事实源。',
       '',
       '## 当前引用作品明细',
@@ -244,16 +224,7 @@ class InformationMarkdownProjectionService {
     }
     lines
       ..add('')
-      ..add('## 结构化参考快照（只读参考）')
-      ..add('')
-      ..add(
-        _jsonBlock(
-          referenceWorkReferenceBlockId,
-          works.map((item) => item.toJson()).toList(growable: false),
-        ),
-      )
-      ..add('')
-      ..add('## 可编辑 Reference Work Proposal Draft')
+      ..add('## 人工补充 Reference Work Draft')
       ..add('')
       ..add(_jsonBlock(referenceWorkDraftBlockId, const <Object?>[]));
     return InformationProjectionDocument(
@@ -275,9 +246,10 @@ class InformationMarkdownProjectionService {
       '- 置信度：${card.confidence}',
       '- 激活优先级：`${card.activationPolicy.activationPriority}`',
       '- 使用模式：`${card.usagePolicy.usageMode}`',
-      '- 来源：${_joinedSourceLabels(card.sourceRefs)}',
+      '- 来源身份：${_joinedSourceLabels(card.sourceRefs)}',
+      '- 证据数：${card.evidenceRefs.length}',
       '- 摘要：${card.summary.trim().isEmpty ? '无' : card.summary}',
-      '- Payload：`${jsonEncode(card.contentPayload)}`',
+      '- 关键字段：${_mapPreview(card.contentPayload)}',
       '',
     ];
   }
@@ -293,9 +265,10 @@ class InformationMarkdownProjectionService {
       '- 不确定性：${card.uncertainty.trim().isEmpty ? '无' : card.uncertainty}',
       '- 激活优先级：`${card.activationPolicy.activationPriority}`',
       '- 使用模式：`${card.usagePolicy.usageMode}`',
-      '- 来源：${_joinedSourceLabels(card.sourceRefs)}',
+      '- 来源身份：${_joinedSourceLabels(card.sourceRefs)}',
+      '- 证据数：${card.evidenceRefs.length}',
       '- Linked Refs：${card.linkedRefs.length}',
-      '- Payload：`${jsonEncode(card.designPayload)}`',
+      '- 设计要点：${_mapPreview(card.designPayload)}',
       '',
     ];
   }
@@ -306,7 +279,7 @@ class InformationMarkdownProjectionService {
       '',
       '- Research ID：`${note.researchId}`',
       '- Source Kind：`${note.sourceKind}`',
-      '- Source Ref：`${note.sourceUrlOrRef}`',
+      '- 来源定位：${_displayResearchSourceLocator(note.sourceUrlOrRef)}',
       '- Citation：${note.citation.trim().isEmpty ? '无' : note.citation}',
       '- 使用模式：`${note.usagePolicy.usageMode}`',
       '- 可用事实数：${note.usableFacts.length}',
@@ -330,7 +303,7 @@ class InformationMarkdownProjectionService {
       '- Allowed Usage Summary：${record.allowedUsageSummary.trim().isEmpty ? '无' : record.allowedUsageSummary}',
       '- Requires Confirmation：${record.requiresConfirmation}',
       '- 风险记录数：${record.riskNotes.length}',
-      '- 来源：${_joinedSourceLabels(record.sourceRefs)}',
+      '- 来源身份：${_joinedSourceLabels(record.sourceRefs)}',
       '',
     ];
   }
@@ -339,11 +312,76 @@ class InformationMarkdownProjectionService {
     final labels = sourceRefs
         .map((entry) {
           final dynamic ref = entry;
-          final sourceRef = ref.sourceRef;
-          return '`${sourceRef.sourceType}` / `${sourceRef.sourceId}`';
+          final identity = ref.sourceIdentity as SourceAssetIdentity;
+          return _sourceIdentityLabel(identity);
         })
+        .where((label) => label.isNotEmpty)
         .toList(growable: false);
     return labels.isEmpty ? '无' : labels.join('；');
+  }
+
+  String _sourceIdentityLabel(SourceAssetIdentity identity) {
+    final primary = identity.displayName.trim().isNotEmpty
+        ? identity.displayName.trim()
+        : identity.sourceAssetId.trim();
+    final assetId = identity.sourceAssetId.trim();
+    final kind = identity.sourceKind.trim();
+    final parts = <String>[];
+    if (primary.isNotEmpty) {
+      parts.add(primary);
+    }
+    if (assetId.isNotEmpty && assetId != primary) {
+      parts.add('`${_truncate(assetId, maxLength: 64)}`');
+    }
+    if (kind.isNotEmpty) {
+      parts.add('kind:`$kind`');
+    }
+    return parts.join(' / ');
+  }
+
+  String _mapPreview(Map<String, Object?> payload) {
+    if (payload.isEmpty) {
+      return '无';
+    }
+    final entries = payload.entries
+        .take(3)
+        .map((entry) {
+          final value = entry.value;
+          final valuePreview = switch (value) {
+            null => 'null',
+            String() => _truncate(value, maxLength: 48),
+            num() || bool() => '$value',
+            Map() => '[map:${value.length}]',
+            List() => '[list:${value.length}]',
+            _ => '[complex]',
+          };
+          return '${entry.key}=$valuePreview';
+        })
+        .toList(growable: false);
+    final suffix = payload.length > entries.length
+        ? '；其余 ${payload.length - entries.length} 项省略'
+        : '';
+    return entries.join('；') + suffix;
+  }
+
+  String _displayResearchSourceLocator(String sourceUrlOrRef) {
+    final trimmed = sourceUrlOrRef.trim();
+    if (trimmed.isEmpty) {
+      return '无';
+    }
+    if (SourceAssetIdentity.isAbsolutePath(trimmed)) {
+      final normalized = SourceAssetIdentity.normalizeLocalHintPath(trimmed);
+      return normalized.isEmpty ? '`local-file`' : '`$normalized`';
+    }
+    return '`${_truncate(trimmed, maxLength: 96)}`';
+  }
+
+  String _truncate(String value, {required int maxLength}) {
+    final trimmed = value.trim();
+    if (trimmed.length <= maxLength) {
+      return trimmed;
+    }
+    return '${trimmed.substring(0, maxLength - 3)}...';
   }
 
   String _frontmatter({

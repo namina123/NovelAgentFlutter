@@ -1,6 +1,7 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
 import 'task_runtime_constants.dart';
+import 'writing_execution_outcome_statuses.dart';
 
 class LongTaskRunLifecycleService {
   JsonMap pauseRecord(
@@ -37,6 +38,52 @@ class LongTaskRunLifecycleService {
     next['updated_at'] = createdAt.isEmpty
         ? DateTime.now().toIso8601String()
         : createdAt;
+    return next;
+  }
+
+  JsonMap resumeRecordAfterCheckpointConfirmation(
+    JsonMap record, {
+    String note = '',
+    String checkpointReviewPath = '',
+    String createdAt = '',
+  }) {
+    final next = resumeRecord(record, note: note, createdAt: createdAt);
+    final summary = note.trim().isEmpty
+        ? '用户已确认当前 checkpoint，长任务恢复继续调度。'
+        : note.trim();
+    next['last_writing_execution_result'] = <String, Object?>{
+      'execution_id': '',
+      'workflow_kind': 'long_task_checkpoint_acknowledged',
+      'overall_status': WritingExecutionOutcomeStatuses.success,
+      'summary': summary,
+      'delivery': const <String, Object?>{},
+      'constraints': const <String, Object?>{},
+      'information': const <String, Object?>{
+        'present': false,
+        'risk_category': 'accept',
+        'summary': '',
+      },
+      'collaboration': const <String, Object?>{},
+      'recovery': const <String, Object?>{},
+      'next_action': 'resume_dispatch',
+      'blocks_progress': false,
+      'retryable': false,
+      'requires_user_action': false,
+      'schema_version': 1,
+      'metadata': <String, Object?>{
+        'checkpoint_review_acknowledged': true,
+        if (checkpointReviewPath.trim().isNotEmpty)
+          'checkpoint_review_path': checkpointReviewPath.trim(),
+      },
+    };
+    next['last_writing_execution_category'] = 'success';
+    next['last_writing_execution_status'] =
+        WritingExecutionOutcomeStatuses.success;
+    next['last_writing_execution_summary'] = summary;
+    next['last_writing_execution_next_action'] = 'resume_dispatch';
+    next['last_information_risk_category'] = 'accept';
+    next['last_information_summary'] = '';
+    next['last_chapter_delivery_state'] = '';
     return next;
   }
 

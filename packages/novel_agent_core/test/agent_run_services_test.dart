@@ -39,6 +39,33 @@ void main() {
       expect(policy['mode'], 'only_plan');
     });
 
+    test('retries after read-only tool round when assistant returns empty', () {
+      final decision = policyService.afterToolRoundDecision(
+        const <String, Object?>{'ok': true, 'content': ''},
+        roundHasPlanTool: false,
+        planContinueRetryUsed: false,
+        executedTools: <Object?>[
+          <String, Object?>{
+            'name': 'read_project_file',
+            'ok': true,
+            'result': <String, Object?>{'ok': true},
+          },
+          <String, Object?>{
+            'name': 'list_project_files',
+            'ok': true,
+            'result': <String, Object?>{'ok': true},
+          },
+        ],
+        writtenPaths: const <Object?>[],
+      );
+
+      expect(decision['retry_after_read_only_context'], isTrue);
+      expect(
+        ValueReaders.stringValue(decision['continue_instruction']),
+        contains('直接给出本轮实质结果'),
+      );
+    });
+
     test('builds response packages', () {
       // 中文注释: 这里验证主智能体和子智能体结果包装后都保留运行层需要的稳定字段。
       final response = responseService.runResponsePackage(

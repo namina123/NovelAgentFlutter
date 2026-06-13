@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../shared/widgets/action_button.dart';
+import '../models/project_creation_expression_constraint_defaults_view_data.dart';
 import '../../../workbench/presentation/models/tool_preview_mode.dart';
+import 'project_creation_expression_constraint_defaults_panel.dart';
 import 'settings_form_section.dart';
 import 'settings_labeled_dropdown_field.dart';
 import 'settings_switch_row.dart';
@@ -11,10 +13,15 @@ class ToolStrategySettingsPanel extends StatefulWidget {
     super.key,
     required this.settings,
     required this.onSaved,
+    this.projectCreationDefaultsViewData,
+    this.onProjectCreationDefaultsSaved,
   });
 
   final Map<String, Object?> settings;
   final ValueChanged<Map<String, Object?>> onSaved;
+  final ProjectCreationExpressionConstraintDefaultsViewData?
+  projectCreationDefaultsViewData;
+  final ValueChanged<Map<String, Object?>>? onProjectCreationDefaultsSaved;
 
   @override
   State<ToolStrategySettingsPanel> createState() =>
@@ -185,6 +192,14 @@ class _ToolStrategySettingsPanelState extends State<ToolStrategySettingsPanel> {
             });
           },
         ),
+        if (widget.projectCreationDefaultsViewData != null &&
+            widget.onProjectCreationDefaultsSaved != null) ...[
+          const SizedBox(height: 16),
+          ProjectCreationExpressionConstraintDefaultsPanel(
+            viewData: widget.projectCreationDefaultsViewData!,
+            onSaved: widget.onProjectCreationDefaultsSaved!,
+          ),
+        ],
       ],
     );
   }

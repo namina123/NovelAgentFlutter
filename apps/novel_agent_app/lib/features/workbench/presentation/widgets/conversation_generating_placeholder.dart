@@ -9,32 +9,57 @@ class ConversationGeneratingPlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.novelThemeColors;
+    final surface = context.novelThemeSurfaces.inputDock;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
       decoration: BoxDecoration(
-        color: colors.warmColor.withValues(alpha: 0.56),
+        color: surface.backgroundColor.withValues(alpha: 0.92),
         borderRadius: AppChrome.surfaceBorderRadius,
         border: Border.all(
-          color: colors.warmStrongColor.withValues(alpha: 0.42),
+          color: surface.borderColor.withValues(alpha: 0.92),
           width: AppChrome.borderWidth,
         ),
       ),
       child: Row(
         children: [
-          const SizedBox(
-            width: 12,
-            height: 12,
-            child: CircularProgressIndicator(strokeWidth: 2),
+          Container(
+            width: 18,
+            height: 18,
+            decoration: BoxDecoration(
+              color: colors.accentSoftColor.withValues(alpha: 0.78),
+              borderRadius: BorderRadius.circular(5),
+            ),
+            child: Icon(
+              Icons.stream_rounded,
+              size: 13,
+              color: colors.accentColor,
+            ),
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(
-              '智能体正在处理当前请求...',
-              style: TextStyle(
-                color: colors.textColor,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '智能体正在生成回复',
+                  style: TextStyle(
+                    color: colors.textColor,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '输出会随着工具执行和推理进度持续写入当前会话。',
+                  style: TextStyle(
+                    color: colors.mutedTextColor,
+                    fontSize: 10.5,
+                    height: 1.35,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
             ),
           ),
         ],

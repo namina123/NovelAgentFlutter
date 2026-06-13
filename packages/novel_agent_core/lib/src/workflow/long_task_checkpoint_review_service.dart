@@ -2,7 +2,10 @@ import '../common/json_types.dart';
 import '../common/value_readers.dart';
 import '../creative/expression_constraint_review_projection.dart';
 import '../creative/expression_constraint_review_projection_service.dart';
+import '../creative/expression_constraint_surface_risk_scan_service.dart';
+import 'expression_constraint_supervisor_signal_service.dart';
 import 'long_task_checkpoint_drift_signal_service.dart';
+import 'writing_execution_constraint_bridge_result.dart';
 import 'writing_execution_result.dart';
 import 'writing_execution_result_codec_service.dart';
 import 'narrative_supervisor_risk_policy_service.dart';
@@ -16,6 +19,10 @@ class LongTaskCheckpointReviewService {
     NarrativeSupervisorRiskPolicyService? narrativeSupervisorRiskPolicyService,
     ExpressionConstraintReviewProjectionService?
     expressionConstraintReviewProjectionService,
+    ExpressionConstraintSurfaceRiskScanService?
+    expressionConstraintSurfaceRiskScanService,
+    ExpressionConstraintSupervisorSignalService?
+    expressionConstraintSupervisorSignalService,
     WritingExecutionResultCodecService? writingExecutionResultCodecService,
   }) : _taskSummaryService = taskSummaryService,
        _driftSignalService =
@@ -26,6 +33,12 @@ class LongTaskCheckpointReviewService {
        _expressionConstraintReviewProjectionService =
            expressionConstraintReviewProjectionService ??
            const ExpressionConstraintReviewProjectionService(),
+       _expressionConstraintSurfaceRiskScanService =
+           expressionConstraintSurfaceRiskScanService ??
+           const ExpressionConstraintSurfaceRiskScanService(),
+       _expressionConstraintSupervisorSignalService =
+           expressionConstraintSupervisorSignalService ??
+           const ExpressionConstraintSupervisorSignalService(),
        _writingExecutionResultCodecService =
            writingExecutionResultCodecService ??
            const WritingExecutionResultCodecService();
@@ -36,6 +49,10 @@ class LongTaskCheckpointReviewService {
   _narrativeSupervisorRiskPolicyService;
   final ExpressionConstraintReviewProjectionService
   _expressionConstraintReviewProjectionService;
+  final ExpressionConstraintSurfaceRiskScanService
+  _expressionConstraintSurfaceRiskScanService;
+  final ExpressionConstraintSupervisorSignalService
+  _expressionConstraintSupervisorSignalService;
   final WritingExecutionResultCodecService _writingExecutionResultCodecService;
 
   JsonMap buildReview({
@@ -58,17 +75,34 @@ class LongTaskCheckpointReviewService {
       ValueReaders.stringValue(taskSummary['task_type']),
     );
     final stage = ValueReaders.stringValue(metadata['stage']);
-    final cleanOutputs = _mergePaths(
-      ValueReaders.stringList(task['output_paths']),
-      outputPaths,
-    );
+    final cleanOutputs = _dedupePaths(outputPaths);
+    final expectedOutputs = ValueReaders.stringList(task['output_paths']);
     final chapterLengthEvaluation = ValueReaders.mapValue(
       result['chapter_length_evaluation'],
     );
     final expressionConstraintReview =
-        _expressionConstraintReviewProjectionService.buildFromCreativeRuleStack(
-          _creativeRuleStack(execution),
+        _expressionConstraintSurfaceRiskScanService.merge(
+          _expressionConstraintReviewProjectionService
+              .buildFromCreativeRuleStack(_creativeRuleStack(execution)),
+          ExpressionConstraintReviewProjection.fromJson(
+            ValueReaders.mapValue(
+              result['expression_constraint_surface_review'],
+            ),
+          ),
         );
+    final executionConstraintBridgeResult = _executionConstraintBridgeResult(
+      execution,
+    );
+    final writingExecutionConstraints = executionConstraintBridgeResult == null
+        ? const <String, Object?>{}
+        : _expressionConstraintSupervisorSignalService
+              .projectionFromBridgeResult(executionConstraintBridgeResult);
+    final expressionConstraintSignal = executionConstraintBridgeResult == null
+        ? const <String, Object?>{}
+        : _expressionConstraintSupervisorSignalService.signalFromBridgeResult(
+            bridgeResult: executionConstraintBridgeResult,
+            review: expressionConstraintReview,
+          );
     final confirmationFocus = _confirmationFocus(
       taskType: taskType,
       stage: stage,
@@ -100,7 +134,11 @@ class LongTaskCheckpointReviewService {
       collaborationSignal: _collaborationSignal(result, execution),
     );
     final narrativeSupervisorRisk = _narrativeSupervisorRiskPolicyService
-        .assess(result: result, execution: execution);
+        .assess(
+          result: result,
+          execution: execution,
+          expressionConstraintSignal: expressionConstraintSignal,
+        );
     final informationSignal = ValueReaders.mapValue(
       narrativeSupervisorRisk['information'],
     );
@@ -135,6 +173,8 @@ class LongTaskCheckpointReviewService {
       'drift_signals': driftSignals,
       'drift_watch_items': driftWatchItems,
       'expression_constraint_review': expressionConstraintReview.toJson(),
+      'writing_execution_constraints': writingExecutionConstraints,
+      'expression_constraint_signal': expressionConstraintSignal,
       'mini_recheck_items': miniRecheckItems,
       'next_actions': nextActions,
       'narrative_supervisor_risk': narrativeSupervisorRisk,
@@ -149,6 +189,7 @@ class LongTaskCheckpointReviewService {
       'collaboration_summary': ValueReaders.stringValue(
         collaborationSignal['summary'],
       ),
+      'expected_output_paths': expectedOutputs,
       'output_paths': cleanOutputs,
       'tool_names': _toolNames(result),
       'changed_paths': ValueReaders.stringList(result['changed_paths']),
@@ -341,6 +382,16 @@ class LongTaskCheckpointReviewService {
     };
   }
 
+  WritingExecutionConstraintBridgeResult? _executionConstraintBridgeResult(
+    JsonMap execution,
+  ) {
+    final raw = ValueReaders.mapValue(execution['execution_constraints']);
+    if (raw.isEmpty) {
+      return null;
+    }
+    return WritingExecutionConstraintBridgeResult.fromJson(raw);
+  }
+
   WritingExecutionResult? _sharedWritingExecutionResult(
     JsonMap result,
     JsonMap execution,
@@ -457,9 +508,9 @@ class LongTaskCheckpointReviewService {
     return tools;
   }
 
-  List<String> _mergePaths(List<String> left, List<String> right) {
-    final result = <String>[...left];
-    for (final item in right) {
+  List<String> _dedupePaths(List<String> paths) {
+    final result = <String>[];
+    for (final item in paths) {
       if (!result.contains(item)) {
         result.add(item);
       }

@@ -1,3 +1,4 @@
+import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'open_document_state.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
@@ -10,6 +11,8 @@ class WorkbenchProjectRuntimeState {
     this.openDocuments = const <OpenDocumentState>[],
     this.activeOpenDocumentId = '',
     this.currentProjectLongTaskRuns = const <RunInstance>[],
+    this.currentProjectLongTaskRunDetails =
+        const <String, ProjectLongTaskStationDetail>{},
     this.isProjectLongTaskSummaryLoading = false,
     this.isSavingWorkbenchSnapshot = false,
   });
@@ -21,6 +24,8 @@ class WorkbenchProjectRuntimeState {
   final List<OpenDocumentState> openDocuments;
   final String activeOpenDocumentId;
   final List<RunInstance> currentProjectLongTaskRuns;
+  final Map<String, ProjectLongTaskStationDetail>
+  currentProjectLongTaskRunDetails;
   final bool isProjectLongTaskSummaryLoading;
   final bool isSavingWorkbenchSnapshot;
 
@@ -32,6 +37,7 @@ class WorkbenchProjectRuntimeState {
     List<OpenDocumentState>? openDocuments,
     String? activeOpenDocumentId,
     List<RunInstance>? currentProjectLongTaskRuns,
+    Map<String, ProjectLongTaskStationDetail>? currentProjectLongTaskRunDetails,
     bool? isProjectLongTaskSummaryLoading,
     bool? isSavingWorkbenchSnapshot,
   }) {
@@ -52,6 +58,9 @@ class WorkbenchProjectRuntimeState {
       activeOpenDocumentId: activeOpenDocumentId ?? this.activeOpenDocumentId,
       currentProjectLongTaskRuns:
           currentProjectLongTaskRuns ?? this.currentProjectLongTaskRuns,
+      currentProjectLongTaskRunDetails:
+          currentProjectLongTaskRunDetails ??
+          this.currentProjectLongTaskRunDetails,
       isProjectLongTaskSummaryLoading:
           isProjectLongTaskSummaryLoading ??
           this.isProjectLongTaskSummaryLoading,

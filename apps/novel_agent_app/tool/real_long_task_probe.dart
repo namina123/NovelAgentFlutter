@@ -5,11 +5,17 @@ import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import 'probe_support.dart';
+import '../../../tools/probe_config_support.dart';
 
-Future<void> main() async {
+Future<void> main(List<String> arguments) async {
   // 中文注释: 该探针使用统一探针配置源真实跑一段 mode 1 长任务主链，重点核对样章门槛、正文落盘、角色状态与技能调用。
-  final repoRoot = _resolveRepoRoot();
-  final apiConfig = await loadProbeApiConfig(probeName: 'real_long_task_probe');
+  await ensureLocalRealProbeOptIn(probeName: 'real_long_task_probe');
+  final stopAfterSample = arguments.contains('--stop-after-sample');
+  final repoRoot = resolveLocalProbeRepoRoot();
+  final apiConfig = await loadProbeApiConfig(
+    probeName: 'real_long_task_probe',
+    repoRootOverride: repoRoot,
+  );
   final provider = ProviderEndpointSettings(
     id: 'real_long_task_probe',
     title: 'Real Long Task Probe',
@@ -84,13 +90,21 @@ Future<void> main() async {
     },
   );
 
-  final projectRoot = await Directory.systemTemp.createTemp(
-    'novel_agent_real_long_task_probe_',
+  final runId = DateTime.now().toIso8601String();
+  final projectRoot = buildProbeWorkspaceDirectory(
+    repoRoot: repoRoot,
+    probeName: 'real_long_task_probe',
+    runId: runId,
   );
+  await projectRoot.create(recursive: true);
   final report = <String, Object?>{
     'provider_id': provider.id,
     'model_id': provider.modelId,
+    'probe_config_source': apiConfig.sourceLabel,
+    'run_id': runId,
     'started_at': DateTime.now().toIso8601String(),
+    'workspace_root': projectRoot.path,
+    'stop_after_sample': stopAfterSample,
   };
   try {
     final project = await createProjectWorkspaceUseCase.execute(
@@ -252,6 +266,100 @@ Future<void> main() async {
       note: '真实探针确认样章检查点通过。',
     );
 
+    final samplePrompt = ValueReaders.stringValue(
+      ValueReaders.mapValue(
+        samplePrepared['execution'],
+      )['prompt_preview_markdown'],
+    );
+    final planningInformationProbe = buildInformationProbeAssessment(
+      probeLabel: 'long_task_planning',
+      activationReport: ValueReaders.mapValue(
+        ValueReaders.mapValue(planningResult['execution'])['activation_report'],
+      ),
+      changedPaths: ValueReaders.objectList(planningResult['changed_paths']),
+      toolNames: _resultToolNames(planningResult),
+    );
+    final sampleInformationProbe = buildInformationProbeAssessment(
+      probeLabel: 'long_task_sample',
+      activationReport: ValueReaders.mapValue(
+        ValueReaders.mapValue(samplePrepared['execution'])['activation_report'],
+      ),
+      changedPaths: ValueReaders.objectList(sampleResult['changed_paths']),
+      toolNames: _resultToolNames(sampleResult),
+    );
+    final sampleCheckpointReview = ValueReaders.mapValue(
+      samplePostprocess['checkpoint_review'],
+    );
+    final sampleCheckpointReviewBody = ValueReaders.mapValue(
+      sampleCheckpointReview['review'],
+    );
+    if (stopAfterSample) {
+      final projectFiles = await bundle.projectWorkspacePort.listEntries(
+        project.rootPath,
+      );
+      report.addAll(<String, Object?>{
+        'ok': true,
+        'report_category': ProbeReportCategories.success,
+        'project_root': project.rootPath,
+        'planning': <String, Object?>{
+          'ok': ValueReaders.boolValue(planningResult['ok']),
+          'status_after_step': ValueReaders.stringValue(
+            planningTaskAfter['status'],
+          ),
+          'changed_paths': ValueReaders.stringList(
+            planningResult['changed_paths'],
+          ),
+          'tool_summary': planningToolSummary,
+          'checkpoint_review_path': planningCheckpointReviewPath,
+          'information_probe': planningInformationProbe,
+        },
+        'sample': <String, Object?>{
+          'ok': ValueReaders.boolValue(sampleResult['ok']),
+          'status_after_step': ValueReaders.stringValue(
+            sampleTaskAfter['status'],
+          ),
+          'output_paths': ValueReaders.stringList(sampleResult['output_paths']),
+          'tool_summary': _toolSummary(sampleResult),
+          'postprocess_output_paths': ValueReaders.stringList(
+            samplePostprocess['output_paths'],
+          ),
+          'postprocess_tools': _resultToolNames(samplePostprocess),
+          'checkpoint_review_path': sampleCheckpointReviewPath,
+          'checkpoint_information_summary': ValueReaders.stringValue(
+            sampleCheckpointReviewBody['information_summary'],
+          ),
+          'checkpoint_information_signal': ValueReaders.deepCopyMap(
+            ValueReaders.mapValue(sampleCheckpointReviewBody['information_signal']),
+          ),
+          'prompt_has_word_target': samplePrompt.contains('目标约 1400 字'),
+          'information_probe': sampleInformationProbe,
+        },
+        'character_state_written': projectFiles.any((entry) {
+          final path = ValueReaders.stringValue(entry['relative_path']);
+          final lower = path.toLowerCase();
+          return lower.startsWith('assets/characters/') ||
+              lower.startsWith('characters/');
+        }),
+        'chapter_file_written': projectFiles.any(
+          (entry) => ValueReaders.stringValue(
+            entry['relative_path'],
+          ).startsWith('chapters/'),
+        ),
+        'summary_file_written': projectFiles.any(
+          (entry) => ValueReaders.stringValue(
+            entry['relative_path'],
+          ).startsWith('summaries/'),
+        ),
+        'all_project_files': projectFiles
+            .map((entry) => ValueReaders.stringValue(entry['relative_path']))
+            .toList(growable: false),
+      });
+      report['information_probe'] = _summarizeLongTaskInformationProbe(report);
+      report['sample_checkpoint_information_visible'] =
+          sampleCheckpointReviewBody.containsKey('information_summary');
+      return;
+    }
+
     final chapterTwoTrace = <String, Object?>{
       'steps': <Object?>[],
       'resolved': false,
@@ -402,10 +510,13 @@ Future<void> main() async {
       },
     );
 
-    final samplePrompt = ValueReaders.stringValue(
-      ValueReaders.mapValue(
-        samplePrepared['execution'],
-      )['prompt_preview_markdown'],
+    final chapterTwoInformationProbe = buildInformationProbeAssessment(
+      probeLabel: 'long_task_chapter_02',
+      activationReport: ValueReaders.mapValue(
+        ValueReaders.mapValue(chapterTwoResult['execution'])['activation_report'],
+      ),
+      changedPaths: ValueReaders.objectList(chapterTwoResult['changed_paths']),
+      toolNames: _resultToolNames(chapterTwoResult),
     );
     final projectFiles = await bundle.projectWorkspacePort.listEntries(
       project.rootPath,
@@ -424,6 +535,7 @@ Future<void> main() async {
         ),
         'tool_summary': planningToolSummary,
         'checkpoint_review_path': planningCheckpointReviewPath,
+        'information_probe': planningInformationProbe,
       },
       'sample': <String, Object?>{
         'ok': ValueReaders.boolValue(sampleResult['ok']),
@@ -438,6 +550,7 @@ Future<void> main() async {
         'postprocess_tools': _resultToolNames(samplePostprocess),
         'checkpoint_review_path': sampleCheckpointReviewPath,
         'prompt_has_word_target': samplePrompt.contains('目标约 1400 字'),
+        'information_probe': sampleInformationProbe,
       },
       'chapter_02': <String, Object?>{
         'ok': ValueReaders.boolValue(chapterTwoResult['ok']),
@@ -455,6 +568,7 @@ Future<void> main() async {
         'postprocess_tools': _resultToolNames(chapterTwoPostprocess),
         'checkpoint_review_path': chapterTwoCheckpointReviewPath,
         'trace': chapterTwoTrace,
+        'information_probe': chapterTwoInformationProbe,
       },
       'character_state_written': projectFiles.any((entry) {
         final path = ValueReaders.stringValue(entry['relative_path']);
@@ -476,6 +590,7 @@ Future<void> main() async {
           .map((entry) => ValueReaders.stringValue(entry['relative_path']))
           .toList(growable: false),
     });
+    report['information_probe'] = _summarizeLongTaskInformationProbe(report);
   } catch (error, stackTrace) {
     report['ok'] = false;
     report['error'] = '$error';
@@ -485,6 +600,15 @@ Future<void> main() async {
       errorSummary: '$error',
     );
   } finally {
+    if (ValueReaders.boolValue(report['ok'])) {
+      report['report_category'] = classifyDraftProbeReportCategory(
+        ok: true,
+        validation: <String, Object?>{
+          'information_probe': ValueReaders.mapValue(report['information_probe']),
+        },
+      );
+      report['ok'] = report['report_category'] == ProbeReportCategories.success;
+    }
     report['finished_at'] = DateTime.now().toIso8601String();
     final reportFile = File(
       '$repoRoot${Platform.pathSeparator}artifacts${Platform.pathSeparator}real_long_task_probe_report.json',
@@ -495,32 +619,7 @@ Future<void> main() async {
     );
     stdout.writeln('report: ${reportFile.path}');
     stdout.writeln(ValueReaders.boolValue(report['ok']) ? 'PASS' : 'FAIL');
-    if (await projectRoot.exists()) {
-      await projectRoot.delete(recursive: true);
-    }
   }
-}
-
-String _resolveRepoRoot() {
-  // 中文注释: 真实探针既可能从 apps/novel_agent_app 执行，也可能从仓库根执行，这里统一向上定位仓库根。
-  var current = Directory.current.absolute;
-  for (var depth = 0; depth < 6; depth += 1) {
-    final settingsCandidate = File(
-      '${current.path}${Platform.pathSeparator}temp${Platform.pathSeparator}novel_agent_settings.json',
-    );
-    final testApiCandidate = File(
-      '${current.path}${Platform.pathSeparator}test_api.txt',
-    );
-    if (settingsCandidate.existsSync() || testApiCandidate.existsSync()) {
-      return current.path;
-    }
-    final parent = current.parent;
-    if (parent.path == current.path) {
-      break;
-    }
-    current = parent;
-  }
-  return Directory.current.absolute.path;
 }
 
 Map<String, Object?> _toolSummary(JsonMap result) {
@@ -748,4 +847,51 @@ Future<void> _seedReadyState({
     );
   }
   await repository.save(project, state);
+}
+
+JsonMap _summarizeLongTaskInformationProbe(JsonMap report) {
+  final activationSourceKinds = <String>{};
+  final changedPaths = <String>{};
+  final toolNames = <String>{};
+  final summaries = <String>[];
+  final assessments = <Map<String, Object?>>[];
+  for (final key in const <String>['planning', 'sample', 'chapter_02']) {
+    final section = ValueReaders.mapValue(report[key]);
+    final informationProbe = ValueReaders.mapValue(section['information_probe']);
+    if (informationProbe.isEmpty) {
+      continue;
+    }
+    assessments.add(informationProbe);
+    activationSourceKinds.addAll(
+      ValueReaders.stringList(informationProbe['activation_source_kinds']),
+    );
+    changedPaths.addAll(
+      ValueReaders.stringList(informationProbe['information_changed_paths']),
+    );
+    toolNames.addAll(
+      ValueReaders.stringList(informationProbe['information_tool_names']),
+    );
+    final summary = ValueReaders.stringValue(informationProbe['summary']);
+    if (summary.isNotEmpty) {
+      summaries.add(summary);
+    }
+  }
+  final ok = assessments.every(
+    (assessment) => ValueReaders.boolValue(assessment['ok'], true),
+  );
+  return <String, Object?>{
+    'ok': ok,
+    'probe_label': 'long_task_information_probe',
+    'expectation_mode': 'observe_only',
+    'activation_source_kinds': activationSourceKinds.toList(growable: false),
+    'information_changed_paths': changedPaths.toList(growable: false),
+    'information_tool_names': toolNames.toList(growable: false),
+    'report_category': ok
+        ? ProbeReportCategories.success
+        : ProbeReportCategories.informationQualityFailure,
+    'step_count': assessments.length,
+    'summary': summaries.isEmpty
+        ? 'information probe observation collected'
+        : summaries.join('；'),
+  };
 }

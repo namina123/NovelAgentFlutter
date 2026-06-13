@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../app/theme/app_chrome.dart';
+import '../../../../../app/theme/app_typography.dart';
 import 'conversation_entry_palette.dart';
 
 class ConversationDetailSection extends StatefulWidget {
@@ -56,47 +57,63 @@ class _ConversationDetailSectionState extends State<ConversationDetailSection> {
               _expanded = !_expanded;
             });
           },
-          child: Row(
-            children: [
-              Icon(
-                _expanded
-                    ? Icons.expand_less_rounded
-                    : Icons.expand_more_rounded,
-                size: 16,
-                color: widget.palette.foreground,
+          borderRadius: BorderRadius.circular(6),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: widget.palette.detailBackground.withValues(alpha: 0.32),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: widget.palette.border.withValues(alpha: 0.22),
+                width: AppChrome.borderWidth,
               ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Text(
-                  _toggleLabel(),
-                  style: TextStyle(
-                    color: widget.palette.foreground,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  _expanded
+                      ? Icons.expand_less_rounded
+                      : Icons.expand_more_rounded,
+                  size: 16,
+                  color: widget.palette.foreground.withValues(alpha: 0.88),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    _toggleLabel(),
+                    style: TextStyle(
+                      color: widget.palette.foreground.withValues(alpha: 0.88),
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
         if (_expanded) ...[
           const SizedBox(height: 6),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.fromLTRB(11, 10, 11, 11),
             decoration: BoxDecoration(
-              color: widget.palette.detailBackground,
+              color: widget.palette.detailBackground.withValues(alpha: 0.86),
+              borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: widget.palette.border,
+                color: widget.palette.border.withValues(alpha: 0.32),
                 width: AppChrome.borderWidth,
               ),
             ),
             child: SelectableText(
               cleanBody,
-              style: TextStyle(
-                color: widget.palette.detailForeground,
-                fontSize: 12,
-                height: 1.45,
+              style: AppTypography.applyMonospaceFallback(
+                TextStyle(
+                  color: widget.palette.detailForeground,
+                  fontSize: 11.4,
+                  height: 1.56,
+                  fontFamily: 'Consolas',
+                ),
               ),
             ),
           ),

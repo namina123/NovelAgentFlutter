@@ -11,11 +11,12 @@ void main() {
     late LocalProjectWorkspacePort workspacePort;
     late LocalNarrativeProfileRepository profileRepository;
     late LocalNarrativeClaimRepository claimRepository;
+    late LocalNarrativeLedgerRepository ledgerRepository;
     late LocalConstraintBindingRepository bindingRepository;
-    late LocalKnowledgeCardRepository knowledgeCardRepository;
-    late LocalDesignElementRepository designElementRepository;
-    late LocalResearchNoteRepository researchNoteRepository;
-    late LocalReferenceWorkRepository referenceWorkRepository;
+    late KnowledgeCardRepository knowledgeCardRepository;
+    late DesignElementRepository designElementRepository;
+    late ResearchNoteRepository researchNoteRepository;
+    late ReferenceWorkRepository referenceWorkRepository;
     late ProjectContextActivationService service;
 
     setUp(() async {
@@ -29,21 +30,16 @@ void main() {
       claimRepository = LocalNarrativeClaimRepository(
         workspacePort: workspacePort,
       );
+      ledgerRepository = LocalNarrativeLedgerRepository(
+        workspacePort: workspacePort,
+      );
       bindingRepository = LocalConstraintBindingRepository(
         workspacePort: workspacePort,
       );
-      knowledgeCardRepository = LocalKnowledgeCardRepository(
-        workspacePort: workspacePort,
-      );
-      designElementRepository = LocalDesignElementRepository(
-        workspacePort: workspacePort,
-      );
-      researchNoteRepository = LocalResearchNoteRepository(
-        workspacePort: workspacePort,
-      );
-      referenceWorkRepository = LocalReferenceWorkRepository(
-        workspacePort: workspacePort,
-      );
+      knowledgeCardRepository = SqliteKnowledgeCardRepository();
+      designElementRepository = SqliteDesignElementRepository();
+      researchNoteRepository = SqliteResearchNoteRepository();
+      referenceWorkRepository = SqliteReferenceWorkRepository();
       project = ProjectDescriptor(
         id: 'project_1',
         name: '上下文桥接测试',
@@ -53,6 +49,7 @@ void main() {
         workspacePort: workspacePort,
         profileRepository: profileRepository,
         claimRepository: claimRepository,
+        ledgerRepository: ledgerRepository,
         bindingRepository: bindingRepository,
       );
     });
@@ -111,6 +108,31 @@ void main() {
             confidence: 0.91,
           ),
         );
+        await ledgerRepository.appendLedgerEntry(
+          project,
+          NarrativeLedgerEntry(
+            entryId: 'entry-claim-eclipse',
+            claim: NarrativeStateClaim(
+              claimId: 'claim-eclipse',
+              claimNamespace: 'continuity',
+              claimLabel: '月蚀记忆一致',
+              claimPayload: const <String, Object?>{'fact': '所有核心角色保留上一轮记忆'},
+              contextRefs: const <NarrativeRef>[
+                NarrativeRef(
+                  refType: NarrativeRefTypes.chapter,
+                  refId: 'chapter-12',
+                  relativePath: 'chapters/chapter_12.md',
+                  displayName: '第12章',
+                ),
+              ],
+              source: _source(),
+              confidence: 0.91,
+            ),
+            disposition: NarrativeClaimDisposition.accepted,
+            source: _source(),
+          ),
+          ledgerId: 'main-ledger',
+        );
         await bindingRepository.appendBinding(
           project,
           NarrativeConstraintBindingProposal(
@@ -138,6 +160,13 @@ void main() {
             summary: '钟楼轮回每次都会在钟声前十五分钟重置。',
             contentPayload: const <String, Object?>{'fact': '主角会在钟楼轮回重置时保留记忆'},
             sourceRefs: <InformationSourceRef>[_sourceRef()],
+            evidenceRefs: const <NarrativeEvidenceRef>[
+              NarrativeEvidenceRef(
+                evidenceType: 'chapter_excerpt',
+                evidenceId: 'knowledge-evidence-1',
+                summary: '钟楼轮回证据段落',
+              ),
+            ],
             activationPolicy: const InformationActivationPolicy(
               activationPriority: InformationActivationPriorities.required,
               preferredBudgetChars: 220,
@@ -158,6 +187,13 @@ void main() {
             designLabel: '镜潮回扣',
             designPayload: const <String, Object?>{'pattern': '镜与潮在章首章尾形成呼应'},
             sourceRefs: <InformationSourceRef>[_sourceRef()],
+            evidenceRefs: const <NarrativeEvidenceRef>[
+              NarrativeEvidenceRef(
+                evidenceType: 'design_excerpt',
+                evidenceId: 'design-evidence-1',
+                summary: '镜潮呼应证据',
+              ),
+            ],
             scopeRefs: const <NarrativeRef>[
               NarrativeRef(
                 refType: NarrativeRefTypes.chapter,
@@ -257,7 +293,10 @@ void main() {
           (item) => item.itemId == 'profile:hero',
         );
         final claimItem = plan.items.singleWhere(
-          (item) => item.itemId == 'claim:claim-eclipse',
+          (item) =>
+              ValueReaders.stringValue(item.metadata['claim_id']) ==
+                  'claim-eclipse' &&
+              item.source == 'narrative_claim',
         );
         final constraintItem = plan.items.singleWhere(
           (item) => item.itemId == 'constraint:constraint-style',
@@ -292,8 +331,36 @@ void main() {
           'character',
         );
         expect(claimItem.refs.single.relativePath, 'chapters/chapter_12.md');
+        expect(
+          ValueReaders.stringValue(claimItem.metadata['source_kind']),
+          'narrative_claim',
+        );
+        expect(
+          ValueReaders.stringValue(claimItem.metadata['truth_status']),
+          'formal_ledger',
+        );
+        expect(
+          ValueReaders.stringValue(
+            claimItem.metadata['source_of_truth_locator'],
+          ),
+          '.novel_agent/continuity/ledgers/main-ledger/entries.jsonl#entry-claim-eclipse',
+        );
         expect(constraintItem.reasonDetails['required'], isTrue);
         expect(knowledgeItem.reasonDetails['required'], isTrue);
+        expect(
+          knowledgeItem.targetPath,
+          'project-information://knowledge_cards/knowledge-loop-rule',
+        );
+        expect(
+          ValueReaders.stringValue(
+            knowledgeItem.metadata['source_of_truth_locator'],
+          ),
+          'project-information://knowledge_cards/knowledge-loop-rule',
+        );
+        expect(
+          ValueReaders.mapList(knowledgeItem.metadata['evidence_refs']),
+          isNotEmpty,
+        );
         expect(
           designItem.activationReasons,
           contains(ContextActivationReasonCodes.manualPin),
@@ -303,12 +370,22 @@ void main() {
           'project_design_element',
         );
         expect(
+          ValueReaders.mapList(designItem.metadata['evidence_refs']),
+          isNotEmpty,
+        );
+        expect(
           ValueReaders.stringValue(
             researchItem.metadata['activation_priority'],
           ),
           InformationActivationPriorities.reference,
         );
-        expect(referenceItem.reasonDetails['required'], isTrue);
+        expect(referenceItem.reasonDetails['required'], isFalse);
+        expect(
+          File(
+            '${project.rootPath}${Platform.pathSeparator}.novel_agent${Platform.pathSeparator}information${Platform.pathSeparator}knowledge_cards${Platform.pathSeparator}knowledge-loop-rule.json',
+          ).existsSync(),
+          isFalse,
+        );
         expect(
           ValueReaders.mapValue(plan.metadata['candidate_source_counts']),
           <String, Object?>{
@@ -320,6 +397,124 @@ void main() {
             'project_design_element': 1,
             'project_research_note': 1,
             'project_reference_work': 1,
+          },
+        );
+      },
+    );
+
+    test(
+      'buildPlan downgrades raw claim submissions and hides rejected ledger entries from formal truth candidates',
+      () async {
+        await claimRepository.appendClaim(
+          project,
+          NarrativeStateClaim(
+            claimId: 'claim-accepted',
+            claimNamespace: 'continuity',
+            claimLabel: '正式状态',
+            claimPayload: const <String, Object?>{'fact': '已确认事实'},
+            source: _source(),
+            confidence: 0.95,
+          ),
+        );
+        await claimRepository.appendClaim(
+          project,
+          NarrativeStateClaim(
+            claimId: 'claim-pending',
+            claimNamespace: 'continuity',
+            claimLabel: '待裁决状态',
+            claimPayload: const <String, Object?>{'fact': '尚待确认'},
+            source: _source(),
+            confidence: 0.6,
+          ),
+        );
+        await claimRepository.appendClaim(
+          project,
+          NarrativeStateClaim(
+            claimId: 'claim-rejected',
+            claimNamespace: 'continuity',
+            claimLabel: '已否决状态',
+            claimPayload: const <String, Object?>{'fact': '已否决'},
+            source: _source(),
+            confidence: 0.4,
+          ),
+        );
+        await ledgerRepository.appendLedgerEntry(
+          project,
+          NarrativeLedgerEntry(
+            entryId: 'entry-accepted',
+            claim: NarrativeStateClaim(
+              claimId: 'claim-accepted',
+              claimNamespace: 'continuity',
+              claimLabel: '正式状态',
+              claimPayload: const <String, Object?>{'fact': '已确认事实'},
+              source: _source(),
+              confidence: 0.95,
+            ),
+            disposition: NarrativeClaimDisposition.accepted,
+            source: _source(),
+          ),
+          ledgerId: 'main-ledger',
+        );
+        await ledgerRepository.appendLedgerEntry(
+          project,
+          NarrativeLedgerEntry(
+            entryId: 'entry-rejected',
+            claim: NarrativeStateClaim(
+              claimId: 'claim-rejected',
+              claimNamespace: 'continuity',
+              claimLabel: '已否决状态',
+              claimPayload: const <String, Object?>{'fact': '已否决'},
+              source: _source(),
+              confidence: 0.4,
+            ),
+            disposition: NarrativeClaimDisposition.rejected,
+            source: _source(),
+          ),
+          ledgerId: 'main-ledger',
+        );
+
+        final plan = await service.buildPlan(project: project);
+
+        final acceptedItem = plan.items.singleWhere(
+          (item) =>
+              ValueReaders.stringValue(item.metadata['claim_id']) ==
+                  'claim-accepted' &&
+              item.source == 'narrative_claim',
+        );
+        final pendingItem = plan.items.singleWhere(
+          (item) =>
+              ValueReaders.stringValue(item.metadata['claim_id']) ==
+                  'claim-pending' &&
+              item.source == 'narrative_claim_submission',
+        );
+
+        expect(
+          ValueReaders.stringValue(acceptedItem.metadata['truth_status']),
+          'formal_ledger',
+        );
+        expect(
+          ValueReaders.stringValue(pendingItem.metadata['truth_status']),
+          'submission_log',
+        );
+        expect(
+          ValueReaders.stringValue(
+            pendingItem.metadata['source_of_truth_locator'],
+          ),
+          '.novel_agent/continuity/claims/claims.jsonl#claim-pending',
+        );
+        expect(
+          plan.items.where(
+            (item) =>
+                ValueReaders.stringValue(item.metadata['claim_id']) ==
+                'claim-rejected',
+          ),
+          isEmpty,
+        );
+        expect(
+          ValueReaders.mapValue(plan.metadata['candidate_source_counts']),
+          <String, Object?>{
+            'narrative_claim': 1,
+            'narrative_claim_submission': 1,
           },
         );
       },
@@ -387,6 +582,13 @@ void main() {
               'effect': '制造宿命感',
             },
             sourceRefs: <InformationSourceRef>[_sourceRef()],
+            evidenceRefs: const <NarrativeEvidenceRef>[
+              NarrativeEvidenceRef(
+                evidenceType: 'design_excerpt',
+                evidenceId: 'design-selected-evidence-1',
+                summary: '钟声回扣证据',
+              ),
+            ],
             linkedRefs: const <NarrativeRef>[
               NarrativeRef(
                 refType: NarrativeRefTypes.chapter,
@@ -560,6 +762,24 @@ void main() {
           ),
           isTrue,
         );
+        final designSection = selectedSections.firstWhere(
+          (entry) =>
+              ValueReaders.stringValue(entry['item_id']) ==
+              'design:design-selected',
+        );
+        expect(
+          ValueReaders.stringValue(designSection['source_of_truth_locator']),
+          'project-information://design_elements/design-selected',
+        );
+        expect(
+          ValueReaders.stringValue(designSection['source_display']),
+          isNotEmpty,
+        );
+        expect(ValueReaders.mapList(designSection['source_refs']), isNotEmpty);
+        expect(
+          ValueReaders.mapList(designSection['evidence_refs']),
+          isNotEmpty,
+        );
         expect(
           truncatedSections.any(
             (entry) =>
@@ -578,6 +798,240 @@ void main() {
         );
         expect(report.summary, contains('selected profiles'));
         expect(report.summary, contains('design'));
+      },
+    );
+
+    test(
+      'buildReport prioritizes recent chapter handoff assets for focused chapter execution',
+      () async {
+        await _writeFile(
+          tempDirectory.path,
+          'premise/project_brief.md',
+          '项目简介：一个需要长期保持章节衔接的故事。',
+        );
+        await _writeFile(
+          tempDirectory.path,
+          'specs/project_spec.md',
+          '规格：正文必须承接上一章状态继续推进。',
+        );
+        await _writeFile(
+          tempDirectory.path,
+          'styles/seed_autopilot_style.md',
+          '风格：保持口吻连续。',
+        );
+        await _writeFile(
+          tempDirectory.path,
+          'outlines/story/总纲.md',
+          '总纲：主角在小镇站稳脚跟。',
+        );
+        await _writeFile(
+          tempDirectory.path,
+          'outlines/chapters/章节任务清单.md',
+          '第02章：探镇。第03章：落脚。',
+        );
+        await _writeFile(
+          tempDirectory.path,
+          'world/seed_autopilot_world_anchor.md',
+          '世界锚点：明代江南小镇。',
+        );
+        await _writeFile(
+          tempDirectory.path,
+          'assets/characters/protagonist_lu_an.md',
+          '主角卡：陆安，刚刚进入小镇。',
+        );
+        await _writeFile(
+          tempDirectory.path,
+          'summaries/第02章摘要：找到落脚处.summary.md',
+          '第02章摘要：陆安找到王保正家，已经敲门并开口询问落户之事。',
+        );
+        await _writeFile(
+          tempDirectory.path,
+          'assets/timeline/第02章_探镇.timeline.md',
+          '第02章时间线：陆安在章末已经站到王保正面前并提出落户问题。',
+        );
+        await _writeFile(
+          tempDirectory.path,
+          'chapters/第02章_探镇.md',
+          '# 第02章\n\n前文铺垫。\n\n王保正家的门终于开了。陆安把冻僵的手缩回袖里，先把准备好的说辞咽了一遍，又盯住门槛里那双旧布鞋。那人没让他进门，只站在门内问他是哪来的。陆安知道自己已经站到这一步，不能再退回去装糊涂，于是把“想在镇上寻个落脚处、愿意先做粗活换口饭”这句话慢慢说了出来。门里的人没立刻答，先把他从头到脚看了一遍。巷口的风钻进来，吹得门板吱呀一响。陆安没再补话，只等着对方开口。',
+        );
+        await _writeFile(
+          tempDirectory.path,
+          '.novel_agent/continuity/deliveries/submission_chapters_第02章_探镇.md.json',
+          '{"submission":{"summary":"第02章交付：章末已到王保正门前并发问。","final_state_summary":{"location":"王保正家门口","active_goal":"争取一个能暂时落脚的机会","next_chapter_handoff":"从王保正的回应继续，不要回退到寻路或敲门前。"}}}',
+        );
+
+        final report = await service.buildReport(
+          project: project,
+          taskType: 'chapter',
+          chapterLabel: '第03章',
+          budgetChars: 2600,
+          reservedOutputChars: 200,
+          maxFiles: 5,
+          pinnedRelativePaths: const <String>[
+            'specs/project_spec.md',
+            'outlines/story/总纲.md',
+            'outlines/chapters/章节任务清单.md',
+          ],
+        );
+
+        final selectedIds = report.selectedItemIds;
+        final summaryId = 'file:summaries/第02章摘要：找到落脚处.summary.md';
+        final timelineId = 'file:assets/timeline/第02章_探镇.timeline.md';
+        final deliveryId =
+            'file:.novel_agent/continuity/deliveries/submission_chapters_第02章_探镇.md.json';
+        final continuationPointId = 'chapter_tail:chapters/第02章_探镇.md';
+        final specId = 'file:specs/project_spec.md';
+
+        expect(selectedIds, contains(summaryId));
+        expect(selectedIds, contains(timelineId));
+        expect(selectedIds, contains(deliveryId));
+        expect(selectedIds, contains(continuationPointId));
+        expect(
+          selectedIds.indexOf(summaryId),
+          lessThan(selectedIds.indexOf(specId)),
+        );
+        expect(
+          selectedIds.indexOf(timelineId),
+          lessThan(selectedIds.indexOf(specId)),
+        );
+        expect(
+          selectedIds.indexOf(deliveryId),
+          lessThan(selectedIds.indexOf(specId)),
+        );
+        expect(
+          selectedIds.indexOf(continuationPointId),
+          lessThan(selectedIds.indexOf(specId)),
+        );
+        final selectedSections = ValueReaders.mapList(
+          report.metadata['selected_context_sections'],
+        );
+        final deliverySection = selectedSections.firstWhere(
+          (entry) => ValueReaders.stringValue(entry['item_id']) == deliveryId,
+        );
+        final continuationSection = selectedSections.firstWhere(
+          (entry) =>
+              ValueReaders.stringValue(entry['item_id']) == continuationPointId,
+        );
+        expect(
+          ValueReaders.stringValue(deliverySection['selected_text']),
+          contains('上一章已完成剧情（不要重复重演）'),
+        );
+        expect(
+          ValueReaders.stringValue(deliverySection['selected_text']),
+          contains('从王保正的回应继续'),
+        );
+        expect(
+          ValueReaders.stringValue(continuationSection['selected_text']),
+          contains('优先承接锚点：从王保正的回应继续'),
+        );
+      },
+    );
+
+    test(
+      'buildReport applies chapter handoff assets to continuation writing tasks beyond raw chapter type',
+      () async {
+        await _writeFile(
+          tempDirectory.path,
+          'specs/project_spec.md',
+          '规格：分章续写必须承接上一章章末状态。',
+        );
+        await _writeFile(
+          tempDirectory.path,
+          'summaries/第02章：摸底.summary.md',
+          '第02章摘要：章末已经把落脚请求说出口，下一章应直接承接回应。',
+        );
+        await _writeFile(
+          tempDirectory.path,
+          'assets/timeline/第02章_摸底.timeline.md',
+          '第02章时间线：王保正已经开门，陆安已说明来意。',
+        );
+        await _writeFile(
+          tempDirectory.path,
+          'chapters/第02章_摸底.md',
+          '# 第02章\n\n陆安把话说完，只等门里的人给一句回音。',
+        );
+        await _writeFile(
+          tempDirectory.path,
+          '.novel_agent/continuity/deliveries/submission_chapters_第02章_摸底.md.json',
+          '{"submission":{"summary":"第02章交付：章末已提出落脚请求。","final_state_summary":{"next_chapter_handoff":"直接从对方回应继续。"}}}',
+        );
+
+        final report = await service.buildReport(
+          project: project,
+          taskType: 'book_deconstruction_continuation',
+          chapterLabel: '第03章',
+          budgetChars: 2600,
+          reservedOutputChars: 200,
+          maxFiles: 4,
+          pinnedRelativePaths: const <String>['specs/project_spec.md'],
+        );
+
+        expect(
+          report.selectedItemIds,
+          containsAll(<String>[
+            'file:summaries/第02章：摸底.summary.md',
+            'file:assets/timeline/第02章_摸底.timeline.md',
+            'file:.novel_agent/continuity/deliveries/submission_chapters_第02章_摸底.md.json',
+            'chapter_tail:chapters/第02章_摸底.md',
+          ]),
+        );
+        final selectedSections = ValueReaders.mapList(
+          report.metadata['selected_context_sections'],
+        );
+        final continuationSection = selectedSections.firstWhere(
+          (entry) =>
+              ValueReaders.stringValue(entry['item_id']) ==
+              'chapter_tail:chapters/第02章_摸底.md',
+        );
+        expect(
+          ValueReaders.stringValue(continuationSection['selected_text']),
+          contains('优先承接锚点：直接从对方回应继续。'),
+        );
+      },
+    );
+
+    test(
+      'buildReport recognizes Chinese chapter numerals for continuity handoff selection',
+      () async {
+        await _writeFile(
+          tempDirectory.path,
+          'summaries/第02章：摸底.summary.md',
+          '第02章摘要：章末已经把落脚请求说出口，下一章应直接承接回应。',
+        );
+        await _writeFile(
+          tempDirectory.path,
+          'assets/timeline/第02章_摸底.timeline.md',
+          '第02章时间线：王保正已经开门，陆安已说明来意。',
+        );
+        await _writeFile(
+          tempDirectory.path,
+          'chapters/第02章_摸底.md',
+          '# 第02章\n\n陆安把话说完，只等门里的人给一句回音。',
+        );
+        await _writeFile(
+          tempDirectory.path,
+          '.novel_agent/continuity/deliveries/submission_chapters_第02章_摸底.md.json',
+          '{"submission":{"summary":"第02章交付：章末已提出落脚请求。","final_state_summary":{"next_chapter_handoff":"直接从对方回应继续。"}}}',
+        );
+
+        final report = await service.buildReport(
+          project: project,
+          taskType: 'chapter',
+          chapterLabel: '第三章',
+          budgetChars: 2400,
+          reservedOutputChars: 200,
+          maxFiles: 4,
+        );
+
+        expect(
+          report.selectedItemIds,
+          containsAll(<String>[
+            'file:summaries/第02章：摸底.summary.md',
+            'file:assets/timeline/第02章_摸底.timeline.md',
+            'file:.novel_agent/continuity/deliveries/submission_chapters_第02章_摸底.md.json',
+            'chapter_tail:chapters/第02章_摸底.md',
+          ]),
+        );
       },
     );
   });

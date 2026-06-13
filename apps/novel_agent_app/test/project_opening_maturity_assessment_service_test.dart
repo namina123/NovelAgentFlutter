@@ -61,6 +61,51 @@ void main() {
       expect(assessment.summary, contains('可直接继续推进长篇协作'));
     },
   );
+
+  test(
+    'maturity service uses full resource snapshot even when tree is collapsed',
+    () {
+      const service = ProjectOpeningMaturityAssessmentService();
+
+      final assessment = service.build(
+        projectType: 'long_novel',
+        resourceEntries: const <ResourceEntryViewData>[
+          ResourceEntryViewData(
+            id: 'premise/project_brief.md',
+            title: 'project_brief.md',
+            relativePath: 'premise/project_brief.md',
+            depth: 1,
+            isDirectory: false,
+          ),
+          ResourceEntryViewData(
+            id: 'outlines',
+            title: 'outlines',
+            relativePath: 'outlines',
+            depth: 0,
+            isDirectory: true,
+          ),
+        ],
+        resourceSnapshotEntries: const <JsonMap>[
+          <String, Object?>{
+            'relative_path': 'premise/project_brief.md',
+            'is_dir': false,
+          },
+          <String, Object?>{
+            'relative_path': 'outlines/story/总纲.md',
+            'is_dir': false,
+          },
+          <String, Object?>{
+            'relative_path': 'outlines/chapters/章节任务清单.md',
+            'is_dir': false,
+          },
+        ],
+        openingProjection: _projection(canStartInteractiveSession: false),
+      );
+
+      expect(assessment.stage, ProjectOpeningMaturityStage.continueReady);
+      expect(assessment.shouldShowOpeningEntry, isFalse);
+    },
+  );
 }
 
 OpeningSessionProjection _projection({

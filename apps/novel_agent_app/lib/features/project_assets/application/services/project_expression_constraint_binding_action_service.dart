@@ -12,6 +12,10 @@ class ProjectExpressionConstraintBindingActionService {
   }) {
     // 中文注释: 编辑器请求只负责生成一条新的绑定快照，不在控制器里散落 CSV 和权重清洗逻辑。
     final existing = _bindingOf(currentBindings, profile.id);
+    final nextMetadata = Map<String, Object?>.from(
+      existing?.metadata ?? const <String, Object?>{},
+    );
+    nextMetadata['policy_mode'] = _policyMode(request.selectedPolicyMode);
     final nextBinding = ProjectExpressionConstraintBinding(
       id: existing?.id.trim().isNotEmpty == true ? existing!.id : profile.id,
       profileId: profile.id,
@@ -25,9 +29,7 @@ class ProjectExpressionConstraintBindingActionService {
         request.weightText,
         fallback: existing?.weight ?? 100,
       ),
-      metadata: Map<String, Object?>.from(
-        existing?.metadata ?? const <String, Object?>{},
-      ),
+      metadata: nextMetadata,
     );
     final nextBindings = <ProjectExpressionConstraintBinding>[
       for (final binding in currentBindings)
@@ -124,5 +126,16 @@ class ProjectExpressionConstraintBindingActionService {
       return fallback;
     }
     return parsed;
+  }
+
+  String _policyMode(String rawMode) {
+    final cleanMode = rawMode.trim().toLowerCase();
+    return switch (cleanMode) {
+      ExpressionConstraintExecutionPolicyModes.disabled =>
+        ExpressionConstraintExecutionPolicyModes.disabled,
+      ExpressionConstraintExecutionPolicyModes.force =>
+        ExpressionConstraintExecutionPolicyModes.force,
+      _ => ExpressionConstraintExecutionPolicyModes.adaptive,
+    };
   }
 }

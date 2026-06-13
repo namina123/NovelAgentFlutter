@@ -94,5 +94,63 @@ void main() {
         expect(content, contains('"persistent_context_paths"'));
       },
     );
+
+    test(
+      'setAgentTasks inherits workflow plan metadata from hidden context',
+      () async {
+        final planResult = await executor.setAgentTasks(
+          project,
+          <String, Object?>{
+            'goal': '补齐规划产物',
+            '_workflow_task_context': <String, Object?>{
+              'id': 'planning_seed_001',
+              'title': '规划：长篇开局',
+              'task_type': 'planning',
+              'mode': TaskRuntimeConstants.modeSeedToFullNovel,
+              'workflow_mode': TaskRuntimeConstants.modeSeedToFullNovel,
+              'metadata': <String, Object?>{
+                'plan_id': 'plan_seed_001',
+                'generated_by': 'LongTaskPlanner',
+                'runtime_baseline_id': 'continuous_autonomous',
+                'workflow_mode': TaskRuntimeConstants.modeSeedToFullNovel,
+                'stage': 'planning',
+              },
+            },
+            'tasks': <Object?>[
+              <String, Object?>{
+                'id': 'write_spec',
+                'title': '写入项目规格',
+                'task_type': 'planning',
+                'output_paths': <Object?>['specs/project_spec.md'],
+              },
+            ],
+          },
+        );
+
+        expect(ValueReaders.boolValue(planResult['ok']), isTrue);
+        final persistedTask = ValueReaders.mapValue(
+          ValueReaders.objectList(planResult['tasks']).single,
+        );
+        expect(
+          ValueReaders.stringValue(persistedTask['mode']),
+          TaskRuntimeConstants.modeSeedToFullNovel,
+        );
+        final metadata = ValueReaders.mapValue(persistedTask['metadata']);
+        expect(ValueReaders.stringValue(metadata['plan_id']), 'plan_seed_001');
+        expect(
+          ValueReaders.stringValue(metadata['generated_by']),
+          'LongTaskPlanner',
+        );
+        expect(
+          ValueReaders.stringValue(metadata['runtime_baseline_id']),
+          'continuous_autonomous',
+        );
+        expect(
+          ValueReaders.stringValue(metadata['workflow_mode']),
+          TaskRuntimeConstants.modeSeedToFullNovel,
+        );
+        expect(ValueReaders.stringValue(metadata['stage']), 'planning');
+      },
+    );
   });
 }

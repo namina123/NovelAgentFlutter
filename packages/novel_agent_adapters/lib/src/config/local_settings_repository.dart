@@ -54,7 +54,7 @@ class LocalSettingsRepository implements SettingsRepository {
       networkSettings: _mapValue(document['network']),
       contextSettings: _mapValue(document['context']),
       themeSettings: _mapValue(document['theme']),
-      extraSettings: _remainingSettings(document),
+      extraSettings: _remainingSettings(document, basePath: documentBasePath),
     );
   }
 
@@ -64,19 +64,23 @@ class LocalSettingsRepository implements SettingsRepository {
     if (_lastSettingsBasePath.trim().isEmpty) {
       await load();
     }
-    final basePath = _lastSettingsBasePath.trim().isEmpty
+    final discoveredBasePath = _lastSettingsBasePath.trim().isEmpty
         ? Directory(_defaultProjectRootPath).absolute.parent.path
         : _lastSettingsBasePath;
-    final filePath = _resolvedSettingsFilePath(basePath);
+    final filePath = _resolvedSettingsFilePath(discoveredBasePath);
+    final fileBasePath = File(filePath).absolute.parent.path;
     final document = <String, Object?>{
       ..._lastLoadedDocument,
-      ...settings.extraSettings,
+      ..._sanitizedExtraSettingsForSave(
+        settings.extraSettings,
+        basePath: fileBasePath,
+      ),
       'default_provider_id': settings.defaultProviderId,
       'default_agent_id': settings.defaultAgentId,
       'default_model_id': settings.defaultModelId,
       'default_project_path': _storedProjectPath(
         settings.defaultProjectPath,
-        basePath: basePath,
+        basePath: fileBasePath,
       ),
       'auto_save_drafts': settings.autoSaveDrafts,
       'providers': settings.providers
@@ -98,7 +102,10 @@ class LocalSettingsRepository implements SettingsRepository {
     return load();
   }
 
-  JsonMap _remainingSettings(Map<String, Object?> document) {
+  JsonMap _remainingSettings(
+    Map<String, Object?> document, {
+    required String basePath,
+  }) {
     // 中文注释: 未被当前设置模型直接理解的键统一保留下来，方便未来扩展而不丢失用户手写配置。
     final next = Map<String, Object?>.from(document);
     for (final key in <String>[
@@ -116,21 +123,91 @@ class LocalSettingsRepository implements SettingsRepository {
     ]) {
       next.remove(key);
     }
-    return next;
+    return _resolvedExtraSettingsForLoad(next, basePath: basePath);
   }
 
   Map<String, Object?> _providerToDocument(ProviderEndpointSettings provider) {
     // 中文注释: provider 写回 JSON 时统一从模型投影，保持 GUI 与 CLI 使用同一份磁盘结构。
+    final storedProvider = _storedProviderDocument(provider.id);
     return <String, Object?>{
       'id': provider.id,
       'title': provider.title,
       'protocol': provider.protocol,
       'base_url': provider.baseUrl,
-      'api_key': provider.apiKey,
+      'api_key': _persistedProviderApiKey(
+        provider,
+        storedProviderDocument: storedProvider,
+      ),
       'model_id': provider.modelId,
       'description': provider.description,
       'is_default': provider.isDefault,
     };
+  }
+
+  JsonMap _sanitizedExtraSettingsForSave(
+    JsonMap extraSettings, {
+    required String basePath,
+  }) {
+    final next = Map<String, Object?>.from(extraSettings);
+    final workbenchState = _mapValue(next['workbench_state']);
+    if (workbenchState.isEmpty) {
+      return next;
+    }
+    final projectRootPath = _stringValue(workbenchState['project_root_path']);
+    next['workbench_state'] = <String, Object?>{
+      ...workbenchState,
+      'project_root_path': projectRootPath.trim().isEmpty
+          ? ''
+          : _storedProjectPath(projectRootPath, basePath: basePath),
+    };
+    return next;
+  }
+
+  JsonMap _resolvedExtraSettingsForLoad(
+    JsonMap extraSettings, {
+    required String basePath,
+  }) {
+    final next = Map<String, Object?>.from(extraSettings);
+    final workbenchState = _mapValue(next['workbench_state']);
+    if (workbenchState.isEmpty) {
+      return next;
+    }
+    final projectRootPath = _stringValue(workbenchState['project_root_path']);
+    next['workbench_state'] = <String, Object?>{
+      ...workbenchState,
+      'project_root_path': projectRootPath.trim().isEmpty
+          ? ''
+          : _resolveProjectPath(projectRootPath, basePath: basePath),
+    };
+    return next;
+  }
+
+  Map<String, Object?> _storedProviderDocument(String providerId) {
+    final providers = _lastLoadedDocument['providers'];
+    if (providers is! List) {
+      return const <String, Object?>{};
+    }
+    for (final entry in providers) {
+      final provider = _mapValue(entry);
+      if (_stringValue(provider['id']) == providerId) {
+        return provider;
+      }
+    }
+    return const <String, Object?>{};
+  }
+
+  String _persistedProviderApiKey(
+    ProviderEndpointSettings provider, {
+    required Map<String, Object?> storedProviderDocument,
+  }) {
+    final envApiKey = _env('NOVEL_AGENT_PROVIDER_API_KEY');
+    final envProviderId = _env('NOVEL_AGENT_PROVIDER_ID');
+    final providerMatchesOverride =
+        envProviderId.isEmpty || provider.id == envProviderId;
+    if (envApiKey.isEmpty || !providerMatchesOverride) {
+      return provider.apiKey;
+    }
+    return _stringValue(storedProviderDocument['api_key']);
   }
 
   Map<String, Object?> _normalizedNetworkDocument(JsonMap networkSettings) {
@@ -183,17 +260,79 @@ class LocalSettingsRepository implements SettingsRepository {
   }
 
   String _storedProjectPath(String projectPath, {required String basePath}) {
-    // 中文注释: 保存项目路径时尽量写成相对设置根的形式，保持桌面端配置可搬移；移动端仍可被固定根策略忽略。
+    // 中文注释: 保存项目路径时只要同一文件系统根就尽量转成相对路径，
+    // 避免 settings/ 与 projects/ 作为兄弟目录时退回绝对路径。
+    if (projectPath.trim().isEmpty) {
+      return '';
+    }
     final absoluteProjectPath = Directory(projectPath).absolute.path;
     final absoluteBasePath = Directory(basePath).absolute.path;
-    if (!absoluteProjectPath.startsWith(absoluteBasePath)) {
-      return absoluteProjectPath;
+    final relative = _relativePathFromBase(
+      absoluteTargetPath: absoluteProjectPath,
+      absoluteBasePath: absoluteBasePath,
+    );
+    return relative ?? absoluteProjectPath;
+  }
+
+  String? _relativePathFromBase({
+    required String absoluteTargetPath,
+    required String absoluteBasePath,
+  }) {
+    final normalizedTarget = _normalizePathForCompare(absoluteTargetPath);
+    final normalizedBase = _normalizePathForCompare(absoluteBasePath);
+    final targetRoot = _pathRoot(normalizedTarget);
+    final baseRoot = _pathRoot(normalizedBase);
+    if (targetRoot != baseRoot) {
+      return null;
     }
-    var relative = absoluteProjectPath.substring(absoluteBasePath.length);
-    if (relative.startsWith(Platform.pathSeparator)) {
-      relative = relative.substring(1);
+    final targetSegments = _pathSegmentsWithoutRoot(normalizedTarget);
+    final baseSegments = _pathSegmentsWithoutRoot(normalizedBase);
+    var common = 0;
+    final limit = targetSegments.length < baseSegments.length
+        ? targetSegments.length
+        : baseSegments.length;
+    while (common < limit && targetSegments[common] == baseSegments[common]) {
+      common += 1;
     }
-    return relative.replaceAll(Platform.pathSeparator, '/');
+    final result = <String>[
+      for (var index = common; index < baseSegments.length; index += 1) '..',
+      ...targetSegments.sublist(common),
+    ];
+    return result.isEmpty ? '.' : result.join('/');
+  }
+
+  String _normalizePathForCompare(String path) {
+    return Directory(path).absolute.path
+        .replaceAll('\\', '/')
+        .replaceAll(RegExp('/+'), '/')
+        .replaceAll(RegExp('/\$'), '')
+        .toLowerCase();
+  }
+
+  String _pathRoot(String normalizedPath) {
+    final windowsRoot = RegExp(r'^[a-z]:').stringMatch(normalizedPath);
+    if (windowsRoot != null) {
+      return windowsRoot;
+    }
+    return normalizedPath.startsWith('/') ? '/' : '';
+  }
+
+  List<String> _pathSegmentsWithoutRoot(String normalizedPath) {
+    final root = _pathRoot(normalizedPath);
+    var remainder = normalizedPath;
+    if (root.isNotEmpty) {
+      remainder = remainder.substring(root.length);
+    }
+    if (remainder.startsWith('/')) {
+      remainder = remainder.substring(1);
+    }
+    if (remainder.isEmpty) {
+      return const <String>[];
+    }
+    return remainder
+        .split('/')
+        .where((segment) => segment.trim().isNotEmpty)
+        .toList(growable: false);
   }
 
   Future<({Map<String, Object?> document, String basePath})>
@@ -363,14 +502,49 @@ class LocalSettingsRepository implements SettingsRepository {
   String _resolveProjectPath(String rawPath, {required String basePath}) {
     // 中文注释: 相对项目路径总是相对设置基准目录解析，避免再偷偷回到当前目录。
     if (rawPath.trim().isEmpty) {
-      return Directory(_defaultProjectRootPath).absolute.path;
+      return _normalizedAbsolutePath(_defaultProjectRootPath);
     }
     if (rawPath.startsWith('/') || RegExp(r'^[A-Za-z]:').hasMatch(rawPath)) {
-      return rawPath;
+      return _normalizedAbsolutePath(rawPath);
     }
-    return Directory(
+    return _normalizedAbsolutePath(
       '$basePath${Platform.pathSeparator}${rawPath.replaceAll('/', Platform.pathSeparator)}',
-    ).absolute.path;
+    );
+  }
+
+  String _normalizedAbsolutePath(String path) {
+    final absolutePath = Directory(path).absolute.path.replaceAll('\\', '/');
+    final root = _pathRoot(absolutePath);
+    var remainder = absolutePath;
+    if (root.isNotEmpty) {
+      remainder = remainder.substring(root.length);
+    }
+    if (remainder.startsWith('/')) {
+      remainder = remainder.substring(1);
+    }
+    final segments = <String>[];
+    for (final segment in remainder.split('/')) {
+      if (segment.isEmpty || segment == '.') {
+        continue;
+      }
+      if (segment == '..') {
+        if (segments.isNotEmpty) {
+          segments.removeLast();
+        }
+        continue;
+      }
+      segments.add(segment);
+    }
+    if (root == '/') {
+      return segments.isEmpty ? '/' : '/${segments.join('/')}';
+    }
+    if (RegExp(r'^[A-Za-z]:').hasMatch(root)) {
+      final body = segments.join(Platform.pathSeparator);
+      return body.isEmpty
+          ? '$root${Platform.pathSeparator}'
+          : '$root${Platform.pathSeparator}$body';
+    }
+    return segments.join(Platform.pathSeparator);
   }
 
   String _env(String key) {

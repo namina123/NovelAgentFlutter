@@ -41,6 +41,14 @@ void main() {
             'chapter_path': 'chapters/第01章.md',
             'chapter_content': '# 第01章\n\n正文内容',
             'title': '第01章',
+            'claims': <Object?>[
+              <String, Object?>{
+                'claim_id': 'delivery-claim-001',
+                'claim_namespace': 'continuity.chapter.delta',
+                'claim_payload': <String, Object?>{'weather': 'ash'},
+                'confidence': 0.75,
+              },
+            ],
             'submission': <String, Object?>{
               'summary': '章节摘要',
               'future_sidecar_flag': true,
@@ -303,6 +311,9 @@ void main() {
             chapterMetadata[OpenJsonContractCodecService
                     .unknownFieldsMetadataKey]
                 as Map<String, Object?>;
+        final chapterSubmission =
+            chapterDelivery.request!.requestPayload['submission']
+                as Map<String, Object?>;
         final parsedClaim =
             (claims.request!.requestPayload['claims'] as List<Object?>).single
                 as Map<String, Object?>;
@@ -318,6 +329,11 @@ void main() {
           (chapterUnknownFields['future_top_level']
               as Map<String, Object?>)['keep'],
           isTrue,
+        );
+        expect(
+          ((chapterSubmission['claims'] as List<Object?>).single
+                  as Map<String, Object?>)['claim_id'],
+          'delivery-claim-001',
         );
         expect(
           (parsedClaim['source'] as Map<String, Object?>)['source_type'],
@@ -492,5 +508,74 @@ void main() {
         NarrativeDomainToolValidationCodes.invalidNestedContract,
       );
     });
+
+    test(
+      'canonicalizes near-miss semantic review finding and claim aliases',
+      () {
+        final catalog = NarrativeDomainToolCatalog();
+        final request = catalog.parseRequest(
+          callId: 'call-review-aliases',
+          toolName: NarrativeDomainToolNames.submitSemanticReview,
+          source: const NarrativeSourceRef(
+            sourceType: NarrativeSourceTypes.reviewer,
+          ),
+          arguments: <String, Object?>{
+            'review_id': 'review-aliases-001',
+            'recommended_disposition': 'accept_with_note',
+            'suggested_claims': <Object?>[
+              <String, Object?>{
+                'id': 'claim-alias-001',
+                'namespace': 'continuity.asset_gap',
+                'title': '角色卡待补',
+                'payload': <String, Object?>{'target': 'assets/hero.md'},
+              },
+            ],
+            'findings': <Object?>[
+              <String, Object?>{
+                'id': 'finding-alias-001',
+                'title': '角色卡仍是占位符',
+                'severity': 'medium',
+                'detail': '角色资产文件只有占位说明。',
+                'evidence': '读取角色文件确认暂无正式内容。',
+                'action': '补齐角色主档后再继续扩大章节规划。',
+              },
+            ],
+          },
+        );
+
+        expect(request.isSuccess, isTrue);
+        final payload = request.request!.requestPayload;
+        final suggestedClaims = ValueReaders.mapList(payload['suggested_claims']);
+        final findings = ValueReaders.mapList(payload['findings']);
+        expect(
+          ValueReaders.stringValue(suggestedClaims.single['claim_id']),
+          'claim-alias-001',
+        );
+        expect(
+          ValueReaders.stringValue(suggestedClaims.single['claim_namespace']),
+          'continuity.asset_gap',
+        );
+        expect(
+          ValueReaders.stringValue(findings.single['finding_id']),
+          'finding-alias-001',
+        );
+        expect(
+          ValueReaders.stringValue(findings.single['summary']),
+          '角色卡仍是占位符',
+        );
+        expect(
+          ValueReaders.boolValue(findings.single['unable_to_locate_evidence']),
+          isTrue,
+        );
+        expect(
+          ValueReaders.stringValue(findings.single['unlocatable_reason']),
+          '读取角色文件确认暂无正式内容。',
+        );
+        expect(
+          ValueReaders.stringValue(findings.single['suggested_action']),
+          '补齐角色主档后再继续扩大章节规划。',
+        );
+      },
+    );
   });
 }

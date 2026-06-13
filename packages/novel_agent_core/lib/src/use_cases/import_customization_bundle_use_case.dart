@@ -31,16 +31,6 @@ class ImportCustomizationBundleUseCase {
     EcosystemAssetProposalService? proposalService,
     EcosystemAssetPathService? pathService,
   }) : _projectToolHostPort = projectToolHostPort,
-       _generateCustomizationIndexesUseCase =
-           generateCustomizationIndexesUseCase,
-       _agentRendererService =
-           agentRendererService ?? AgentMarkdownPackageRendererService(),
-       _skillRendererService =
-           skillRendererService ?? SkillMarkdownPackageRendererService(),
-       _agentGroupCodecService =
-           agentGroupCodecService ?? AgentGroupFileCodecService(),
-       _skillGroupCodecService =
-           skillGroupCodecService ?? SkillGroupFileCodecService(),
        _agentGroupNormalizerService =
            agentGroupNormalizerService ?? AgentGroupNormalizerService(),
        _skillGroupNormalizerService =
@@ -49,12 +39,6 @@ class ImportCustomizationBundleUseCase {
        _pathService = pathService ?? EcosystemAssetPathService();
 
   final ProjectToolHostPort _projectToolHostPort;
-  final GenerateCustomizationIndexesUseCase
-  _generateCustomizationIndexesUseCase;
-  final AgentMarkdownPackageRendererService _agentRendererService;
-  final SkillMarkdownPackageRendererService _skillRendererService;
-  final AgentGroupFileCodecService _agentGroupCodecService;
-  final SkillGroupFileCodecService _skillGroupCodecService;
   final AgentGroupNormalizerService _agentGroupNormalizerService;
   final SkillGroupNormalizerService _skillGroupNormalizerService;
   final EcosystemAssetProposalService _proposalService;

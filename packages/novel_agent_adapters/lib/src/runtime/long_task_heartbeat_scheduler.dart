@@ -92,6 +92,20 @@ class LongTaskHeartbeatScheduler {
     _lastDispatchedAtByRunId.remove(runId.trim());
   }
 
+  int reconcileDispatchState(Iterable<String> activeRunIds) {
+    final activeIds = activeRunIds
+        .map((entry) => entry.trim())
+        .where((entry) => entry.isNotEmpty)
+        .toSet();
+    final orphanIds = _lastDispatchedAtByRunId.keys
+        .where((runId) => !activeIds.contains(runId))
+        .toList(growable: false);
+    for (final runId in orphanIds) {
+      _lastDispatchedAtByRunId.remove(runId);
+    }
+    return orphanIds.length;
+  }
+
   bool _shouldDispatch(LongTaskHeartbeatEvent event, RuntimeBaseline baseline) {
     // 中文注释: 即使宿主暂时还没处理事件，scheduler 也要避免在每次轮询里疯狂重复抛同一条心跳告警。
     final lastDispatchedAt = _lastDispatchedAtByRunId[event.runInstance.id];

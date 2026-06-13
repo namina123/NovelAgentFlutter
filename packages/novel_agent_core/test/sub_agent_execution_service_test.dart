@@ -579,6 +579,81 @@ void main() {
         );
       },
     );
+
+    test('sanitizes provider secrets from effective execution profile payloads', () async {
+      final service = SubAgentExecutionService(
+        llmGateway: _SequencedGateway(<JsonMap>[
+          const <String, Object?>{
+            'ok': true,
+            'content': 'done',
+            'tool_calls': <Object?>[],
+          },
+        ]),
+        toolExecutionPort: _RecordingToolExecutionPort(),
+        loadAvailableAgents: (_) async => <JsonMap>[_writerAgent],
+        loadAvailableGroups: (_) async => <JsonMap>[
+          const <String, Object?>{
+            'id': 'writer_room',
+            'name': '作者组',
+            'agents': <String>['writer'],
+          },
+        ],
+      );
+
+      final result = await service.execute(
+        project: const ProjectDescriptor(
+          id: 'demo',
+          name: '示例项目',
+          rootPath: 'D:/demo',
+          projectType: 'long_novel',
+        ),
+        parentAgent: _writerAgent,
+        toolCall: const <String, Object?>{
+          'name': 'call_sub_agent',
+          'arguments': <String, Object?>{
+            'agent_id': 'writer',
+            'task': '请补充。',
+          },
+        },
+        modelId: 'probe-model',
+        mainContext: <String, Object?>{
+          'intent': 'draft',
+          'sub_agent_runtime_settings': AppSettings(
+            defaultProviderId: 'secret-provider',
+            defaultAgentId: 'default_generalist',
+            defaultModelId: 'writer-child-model',
+            defaultProjectPath: '',
+            autoSaveDrafts: true,
+            providers: const <ProviderEndpointSettings>[
+              ProviderEndpointSettings(
+                id: 'secret-provider',
+                title: 'Secret Provider',
+                protocol: 'openai_compatible',
+                baseUrl: 'https://example.invalid/v1',
+                apiKey: 'secret-key-123',
+                modelId: 'writer-child-model',
+                description: '',
+                isDefault: true,
+              ),
+            ],
+            extraSettings: <String, Object?>{
+              'model_settings': <String, Object?>{
+                'provider_id': 'secret-provider',
+                'model_id': 'writer-child-model',
+                'stream_mode': 'stream',
+                'api_mode': 'chat',
+              },
+            },
+          ),
+        },
+      );
+
+      final profile = ValueReaders.mapValue(result['effective_execution_profile']);
+      final serialized = profile.toString();
+
+      expect(serialized, isNot(contains('secret-key-123')));
+      expect(serialized, contains('api_key: ***'));
+    });
   });
 }
 
@@ -663,6 +738,9 @@ Future<_PolicyScenarioResult> _runPolicyScenario({
   required JsonMap agent,
   required String task,
 }) async {
+  final agentId = ValueReaders.stringValue(agent['id']);
+  final isReviewer = agentId == 'reviewer';
+  final isResearcher = agentId == 'researcher';
   final gateway = _SequencedGateway(<JsonMap>[
     <String, Object?>{
       'ok': true,
@@ -676,11 +754,26 @@ Future<_PolicyScenarioResult> _runPolicyScenario({
     loadAvailableAgents: (_) async => <JsonMap>[agent],
     loadAvailableGroups: (_) async => <JsonMap>[
       <String, Object?>{
-        'id': ValueReaders.stringValue(agent['id']) == 'reviewer'
-            ? 'optional_review_room'
-            : 'optional_editorial_room',
+        'id': isResearcher
+            ? 'optional_research_room'
+            : (isReviewer
+                  ? 'optional_review_room'
+                  : 'optional_editorial_room'),
         'name': '策略测试组',
-        'agents': <String>[ValueReaders.stringValue(agent['id'])],
+        'agents': <String>[agentId],
+        'metadata': <String, Object?>{
+          'tool_capability_family_ids': <String>[
+            ToolCapabilityFamilyCatalogService.mountedReferenceConsumption,
+            if (isResearcher)
+              ToolCapabilityFamilyCatalogService.research
+            else
+              ToolCapabilityFamilyCatalogService.review,
+            if (!isReviewer && !isResearcher)
+              ToolCapabilityFamilyCatalogService.writing,
+            if (isResearcher)
+              ToolCapabilityFamilyCatalogService.referenceExtraction,
+          ],
+        },
       },
     ],
   );
@@ -704,6 +797,32 @@ Future<_PolicyScenarioResult> _runPolicyScenario({
       'intent': 'draft',
       'sub_agent_max_tool_rounds': 1,
       'sub_agent_runtime_settings': _subAgentTestSettings(),
+      'task_type': isReviewer
+          ? 'review'
+          : (isResearcher ? 'chapter' : 'chapter'),
+      'continuous_task_family_id': isResearcher
+          ? ContinuousTaskFamilies.referenceExtraction
+          : ContinuousTaskFamilies.longFormWriting,
+      'selected_collaboration_group': <String, Object?>{
+        'id': isResearcher
+            ? 'optional_research_room'
+            : (isReviewer
+                  ? 'optional_review_room'
+                  : 'optional_editorial_room'),
+        'metadata': <String, Object?>{
+          'tool_capability_family_ids': <String>[
+            ToolCapabilityFamilyCatalogService.mountedReferenceConsumption,
+            if (isResearcher)
+              ToolCapabilityFamilyCatalogService.research
+            else
+              ToolCapabilityFamilyCatalogService.review,
+            if (!isReviewer && !isResearcher)
+              ToolCapabilityFamilyCatalogService.writing,
+            if (isResearcher)
+              ToolCapabilityFamilyCatalogService.referenceExtraction,
+          ],
+        },
+      },
     },
   );
   return _PolicyScenarioResult(gateway: gateway, result: result);

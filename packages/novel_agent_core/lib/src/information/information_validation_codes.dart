@@ -123,4 +123,10 @@ abstract final class InformationValidationCodes {
       'invalid_information_event_ref';
   static const String invalidInformationLifecycleRef =
       'invalid_information_lifecycle_ref';
+  static const String missingHostInformationPermissionMode =
+      'missing_host_information_permission_mode';
+  static const String missingHostInformationConfirmationMode =
+      'missing_host_information_confirmation_mode';
+  static const String missingHostInformationPermissionSource =
+      'missing_host_information_permission_source';
 }

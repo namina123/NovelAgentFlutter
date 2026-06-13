@@ -28,7 +28,6 @@ class ExpressionConstraintReviewProjectionService {
     final voiceProtectionNotes = <String>[];
     var authenticityScore = 0;
     for (final profile in profiles) {
-      final profileId = profile.id.trim().toLowerCase();
       switch (profile.kind) {
         case ExpressionConstraintKind.naturalExpression:
           authenticityScore = _max(authenticityScore, 2);
@@ -65,17 +64,6 @@ class ExpressionConstraintReviewProjectionService {
           break;
         case ExpressionConstraintKind.custom:
           break;
-      }
-
-      if (profileId == 'de_ai') {
-        authenticityScore = _max(authenticityScore, 3);
-        _addUnique(reviewFocuses, '重点清理 AI 味、假深刻句、总结腔与解释腔，但不能洗平人物声音。');
-      } else if (profileId == 'strict_pov_boundary') {
-        _addUnique(continuityWatchItems, '视角泄漏');
-        _addUnique(continuityWatchItems, '信息边界混用');
-      } else if (profileId == 'low_jargon_narration') {
-        authenticityScore = _max(authenticityScore, 2);
-        _addUnique(reviewFocuses, '把职业化、理论化、评论员式措辞视为真实性风险。');
       }
     }
     return ExpressionConstraintReviewProjection(

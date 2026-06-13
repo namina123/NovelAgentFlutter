@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_app/features/book_deconstruction/application/services/book_deconstruction_narrative_persistence_service.dart';
@@ -117,6 +120,189 @@ void main() {
         <String>['drafts'],
       );
     });
+
+    test(
+      'refreshProjectLongTaskSummary loads station detail truth for workbench summary',
+      () async {
+        final project = _project('D:/Projects/novel_project');
+        final run = RunInstance(
+          id: 'run-1',
+          project: RunProjectReference.fromProject(project),
+          runtimeBaselineId: 'continuous_autonomous',
+          modeId: TaskRuntimeConstants.modeHumanOutlineAiDraft,
+          workflowStrategyId: 'resumable_long_task',
+          status: LongTaskRunStatus.paused,
+          createdAt: DateTime.now().subtract(const Duration(hours: 1)),
+          updatedAt: DateTime.now().subtract(const Duration(minutes: 3)),
+          activeTaskTitle: '检查点确认',
+          stopOutcome: const LongTaskStopOutcome(
+            present: true,
+            category: LongTaskStopOutcomeCategories.waitingUser,
+            reason: 'waiting_user_checkpoint',
+            summary: '当前运行正在等待用户确认。',
+          ),
+        );
+        final harness = _ControllerHarness(
+          settings: _baseSettings(),
+          workbench: WorkbenchViewData.initial(),
+          projectState: WorkbenchProjectRuntimeState(currentProject: project),
+          longTaskSupervisor: _buildSupervisor(<RunInstance>[run]),
+          projectLongTaskDetailLoader: (_) async =>
+              const ProjectLongTaskStationDetail(
+                activeTask: null,
+                chain: null,
+                latestCheckpointReview: ProjectLongTaskStationItemSummary(
+                  id: 'checkpoint-1',
+                  title: '检查点确认',
+                  relativePath: '.novel_agent/checkpoints/checkpoint-1.md',
+                  status: TaskRuntimeConstants.statusWaitingUser,
+                  subtitle: '等待确认',
+                  summary: '需要先确认本章检查点再继续。',
+                ),
+                latestReviewReport: ProjectLongTaskStationItemSummary(
+                  id: 'review-1',
+                  title: '第 12 章审稿',
+                  relativePath: '.novel_agent/reviews/review-1.md',
+                  status: TaskRuntimeConstants.statusSucceeded,
+                  subtitle: '审稿完成',
+                  summary: '建议补强冲突并确认结尾停点。',
+                ),
+                latestRepairTask: null,
+                narrativeSummary: ProjectLongTaskStationNarrativeSummary(
+                  activation: null,
+                  delivery: null,
+                  review: null,
+                  continuity: null,
+                  information: null,
+                  projectionItems: <ProjectLongTaskStationItemSummary>[],
+                  permissionItems: <ProjectLongTaskStationItemSummary>[
+                    ProjectLongTaskStationItemSummary(
+                      id: 'permission-1',
+                      title: 'Clarification',
+                      relativePath:
+                          '.novel_agent/continuity/clarifications/permission-1.md',
+                      status: TaskRuntimeConstants.statusWaitingUser,
+                      subtitle: 'needs_user_confirmation',
+                      summary: '请先确认是否接受当前审稿建议。',
+                    ),
+                  ],
+                  informationProjectionItems:
+                      <ProjectLongTaskStationItemSummary>[],
+                  informationPermissionItems:
+                      <ProjectLongTaskStationItemSummary>[],
+                ),
+                blocker: ProjectLongTaskStationBlockerSummary(
+                  code: 'waiting_user_checkpoint',
+                  note: '当前运行正在等待用户确认。',
+                  detail: '',
+                  controlSummary: '先确认当前检查点和审稿意见，再继续推进。',
+                  blockingCheckpointTitles: <String>['检查点确认'],
+                  runRecordPath: 'tracking/long_task_runs/run-1.json',
+                ),
+              ),
+        );
+
+        await harness.controller.refreshProjectLongTaskSummary();
+
+        expect(
+          harness.projectState.currentProjectLongTaskRuns.single.id,
+          'run-1',
+        );
+        expect(
+          harness.projectState.currentProjectLongTaskRunDetails['run-1'],
+          isNotNull,
+        );
+        expect(
+          harness
+              .workbench
+              .projectLongTaskSummary!
+              .runs
+              .single
+              .reviewSummaryLine,
+          '最近审稿：第 12 章审稿，建议补强冲突并确认结尾停点。',
+        );
+        expect(
+          harness
+              .workbench
+              .projectLongTaskSummary!
+              .runs
+              .single
+              .pendingSummaryLine,
+          '待确认事项：待确认问题，请先确认是否接受当前审稿建议。',
+        );
+      },
+    );
+
+    test(
+      'loadProject skips reference extraction bundle subtree while building information view',
+      () async {
+        final workspacePort = LocalProjectWorkspacePort();
+        final tempDirectory = await Directory.systemTemp.createTemp(
+          'workbench_information_scan_',
+        );
+        addTearDown(() async {
+          if (await tempDirectory.exists()) {
+            await tempDirectory.delete(recursive: true);
+          }
+        });
+        await _writeProjectFile(
+          tempDirectory.path,
+          'knowledge/项目知识摘要.md',
+          _projectionMarkdown(
+            title: '知识摘要',
+            sourceOfTruthPath: 'project-information://knowledge_cards',
+            sourceIdentity:
+                '来源-source-1 / `imports/reference/source-1.txt` / kind:`user`',
+          ),
+        );
+        await _writeProjectFile(
+          tempDirectory.path,
+          '.novel_agent/information/knowledge_cards/knowledge_1.json',
+          jsonEncode(<String, Object?>{
+            'card_id': 'knowledge_1',
+            'title': '王朝年号',
+            'summary': '需要确认帝国年号是否已经固定。',
+            'lifecycle_status': InformationLifecycleStatuses.proposed,
+          }),
+        );
+        await _writeProjectFile(
+          tempDirectory.path,
+          '.novel_agent/reference_extraction/bundles/bundle_1/activation_report.json',
+          '{invalid-json',
+        );
+        final harness = _ControllerHarness(
+          settings: _baseSettings(),
+          workbench: WorkbenchViewData.initial(),
+          projectState: const WorkbenchProjectRuntimeState(),
+          projectRepository: _FixedProjectRepository(
+            _project(tempDirectory.path),
+          ),
+          workspacePort: workspacePort,
+          toolHostPort: ProjectWorkspaceToolHostAdapter(
+            workspacePort: workspacePort,
+            fileMutationAdapter: LocalProjectFileMutationAdapter(),
+          ),
+        );
+
+        final loaded = await harness.controller.loadProject(tempDirectory.path);
+
+        expect(loaded, isTrue);
+        expect(
+          harness.workbench.informationViewData.summary,
+          '已整理 1 组资料摘要，1 项待确认',
+        );
+        expect(
+          harness.workbench.informationViewData.usageSummary,
+          '本轮还没有可解释的资料使用记录。',
+        );
+        expect(
+          harness.workbench.informationViewData.pendingEntries
+              .map((entry) => entry.title)
+              .toList(growable: false),
+          <String>['待确认知识'],
+        );
+      },
+    );
   });
 }
 
@@ -125,10 +311,20 @@ class _ControllerHarness {
     required AppSettings settings,
     required WorkbenchViewData workbench,
     required WorkbenchProjectRuntimeState projectState,
+    LongTaskSupervisor? longTaskSupervisor,
+    WorkbenchProjectLongTaskDetailLoader? projectLongTaskDetailLoader,
+    ProjectRepository? projectRepository,
+    ProjectWorkspacePort? workspacePort,
+    ProjectToolHostPort? toolHostPort,
   }) : _settings = settings,
        _workbench = workbench,
        _projectState = projectState {
     controller = _createController(
+      longTaskSupervisor: longTaskSupervisor,
+      projectLongTaskDetailLoader: projectLongTaskDetailLoader,
+      projectRepository: projectRepository,
+      workspacePort: workspacePort,
+      toolHostPort: toolHostPort,
       readSettings: () => _settings,
       saveSettingsSilently: (next) async {
         _savedSettings.add(next);
@@ -159,6 +355,11 @@ class _ControllerHarness {
 }
 
 WorkbenchWorkspaceController _createController({
+  LongTaskSupervisor? longTaskSupervisor,
+  WorkbenchProjectLongTaskDetailLoader? projectLongTaskDetailLoader,
+  ProjectRepository? projectRepository,
+  ProjectWorkspacePort? workspacePort,
+  ProjectToolHostPort? toolHostPort,
   required AppSettings? Function() readSettings,
   required Future<void> Function(AppSettings nextSettings) saveSettingsSilently,
   required WorkbenchViewData Function() readWorkbench,
@@ -167,36 +368,41 @@ WorkbenchWorkspaceController _createController({
   required WorkbenchProjectRuntimeState Function() readProjectState,
   required void Function(WorkbenchProjectRuntimeState state) writeProjectState,
 }) {
-  final workspacePort = _NoopProjectWorkspacePort();
-  final toolHostPort = _NoopProjectToolHostPort();
+  final effectiveProjectRepository = projectRepository ?? _NoopProjectRepository();
+  final effectiveWorkspacePort = workspacePort ?? _NoopProjectWorkspacePort();
+  final effectiveToolHostPort = toolHostPort ?? _NoopProjectToolHostPort();
   return WorkbenchWorkspaceController(
     loadProjectWorkspaceUseCase: LoadProjectWorkspaceUseCase(
-      projectRepository: _NoopProjectRepository(),
-      projectWorkspacePort: workspacePort,
+      projectRepository: effectiveProjectRepository,
+      projectWorkspacePort: effectiveWorkspacePort,
     ),
-    readProjectFileUseCase: ReadProjectFileUseCase(workspacePort),
-    saveDraftUseCase: SaveDraftUseCase(projectWorkspacePort: workspacePort),
+    readProjectFileUseCase: ReadProjectFileUseCase(effectiveWorkspacePort),
+    saveDraftUseCase: SaveDraftUseCase(
+      projectWorkspacePort: effectiveWorkspacePort,
+    ),
     createProjectEntryUseCase: CreateProjectEntryUseCase(
-      projectToolHostPort: toolHostPort,
+      projectToolHostPort: effectiveToolHostPort,
     ),
     importProjectFilesUseCase: ImportProjectFilesUseCase(
-      projectToolHostPort: toolHostPort,
+      projectToolHostPort: effectiveToolHostPort,
     ),
     updateProjectManifestUseCase: UpdateProjectManifestUseCase(
       writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
-        projectWorkspacePort: workspacePort,
+        projectWorkspacePort: effectiveWorkspacePort,
       ),
     ),
-    projectToolHostPort: toolHostPort,
+    projectToolHostPort: effectiveToolHostPort,
     writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
-      projectWorkspacePort: workspacePort,
+      projectWorkspacePort: effectiveWorkspacePort,
     ),
     narrativePersistenceService: BookDeconstructionNarrativePersistenceService(
-      workspacePort: workspacePort,
+      workspacePort: effectiveWorkspacePort,
     ),
-    longTaskSupervisor: _NoopLongTaskSupervisor(),
+    longTaskSupervisor: longTaskSupervisor ?? _NoopLongTaskSupervisor(),
     reviewReportService: _NoopProjectReviewReportService(),
-    projectRuntimeProfileRepository: _NoopProjectRuntimeProfileRepository(),
+    projectRuntimeProfileRepository: ProjectRuntimeProfileRepository(
+      workspacePort: effectiveWorkspacePort,
+    ),
     readProjectState: readProjectState,
     writeProjectState: writeProjectState,
     resetConversationRuntimeState: () {},
@@ -220,7 +426,12 @@ WorkbenchWorkspaceController _createController({
     showCurrentAgentSkillLoadout: (_) async {},
     showCurrentAgentExpressionConstraints: (_) async {},
     announce: (_) {},
+    projectLongTaskDetailLoader: projectLongTaskDetailLoader,
   );
+}
+
+LongTaskSupervisor _buildSupervisor(List<RunInstance> runs) {
+  return LongTaskSupervisor(runRegistry: _MemoryLongTaskRunRegistry(runs));
 }
 
 ProjectDescriptor _project(String rootPath) {
@@ -277,6 +488,17 @@ JsonMap _mapValue(Object? value) {
 class _NoopProjectRepository implements ProjectRepository {
   @override
   Future<ProjectDescriptor?> openByPath(String rootPath) async => null;
+}
+
+class _FixedProjectRepository implements ProjectRepository {
+  _FixedProjectRepository(this._project);
+
+  final ProjectDescriptor _project;
+
+  @override
+  Future<ProjectDescriptor?> openByPath(String rootPath) async {
+    return rootPath == _project.rootPath ? _project : null;
+  }
 }
 
 class _NoopProjectWorkspacePort implements ProjectWorkspacePort {
@@ -357,13 +579,70 @@ class _NoopLongTaskSupervisor implements LongTaskSupervisor {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+class _MemoryLongTaskRunRegistry implements LongTaskRunRegistry {
+  _MemoryLongTaskRunRegistry(List<RunInstance> runs)
+    : _runs = <String, RunInstance>{for (final run in runs) run.id: run};
+
+  final Map<String, RunInstance> _runs;
+
+  @override
+  Future<void> delete(String runId) async {
+    _runs.remove(runId);
+  }
+
+  @override
+  Future<RunInstance?> findById(String runId) async => _runs[runId];
+
+  @override
+  Future<List<RunInstance>> listActive() async =>
+      _runs.values.where((run) => run.isActive).toList(growable: false);
+
+  @override
+  Future<List<RunInstance>> listAll() async =>
+      _runs.values.toList(growable: false);
+
+  @override
+  Future<List<RunInstance>> listByProject(String projectKey) async => _runs
+      .values
+      .where((run) => run.project.rootPath == projectKey)
+      .toList(growable: false);
+
+  @override
+  Future<void> save(RunInstance instance) async {
+    _runs[instance.id] = instance;
+  }
+}
+
 class _NoopProjectReviewReportService implements ProjectReviewReportService {
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-class _NoopProjectRuntimeProfileRepository
-    implements ProjectRuntimeProfileRepository {
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+Future<void> _writeProjectFile(
+  String rootPath,
+  String relativePath,
+  String content,
+) async {
+  final normalizedRelative = relativePath.replaceAll('/', Platform.pathSeparator);
+  final file = File('$rootPath${Platform.pathSeparator}$normalizedRelative');
+  await file.parent.create(recursive: true);
+  await file.writeAsString(content);
+}
+
+String _projectionMarkdown({
+  required String title,
+  required String sourceOfTruthPath,
+  required String sourceIdentity,
+}) {
+  return '''
+---
+title: $title
+source_of_truth_path: $sourceOfTruthPath
+source_identity: $sourceIdentity
+---
+
+# $title
+
+- 测试摘要
+''';
 }

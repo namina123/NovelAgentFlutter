@@ -22,6 +22,8 @@ class RunInstanceDocumentCodecService {
       'active_task_title': instance.activeTaskTitle,
       'note': instance.note,
       'stop_reason': instance.stopReason,
+      'stop_outcome': instance.stopOutcome.toJson(),
+      'recovery_state': instance.recoveryState.toJson(),
       'metadata': ValueReaders.deepCopyMap(instance.metadata),
       'project': <String, Object?>{
         'project_id': instance.project.projectId,
@@ -67,6 +69,12 @@ class RunInstanceDocumentCodecService {
       activeTaskTitle: ValueReaders.stringValue(document['active_task_title']),
       note: ValueReaders.stringValue(document['note']),
       stopReason: ValueReaders.stringValue(document['stop_reason']),
+      stopOutcome: LongTaskStopOutcome.fromJson(
+        ValueReaders.mapValue(document['stop_outcome']),
+      ),
+      recoveryState: LongTaskRecoveryState.fromJson(
+        ValueReaders.mapValue(document['recovery_state']),
+      ),
       metadata: ValueReaders.deepCopyMap(
         ValueReaders.mapValue(document['metadata']),
       ),

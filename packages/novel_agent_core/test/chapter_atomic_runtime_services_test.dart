@@ -87,6 +87,85 @@ void main() {
         2,
       );
     });
+
+    test('planning recorder recognizes canonical outline artifact roots', () {
+      final prepared = executionBuilder.prepareExecution(<String, Object?>{
+        'project': <String, Object?>{'id': 'p1', 'name': '项目'},
+        'task': <String, Object?>{
+          'id': 'planning_1',
+          'title': '规划任务',
+          'task_type': 'planning',
+          'mode': TaskRuntimeConstants.modeSeedToFullNovel,
+          'goal': '落地规格与大纲',
+          'brief': '从种子扩展成长篇规划。',
+          'source_paths': <String>['specs/project_spec.md'],
+        },
+        'project_files': <Object?>[],
+        'project_file_contents': <String, Object?>{},
+        'context_settings': <String, Object?>{
+          'context_pack_budget_chars': 2000,
+        },
+        'model_profile': <String, Object?>{'context_window': 8000},
+      });
+      expect(prepared['ok'], isTrue);
+
+      final execution = prepared['execution'] as Map<String, Object?>;
+      final afterModel = recorder.recordModelResult(
+        execution,
+        <String, Object?>{'id': 'resp_planning', 'result_markdown': '规划结果'},
+        <Object?>[
+          'specs/project_spec.md',
+          'outlines/story/总纲.md',
+          'outlines/chapters/章节任务清单.md',
+        ],
+      );
+      final steps = ValueReaders.mapList(
+        (afterModel['execution'] as Map<String, Object?>)['steps'],
+      );
+      final saveProjectSpec = steps.firstWhere(
+        (step) => ValueReaders.stringValue(step['id']) == 'save_project_spec',
+      );
+      final saveOutline = steps.firstWhere(
+        (step) => ValueReaders.stringValue(step['id']) == 'save_outline',
+      );
+
+      expect(
+        ValueReaders.stringValue(saveProjectSpec['status']),
+        ChapterAtomicConstants.stepSucceeded,
+      );
+      expect(
+        ValueReaders.stringValue(saveOutline['status']),
+        ChapterAtomicConstants.stepSucceeded,
+      );
+    });
+
+    test(
+      'planning-stage workflow subtask does not propose chapter outputs',
+      () {
+        final outputs = ChapterAtomicOutputPathService().proposedOutputPaths(
+          <String, Object?>{
+            'id': 'update_character_state',
+            'title': '更新主角状态',
+            'task_type': 'agent_task',
+            'output_paths': <Object?>['assets/characters/主角.md'],
+            'metadata': const <String, Object?>{
+              'plan_id': 'plan_seed',
+              'stage': 'planning',
+              'generated_by': 'LongTaskPlanner',
+            },
+          },
+        );
+
+        expect(outputs.containsKey('chapter'), isFalse);
+        expect(
+          ValueReaders.stringValue(outputs['primary']),
+          'assets/characters/主角.md',
+        );
+        expect(
+          ValueReaders.stringValue(outputs['planning_note']),
+          contains('tracking/planning/'),
+        );
+      },
+    );
   });
 }
-

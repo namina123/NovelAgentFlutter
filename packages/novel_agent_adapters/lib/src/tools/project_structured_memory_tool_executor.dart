@@ -130,7 +130,8 @@ class ProjectStructuredMemoryToolExecutor {
     JsonMap arguments,
   ) {
     // 中文注释: 摘要文件采用 Markdown，保证后续上下文读取和人工审阅都方便。
-    final title = ValueReaders.stringValue(arguments['title'], '上下文摘要');
+    final rawTitle = ValueReaders.stringValue(arguments['title'], '上下文摘要');
+    final title = _normalizedSummaryTitle(rawTitle);
     final scope = ValueReaders.stringValue(arguments['scope']);
     final summary = ValueReaders.stringValue(arguments['summary']);
     return _writeToolExecutor.writeProjectFile(project, <String, Object?>{
@@ -138,7 +139,7 @@ class ProjectStructuredMemoryToolExecutor {
       'title': title,
       'relative_path':
           ValueReaders.stringValue(arguments['relative_path']).trim().isEmpty
-          ? 'summaries/${_pathPolicy.safeFileName(title)}.summary.md'
+          ? _defaultSummaryRelativePath(title, fallbackTitle: rawTitle)
           : arguments['relative_path'],
       'content': [
         '# $title',
@@ -148,6 +149,34 @@ class ProjectStructuredMemoryToolExecutor {
         summary,
       ].join('\n').trim(),
     });
+  }
+
+  String _defaultSummaryRelativePath(
+    String title, {
+    String fallbackTitle = '上下文摘要',
+  }) {
+    final safeStem = _pathPolicy.safeFileName(
+      title.trim().isEmpty ? fallbackTitle : title,
+      fallback: 'summary',
+    );
+    return 'summaries/$safeStem.summary.md';
+  }
+
+  String _normalizedSummaryTitle(String value) {
+    var result = value.trim();
+    if (result.isEmpty) {
+      return result;
+    }
+    final lowerResult = result.toLowerCase();
+    if (lowerResult.endsWith('.summary.md')) {
+      result = result.substring(0, result.length - '.summary.md'.length);
+    } else if (lowerResult.endsWith('.md')) {
+      result = result.substring(0, result.length - '.md'.length);
+    }
+    while (result.toLowerCase().endsWith('.summary')) {
+      result = result.substring(0, result.length - '.summary'.length).trim();
+    }
+    return result.trim();
   }
 
   Future<JsonMap> runContinuityCheck(

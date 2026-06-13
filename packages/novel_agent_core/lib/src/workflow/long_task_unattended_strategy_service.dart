@@ -1,5 +1,6 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import 'long_task_checkpoint_cadence_policy_service.dart';
 import 'long_task_chapter_gate_policy_service.dart';
 import 'long_task_controller_profile_service.dart';
 import 'long_task_mode_service.dart';
@@ -12,16 +13,21 @@ class LongTaskUnattendedStrategyService {
     required LongTaskModeStrategyService strategyService,
     required LongTaskControllerProfileService profileService,
     LongTaskChapterGatePolicyService? chapterGatePolicyService,
+    LongTaskCheckpointCadencePolicyService? checkpointCadencePolicyService,
   }) : _modeService = modeService,
        _strategyService = strategyService,
        _profileService = profileService,
        _chapterGatePolicyService =
-           chapterGatePolicyService ?? const LongTaskChapterGatePolicyService();
+           chapterGatePolicyService ?? const LongTaskChapterGatePolicyService(),
+       _checkpointCadencePolicyService =
+           checkpointCadencePolicyService ??
+           const LongTaskCheckpointCadencePolicyService();
 
   final LongTaskModeService _modeService;
   final LongTaskModeStrategyService _strategyService;
   final LongTaskControllerProfileService _profileService;
   final LongTaskChapterGatePolicyService _chapterGatePolicyService;
+  final LongTaskCheckpointCadencePolicyService _checkpointCadencePolicyService;
 
   JsonMap unattendedStrategy(
     JsonMap record,
@@ -32,14 +38,15 @@ class LongTaskUnattendedStrategyService {
     final mode = _modeFromRecordTasksOptions(record, tasks, options);
     final profile = _profileService.controllerProfile(mode, options: options);
     final runtimeBaselineId = _runtimeBaselineId(record, tasks, options);
-    final maxSteps = ValueReaders.intValue(
-      profile['max_steps'],
-      1,
-    ).clamp(1, 80);
-    final maxSeconds = ValueReaders.intValue(
-      profile['max_seconds'],
-      7200,
-    ).clamp(30, 86400);
+    final cadence = _checkpointCadencePolicyService.policyForRuntime(
+      mode,
+      record: record,
+      options: <String, Object?>{
+        ...ValueReaders.deepCopyMap(options),
+        if (runtimeBaselineId.isNotEmpty) 'runtime_baseline_id': runtimeBaselineId,
+      },
+      controllerProfile: profile,
+    );
     return <String, Object?>{
       'ok': true,
       'schema_version': 1,
@@ -51,8 +58,9 @@ class LongTaskUnattendedStrategyService {
       ),
       'mode_strategy': _strategyService.modeStrategy(mode),
       'controller_profile': profile,
-      'default_batch_steps': maxSteps,
-      'max_seconds': maxSeconds,
+      'checkpoint_cadence': cadence.toJson(),
+      'default_batch_steps': cadence.effectiveBatchSteps,
+      'max_seconds': cadence.effectiveBatchSeconds,
       'requires_host_network': true,
       'requires_host_filesystem': true,
       'snapshot_after_each_step': true,

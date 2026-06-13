@@ -4,6 +4,7 @@ import 'package:novel_agent_app/app/theme/app_theme.dart';
 import 'package:novel_agent_app/features/settings/presentation/models/custom_model_reasoning_override_view_data.dart';
 import 'package:novel_agent_app/features/settings/presentation/models/model_editor_view_data.dart';
 import 'package:novel_agent_app/features/settings/presentation/models/model_parameter_entry_view_data.dart';
+import 'package:novel_agent_app/features/settings/presentation/models/project_creation_expression_constraint_defaults_view_data.dart';
 import 'package:novel_agent_app/features/settings/presentation/models/settings_search_option.dart';
 import 'package:novel_agent_app/features/settings/presentation/models/settings_view_data.dart';
 import 'package:novel_agent_app/features/settings/presentation/models/theme_settings_view_data.dart';
@@ -108,6 +109,8 @@ void main() {
                 defaultProjectPath: '',
                 permissionSettings: const {},
                 toolStrategySettings: const {},
+                projectCreationExpressionConstraintDefaults:
+                    ProjectCreationExpressionConstraintDefaultsViewData.initial(),
                 networkSettings: const {},
                 contextSettings: const {},
                 themeSettings: const {},
@@ -271,6 +274,8 @@ void main() {
                 defaultProjectPath: '',
                 permissionSettings: const {},
                 toolStrategySettings: const {},
+                projectCreationExpressionConstraintDefaults:
+                    ProjectCreationExpressionConstraintDefaultsViewData.initial(),
                 networkSettings: const {},
                 contextSettings: const {},
                 themeSettings: const {},
@@ -400,6 +405,8 @@ void main() {
                 defaultProjectPath: '',
                 permissionSettings: const {},
                 toolStrategySettings: const {},
+                projectCreationExpressionConstraintDefaults:
+                    ProjectCreationExpressionConstraintDefaultsViewData.initial(),
                 networkSettings: const {},
                 contextSettings: const {},
                 themeSettings: const {},
@@ -590,6 +597,8 @@ void main() {
                 defaultProjectPath: '',
                 permissionSettings: const {},
                 toolStrategySettings: const {},
+                projectCreationExpressionConstraintDefaults:
+                    ProjectCreationExpressionConstraintDefaultsViewData.initial(),
                 networkSettings: const {},
                 contextSettings: const {},
                 themeSettings: const {},
@@ -731,6 +740,8 @@ void main() {
                 defaultProjectPath: '',
                 permissionSettings: const {},
                 toolStrategySettings: const {},
+                projectCreationExpressionConstraintDefaults:
+                    ProjectCreationExpressionConstraintDefaultsViewData.initial(),
                 networkSettings: const {},
                 contextSettings: const {},
                 themeSettings: const {},
@@ -862,6 +873,8 @@ void main() {
                 defaultProjectPath: '',
                 permissionSettings: const {},
                 toolStrategySettings: const {},
+                projectCreationExpressionConstraintDefaults:
+                    ProjectCreationExpressionConstraintDefaultsViewData.initial(),
                 networkSettings: const {},
                 contextSettings: const {},
                 themeSettings: const {},
@@ -999,6 +1012,8 @@ void main() {
                 defaultProjectPath: '',
                 permissionSettings: const {},
                 toolStrategySettings: const {},
+                projectCreationExpressionConstraintDefaults:
+                    ProjectCreationExpressionConstraintDefaultsViewData.initial(),
                 networkSettings: const {},
                 contextSettings: const {},
                 themeSettings: const {},
@@ -1100,6 +1115,8 @@ void main() {
                 defaultProjectPath: '',
                 permissionSettings: const {},
                 toolStrategySettings: const {},
+                projectCreationExpressionConstraintDefaults:
+                    ProjectCreationExpressionConstraintDefaultsViewData.initial(),
                 networkSettings: const {},
                 contextSettings: const {},
                 themeSettings: const {},

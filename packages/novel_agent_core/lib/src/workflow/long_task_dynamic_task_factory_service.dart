@@ -6,6 +6,7 @@ import 'long_task_chapter_output_policy_service.dart';
 import 'long_task_mode_context_path_service.dart';
 import 'long_task_mode_service.dart';
 import 'long_task_path_policy_service.dart';
+import 'long_task_planning_artifact_path_service.dart';
 import 'task_runtime_constants.dart';
 
 class LongTaskDynamicTaskFactoryService {
@@ -16,6 +17,7 @@ class LongTaskDynamicTaskFactoryService {
     LongTaskModeContextPathService? modeContextPathService,
     RuntimeBaselineExecutionModeService? runtimeBaselineExecutionModeService,
     ChapterLengthProfileResolverService? chapterLengthProfileResolverService,
+    LongTaskPlanningArtifactPathService? planningArtifactPathService,
   }) : _pathPolicyService = pathPolicyService,
        _chapterOutputPolicyService =
            chapterOutputPolicyService ??
@@ -31,7 +33,10 @@ class LongTaskDynamicTaskFactoryService {
            RuntimeBaselineExecutionModeService(modeService: modeService),
        _chapterLengthProfileResolverService =
            chapterLengthProfileResolverService ??
-           const ChapterLengthProfileResolverService();
+           const ChapterLengthProfileResolverService(),
+       _planningArtifactPathService =
+           planningArtifactPathService ??
+           const LongTaskPlanningArtifactPathService();
 
   final LongTaskPathPolicyService _pathPolicyService;
   final LongTaskChapterOutputPolicyService _chapterOutputPolicyService;
@@ -40,6 +45,7 @@ class LongTaskDynamicTaskFactoryService {
   _runtimeBaselineExecutionModeService;
   final ChapterLengthProfileResolverService
   _chapterLengthProfileResolverService;
+  final LongTaskPlanningArtifactPathService _planningArtifactPathService;
 
   JsonMap buildCheckpointTask(
     JsonMap record,
@@ -89,7 +95,7 @@ class LongTaskDynamicTaskFactoryService {
       'title': ValueReaders.stringValue(arguments['title'], '检查点：人工确认'),
       'task_type': 'checkpoint',
       'mode': mode,
-      'status': TaskRuntimeConstants.statusWaitingUser,
+      'status': TaskRuntimeConstants.statusQueued,
       'chapter': '',
       'goal': ValueReaders.stringValue(
         arguments['goal'],
@@ -123,7 +129,7 @@ class LongTaskDynamicTaskFactoryService {
       'updated_at': now,
       'history': <Object?>[
         <String, Object?>{
-          'status': TaskRuntimeConstants.statusWaitingUser,
+          'status': TaskRuntimeConstants.statusQueued,
           'note': 'Long task revision inserted checkpoint.',
           'created_at': now,
         },
@@ -180,8 +186,10 @@ class LongTaskDynamicTaskFactoryService {
       outputPath = _chapterOutputPolicyService.defaultOutputPath(
         mode: mode,
         stage: stage,
-        fileStem:
-            '第${chapterNumber.toString().padLeft(2, '0')}章_${_safeFilePart(title, 'chapter')}',
+        fileStem: _chapterOutputPolicyService.chapterFileStem(
+          chapterNumber: chapterNumber,
+          title: title,
+        ),
       );
     }
     final inheritedPersistentPaths = _persistentContextPaths(
@@ -221,9 +229,9 @@ class LongTaskDynamicTaskFactoryService {
         <String, Object?>{'persistent_context_paths': inheritedPersistentPaths},
         ValueReaders.objectList(
           arguments['source_paths'] ??
-              const <Object?>[
-                'specs/project_spec.md',
-                'outline/总纲.md',
+              <Object?>[
+                LongTaskPlanningArtifactPathService.projectSpecPath,
+                _planningArtifactPathService.storyOutlinePath(),
                 'summaries',
               ],
         ),
@@ -302,12 +310,6 @@ class LongTaskDynamicTaskFactoryService {
       }
     }
     return count + 1;
-  }
-
-  String _safeFilePart(String value, String fallback) {
-    // 中文注释: 文件名片段沿用核心路径策略，避免动态章节生成出脏路径。
-    final result = _pathPolicyService.safeId(value, fallbackPrefix: fallback);
-    return result.isEmpty ? fallback : result;
   }
 
   List<String> _persistentContextPaths(JsonMap arguments, JsonMap afterTask) {

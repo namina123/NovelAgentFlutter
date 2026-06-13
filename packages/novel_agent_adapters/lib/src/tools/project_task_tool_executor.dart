@@ -28,6 +28,9 @@ class ProjectTaskToolExecutor {
   ) async {
     // 中文注释: 计划型任务也要落成真实任务文件，这样 mark_task_status、GUI 和 CLI 才能看到同一批任务实体。
     final goal = ValueReaders.stringValue(arguments['goal']);
+    final workflowTaskContext = ValueReaders.mapValue(
+      arguments['_workflow_task_context'],
+    );
     final tasks = ValueReaders.objectList(arguments['tasks'])
         .map(ValueReaders.mapValue)
         .where((task) => task.isNotEmpty)
@@ -35,7 +38,17 @@ class ProjectTaskToolExecutor {
     final changedPaths = <Object?>[];
     final normalizedTasks = <Object?>[];
     for (final task in tasks) {
-      final record = await _upsertAgentTaskRecord(project, goal, task);
+      final enrichedTask =
+          workflowTaskContext.isEmpty ||
+                  ValueReaders.mapValue(task['_workflow_task_context']).isNotEmpty
+              ? task
+              : <String, Object?>{
+                  ...ValueReaders.deepCopyMap(task),
+                  '_workflow_task_context': ValueReaders.deepCopyMap(
+                    workflowTaskContext,
+                  ),
+                };
+      final record = await _upsertAgentTaskRecord(project, goal, enrichedTask);
       final relativePath = ValueReaders.stringValue(record['relative_path']);
       if (relativePath.isNotEmpty) {
         changedPaths.add(relativePath);
@@ -235,6 +248,42 @@ class ProjectTaskToolExecutor {
         )..addAll(
           ValueReaders.deepCopyMap(ValueReaders.mapValue(task['metadata'])),
         );
+    final workflowTaskContext = ValueReaders.mapValue(
+      task['_workflow_task_context'],
+    );
+    final workflowTaskMetadata = ValueReaders.mapValue(
+      workflowTaskContext['metadata'],
+    );
+    final inheritedMetadata = <String, Object?>{
+      if (ValueReaders.stringValue(workflowTaskMetadata['plan_id']).trim().isNotEmpty)
+        'plan_id': ValueReaders.stringValue(workflowTaskMetadata['plan_id']),
+      if (ValueReaders.stringValue(
+        workflowTaskMetadata['generated_by'],
+      ).trim().isNotEmpty)
+        'generated_by': ValueReaders.stringValue(
+          workflowTaskMetadata['generated_by'],
+        ),
+      if (ValueReaders.stringValue(
+        workflowTaskMetadata['runtime_baseline_id'],
+      ).trim().isNotEmpty)
+        'runtime_baseline_id': ValueReaders.stringValue(
+          workflowTaskMetadata['runtime_baseline_id'],
+        ),
+      if (ValueReaders.stringValue(
+        workflowTaskMetadata['workflow_mode'],
+      ).trim().isNotEmpty)
+        'workflow_mode': ValueReaders.stringValue(
+          workflowTaskMetadata['workflow_mode'],
+        ),
+      if (ValueReaders.stringValue(workflowTaskMetadata['stage']).trim().isNotEmpty)
+        'stage': ValueReaders.stringValue(workflowTaskMetadata['stage']),
+    };
+    if (inheritedMetadata.isNotEmpty) {
+      inheritedMetadata.addAll(mergedMetadata);
+      mergedMetadata
+        ..clear()
+        ..addAll(inheritedMetadata);
+    }
     final rawStatus = ValueReaders.stringValue(
       task['status'],
       ValueReaders.stringValue(existingRecord['status']),
@@ -264,7 +313,16 @@ class ProjectTaskToolExecutor {
       ),
       'mode': ValueReaders.stringValue(
         task['mode'],
-        ValueReaders.stringValue(existingRecord['mode']),
+        ValueReaders.stringValue(
+          existingRecord['mode'],
+          ValueReaders.stringValue(
+            workflowTaskContext['mode'],
+            ValueReaders.stringValue(
+              workflowTaskMetadata['workflow_mode'],
+              ValueReaders.stringValue(workflowTaskContext['workflow_mode']),
+            ),
+          ),
+        ),
       ),
       'status': rawStatus,
       'note': ValueReaders.stringValue(

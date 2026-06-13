@@ -68,21 +68,21 @@ class ProjectContentPathPolicyService {
     // 中文注释: 内容类型到主目录的映射在这里维持一份，避免 adapters 和 app 各自发明默认归档位置。
     switch (normalizeContentType(contentType)) {
       case 'outline':
-        return 'outline';
+        return 'outlines/story';
       case 'volume_outline':
-        return 'volume_outlines';
+        return 'outlines/volumes';
       case 'chapter_outline':
-        return 'chapter_outlines';
+        return 'outlines/chapters';
       case 'chapter':
         return chaptersRoot;
       case 'scene':
         return scenesRoot;
       case 'setting':
-        return 'world';
+        return 'assets/world';
       case 'character':
         return 'assets/characters';
       case 'style':
-        return 'styles';
+        return 'assets/styles';
       case 'summary':
         return 'summaries';
       case 'knowledge':
@@ -110,6 +110,17 @@ class ProjectContentPathPolicyService {
             return 'setting';
           case 'styles':
             return 'style';
+        }
+        return 'chapter';
+      case 'outlines':
+        final second = parts.length > 1 ? parts[1] : '';
+        switch (second) {
+          case 'story':
+            return 'outline';
+          case 'volumes':
+            return 'volume_outline';
+          case 'chapters':
+            return 'chapter_outline';
         }
         return 'chapter';
       case 'outline':

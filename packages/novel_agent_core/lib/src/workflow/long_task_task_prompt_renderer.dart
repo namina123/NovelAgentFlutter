@@ -13,7 +13,7 @@ class LongTaskTaskPromptRenderer {
     // 中文注释: 事务提示把结构化合同翻成模型可读说明，但不自行追加宿主层私有内容。
     final lines = <String>[
       '你正在执行 NOVEL Agent 的长篇任务流单步。请按事务包行动，先判断需要读取哪些项目文件，再调用工具。',
-      '不要把头脑风暴、选项或不确定内容写入正文；如果需要用户选择，调用 present_user_options。',
+      _openingBoundaryLine(transaction),
       '',
       '## 任务',
       '- 标题：${ValueReaders.stringValue(transaction['task_title'], '未命名任务')}',
@@ -207,5 +207,43 @@ class LongTaskTaskPromptRenderer {
         lines.add('- $text');
       }
     }
+  }
+
+  String _openingBoundaryLine(JsonMap transaction) {
+    if (_isAutonomousSeedPlanning(transaction)) {
+      return '不要把头脑风暴、选项或不确定内容写入正文；当前是 continuous_autonomous 的种子长篇规划，先落可修订草案，除非主线承诺、结局方向和世界边界都缺失到无法成稿，否则不要退回 present_user_options。';
+    }
+    if (_isAutonomousFormalChapter(transaction)) {
+      return '不要把头脑风暴、选项或不确定内容写入正文；当前是 continuous_autonomous 的正式章节/修订单步，优先读取既有规划与必要前文并完成 submit_chapter_delivery，除非关键输入真实缺失到无法成稿，否则不要退回 present_user_options。';
+    }
+    return '不要把头脑风暴、选项或不确定内容写入正文；如果需要用户选择，调用 present_user_options。';
+  }
+
+  bool _isAutonomousSeedPlanning(JsonMap transaction) {
+    return _isContinuousAutonomousSeedTask(
+      transaction,
+      const <String>{'planning'},
+    );
+  }
+
+  bool _isAutonomousFormalChapter(JsonMap transaction) {
+    return _isContinuousAutonomousSeedTask(
+      transaction,
+      const <String>{'chapter', 'revision'},
+    );
+  }
+
+  bool _isContinuousAutonomousSeedTask(
+    JsonMap transaction,
+    Set<String> taskTypes,
+  ) {
+    final metadata = ValueReaders.mapValue(transaction['metadata']);
+    return taskTypes.contains(
+          ValueReaders.stringValue(transaction['task_type']).trim(),
+        ) &&
+        ValueReaders.stringValue(transaction['mode']).trim() ==
+            'seed_to_full_novel' &&
+        ValueReaders.stringValue(metadata['runtime_baseline_id']).trim() ==
+            'continuous_autonomous';
   }
 }

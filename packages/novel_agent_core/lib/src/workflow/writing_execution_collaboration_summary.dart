@@ -131,6 +131,12 @@ class WritingExecutionCollaborationSummary {
 
   factory WritingExecutionCollaborationSummary.fromJson(JsonMap json) {
     // 中文注释: collaboration summary 回读后应能直接给 GUI/CLI 用，不要求它理解 sub-agent 原始包结构。
+    final failedCollaboratorCount = ValueReaders.intValue(
+      json['failed_collaborator_count'],
+    );
+    final blockingFailureCount = json.containsKey('blocking_failure_count')
+        ? ValueReaders.intValue(json['blocking_failure_count'])
+        : failedCollaboratorCount;
     return WritingExecutionCollaborationSummary(
       present: ValueReaders.boolValue(json['present']),
       strategy: ValueReaders.stringValue(json['strategy']).trim(),
@@ -140,12 +146,8 @@ class WritingExecutionCollaborationSummary {
       successfulCollaboratorCount: ValueReaders.intValue(
         json['successful_collaborator_count'],
       ),
-      failedCollaboratorCount: ValueReaders.intValue(
-        json['failed_collaborator_count'],
-      ),
-      blockingFailureCount: ValueReaders.intValue(
-        json['blocking_failure_count'],
-      ),
+      failedCollaboratorCount: failedCollaboratorCount,
+      blockingFailureCount: blockingFailureCount,
       cancelledCollaboratorCount: ValueReaders.intValue(
         json['cancelled_collaborator_count'],
       ),

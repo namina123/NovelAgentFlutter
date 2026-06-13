@@ -14,10 +14,11 @@ class ConversationSecondaryActionsRow extends StatelessWidget {
   Widget build(BuildContext context) {
     // 中文注释: 窄屏工作台补充入口独立成行，后续改按钮数量和顺序时不会波及会话主体。
     return ActionButton(
-      label: '文档',
+      label: '打开文档区',
       icon: Icons.description_outlined,
       tone: ActionButtonTone.neutral,
       expanded: true,
+      compact: true,
       onPressed: onDocumentsRequested,
     );
   }

@@ -57,6 +57,40 @@ void main() {
       expect(status, TaskRuntimeConstants.statusWaitingUser);
     });
 
+    test(
+      'checkpoint followup review auto completes in continuous seed_to_full mode',
+      () {
+        final status = service.statusAfterSuccessfulModelStep(<String, Object?>{
+          'task_type': 'review',
+          'mode': TaskRuntimeConstants.modeSeedToFullNovel,
+          'metadata': <String, Object?>{
+            'origin': 'checkpoint_review_suggestion',
+            'stage': 'planning',
+            'runtime_baseline_id': 'continuous_autonomous',
+          },
+        });
+
+        expect(status, TaskRuntimeConstants.statusSucceeded);
+      },
+    );
+
+    test(
+      'review repair revision auto completes in continuous seed_to_full mode',
+      () {
+        final status = service.statusAfterSuccessfulModelStep(<String, Object?>{
+          'task_type': 'revision',
+          'mode': TaskRuntimeConstants.modeSeedToFullNovel,
+          'metadata': <String, Object?>{
+            'origin': 'review_repair_handoff',
+            'stage': 'revision',
+            'runtime_baseline_id': 'continuous_autonomous',
+          },
+        });
+
+        expect(status, TaskRuntimeConstants.statusSucceeded);
+      },
+    );
+
     test('chapter gate review task auto completes in autorun baseline', () {
       final status = service.statusAfterSuccessfulModelStep(<String, Object?>{
         'task_type': 'review',
@@ -80,5 +114,22 @@ void main() {
 
       expect(status, TaskRuntimeConstants.statusSucceeded);
     });
+
+    test(
+      'continuous autonomous revision-generated agent task auto completes',
+      () {
+        final status = service.statusAfterSuccessfulModelStep(<String, Object?>{
+          'task_type': 'agent_task',
+          'mode': TaskRuntimeConstants.modeSeedToFullNovel,
+          'metadata': <String, Object?>{
+            'runtime_baseline_id': 'continuous_autonomous',
+            'generated_by': 'LongTaskRevision',
+            'stage': 'draft',
+          },
+        });
+
+        expect(status, TaskRuntimeConstants.statusSucceeded);
+      },
+    );
   });
 }

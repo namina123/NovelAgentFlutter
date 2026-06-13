@@ -12,14 +12,19 @@ import 'narrative_domain_tool_names.dart';
 class RequestExternalResearchHandler implements NarrativeDomainToolHandler {
   const RequestExternalResearchHandler({
     InformationPermissionPolicyService? permissionPolicyService,
+    InformationCollectionPolicyService? collectionPolicyService,
     InformationDomainToolHandlerSupport? handlerSupport,
   }) : _permissionPolicyService =
            permissionPolicyService ??
            const InformationPermissionPolicyService(),
+       _collectionPolicyService =
+           collectionPolicyService ??
+           const InformationCollectionPolicyService(),
        _handlerSupport =
            handlerSupport ?? const InformationDomainToolHandlerSupport();
 
   final InformationPermissionPolicyService _permissionPolicyService;
+  final InformationCollectionPolicyService _collectionPolicyService;
   final InformationDomainToolHandlerSupport _handlerSupport;
 
   @override
@@ -94,31 +99,33 @@ class RequestExternalResearchHandler implements NarrativeDomainToolHandler {
       );
     }
 
-    final purpose = ValueReaders.stringValue(
-      request.requestPayload['purpose'],
-    ).trim();
-    final requestedDepth = ValueReaders.stringValue(
-      request.requestPayload['requested_depth'],
-    ).trim();
-    final referenceRelationship = ValueReaders.stringValue(
-      request.requestPayload['reference_relationship'],
-    ).trim();
-    final userGrantedNetworkAccess = ValueReaders.boolValue(
-      request.requestPayload['user_granted_network_access'],
-    );
     final requestMetadata = ValueReaders.deepCopyMap(
       ValueReaders.mapValue(request.requestPayload['metadata']),
+    );
+    final collectionRequest = _collectionPolicyService.normalize(
+      InformationCollectionRequest.fromJson(<String, Object?>{
+        ...request.requestPayload,
+        'target_refs': targetRefs
+            .map((entry) => entry.toJson())
+            .toList(growable: false),
+        'metadata': requestMetadata,
+      }),
     );
     final informationPermissionDecision = _permissionPolicyService
         .decideExternalResearchRequest(
           query: query,
           requestedBy: request.source.sourceType,
-          userGrantedNetworkAccess: userGrantedNetworkAccess,
+          userGrantedNetworkAccess: collectionRequest.userGrantedNetworkAccess,
           metadata: <String, Object?>{
-            ...requestMetadata,
-            'purpose': purpose,
-            'requested_depth': requestedDepth,
-            'reference_relationship': referenceRelationship,
+            ...collectionRequest.metadata,
+            'purpose': collectionRequest.purpose,
+            'requested_depth': collectionRequest.requestedDepth,
+            'reference_relationship': collectionRequest.referenceRelationship,
+            'collection_mode': collectionRequest.collectionMode,
+            'information_domain': collectionRequest.informationDomain,
+            'source_requirements': collectionRequest.sourceRequirements
+                .toJson(),
+            'extraction_policy': collectionRequest.extractionPolicy.toJson(),
           },
         );
 
@@ -131,16 +138,8 @@ class RequestExternalResearchHandler implements NarrativeDomainToolHandler {
       forbiddenMessage: '当前外部研究请求包含禁止自动执行的 payload。',
       outcomePayload: <String, Object?>{
         'research_request': <String, Object?>{
-          'query': query,
-          'purpose': purpose,
-          'requested_depth': requestedDepth,
-          'reference_relationship': referenceRelationship,
-          'target_refs': targetRefs
-              .map((entry) => entry.toJson())
-              .toList(growable: false),
-          'user_granted_network_access': userGrantedNetworkAccess,
+          ...collectionRequest.toJson(),
           'requested_by': request.source.sourceType,
-          'metadata': requestMetadata,
         },
         'request_registered': true,
         'network_execution_performed': false,
@@ -151,6 +150,8 @@ class RequestExternalResearchHandler implements NarrativeDomainToolHandler {
       metadata: <String, Object?>{
         'request_source_type': request.source.sourceType,
         'target_ref_count': targetRefs.length,
+        'collection_mode': collectionRequest.collectionMode,
+        'information_domain': collectionRequest.informationDomain,
       },
     );
   }

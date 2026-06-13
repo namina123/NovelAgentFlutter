@@ -5,6 +5,7 @@ import '../../../../shared/widgets/workspace_page_header.dart';
 import '../../application/controllers/project_assets_controller.dart';
 import '../models/project_assets_view_data.dart';
 import 'project_asset_bundle_dialogs.dart';
+import 'project_reference_extraction_dialog.dart';
 
 class ProjectAssetsToolbar extends StatelessWidget {
   const ProjectAssetsToolbar({
@@ -28,6 +29,17 @@ class ProjectAssetsToolbar extends StatelessWidget {
           icon: Icons.add_rounded,
           compact: true,
           onPressed: controller.onProjectAssetsNewRequested,
+        ),
+        ActionButton(
+          label: '提取参考资料',
+          icon: Icons.auto_stories_outlined,
+          compact: true,
+          tone: ActionButtonTone.neutral,
+          onPressed: () => showProjectReferenceExtractionDialog(
+            context,
+            controller,
+            viewData.referenceExtractionStrategyPicker,
+          ),
         ),
         ActionButton(
           label: '导入资产包',

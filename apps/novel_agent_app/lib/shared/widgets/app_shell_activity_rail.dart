@@ -22,14 +22,14 @@ class AppShellActivityRail extends StatelessWidget {
     final sidebarSurface = context.novelThemeSurfaces.sidebar;
     final sections = AppShellNavigationCatalog.sections();
     return Container(
-      width: 88,
+      width: 86,
       decoration: BoxDecoration(
         color: sidebarSurface.backgroundColor,
         border: Border(right: BorderSide(color: sidebarSurface.borderColor)),
       ),
       child: ListView.separated(
         primary: false,
-        padding: const EdgeInsets.fromLTRB(10, 12, 10, 12),
+        padding: const EdgeInsets.fromLTRB(10, 16, 10, 14),
         itemCount: sections.length,
         separatorBuilder: (context, index) => const SizedBox(height: 10),
         itemBuilder: (context, index) {
@@ -63,12 +63,13 @@ class _SectionBlock extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 6),
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
           child: Text(
-            section.label,
+            section.label.toUpperCase(),
             style: TextStyle(
               fontSize: 10,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.35,
               color: sidebarSurface.mutedForegroundColor,
             ),
           ),
@@ -115,22 +116,31 @@ class _NavigationButton extends StatelessWidget {
       waitDuration: const Duration(milliseconds: 350),
       child: InkWell(
         onTap: onPressed,
-        borderRadius: BorderRadius.zero,
+        borderRadius: BorderRadius.circular(8),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+          constraints: const BoxConstraints(minHeight: 58),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           decoration: BoxDecoration(
-            color: isSelected ? selectedColor : Colors.transparent,
-            border: Border.all(color: isSelected ? selectedBorder : idleBorder),
+            color: isSelected
+                ? selectedColor
+                : sidebarSurface.backgroundColor.withValues(alpha: 0.28),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isSelected
+                  ? selectedBorder
+                  : idleBorder.withValues(alpha: 0.46),
+            ),
           ),
           child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(item.icon, size: 18, color: foreground),
+              Icon(item.icon, size: 17, color: foreground),
               const SizedBox(height: 4),
               Text(
                 item.label,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 10,
+                  fontSize: 10.5,
                   fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
                   color: foreground,
                 ),

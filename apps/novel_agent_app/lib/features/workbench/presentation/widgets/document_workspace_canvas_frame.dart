@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../shared/theme/novel_theme_context.dart';
+import 'workbench_visual_style.dart';
 
 class DocumentWorkspaceCanvasFrame extends StatelessWidget {
   const DocumentWorkspaceCanvasFrame({
@@ -18,122 +19,130 @@ class DocumentWorkspaceCanvasFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 中文注释: 文档画布外框统一后，编辑态、渲染态和空态只需关心内容差异，不再重复写一套容器样式。
     final panelSurface = context.novelThemeSurfaces.panel;
-    final toolSurface = context.novelThemeSurfaces.toolRow;
+    final visual = WorkbenchVisualStyle.of(context);
     final normalizedTitle = title.trim().isEmpty ? '未命名正文' : title.trim();
     final normalizedPath = relativePath.trim();
     final compactStatus = status.trim();
+    final primaryLabel = normalizedTitle;
+    final secondaryLabel =
+        normalizedPath.isNotEmpty && normalizedPath != normalizedTitle
+        ? normalizedPath
+        : '';
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: panelSurface.backgroundColor.withValues(alpha: 0.78),
+        color: panelSurface.backgroundColor.withValues(alpha: 0.34),
+        borderRadius: BorderRadius.circular(visual.surfaceRadius),
         border: Border.all(
-          color: panelSurface.borderColor,
+          color: panelSurface.borderColor.withValues(alpha: 0.12),
           width: panelSurface.borderWidth,
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+        padding: EdgeInsets.fromLTRB(
+          visual.panelPadding.left + 1,
+          visual.compactGap,
+          visual.panelPadding.right + 1,
+          visual.panelPadding.bottom,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        normalizedTitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: panelSurface.foregroundColor,
-                        ),
-                      ),
-                      if (normalizedPath.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          normalizedPath,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: panelSurface.mutedForegroundColor,
-                          ),
-                        ),
-                      ],
-                    ],
+                Container(
+                  width: 15,
+                  height: 15,
+                  margin: EdgeInsets.only(right: visual.compactGap),
+                  decoration: BoxDecoration(
+                    color: panelSurface.backgroundColor.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Icon(
+                    Icons.description_outlined,
+                    size: 9,
+                    color: panelSurface.mutedForegroundColor,
                   ),
                 ),
+                Expanded(
+                  child: Text(
+                    primaryLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: visual.sectionTitleFontSize - 0.1,
+                      fontWeight: FontWeight.w700,
+                      color: panelSurface.foregroundColor,
+                    ),
+                  ),
+                ),
+                if (secondaryLabel.isNotEmpty) ...[
+                  SizedBox(width: visual.compactGap + 1),
+                  Flexible(
+                    child: Text(
+                      secondaryLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        fontSize: visual.metaFontSize,
+                        fontWeight: FontWeight.w500,
+                        color: panelSurface.mutedForegroundColor,
+                      ),
+                    ),
+                  ),
+                ],
                 if (compactStatus.isNotEmpty) ...[
-                  const SizedBox(width: 12),
-                  _DocumentStatusChip(
-                    label: compactStatus,
-                    backgroundColor: toolSurface.highlightBackgroundColor,
-                    borderColor: toolSurface.highlightBorderColor,
-                    foregroundColor: toolSurface.highlightForegroundColor,
-                    borderWidth: toolSurface.borderWidth,
+                  SizedBox(width: visual.compactGap + 2),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: panelSurface.backgroundColor.withValues(
+                        alpha: 0.14,
+                      ),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: panelSurface.borderColor.withValues(alpha: 0.16),
+                        width: panelSurface.borderWidth,
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      child: Text(
+                        compactStatus,
+                        style: TextStyle(
+                          fontSize: visual.metaFontSize - 0.1,
+                          fontWeight: FontWeight.w500,
+                          color: panelSurface.mutedForegroundColor,
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ],
             ),
-            const SizedBox(height: 12),
-            Divider(
-              height: 1,
-              thickness: panelSurface.borderWidth,
-              color: panelSurface.borderColor.withValues(alpha: 0.72),
+            SizedBox(height: visual.compactGap + 1),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final width = constraints.maxWidth > 1100
+                      ? 1116.0
+                      : constraints.maxWidth;
+                  return Align(
+                    alignment: Alignment.topCenter,
+                    child: SizedBox(
+                      width: width,
+                      height: constraints.maxHeight,
+                      child: body,
+                    ),
+                  );
+                },
+              ),
             ),
-            const SizedBox(height: 14),
-            Expanded(child: body),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DocumentStatusChip extends StatelessWidget {
-  const _DocumentStatusChip({
-    required this.label,
-    required this.backgroundColor,
-    required this.borderColor,
-    required this.foregroundColor,
-    required this.borderWidth,
-  });
-
-  final String label;
-  final Color backgroundColor;
-  final Color borderColor;
-  final Color foregroundColor;
-  final double borderWidth;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 160),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        border: Border.all(
-          color: borderColor,
-          width: borderWidth,
-        ),
-      ),
-      child: Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: foregroundColor,
-          height: 1.1,
         ),
       ),
     );

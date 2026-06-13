@@ -111,6 +111,23 @@ class AppBootstrap {
       workspacePort: bundle.projectWorkspacePort,
       taskRepository: projectTaskRepository,
     );
+    final continuousTaskSupervisorBridgeService =
+        ContinuousTaskSupervisorBridgeService(
+          supervisor: bundle.longTaskSupervisor,
+        );
+    final referenceExtractionRuntimeService =
+        ProjectReferenceExtractionRuntimeService(
+          workspacePort: bundle.projectWorkspacePort,
+          loadAvailableAgents: (project) =>
+              bundle.agentPackageCatalog.loadAgentPackages(project),
+          loadAvailableGroups: (project) =>
+              bundle.agentGroupCatalog.loadAgentGroups(project),
+          groupBindingRepository: bundle.projectAgentGroupBindingRepository,
+          continuousTaskSyncService:
+              ReferenceExtractionContinuousTaskSyncService(
+                supervisorBridgeService: continuousTaskSupervisorBridgeService,
+              ),
+        );
     final longTaskStationDetailService = ProjectLongTaskStationDetailService(
       taskRepository: projectTaskRepository,
       reviewReportService: reviewReportService,
@@ -118,8 +135,33 @@ class AppBootstrap {
     final workflowRuntimeService = ProjectWorkflowRuntimeService(
       taskRepository: projectTaskRepository,
       promptTemplateService: promptTemplateService,
+      longTaskSupervisor: bundle.longTaskSupervisor,
       loadProjectAgentGroupSelections: (project) =>
           bundle.projectAgentGroupBindingRepository.loadSelections(project),
+      hostAwareGenerateDraftUseCaseFactory:
+          (provider, networkSettings, {hostInformationPermissionContext}) {
+            final basePort = bundle.projectToolExecutionPort;
+            final scopedToolExecutionPort = basePort is ProjectToolDispatcher
+                ? basePort.scopedWithHostInformationPermissionContext(
+                    hostInformationPermissionContext,
+                  )
+                : basePort;
+            return GenerateDraftUseCase(
+              projectWorkspacePort: bundle.projectWorkspacePort,
+              llmGateway: bundle.createGateway(
+                provider,
+                networkSettings: networkSettings,
+              ),
+              toolExecutionPort: scopedToolExecutionPort,
+              contextAssemblerService: contextAssemblerService,
+              projectPromptContract: ProjectPromptContract(),
+              hostPlatform: hostPlatform,
+              loadAvailableAgents: (project) =>
+                  bundle.agentPackageCatalog.loadAgentPackages(project),
+              loadAvailableAgentGroups: (project) =>
+                  bundle.agentGroupCatalog.loadAgentGroups(project),
+            );
+          },
       generateDraftUseCaseFactory: (provider, networkSettings) {
         return GenerateDraftUseCase(
           projectWorkspacePort: bundle.projectWorkspacePort,
@@ -144,9 +186,13 @@ class AppBootstrap {
           hostPort: bundle.projectToolHostPort,
           taskRepository: projectTaskRepository,
         );
+    final pendingResearchActionService = ProjectPendingResearchActionService(
+      workspacePort: bundle.projectWorkspacePort,
+    );
     final longTaskStationController = LongTaskStationController(
       longTaskSupervisor: bundle.longTaskSupervisor,
       detailService: longTaskStationDetailService,
+      pendingResearchActionService: pendingResearchActionService,
     );
     final controller = AppShellController(
       settingsRepository: bundle.settingsRepository,
@@ -243,6 +289,10 @@ class AppBootstrap {
       draftExecutionConstraintRuntimeService:
           draftExecutionConstraintRuntimeService,
       workflowRuntimeService: workflowRuntimeService,
+      llmGatewayFactory: (provider, networkSettings) {
+        return bundle.createGateway(provider, networkSettings: networkSettings);
+      },
+      referenceExtractionRuntimeService: referenceExtractionRuntimeService,
       conversationDraftRuntimeService: conversationDraftRuntimeService,
       reviewReportService: reviewReportService,
       projectChapterRewriteTaskService: projectChapterRewriteTaskService,
@@ -254,8 +304,33 @@ class AppBootstrap {
           projectExpressionConstraintWorkspaceService,
       projectGeneralContinuitySetupService:
           projectGeneralContinuitySetupService,
+      pendingResearchActionService: pendingResearchActionService,
       longTaskSupervisor: bundle.longTaskSupervisor,
       longTaskStationController: longTaskStationController,
+      hostAwareGenerateDraftUseCaseFactory:
+          (provider, networkSettings, {hostInformationPermissionContext}) {
+            final basePort = bundle.projectToolExecutionPort;
+            final scopedToolExecutionPort = basePort is ProjectToolDispatcher
+                ? basePort.scopedWithHostInformationPermissionContext(
+                    hostInformationPermissionContext,
+                  )
+                : basePort;
+            return GenerateDraftUseCase(
+              projectWorkspacePort: bundle.projectWorkspacePort,
+              llmGateway: bundle.createGateway(
+                provider,
+                networkSettings: networkSettings,
+              ),
+              toolExecutionPort: scopedToolExecutionPort,
+              contextAssemblerService: contextAssemblerService,
+              projectPromptContract: ProjectPromptContract(),
+              hostPlatform: hostPlatform,
+              loadAvailableAgents: (project) =>
+                  bundle.agentPackageCatalog.loadAgentPackages(project),
+              loadAvailableAgentGroups: (project) =>
+                  bundle.agentGroupCatalog.loadAgentGroups(project),
+            );
+          },
       generateDraftUseCaseFactory: (provider, networkSettings) {
         // 中文注释: 草稿生成用例按当前 provider 动态创建，避免控制器直接依赖具体 HTTP 实现。
         return GenerateDraftUseCase(

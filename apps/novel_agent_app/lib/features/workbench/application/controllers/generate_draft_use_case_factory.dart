@@ -5,3 +5,10 @@ typedef GenerateDraftUseCaseFactory =
       ProviderEndpointSettings provider,
       JsonMap networkSettings,
     );
+
+typedef HostAwareGenerateDraftUseCaseFactory =
+    GenerateDraftUseCase Function(
+      ProviderEndpointSettings provider,
+      JsonMap networkSettings, {
+      HostInformationPermissionContext? hostInformationPermissionContext,
+    });

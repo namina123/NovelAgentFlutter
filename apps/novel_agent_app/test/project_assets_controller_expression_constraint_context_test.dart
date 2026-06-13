@@ -3,8 +3,10 @@ import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_app/features/project_assets/application/controllers/project_assets_controller.dart';
 import 'package:novel_agent_app/features/project_assets/application/models/project_assets_catalog.dart';
 import 'package:novel_agent_app/features/project_assets/application/models/project_assets_tab_id.dart';
+import 'package:novel_agent_app/features/project_assets/application/models/project_reference_extraction_execution_result.dart';
 import 'package:novel_agent_app/features/project_assets/application/services/project_assets_loader_service.dart';
 import 'package:novel_agent_app/features/project_assets/application/services/project_expression_constraint_workspace_service.dart';
+import 'package:novel_agent_app/features/project_assets/application/services/project_reference_extraction_execution_service.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 void main() {
@@ -26,6 +28,7 @@ void main() {
         readAvailableProjectAgents: () => const <JsonMap>[],
         syncWorkbenchResources: () async {},
         onBackRequested: () {},
+        referenceExtractionExecutionService: _noopReferenceExtractionService(),
       );
 
       controller.openExpressionConstraintsForAgent('reviewer');
@@ -36,6 +39,108 @@ void main() {
       );
       expect(controller.viewData.entryAgentContextId, 'reviewer');
     },
+  );
+
+  test(
+    'onProjectAssetsExtractReferenceRequested syncs workspace and reports extraction status',
+    () async {
+      var syncCount = 0;
+      final loader = _RecordingProjectAssetsLoaderService();
+      final extractionService = _FakeSuccessfulReferenceExtractionService();
+      final controller = ProjectAssetsController(
+        projectAssetLibraryService: _NoopProjectAssetLibraryService(),
+        expressionConstraintWorkspaceService:
+            ProjectExpressionConstraintWorkspaceService(
+              loadProfiles: (project) async =>
+                  const <ExpressionConstraintProfile>[],
+              loadBindings: (_) async =>
+                  const <ProjectExpressionConstraintBinding>[],
+              saveBindings: (project, bindings) async {},
+            ),
+        loaderService: loader,
+        readCurrentProject: () => const ProjectDescriptor(
+          id: 'project_a',
+          name: '测试项目',
+          rootPath: 'D:/Projects/demo',
+        ),
+        readAvailableProjectAgents: () => const <JsonMap>[],
+        syncWorkbenchResources: () async {
+          syncCount++;
+        },
+        onBackRequested: () {},
+        referenceExtractionExecutionService: extractionService,
+      );
+
+      await controller.onProjectAssetsExtractReferenceRequested(
+        strategyProfileId: 'reference_extraction.fact_focused',
+      );
+
+      expect(syncCount, 1);
+      expect(loader.loadCount, 1);
+      expect(
+        extractionService.lastStrategyProfileId,
+        'reference_extraction.fact_focused',
+      );
+      expect(controller.viewData.status, contains('接纳 2 条'));
+      expect(controller.viewData.status, contains('knowledge/项目知识摘要.md'));
+      expect(controller.viewData.isLoading, isFalse);
+      expect(
+        controller.viewData.referenceExtractionStrategyPicker.selectedProfileId,
+        'reference_extraction.fact_focused',
+      );
+    },
+  );
+
+  test(
+    'onProjectAssetsReferenceSelected navigates by shared reference contract instead of parsing GUI-side key text',
+    () async {
+      final controller = ProjectAssetsController(
+        projectAssetLibraryService: _NoopProjectAssetLibraryService(),
+        expressionConstraintWorkspaceService:
+            ProjectExpressionConstraintWorkspaceService(
+              loadProfiles: (project) async =>
+                  const <ExpressionConstraintProfile>[],
+              loadBindings: (_) async =>
+                  const <ProjectExpressionConstraintBinding>[],
+              saveBindings: (project, bindings) async {},
+            ),
+        loaderService: _GraphSeededProjectAssetsLoaderService(),
+        readCurrentProject: () => const ProjectDescriptor(
+          id: 'project_a',
+          name: '测试项目',
+          rootPath: 'D:/Projects/demo',
+        ),
+        readAvailableProjectAgents: () => const <JsonMap>[],
+        syncWorkbenchResources: () async {},
+        onBackRequested: () {},
+        referenceExtractionExecutionService: _noopReferenceExtractionService(),
+      );
+
+      await controller.refresh();
+      controller.onProjectAssetsReferenceSelected('timeline:event-1');
+
+      expect(controller.viewData.activeTabId, ProjectAssetsTabId.timelines);
+      expect(
+        controller.viewData.timeline.items.singleWhere((item) => item.isSelected).id,
+        'event-1',
+      );
+    },
+  );
+}
+
+ProjectReferenceExtractionExecutionService _noopReferenceExtractionService() {
+  return ProjectReferenceExtractionExecutionService(
+    readSettings: () => null,
+    llmGatewayFactory: (_, networkSettings) => _NoopLlmGateway(),
+    executeReferenceExtraction:
+        ({
+          required project,
+          required llmGateway,
+          required modelId,
+          required request,
+        }) async {
+          throw UnimplementedError();
+        },
   );
 }
 
@@ -66,6 +171,81 @@ class _NoopProjectAssetsLoaderService extends ProjectAssetsLoaderService {
   @override
   Future<ProjectAssetsCatalog> load(ProjectDescriptor project) async {
     return ProjectAssetsCatalog.empty();
+  }
+}
+
+class _RecordingProjectAssetsLoaderService extends ProjectAssetsLoaderService {
+  _RecordingProjectAssetsLoaderService()
+    : super(
+        projectAssetLibraryService: _NoopProjectAssetLibraryService(),
+        timelineRepository: _NoopProjectTimelineRepository(),
+        relationshipRepository: _NoopProjectRelationshipRepository(),
+        expressionConstraintWorkspaceService:
+            ProjectExpressionConstraintWorkspaceService(
+              loadProfiles: (project) async =>
+                  const <ExpressionConstraintProfile>[],
+              loadBindings: (_) async =>
+                  const <ProjectExpressionConstraintBinding>[],
+              saveBindings: (project, bindings) async {},
+            ),
+      );
+
+  int loadCount = 0;
+
+  @override
+  Future<ProjectAssetsCatalog> load(ProjectDescriptor project) async {
+    loadCount++;
+    return ProjectAssetsCatalog.empty();
+  }
+}
+
+class _GraphSeededProjectAssetsLoaderService extends ProjectAssetsLoaderService {
+  _GraphSeededProjectAssetsLoaderService()
+    : super(
+        projectAssetLibraryService: _NoopProjectAssetLibraryService(),
+        timelineRepository: _NoopProjectTimelineRepository(),
+        relationshipRepository: _NoopProjectRelationshipRepository(),
+        expressionConstraintWorkspaceService:
+            ProjectExpressionConstraintWorkspaceService(
+              loadProfiles: (project) async =>
+                  const <ExpressionConstraintProfile>[],
+              loadBindings: (_) async =>
+                  const <ProjectExpressionConstraintBinding>[],
+              saveBindings: (project, bindings) async {},
+            ),
+      );
+
+  @override
+  Future<ProjectAssetsCatalog> load(ProjectDescriptor project) async {
+    final referenceIndex = const SharedNarrativeAssetReferenceIndexService()
+        .buildIndex(
+          foreshadows: const <ForeshadowRecord>[
+            ForeshadowRecord(
+              id: 'hook',
+              title: '开场伏笔',
+              status: 'planted',
+              relatedTimelineIds: <String>['event-1'],
+            ),
+          ],
+          timelines: const <TimelineRecord>[
+            TimelineRecord(
+              id: 'event-1',
+              displayName: '主角进入学院',
+              sequence: 1,
+              relatedForeshadowIds: <String>['hook'],
+            ),
+          ],
+          relationships: const <RelationshipRecord>[],
+        );
+    return ProjectAssetsCatalog(
+      foreshadows: const <ForeshadowRecord>[
+        ForeshadowRecord(id: 'hook', title: '开场伏笔', status: 'planted'),
+      ],
+      timelines: const <TimelineRecord>[
+        TimelineRecord(id: 'event-1', displayName: '主角进入学院', sequence: 1),
+      ],
+      referenceIndex: referenceIndex,
+    );
   }
 }
 
@@ -150,4 +330,94 @@ class _NoopProjectTimelineRepository extends ProjectTimelineRepository {
 class _NoopProjectRelationshipRepository extends ProjectRelationshipRepository {
   _NoopProjectRelationshipRepository()
     : super(hostPort: _NoopProjectToolHostPort());
+}
+
+class _NoopLlmGateway implements LlmGateway {
+  @override
+  Future<JsonMap> requestChat({
+    required ChatRequest request,
+    DraftGenerationCancellationToken? cancellationToken,
+    void Function(LlmStreamUpdate update)? onStreamUpdate,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<JsonMap> requestChatLegacy({
+    required List<JsonMap> messages,
+    required String modelId,
+    List<JsonMap> tools = const <JsonMap>[],
+    JsonMap options = const <String, Object?>{},
+    List<ChatInputAttachment> attachments = const <ChatInputAttachment>[],
+    DraftGenerationCancellationToken? cancellationToken,
+    void Function(LlmStreamUpdate update)? onStreamUpdate,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<String> requestText({
+    required String prompt,
+    required String modelId,
+  }) {
+    throw UnimplementedError();
+  }
+}
+
+class _FakeSuccessfulReferenceExtractionService
+    extends ProjectReferenceExtractionExecutionService {
+  _FakeSuccessfulReferenceExtractionService()
+    : super(
+        readSettings: _readSettings,
+        llmGatewayFactory: _gatewayFactory,
+        executeReferenceExtraction: _executeReferenceExtraction,
+      );
+
+  String lastStrategyProfileId = '';
+
+  static AppSettings? _readSettings() => null;
+
+  static LlmGateway _gatewayFactory(
+    ProviderEndpointSettings _,
+    JsonMap networkSettings,
+  ) {
+    return _NoopLlmGateway();
+  }
+
+  static Future<ProjectReferenceExtractionResult> _executeReferenceExtraction({
+    required ProjectDescriptor project,
+    required LlmGateway llmGateway,
+    required String modelId,
+    required ProjectReferenceExtractionRequest request,
+  }) async {
+    return const ProjectReferenceExtractionResult(
+      runId: 'run_1',
+      packageId: 'pkg_a',
+      packageVersionId: 'v1',
+      sourceFilePath: 'D:/source/book.txt',
+      sourceDecodeMode: 'utf8',
+      groupResolutionKind: 'single_agent_fallback',
+      selectedGroupId: 'reference_extraction_group',
+      strategyProfileId: 'reference_extraction.standard',
+      executionConcurrencyMode: ReferenceExtractionConcurrencyModes.single,
+      proposalCount: 4,
+      acceptedProposalCount: 2,
+      finalizedEntryCount: 7,
+      generatedProjectionPaths: <String>['knowledge/项目知识摘要.md'],
+    );
+  }
+
+  @override
+  Future<ProjectReferenceExtractionExecutionResult> pickAndExecute({
+    required ProjectDescriptor project,
+    String strategyProfileId = '',
+  }) async {
+    lastStrategyProfileId = strategyProfileId;
+    return const ProjectReferenceExtractionExecutionResult(
+      ok: true,
+      didMutateProject: true,
+      statusMessage:
+          '参考资料提取完成：接纳 2 条，沉淀 7 条结构化条目。已生成 knowledge/项目知识摘要.md，可返回工作台资料区查看。',
+    );
+  }
 }

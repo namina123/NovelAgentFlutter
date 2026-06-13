@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../shared/theme/novel_theme_context.dart';
 import '../../../../../shared/widgets/action_button.dart';
 import '../contracts/conversation_action_handler.dart';
 import '../models/conversation_input_capability_state.dart';
@@ -19,56 +20,45 @@ class ConversationInputActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 中文注释: 输入区动作行只承接按钮布局和显隐，不把发送、停止、附件逻辑堆回文本框组件。
+    final colors = context.novelThemeColors;
+    final surface = context.novelThemeSurfaces.inputDock;
     return LayoutBuilder(
       builder: (context, constraints) {
         final actionButtons = <Widget>[];
         void appendAction(Widget child) {
-          if (actionButtons.isNotEmpty) {
-            actionButtons.add(const SizedBox(width: 8));
-          }
           actionButtons.add(child);
         }
 
         if (capabilities.showOptimizeAction) {
           appendAction(
-            Expanded(
-              child: ActionButton(
-                label: '优化',
-                icon: Icons.auto_fix_high_outlined,
-                tone: ActionButtonTone.warm,
-                compact: true,
-                expanded: true,
-                onPressed: actionHandler.onOptimizeRequested,
-              ),
+            ActionButton(
+              label: '优化',
+              icon: Icons.auto_fix_high_outlined,
+              tone: ActionButtonTone.warm,
+              compact: true,
+              onPressed: actionHandler.onOptimizeRequested,
             ),
           );
         }
         if (capabilities.showToolOptionsAction) {
           appendAction(
-            Expanded(
-              child: ActionButton(
-                label: '工具',
-                icon: Icons.tune_outlined,
-                tone: ActionButtonTone.neutral,
-                compact: true,
-                expanded: true,
-                onPressed: actionHandler.onToolOptionsRequested,
-              ),
+            ActionButton(
+              label: '工具',
+              icon: Icons.tune_outlined,
+              tone: ActionButtonTone.neutral,
+              compact: true,
+              onPressed: actionHandler.onToolOptionsRequested,
             ),
           );
         }
         if (capabilities.showAttachmentEntry) {
           appendAction(
-            Expanded(
-              child: ActionButton(
-                label: '附件',
-                icon: Icons.attach_file_rounded,
-                tone: ActionButtonTone.neutral,
-                compact: true,
-                expanded: true,
-                onPressed: actionHandler.onAttachmentRequested,
-              ),
+            ActionButton(
+              label: '附件',
+              icon: Icons.attach_file_rounded,
+              tone: ActionButtonTone.neutral,
+              compact: true,
+              onPressed: actionHandler.onAttachmentRequested,
             ),
           );
         }
@@ -78,35 +68,85 @@ class ConversationInputActionRow extends StatelessWidget {
                 onChanged: actionHandler.onReasoningToggleChanged,
               )
             : null;
-        final sendButton = SizedBox(width: 112, child: _buildSendButton());
+        final sendButton = SizedBox(width: 104, child: _buildSendButton());
         final trailingChildren = <Widget>[];
         if (reasoningToggle != null) {
           trailingChildren.add(reasoningToggle);
           trailingChildren.add(const SizedBox(width: 8));
         }
         trailingChildren.add(sendButton);
+        final showStatusLabel = capabilities.showStopAction;
+        final statusLabel = Text(
+          '生成中',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 10.4,
+            fontWeight: FontWeight.w600,
+            color: colors.mutedTextColor,
+          ),
+        );
+        final statusPill = DecoratedBox(
+          decoration: BoxDecoration(
+            color: surface.backgroundColor.withValues(alpha: 0.22),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: surface.borderColor.withValues(alpha: 0.18),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            child: statusLabel,
+          ),
+        );
         final trailingGroup = Row(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: trailingChildren,
         );
         if (actionButtons.isEmpty) {
-          return Align(alignment: Alignment.centerRight, child: trailingGroup);
+          return Row(
+            children: [
+              if (showStatusLabel) statusPill else const Spacer(),
+              if (!showStatusLabel) const Spacer(),
+              if (showStatusLabel) const SizedBox(width: 8),
+              trailingGroup,
+            ],
+          );
         }
-        final useCompactStack = constraints.maxWidth < 360;
+        final actionsWrap = Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: actionButtons,
+        );
+        final useCompactStack = constraints.maxWidth < 405;
         if (useCompactStack) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(children: actionButtons),
-              const SizedBox(height: 8),
-              Align(alignment: Alignment.centerRight, child: trailingGroup),
+              Row(
+                children: [
+                  if (showStatusLabel) statusPill else const Spacer(),
+                  if (showStatusLabel) const SizedBox(width: 8),
+                  trailingGroup,
+                ],
+              ),
+              const SizedBox(height: 6),
+              actionsWrap,
             ],
           );
         }
         return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(child: Row(children: actionButtons)),
+            Expanded(
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [if (showStatusLabel) statusPill, ...actionButtons],
+              ),
+            ),
             const SizedBox(width: 8),
             trailingGroup,
           ],
@@ -126,6 +166,7 @@ class ConversationInputActionRow extends StatelessWidget {
           : ActionButtonTone.accent,
       compact: true,
       expanded: true,
+      emphasized: !capabilities.showStopAction,
       onPressed: capabilities.showStopAction
           ? actionHandler.onStopRequested
           : onSendRequested,

@@ -33,8 +33,59 @@ import 'package:novel_agent_app/features/workbench/presentation/widgets/conversa
 import 'package:novel_agent_app/features/workbench/presentation/widgets/workbench_navigation_sidebar.dart';
 import 'package:novel_agent_app/shared/widgets/panel_surface.dart';
 
+import 'test_font_loader.dart';
+
+const String _chapterTwelveBody = '''
+港务塔的玻璃幕墙把整片外环灯带压成一层冷白色的雾，林澈站在观景廊桥尽头，没有立刻推门进去。他能看见控制台前的人影在来回切换窗口，像是在故意把所有动作做得平静、无害，可越是克制，越说明里面已经有人替他做出了决定。
+
+他把袖口里那枚旧式存储片又按紧了一次。那东西本来只是一段备份日志，按理说不该让任何一条巡检线在凌晨两点同时改道，也不该让审计系统在三分钟内接连吞掉两次权限回滚。可事实摆在眼前，星港的调度主机已经开始把某些通行记录从公共索引里抹掉，像是在替一个尚未公开的命令腾位置。
+
+门禁识别到他时迟疑了半秒，细窄的蓝线在掌纹边缘停顿，最后还是退开。黎向晚没有回头，只把主屏上的分区图缩小了一层，像是给他留出一个可以开口的位置。
+
+“你晚了七分钟。”她说。
+
+“我先去看了外环货运线。”林澈把存储片放到桌面，“如果你准备告诉我一切都还在计划之内，那你最好先解释，为什么十二号泊位的出港许可会提前写入明早的军用清单。”
+
+黎向晚终于转过身，神色并不惊讶，反而像是在确认他究竟看到了多少。她没有碰那枚存储片，只是把自己的终端推过来，上面停着一份尚未签发的撤离序列，名单短得不像正式预案，却偏偏囊括了前哨站最关键的四个维护岗位。
+
+“因为有人打算把这次试航伪装成故障疏散。”她低声说，“一旦广播发出去，所有人都会以为只是常规演练。真正的货舱会在第八分钟脱离母港，等我们反应过来，追踪权就已经不在站内了。”
+
+廊桥外有一艘拖船缓慢滑过，尾焰在视野里拖出沉闷的一笔。林澈忽然意识到，眼前最危险的并不是那份清单本身，而是黎向晚把它拿给他看这件事。她等于把自己从调度链条里撕开了一道口子，而这道口子一旦暴露，就再也缝不回去。
+
+“你想让我做什么？”
+
+“别现在给答案。”黎向晚看着他，“我只需要你在四点之前决定，究竟要把这份记录送去审计处，还是跟我一起把那艘船拦在出港线里。”''';
+
+const String _desktopUserPrompt = '''
+把这一章的冲突继续向前推，但别急着给任何人立场上的胜负。我要的感觉是两个人都已经知道局面变了，却还在试探谁先承认这一点。
+
+另外，林澈这段别说太满，保留一点他其实也没准备好的空白。''';
+
+const String _desktopAssistantReply = '''
+可以，我会把这一轮重点放在“信息先到，态度后到”的张力上。
+
+具体写法上，先让林澈带着证据进门，但不马上摊牌。这样读者会先感到他掌握了筹码，却还没看清他愿不愿意真正掀桌。黎向晚则不用急着解释动机，她只需要拿出那份撤离序列，就足够让空气变重。
+
+下一段我会把两人的分歧压在行动选择上，而不是口头辩赢。这样章末能停在更危险的位置，也更方便后面继续抬高代价。''';
+
+const String _activeConversationToolDetail = '''
+已读取 `chapter_12.md` 当前草稿，以及 `premise/project_brief.md` 中关于星港封锁、调度链权限和主角关系的基础设定。
+
+检索结果显示，这一章前半段已经建立了“外环试航异常”与“调度记录被清理”的悬念，因此本轮只需要继续加压，不适合过早解释幕后势力的完整目标。''';
+
+const String _activeConversationAssistantReply = '''
+可以把最后那段解释性判断再削薄一些，让情绪停在“她把选择推到他面前”这一步。
+
+我建议保留撤离序列、出港线和四点前决定这几个钉子，因为它们都属于可执行的压力。相反，像“她已经背叛了调度链”这种结论先别明说，让读者自己从她递出终端的动作里读出来。
+
+如果你同意，我下一轮会直接把章尾改成更收着的版本：两个人都知道不能退，但谁也不先把话说透。''';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUpAll(() async {
+    await GoldenTestFontLoader.ensureLoaded();
+  });
 
   testWidgets('captures SR-14 final visual verification screenshots', (
     tester,
@@ -59,9 +110,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('工作台对象'), findsOneWidget);
-    expect(find.text('正文工作区'), findsOneWidget);
-    expect(find.text('当前会话智能体'), findsOneWidget);
+    expect(find.text('NovelAgent'), findsOneWidget);
+    expect(find.text('chapter_12.md'), findsWidgets);
+    expect(
+      find.byKey(const ValueKey<String>('conversation_header_agent_selector')),
+      findsOneWidget,
+    );
 
     await expectLater(
       find.byKey(const ValueKey<String>('sr14_workbench_desktop_shell')),
@@ -95,8 +149,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('工作台对象'), findsOneWidget);
     expect(find.text('文件'), findsWidgets);
+    expect(find.text('快速操作'), findsOneWidget);
     expect(find.byType(CustomScrollView), findsOneWidget);
 
     await expectLater(
@@ -115,7 +169,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('下一步：智能开局'), findsOneWidget);
+    expect(find.text('智能开局'), findsOneWidget);
     expect(find.text('项目智能体组'), findsNothing);
 
     await expectLater(
@@ -220,23 +274,23 @@ WorkbenchViewData _desktopWorkbenchState() {
       productExposesToolOptionsAction: false,
       productExposesOptimizeAction: false,
     ),
-    contextSummary: '已载入角色、关系、时间线与当前章节上下文。',
-    toolCoreStatus: '当前工具展示：紧凑',
+    contextSummary: '',
+    toolCoreStatus: '紧凑',
     workflowTitle: '章节协作',
-    workflowDescription: '围绕当前文档继续推进这一章。',
+    workflowDescription: '继续推进当前章节。',
     composerHint: '告诉我这一轮想推进的目标。',
     conversationEntries: const <ConversationEntryViewData>[
       ConversationEntryViewData(
         id: 'user_1',
         kind: ConversationEntryKind.user,
         title: '你',
-        body: '把这一章的冲突再往前推半步，但先别收尾。',
+        body: _desktopUserPrompt,
       ),
       ConversationEntryViewData(
         id: 'assistant_1',
         kind: ConversationEntryKind.assistant,
         title: '综合创作智能体',
-        body: '我已经接住当前章节与项目约束，下一步会先抬高两位主角的分歧，再把代价压到下一段。',
+        body: _desktopAssistantReply,
       ),
     ],
     documents: const <DocumentTabViewData>[
@@ -250,7 +304,7 @@ WorkbenchViewData _desktopWorkbenchState() {
     ],
     activeDocumentTitle: 'chapter_12.md',
     activeDocumentPath: 'chapters/chapter_12.md',
-    activeDocumentBody: '这一章的正文片段，用于验证正文对象区仍然保持主位。',
+    activeDocumentBody: _chapterTwelveBody,
     activeDocumentCanRender: true,
     resourceEntries: const <ResourceEntryViewData>[
       ResourceEntryViewData(
@@ -433,8 +487,8 @@ WorkbenchViewData _activeConversationState() {
       SelectorOptionViewData(id: 'gpt-4.1', label: 'GPT-4.1'),
     ],
     workflowTitle: '章节协作',
-    workflowDescription: '围绕当前章节继续推进。',
-    contextSummary: '已载入角色、阵营与时间线约束。',
+    workflowDescription: '继续推进当前章节。',
+    contextSummary: '',
     groupSelector: const ConversationGroupSelectorViewData(
       currentGroupLabel: '长篇总控组',
       groupOptions: <SelectorOptionViewData>[],
@@ -486,7 +540,7 @@ WorkbenchViewData _activeConversationState() {
         id: 'user_1',
         kind: ConversationEntryKind.user,
         title: '你',
-        body: '把会话结尾再压低一点，别急着给角色台阶。',
+        body: '把会话结尾再压低一点，别急着给角色台阶。\n\n现在这版还是有点像作者替人物把意思讲完了，我想让它停在动作和停顿上。',
       ),
       ConversationEntryViewData(
         id: 'tool_1',
@@ -495,13 +549,13 @@ WorkbenchViewData _activeConversationState() {
         body: 'chapters/chapter_12.md',
         detailTitle: '工具调用',
         detailSummary: '已读取设定目录与章节草稿',
-        detailBody: '读取了 chapter_12.md 与 premise/project_brief.md。',
+        detailBody: _activeConversationToolDetail,
       ),
       ConversationEntryViewData(
         id: 'assistant_1',
         kind: ConversationEntryKind.assistant,
         title: '审阅智能体',
-        body: '可以把最后一段的解释性句子再削掉半句，让情绪停在动作与停顿上。',
+        body: _activeConversationAssistantReply,
       ),
     ],
     composerHint: '继续告诉我你希望这一轮怎么改。',
@@ -523,7 +577,9 @@ Widget _buildWorkbenchHost({
     isTabletLike: true,
   );
   return MaterialApp(
-    theme: AppTheme.light().copyWith(platform: TargetPlatform.windows),
+    theme: GoldenTestFontLoader.applyToTheme(
+      AppTheme.light().copyWith(platform: TargetPlatform.windows),
+    ),
     home: AppLayoutScope(
       metrics: metrics,
       child: Scaffold(
@@ -555,7 +611,7 @@ Widget _buildCompactSidebarHost({
   required Key boundaryKey,
 }) {
   return MaterialApp(
-    theme: AppTheme.light(),
+    theme: GoldenTestFontLoader.applyToTheme(AppTheme.light()),
     home: Scaffold(
       body: Center(
         child: RepaintBoundary(key: boundaryKey, child: child),
@@ -569,7 +625,7 @@ Widget _buildConversationHost({
   required WorkbenchConversationViewData viewData,
 }) {
   return MaterialApp(
-    theme: AppTheme.light(),
+    theme: GoldenTestFontLoader.applyToTheme(AppTheme.light()),
     home: Scaffold(
       body: Center(
         child: RepaintBoundary(

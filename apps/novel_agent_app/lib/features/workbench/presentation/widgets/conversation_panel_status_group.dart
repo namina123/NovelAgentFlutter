@@ -17,7 +17,7 @@ class ConversationPanelStatusGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 中文注释: 状态组只负责渲染已投影好的摘要项与展开说明，不再自己判断上下文、工具和运行态语义。
+    // 中文注释: 状态组继续朝“内联协作摘要”收口，避免消息流上方再形成一排重芯片。
     if (viewData.items.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -27,8 +27,8 @@ class ConversationPanelStatusGroup extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Wrap(
-          spacing: style.bandGap,
-          runSpacing: style.bandGap,
+          spacing: style.gap(-2.1, min: 2),
+          runSpacing: style.gap(-2.1, min: 2),
           children: viewData.items
               .map(
                 (item) => _ConversationStatusChip(
@@ -41,7 +41,7 @@ class ConversationPanelStatusGroup extends StatelessWidget {
               .toList(growable: false),
         ),
         if (expandedItems.isNotEmpty) ...[
-          SizedBox(height: style.bandGap),
+          SizedBox(height: style.gap(-0.75, min: 3)),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: expandedItems
@@ -73,17 +73,20 @@ class _ConversationStatusChip extends StatelessWidget {
     final content = DecoratedBox(
       decoration: BoxDecoration(
         color: backgroundColor,
-        border: Border.all(color: style.bandBorderColor),
+        borderRadius: BorderRadius.circular(style.sectionRadius),
+        border: Border(
+          top: BorderSide(color: style.bandBorderColor.withValues(alpha: 0.24)),
+        ),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(_iconOf(item.kind), size: 14, color: foregroundColor),
-            const SizedBox(width: 6),
+            Icon(_iconOf(item.kind), size: 12, color: foregroundColor),
+            const SizedBox(width: 5),
             ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 190),
+              constraints: const BoxConstraints(maxWidth: 156),
               child: Text.rich(
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -92,7 +95,7 @@ class _ConversationStatusChip extends StatelessWidget {
                     TextSpan(
                       text: '${item.label} ',
                       style: TextStyle(
-                        fontSize: 10.5,
+                        fontSize: 9.9,
                         fontWeight: FontWeight.w700,
                         color: item.isHighlighted
                             ? foregroundColor.withValues(alpha: 0.82)
@@ -102,7 +105,7 @@ class _ConversationStatusChip extends StatelessWidget {
                     TextSpan(
                       text: item.summary,
                       style: TextStyle(
-                        fontSize: 11.5,
+                        fontSize: 10.6,
                         fontWeight: FontWeight.w800,
                         color: foregroundColor,
                       ),
@@ -112,22 +115,22 @@ class _ConversationStatusChip extends StatelessWidget {
               ),
             ),
             if (item.isBusy) ...[
-              const SizedBox(width: 6),
+              const SizedBox(width: 5),
               SizedBox(
-                width: 12,
-                height: 12,
+                width: 11,
+                height: 11,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
                   color: foregroundColor,
                 ),
               ),
             ] else if (item.isInteractive) ...[
-              const SizedBox(width: 4),
+              const SizedBox(width: 3),
               Icon(
                 item.isExpanded
                     ? Icons.keyboard_arrow_up_rounded
                     : Icons.keyboard_arrow_down_rounded,
-                size: 16,
+                size: 15,
                 color: foregroundColor,
               ),
             ],
@@ -173,11 +176,11 @@ class _ConversationStatusDetail extends StatelessWidget {
     // 中文注释: 展开说明保持轻量文本行，给后续更正式的明细面板保留可替换边界。
     final style = ConversationPanelStyle.of(context);
     return Padding(
-      padding: const EdgeInsets.only(left: 4),
+      padding: const EdgeInsets.only(left: 3),
       child: Text(
         '${item.label}：${item.detail}',
         style: TextStyle(
-          fontSize: 11,
+          fontSize: 10.2,
           height: 1.45,
           color: style.mutedForegroundColor,
         ),

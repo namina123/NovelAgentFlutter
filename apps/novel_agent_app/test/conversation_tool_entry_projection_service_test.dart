@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:novel_agent_app/features/workbench/application/models/conversation_tool_lifecycle_status.dart';
 import 'package:novel_agent_app/features/workbench/application/services/conversation_tool_entry_projection_service.dart';
 import 'package:novel_agent_app/shared/services/runtime_exposure_policy_service.dart';
 
@@ -53,10 +54,13 @@ void main() {
 
       expect(entries, hasLength(1));
       expect(entries.first.title, '章节交付');
-      expect(entries.first.body, '已保存正文');
+      expect(entries.first.body, '已交付章节');
       expect(entries.first.detailTitle, '执行依据');
       expect(entries.first.detailBody, contains('相关对象：drafts/ch01.md'));
-      expect(entries.first.detailBody, isNot(contains('prompt.delivery.writer')));
+      expect(
+        entries.first.detailBody,
+        isNot(contains('prompt.delivery.writer')),
+      );
       expect(entries.first.detailBody, isNot(contains('chapter_writer')));
       expect(entries.first.detailBody, isNot(contains('sub_run_1')));
       expect(entries.first.detailBody, isNot(contains('execution_constraint')));
@@ -89,7 +93,10 @@ void main() {
       expect(entries, hasLength(1));
       expect(entries.first.title, 'submit_chapter_delivery');
       expect(entries.first.detailTitle, '工具细节');
-      expect(entries.first.detailBody, contains('Prompt Block：prompt.delivery.writer'));
+      expect(
+        entries.first.detailBody,
+        contains('Prompt Block：prompt.delivery.writer'),
+      );
       expect(entries.first.detailBody, contains('Tool Profile：chapter_writer'));
       expect(entries.first.detailBody, contains('子任务会话：sub_run_1'));
       expect(entries.first.detailBody, contains('原始事件 JSON'));
@@ -163,16 +170,11 @@ void main() {
 
       expect(entries, hasLength(1));
       expect(entries.first.body, '已更新资料');
-      expect(
-        entries.first.detailSummary,
-        'knowledge 1 | design 0 | research 0 | reference 0',
-      );
+      expect(entries.first.detailSummary, 'information 改动 2 项');
       expect(entries.first.detailBody, contains('信息摘要'));
-      expect(
-        entries.first.detailBody,
-        contains('Information Signal：information 改动 2 项'),
-      );
-      expect(entries.first.detailBody, contains('knowledge/项目知识摘要.md'));
+      expect(entries.first.detailBody, contains('资料状态：已更新资料'));
+      expect(entries.first.detailBody, contains('information 改动 2 项'));
+      expect(entries.first.detailBody, contains('资料投影：knowledge/项目知识摘要.md'));
     });
 
     test('maps clarification-style tool results to confirmation wording', () {
@@ -183,15 +185,104 @@ void main() {
           'id': 'tool_confirm_1',
           'name': 'present_user_options',
           'ok': true,
-          'result': <String, Object?>{
-            'question': '这一章要不要切到第二人称？',
-          },
+          'result': <String, Object?>{'question': '这一章要不要切到第二人称？'},
         },
       ]);
 
       expect(entries, hasLength(1));
       expect(entries.first.body, '需要确认');
       expect(entries.first.detailSummary, '这一章要不要切到第二人称？');
+      expect(
+        entries.first.toolLifecycleStatus,
+        ConversationToolLifecycleStatus.completed,
+      );
+    });
+
+    test('distinguishes planning file writes from chapter writes', () {
+      final service = ConversationToolEntryProjectionService();
+
+      final entries = service.build(<Object?>[
+        <String, Object?>{
+          'id': 'tool_write_1',
+          'name': 'write_project_file',
+          'ok': true,
+          'arguments': <String, Object?>{
+            'relative_path': 'premise/project_brief.md',
+          },
+          'result': <String, Object?>{
+            'relative_path': 'premise/project_brief.md',
+          },
+        },
+      ]);
+
+      expect(entries, hasLength(1));
+      expect(entries.first.title, '文件写入');
+      expect(entries.first.body, '已更新开局资料');
+    });
+
+    test('projects pending tool calls as running lifecycle entries', () {
+      final service = ConversationToolEntryProjectionService();
+
+      final entries = service.buildPendingCallEntries(<Object?>[
+        <String, Object?>{
+          'id': 'pending_1',
+          'name': 'read_project_file',
+          'arguments': <String, Object?>{'relative_path': 'outline/opening.md'},
+        },
+      ]);
+
+      expect(entries, hasLength(1));
+      expect(entries.first.body, '已发起，正在读取 outline/opening.md');
+      expect(
+        entries.first.toolLifecycleStatus,
+        ConversationToolLifecycleStatus.running,
+      );
+    });
+
+    test(
+      'marks not executed tool results as pending confirmation lifecycle',
+      () {
+        final service = ConversationToolEntryProjectionService();
+
+        final entries = service.build(<Object?>[
+          <String, Object?>{
+            'id': 'tool_pending_1',
+            'name': 'present_user_options',
+            'ok': true,
+            'not_executed': true,
+            'result': <String, Object?>{'question': '是否继续推进？'},
+          },
+        ]);
+
+        expect(entries, hasLength(1));
+        expect(entries.first.body, '需要确认');
+        expect(
+          entries.first.toolLifecycleStatus,
+          ConversationToolLifecycleStatus.pendingConfirmation,
+        );
+      },
+    );
+
+    test('marks failed tool results as failed lifecycle entries', () {
+      final service = ConversationToolEntryProjectionService();
+
+      final entries = service.build(<Object?>[
+        <String, Object?>{
+          'id': 'tool_failed_1',
+          'name': 'write_project_file',
+          'ok': false,
+          'arguments': <String, Object?>{'relative_path': 'chapters/第01章.md'},
+          'result': const <String, Object?>{},
+        },
+      ]);
+
+      expect(entries, hasLength(1));
+      expect(entries.first.body, '需要处理');
+      expect(entries.first.isError, isTrue);
+      expect(
+        entries.first.toolLifecycleStatus,
+        ConversationToolLifecycleStatus.failed,
+      );
     });
   });
 }

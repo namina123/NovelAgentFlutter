@@ -61,5 +61,60 @@ void main() {
         expect(builtSchemas, domainSchemas);
       },
     );
+
+    test('call_sub_agent schema documents empty agent_id fallback routing', () {
+      final service = ToolSchemaBuilderService();
+
+      final schema = service.buildOpenAiSchemas(<String>[
+        'call_sub_agent',
+      ]).single;
+      final parameters = ValueReaders.mapValue(
+        ValueReaders.mapValue(schema['function'])['parameters'],
+      );
+      final properties = ValueReaders.mapValue(parameters['properties']);
+      final agentIdSchema = ValueReaders.mapValue(properties['agent_id']);
+
+      expect(
+        ValueReaders.stringValue(agentIdSchema['description']),
+        contains('空字符串'),
+      );
+      expect(
+        ValueReaders.stringValue(agentIdSchema['description']),
+        contains('自动兜底选取'),
+      );
+    });
+
+    test(
+      'submit_chapter_delivery schema documents continuity handoff fields',
+      () {
+        final service = ToolSchemaBuilderService();
+
+        final schema = service.buildOpenAiSchemas(<String>[
+          'submit_chapter_delivery',
+        ]).single;
+        final function = ValueReaders.mapValue(schema['function']);
+        final parameters = ValueReaders.mapValue(function['parameters']);
+        final properties = ValueReaders.mapValue(parameters['properties']);
+        final chapterContentSchema = ValueReaders.mapValue(
+          properties['chapter_content'],
+        );
+        final submissionSchema = ValueReaders.mapValue(
+          properties['submission'],
+        );
+
+        expect(
+          ValueReaders.stringValue(function['description']),
+          contains('final_state_summary'),
+        );
+        expect(
+          ValueReaders.stringValue(chapterContentSchema['description']),
+          contains('承接上一章已落定状态'),
+        );
+        expect(
+          ValueReaders.stringValue(submissionSchema['description']),
+          contains('下一章入口'),
+        );
+      },
+    );
   });
 }

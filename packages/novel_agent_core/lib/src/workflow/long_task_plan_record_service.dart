@@ -38,6 +38,18 @@ class LongTaskPlanRecordService {
       'seed_prompt',
       'chapter_count',
       'checkpoint_interval',
+      'enable_chapter_word_constraints',
+      'chapter_word_target',
+      'chapter_word_min',
+      'chapter_word_max',
+      'sample_chapter_word_target',
+      'sample_chapter_word_min',
+      'sample_chapter_word_max',
+      'chapter_length_rolling_window',
+      'chapter_length_mild_deviation_ratio',
+      'chapter_length_severe_deviation_ratio',
+      'chapter_length_mild_adjacent_delta_ratio',
+      'chapter_length_severe_adjacent_delta_ratio',
     ]) {
       if (!options.containsKey(key)) {
         continue;

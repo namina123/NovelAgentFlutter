@@ -29,7 +29,7 @@ class ExpressionConstraintContextSectionService {
       }
     }
     if (profile.riskSignals.isNotEmpty) {
-      lines.add('风险信号：');
+      lines.add('风险信号（交付前自查；命中后需要改写或降到明确可接受的极低频率）：');
       for (final item in profile.riskSignals.take(8)) {
         lines.add('- ${item.trim()}');
       }

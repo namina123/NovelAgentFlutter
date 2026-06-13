@@ -71,9 +71,7 @@ void main() {
                   'outcome_payload': <String, Object?>{
                     'request_registered': true,
                     'network_execution_performed': false,
-                    'research_request': <String, Object?>{
-                      'query': '样章入口相关资料',
-                    },
+                    'research_request': <String, Object?>{'query': '样章入口相关资料'},
                   },
                 },
               },
@@ -85,6 +83,36 @@ void main() {
           <String, Object?>{'title': '风格锚点'},
         ],
         execution: const <String, Object?>{
+          'execution_constraints': <String, Object?>{
+            'expression_constraint_policy_mode': 'adaptive',
+            'expression_constraint_injection_strength': 'sections',
+            'expression_constraint_review_requirement': 'when_applied',
+            'expression_constraint_violation_disposition': 'adjust_next',
+            'expression_constraint_applied': true,
+            'expression_constraint_runtime_escalated': true,
+            'expression_constraint_injection_mode': 'brief_and_sections',
+            'expression_constraint_review_required': true,
+            'expression_constraint_profiles': <Object?>[
+              <String, Object?>{
+                'id': 'de_ai',
+                'display_name': '去 AI 风',
+                'summary': '降低模板化表达和解释腔。',
+                'kind': 'natural_expression',
+              },
+            ],
+            'project_expression_constraint_bindings': <Object?>[
+              <String, Object?>{
+                'id': 'binding_de_ai',
+                'profile_id': 'de_ai',
+                'default_for_project': true,
+              },
+            ],
+            'runtime_report': <String, Object?>{
+              'expression_constraints': <String, Object?>{
+                'runtime_escalated': true,
+              },
+            },
+          },
           'activation_report': <String, Object?>{
             'items': <Object?>[
               <String, Object?>{
@@ -127,14 +155,48 @@ void main() {
       expect(
         ValueReaders.stringValue(
           ValueReaders.mapValue(
+            review['review_authority_policy'],
+          )['trigger_authority'],
+        ),
+        ReviewTriggerAuthorities.runtimeSupervisorPolicy,
+      );
+      expect(
+        ValueReaders.stringValue(
+          ValueReaders.mapValue(review['review_contract'])['review_id'],
+        ),
+        startsWith('checkpoint_review_'),
+      );
+      expect(
+        ValueReaders.stringValue(
+          ValueReaders.mapValue(review['review_summary'])['review_type'],
+        ),
+        ReviewTypeConstants.general,
+      );
+      expect(
+        ValueReaders.stringValue(
+          ValueReaders.mapValue(review['review_repair_handoff'])['action'],
+        ),
+        RepairHandoffActions.createBlockingRepair,
+      );
+      expect(
+        ValueReaders.stringValue(
+          ValueReaders.mapValue(
             review['expression_constraint_review'],
           )['authenticity_pass_level'],
         ),
-        'aggressive',
+        isNotEmpty,
       );
       expect(
         ValueReaders.stringValue(review['continuation_disposition']),
         isNotEmpty,
+      );
+      expect(
+        ValueReaders.stringValue(
+          ValueReaders.mapValue(
+            review['expression_constraint_signal'],
+          )['category'],
+        ),
+        'suggest_strengthen',
       );
       expect(
         ValueReaders.stringValue(
@@ -150,8 +212,62 @@ void main() {
         project,
         ValueReaders.stringValue(saved['markdown_path']),
       );
+      expect(markdownContent, contains('## 表达限制执行策略'));
+      expect(markdownContent, contains('Supervisor 信号：suggest_strengthen'));
       expect(markdownContent, contains('## Information 信号'));
       expect(markdownContent, contains('Required 信息省略'));
+    });
+
+    test('does not treat planned target paths as produced outputs', () async {
+      final saved = await service.saveReview(
+        project: project,
+        task: <String, Object?>{
+          'id': 'planning_001',
+          'title': '规划：扩展作品规格与总纲',
+          'task_type': 'planning',
+          'mode': TaskRuntimeConstants.modeSeedToFullNovel,
+          'output_paths': <Object?>[
+            'specs/project_spec.md',
+            'outline/总纲.md',
+            'chapter_outlines/章节任务清单.md',
+          ],
+          'metadata': <String, Object?>{
+            'stage': 'planning',
+            'runtime_baseline_id': 'continuous_autonomous',
+          },
+        },
+        result: const <String, Object?>{
+          'ok': true,
+          'output_paths': <Object?>[],
+          'changed_paths': <Object?>[],
+          'executed_tools': <Object?>[
+            <String, Object?>{
+              'name': 'present_user_options',
+              'result': <String, Object?>{
+                'question': '请选择一个方向',
+                'options': <Object?>[
+                  <String, Object?>{'label': '方向 A'},
+                ],
+              },
+            },
+          ],
+          'response': <String, Object?>{'content': '我需要你先选择一个方向。'},
+        },
+        memorySections: const <JsonMap>[],
+      );
+
+      final review = ValueReaders.mapValue(saved['review']);
+      expect(ValueReaders.stringList(review['output_paths']), isEmpty);
+      expect(ValueReaders.mapList(review['output_excerpts']), isEmpty);
+      expect(ValueReaders.stringValue(review['summary']), contains('尚未写出文件'));
+      expect(
+        ValueReaders.stringValue(review['continuation_disposition']),
+        'manual_attention',
+      );
+      expect(
+        ValueReaders.stringValue(review['continuation_reason']),
+        'missing_output_paths',
+      );
     });
   });
 }

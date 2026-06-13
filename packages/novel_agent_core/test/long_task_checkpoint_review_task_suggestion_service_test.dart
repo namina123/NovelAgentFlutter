@@ -94,6 +94,62 @@ void main() {
     });
 
     test(
+      'planning review suggestions ignore task and sidecar outputs and keep canonical planning artifacts',
+      () {
+        final service = LongTaskCheckpointReviewTaskSuggestionService();
+
+        final suggestions = service.buildSuggestions(
+          task: const <String, Object?>{
+            'id': 'planning_002',
+            'task_type': 'planning',
+            'output_paths': <Object?>[
+              'specs/project_spec.md',
+              'outlines/story/总纲.md',
+              'outlines/chapters/章节任务清单.md',
+              'tasks/plan_seed_to_full_novel_001_chapter_001_task.json',
+              'tracking/checkpoint_reviews/planning_002.json',
+              'world/清溪镇.md',
+              'assets/characters/主角.md',
+            ],
+          },
+          checkpointReview: const <String, Object?>{
+            'id': 'checkpoint_review_002b',
+            'task_type': 'planning',
+            'output_paths': <Object?>[
+              'specs/project_spec.md',
+              'outlines/story/总纲.md',
+              'outlines/chapters/章节任务清单.md',
+              'tasks/plan_seed_to_full_novel_001_chapter_001_task.json',
+              'tracking/checkpoint_reviews/planning_002.json',
+              'world/清溪镇.md',
+              'assets/characters/主角.md',
+            ],
+          },
+        );
+
+        final sourcePaths = suggestions
+            .map((item) => ValueReaders.stringValue(item['source_path']))
+            .toSet();
+        expect(
+          sourcePaths,
+          equals(<String>{
+            'specs/project_spec.md',
+            'outlines/story/总纲.md',
+            'outlines/chapters/章节任务清单.md',
+          }),
+        );
+        expect(
+          suggestions.any(
+            (item) =>
+                ValueReaders.stringValue(item['source_path'])
+                    .startsWith('tasks/'),
+          ),
+          isFalse,
+        );
+      },
+    );
+
+    test(
       'world or entity drift can inject continuity review for outline outputs',
       () {
         final service = LongTaskCheckpointReviewTaskSuggestionService();
@@ -123,5 +179,29 @@ void main() {
         );
       },
     );
+
+    test('does not recurse followup review suggestions from review tasks', () {
+      final service = LongTaskCheckpointReviewTaskSuggestionService();
+
+      final suggestions = service.buildSuggestions(
+        task: const <String, Object?>{
+          'id': 'review_001',
+          'task_type': 'review',
+          'output_paths': <Object?>['reviews/plot/ch01.md'],
+          'metadata': <String, Object?>{
+            'origin': 'checkpoint_review_suggestion',
+            'stage': 'sample',
+          },
+        },
+        checkpointReview: const <String, Object?>{
+          'id': 'checkpoint_review_review_001',
+          'task_type': 'review',
+          'stage': 'sample',
+          'output_paths': <Object?>['reviews/plot/ch01.md'],
+        },
+      );
+
+      expect(suggestions, isEmpty);
+    });
   });
 }

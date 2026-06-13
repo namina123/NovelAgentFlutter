@@ -23,7 +23,7 @@ class PrimaryActionList extends StatelessWidget {
     return Column(
       children: actions.map((action) {
         return Padding(
-          padding: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.only(bottom: 10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -40,10 +40,11 @@ class PrimaryActionList extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 action.description,
-                style: const TextStyle(
-                  fontSize: 12,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  height: 1.45,
                   fontWeight: FontWeight.w500,
-                  color: Color(0xFF5E6E74),
+                  color: Theme.of(context).textTheme.bodySmall?.color,
                 ),
               ),
             ],

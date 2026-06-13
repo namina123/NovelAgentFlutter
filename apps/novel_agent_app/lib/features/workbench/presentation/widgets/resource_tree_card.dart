@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../app/theme/theme_surface_spec.dart';
 import '../../../../../shared/theme/novel_theme_context.dart';
 import '../models/workbench_view_data.dart';
 import 'resource_tree_empty_state.dart';
@@ -20,47 +19,16 @@ class ResourceTreeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 中文注释: 文件树列表单独封装后，后续切到树控件或虚拟滚动时不需要碰资源面板外层结构。
-    final surface = context.novelThemeSurfaces.panel;
-    final listChildren = _buildEntryChildren(surface);
-    final body = embeddedInScrollView
+    final listChildren = _buildEntryChildren();
+    return embeddedInScrollView
         ? _EmbeddedTreeBody(children: listChildren)
         : _ScrollableTreeBody(
             entries: entries,
             onEntrySelected: onEntrySelected,
           );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                '项目目录',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: surface.mutedForegroundColor,
-                ),
-              ),
-            ),
-            Text(
-              '${entries.length} 项',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: surface.mutedForegroundColor,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        if (embeddedInScrollView) body else Expanded(child: body),
-      ],
-    );
   }
 
-  List<Widget> _buildEntryChildren(ThemeSurfaceSpec surface) {
+  List<Widget> _buildEntryChildren() {
     if (entries.isEmpty) {
       return const <Widget>[ResourceTreeEmptyState()];
     }
@@ -74,14 +42,7 @@ class ResourceTreeCard extends StatelessWidget {
         ),
       );
       if (index < entries.length - 1) {
-        widgets.add(
-          Divider(
-            height: 1,
-            indent: 10,
-            endIndent: 10,
-            color: surface.borderColor.withValues(alpha: 0.35),
-          ),
-        );
+        widgets.add(const SizedBox(height: 2));
       }
     }
     return widgets;
@@ -102,25 +63,24 @@ class _ScrollableTreeBody extends StatelessWidget {
     final surface = context.novelThemeSurfaces.panel;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: surface.backgroundColor.withValues(alpha: 0.42),
-        borderRadius: BorderRadius.circular(surface.radius),
+        color: surface.backgroundColor.withValues(alpha: 0.02),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: entries.isEmpty
           ? const ResourceTreeEmptyState()
-          : ListView.separated(
-              padding: const EdgeInsets.symmetric(vertical: 6),
+          : ListView.builder(
+              padding: const EdgeInsets.fromLTRB(4, 4, 4, 5),
               itemCount: entries.length,
-              separatorBuilder: (_, index) => Divider(
-                height: 1,
-                indent: 10,
-                endIndent: 10,
-                color: surface.borderColor.withValues(alpha: 0.35),
-              ),
               itemBuilder: (context, index) {
                 final entry = entries[index];
-                return ResourceTreeEntryTile(
-                  entry: entry,
-                  onPressed: () => onEntrySelected(entry.id),
+                return Padding(
+                  padding: EdgeInsets.only(
+                    bottom: index == entries.length - 1 ? 0 : 2,
+                  ),
+                  child: ResourceTreeEntryTile(
+                    entry: entry,
+                    onPressed: () => onEntrySelected(entry.id),
+                  ),
                 );
               },
             ),
@@ -138,15 +98,15 @@ class _EmbeddedTreeBody extends StatelessWidget {
     final surface = context.novelThemeSurfaces.panel;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: surface.backgroundColor.withValues(alpha: 0.42),
-        borderRadius: BorderRadius.circular(surface.radius),
+        color: surface.backgroundColor.withValues(alpha: 0.02),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           ...children,
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
         ],
       ),
     );

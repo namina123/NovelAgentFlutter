@@ -13,6 +13,7 @@ class ActionButton extends StatelessWidget {
     this.tone = ActionButtonTone.accent,
     this.compact = false,
     this.labelMaxLines = 1,
+    this.emphasized = false,
   });
 
   final String label;
@@ -22,17 +23,18 @@ class ActionButton extends StatelessWidget {
   final ActionButtonTone tone;
   final bool compact;
   final int labelMaxLines;
+  final bool emphasized;
 
   @override
   Widget build(BuildContext context) {
-    // 中文注释: 统一业务按钮的视觉层级，让不同页面的动作密度一致，而不是每页自造按钮风格。
     final colors = context.novelThemeColors;
     final chrome = context.novelButtonChrome;
     final foreground = _foregroundColor(colors);
     final border = _borderColor(colors);
-    final button = OutlinedButton(
+    final background = _backgroundColor(colors);
+    final button = TextButton(
       onPressed: onPressed,
-      style: OutlinedButton.styleFrom(
+      style: TextButton.styleFrom(
         minimumSize: Size(
           0,
           compact ? chrome.compactMinHeight : chrome.regularMinHeight,
@@ -40,16 +42,17 @@ class ActionButton extends StatelessWidget {
         padding: compact ? chrome.compactPadding : chrome.regularPadding,
         foregroundColor: foreground,
         side: BorderSide(color: border, width: chrome.borderWidth),
-        backgroundColor: _backgroundColor(colors),
+        backgroundColor: background,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(chrome.radius),
           side: BorderSide(color: border, width: chrome.borderWidth),
         ),
         textStyle: TextStyle(
-          fontSize: compact ? 12 : 14,
-          fontWeight: FontWeight.w700,
+          fontSize: compact ? (emphasized ? 11.8 : 11.5) : 13.5,
+          fontWeight: emphasized ? FontWeight.w700 : FontWeight.w600,
           letterSpacing: 0,
         ),
+        elevation: emphasized ? 0 : 0,
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -84,21 +87,21 @@ class ActionButton extends StatelessWidget {
   }
 
   Color _backgroundColor(ThemeColorTokens themeColors) {
-    // 中文注释: 按钮底色按语义分层，保证工具型按钮和重点动作按钮有清晰区分。
     switch (tone) {
       case ActionButtonTone.accent:
-        return themeColors.accentSoftColor;
+        return emphasized
+            ? themeColors.accentColor.withValues(alpha: 0.18)
+            : themeColors.accentSoftColor.withValues(alpha: 0.68);
       case ActionButtonTone.warm:
-        return themeColors.warmColor;
+        return themeColors.warmColor.withValues(alpha: 0.68);
       case ActionButtonTone.neutral:
-        return Colors.transparent;
+        return themeColors.panelBackground.withValues(alpha: 0.16);
       case ActionButtonTone.danger:
-        return themeColors.dangerSoftColor;
+        return themeColors.dangerSoftColor.withValues(alpha: 0.68);
     }
   }
 
   Color _foregroundColor(ThemeColorTokens themeColors) {
-    // 中文注释: 文字和图标颜色与按钮语义保持一致，避免用同一套颜色覆盖所有状态。
     switch (tone) {
       case ActionButtonTone.accent:
         return themeColors.lineStrongColor;
@@ -112,16 +115,17 @@ class ActionButton extends StatelessWidget {
   }
 
   Color _borderColor(ThemeColorTokens themeColors) {
-    // 中文注释: 边框颜色跟随按钮语义变化，用来提升大面积浅色界面中的层次感。
     switch (tone) {
       case ActionButtonTone.accent:
-        return themeColors.lineColor;
+        return emphasized
+            ? themeColors.accentColor.withValues(alpha: 0.46)
+            : themeColors.lineColor.withValues(alpha: 0.82);
       case ActionButtonTone.warm:
-        return themeColors.warmStrongColor.withValues(alpha: 0.7);
+        return themeColors.warmStrongColor.withValues(alpha: 0.58);
       case ActionButtonTone.neutral:
-        return themeColors.lineColor;
+        return themeColors.lineColor.withValues(alpha: 0.72);
       case ActionButtonTone.danger:
-        return themeColors.dangerStrongColor.withValues(alpha: 0.62);
+        return themeColors.dangerStrongColor.withValues(alpha: 0.54);
     }
   }
 }

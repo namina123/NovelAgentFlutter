@@ -1,16 +1,28 @@
+import 'package:novel_agent_core/novel_agent_core.dart';
+
 import '../tools/project_tool_path_policy.dart';
 
 class ProjectInformationPathService {
   ProjectInformationPathService({ProjectToolPathPolicy? toolPathPolicy})
-    : _toolPathPolicy = toolPathPolicy ?? ProjectToolPathPolicy();
+    : _toolPathPolicy = toolPathPolicy ?? ProjectToolPathPolicy(),
+      _sourceOfTruthLocatorService =
+          const InformationSourceOfTruthLocatorService();
 
   final ProjectToolPathPolicy _toolPathPolicy;
+  final InformationSourceOfTruthLocatorService _sourceOfTruthLocatorService;
 
   String knowledgeCardsIndexPath() =>
       '.novel_agent/information/knowledge_cards/index.json';
 
   String knowledgeCardPath(String cardId) {
     return '.novel_agent/information/knowledge_cards/${_safeId(cardId, fallback: 'knowledge_card')}.json';
+  }
+
+  String knowledgeCardLocator(String cardId) {
+    return _sourceOfTruthLocatorService.entryLocator(
+      InformationSourceOfTruthCollections.knowledgeCards,
+      _safeId(cardId, fallback: 'knowledge_card'),
+    );
   }
 
   String designElementsIndexPath() =>
@@ -20,11 +32,25 @@ class ProjectInformationPathService {
     return '.novel_agent/information/design_elements/${_safeId(designId, fallback: 'design_element')}.json';
   }
 
+  String designElementLocator(String designId) {
+    return _sourceOfTruthLocatorService.entryLocator(
+      InformationSourceOfTruthCollections.designElements,
+      _safeId(designId, fallback: 'design_element'),
+    );
+  }
+
   String researchNotesIndexPath() =>
       '.novel_agent/information/research_notes/index.json';
 
   String researchNotePath(String researchId) {
     return '.novel_agent/information/research_notes/${_safeId(researchId, fallback: 'research_note')}.json';
+  }
+
+  String researchNoteLocator(String researchId) {
+    return _sourceOfTruthLocatorService.entryLocator(
+      InformationSourceOfTruthCollections.researchNotes,
+      _safeId(researchId, fallback: 'research_note'),
+    );
   }
 
   String researchRequestsIndexPath() =>
@@ -39,6 +65,13 @@ class ProjectInformationPathService {
 
   String referenceWorkPath(String referenceWorkId) {
     return '.novel_agent/information/reference_works/${_safeId(referenceWorkId, fallback: 'reference_work')}.json';
+  }
+
+  String referenceWorkLocator(String referenceWorkId) {
+    return _sourceOfTruthLocatorService.entryLocator(
+      InformationSourceOfTruthCollections.referenceWorks,
+      _safeId(referenceWorkId, fallback: 'reference_work'),
+    );
   }
 
   String informationLinksLogPath() =>

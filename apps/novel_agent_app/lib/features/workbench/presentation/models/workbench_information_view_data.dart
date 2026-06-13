@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 class WorkbenchInformationViewData {
   const WorkbenchInformationViewData({
     this.title = '资料与设定',
@@ -24,8 +22,8 @@ class WorkbenchInformationViewData {
             other.title == title &&
             other.summary == summary &&
             other.usageSummary == usageSummary &&
-            listEquals(other.entries, entries) &&
-            listEquals(other.pendingEntries, pendingEntries);
+            _listEquals(other.entries, entries) &&
+            _listEquals(other.pendingEntries, pendingEntries);
   }
 
   @override
@@ -36,6 +34,21 @@ class WorkbenchInformationViewData {
     Object.hashAll(entries),
     Object.hashAll(pendingEntries),
   );
+}
+
+bool _listEquals<T>(List<T> left, List<T> right) {
+  if (identical(left, right)) {
+    return true;
+  }
+  if (left.length != right.length) {
+    return false;
+  }
+  for (var index = 0; index < left.length; index += 1) {
+    if (left[index] != right[index]) {
+      return false;
+    }
+  }
+  return true;
 }
 
 class WorkbenchInformationEntryViewData {
@@ -49,6 +62,10 @@ class WorkbenchInformationEntryViewData {
     this.subtitle = '',
     this.usageLabel = '',
     this.riskLabel = '',
+    this.mountStatusLabel = '',
+    this.sourceOfTruthSummary = '',
+    this.sourceIdentitySummary = '',
+    this.pendingResearchRequestId = '',
   });
 
   final String id;
@@ -58,8 +75,15 @@ class WorkbenchInformationEntryViewData {
   final String statusLabel;
   final String usageLabel;
   final String riskLabel;
+  final String mountStatusLabel;
+  final String sourceOfTruthSummary;
+  final String sourceIdentitySummary;
   final String actionLabel;
   final String relativePath;
+  final String pendingResearchRequestId;
+
+  bool get supportsPendingResearchActions =>
+      pendingResearchRequestId.trim().isNotEmpty;
 
   @override
   bool operator ==(Object other) {
@@ -72,8 +96,12 @@ class WorkbenchInformationEntryViewData {
             other.statusLabel == statusLabel &&
             other.usageLabel == usageLabel &&
             other.riskLabel == riskLabel &&
+            other.mountStatusLabel == mountStatusLabel &&
+            other.sourceOfTruthSummary == sourceOfTruthSummary &&
+            other.sourceIdentitySummary == sourceIdentitySummary &&
             other.actionLabel == actionLabel &&
-            other.relativePath == relativePath;
+            other.relativePath == relativePath &&
+            other.pendingResearchRequestId == pendingResearchRequestId;
   }
 
   @override
@@ -85,7 +113,11 @@ class WorkbenchInformationEntryViewData {
     statusLabel,
     usageLabel,
     riskLabel,
+    mountStatusLabel,
+    sourceOfTruthSummary,
+    sourceIdentitySummary,
     actionLabel,
     relativePath,
+    pendingResearchRequestId,
   );
 }

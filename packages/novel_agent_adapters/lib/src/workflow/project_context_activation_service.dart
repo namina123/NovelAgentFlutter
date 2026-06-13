@@ -4,21 +4,31 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../storage/local_constraint_binding_repository.dart';
 import '../storage/local_narrative_claim_repository.dart';
+import '../storage/local_narrative_ledger_repository.dart';
 import '../storage/local_narrative_profile_repository.dart';
 import '../storage/open_narrative_state_path_service.dart';
+import 'project_chapter_continuity_handoff_item_service.dart';
+import 'project_chapter_continuity_priority_service.dart';
 import 'project_information_activation_bridge_service.dart';
+import 'project_narrative_claim_activation_contract_service.dart';
 
 class ProjectContextActivationService {
   ProjectContextActivationService({
     required ProjectWorkspacePort workspacePort,
     NarrativeProfileRepository? profileRepository,
     NarrativeClaimRepository? claimRepository,
+    NarrativeLedgerRepository? ledgerRepository,
     ConstraintBindingRepository? bindingRepository,
     ProjectContextFileSelectionService? fileSelectionService,
     ContextActivationPlannerService? plannerService,
     OpenNarrativeStatePathService? pathService,
+    ProjectNarrativeClaimActivationContractService?
+    narrativeClaimActivationContractService,
     ProjectInformationActivationBridgeService?
     informationActivationBridgeService,
+    ProjectChapterContinuityHandoffItemService?
+    chapterContinuityHandoffItemService,
+    ProjectChapterContinuityPriorityService? chapterContinuityPriorityService,
   }) : _workspacePort = workspacePort,
        _profileRepository =
            profileRepository ??
@@ -26,6 +36,9 @@ class ProjectContextActivationService {
        _claimRepository =
            claimRepository ??
            LocalNarrativeClaimRepository(workspacePort: workspacePort),
+       _ledgerRepository =
+           ledgerRepository ??
+           LocalNarrativeLedgerRepository(workspacePort: workspacePort),
        _bindingRepository =
            bindingRepository ??
            LocalConstraintBindingRepository(workspacePort: workspacePort),
@@ -34,21 +47,39 @@ class ProjectContextActivationService {
        _plannerService =
            plannerService ?? const ContextActivationPlannerService(),
        _pathService = pathService ?? OpenNarrativeStatePathService(),
+       _narrativeClaimActivationContractService =
+           narrativeClaimActivationContractService ??
+           ProjectNarrativeClaimActivationContractService(
+             pathService: pathService ?? OpenNarrativeStatePathService(),
+           ),
        _informationActivationBridgeService =
            informationActivationBridgeService ??
            ProjectInformationActivationBridgeService(
              workspacePort: workspacePort,
-           );
+           ),
+       _chapterContinuityHandoffItemService =
+           chapterContinuityHandoffItemService ??
+           const ProjectChapterContinuityHandoffItemService(),
+       _chapterContinuityPriorityService =
+           chapterContinuityPriorityService ??
+           const ProjectChapterContinuityPriorityService();
 
   final ProjectWorkspacePort _workspacePort;
   final NarrativeProfileRepository _profileRepository;
   final NarrativeClaimRepository _claimRepository;
+  final NarrativeLedgerRepository _ledgerRepository;
   final ConstraintBindingRepository _bindingRepository;
   final ProjectContextFileSelectionService _fileSelectionService;
   final ContextActivationPlannerService _plannerService;
   final OpenNarrativeStatePathService _pathService;
+  final ProjectNarrativeClaimActivationContractService
+  _narrativeClaimActivationContractService;
   final ProjectInformationActivationBridgeService
   _informationActivationBridgeService;
+  final ProjectChapterContinuityHandoffItemService
+  _chapterContinuityHandoffItemService;
+  final ProjectChapterContinuityPriorityService
+  _chapterContinuityPriorityService;
 
   Future<ContextActivationPlan> buildPlan({
     required ProjectDescriptor project,
@@ -57,6 +88,7 @@ class ProjectContextActivationService {
     int reservedOutputChars = 2000,
     int maxFiles = 12,
     List<String> pinnedRelativePaths = const <String>[],
+    String chapterLabel = '',
     String source = 'project_context_activation_adapter',
   }) async {
     final cleanTaskType = taskType.trim().isEmpty ? 'draft' : taskType.trim();
@@ -71,6 +103,7 @@ class ProjectContextActivationService {
         taskType: cleanTaskType,
         maxFiles: maxFiles,
         pinnedPaths: pinnedPathSet,
+        chapterLabel: chapterLabel,
       ),
       ...await _buildProfileItems(project),
       ...await _buildClaimItems(project),
@@ -90,12 +123,13 @@ class ProjectContextActivationService {
       reservedOutputChars: reservedOutputChars < 0 ? 0 : reservedOutputChars,
       items: items,
       summary:
-          'project files ${sourceCounts['project_file'] ?? 0}, profiles ${sourceCounts['narrative_profile'] ?? 0}, claims ${sourceCounts['narrative_claim'] ?? 0}, constraints ${sourceCounts['narrative_constraint'] ?? 0}, knowledge ${sourceCounts['project_knowledge_card'] ?? 0}, design ${sourceCounts['project_design_element'] ?? 0}, research ${sourceCounts['project_research_note'] ?? 0}, references ${sourceCounts['project_reference_work'] ?? 0}.',
+          'project files ${sourceCounts['project_file'] ?? 0}, profiles ${sourceCounts['narrative_profile'] ?? 0}, claims ${sourceCounts['narrative_claim'] ?? 0}, claim submissions ${sourceCounts['narrative_claim_submission'] ?? 0}, constraints ${sourceCounts['narrative_constraint'] ?? 0}, knowledge ${sourceCounts['project_knowledge_card'] ?? 0}, design ${sourceCounts['project_design_element'] ?? 0}, research ${sourceCounts['project_research_note'] ?? 0}, references ${sourceCounts['project_reference_work'] ?? 0}.',
       schemaVersion: '1',
       metadata: <String, Object?>{
         'project_id': project.id,
         'project_name': project.name,
         'task_type': cleanTaskType,
+        'chapter_label': chapterLabel.trim(),
         'max_files': maxFiles,
         'pinned_relative_paths': pinnedPathSet.toList()..sort(),
         'candidate_source_counts': sourceCounts,
@@ -110,6 +144,7 @@ class ProjectContextActivationService {
     int reservedOutputChars = 2000,
     int maxFiles = 12,
     List<String> pinnedRelativePaths = const <String>[],
+    String chapterLabel = '',
     String planSource = 'project_context_activation_adapter',
     String reportSource = 'project_context_activation_adapter',
   }) async {
@@ -120,6 +155,7 @@ class ProjectContextActivationService {
       reservedOutputChars: reservedOutputChars,
       maxFiles: maxFiles,
       pinnedRelativePaths: pinnedRelativePaths,
+      chapterLabel: chapterLabel,
       source: planSource,
     );
     final plannedTextById = <String, String>{
@@ -162,20 +198,36 @@ class ProjectContextActivationService {
     required String taskType,
     required int maxFiles,
     required Set<String> pinnedPaths,
+    required String chapterLabel,
   }) async {
     final entries = await _workspacePort.listEntries(project.rootPath);
+    final priorityWeights = _chapterContinuityPriorityService
+        .buildPriorityWeights(
+          entries,
+          taskType: taskType,
+          chapterLabel: chapterLabel,
+        );
+    final handoffItems = await _chapterContinuityHandoffItemService.buildItems(
+      workspacePort: _workspacePort,
+      project: project,
+      visibleEntries: entries,
+      taskType: taskType,
+      chapterLabel: chapterLabel,
+    );
     final selectedPaths = _fileSelectionService.select(
       entries,
       maxFiles: maxFiles,
     );
+    final selectedPathSet = <String>{...selectedPaths, ...priorityWeights.keys};
     final result = <ContextActivationItem>[];
-    for (final path in selectedPaths) {
+    for (final path in selectedPathSet) {
       final content = await _workspacePort.readTextFile(project.rootPath, path);
       final normalized = _normalizeContent(content);
       if (normalized.isEmpty) {
         continue;
       }
-      final pinned = pinnedPaths.contains(path);
+      final priorityWeight = priorityWeights[path];
+      final pinned = pinnedPaths.contains(path) || priorityWeight != null;
       final activationText = '# File: $path\n\n$normalized';
       final title = path.split('/').last;
       result.add(
@@ -201,6 +253,7 @@ class ProjectContextActivationService {
             'task_type': taskType,
             'relative_path': path,
             'pinned': pinned,
+            if (priorityWeight != null) 'weight': priorityWeight,
           },
           requestedChars: activationText.length,
           metadata: <String, Object?>{
@@ -208,12 +261,13 @@ class ProjectContextActivationService {
             'relative_path': path,
             'task_type': taskType,
             'pinned': pinned,
+            if (priorityWeight != null) 'weight': priorityWeight,
             'activation_text': activationText,
           },
         ),
       );
     }
-    return result;
+    return <ContextActivationItem>[...result, ...handoffItems];
   }
 
   Future<List<ContextActivationItem>> _buildProfileItems(
@@ -234,13 +288,13 @@ class ProjectContextActivationService {
   Future<List<ContextActivationItem>> _buildClaimItems(
     ProjectDescriptor project,
   ) async {
+    // 中文注释: claim 激活候选不再直接把 raw claim log 当正式状态源，而是统一通过 ledger-backed 合同区分正式真相与待裁决提交流。
     final claims = await _claimRepository.listClaims(project);
-    claims.sort(
-      (left, right) => left.claimNamespace.compareTo(right.claimNamespace) != 0
-          ? left.claimNamespace.compareTo(right.claimNamespace)
-          : left.claimId.compareTo(right.claimId),
+    final ledgers = await _ledgerRepository.listLedgers(project);
+    return _narrativeClaimActivationContractService.buildItems(
+      claims: claims,
+      ledgers: ledgers,
     );
-    return claims.map((claim) => _claimItem(claim)).toList(growable: false);
   }
 
   Future<List<ContextActivationItem>> _buildConstraintItems(
@@ -303,61 +357,6 @@ class ProjectContextActivationService {
         'profile_id': profile.profileId,
         'profile_namespace': profile.profileNamespace,
         'lifecycle_status': profile.lifecycleStatus.id,
-        'activation_text': activationText,
-        'required': required,
-        'pinned': pinned,
-      },
-    );
-  }
-
-  ContextActivationItem _claimItem(NarrativeStateClaim claim) {
-    final targetPath = _pathService.claimsLogPath();
-    final label = claim.claimLabel.trim().isEmpty
-        ? claim.claimId
-        : claim.claimLabel.trim();
-    final refs = _dedupeRefs(<NarrativeRef>[
-      ...claim.affectedRefs,
-      ...claim.contextRefs,
-    ]);
-    final required = _boolFlags(
-      claim.metadata['required'],
-      claim.metadata['is_required'],
-    );
-    final pinned = _boolFlags(claim.metadata['pinned'], claim.metadata['pin']);
-    final activationText = _claimActivationText(claim);
-    return ContextActivationItem(
-      itemId: 'claim:${claim.claimId}',
-      source: 'narrative_claim',
-      title: label,
-      targetPath: targetPath,
-      refs: refs.isEmpty
-          ? <NarrativeRef>[
-              NarrativeRef(
-                refType: NarrativeRefTypes.asset,
-                refId: claim.claimId,
-                displayName: label,
-                relativePath: targetPath,
-                sourcePath: targetPath,
-              ),
-            ]
-          : refs,
-      activationReasons: <String>[
-        if (pinned) ContextActivationReasonCodes.manualPin,
-        ContextActivationReasonCodes.claim,
-      ],
-      reasonDetails: <String, Object?>{
-        'claim_id': claim.claimId,
-        'claim_namespace': claim.claimNamespace,
-        'required': required,
-        'pinned': pinned,
-      },
-      requestedChars: activationText.length,
-      metadata: <String, Object?>{
-        'source_kind': 'narrative_claim',
-        'claim_id': claim.claimId,
-        'claim_namespace': claim.claimNamespace,
-        'confidence': claim.confidence,
-        'uncertainty': claim.uncertainty,
         'activation_text': activationText,
         'required': required,
         'pinned': pinned,
@@ -469,6 +468,16 @@ class ProjectContextActivationService {
             'source_kind': ValueReaders.stringValue(
               item.metadata['source_kind'],
             ),
+            'source_of_truth_locator': ValueReaders.stringValue(
+              item.metadata['source_of_truth_locator'],
+            ),
+            'source_display': ValueReaders.stringValue(
+              item.metadata['source_display'],
+            ),
+            'source_refs': ValueReaders.mapList(item.metadata['source_refs']),
+            'evidence_refs': ValueReaders.mapList(
+              item.metadata['evidence_refs'],
+            ),
             'explanation': ValueReaders.stringValue(
               item.metadata['explanation'],
             ),
@@ -537,34 +546,6 @@ class ProjectContextActivationService {
     return lines.join('\n');
   }
 
-  String _claimActivationText(NarrativeStateClaim claim) {
-    final lines = <String>[
-      '[Claim] ${claim.claimLabel.trim().isEmpty ? claim.claimId : claim.claimLabel.trim()}',
-      'claim_id: ${claim.claimId}',
-      'claim_namespace: ${claim.claimNamespace}',
-      'confidence: ${claim.confidence}',
-    ];
-    if (claim.uncertainty.trim().isNotEmpty) {
-      lines.add('uncertainty: ${claim.uncertainty.trim()}');
-    }
-    if (claim.claimPayload.isNotEmpty) {
-      lines
-        ..add('claim_payload:')
-        ..add(_prettyJson(claim.claimPayload));
-    }
-    if (claim.affectedRefs.isNotEmpty) {
-      lines
-        ..add('affected_refs:')
-        ..add(_prettyObject(_refsJson(claim.affectedRefs)));
-    }
-    if (claim.contextRefs.isNotEmpty) {
-      lines
-        ..add('context_refs:')
-        ..add(_prettyObject(_refsJson(claim.contextRefs)));
-    }
-    return lines.join('\n');
-  }
-
   String _constraintActivationText(NarrativeConstraintBindingProposal binding) {
     final lines = <String>[
       '[Constraint] ${binding.constraintLabel.trim().isEmpty ? binding.bindingId : binding.constraintLabel.trim()}',
@@ -611,7 +592,7 @@ class ProjectContextActivationService {
     List<ContextActivationItem> items,
   ) {
     final kinds = _countByKind(items);
-    return '${report.summary} selected profiles ${kinds['narrative_profile_selected'] ?? 0}, claims ${kinds['narrative_claim_selected'] ?? 0}, constraints ${kinds['narrative_constraint_selected'] ?? 0}, files ${kinds['project_file_selected'] ?? 0}, knowledge ${kinds['project_knowledge_card_selected'] ?? 0}, design ${kinds['project_design_element_selected'] ?? 0}, research ${kinds['project_research_note_selected'] ?? 0}, references ${kinds['project_reference_work_selected'] ?? 0}.';
+    return '${report.summary} selected profiles ${kinds['narrative_profile_selected'] ?? 0}, claims ${kinds['narrative_claim_selected'] ?? 0}, claim submissions ${kinds['narrative_claim_submission_selected'] ?? 0}, constraints ${kinds['narrative_constraint_selected'] ?? 0}, files ${kinds['project_file_selected'] ?? 0}, knowledge ${kinds['project_knowledge_card_selected'] ?? 0}, design ${kinds['project_design_element_selected'] ?? 0}, research ${kinds['project_research_note_selected'] ?? 0}, references ${kinds['project_reference_work_selected'] ?? 0}.';
   }
 
   Map<String, int> _countByKind(List<ContextActivationItem> items) {

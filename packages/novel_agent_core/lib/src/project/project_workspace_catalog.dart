@@ -204,14 +204,34 @@ final class ProjectWorkspaceCatalog {
       purpose: '旧项目中的世界设定目录，兼容映射到当前世界资产展示语义。',
     ),
     WorkspaceDirectoryDescriptor(
+      path: 'specs/',
+      name: '项目规格',
+      purpose: '作品规格、创作宪法和模式约束等可读规划文件的稳定目录。',
+    ),
+    WorkspaceDirectoryDescriptor(
       path: 'knowledge/',
       name: '知识',
       purpose: '旧项目中的知识材料目录，兼容保留为可读资源。',
     ),
     WorkspaceDirectoryDescriptor(
+      path: 'inspiration/',
+      name: '灵感',
+      purpose: '创作种子、灵感投影和前置素材的稳定目录。',
+    ),
+    WorkspaceDirectoryDescriptor(
       path: 'summaries/',
       name: '摘要',
       purpose: '旧项目中的章节摘要目录，兼容保留为可读资源。',
+    ),
+    WorkspaceDirectoryDescriptor(
+      path: 'constraints/',
+      name: '约束',
+      purpose: '开放叙事状态投影出的项目约束摘要，可作为模型可读的稳定创作边界。',
+    ),
+    WorkspaceDirectoryDescriptor(
+      path: 'continuity/',
+      name: '连续性',
+      purpose: '开放叙事状态投影出的叙事状态规则与最近变化摘要，可作为模型可读的连续性资源。',
     ),
     WorkspaceDirectoryDescriptor(
       path: 'reviews/',

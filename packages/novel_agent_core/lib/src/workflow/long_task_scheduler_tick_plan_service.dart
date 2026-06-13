@@ -194,6 +194,25 @@ class LongTaskSchedulerTickPlanService {
       );
       plan['requires_user'] = !autoResume;
       plan['should_persist_record'] = autoResume;
+    } else if (recoveryAction == 'auto_retry_failed_task') {
+      plan = _basePlan(
+        'retry_failed_task',
+        'recovering',
+        ValueReaders.stringValue(recovery['reason'], 'auto_retry_failed_task'),
+        ValueReaders.stringValue(
+          recovery['note'],
+          '恢复状态机已判定当前失败任务可以在预算内自动重试。',
+        ),
+        hostCommand: 'long_task_failure_action',
+      );
+      plan['should_dispatch'] = true;
+      plan['should_persist_record'] = true;
+      plan['dispatch_options'] = <String, Object?>{
+        ...ValueReaders.deepCopyMap(options),
+        'failure_command': 'retry',
+        'auto_retry': true,
+      };
+      plan['task'] = ValueReaders.mapValue(recovery['task']);
     } else if (recoveryAction == 'read_only') {
       plan = _basePlan(
         'read_only',
@@ -235,6 +254,19 @@ class LongTaskSchedulerTickPlanService {
       );
       plan['requires_user'] = true;
       plan['should_persist_record'] = true;
+    } else if (recoveryAction == 'stop_after_recovery_exhausted') {
+      plan = _basePlan(
+        'stop_after_recovery_exhausted',
+        'stopped',
+        ValueReaders.stringValue(recovery['reason'], 'recovery_exhausted'),
+        ValueReaders.stringValue(
+          recovery['note'],
+          '自动重试预算已耗尽，恢复状态机建议终止当前运行。',
+        ),
+        hostCommand: 'stop_long_task_run',
+      );
+      plan['requires_user'] = true;
+      plan['should_persist_record'] = true;
     } else if (recoveryAction == 'pause_for_review') {
       plan = _basePlan(
         'pause_for_review',
@@ -250,6 +282,7 @@ class LongTaskSchedulerTickPlanService {
       return <String, Object?>{};
     }
     plan['task'] = ValueReaders.mapValue(recovery['task']);
+    plan['recovery_state'] = ValueReaders.mapValue(recovery['recovery_state']);
     _attachCommon(plan, record, tasks, options);
     plan['recovery_plan'] = recovery;
     return plan;

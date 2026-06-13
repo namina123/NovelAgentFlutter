@@ -36,6 +36,24 @@ void main() {
 
       expect(path, 'chapters/第03章_伏笔推进.md');
     });
+
+    test(
+      'delegates chapter stem normalization to shared chapter path policy',
+      () {
+        expect(
+          service.chapterFileStem(chapterNumber: 4, title: '第04章'),
+          '第04章',
+        );
+        expect(
+          service.chapterFileStem(chapterNumber: 4, title: '第04章：族中压力'),
+          '第04章_族中压力',
+        );
+        expect(
+          service.chapterFileStem(chapterNumber: 4, title: '族中压力'),
+          '第04章_族中压力',
+        );
+        expect(service.chapterFileStem(chapterNumber: 4, title: '第4章'), '第04章');
+      },
+    );
   });
 }
-

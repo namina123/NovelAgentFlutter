@@ -29,13 +29,17 @@ class ProjectToolRelativePathResolver {
       }
     }
     final entries = await _hostPort.listEntries(project.rootPath);
+    var matchedButRejected = '';
     for (final candidate in candidates) {
       final matched = _matchEntryPath(entries, candidate, fileOnly: true);
       if (_pathPolicy.isSafeFilePath(matched, allowSessions: allowSessions)) {
         return matched;
       }
+      if (matched.isNotEmpty) {
+        matchedButRejected = matched;
+      }
     }
-    return '';
+    return matchedButRejected;
   }
 
   Future<String> resolveScopePath(
@@ -55,13 +59,17 @@ class ProjectToolRelativePathResolver {
       }
     }
     final entries = await _hostPort.listEntries(project.rootPath);
+    var matchedButRejected = '';
     for (final candidate in candidates) {
       final matched = _matchEntryPath(entries, candidate, fileOnly: false);
       if (_pathPolicy.isSafeScopePath(matched, allowSessions: allowSessions)) {
         return matched;
       }
+      if (matched.isNotEmpty) {
+        matchedButRejected = matched;
+      }
     }
-    return '';
+    return matchedButRejected;
   }
 
   String normalizeProjectPath(String value) {
@@ -139,14 +147,14 @@ class ProjectToolRelativePathResolver {
     for (final descriptor in ProjectWorkspaceCatalog.advancedWorkspaceDirs)
       descriptor.name: descriptor.path.replaceAll(RegExp(r'/$'), ''),
     '项目规格': 'specs',
-    '设定': 'world',
-    '总纲': 'outline',
-    '卷纲': 'volume_outlines',
-    '章纲': 'chapter_outlines',
+    '设定': 'assets/world',
+    '总纲': 'outlines/story',
+    '卷纲': 'outlines/volumes',
+    '章纲': 'outlines/chapters',
     '正文': 'chapters',
     '场景': 'scenes',
     '角色': 'assets/characters',
-    '风格': 'styles',
+    '风格': 'assets/styles',
     '摘要': 'summaries',
     '知识库': 'knowledge',
     '灵感': 'inspiration',

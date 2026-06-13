@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../shared/theme/novel_theme_context.dart';
+import '../contracts/pending_research_action_handler.dart';
 import '../contracts/workbench_file_panel_action_handler.dart';
 import '../models/workbench_resource_view_data.dart';
 import 'file_tool_group.dart';
@@ -14,24 +16,27 @@ class ResourceManagerPanel extends StatelessWidget {
     super.key,
     required this.viewData,
     required this.actionHandler,
+    this.pendingResearchActionHandler,
   });
 
   final WorkbenchResourceViewData viewData;
   final WorkbenchFilePanelActionHandler actionHandler;
+  final PendingResearchActionHandler? pendingResearchActionHandler;
 
   @override
   Widget build(BuildContext context) {
-    // 中文注释: 文件面板统一改成单一 CustomScrollView，让高度收缩时不再切换滚动语义。
     final visual = WorkbenchVisualStyle.of(context);
+    final entries = viewData.resourceEntries;
+    final directoryCount = entries.where((entry) => entry.isDirectory).length;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final horizontalPadding = constraints.maxWidth < 300 ? 8.0 : 12.0;
+        final horizontalPadding = constraints.maxWidth < 300 ? 6.0 : 10.0;
         return Padding(
           padding: EdgeInsets.fromLTRB(
             horizontalPadding,
-            12,
+            6,
             horizontalPadding,
-            10,
+            4,
           ),
           child: CustomScrollView(
             key: const ValueKey<String>('resource_manager_scroll_view'),
@@ -40,13 +45,17 @@ class ResourceManagerPanel extends StatelessWidget {
                 child: ResourceManagerHeader(
                   title: viewData.projectName,
                   subtitle: viewData.projectSubtitle,
+                  itemCount: entries.length,
+                  directoryCount: directoryCount,
+                  fileCount: entries.length - directoryCount,
                 ),
               ),
-              SliverToBoxAdapter(child: SizedBox(height: visual.headerGap)),
               SliverToBoxAdapter(
-                child: ResourcePanelSection(
-                  title: '文件',
-                  emphasized: true,
+                child: SizedBox(height: visual.compactGap + 2),
+              ),
+              SliverToBoxAdapter(
+                child: _ResourceInlineTools(
+                  itemCount: entries.length,
                   child: FileToolGroup(
                     onCreateFileRequested: actionHandler.onCreateFileRequested,
                     onCreateFolderRequested:
@@ -60,23 +69,86 @@ class ResourceManagerPanel extends StatelessWidget {
                 ),
               ),
               if (viewData.informationViewData.hasContent) ...[
-                SliverToBoxAdapter(child: SizedBox(height: visual.sectionGap)),
+                SliverToBoxAdapter(
+                  child: SizedBox(height: visual.compactGap + 2),
+                ),
                 SliverToBoxAdapter(
                   child: ResourceInformationSection(
                     viewData: viewData.informationViewData,
                     actionHandler: actionHandler,
+                    pendingResearchActionHandler: pendingResearchActionHandler,
                   ),
                 ),
               ],
-              SliverToBoxAdapter(child: SizedBox(height: visual.sectionGap)),
               SliverToBoxAdapter(
-                child: ResourceTreeCard(
-                  entries: viewData.resourceEntries,
-                  onEntrySelected: actionHandler.onResourceEntrySelected,
-                  embeddedInScrollView: true,
+                child: SizedBox(height: visual.compactGap + 1),
+              ),
+              SliverToBoxAdapter(
+                child: ResourcePanelSection(
+                  title: '浏览',
+                  trailing: Text(
+                    '$directoryCount 个分组',
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
+                  padding: const EdgeInsets.fromLTRB(0, 2, 0, 0),
+                  emphasized: false,
+                  child: ResourceTreeCard(
+                    entries: entries,
+                    onEntrySelected: actionHandler.onResourceEntrySelected,
+                    embeddedInScrollView: true,
+                  ),
                 ),
               ),
             ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ResourceInlineTools extends StatelessWidget {
+  const _ResourceInlineTools({required this.itemCount, required this.child});
+
+  final int itemCount;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final surface = context.novelThemeSurfaces.sidebar;
+    final visual = WorkbenchVisualStyle.of(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 188;
+        final inset = compact ? 3.0 : 8.0;
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            color: surface.backgroundColor.withValues(
+              alpha: compact ? 0.02 : 0.04,
+            ),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(inset, inset, inset, inset),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: compact ? 3 : 0),
+                  child: Text(
+                    '快速操作',
+                    style: TextStyle(
+                      fontSize: visual.compactLabelFontSize,
+                      fontWeight: FontWeight.w800,
+                      color: surface.mutedForegroundColor,
+                      letterSpacing: 0.08,
+                    ),
+                  ),
+                ),
+                SizedBox(height: compact ? 4 : visual.microGap + 3),
+                child,
+              ],
+            ),
           ),
         );
       },

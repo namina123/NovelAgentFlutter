@@ -20,17 +20,20 @@ class ConversationOpeningStateViewDataService {
         maturity.authoredFoundationFileCount > 0 ||
         maturity.narrativeFileCount > 0 ||
         maturity.isContinueReady;
+    final suppressProjectionMissingRequirements =
+        !maturity.shouldShowOpeningEntry || maturity.isContinueReady;
     final hasResolvedGroup = projection == null
         ? !maturity.shouldShowOpeningEntry
         : projection.currentGroupDisplayName.trim().isNotEmpty ||
               projection.currentGroupId.trim().isNotEmpty;
-    final missingRequirementTitles =
-        projection?.orchestration.readiness.missingRequirements
-            .where((item) => item.id.trim() != 'conversation_goal')
-            .map((item) => item.title.trim())
-            .where((item) => item.isNotEmpty)
-            .toList(growable: false) ??
-        const <String>[];
+    final missingRequirementTitles = suppressProjectionMissingRequirements
+        ? const <String>[]
+        : projection?.orchestration.readiness.missingRequirements
+                  .where((item) => item.id.trim() != 'conversation_goal')
+                  .map((item) => item.title.trim())
+                  .where((item) => item.isNotEmpty)
+                  .toList(growable: false) ??
+              const <String>[];
     final nextAction =
         preferredNextAction ??
         (primaryActions.isEmpty ? null : primaryActions.first);

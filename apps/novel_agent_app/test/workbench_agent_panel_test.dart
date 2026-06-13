@@ -52,8 +52,7 @@ void main() {
                     WorkbenchProjectPanelActionViewData(
                       icon: Icons.rule_folder_outlined,
                       title: '表达限制',
-                      description:
-                          '进入项目级写作约束系统，管理内置或自定义表达限制预设，并按当前智能体进一步定向绑定。',
+                      description: '进入项目级写作约束系统，管理内置或自定义表达限制方案，并按当前智能体进一步定向绑定。',
                       actionId: 'project_expression_constraints',
                     ),
                   ],
@@ -70,7 +69,7 @@ void main() {
       expect(find.text('项目协作基线'), findsNothing);
       expect(find.text('当前会话分工'), findsOneWidget);
       expect(find.text('当前智能体'), findsOneWidget);
-      expect(find.text('审阅智能体'), findsOneWidget);
+      expect(find.text('审阅智能体'), findsWidgets);
       expect(find.text('项目基线组'), findsOneWidget);
       expect(find.text('长篇总控组'), findsWidgets);
       expect(find.text('组主智能体'), findsOneWidget);
@@ -99,6 +98,8 @@ void main() {
       expect(handler.currentAgentSkillLoadoutRequestedCount, 1);
       expect(handler.agentEcosystemRequestedCount, 0);
 
+      await tester.ensureVisible(find.text('表达限制'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('表达限制'));
       await tester.pumpAndSettle();
 

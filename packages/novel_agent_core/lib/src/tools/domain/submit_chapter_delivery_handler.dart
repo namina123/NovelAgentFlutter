@@ -1,6 +1,7 @@
 import '../../common/json_types.dart';
 import '../../common/value_readers.dart';
 import '../../continuity/narrative_state.dart';
+import '../../project/chapter_output_path_policy_service.dart';
 import '../../runtime/tool_round_evidence.dart';
 import '../../workflow/chapter_delivery_state_machine.dart';
 import '../../workflow/chapter_delivery_state_request.dart';
@@ -19,15 +20,27 @@ import 'submit_chapter_delivery_result.dart';
 class SubmitChapterDeliveryHandler implements NarrativeDomainToolHandler {
   SubmitChapterDeliveryHandler({
     ChapterNarrativeSubmissionCodecService? submissionCodecService,
+    ChapterNarrativeSubmissionContinuityEnricherService?
+    submissionContinuityEnricherService,
     ChapterDeliveryStateMachine? deliveryStateMachine,
+    ChapterOutputPathPolicyService? chapterOutputPathPolicyService,
   }) : _submissionCodecService =
            submissionCodecService ??
            const ChapterNarrativeSubmissionCodecService(),
+       _submissionContinuityEnricherService =
+           submissionContinuityEnricherService ??
+           const ChapterNarrativeSubmissionContinuityEnricherService(),
        _deliveryStateMachine =
-           deliveryStateMachine ?? const ChapterDeliveryStateMachine();
+           deliveryStateMachine ?? const ChapterDeliveryStateMachine(),
+       _chapterOutputPathPolicyService =
+           chapterOutputPathPolicyService ??
+           const ChapterOutputPathPolicyService();
 
   final ChapterNarrativeSubmissionCodecService _submissionCodecService;
+  final ChapterNarrativeSubmissionContinuityEnricherService
+  _submissionContinuityEnricherService;
   final ChapterDeliveryStateMachine _deliveryStateMachine;
+  final ChapterOutputPathPolicyService _chapterOutputPathPolicyService;
 
   @override
   final NarrativeDomainToolCapability capability =
@@ -47,14 +60,14 @@ class SubmitChapterDeliveryHandler implements NarrativeDomainToolHandler {
     required DomainToolPermissionDecision permissionDecision,
   }) async {
     final payload = request.requestPayload;
-    final chapterPath = ValueReaders.stringValue(
+    final requestedChapterPath = ValueReaders.stringValue(
       payload['chapter_path'],
     ).trim();
     final chapterContent = ValueReaders.stringValue(
       payload['chapter_content'],
     ).trimRight();
 
-    if (chapterPath.isEmpty) {
+    if (requestedChapterPath.isEmpty) {
       return _invalidPayloadOutcome(
         request: request,
         message: 'submit_chapter_delivery 缺少 chapter_path。',
@@ -63,30 +76,57 @@ class SubmitChapterDeliveryHandler implements NarrativeDomainToolHandler {
     }
 
     final submission = _submissionFromPayload(payload);
+    final explicitTitle = ValueReaders.stringValue(payload['title']).trim();
+    final pathResolution = _chapterOutputPathPolicyService.resolveChapterOutput(
+      requestedPath: requestedChapterPath,
+      explicitTitle: explicitTitle,
+      submissionTitle: submission?.title ?? '',
+      chapterContent: chapterContent,
+    );
+    final effectiveTitle = pathResolution.title.trim();
+    final chapterPath = pathResolution.resolvedPath.trim().isEmpty
+        ? requestedChapterPath
+        : pathResolution.resolvedPath.trim();
+    final normalizedSubmission = _normalizedSubmissionForDelivery(
+      submission,
+      requestedChapterPath: requestedChapterPath,
+      chapterPath: chapterPath,
+      title: effectiveTitle,
+      chapterContent: chapterContent,
+    );
     final stateRequest = ChapterDeliveryStateRequest(
-      deliveryId: _deliveryIdFor(request, chapterPath),
+      deliveryId: _deliveryIdFor(request, chapterPath, normalizedSubmission),
       chapterPath: chapterPath,
       resolvedChapterPath: chapterPath,
       chapterContent: chapterContent,
-      title: ValueReaders.stringValue(payload['title']).trim(),
-      submission: submission,
-      metadata: ValueReaders.deepCopyMap(
-        ValueReaders.mapValue(payload['metadata']),
-      ),
+      title: effectiveTitle,
+      submission: normalizedSubmission,
+      metadata: ValueReaders.deepCopyMap(<String, Object?>{
+        ...ValueReaders.mapValue(payload['metadata']),
+        if (requestedChapterPath != chapterPath)
+          'requested_chapter_path': requestedChapterPath,
+        'path_resolution': pathResolution.toJson(),
+      }),
     );
     final stateResult = _deliveryStateMachine.evaluate(stateRequest);
     final result = SubmitChapterDeliveryResult(
       deliveryId: stateResult.deliveryId,
       chapterPath: chapterPath,
+      requestedChapterPath: requestedChapterPath,
+      resolvedChapterPath: chapterPath,
+      title: effectiveTitle,
       deliveryState: stateResult.state,
       chapterBodyState: _chapterBodyStateFor(stateResult),
-      sidecarState: _sidecarStateFor(stateResult, submission),
+      sidecarState: _sidecarStateFor(stateResult, normalizedSubmission),
       deliveryEvidenceRefs: _deliveryEvidenceRefs(request, chapterPath),
       stateResult: stateResult,
-      constraintCoverage: _constraintCoverageFor(payload, submission),
+      pathResolution: pathResolution.toJson(),
+      submission: normalizedSubmission?.toJson() ?? const <String, Object?>{},
+      constraintCoverage: _constraintCoverageFor(payload, normalizedSubmission),
       metadata: ValueReaders.deepCopyMap(<String, Object?>{
         'source': request.source.toJson(),
-        if (submission != null) 'submission_id': submission.submissionId,
+        if (normalizedSubmission != null)
+          'submission_id': normalizedSubmission.submissionId,
       }),
     );
 
@@ -117,12 +157,69 @@ class SubmitChapterDeliveryHandler implements NarrativeDomainToolHandler {
     return _submissionCodecService.fromJson(submissionJson);
   }
 
-  String _deliveryIdFor(DomainToolRequest request, String chapterPath) {
-    final submission = ValueReaders.mapValue(
+  ChapterNarrativeSubmission? _normalizedSubmissionForDelivery(
+    ChapterNarrativeSubmission? submission, {
+    required String requestedChapterPath,
+    required String chapterPath,
+    required String title,
+    required String chapterContent,
+  }) {
+    if (submission == null) {
+      return null;
+    }
+    final submissionId = _normalizedSubmissionId(
+      submission.submissionId,
+      requestedChapterPath: requestedChapterPath,
+      chapterPath: chapterPath,
+    );
+    final normalized = submission.copyWith(
+      submissionId: submissionId,
+      title: title.trim().isEmpty ? submission.title : title.trim(),
+      chapterRef: submission.chapterRef.copyWith(
+        refId: chapterPath,
+        relativePath: chapterPath,
+        displayName: title.trim().isEmpty
+            ? submission.chapterRef.displayName
+            : title.trim(),
+      ),
+    );
+    return _submissionContinuityEnricherService.enrich(
+      normalized,
+      chapterPath: chapterPath,
+      title: title,
+      chapterContent: chapterContent,
+    );
+  }
+
+  String _normalizedSubmissionId(
+    String submissionId, {
+    required String requestedChapterPath,
+    required String chapterPath,
+  }) {
+    final cleanId = submissionId.trim();
+    if (cleanId.isEmpty) {
+      return cleanId;
+    }
+    if (cleanId == 'submission:$requestedChapterPath') {
+      return 'submission:$chapterPath';
+    }
+    return cleanId;
+  }
+
+  String _deliveryIdFor(
+    DomainToolRequest request,
+    String chapterPath,
+    ChapterNarrativeSubmission? submission,
+  ) {
+    final normalizedSubmissionId = submission?.submissionId.trim() ?? '';
+    if (normalizedSubmissionId.isNotEmpty) {
+      return normalizedSubmissionId;
+    }
+    final rawSubmission = ValueReaders.mapValue(
       request.requestPayload['submission'],
     );
     final submissionId = ValueReaders.stringValue(
-      submission['submission_id'],
+      rawSubmission['submission_id'],
     ).trim();
     if (submissionId.isNotEmpty) {
       return submissionId;

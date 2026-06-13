@@ -146,6 +146,9 @@ class ChapterAtomicStepStateService {
     // 中文注释: 规划任务把总纲、卷纲和章纲都视作 outline 类产物。
     return ValueReaders.stringList(paths).any(
       (path) =>
+          path.startsWith('outlines/story/') ||
+          path.startsWith('outlines/volumes/') ||
+          path.startsWith('outlines/chapters/') ||
           path.startsWith('outline/') ||
           path.startsWith('volume_outlines/') ||
           path.startsWith('chapter_outlines/'),

@@ -9,11 +9,15 @@ import '../storage/local_research_note_repository.dart';
 import '../storage/open_narrative_state_record_document_service.dart';
 import '../storage/project_information_path_service.dart';
 import '../storage/project_information_projection_writer_service.dart';
+import 'project_information_research_coordinator_result.dart';
+import 'project_information_research_coordinator_service.dart';
+import 'project_information_research_execution_budget.dart';
 
 class ProjectInformationDomainToolExecutor {
   ProjectInformationDomainToolExecutor({
     required ProjectWorkspacePort workspacePort,
     NarrativeDomainToolDispatcher? dispatcher,
+    HostInformationPermissionResolverService? hostPermissionResolverService,
     KnowledgeCardRepository? knowledgeCardRepository,
     DesignElementRepository? designElementRepository,
     ResearchNoteRepository? researchNoteRepository,
@@ -23,6 +27,11 @@ class ProjectInformationDomainToolExecutor {
     ProjectInformationProjectionWriterService? projectionWriterService,
     OpenNarrativeStateRecordDocumentService? recordDocumentService,
     ProjectInformationPathService? pathService,
+    ProjectInformationResearchCoordinatorService? researchCoordinatorService,
+    ProjectInformationResearchExecutionBudget researchExecutionBudget =
+        const ProjectInformationResearchExecutionBudget(
+          allowGatewayExecution: true,
+        ),
   }) : _dispatcher =
            dispatcher ??
            NarrativeDomainToolDispatchService(
@@ -35,6 +44,9 @@ class ProjectInformationDomainToolExecutor {
                const ProposeReferenceWorkHandler(),
              ],
            ),
+       _hostPermissionResolverService =
+           hostPermissionResolverService ??
+           const HostInformationPermissionResolverService(),
        _knowledgeCardRepository =
            knowledgeCardRepository ??
            LocalKnowledgeCardRepository(workspacePort: workspacePort),
@@ -75,9 +87,17 @@ class ProjectInformationDomainToolExecutor {
            OpenNarrativeStateRecordDocumentService(
              workspacePort: workspacePort,
            ),
-       _pathService = pathService ?? ProjectInformationPathService();
+       _pathService = pathService ?? ProjectInformationPathService(),
+       _researchCoordinatorService =
+           researchCoordinatorService ??
+           ProjectInformationResearchCoordinatorService(
+             workspacePort: workspacePort,
+           ),
+       _researchExecutionBudget = researchExecutionBudget;
 
   final NarrativeDomainToolDispatcher _dispatcher;
+  final HostInformationPermissionResolverService
+  _hostPermissionResolverService;
   final KnowledgeCardRepository _knowledgeCardRepository;
   final DesignElementRepository _designElementRepository;
   final ResearchNoteRepository _researchNoteRepository;
@@ -87,56 +107,107 @@ class ProjectInformationDomainToolExecutor {
   final ProjectInformationProjectionWriterService _projectionWriterService;
   final OpenNarrativeStateRecordDocumentService _recordDocumentService;
   final ProjectInformationPathService _pathService;
+  final ProjectInformationResearchCoordinatorService _researchCoordinatorService;
+  final ProjectInformationResearchExecutionBudget _researchExecutionBudget;
 
   Future<DomainToolOutcome> execute(
     ProjectDescriptor project,
     DomainToolRequest request,
+    {HostInformationPermissionContext? hostPermissionContext}
   ) async {
-    final outcome = await _dispatcher.dispatch(request: request);
+    final effectiveRequest = _resolveEffectiveRequest(
+      request,
+      hostPermissionContext: hostPermissionContext,
+    );
+    final outcome = await _dispatcher.dispatch(request: effectiveRequest);
     if (!_shouldPersistOutcome(outcome)) {
       return outcome;
     }
     final changedPaths = <String>[];
+    var persistedOutcome = outcome;
     try {
-      switch (request.toolName) {
+      switch (effectiveRequest.toolName) {
         case NarrativeDomainToolNames.requestExternalResearch:
-          await _persistResearchRequest(
+          persistedOutcome = await _persistResearchRequest(
             project,
-            request,
+            effectiveRequest,
+            outcome,
+            changedPaths,
+            hostPermissionContext: hostPermissionContext,
+          );
+          break;
+        case NarrativeDomainToolNames.submitResearchNote:
+          await _persistResearchNote(
+            project,
+            effectiveRequest,
             outcome,
             changedPaths,
           );
           break;
-        case NarrativeDomainToolNames.submitResearchNote:
-          await _persistResearchNote(project, request, outcome, changedPaths);
-          break;
         case NarrativeDomainToolNames.proposeKnowledgeCard:
-          await _persistKnowledgeCard(project, request, outcome, changedPaths);
+          await _persistKnowledgeCard(
+            project,
+            effectiveRequest,
+            outcome,
+            changedPaths,
+          );
           break;
         case NarrativeDomainToolNames.proposeDesignElement:
-          await _persistDesignElement(project, request, outcome, changedPaths);
+          await _persistDesignElement(
+            project,
+            effectiveRequest,
+            outcome,
+            changedPaths,
+          );
           break;
         case NarrativeDomainToolNames.linkInformationEvidence:
           await _persistInformationLink(
             project,
-            request,
+            effectiveRequest,
             outcome,
             changedPaths,
           );
           break;
         case NarrativeDomainToolNames.proposeReferenceWork:
-          await _persistReferenceWork(project, request, outcome, changedPaths);
+          await _persistReferenceWork(
+            project,
+            effectiveRequest,
+            outcome,
+            changedPaths,
+          );
           break;
       }
-      return _withPersistenceMetadata(outcome, changedPaths);
+      return _withPersistenceMetadata(persistedOutcome, changedPaths);
     } catch (error) {
       return _persistenceFailureOutcome(
-        request: request,
-        originalOutcome: outcome,
+        request: effectiveRequest,
+        originalOutcome: persistedOutcome,
         error: error,
         changedPaths: changedPaths,
       );
     }
+  }
+
+  DomainToolRequest _resolveEffectiveRequest(
+    DomainToolRequest request, {
+    HostInformationPermissionContext? hostPermissionContext,
+  }) {
+    if (hostPermissionContext == null ||
+        request.toolName != NarrativeDomainToolNames.requestExternalResearch) {
+      return request;
+    }
+    final payload = ValueReaders.deepCopyMap(request.requestPayload);
+    if (request.targetRefs.isNotEmpty &&
+        ValueReaders.objectList(payload['target_refs']).isEmpty) {
+      payload['target_refs'] = request.targetRefs
+          .map((entry) => entry.toJson())
+          .toList(growable: false);
+    }
+    final resolution = _hostPermissionResolverService.resolve(
+      request: InformationCollectionRequest.fromJson(payload),
+      hostContext: hostPermissionContext,
+    );
+    return request.copyWith(requestPayload: resolution.effectiveRequest.toJson());
   }
 
   bool _shouldPersistOutcome(DomainToolOutcome outcome) {
@@ -146,19 +217,22 @@ class ProjectInformationDomainToolExecutor {
             DomainToolOutcomeStatuses.needsUserConfirmation;
   }
 
-  Future<void> _persistResearchRequest(
+  Future<DomainToolOutcome> _persistResearchRequest(
     ProjectDescriptor project,
     DomainToolRequest request,
     DomainToolOutcome outcome,
-    List<String> changedPaths,
+    List<String> changedPaths, {
+    HostInformationPermissionContext? hostPermissionContext,
+  }
   ) async {
     final researchRequest = ValueReaders.mapValue(
       outcome.outcomePayload['research_request'],
     );
     if (researchRequest.isEmpty) {
-      return;
+      return outcome;
     }
     final requestId = 'research_request_${request.callId}';
+    final initialRequestState = _researchRequestState(outcome);
     final recordPath = _pathService.researchRequestPath(requestId);
     await _recordDocumentService.writeIndexedRecord(
       rootPath: project.rootPath,
@@ -177,7 +251,7 @@ class ProjectInformationDomainToolExecutor {
         'outcome_status': outcome.outcomeStatus,
         'permission_decision': outcome.permissionDecision?.toJson(),
         'tool_round_evidence': request.toolRoundEvidence?.toJson(),
-        'request_state': _researchRequestState(outcome),
+        'request_state': initialRequestState,
         'network_execution_performed': false,
         'persisted_at': DateTime.now().toIso8601String(),
       },
@@ -199,6 +273,30 @@ class ProjectInformationDomainToolExecutor {
       ),
       summary: '已登记待研究请求：${ValueReaders.stringValue(researchRequest['query'])}',
     );
+    var persistedOutcome = outcome.copyWith(
+      outcomePayload: ValueReaders.deepCopyMap(<String, Object?>{
+        ...outcome.outcomePayload,
+        'request_id': requestId,
+        'request_state': initialRequestState,
+        'request_registered': true,
+        'network_execution_performed': false,
+        'import_execution_performed': false,
+        'requires_user_confirmation':
+            outcome.outcomeStatus ==
+            DomainToolOutcomeStatuses.needsUserConfirmation,
+      }),
+    );
+    if (hostPermissionContext == null) {
+      return persistedOutcome;
+    }
+    final researchExecution = await _researchCoordinatorService.processPendingRequest(
+      project,
+      requestId: requestId,
+      hostPermissionContext: hostPermissionContext,
+      budget: _researchExecutionBudget,
+    );
+    changedPaths.addAll(researchExecution.changedPaths);
+    return _withResearchExecutionOutcome(persistedOutcome, researchExecution);
   }
 
   Future<void> _persistResearchNote(
@@ -444,6 +542,41 @@ class ProjectInformationDomainToolExecutor {
         ...outcome.metadata,
         'adapter_persistence': <String, Object?>{
           'changed_paths': changedPaths.toSet().toList(growable: false),
+        },
+      }),
+    );
+  }
+
+  DomainToolOutcome _withResearchExecutionOutcome(
+    DomainToolOutcome outcome,
+    ProjectInformationResearchCoordinatorResult researchExecution,
+  ) {
+    return outcome.copyWith(
+      outcomePayload: ValueReaders.deepCopyMap(<String, Object?>{
+        ...outcome.outcomePayload,
+        'request_id': researchExecution.requestId,
+        'request_state': researchExecution.requestState,
+        'request_registered': true,
+        'network_execution_performed': researchExecution.executedNetwork,
+        'import_execution_performed': researchExecution.executedImport,
+        'requires_user_confirmation': researchExecution.awaitUserConfirmation,
+        'research_execution_summary': researchExecution.summary,
+        'generated_research_note_ids': researchExecution.generatedResearchNoteIds,
+        'research_execution': <String, Object?>{
+          'request_id': researchExecution.requestId,
+          'request_state': researchExecution.requestState,
+          'executed_network': researchExecution.executedNetwork,
+          'executed_import': researchExecution.executedImport,
+          'await_user_confirmation': researchExecution.awaitUserConfirmation,
+          'blocked': researchExecution.blocked,
+          'summary': researchExecution.summary,
+          'blocked_reason': researchExecution.blockedReason,
+          'changed_paths': researchExecution.changedPaths,
+          'gateway_summary': researchExecution.gatewaySummary,
+          'import_summary': researchExecution.importSummary,
+          'execution_decision': researchExecution.executionDecision,
+          'generated_research_note_ids':
+              researchExecution.generatedResearchNoteIds,
         },
       }),
     );

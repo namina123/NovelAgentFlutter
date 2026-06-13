@@ -39,7 +39,13 @@ class LongTaskRunAttentionCallout extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            run.requiresManualAttention ? '当前运行需要处理后再继续。' : '这里有一条建议操作链。',
+            run.attentionCalloutTitle.trim().isEmpty
+                ? (run.pendingUserAction != null
+                      ? '当前运行停在待确认节点。'
+                      : run.requiresManualAttention
+                      ? '当前运行停在待处理节点。'
+                      : '这里有一条建议操作链。')
+                : run.attentionCalloutTitle,
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w800,
@@ -48,7 +54,9 @@ class LongTaskRunAttentionCallout extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            _summaryText(),
+            run.attentionCalloutSummary.trim().isEmpty
+                ? _fallbackSummaryText()
+                : run.attentionCalloutSummary,
             style: TextStyle(
               fontSize: 12,
               height: 1.55,
@@ -95,15 +103,6 @@ class LongTaskRunAttentionCallout extends StatelessWidget {
                         run.latestRepairTask!.relativePath,
                       ),
                   child: Text(run.latestRepairTask!.actionLabel),
-                )
-              else if (run.activeTaskPath.trim().isNotEmpty)
-                OutlinedButton(
-                  onPressed: () =>
-                      actionHandler.onLongTaskStationResourceRequested(
-                        run.id,
-                        run.activeTaskPath,
-                      ),
-                  child: const Text('打开当前任务'),
                 ),
               if (run.latestReviewReport != null)
                 OutlinedButton(
@@ -121,7 +120,7 @@ class LongTaskRunAttentionCallout extends StatelessWidget {
     );
   }
 
-  String _summaryText() {
+  String _fallbackSummaryText() {
     final segments = <String>[];
     if (run.blockerNote.trim().isNotEmpty && run.blockerNote != '当前没有明显阻塞。') {
       segments.add(run.blockerNote.trim());
@@ -129,13 +128,14 @@ class LongTaskRunAttentionCallout extends StatelessWidget {
     if (run.blockerActionHint.trim().isNotEmpty) {
       segments.add(run.blockerActionHint.trim());
     }
-    if (run.latestRepairTask != null) {
-      segments.add('最近返工任务：${run.latestRepairTask!.title}');
-    } else if (run.latestReviewReport != null) {
-      segments.add('最近审稿：${run.latestReviewReport!.title}');
-    }
     if (segments.isEmpty) {
-      return '可以从这里继续推进，或先查看当前任务与最近的审稿结果。';
+      if (run.requiresManualAttention) {
+        return '当前运行需要先处理后再继续。';
+      }
+      if (run.pendingUserAction != null) {
+        return '当前运行在等待你先处理当前确认。';
+      }
+      return '可以从这里继续查看当前运行状态。';
     }
     return segments.join(' ');
   }

@@ -1,3 +1,5 @@
+import 'project_reference_extraction_strategy_picker_view_data.dart';
+
 class ProjectAssetsViewData {
   const ProjectAssetsViewData({
     required this.title,
@@ -13,6 +15,7 @@ class ProjectAssetsViewData {
     required this.styleEditor,
     required this.expressionConstraintEditor,
     required this.foreshadowEditor,
+    required this.referenceExtractionStrategyPicker,
     required this.isLoading,
   });
 
@@ -29,12 +32,14 @@ class ProjectAssetsViewData {
   final StyleProfileEditorViewData styleEditor;
   final ExpressionConstraintBindingEditorViewData expressionConstraintEditor;
   final ForeshadowRecordEditorViewData foreshadowEditor;
+  final ProjectReferenceExtractionStrategyPickerViewData
+  referenceExtractionStrategyPicker;
   final bool isLoading;
 
   factory ProjectAssetsViewData.initial() {
     return ProjectAssetsViewData(
       title: '项目资产',
-      description: '集中管理风格、表达限制、伏笔与项目资产包。',
+      description: '集中管理风格、表达限制、伏笔、项目资产包与参考资料提取结果。',
       status: '',
       activeTabId: 'styles',
       entryAgentContextId: '',
@@ -54,6 +59,8 @@ class ProjectAssetsViewData {
       expressionConstraintEditor:
           ExpressionConstraintBindingEditorViewData.empty(),
       foreshadowEditor: ForeshadowRecordEditorViewData.empty(),
+      referenceExtractionStrategyPicker:
+          ProjectReferenceExtractionStrategyPickerViewData.empty(),
       isLoading: false,
     );
   }
@@ -365,14 +372,22 @@ class StyleProfileEditorRequestViewData {
 class ExpressionConstraintBindingEditorViewData {
   const ExpressionConstraintBindingEditorViewData({
     required this.profileId,
+    required this.bindingId,
     required this.displayName,
     required this.summary,
     required this.kindLabel,
+    required this.originLabel,
     required this.sourcePath,
     required this.entryAgentContextId,
+    required this.selectedPolicyMode,
+    required this.availablePolicyOptions,
+    required this.scopeSummary,
+    required this.strengthSummary,
+    required this.usageStrategySummary,
     required this.recommendedScopeText,
     required this.rules,
     required this.riskSignals,
+    required this.diagnosticFields,
     required this.enabled,
     required this.defaultForProject,
     required this.availableAgentOptions,
@@ -390,20 +405,27 @@ class ExpressionConstraintBindingEditorViewData {
   });
 
   final String profileId;
+  final String bindingId;
   final String displayName;
   final String summary;
   final String kindLabel;
+  final String originLabel;
   final String sourcePath;
   final String entryAgentContextId;
+  final String selectedPolicyMode;
+  final List<ExpressionConstraintPolicyOptionViewData> availablePolicyOptions;
+  final String scopeSummary;
+  final String strengthSummary;
+  final String usageStrategySummary;
   final String recommendedScopeText;
   final List<String> rules;
   final List<String> riskSignals;
+  final List<ExpressionConstraintDiagnosticFieldViewData> diagnosticFields;
   final bool enabled;
   final bool defaultForProject;
   final List<ExpressionConstraintSelectableOptionViewData>
   availableAgentOptions;
-  final List<ExpressionConstraintSelectableOptionViewData>
-  availableModeOptions;
+  final List<ExpressionConstraintSelectableOptionViewData> availableModeOptions;
   final List<ExpressionConstraintSelectableOptionViewData>
   availableStageOptions;
   final List<String> selectedAgentIds;
@@ -419,14 +441,22 @@ class ExpressionConstraintBindingEditorViewData {
   factory ExpressionConstraintBindingEditorViewData.empty() {
     return const ExpressionConstraintBindingEditorViewData(
       profileId: '',
+      bindingId: '',
       displayName: '',
       summary: '',
       kindLabel: '',
+      originLabel: '',
       sourcePath: '',
       entryAgentContextId: '',
+      selectedPolicyMode: 'adaptive',
+      availablePolicyOptions: <ExpressionConstraintPolicyOptionViewData>[],
+      scopeSummary: '',
+      strengthSummary: '',
+      usageStrategySummary: '',
       recommendedScopeText: '',
       rules: <String>[],
       riskSignals: <String>[],
+      diagnosticFields: <ExpressionConstraintDiagnosticFieldViewData>[],
       enabled: false,
       defaultForProject: false,
       availableAgentOptions: <ExpressionConstraintSelectableOptionViewData>[],
@@ -448,6 +478,7 @@ class ExpressionConstraintBindingEditorViewData {
 class ExpressionConstraintBindingEditorRequestViewData {
   const ExpressionConstraintBindingEditorRequestViewData({
     required this.profileId,
+    required this.selectedPolicyMode,
     required this.enabled,
     required this.defaultForProject,
     required this.selectedAgentIds,
@@ -460,6 +491,7 @@ class ExpressionConstraintBindingEditorRequestViewData {
   });
 
   final String profileId;
+  final String selectedPolicyMode;
   final bool enabled;
   final bool defaultForProject;
   final List<String> selectedAgentIds;
@@ -469,6 +501,28 @@ class ExpressionConstraintBindingEditorRequestViewData {
   final String targetModeIdsText;
   final String targetStageIdsText;
   final String weightText;
+}
+
+class ExpressionConstraintPolicyOptionViewData {
+  const ExpressionConstraintPolicyOptionViewData({
+    required this.id,
+    required this.label,
+    required this.description,
+  });
+
+  final String id;
+  final String label;
+  final String description;
+}
+
+class ExpressionConstraintDiagnosticFieldViewData {
+  const ExpressionConstraintDiagnosticFieldViewData({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
 }
 
 class ExpressionConstraintSelectableOptionViewData {

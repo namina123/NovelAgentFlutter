@@ -92,7 +92,6 @@ class LongTaskRunDetailViewData {
     required this.modeId,
     required this.workflowStrategyId,
     required this.statusLabel,
-    required this.stopReasonLabel,
     required this.storageStrategyLabel,
     required this.runtimeModeLabel,
     required this.policyBadges,
@@ -131,21 +130,25 @@ class LongTaskRunDetailViewData {
     required this.canPause,
     required this.canResume,
     required this.canStop,
+    this.stopDiagnosis,
+    this.expressionConstraintStatus,
     this.overviewBlocks = const <LongTaskRunOverviewBlockViewData>[],
     this.primaryMetadata = const <LongTaskRunMetaItemViewData>[],
     this.diagnosticMetadata = const <LongTaskRunMetaItemViewData>[],
     this.resumeActionLabel = '继续推进',
+    this.attentionCalloutTitle = '',
+    this.attentionCalloutSummary = '',
     this.pendingUserActionLabel = '等待确认',
     this.pendingUserAction,
     this.preferredRecentOutput,
-    this.narrativeSectionTitle = '开放叙事摘要',
-    this.narrativeActivationLabel = 'Activation',
-    this.narrativeDeliveryLabel = 'Delivery',
-    this.narrativeReviewLabel = 'Review',
-    this.narrativeContinuityLabel = 'Continuity',
-    this.informationSummaryLabel = 'Information',
-    this.narrativeProjectionSectionTitle = '开放叙事投影',
-    this.informationProjectionSectionTitle = '信息投影',
+    this.narrativeSectionTitle = '运行摘要',
+    this.narrativeActivationLabel = '本轮上下文',
+    this.narrativeDeliveryLabel = '正文交付',
+    this.narrativeReviewLabel = '审稿结果',
+    this.narrativeContinuityLabel = '连续性记录',
+    this.informationSummaryLabel = '资料与设定',
+    this.narrativeProjectionSectionTitle = '可读摘要',
+    this.informationProjectionSectionTitle = '资料摘要',
     this.narrativePermissionSectionTitle = '权限确认',
     this.informationPermissionSectionTitle = '信息待确认',
     this.relatedResultsSectionTitle = '最近关联结果',
@@ -160,7 +163,6 @@ class LongTaskRunDetailViewData {
   final String modeId;
   final String workflowStrategyId;
   final String statusLabel;
-  final String stopReasonLabel;
   final String storageStrategyLabel;
   final String runtimeModeLabel;
   final List<String> policyBadges;
@@ -199,10 +201,15 @@ class LongTaskRunDetailViewData {
   final bool canPause;
   final bool canResume;
   final bool canStop;
+  final LongTaskRunStopDiagnosisViewData? stopDiagnosis;
+  final LongTaskRunExpressionConstraintStatusViewData?
+  expressionConstraintStatus;
   final List<LongTaskRunOverviewBlockViewData> overviewBlocks;
   final List<LongTaskRunMetaItemViewData> primaryMetadata;
   final List<LongTaskRunMetaItemViewData> diagnosticMetadata;
   final String resumeActionLabel;
+  final String attentionCalloutTitle;
+  final String attentionCalloutSummary;
   final String pendingUserActionLabel;
   final LongTaskRunRelatedItemViewData? pendingUserAction;
   final LongTaskRunRelatedItemViewData? preferredRecentOutput;
@@ -218,6 +225,44 @@ class LongTaskRunDetailViewData {
   final String informationPermissionSectionTitle;
   final String relatedResultsSectionTitle;
   final String diagnosticSectionTitle;
+}
+
+class LongTaskRunStopDiagnosisViewData {
+  const LongTaskRunStopDiagnosisViewData({
+    required this.code,
+    required this.category,
+    required this.label,
+    this.summary = '',
+    this.detail = '',
+  });
+
+  final String code;
+  final String category;
+  final String label;
+  final String summary;
+  final String detail;
+}
+
+class LongTaskRunExpressionConstraintStatusViewData {
+  const LongTaskRunExpressionConstraintStatusViewData({
+    required this.category,
+    required this.label,
+    this.summary = '',
+    this.currentItem,
+    this.recentItems = const <LongTaskRunRelatedItemViewData>[],
+    this.blocksRepair = false,
+    this.suggestsStrengthen = false,
+    this.isDisabled = false,
+  });
+
+  final String category;
+  final String label;
+  final String summary;
+  final LongTaskRunRelatedItemViewData? currentItem;
+  final List<LongTaskRunRelatedItemViewData> recentItems;
+  final bool blocksRepair;
+  final bool suggestsStrengthen;
+  final bool isDisabled;
 }
 
 class LongTaskRunOverviewBlockViewData {
@@ -270,6 +315,7 @@ class LongTaskRunRelatedItemViewData {
     required this.summary,
     required this.relativePath,
     required this.actionLabel,
+    this.pendingResearchRequestId = '',
   });
 
   final String title;
@@ -277,4 +323,8 @@ class LongTaskRunRelatedItemViewData {
   final String summary;
   final String relativePath;
   final String actionLabel;
+  final String pendingResearchRequestId;
+
+  bool get supportsPendingResearchActions =>
+      pendingResearchRequestId.trim().isNotEmpty;
 }

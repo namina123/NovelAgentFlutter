@@ -30,6 +30,7 @@ class WorkbenchProjectPanelViewDataService {
       assetActions: _actionPolicyService.assetActions(
         hasActiveProject: hasActiveProject,
       ),
+      projectLongTaskSummary: source.projectLongTaskSummary,
     );
   }
 }

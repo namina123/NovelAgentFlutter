@@ -283,6 +283,96 @@ void main() {
     );
 
     test(
+      'generate draft continues after read-only tool round if the next reply is empty',
+      () async {
+        final workspacePort = _FakeProjectWorkspacePort(entries: [], files: {});
+        final gateway = _FakeLlmGateway(
+          scriptedResults: [
+            <String, Object?>{
+              'ok': true,
+              'content': '',
+              'tool_calls': <Object?>[
+                <String, Object?>{
+                  'id': 'call_read_1',
+                  'name': 'read_project_file',
+                  'arguments': <String, Object?>{
+                    'relative_path': 'knowledge/项目知识摘要.md',
+                  },
+                },
+              ],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '',
+              },
+            },
+            <String, Object?>{
+              'ok': true,
+              'content': '',
+              'tool_calls': const <Object?>[],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '',
+              },
+            },
+            <String, Object?>{
+              'ok': true,
+              'content':
+                  '借用的原作事实包括哈利住在楼梯下储物间、海格会在十一岁生日节点出现。新增偏移是主角与哈利更早建立友谊。下面给出开局方案与试写片段。',
+              'tool_calls': const <Object?>[],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content':
+                    '借用的原作事实包括哈利住在楼梯下储物间、海格会在十一岁生日节点出现。新增偏移是主角与哈利更早建立友谊。下面给出开局方案与试写片段。',
+              },
+            },
+          ],
+        );
+        final toolExecutionPort = _FakeToolExecutionPort(
+          resultByToolName: <String, JsonMap>{
+            'read_project_file': <String, Object?>{
+              'ok': true,
+              'relative_path': 'knowledge/项目知识摘要.md',
+              'content': '# 项目知识摘要\n哈利住在楼梯下储物间；海格会在十一岁生日到来。',
+              'changed_paths': const <Object?>[],
+            },
+          },
+        );
+        final useCase = GenerateDraftUseCase(
+          projectWorkspacePort: workspacePort,
+          llmGateway: gateway,
+          toolExecutionPort: toolExecutionPort,
+          contextAssemblerService: ContextAssemblerService(
+            budgetService: ContextBudgetService(),
+            staticSectionService: ContextStaticSectionService(
+              projectPromptContract: ProjectPromptContract(),
+            ),
+            projectFileSectionService: ContextProjectFileSectionService(),
+          ),
+          projectPromptContract: ProjectPromptContract(),
+        );
+
+        final result = await useCase.execute(
+          project: const ProjectDescriptor(
+            id: 'demo',
+            name: '示例项目',
+            rootPath: 'D:/demo',
+          ),
+          userPrompt: '请说明借用哪些原作事实、哪些地方会产生剧情偏移，并给出开局方案和试写。',
+          modelId: 'test-model',
+          intent: 'draft',
+        );
+
+        expect(result.draftMarkdown, contains('借用的原作事实'));
+        expect(gateway.requestCount, 3);
+        expect(gateway.promptHistory.last, contains('直接给出本轮实质结果'));
+        expect(
+          toolExecutionPort.executedToolNames,
+          contains('read_project_file'),
+        );
+      },
+    );
+
+    test(
       'generate draft forces present_user_options for option selection turns',
       () async {
         // 中文注释: 这里 mock“让用户先选方向”的真实入口，验证请求级约束会把模型压到选项工具而不是普通正文列表。
@@ -503,6 +593,613 @@ void main() {
     );
 
     test(
+      'generate draft keeps formal chapter delivery primary even when research tools stay exposed',
+      () async {
+        // 中文注释: 研究工具可以继续暴露，但普通分章如果已足够写作，模型仍应直接完成正式交付。
+        final workspacePort = _FakeProjectWorkspacePort(entries: [], files: {});
+        final gateway = _FakeLlmGateway(
+          scriptedResults: [
+            <String, Object?>{
+              'ok': true,
+              'content': '',
+              'tool_calls': <Object?>[
+                <String, Object?>{
+                  'id': 'call_delivery_1',
+                  'name': 'submit_chapter_delivery',
+                  'arguments': <String, Object?>{
+                    'chapter_path': 'chapters/chapter_01.md',
+                    'chapter_content': '# 第一章\n\n正文',
+                    'title': '第一章',
+                    'submission': <String, Object?>{
+                      'submission_id': 'delivery-1',
+                      'chapter_ref': <String, Object?>{
+                        'ref_type': 'chapter',
+                        'ref_id': 'chapters/chapter_01.md',
+                        'relative_path': 'chapters/chapter_01.md',
+                      },
+                    },
+                  },
+                },
+              ],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '',
+              },
+            },
+            <String, Object?>{
+              'ok': true,
+              'content': '章节已交付。',
+              'tool_calls': const <Object?>[],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '章节已交付。',
+              },
+            },
+          ],
+        );
+        final toolExecutionPort = _FakeToolExecutionPort(
+          resultByToolName: <String, JsonMap>{
+            'request_external_research': <String, Object?>{
+              'ok': true,
+              'changed_paths': <Object?>[
+                '.novel_agent/information/research_requests/request-1.json',
+                'research/资料研究摘要.md',
+              ],
+            },
+            'submit_chapter_delivery': <String, Object?>{
+              'ok': true,
+              'changed_paths': <Object?>[
+                'chapters/chapter_01.md',
+                '.novel_agent/continuity/deliveries/delivery-1.json',
+              ],
+              'domain_outcome_status': 'accepted',
+              'domain_outcome': <String, Object?>{
+                'outcome_status': 'accepted',
+                'outcome_payload': <String, Object?>{
+                  'delivery_id': 'delivery-1',
+                  'chapter_path': 'chapters/chapter_01.md',
+                  'delivery_state': 'delivered',
+                  'chapter_body_state': 'delivered',
+                  'sidecar_state': 'accepted',
+                  'state_result': <String, Object?>{
+                    'chapter_body_delivered': true,
+                    'submission_accepted': true,
+                  },
+                },
+              },
+            },
+          },
+        );
+        final useCase = GenerateDraftUseCase(
+          projectWorkspacePort: workspacePort,
+          llmGateway: gateway,
+          toolExecutionPort: toolExecutionPort,
+          contextAssemblerService: ContextAssemblerService(
+            budgetService: ContextBudgetService(),
+            staticSectionService: ContextStaticSectionService(
+              projectPromptContract: ProjectPromptContract(),
+            ),
+            projectFileSectionService: ContextProjectFileSectionService(),
+          ),
+          projectPromptContract: ProjectPromptContract(),
+        );
+
+        final result = await useCase.execute(
+          project: const ProjectDescriptor(
+            id: 'demo',
+            name: '示例项目',
+            rootPath: 'D:/demo',
+          ),
+          userPrompt: '请写第一章，涉及真实历史背景时先收集资料。',
+          modelId: 'test-model',
+          title: '第一章',
+          exposedToolIds: const <String>[
+            'submit_chapter_delivery',
+            'request_external_research',
+            'submit_research_note',
+            'read_project_file',
+          ],
+        );
+
+        expect(gateway.requestCount, 2);
+        expect(
+          gateway.toolNameHistory.first,
+          contains('submit_chapter_delivery'),
+        );
+        expect(
+          gateway.promptHistory,
+          contains(contains('submit_chapter_delivery')),
+        );
+        expect(
+          toolExecutionPort.executedToolNames,
+          orderedEquals(const <String>['submit_chapter_delivery']),
+        );
+        expect(result.changedPaths, contains('chapters/chapter_01.md'));
+        expect(result.draftMarkdown, contains('章节已交付'));
+      },
+    );
+
+    test(
+      'generate draft recovers formal delivery after mergeable sub-agent failure',
+      () async {
+        // 中文注释: 子智能体空返/失败是协作信号，主智能体仍必须回到正式章节交付合同。
+        final workspacePort = _FakeProjectWorkspacePort(entries: [], files: {});
+        final gateway = _FakeLlmGateway(
+          scriptedResults: [
+            <String, Object?>{
+              'ok': true,
+              'content': '',
+              'tool_calls': <Object?>[
+                <String, Object?>{
+                  'id': 'call_sub_1',
+                  'name': 'call_sub_agent',
+                  'arguments': <String, Object?>{
+                    'agent_id': 'reviewer',
+                    'task': '请先审稿，再返回结构化建议。',
+                  },
+                },
+              ],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '',
+              },
+            },
+            const <String, Object?>{
+              'ok': true,
+              'content': '',
+              'tool_calls': <Object?>[],
+            },
+            const <String, Object?>{
+              'ok': true,
+              'content': '',
+              'tool_calls': <Object?>[],
+            },
+            <String, Object?>{
+              'ok': true,
+              'content': '',
+              'tool_calls': <Object?>[
+                <String, Object?>{
+                  'id': 'call_delivery_1',
+                  'name': 'submit_chapter_delivery',
+                  'arguments': <String, Object?>{
+                    'chapter_path': 'chapters/chapter_01.md',
+                    'chapter_content': '# 第一章\n\n正文',
+                    'title': '第一章',
+                    'submission': <String, Object?>{
+                      'submission_id': 'delivery-1',
+                      'chapter_ref': <String, Object?>{
+                        'ref_type': 'chapter',
+                        'ref_id': 'chapters/chapter_01.md',
+                        'relative_path': 'chapters/chapter_01.md',
+                      },
+                    },
+                  },
+                },
+              ],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '',
+              },
+            },
+            <String, Object?>{
+              'ok': true,
+              'content': '已由主智能体兜底完成章节交付。',
+              'tool_calls': const <Object?>[],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '已由主智能体兜底完成章节交付。',
+              },
+            },
+          ],
+        );
+        final toolExecutionPort = _FakeToolExecutionPort(
+          resultByToolName: <String, JsonMap>{
+            'submit_chapter_delivery': <String, Object?>{
+              'ok': true,
+              'changed_paths': <Object?>[
+                'chapters/chapter_01.md',
+                '.novel_agent/continuity/deliveries/delivery-1.json',
+              ],
+              'domain_outcome_status': 'accepted',
+              'domain_outcome': <String, Object?>{
+                'outcome_status': 'accepted',
+                'outcome_payload': <String, Object?>{
+                  'delivery_id': 'delivery-1',
+                  'chapter_path': 'chapters/chapter_01.md',
+                  'delivery_state': 'delivered',
+                  'chapter_body_state': 'delivered',
+                  'sidecar_state': 'accepted',
+                  'state_result': <String, Object?>{
+                    'chapter_body_delivered': true,
+                    'submission_accepted': true,
+                  },
+                },
+              },
+            },
+          },
+        );
+        final useCase = GenerateDraftUseCase(
+          projectWorkspacePort: workspacePort,
+          llmGateway: gateway,
+          toolExecutionPort: toolExecutionPort,
+          contextAssemblerService: ContextAssemblerService(
+            budgetService: ContextBudgetService(),
+            staticSectionService: ContextStaticSectionService(
+              projectPromptContract: ProjectPromptContract(),
+            ),
+            projectFileSectionService: ContextProjectFileSectionService(),
+          ),
+          projectPromptContract: ProjectPromptContract(),
+          loadAvailableAgents: (_) async => <JsonMap>[
+            const <String, Object?>{
+              'id': 'reviewer',
+              'name': '审稿智能体',
+              'role': '负责审稿',
+            },
+          ],
+          loadAvailableAgentGroups: (_) async => <JsonMap>[
+            const <String, Object?>{
+              'id': 'optional_review_room',
+              'name': '审稿组',
+              'agents': <String>['reviewer'],
+            },
+          ],
+        );
+
+        final result = await useCase.execute(
+          project: const ProjectDescriptor(
+            id: 'demo',
+            name: '示例项目',
+            rootPath: 'D:/demo',
+          ),
+          userPrompt: '请写第一章，可先让审稿智能体检查，但最终必须交付正文。',
+          modelId: 'test-model',
+          title: '第一章',
+          exposedToolIds: const <String>[
+            'submit_chapter_delivery',
+            'call_sub_agent',
+            'read_project_file',
+          ],
+        );
+
+        final toolNames = result.executedTools
+            .map(ValueReaders.mapValue)
+            .map((tool) => ValueReaders.stringValue(tool['name']))
+            .toList(growable: false);
+        final subAgentTool = result.executedTools
+            .map(ValueReaders.mapValue)
+            .firstWhere(
+              (tool) =>
+                  ValueReaders.stringValue(tool['name']) == 'call_sub_agent',
+            );
+        final subAgentResult = ValueReaders.mapValue(subAgentTool['result']);
+        expect(ValueReaders.boolValue(subAgentResult['ok']), isFalse);
+        expect(
+          ValueReaders.stringValue(subAgentResult['failure_disposition']),
+          ChildFailureDispositions.retryChild,
+        );
+        expect(result.stoppedByToolError, isFalse);
+        expect(
+          toolNames,
+          containsAll(<String>['call_sub_agent', 'submit_chapter_delivery']),
+        );
+        expect(gateway.promptHistory, contains(contains('子智能体')));
+        expect(
+          gateway.toolNameHistory.any(
+            (names) =>
+                names.length == 1 && names.single == 'submit_chapter_delivery',
+          ),
+          isTrue,
+        );
+        expect(result.changedPaths, contains('chapters/chapter_01.md'));
+        expect(result.draftMarkdown, contains('兜底完成章节交付'));
+      },
+    );
+
+    test(
+      'generate draft retries failed submit_chapter_delivery in restricted recovery round',
+      () async {
+        // 中文注释: 分章正文首轮交付被 continuity/length gate 拦下时，核心必须给出只允许正式交付的纠偏回合。
+        final workspacePort = _FakeProjectWorkspacePort(entries: [], files: {});
+        final gateway = _FakeLlmGateway(
+          scriptedResults: [
+            <String, Object?>{
+              'ok': true,
+              'content': '',
+              'tool_calls': <Object?>[
+                <String, Object?>{
+                  'id': 'call_delivery_invalid_1',
+                  'name': 'submit_chapter_delivery',
+                  'arguments': <String, Object?>{
+                    'chapter_path': 'chapters/chapter_03.md',
+                    'chapter_content': '# 第三章\n\n王保正刚把话说完，门外的人又把同一句话重复了一遍。',
+                    'title': '第三章',
+                  },
+                },
+              ],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '',
+              },
+            },
+            <String, Object?>{
+              'ok': true,
+              'content': '',
+              'tool_calls': <Object?>[
+                <String, Object?>{
+                  'id': 'call_delivery_retry_1',
+                  'name': 'submit_chapter_delivery',
+                  'arguments': <String, Object?>{
+                    'chapter_path': 'chapters/chapter_03.md',
+                    'chapter_content':
+                        '# 第三章\n\n王保正的话音一落，门外的人没有再重复上一句，而是直接接过话头迈进屋里。',
+                    'title': '第三章',
+                  },
+                },
+              ],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '',
+              },
+            },
+            <String, Object?>{
+              'ok': true,
+              'content': '章节已交付。',
+              'tool_calls': const <Object?>[],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '章节已交付。',
+              },
+            },
+          ],
+        );
+        final toolExecutionPort = _FakeToolExecutionPort(
+          queuedResultsByToolName: <String, List<JsonMap>>{
+            'submit_chapter_delivery': <JsonMap>[
+              <String, Object?>{
+                'ok': false,
+                'error': '章节开篇疑似回退重演上一章末尾已完成动作，没有直接承接下一章入口。',
+                'domain_outcome_status': 'invalid_payload',
+                'domain_outcome': <String, Object?>{
+                  'outcome_status': 'invalid_payload',
+                  'outcome_payload': <String, Object?>{
+                    'chapter_path': 'chapters/chapter_03.md',
+                    'delivery_state': 'delivered',
+                    'chapter_body_state': 'delivered',
+                    'sidecar_state': 'missing',
+                    'state_result': <String, Object?>{
+                      'chapter_body_delivered': true,
+                      'submission_accepted': false,
+                    },
+                  },
+                },
+              },
+              <String, Object?>{
+                'ok': true,
+                'changed_paths': <Object?>[
+                  'chapters/chapter_03.md',
+                  '.novel_agent/continuity/deliveries/delivery-3.json',
+                ],
+                'domain_outcome_status': 'accepted',
+                'domain_outcome': <String, Object?>{
+                  'outcome_status': 'accepted',
+                  'outcome_payload': <String, Object?>{
+                    'delivery_id': 'delivery-3',
+                    'chapter_path': 'chapters/chapter_03.md',
+                    'delivery_state': 'delivered',
+                    'chapter_body_state': 'delivered',
+                    'sidecar_state': 'accepted',
+                    'state_result': <String, Object?>{
+                      'chapter_body_delivered': true,
+                      'submission_accepted': true,
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        );
+        final useCase = GenerateDraftUseCase(
+          projectWorkspacePort: workspacePort,
+          llmGateway: gateway,
+          toolExecutionPort: toolExecutionPort,
+          contextAssemblerService: ContextAssemblerService(
+            budgetService: ContextBudgetService(),
+            staticSectionService: ContextStaticSectionService(
+              projectPromptContract: ProjectPromptContract(),
+            ),
+            projectFileSectionService: ContextProjectFileSectionService(),
+          ),
+          projectPromptContract: ProjectPromptContract(),
+        );
+
+        final result = await useCase.execute(
+          project: const ProjectDescriptor(
+            id: 'demo',
+            name: '示例项目',
+            rootPath: 'D:/demo',
+          ),
+          userPrompt: '直接续写第三章。',
+          modelId: 'test-model',
+          title: '第三章',
+          exposedToolIds: const <String>[
+            NarrativeDomainToolNames.submitChapterDelivery,
+            'read_project_file',
+            'request_external_research',
+          ],
+          modelProfile: const <String, Object?>{'supports_tool_choice': true},
+        );
+
+        expect(toolExecutionPort.executedToolNames, <String>[
+          'submit_chapter_delivery',
+          'submit_chapter_delivery',
+        ]);
+        expect(
+          gateway.toolNameHistory[1],
+          orderedEquals(const <String>['submit_chapter_delivery']),
+        );
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(
+              ValueReaders.mapValue(
+                gateway.optionsHistory[1]['tool_choice'],
+              )['function'],
+            )['name'],
+          ),
+          NarrativeDomainToolNames.submitChapterDelivery,
+        );
+        expect(result.stoppedByToolError, isFalse);
+        expect(result.toolErrorSummary, isEmpty);
+        expect(result.changedPaths, contains('chapters/chapter_03.md'));
+        expect(result.draftMarkdown, contains('章节已交付'));
+      },
+    );
+
+    test(
+      'generate draft keeps read-only context tools available while chapter flow still avoids unnecessary research calls',
+      () async {
+        // 中文注释: 章节主链可以先读上下文再交付，但没必要时不应额外触发研究工具。
+        final workspacePort = _FakeProjectWorkspacePort(entries: [], files: {});
+        final gateway = _FakeLlmGateway(
+          scriptedResults: [
+            <String, Object?>{
+              'ok': true,
+              'content': '',
+              'tool_calls': <Object?>[
+                <String, Object?>{
+                  'id': 'call_read_1',
+                  'name': 'read_project_file',
+                  'arguments': <String, Object?>{
+                    'relative_path': 'research/待研究问题.md',
+                  },
+                },
+              ],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '',
+              },
+            },
+            <String, Object?>{
+              'ok': true,
+              'content': '',
+              'tool_calls': <Object?>[
+                <String, Object?>{
+                  'id': 'call_delivery_1',
+                  'name': 'submit_chapter_delivery',
+                  'arguments': <String, Object?>{
+                    'chapter_path': 'chapters/chapter_01.md',
+                    'chapter_content': '# 第一章\n\n正文',
+                    'title': '第一章',
+                    'submission': <String, Object?>{
+                      'submission_id': 'delivery-1',
+                      'chapter_ref': <String, Object?>{
+                        'ref_type': 'chapter',
+                        'ref_id': 'chapters/chapter_01.md',
+                        'relative_path': 'chapters/chapter_01.md',
+                      },
+                    },
+                  },
+                },
+              ],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '',
+              },
+            },
+            <String, Object?>{
+              'ok': true,
+              'content': '章节已交付。',
+              'tool_calls': const <Object?>[],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '章节已交付。',
+              },
+            },
+          ],
+        );
+        final toolExecutionPort = _FakeToolExecutionPort(
+          resultByToolName: <String, JsonMap>{
+            'read_project_file': <String, Object?>{
+              'ok': true,
+              'content': '本章需要确认明代家内称谓。',
+              'changed_paths': const <Object?>[],
+            },
+            'submit_chapter_delivery': <String, Object?>{
+              'ok': true,
+              'changed_paths': <Object?>[
+                'chapters/chapter_01.md',
+                '.novel_agent/continuity/deliveries/delivery-1.json',
+              ],
+              'domain_outcome_status': 'accepted',
+              'domain_outcome': <String, Object?>{
+                'outcome_status': 'accepted',
+                'outcome_payload': <String, Object?>{
+                  'delivery_id': 'delivery-1',
+                  'chapter_path': 'chapters/chapter_01.md',
+                  'delivery_state': 'delivered',
+                  'chapter_body_state': 'delivered',
+                  'sidecar_state': 'accepted',
+                  'state_result': <String, Object?>{
+                    'chapter_body_delivered': true,
+                    'submission_accepted': true,
+                  },
+                },
+              },
+            },
+          },
+        );
+        final useCase = GenerateDraftUseCase(
+          projectWorkspacePort: workspacePort,
+          llmGateway: gateway,
+          toolExecutionPort: toolExecutionPort,
+          contextAssemblerService: ContextAssemblerService(
+            budgetService: ContextBudgetService(),
+            staticSectionService: ContextStaticSectionService(
+              projectPromptContract: ProjectPromptContract(),
+            ),
+            projectFileSectionService: ContextProjectFileSectionService(),
+          ),
+          projectPromptContract: ProjectPromptContract(),
+        );
+
+        final result = await useCase.execute(
+          project: const ProjectDescriptor(
+            id: 'demo',
+            name: '示例项目',
+            rootPath: 'D:/demo',
+          ),
+          userPrompt: '请写第一章，必须先确认一个真实历史称谓。',
+          modelId: 'test-model',
+          title: '第一章',
+          exposedToolIds: const <String>[
+            'submit_chapter_delivery',
+            'request_external_research',
+            'submit_research_note',
+            'read_project_file',
+          ],
+        );
+
+        expect(
+          toolExecutionPort.executedToolNames,
+          containsAllInOrder(<String>[
+            'read_project_file',
+            'submit_chapter_delivery',
+          ]),
+        );
+        expect(
+          toolExecutionPort.executedToolNames,
+          isNot(contains('request_external_research')),
+        );
+        expect(
+          gateway.toolNameHistory[1],
+          containsAll(<String>['read_project_file', 'submit_chapter_delivery']),
+        );
+        expect(result.draftMarkdown, contains('章节已交付'));
+        expect(result.changedPaths, contains('chapters/chapter_01.md'));
+      },
+    );
+
+    test(
       'generate draft preloads routed skills before model response',
       () async {
         // 中文注释: 这里验证长任务阶段会先按策略读取技能摘要，而不是完全等模型自己想起来。
@@ -569,6 +1266,81 @@ void main() {
               .map((tool) => ValueReaders.stringValue(tool['name'])),
           contains('load_agent_skill'),
         );
+      },
+    );
+
+    test(
+      'generate draft respects explicit tool exposure and skips skill preload when load_agent_skill is not exposed',
+      () async {
+        final workspacePort = _FakeProjectWorkspacePort(entries: [], files: {});
+        final gateway = _FakeLlmGateway(
+          scriptedResults: [
+            <String, Object?>{
+              'ok': true,
+              'content': '直接进入正文。',
+              'tool_calls': const <Object?>[],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '直接进入正文。',
+              },
+            },
+          ],
+        );
+        final toolExecutionPort = _FakeToolExecutionPort(
+          resultByToolName: <String, JsonMap>{
+            'load_agent_skill': <String, Object?>{
+              'ok': true,
+              'skill_id': 'chapter_drafting_method',
+              'detail_level': 'summary',
+              'content': '章节起草摘要',
+              'changed_paths': const <Object?>[],
+            },
+          },
+        );
+        final useCase = GenerateDraftUseCase(
+          projectWorkspacePort: workspacePort,
+          llmGateway: gateway,
+          toolExecutionPort: toolExecutionPort,
+          contextAssemblerService: ContextAssemblerService(
+            budgetService: ContextBudgetService(),
+            staticSectionService: ContextStaticSectionService(
+              projectPromptContract: ProjectPromptContract(),
+            ),
+            projectFileSectionService: ContextProjectFileSectionService(),
+          ),
+          projectPromptContract: ProjectPromptContract(),
+        );
+
+        final result = await useCase.execute(
+          project: const ProjectDescriptor(
+            id: 'demo',
+            name: '示例项目',
+            rootPath: 'D:/demo',
+            projectType: 'novel',
+          ),
+          userPrompt: '请直接写正文，不要再读技能。',
+          modelId: 'test-model',
+          intent: 'workflow_task',
+          skillRoutingContext: const <String, Object?>{
+            'task_type': 'chapter',
+            'mode': 'seed_to_full_novel',
+          },
+          exposedToolIds: const <String>[
+            NarrativeDomainToolNames.submitChapterDelivery,
+          ],
+        );
+
+        expect(
+          toolExecutionPort.executedToolNames,
+          isNot(contains('load_agent_skill')),
+        );
+        expect(
+          result.executedTools
+              .map(ValueReaders.mapValue)
+              .map((tool) => ValueReaders.stringValue(tool['name'])),
+          isNot(contains('load_agent_skill')),
+        );
+        expect(result.draftMarkdown, contains('直接进入正文'));
       },
     );
 
@@ -1120,6 +1892,10 @@ class _FakeLlmGateway extends LlmGateway {
   String lastModelId = '';
   JsonMap lastOptions = const <String, Object?>{};
   List<String> lastToolNames = const <String>[];
+  int requestCount = 0;
+  final List<String> promptHistory = <String>[];
+  final List<List<String>> toolNameHistory = <List<String>>[];
+  final List<JsonMap> optionsHistory = <JsonMap>[];
   final List<JsonMap> _scriptedResults;
   final void Function(void Function(LlmStreamUpdate update)? onStreamUpdate)?
   beforeReturningResult;
@@ -1144,6 +1920,7 @@ class _FakeLlmGateway extends LlmGateway {
     void Function(LlmStreamUpdate update)? onStreamUpdate,
   }) async {
     // 中文注释: 模型网关替身记录本轮用户提示，验证用例是否把上下文正确送入模型层。
+    requestCount += 1;
     if (errorToThrow != null) {
       throw errorToThrow!;
     }
@@ -1159,6 +1936,8 @@ class _FakeLlmGateway extends LlmGateway {
     lastSystemPrompt = systemMessage['content']?.toString() ?? '';
     lastModelId = request.modelId;
     lastOptions = ValueReaders.deepCopyMap(request.options);
+    optionsHistory.add(lastOptions);
+    promptHistory.add(lastPrompt);
     lastToolNames = request.tools
         .map(ValueReaders.mapValue)
         .map(
@@ -1168,6 +1947,7 @@ class _FakeLlmGateway extends LlmGateway {
         )
         .where((name) => name.trim().isNotEmpty)
         .toList(growable: false);
+    toolNameHistory.add(lastToolNames);
     if (_scriptedResults.isNotEmpty) {
       if (beforeReturningResult != null) {
         beforeReturningResult!(onStreamUpdate);
@@ -1209,9 +1989,15 @@ class _ForceOptionToolStrategyService extends ToolStrategyService {
 class _FakeToolExecutionPort implements ToolExecutionPort {
   _FakeToolExecutionPort({
     Map<String, JsonMap> resultByToolName = const <String, JsonMap>{},
-  }) : _resultByToolName = resultByToolName;
+    Map<String, List<JsonMap>> queuedResultsByToolName =
+        const <String, List<JsonMap>>{},
+  }) : _resultByToolName = resultByToolName,
+       _queuedResultsByToolName = queuedResultsByToolName.map(
+         (key, value) => MapEntry(key, List<JsonMap>.from(value)),
+       );
 
   final Map<String, JsonMap> _resultByToolName;
+  final Map<String, List<JsonMap>> _queuedResultsByToolName;
   final List<String> executedToolNames = <String>[];
   JsonMap lastToolCall = const <String, Object?>{};
 
@@ -1224,6 +2010,10 @@ class _FakeToolExecutionPort implements ToolExecutionPort {
     final toolName = toolCall['name']?.toString() ?? '';
     executedToolNames.add(toolName);
     lastToolCall = ValueReaders.deepCopyMap(toolCall);
+    final queuedResults = _queuedResultsByToolName[toolName];
+    if (queuedResults != null && queuedResults.isNotEmpty) {
+      return queuedResults.removeAt(0);
+    }
     return _resultByToolName[toolName] ??
         <String, Object?>{'ok': true, 'changed_paths': const <Object?>[]};
   }

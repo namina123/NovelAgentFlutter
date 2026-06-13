@@ -32,6 +32,7 @@ class ProjectAgentGroupCandidateResolverService {
     required List<AgentGroupAvailabilityAssessment> groupAssessments,
     required List<ProjectAgentBinding> agentBindings,
     required List<AgentAvailabilityAssessment> agentAssessments,
+    String taskFamilyId = '',
     String modeId = '',
     String stageId = '',
   }) {
@@ -39,6 +40,7 @@ class ProjectAgentGroupCandidateResolverService {
     final preferredSelection = _groupSelectionResolverService
         .resolvePreferredSelection(
           groupSelections,
+          taskFamilyId: taskFamilyId,
           modeId: modeId,
           stageId: stageId,
         );

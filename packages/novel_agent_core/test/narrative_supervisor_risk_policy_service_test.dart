@@ -5,94 +5,102 @@ void main() {
   group('NarrativeSupervisorRiskPolicyService', () {
     const service = NarrativeSupervisorRiskPolicyService();
 
-    test('flags recoverable chapter delivery as repair instead of waiting user', () {
-      final risk = service.assess(
-        result: const <String, Object?>{
-          'ok': true,
-          'executed_tools': <Object?>[],
-          'response': <String, Object?>{},
-        },
-        execution: const <String, Object?>{
-          'chapter_delivery_state': 'missing_output_recoverable',
-          'chapter_delivery': <String, Object?>{
-            'delivery_state': 'missing_output_recoverable',
-            'chapter_path': 'chapters/ch01.md',
-            'state_result': <String, Object?>{
-              'reason': 'chapter_body_missing',
+    test(
+      'flags recoverable chapter delivery as repair instead of waiting user',
+      () {
+        final risk = service.assess(
+          result: const <String, Object?>{
+            'ok': true,
+            'executed_tools': <Object?>[],
+            'response': <String, Object?>{},
+          },
+          execution: const <String, Object?>{
+            'chapter_delivery_state': 'missing_output_recoverable',
+            'chapter_delivery': <String, Object?>{
+              'delivery_state': 'missing_output_recoverable',
+              'chapter_path': 'chapters/ch01.md',
+              'state_result': <String, Object?>{
+                'reason': 'chapter_body_missing',
+              },
             },
           },
-        },
-      );
+        );
 
-      expect(
-        ValueReaders.stringValue(
-          ValueReaders.mapValue(risk['delivery'])['category'],
-        ),
-        'repair',
-      );
-      expect(
-        ValueReaders.stringValue(
-          ValueReaders.mapValue(risk['overall'])['category'],
-        ),
-        'repair',
-      );
-      expect(
-        ValueReaders.boolValue(
-          ValueReaders.mapValue(risk['overall'])['waiting_user'],
-        ),
-        isFalse,
-      );
-    });
-
-    test('treats blocking semantic review findings as repair and tracks claim disposition counts', () {
-      final review = NarrativeSemanticReview(
-        reviewId: 'semantic-review-1',
-        source: const NarrativeSourceRef(
-          sourceType: NarrativeSourceTypes.reviewer,
-          sourceId: 'reviewer-1',
-        ),
-        recommendedDisposition: SemanticReviewRecommendedDisposition.repair,
-        questionedClaimIds: const <String>['claim-questioned-1'],
-        findings: const <SemanticReviewFinding>[
-          SemanticReviewFinding(
-            findingId: 'finding-1',
-            severity: SemanticReviewSeverity.blocking,
-            summary: '结尾和前文设定冲突。',
-            unableToLocateEvidence: true,
-            unlocatableReason: 'focused test',
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(risk['delivery'])['category'],
           ),
-        ],
-      );
+          'repair',
+        );
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(risk['overall'])['category'],
+          ),
+          'repair',
+        );
+        expect(
+          ValueReaders.boolValue(
+            ValueReaders.mapValue(risk['overall'])['waiting_user'],
+          ),
+          isFalse,
+        );
+      },
+    );
 
-      final risk = service.assess(
-        result: <String, Object?>{
-          'ok': true,
-          'executed_tools': <Object?>[
-            <String, Object?>{
-              'name': 'submit_semantic_review',
-              'result': <String, Object?>{
-                'domain_outcome': <String, Object?>{
-                  'outcome_status': 'accepted',
-                  'outcome_payload': <String, Object?>{
-                    'review': review.toJson(),
+    test(
+      'treats blocking semantic review findings as repair and tracks claim disposition counts',
+      () {
+        final review = NarrativeSemanticReview(
+          reviewId: 'semantic-review-1',
+          source: const NarrativeSourceRef(
+            sourceType: NarrativeSourceTypes.reviewer,
+            sourceId: 'reviewer-1',
+          ),
+          recommendedDisposition: SemanticReviewRecommendedDisposition.repair,
+          questionedClaimIds: const <String>['claim-questioned-1'],
+          findings: const <SemanticReviewFinding>[
+            SemanticReviewFinding(
+              findingId: 'finding-1',
+              severity: SemanticReviewSeverity.blocking,
+              summary: '结尾和前文设定冲突。',
+              unableToLocateEvidence: true,
+              unlocatableReason: 'focused test',
+            ),
+          ],
+        );
+
+        final risk = service.assess(
+          result: <String, Object?>{
+            'ok': true,
+            'executed_tools': <Object?>[
+              <String, Object?>{
+                'name': 'submit_semantic_review',
+                'result': <String, Object?>{
+                  'domain_outcome': <String, Object?>{
+                    'outcome_status': 'accepted',
+                    'outcome_payload': <String, Object?>{
+                      'review': review.toJson(),
+                    },
                   },
                 },
               },
-            },
-          ],
-          'response': const <String, Object?>{},
-        },
-      );
+            ],
+            'response': const <String, Object?>{},
+          },
+        );
 
-      final reviewRisk = ValueReaders.mapValue(risk['review']);
-      expect(ValueReaders.stringValue(reviewRisk['category']), 'repair');
-      expect(ValueReaders.intValue(reviewRisk['blocking_finding_count']), 1);
-      expect(ValueReaders.intValue(reviewRisk['questioned_claim_count']), 1);
-      expect(
-        ValueReaders.stringValue(ValueReaders.mapValue(risk['overall'])['category']),
-        'repair',
-      );
-    });
+        final reviewRisk = ValueReaders.mapValue(risk['review']);
+        expect(ValueReaders.stringValue(reviewRisk['category']), 'repair');
+        expect(ValueReaders.intValue(reviewRisk['blocking_finding_count']), 1);
+        expect(ValueReaders.intValue(reviewRisk['questioned_claim_count']), 1);
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(risk['overall'])['category'],
+          ),
+          'repair',
+        );
+      },
+    );
 
     test('keeps waiting_user for true permission confirmation only', () {
       final risk = service.assess(
@@ -182,8 +190,14 @@ void main() {
 
         final informationRisk = ValueReaders.mapValue(risk['information']);
         expect(ValueReaders.stringValue(informationRisk['category']), 'repair');
-        expect(ValueReaders.intValue(informationRisk['pending_research_count']), 1);
-        expect(ValueReaders.intValue(informationRisk['required_omitted_count']), 1);
+        expect(
+          ValueReaders.intValue(informationRisk['pending_research_count']),
+          1,
+        );
+        expect(
+          ValueReaders.intValue(informationRisk['required_omitted_count']),
+          1,
+        );
         expect(
           ValueReaders.stringList(informationRisk['changed_paths']),
           contains(
@@ -199,25 +213,75 @@ void main() {
       },
     );
 
-    test('treats high risk reference boundary as manual attention information signal', () {
+    test(
+      'treats high risk reference boundary as manual attention information signal',
+      () {
+        final risk = service.assess(
+          result: const <String, Object?>{
+            'ok': true,
+            'executed_tools': <Object?>[
+              <String, Object?>{
+                'name': 'propose_reference_work',
+                'result': <String, Object?>{
+                  'domain_outcome': <String, Object?>{
+                    'outcome_status': 'needs_user_confirmation',
+                    'outcome_payload': <String, Object?>{
+                      'requires_user_confirmation': true,
+                      'risk_note_count': 2,
+                      'relationship_to_project': 'source_work',
+                      'reference_work': <String, Object?>{
+                        'reference_work_id': 'ref_source_1',
+                        'title': '原著边界',
+                        'requires_confirmation': true,
+                      },
+                    },
+                  },
+                },
+              },
+            ],
+            'response': <String, Object?>{},
+          },
+        );
+
+        final informationRisk = ValueReaders.mapValue(risk['information']);
+        expect(
+          ValueReaders.stringValue(informationRisk['category']),
+          'manual_attention',
+        );
+        expect(
+          ValueReaders.intValue(informationRisk['high_risk_reference_count']),
+          1,
+        );
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(risk['overall'])['category'],
+          ),
+          'manual_attention',
+        );
+      },
+    );
+
+    test('distinguishes awaiting confirmation from plain pending research', () {
       final risk = service.assess(
         result: const <String, Object?>{
           'ok': true,
+          'changed_paths': <Object?>[
+            '.novel_agent/information/research_requests/research_request_call_2.json',
+          ],
           'executed_tools': <Object?>[
             <String, Object?>{
-              'name': 'propose_reference_work',
+              'name': 'request_external_research',
               'result': <String, Object?>{
+                'waiting_for_user_choice': true,
                 'domain_outcome': <String, Object?>{
                   'outcome_status': 'needs_user_confirmation',
+                  'permission_decision': <String, Object?>{
+                    'disposition': 'needs_user_confirmation',
+                  },
                   'outcome_payload': <String, Object?>{
-                    'requires_user_confirmation': true,
-                    'risk_note_count': 2,
-                    'relationship_to_project': 'source_work',
-                    'reference_work': <String, Object?>{
-                      'reference_work_id': 'ref_source_1',
-                      'title': '原著边界',
-                      'requires_confirmation': true,
-                    },
+                    'request_registered': true,
+                    'network_execution_performed': false,
+                    'research_request': <String, Object?>{'query': '北境钟楼现实史料'},
                   },
                 },
               },
@@ -230,18 +294,219 @@ void main() {
       final informationRisk = ValueReaders.mapValue(risk['information']);
       expect(
         ValueReaders.stringValue(informationRisk['category']),
-        'manual_attention',
+        'checkpoint_user',
       );
       expect(
-        ValueReaders.intValue(informationRisk['high_risk_reference_count']),
+        ValueReaders.intValue(informationRisk['awaiting_confirmation_count']),
         1,
       );
       expect(
+        ValueReaders.intValue(informationRisk['pending_research_count']),
+        0,
+      );
+      expect(
         ValueReaders.stringValue(
-          ValueReaders.mapValue(risk['overall'])['category'],
+          ValueReaders.mapValue(informationRisk['evidence_gate'])['severity'],
         ),
-        'manual_attention',
+        InformationEvidenceGateSeverities.blocking,
       );
     });
+
+    test(
+      'accepts provided evidence gate for gateway failure and unverified facts',
+      () {
+        final risk = service.assess(
+          result: const <String, Object?>{
+            'ok': true,
+            'executed_tools': <Object?>[],
+            'response': <String, Object?>{},
+          },
+          execution: const <String, Object?>{
+            'information_signal': <String, Object?>{
+              'gateway_failure_count': 1,
+              'external_fact_unverified_count': 2,
+              'recommended_disposition': 'repair',
+              'requires_repair': true,
+              'changed_paths': <Object?>['research/资料研究摘要.md'],
+            },
+          },
+        );
+
+        final informationRisk = ValueReaders.mapValue(risk['information']);
+        expect(ValueReaders.stringValue(informationRisk['category']), 'repair');
+        expect(
+          ValueReaders.intValue(informationRisk['gateway_failure_count']),
+          1,
+        );
+        expect(
+          ValueReaders.intValue(
+            informationRisk['external_fact_unverified_count'],
+          ),
+          2,
+        );
+        expect(
+          ValueReaders.stringValue(informationRisk['summary']),
+          contains('研究网关失败 1 项'),
+        );
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(risk['overall'])['category'],
+          ),
+          'repair',
+        );
+      },
+    );
+
+    test(
+      'distinguishes disabled, waiting review evidence, strengthen, and light repair expression constraint signals',
+      () {
+        JsonMap resultForConstraints(JsonMap constraints) {
+          return <String, Object?>{
+            'ok': true,
+            'executed_tools': const <Object?>[],
+            'response': const <String, Object?>{},
+            'writing_execution_result': <String, Object?>{
+              'execution_id': 'writing_exec_signal_test',
+              'workflow_kind': 'long_task',
+              'overall_status': 'success',
+              'summary': 'signal test',
+              'delivery': const <String, Object?>{},
+              'constraints': constraints,
+              'information': const <String, Object?>{},
+              'collaboration': const <String, Object?>{},
+              'recovery': const <String, Object?>{},
+              'schema_version': 1,
+            },
+          };
+        }
+
+        final disabledRisk = service.assess(
+          result: resultForConstraints(const <String, Object?>{
+            'present': true,
+            'expression_constraint_policy_mode': 'disabled',
+            'expression_constraint_injection_strength': 'none',
+            'expression_constraint_review_requirement': 'none',
+            'expression_constraint_violation_disposition': 'remind',
+            'expression_constraint_applied': false,
+            'expression_constraint_disabled': true,
+            'expression_constraint_review_required': false,
+            'expression_constraint_review_provided': false,
+          }),
+        );
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(
+              disabledRisk['expression_constraints'],
+            )['category'],
+          ),
+          'policy_disabled',
+        );
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(disabledRisk['overall'])['category'],
+          ),
+          'accept',
+        );
+
+        final waitingEvidenceRisk = service.assess(
+          result: resultForConstraints(const <String, Object?>{
+            'present': true,
+            'expression_constraint_policy_mode': 'adaptive',
+            'expression_constraint_injection_strength': 'sections',
+            'expression_constraint_review_requirement': 'when_applied',
+            'expression_constraint_violation_disposition': 'adjust_next',
+            'expression_constraint_applied': true,
+            'expression_constraint_review_required': true,
+            'expression_constraint_review_provided': false,
+            'expression_constraint_gate': <String, Object?>{
+              'present': true,
+              'recommended_disposition': 'repair',
+              'reason': 'expression_constraint_review_missing',
+              'repair_required': true,
+            },
+          }),
+        );
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(
+              waitingEvidenceRisk['expression_constraints'],
+            )['category'],
+          ),
+          'waiting_review_evidence',
+        );
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(waitingEvidenceRisk['overall'])['category'],
+          ),
+          'repair',
+        );
+
+        final strengthenRisk = service.assess(
+          result: resultForConstraints(const <String, Object?>{
+            'present': true,
+            'expression_constraint_policy_mode': 'adaptive',
+            'expression_constraint_injection_strength': 'sections',
+            'expression_constraint_review_requirement': 'when_applied',
+            'expression_constraint_violation_disposition': 'adjust_next',
+            'expression_constraint_applied': true,
+            'expression_constraint_review_required': true,
+            'expression_constraint_review_provided': true,
+            'expression_constraint_runtime_escalated': true,
+            'expression_constraint_gate': <String, Object?>{
+              'present': true,
+              'recommended_disposition': 'adjust_next',
+              'adjust_next_chapter': true,
+              'risk_signals': <Object?>['视角泄漏'],
+            },
+          }),
+        );
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(
+              strengthenRisk['expression_constraints'],
+            )['category'],
+          ),
+          'suggest_strengthen',
+        );
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(strengthenRisk['overall'])['category'],
+          ),
+          'accept',
+        );
+
+        final lightRepairRisk = service.assess(
+          result: resultForConstraints(const <String, Object?>{
+            'present': true,
+            'expression_constraint_policy_mode': 'adaptive',
+            'expression_constraint_injection_strength': 'sections',
+            'expression_constraint_review_requirement': 'when_applied',
+            'expression_constraint_violation_disposition': 'adjust_next',
+            'expression_constraint_applied': true,
+            'expression_constraint_review_required': true,
+            'expression_constraint_review_provided': true,
+            'expression_constraint_gate': <String, Object?>{
+              'present': true,
+              'recommended_disposition': 'remind',
+              'risk_signals': <Object?>['说话风格漂移'],
+            },
+          }),
+        );
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(
+              lightRepairRisk['expression_constraints'],
+            )['category'],
+          ),
+          'suggest_strengthen',
+        );
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(lightRepairRisk['overall'])['category'],
+          ),
+          'accept',
+        );
+      },
+    );
   });
 }

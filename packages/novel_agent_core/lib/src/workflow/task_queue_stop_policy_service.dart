@@ -54,6 +54,13 @@ class TaskQueueStopPolicyService {
     if (ValueReaders.boolValue(writingExecutionSignal['present']) &&
         ValueReaders.stringValue(writingExecutionSignal['category']) !=
             'success') {
+      if (_hasScheduledRepairTask(result)) {
+        return const <String, Object?>{
+          'stop': false,
+          'reason': 'scheduled_repair_task',
+          'note': '当前问题已物化成队列内修订任务，继续调度下一步修订。',
+        };
+      }
       return <String, Object?>{
         'stop': true,
         'reason': ValueReaders.stringValue(
@@ -84,6 +91,7 @@ class TaskQueueStopPolicyService {
     }
     final outputPaths = ValueReaders.stringList(result['output_paths']);
     if (outputPaths.isEmpty &&
+        !_shouldIgnoreNoOutputForContinuousAgentTask(taskAfterStep) &&
         deliveryState.isEmpty &&
         ValueReaders.boolValue(cleanOptions['stop_on_no_output'], true)) {
       return <String, Object?>{
@@ -93,6 +101,37 @@ class TaskQueueStopPolicyService {
       };
     }
     return const <String, Object?>{'stop': false, 'reason': '', 'note': ''};
+  }
+
+  bool _hasScheduledRepairTask(JsonMap result) {
+    final scheduledRepair = ValueReaders.mapValue(result['scheduled_repair']);
+    if (scheduledRepair.isEmpty ||
+        !ValueReaders.boolValue(scheduledRepair['ok'])) {
+      return false;
+    }
+    if (!ValueReaders.boolValue(scheduledRepair['created']) &&
+        !ValueReaders.boolValue(scheduledRepair['duplicated'])) {
+      return false;
+    }
+    return ValueReaders.mapValue(scheduledRepair['repair_task']).isNotEmpty;
+  }
+
+  bool _shouldIgnoreNoOutputForContinuousAgentTask(JsonMap taskAfterStep) {
+    if (ValueReaders.stringValue(taskAfterStep['task_type']).trim() !=
+        'agent_task') {
+      return false;
+    }
+    if (ValueReaders.stringValue(taskAfterStep['mode']).trim() !=
+            TaskRuntimeConstants.modeSeedToFullNovel &&
+        ValueReaders.stringValue(taskAfterStep['mode']).trim() !=
+            TaskRuntimeConstants.modeHumanOutlineAiDraft) {
+      return false;
+    }
+    final metadata = ValueReaders.mapValue(taskAfterStep['metadata']);
+    return ValueReaders.stringValue(metadata['runtime_baseline_id']).trim() ==
+            'continuous_autonomous' &&
+        ValueReaders.stringValue(metadata['generated_by']).trim() ==
+            'LongTaskRevision';
   }
 
   String statusForReason(String reason) {
@@ -138,9 +177,8 @@ class TaskQueueStopPolicyService {
     final checkpointReview = ValueReaders.mapValue(
       ValueReaders.mapValue(result['checkpoint_review'])['review'],
     );
-    final informationSignal = ValueReaders.mapValue(
-      checkpointReview['information_signal'],
-    ).isNotEmpty
+    final informationSignal =
+        ValueReaders.mapValue(checkpointReview['information_signal']).isNotEmpty
         ? ValueReaders.mapValue(checkpointReview['information_signal'])
         : ValueReaders.mapValue(
             ValueReaders.mapValue(

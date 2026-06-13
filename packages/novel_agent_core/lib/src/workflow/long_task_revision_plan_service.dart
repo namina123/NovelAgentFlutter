@@ -32,9 +32,9 @@ class LongTaskRevisionPlanService {
     if (cleanCommand == 'confirm_checkpoint') {
       final taskId = ValueReaders.stringValue(arguments['task_id']).trim();
       final target = taskId.isEmpty
-          ? _firstWaitingCheckpoint(tasks)
+          ? _firstReadyCheckpoint(tasks)
           : _taskAt(tasks, _indexById(tasks, taskId));
-      if (target.isEmpty) {
+      if (target.isEmpty || !_isReadyCheckpoint(target, tasks)) {
         return _invalidResult(cleanCommand, '没有找到可确认的检查点任务。', now);
       }
       updates.add(
@@ -176,16 +176,49 @@ class LongTaskRevisionPlanService {
     return -1;
   }
 
-  JsonMap _firstWaitingCheckpoint(List<Object?> tasks) {
-    // 中文注释: confirm_checkpoint 默认确认第一条可见检查点，和旧项目行为保持一致。
+  JsonMap _firstReadyCheckpoint(List<Object?> tasks) {
+    // 中文注释: confirm_checkpoint 只能命中依赖已满足的检查点，避免前序章节仍在运行时被提前确认。
     for (final rawTask in tasks) {
       final task = ValueReaders.mapValue(rawTask);
-      if (ValueReaders.stringValue(task['status']) ==
-              TaskRuntimeConstants.statusWaitingUser &&
-          ValueReaders.stringValue(task['task_type']) == 'checkpoint') {
+      if (_isReadyCheckpoint(task, tasks)) {
         return task;
       }
     }
     return <String, Object?>{};
+  }
+
+  bool _isReadyCheckpoint(JsonMap task, List<Object?> tasks) {
+    if (ValueReaders.stringValue(task['task_type']) != 'checkpoint') {
+      return false;
+    }
+    final status = ValueReaders.stringValue(task['status']);
+    if (!<String>{
+      TaskRuntimeConstants.statusQueued,
+      TaskRuntimeConstants.statusWaitingUser,
+    }.contains(status)) {
+      return false;
+    }
+    final succeeded = _succeededMap(tasks);
+    for (final dependency in ValueReaders.stringList(task['depends_on'])) {
+      if (dependency.isNotEmpty && !(succeeded[dependency] ?? false)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  Map<String, bool> _succeededMap(List<Object?> tasks) {
+    final result = <String, bool>{};
+    for (final rawTask in tasks) {
+      final task = ValueReaders.mapValue(rawTask);
+      if (ValueReaders.stringValue(task['status']) ==
+          TaskRuntimeConstants.statusSucceeded) {
+        final taskId = ValueReaders.stringValue(task['id']).trim();
+        if (taskId.isNotEmpty) {
+          result[taskId] = true;
+        }
+      }
+    }
+    return result;
   }
 }

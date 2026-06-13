@@ -16,39 +16,45 @@ class SectionHeading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 中文注释: 通用分区标题组件统一管理标题、副标题和尾部动作的关系，减少页面头部重复代码。
+    // 中文注释: 通用分区标题统一成更接近 IDE 的两段式标题语法，减少传统页面标题感。
     final surface = context.novelThemeSurfaces.panel;
-    return Row(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  color: surface.foregroundColor,
-                ),
-              ),
-              if (subtitle != null) ...[
-                const SizedBox(height: 2),
-                Text(
-                  subtitle!,
-                  style: TextStyle(
-                    fontSize: 11,
-                    height: 1.4,
-                    fontWeight: FontWeight.w500,
-                    color: surface.mutedForegroundColor,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.05,
+                      color: surface.foregroundColor,
+                    ),
                   ),
-                ),
-              ],
-            ],
-          ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle!,
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        height: 1.45,
+                        fontWeight: FontWeight.w500,
+                        color: surface.mutedForegroundColor,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (trailing != null) ...[const SizedBox(width: 12), trailing!],
+          ],
         ),
-        if (trailing != null) ...[const SizedBox(width: 12), trailing!],
       ],
     );
   }

@@ -25,6 +25,7 @@ class _ExpressionConstraintBindingEditorPanelState
   late final TextEditingController _weightController;
   late bool _enabled;
   late bool _defaultForProject;
+  late String _selectedPolicyMode;
   late Set<String> _selectedAgentIds;
   late Set<String> _selectedModeIds;
   late Set<String> _selectedStageIds;
@@ -41,11 +42,9 @@ class _ExpressionConstraintBindingEditorPanelState
   void didUpdateWidget(
     covariant ExpressionConstraintBindingEditorPanel oldWidget,
   ) {
-    // 中文注释: 当用户切换到另一个 preset 时，编辑器需要整体替换成本轮选中的绑定草稿。
+    // 中文注释: 当用户切换规则方案或外层刷新保存结果时，编辑器需要整体替换成本轮草稿。
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.viewData.profileId != widget.viewData.profileId ||
-        oldWidget.viewData.sourcePath != widget.viewData.sourcePath ||
-        oldWidget.viewData.hasBinding != widget.viewData.hasBinding) {
+    if (_viewSignature(oldWidget.viewData) != _viewSignature(widget.viewData)) {
       _apply(widget.viewData);
     }
   }
@@ -59,7 +58,7 @@ class _ExpressionConstraintBindingEditorPanelState
 
   @override
   Widget build(BuildContext context) {
-    // 中文注释: 这个面板只承担“查看 preset + 编辑项目级 binding”，不承担 preset 本体编辑职责。
+    // 中文注释: 这个面板只承担“查看规则方案 + 编辑项目级 binding”，不承担方案本体编辑职责。
     if (widget.viewData.profileId.trim().isEmpty) {
       final entryAgentContextId = widget.viewData.entryAgentContextId.trim();
       return Center(
@@ -68,7 +67,7 @@ class _ExpressionConstraintBindingEditorPanelState
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('当前没有可编辑的表达限制 preset。'),
+              const Text('当前没有可编辑的表达限制方案。'),
               if (entryAgentContextId.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text(
@@ -81,7 +80,6 @@ class _ExpressionConstraintBindingEditorPanelState
         ),
       );
     }
-    final isBuiltin = widget.viewData.isBuiltin;
     final entryAgentContextId = widget.viewData.entryAgentContextId.trim();
     return ListView(
       padding: const EdgeInsets.all(12),
@@ -93,8 +91,8 @@ class _ExpressionConstraintBindingEditorPanelState
         const SizedBox(height: 6),
         Text(
           entryAgentContextId.isEmpty
-              ? '表达限制是项目级写作约束系统，可为整个项目或特定智能体挂载写作约束预设。'
-              : '表达限制是项目级写作约束系统；当前正从智能体 $entryAgentContextId 进入，可继续为它定向绑定写作约束预设。',
+              ? '表达限制是项目级写作约束系统，可为整个项目或特定智能体挂载写作规则方案。'
+              : '表达限制是项目级写作约束系统；当前正从智能体 $entryAgentContextId 进入，可继续为它定向绑定写作规则方案。',
           style: Theme.of(context).textTheme.bodyMedium,
         ),
         const SizedBox(height: 16),
@@ -108,101 +106,187 @@ class _ExpressionConstraintBindingEditorPanelState
           runSpacing: 8,
           children: [
             _chip(widget.viewData.kindLabel),
-            _chip(isBuiltin ? '内置预设' : '项目预设'),
-            _chip(widget.viewData.hasBinding ? '已配置绑定' : '尚未绑定'),
+            _chip(widget.viewData.originLabel),
+            _chip(_bindingStateLabel),
           ],
         ),
-        const SizedBox(height: 10),
-        Text(
-          '当前预设 ID：${widget.viewData.profileId}',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        if (isBuiltin) ...[
-          const SizedBox(height: 6),
-          Text(
-            '这是表达限制系统中的一个内置预设，不是系统总名；后续可以继续叠加其他预设。',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
         if (widget.viewData.summary.trim().isNotEmpty) ...[
           const SizedBox(height: 12),
           Text(widget.viewData.summary),
         ],
-        if (widget.viewData.sourcePath.trim().isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Text(
-            '来源：${widget.viewData.sourcePath}',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
-        if (widget.viewData.recommendedScopeText.trim().isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Text(
-            '推荐作用域：${widget.viewData.recommendedScopeText}',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
-        if (widget.viewData.entryAgentContextId.trim().isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Text(
-            '当前入口智能体：${widget.viewData.entryAgentContextId}',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
         const SizedBox(height: 16),
-        const Text('项目绑定', style: TextStyle(fontWeight: FontWeight.w700)),
-        const SizedBox(height: 8),
-        Material(
-          color: Colors.transparent,
-          child: SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('启用这个表达限制预设'),
-            value: _enabled,
-            onChanged: (value) => setState(() => _enabled = value),
-          ),
-        ),
-        Material(
-          color: Colors.transparent,
-          child: SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('设为项目默认绑定'),
-            subtitle: const Text('未指定 agent / mode / stage 时按默认绑定参与解析。'),
-            value: _defaultForProject,
-            onChanged: (value) => setState(() => _defaultForProject = value),
-          ),
-        ),
-        _agentSelectorSection(context),
-        _modeSelectorSection(context),
-        _stageSelectorSection(context),
-        _field(_weightController, '权重'),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            FilledButton(onPressed: _submit, child: const Text('保存绑定')),
-            const SizedBox(width: 8),
-            OutlinedButton(
-              onPressed: widget.viewData.hasBinding
-                  ? () => widget.onRemoveRequested(widget.viewData.profileId)
-                  : null,
-              child: const Text('移除绑定'),
-            ),
-          ],
-        ),
+        _overviewCard(context),
+        const SizedBox(height: 16),
+        _policySelectorSection(context),
+        const SizedBox(height: 16),
+        _projectBindingSection(context),
         const SizedBox(height: 20),
         _section(
           context,
-          title: '规则',
+          title: '写作规则',
           items: widget.viewData.rules,
-          emptyText: '当前 preset 没有提供额外规则。',
+          emptyText: '当前规则方案没有提供额外写作规则。',
         ),
         const SizedBox(height: 16),
         _section(
           context,
           title: '风险信号',
           items: widget.viewData.riskSignals,
-          emptyText: '当前 preset 没有列出风险信号。',
+          emptyText: '当前规则方案没有列出风险信号。',
         ),
+        const SizedBox(height: 16),
+        _advancedSection(context),
       ],
+    );
+  }
+
+  Widget _overviewCard(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _summaryRow(
+              context,
+              label: '使用策略',
+              value: _policyOptionLabel(_selectedPolicyMode),
+              detail: widget.viewData.usageStrategySummary,
+            ),
+            const Divider(height: 20),
+            _summaryRow(
+              context,
+              label: '强度',
+              value: widget.viewData.strengthSummary,
+            ),
+            const Divider(height: 20),
+            _summaryRow(
+              context,
+              label: '适用范围',
+              value: widget.viewData.scopeSummary,
+            ),
+            const Divider(height: 20),
+            _summaryRow(
+              context,
+              label: '写作规则',
+              value: widget.viewData.rules.isEmpty
+                  ? '当前没有额外规则。'
+                  : '共 ${widget.viewData.rules.length} 条，见下方“写作规则”。',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _summaryRow(
+    BuildContext context, {
+    required String label,
+    required String value,
+    String detail = '',
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: Theme.of(context).textTheme.labelLarge),
+        const SizedBox(height: 4),
+        Text(value),
+        if (detail.trim().isNotEmpty && detail.trim() != value.trim()) ...[
+          const SizedBox(height: 4),
+          Text(detail, style: Theme.of(context).textTheme.bodySmall),
+        ],
+      ],
+    );
+  }
+
+  Widget _policySelectorSection(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('使用策略', style: TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 6),
+            Text(
+              '按当前项目选择表达规则的使用强度；关闭只停用表达规则，不会自动删掉这条项目绑定。',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
+            RadioGroup<String>(
+              groupValue: _selectedPolicyMode,
+              onChanged: (value) {
+                if (value == null) {
+                  return;
+                }
+                setState(() => _selectedPolicyMode = value);
+              },
+              child: Column(
+                children: [
+                  for (final option in widget.viewData.availablePolicyOptions)
+                    RadioListTile<String>(
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      value: option.id,
+                      title: Text(option.label),
+                      subtitle: Text(option.description),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _projectBindingSection(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('项目设置', style: TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('纳入当前项目'),
+              subtitle: const Text('关闭后会保留这套规则方案，但当前项目暂不参与解析。'),
+              value: _enabled,
+              onChanged: (value) => setState(() => _enabled = value),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('设为项目默认'),
+              subtitle: const Text('未指定智能体、模式或阶段时，按默认方案参与解析。'),
+              value: _defaultForProject,
+              onChanged: (value) => setState(() => _defaultForProject = value),
+            ),
+            _agentSelectorSection(context),
+            _modeSelectorSection(context),
+            _stageSelectorSection(context),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton(onPressed: _submit, child: const Text('保存设置')),
+                OutlinedButton(
+                  onPressed: widget.viewData.hasBinding
+                      ? () =>
+                            widget.onRemoveRequested(widget.viewData.profileId)
+                      : null,
+                  child: const Text('移除绑定'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -216,7 +300,7 @@ class _ExpressionConstraintBindingEditorPanelState
     String label, {
     int maxLines = 1,
   }) {
-    // 中文注释: 当前最小入口继续使用文本字段承载 scope ids，后续升级选择器时只需替换这里。
+    // 中文注释: 高级区继续保留轻量输入字段，避免把权重一类次级设置塞进主面板。
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: TextField(
@@ -233,7 +317,7 @@ class _ExpressionConstraintBindingEditorPanelState
       return Padding(
         padding: const EdgeInsets.only(bottom: 10),
         child: Text(
-          '当前项目里没有可选智能体；暂不支持手填 Agent ID。',
+          '当前项目里还没有可选智能体。',
           style: Theme.of(context).textTheme.bodySmall,
         ),
       );
@@ -246,31 +330,27 @@ class _ExpressionConstraintBindingEditorPanelState
           Text('定向智能体', style: Theme.of(context).textTheme.bodyMedium),
           const SizedBox(height: 6),
           Text(
-            '不再手填内部 Agent ID，直接从当前项目智能体中选择。',
+            '直接从当前项目智能体中选择，不再手填内部标识。',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 8),
-          ...options.map(
-            (option) => Material(
-              color: Colors.transparent,
-              child: CheckboxListTile(
-                value: _selectedAgentIds.contains(option.id),
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                title: Text(option.label),
-                subtitle: option.note.trim().isEmpty ? null : Text(option.note),
-                onChanged: (selected) {
-                  setState(() {
-                    if (selected == true) {
-                      _selectedAgentIds.add(option.id);
-                    } else {
-                      _selectedAgentIds.remove(option.id);
-                    }
-                  });
-                },
-              ),
+          for (final option in options)
+            CheckboxListTile(
+              value: _selectedAgentIds.contains(option.id),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: Text(option.label),
+              subtitle: option.note.trim().isEmpty ? null : Text(option.note),
+              onChanged: (selected) {
+                setState(() {
+                  if (selected == true) {
+                    _selectedAgentIds.add(option.id);
+                  } else {
+                    _selectedAgentIds.remove(option.id);
+                  }
+                });
+              },
             ),
-          ),
         ],
       ),
     );
@@ -294,35 +374,28 @@ class _ExpressionConstraintBindingEditorPanelState
         children: [
           Text('定向模式', style: Theme.of(context).textTheme.bodyMedium),
           const SizedBox(height: 6),
-          Text(
-            '直接选择已知写作模式，不再手填内部 Mode ID。',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
+          Text('直接从已知写作模式中选择。', style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 8),
-          ...options.map(
-            (option) => Material(
-              color: Colors.transparent,
-              child: CheckboxListTile(
-                value: _selectedModeIds.contains(option.id),
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                title: Text(option.label),
-                subtitle: option.note.trim().isEmpty ? null : Text(option.note),
-                onChanged: (selected) {
-                  setState(() {
-                    if (selected == true) {
-                      _selectedModeIds.add(option.id);
-                    } else {
-                      _selectedModeIds.remove(option.id);
-                      _selectedStageIds.removeWhere(
-                        (stageId) => !_visibleStageIds.contains(stageId),
-                      );
-                    }
-                  });
-                },
-              ),
+          for (final option in options)
+            CheckboxListTile(
+              value: _selectedModeIds.contains(option.id),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: Text(option.label),
+              subtitle: option.note.trim().isEmpty ? null : Text(option.note),
+              onChanged: (selected) {
+                setState(() {
+                  if (selected == true) {
+                    _selectedModeIds.add(option.id);
+                  } else {
+                    _selectedModeIds.remove(option.id);
+                    _selectedStageIds.removeWhere(
+                      (stageId) => !_visibleStageIds.contains(stageId),
+                    );
+                  }
+                });
+              },
             ),
-          ),
         ],
       ),
     );
@@ -333,10 +406,7 @@ class _ExpressionConstraintBindingEditorPanelState
     if (widget.viewData.availableStageOptions.isEmpty) {
       return Padding(
         padding: const EdgeInsets.only(bottom: 10),
-        child: Text(
-          '当前没有可选阶段。',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
+        child: Text('当前没有可选阶段。', style: Theme.of(context).textTheme.bodySmall),
       );
     }
     return Padding(
@@ -349,31 +419,27 @@ class _ExpressionConstraintBindingEditorPanelState
           Text(
             _selectedModeIds.isEmpty
                 ? '先选择模式可缩小阶段范围；当前先展示全部已知阶段。'
-                : '阶段会跟随已选模式过滤，不再手填内部 Stage ID。',
+                : '阶段会跟随已选模式过滤。',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 8),
-          ...options.map(
-            (option) => Material(
-              color: Colors.transparent,
-              child: CheckboxListTile(
-                value: _selectedStageIds.contains(option.id),
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                title: Text(option.label),
-                subtitle: option.note.trim().isEmpty ? null : Text(option.note),
-                onChanged: (selected) {
-                  setState(() {
-                    if (selected == true) {
-                      _selectedStageIds.add(option.id);
-                    } else {
-                      _selectedStageIds.remove(option.id);
-                    }
-                  });
-                },
-              ),
+          for (final option in options)
+            CheckboxListTile(
+              value: _selectedStageIds.contains(option.id),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: Text(option.label),
+              subtitle: option.note.trim().isEmpty ? null : Text(option.note),
+              onChanged: (selected) {
+                setState(() {
+                  if (selected == true) {
+                    _selectedStageIds.add(option.id);
+                  } else {
+                    _selectedStageIds.remove(option.id);
+                  }
+                });
+              },
             ),
-          ),
         ],
       ),
     );
@@ -385,7 +451,7 @@ class _ExpressionConstraintBindingEditorPanelState
     required List<String> items,
     required String emptyText,
   }) {
-    // 中文注释: preset 规则与风险信号目前只读展示，统一用同一段渲染逻辑保持面板轻量。
+    // 中文注释: 规则与风险信号目前只读展示，统一用同一段渲染逻辑保持面板轻量。
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -394,12 +460,49 @@ class _ExpressionConstraintBindingEditorPanelState
         if (items.isEmpty)
           Text(emptyText, style: Theme.of(context).textTheme.bodySmall)
         else
-          ...items.map(
-            (item) => Padding(
+          for (final item in items)
+            Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: Text('- $item'),
             ),
+      ],
+    );
+  }
+
+  Widget _advancedSection(BuildContext context) {
+    return ExpansionTile(
+      tilePadding: EdgeInsets.zero,
+      childrenPadding: const EdgeInsets.only(bottom: 8),
+      title: const Text('高级与诊断'),
+      subtitle: const Text('这里保留内部标识、注入方式和次级设置。'),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _field(_weightController, '优先级权重'),
+              for (final field in widget.viewData.diagnosticFields)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        field.label,
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                      const SizedBox(height: 4),
+                      SelectableText(
+                        field.value.trim().isEmpty ? '未设置' : field.value,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+            ],
           ),
+        ),
       ],
     );
   }
@@ -408,6 +511,7 @@ class _ExpressionConstraintBindingEditorPanelState
     // 中文注释: 选中项变化时统一刷新本地表单草稿，避免每个字段各自判断同步条件。
     _enabled = viewData.enabled;
     _defaultForProject = viewData.defaultForProject;
+    _selectedPolicyMode = viewData.selectedPolicyMode;
     _selectedAgentIds = Set<String>.from(viewData.selectedAgentIds);
     _selectedModeIds = Set<String>.from(viewData.selectedModeIds);
     _selectedStageIds = Set<String>.from(viewData.selectedStageIds);
@@ -419,6 +523,7 @@ class _ExpressionConstraintBindingEditorPanelState
     widget.onSaveRequested(
       ExpressionConstraintBindingEditorRequestViewData(
         profileId: widget.viewData.profileId,
+        selectedPolicyMode: _selectedPolicyMode,
         enabled: _enabled,
         defaultForProject: _defaultForProject,
         selectedAgentIds: _selectedAgentIds.toList(growable: false),
@@ -436,12 +541,44 @@ class _ExpressionConstraintBindingEditorPanelState
     if (_selectedModeIds.isEmpty) {
       return widget.viewData.availableStageOptions;
     }
-    return widget.viewData.availableStageOptions.where((option) {
-      return _selectedModeIds.contains(option.groupId);
-    }).toList(growable: false);
+    return widget.viewData.availableStageOptions
+        .where((option) {
+          return _selectedModeIds.contains(option.groupId);
+        })
+        .toList(growable: false);
   }
 
   Set<String> get _visibleStageIds {
     return _visibleStageOptions.map((item) => item.id).toSet();
+  }
+
+  String get _bindingStateLabel {
+    if (!_enabled) {
+      return '当前停用';
+    }
+    return widget.viewData.hasBinding ? '已纳入项目' : '尚未纳入项目';
+  }
+
+  String _policyOptionLabel(String policyMode) {
+    for (final option in widget.viewData.availablePolicyOptions) {
+      if (option.id == policyMode) {
+        return option.label;
+      }
+    }
+    return '智能使用';
+  }
+
+  String _viewSignature(ExpressionConstraintBindingEditorViewData viewData) {
+    return <String>[
+      viewData.profileId,
+      viewData.bindingId,
+      viewData.selectedPolicyMode,
+      '${viewData.enabled}',
+      '${viewData.defaultForProject}',
+      viewData.weightText,
+      viewData.selectedAgentIds.join('|'),
+      viewData.selectedModeIds.join('|'),
+      viewData.selectedStageIds.join('|'),
+    ].join('::');
   }
 }

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
+import 'package:novel_agent_core/novel_agent_core.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -77,5 +78,234 @@ void main() {
 
       expect(settings.defaultProjectPath, fixedProjectRoot);
     });
+
+    test(
+      'desktop mode stores sibling project roots as relative paths instead of absolute paths',
+      () async {
+        final sandboxRoot = await Directory.systemTemp.createTemp(
+          'novel_agent_settings_relative_save_',
+        );
+        addTearDown(() async {
+          if (await sandboxRoot.exists()) {
+            await sandboxRoot.delete(recursive: true);
+          }
+        });
+        final settingsRoot = Directory(
+          '${sandboxRoot.path}${Platform.pathSeparator}settings',
+        )..createSync(recursive: true);
+        final projectRoot = Directory(
+          '${sandboxRoot.path}${Platform.pathSeparator}projects${Platform.pathSeparator}demo_project',
+        ).absolute.path;
+        final repository = LocalSettingsRepository(
+          settingsSearchRoots: <String>[settingsRoot.path],
+          defaultProjectRootPath:
+              '${sandboxRoot.path}${Platform.pathSeparator}projects',
+        );
+
+        await repository.save(
+          const AppSettings(
+            defaultProviderId: '',
+            defaultAgentId: 'default_generalist',
+            defaultModelId: '',
+            defaultProjectPath: '',
+            autoSaveDrafts: true,
+            providers: <ProviderEndpointSettings>[],
+          ).copyWith(defaultProjectPath: projectRoot),
+        );
+
+        final settingsFile = File(
+          '${settingsRoot.path}${Platform.pathSeparator}novel_agent_settings.json',
+        );
+        final raw = await settingsFile.readAsString();
+        final reloaded = await repository.load();
+
+        expect(raw, contains('"default_project_path": "../projects/demo_project"'));
+        expect(reloaded.defaultProjectPath, projectRoot);
+      },
+    );
+
+    test(
+      'environment override supplies provider api key without persisting it in settings file',
+      () async {
+        final sandboxRoot = await Directory.systemTemp.createTemp(
+          'novel_agent_settings_env_override_',
+        );
+        addTearDown(() async {
+          if (await sandboxRoot.exists()) {
+            await sandboxRoot.delete(recursive: true);
+          }
+        });
+        final settingsRoot = Directory(
+          '${sandboxRoot.path}${Platform.pathSeparator}settings',
+        )..createSync(recursive: true);
+        final repository = LocalSettingsRepository(
+          settingsSearchRoots: <String>[settingsRoot.path],
+          defaultProjectRootPath:
+              '${sandboxRoot.path}${Platform.pathSeparator}projects',
+          environment: const <String, String>{
+            'NOVEL_AGENT_PROVIDER_ID': 'hfvv-wave1-provider',
+            'NOVEL_AGENT_PROVIDER_API_KEY': 'env-secret-key',
+            'NOVEL_AGENT_PROVIDER_BASE_URL': 'https://example.invalid/v1',
+            'NOVEL_AGENT_MODEL_ID': 'env-model',
+          },
+        );
+
+        await repository.save(
+          const AppSettings(
+            defaultProviderId: 'hfvv-wave1-provider',
+            defaultAgentId: 'default_generalist',
+            defaultModelId: 'env-model',
+            defaultProjectPath: '',
+            autoSaveDrafts: true,
+            providers: <ProviderEndpointSettings>[
+              ProviderEndpointSettings(
+                id: 'hfvv-wave1-provider',
+                title: 'HFVV',
+                protocol: 'openai_compatible',
+                baseUrl: 'https://stored.invalid/v1',
+                apiKey: '',
+                modelId: 'stored-model',
+                description: '',
+                isDefault: true,
+              ),
+            ],
+          ),
+        );
+
+        final settingsFile = File(
+          '${settingsRoot.path}${Platform.pathSeparator}novel_agent_settings.json',
+        );
+        final raw = await settingsFile.readAsString();
+        final loaded = await repository.load();
+
+        expect(raw, contains('"api_key": ""'));
+        expect(raw, contains('"default_project_path": ""'));
+        expect(loaded.providers, hasLength(1));
+        expect(loaded.providers.single.apiKey, 'env-secret-key');
+        expect(loaded.providers.single.baseUrl, 'https://example.invalid/v1');
+        expect(loaded.providers.single.modelId, 'env-model');
+      },
+    );
+
+    test(
+      're-saving loaded settings does not persist environment override api key',
+      () async {
+        final sandboxRoot = await Directory.systemTemp.createTemp(
+          'novel_agent_settings_env_resave_',
+        );
+        addTearDown(() async {
+          if (await sandboxRoot.exists()) {
+            await sandboxRoot.delete(recursive: true);
+          }
+        });
+        final settingsRoot = Directory(
+          '${sandboxRoot.path}${Platform.pathSeparator}settings',
+        )..createSync(recursive: true);
+        final repository = LocalSettingsRepository(
+          settingsSearchRoots: <String>[settingsRoot.path],
+          defaultProjectRootPath:
+              '${sandboxRoot.path}${Platform.pathSeparator}projects',
+          environment: const <String, String>{
+            'NOVEL_AGENT_PROVIDER_ID': 'hfvv-wave1-provider',
+            'NOVEL_AGENT_PROVIDER_API_KEY': 'env-secret-key',
+            'NOVEL_AGENT_PROVIDER_BASE_URL': 'https://example.invalid/v1',
+            'NOVEL_AGENT_MODEL_ID': 'env-model',
+          },
+        );
+
+        await repository.save(
+          const AppSettings(
+            defaultProviderId: 'hfvv-wave1-provider',
+            defaultAgentId: 'default_generalist',
+            defaultModelId: 'env-model',
+            defaultProjectPath: '',
+            autoSaveDrafts: true,
+            providers: <ProviderEndpointSettings>[
+              ProviderEndpointSettings(
+                id: 'hfvv-wave1-provider',
+                title: 'HFVV',
+                protocol: 'openai_compatible',
+                baseUrl: 'https://stored.invalid/v1',
+                apiKey: '',
+                modelId: 'stored-model',
+                description: '',
+                isDefault: true,
+              ),
+            ],
+          ),
+        );
+
+        final loaded = await repository.load();
+        await repository.save(loaded);
+
+        final settingsFile = File(
+          '${settingsRoot.path}${Platform.pathSeparator}novel_agent_settings.json',
+        );
+        final raw = await settingsFile.readAsString();
+
+        expect(raw, contains('"api_key": ""'));
+        expect(raw, isNot(contains('env-secret-key')));
+      },
+    );
+
+    test(
+      'workbench snapshot stores relative project root and reloads absolute path',
+      () async {
+        final sandboxRoot = await Directory.systemTemp.createTemp(
+          'novel_agent_settings_workbench_snapshot_',
+        );
+        addTearDown(() async {
+          if (await sandboxRoot.exists()) {
+            await sandboxRoot.delete(recursive: true);
+          }
+        });
+        final settingsRoot = Directory(
+          '${sandboxRoot.path}${Platform.pathSeparator}settings',
+        )..createSync(recursive: true);
+        final projectRoot = Directory(
+          '${sandboxRoot.path}${Platform.pathSeparator}projects${Platform.pathSeparator}demo_project',
+        ).absolute.path;
+        final repository = LocalSettingsRepository(
+          settingsSearchRoots: <String>[settingsRoot.path],
+          defaultProjectRootPath:
+              '${sandboxRoot.path}${Platform.pathSeparator}projects',
+        );
+
+        await repository.save(
+          AppSettings(
+            defaultProviderId: '',
+            defaultAgentId: 'default_generalist',
+            defaultModelId: '',
+            defaultProjectPath: projectRoot,
+            autoSaveDrafts: true,
+            providers: const <ProviderEndpointSettings>[],
+            extraSettings: <String, Object?>{
+              'workbench_state': <String, Object?>{
+                'project_root_path': projectRoot,
+                'active_document_path': 'premise/project_brief.md',
+                'expanded_directories': const <String>['chapters', 'assets'],
+                'selected_conversation_agent_id': 'reviewer',
+              },
+            },
+          ),
+        );
+
+        final settingsFile = File(
+          '${settingsRoot.path}${Platform.pathSeparator}novel_agent_settings.json',
+        );
+        final raw = await settingsFile.readAsString();
+        final loaded = await repository.load();
+        final workbenchState = Map<String, Object?>.from(
+          loaded.extraSettings['workbench_state'] as Map,
+        );
+
+        expect(raw, contains('"project_root_path": "../projects/demo_project"'));
+        expect(workbenchState['project_root_path'], projectRoot);
+        expect(
+          workbenchState['active_document_path'],
+          'premise/project_brief.md',
+        );
+      },
+    );
   });
 }

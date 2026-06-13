@@ -52,6 +52,43 @@ void main() {
         }
       }
     });
+
+    test('listEntries skips internal bundle trees before recursing', () async {
+      final root = await Directory.systemTemp.createTemp(
+        'novel_agent_tree_order_internal_skip_test_',
+      );
+      try {
+        await Directory('${root.path}\\knowledge').create(recursive: true);
+        await File(
+          '${root.path}\\knowledge\\项目知识摘要.md',
+        ).writeAsString('summary');
+        await Directory(
+          '${root.path}\\.novel_agent\\reference_extraction\\bundles\\pkg_1\\payload',
+        ).create(recursive: true);
+        await File(
+          '${root.path}\\.novel_agent\\reference_extraction\\bundles\\pkg_1\\payload\\entries.json',
+        ).writeAsString('[]');
+
+        final workspacePort = LocalProjectWorkspacePort(
+          treeOrderService: ProjectTreeOrderService(),
+        );
+        final entries = await workspacePort.listEntries(root.path);
+        final relativePaths = entries
+            .map((entry) => ValueReaders.stringValue(entry['relative_path']))
+            .toList(growable: false);
+
+        expect(relativePaths, contains('knowledge'));
+        expect(relativePaths, contains('knowledge/项目知识摘要.md'));
+        expect(
+          relativePaths.any((path) => path.startsWith('.novel_agent/')),
+          isFalse,
+        );
+      } finally {
+        if (await root.exists()) {
+          await root.delete(recursive: true);
+        }
+      }
+    });
   });
 }
 

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../app/theme/app_chrome.dart';
+import '../../../../../shared/theme/novel_theme_context.dart';
 import '../../../../../shared/widgets/panel_surface.dart';
 import '../contracts/conversation_action_handler.dart';
 import '../models/conversation_opening_state_view_data.dart';
@@ -44,7 +46,9 @@ class _ConversationEmptyStatePanelState
 
   @override
   Widget build(BuildContext context) {
-    // 中文注释: 会话空态面板独立占满中区，避免空白状态下只剩几颗按钮和一大段无意义留白。
+    // 中文注释: 会话空态继续朝“启动面板”而不是“说明页”收口，减少无意义大留白。
+    final colors = context.novelThemeColors;
+    final surface = context.novelThemeSurfaces.panel;
     return PanelSurface(
       role: PanelSurfaceRole.panel,
       showBorder: false,
@@ -52,19 +56,37 @@ class _ConversationEmptyStatePanelState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Icon(Icons.auto_awesome_outlined, size: 16),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  widget.title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+            decoration: BoxDecoration(
+              color: surface.backgroundColor.withValues(alpha: 0.68),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: surface.borderColor.withValues(alpha: 0.68),
+                width: AppChrome.borderWidth,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.auto_awesome_outlined,
+                  size: 16,
+                  color: colors.accentColor,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    widget.title,
+                    style: TextStyle(
+                      color: colors.textColor,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           Expanded(
             child: Scrollbar(
@@ -87,7 +109,9 @@ class _ConversationEmptyStatePanelState
                     else
                       Text(
                         widget.description,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        style: TextStyle(
+                          color: colors.mutedTextColor,
+                          fontSize: 11.5,
                           height: 1.5,
                           fontWeight: FontWeight.w500,
                         ),

@@ -11,6 +11,7 @@ class ProjectAssetsSnapshot {
     required this.selectedTimelineId,
     required this.selectedRelationshipId,
     required this.selectedGraphReferenceKey,
+    required this.selectedReferenceExtractionStrategyId,
     required this.entryAgentContextId,
     required this.availableAgentOptions,
     required this.availableModeOptions,
@@ -26,6 +27,7 @@ class ProjectAssetsSnapshot {
   final String selectedTimelineId;
   final String selectedRelationshipId;
   final String selectedGraphReferenceKey;
+  final String selectedReferenceExtractionStrategyId;
   final String entryAgentContextId;
   final List<ExpressionConstraintSelectableOptionViewData>
   availableAgentOptions;
@@ -44,6 +46,7 @@ class ProjectAssetsSnapshot {
       selectedTimelineId: '',
       selectedRelationshipId: '',
       selectedGraphReferenceKey: '',
+      selectedReferenceExtractionStrategyId: '',
       entryAgentContextId: '',
       availableAgentOptions: <ExpressionConstraintSelectableOptionViewData>[],
       availableModeOptions: <ExpressionConstraintSelectableOptionViewData>[],
@@ -61,6 +64,7 @@ class ProjectAssetsSnapshot {
     String? selectedTimelineId,
     String? selectedRelationshipId,
     String? selectedGraphReferenceKey,
+    String? selectedReferenceExtractionStrategyId,
     String? entryAgentContextId,
     List<ExpressionConstraintSelectableOptionViewData>? availableAgentOptions,
     List<ExpressionConstraintSelectableOptionViewData>? availableModeOptions,
@@ -80,6 +84,9 @@ class ProjectAssetsSnapshot {
           selectedRelationshipId ?? this.selectedRelationshipId,
       selectedGraphReferenceKey:
           selectedGraphReferenceKey ?? this.selectedGraphReferenceKey,
+      selectedReferenceExtractionStrategyId:
+          selectedReferenceExtractionStrategyId ??
+          this.selectedReferenceExtractionStrategyId,
       entryAgentContextId: entryAgentContextId ?? this.entryAgentContextId,
       availableAgentOptions:
           availableAgentOptions ?? this.availableAgentOptions,

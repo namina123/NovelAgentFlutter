@@ -52,7 +52,68 @@ void main() {
       "suggestion": "统一誓约代价描述。"
     }
   ],
-  "suggestions": ["统一世界规则。"]
+  "suggestions": ["统一世界规则。"],
+  "review_contract": {
+    "review_id": "review_001",
+    "review_type": "continuity",
+    "reviewer": {
+      "reviewer_id": "reviewer-agent",
+      "reviewer_role": "critic"
+    },
+    "basis": {
+      "basis_type": "semantic_review",
+      "summary": "第01章",
+      "source_paths": ["chapters/ch01.md", "outline/总纲.md"],
+      "target_paths": ["chapters/ch01.md"]
+    },
+    "findings": [
+      {
+        "finding_id": "finding_001",
+        "severity": "blocking",
+        "summary": "设定前后矛盾",
+        "suggested_action": "统一誓约代价描述。",
+        "evidence_paths": ["chapters/ch01.md"]
+      }
+    ],
+    "risk_level": "critical",
+    "recommended_disposition": "repair",
+    "repair_brief": "统一誓约代价描述。",
+    "summary": "存在连续性问题。",
+    "evidence_paths": ["chapters/ch01.md"],
+    "created_at": "2026-06-09T10:00:00Z"
+  },
+  "review_summary": {
+    "review_id": "review_001",
+    "review_type": "continuity",
+    "reviewer_id": "reviewer-agent",
+    "reviewer_role": "critic",
+    "risk_level": "critical",
+    "recommended_disposition": "repair",
+    "finding_count": 1,
+    "blocking_finding_count": 1,
+    "summary": "存在连续性问题。",
+    "repair_brief": "统一誓约代价描述。",
+    "evidence_paths": ["chapters/ch01.md"]
+  },
+  "review_repair_handoff": {
+    "action": "create_blocking_repair",
+    "reason": "review_requests_blocking_repair",
+    "blocks_main_flow": true,
+    "requires_repair_task": true,
+    "note": "存在连续性问题。",
+    "repair_request": {
+      "request_id": "repair_request_review_001",
+      "source_review_id": "review_001",
+      "source_review_type": "continuity",
+      "source_disposition": "repair",
+      "repair_brief": "统一誓约代价描述。",
+      "finding_ids": ["finding_001"],
+      "target_paths": ["chapters/ch01.md"],
+      "context_paths": ["chapters/ch01.md", "outline/总纲.md"],
+      "evidence_paths": ["chapters/ch01.md"],
+      "blocks_main_flow": true
+    }
+  }
 }
 ''',
       );
@@ -103,6 +164,32 @@ void main() {
           ValueReaders.mapValue(first['task'])['source_paths'],
         ),
         contains('tracking/modes/seed_autopilot_novel/guidance.md'),
+      );
+      expect(
+        ValueReaders.stringValue(
+          ValueReaders.mapValue(
+            ValueReaders.mapValue(first['task'])['metadata'],
+          )['origin'],
+        ),
+        'review_repair_handoff',
+      );
+      expect(
+        ValueReaders.stringValue(
+          ValueReaders.mapValue(
+            ValueReaders.mapValue(first['task'])['metadata'],
+          )['review_id'],
+        ),
+        'review_001',
+      );
+      expect(
+        ValueReaders.stringValue(
+          ValueReaders.mapValue(
+            ValueReaders.mapValue(
+              ValueReaders.mapValue(first['task'])['metadata'],
+            )['review_repair_handoff'],
+          )['action'],
+        ),
+        RepairHandoffActions.createBlockingRepair,
       );
       expect(
         ValueReaders.stringValue(

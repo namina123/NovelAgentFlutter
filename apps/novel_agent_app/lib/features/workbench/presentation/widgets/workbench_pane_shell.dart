@@ -39,7 +39,14 @@ class WorkbenchPaneShell extends StatelessWidget {
       ),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: spec.innerFrameColor,
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              spec.innerFrameColor,
+              spec.backgroundColor.withValues(alpha: 0.98),
+            ],
+          ),
           border: Border(
             left: showLeftOuterBorder ? borderSide : BorderSide.none,
             right: showRightOuterBorder ? borderSide : BorderSide.none,

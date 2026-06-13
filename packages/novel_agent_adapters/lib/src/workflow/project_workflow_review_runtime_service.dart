@@ -14,6 +14,10 @@ class ProjectWorkflowReviewRuntimeService {
     OpenNarrativeStatePathService? pathService,
     ReviewReportNormalizerService? reviewReportNormalizerService,
     ReviewPathPolicyService? reviewPathPolicyService,
+    NarrativeSemanticReviewContractMapperService?
+    semanticReviewContractMapperService,
+    ReviewSummaryBuilderService? reviewSummaryBuilderService,
+    ReviewRepairHandoffService? reviewRepairHandoffService,
   }) : _taskRepository = taskRepository,
        _reviewRepository =
            reviewRepository ??
@@ -31,7 +35,14 @@ class ProjectWorkflowReviewRuntimeService {
        _reviewReportNormalizerService =
            reviewReportNormalizerService ?? ReviewReportNormalizerService(),
        _reviewPathPolicyService =
-           reviewPathPolicyService ?? ReviewPathPolicyService();
+           reviewPathPolicyService ?? ReviewPathPolicyService(),
+       _semanticReviewContractMapperService =
+           semanticReviewContractMapperService ??
+           NarrativeSemanticReviewContractMapperService(),
+       _reviewSummaryBuilderService =
+           reviewSummaryBuilderService ?? const ReviewSummaryBuilderService(),
+       _reviewRepairHandoffService =
+           reviewRepairHandoffService ?? const ReviewRepairHandoffService();
 
   final ProjectTaskRepository _taskRepository;
   final SemanticReviewRepository _reviewRepository;
@@ -41,6 +52,10 @@ class ProjectWorkflowReviewRuntimeService {
   final OpenNarrativeStatePathService _pathService;
   final ReviewReportNormalizerService _reviewReportNormalizerService;
   final ReviewPathPolicyService _reviewPathPolicyService;
+  final NarrativeSemanticReviewContractMapperService
+  _semanticReviewContractMapperService;
+  final ReviewSummaryBuilderService _reviewSummaryBuilderService;
+  final ReviewRepairHandoffService _reviewRepairHandoffService;
 
   Future<JsonMap> preflightReviewTask({
     required ProjectDescriptor project,
@@ -111,15 +126,49 @@ class ProjectWorkflowReviewRuntimeService {
     changedPaths.add(_pathService.reviewsIndexPath());
 
     final primaryReview = reviews.last;
+    final authorityPolicy = const ReviewAuthorityPolicy.standardProject();
     final reportPaths = _reportPaths(task);
-    final report = _semanticReviewAsReport(task, primaryReview);
-    final normalizedReport = _reviewReportNormalizerService.normalizeReport(
-      report,
-      generatedId: primaryReview.reviewId,
-      createdAt: DateTime.now().toIso8601String(),
-    );
     final markdownPath = reportPaths.$1;
     final jsonPath = reportPaths.$2;
+    final reportCreatedAt = DateTime.now().toIso8601String();
+    final semanticReviewContract = _semanticReviewContractMapperService
+        .mapReview(
+          review: primaryReview,
+          reviewType: ValueReaders.stringValue(
+            ValueReaders.mapValue(task['metadata'])['review_type'],
+            ReviewTypeConstants.general,
+          ),
+          sourcePaths: ValueReaders.stringList(task['source_paths']),
+          targetPaths: ValueReaders.stringList(task['output_paths']),
+          reportPaths: <String>[
+            if (markdownPath.isNotEmpty) markdownPath,
+            if (jsonPath.isNotEmpty) jsonPath,
+          ],
+          createdAt: reportCreatedAt,
+          metadata: <String, Object?>{
+            'workflow_kind': 'workflow_task',
+            'review_authority_policy': authorityPolicy.toJson(),
+            'review_task_id': ValueReaders.stringValue(task['id']),
+            'review_task_path': ValueReaders.stringValue(task['relative_path']),
+          },
+        );
+    final semanticReviewSummary = _reviewSummaryBuilderService.buildSummary(
+      semanticReviewContract,
+    );
+    final semanticReviewRepairHandoff = _reviewRepairHandoffService
+        .handoffFromReview(semanticReviewContract);
+    final report = _semanticReviewAsReport(task, primaryReview);
+    final normalizedReport =
+        _reviewReportNormalizerService.normalizeReport(
+          report,
+          generatedId: primaryReview.reviewId,
+          createdAt: reportCreatedAt,
+        )..addAll(<String, Object?>{
+          'review_authority_policy': authorityPolicy.toJson(),
+          'review_contract': semanticReviewContract.toJson(),
+          'review_summary': semanticReviewSummary.toJson(),
+          'review_repair_handoff': semanticReviewRepairHandoff.toJson(),
+        });
     if (jsonPath.isNotEmpty) {
       await _taskRepository.saveRecord(project, jsonPath, normalizedReport);
       changedPaths.add(jsonPath);
@@ -147,6 +196,10 @@ class ProjectWorkflowReviewRuntimeService {
       'report': normalizedReport,
       'report_markdown_path': markdownPath,
       'report_json_path': jsonPath,
+      'semantic_review_authority_policy': authorityPolicy.toJson(),
+      'semantic_review_contract': semanticReviewContract.toJson(),
+      'semantic_review_summary': semanticReviewSummary.toJson(),
+      'semantic_review_repair_handoff': semanticReviewRepairHandoff.toJson(),
       'output_paths': <Object?>[
         if (markdownPath.isNotEmpty) markdownPath,
         if (jsonPath.isNotEmpty) jsonPath,
@@ -173,6 +226,18 @@ class ProjectWorkflowReviewRuntimeService {
       );
       next['semantic_review'] = ValueReaders.deepCopyMap(
         ValueReaders.mapValue(artifacts['primary_review']),
+      );
+      next['semantic_review_authority_policy'] = ValueReaders.deepCopyMap(
+        ValueReaders.mapValue(artifacts['semantic_review_authority_policy']),
+      );
+      next['semantic_review_contract'] = ValueReaders.deepCopyMap(
+        ValueReaders.mapValue(artifacts['semantic_review_contract']),
+      );
+      next['semantic_review_summary'] = ValueReaders.deepCopyMap(
+        ValueReaders.mapValue(artifacts['semantic_review_summary']),
+      );
+      next['semantic_review_repair_handoff'] = ValueReaders.deepCopyMap(
+        ValueReaders.mapValue(artifacts['semantic_review_repair_handoff']),
       );
     }
     final analysisInformation = ValueReaders.mapValue(
@@ -386,22 +451,43 @@ class ProjectWorkflowReviewRuntimeService {
   ) {
     final result = <NarrativeSemanticReview>[];
     for (final rawTool in executedTools) {
-      final tool = ValueReaders.mapValue(rawTool);
-      if (ValueReaders.stringValue(tool['name']) != 'submit_semantic_review') {
-        continue;
-      }
+      _collectSemanticReviewsFromTool(
+        ValueReaders.mapValue(rawTool),
+        into: result,
+      );
+    }
+    return result;
+  }
+
+  void _collectSemanticReviewsFromTool(
+    JsonMap tool, {
+    required List<NarrativeSemanticReview> into,
+  }) {
+    final name = ValueReaders.stringValue(tool['name']).trim();
+    if (name == 'submit_semantic_review') {
       final payload = ValueReaders.mapValue(
         ValueReaders.mapValue(
           ValueReaders.mapValue(tool['result'])['domain_outcome'],
         )['outcome_payload'],
       );
       final reviewJson = ValueReaders.mapValue(payload['review']);
-      if (reviewJson.isEmpty) {
-        continue;
+      if (reviewJson.isNotEmpty) {
+        into.add(NarrativeSemanticReview.fromJson(reviewJson));
       }
-      result.add(NarrativeSemanticReview.fromJson(reviewJson));
+      return;
     }
-    return result;
+    if (name != 'call_sub_agent') {
+      return;
+    }
+    final nestedTools = ValueReaders.objectList(
+      ValueReaders.mapValue(tool['result'])['tool_calls'],
+    );
+    for (final nestedTool in nestedTools) {
+      _collectSemanticReviewsFromTool(
+        ValueReaders.mapValue(nestedTool),
+        into: into,
+      );
+    }
   }
 
   (String, String) _reportPaths(JsonMap task) {

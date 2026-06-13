@@ -58,8 +58,6 @@ class SubAgentExecutionService {
        _groupSelectionService =
            groupSelectionService ?? SubAgentGroupSelectionService(),
        _toolStrategyService = toolStrategyService ?? ToolStrategyService(),
-       _toolExposurePolicyService =
-           toolExposurePolicyService ?? const ToolExposurePolicyService(),
        _hostPlatform = hostPlatform,
        _toolSchemaBuilderService =
            toolSchemaBuilderService ?? ToolSchemaBuilderService(),
@@ -88,7 +86,6 @@ class SubAgentExecutionService {
   final BuiltinCollaboratorCatalogService _collaboratorCatalogService;
   final SubAgentGroupSelectionService _groupSelectionService;
   final ToolStrategyService _toolStrategyService;
-  final ToolExposurePolicyService _toolExposurePolicyService;
   final HostPlatform _hostPlatform;
   final ToolSchemaBuilderService _toolSchemaBuilderService;
   final ToolCallParserService _toolCallParserService;
@@ -540,8 +537,8 @@ class SubAgentExecutionService {
       return <String, Object?>{
         ...success,
         'ok': !stoppedByToolError || resolvedContent.trim().isNotEmpty,
-        'effective_execution_profile': ValueReaders.deepCopyMap(
-          effectiveExecutionProfile,
+        'effective_execution_profile': _sanitizeSensitiveMap(
+          ValueReaders.deepCopyMap(effectiveExecutionProfile),
         ),
         'sub_agent_run_id': runId,
         'sub_agent_events': events,
@@ -679,12 +676,63 @@ class SubAgentExecutionService {
     );
     return <String, Object?>{
       ...failure,
-      'effective_execution_profile': ValueReaders.deepCopyMap(
-        effectiveExecutionProfile,
+      'effective_execution_profile': _sanitizeSensitiveMap(
+        ValueReaders.deepCopyMap(effectiveExecutionProfile),
       ),
       'sub_agent_run_id': runId,
       'sub_agent_events': events,
     };
+  }
+
+  JsonMap _sanitizeSensitiveMap(JsonMap value) {
+    final result = <String, Object?>{};
+    for (final entry in value.entries) {
+      final key = entry.key;
+      final lowerKey = key.toLowerCase();
+      final rawValue = entry.value;
+      if (lowerKey == 'api_key' ||
+          lowerKey == 'key' ||
+          lowerKey == 'secret' ||
+          lowerKey == 'token') {
+        result[key] = '***';
+        continue;
+      }
+      if (rawValue is Map<String, Object?>) {
+        result[key] = _sanitizeSensitiveMap(
+          ValueReaders.deepCopyMap(rawValue),
+        );
+        continue;
+      }
+      if (rawValue is Map) {
+        result[key] = _sanitizeSensitiveMap(
+          rawValue.map((nestedKey, nestedValue) {
+            return MapEntry(nestedKey.toString(), nestedValue);
+          }),
+        );
+        continue;
+      }
+      if (rawValue is List) {
+        result[key] = rawValue
+            .map((item) {
+              if (item is Map<String, Object?>) {
+                return _sanitizeSensitiveMap(ValueReaders.deepCopyMap(item));
+              }
+              if (item is Map) {
+                return _sanitizeSensitiveMap(
+                  item.map(
+                    (nestedKey, nestedValue) =>
+                        MapEntry(nestedKey.toString(), nestedValue),
+                  ),
+                );
+              }
+              return item;
+            })
+            .toList(growable: false);
+        continue;
+      }
+      result[key] = rawValue;
+    }
+    return result;
   }
 
   List<JsonMap> _mergeEntriesById(

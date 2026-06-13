@@ -19,7 +19,7 @@ class WorkbenchAgentPanelActionPolicyService {
         WorkbenchProjectPanelActionViewData(
           icon: Icons.rule_folder_outlined,
           title: '表达限制',
-          description: '打开项目后，可进入项目级写作约束系统，查看内置或自定义表达限制预设，并按当前智能体定向绑定。',
+          description: '打开项目后，可进入项目级写作约束系统，查看内置或自定义表达限制方案，并按当前智能体定向绑定。',
           actionId: 'project_expression_constraints',
         ),
       ];
@@ -34,7 +34,7 @@ class WorkbenchAgentPanelActionPolicyService {
       WorkbenchProjectPanelActionViewData(
         icon: Icons.rule_folder_outlined,
         title: '表达限制',
-        description: '进入项目级写作约束系统，管理内置或自定义表达限制预设，并按当前智能体进一步定向绑定。',
+        description: '进入项目级写作约束系统，管理内置或自定义表达限制方案，并按当前智能体进一步定向绑定。',
         actionId: 'project_expression_constraints',
       ),
     ];

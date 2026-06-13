@@ -53,7 +53,7 @@ class ProjectPromptContract {
       '主存储策略：${ValueReaders.stringValue(project['storage_strategy'], 'markdown_project_store')}',
       '项目阶段：${ValueReaders.stringValue(project['stage'], 'opening')}',
       '当前内容意图：$intent',
-      '项目根路径：${ValueReaders.stringValue(project['path'])}（仅供系统定位；工具调用仍必须传项目相对路径）',
+      '项目根路径：${_projectPathForPrompt(project)}（仅供系统定位；工具调用仍必须传项目相对路径）',
     ];
     final genre = ValueReaders.stringValue(project['genre']).trim();
     if (genre.isNotEmpty) {
@@ -176,7 +176,7 @@ class ProjectPromptContract {
       '1. 先判断用户真正要的是闲聊、创意选项、读取上下文、修订已有文件、生成正式产物，还是长任务推进。',
       '2. 不要为了显得主动而滥用工具；但需要项目事实、已有设定或文件写入时，也不要假装已经知道或已经保存。',
       '3. 用户要求“给我几个方案/选项/开局/方向”时，优先用选项工具展示可点击选择；不要把这种头脑风暴写入 chapters/。',
-      '4. 写入前确认内容类型：章节正文、样章和连续正文默认进 chapters/；局部片段或实验场景进 scenes/；大纲进 outline/ 或 chapter_outlines/；设定进 world/ 或 assets/characters/；摘要进 summaries/。',
+      '4. 写入前确认内容类型：章节正文、样章和连续正文默认进 chapters/；局部片段或实验场景进 scenes/；总纲/卷纲/章纲分别进 outlines/story/、outlines/volumes/、outlines/chapters/；设定进 assets/world/，角色进 assets/characters/；摘要进 summaries/。',
       '5. 修改或覆盖已有文件前先读取原文；修正同一个已存在文件时，优先 edit_project_file 精确修改，或在 write_project_file 中显式传 overwrite=true，避免生成重复文件。删除、恢复、覆盖等危险动作必须有明确用户意图，并尽量先备份。',
       '6. 共享叙事资产优先走专用工具：角色用 update_character_state，伏笔用 update_foreshadow_state，时间线用 update_timeline_state，关系用 update_relationship_state；不要把这些长期记忆混成随手写的普通 Markdown。',
       '7. 工具参数只写项目相对路径；Android/iOS 上也不要请求终端命令或外部用户目录权限。',
@@ -208,8 +208,10 @@ class ProjectPromptContract {
     if (_isReviewer(agent, normalizedIntent)) {
       lines.addAll(<String>[
         '1. 正式语义审稿必须调用 submit_semantic_review，提交结构化 findings 和 recommended_disposition。',
-        '2. 不要把散文评论、任务调度建议或顺手修文冒充为 semantic review 交付。',
-        '3. 如果还缺少关键证据，就在结构化审稿里明确标注缺口，而不是编造已确认结论。',
+        '2. 连续性/状态复核时，优先依据正文、已知 claims 和 evidence 下结论；不要因为“多世界、回档、特殊机制”等题材关键词就自动判定通过或失败。',
+        '3. 如果确认、质疑或补充了 claims，优先在 submit_semantic_review 中填写 accepted_claim_ids / questioned_claim_ids / suggested_claims；需要单独补充稳定状态变化时，可调用 submit_narrative_state_claims。',
+        '4. 不要把散文评论、任务调度建议或顺手修文冒充为 semantic review 交付。',
+        '5. 如果还缺少关键证据，就在结构化审稿里明确标注缺口，而不是编造已确认结论。',
       ]);
       return lines.join('\n');
     }
@@ -240,6 +242,9 @@ class ProjectPromptContract {
       '信息工具分四类：project knowledge 用 propose_knowledge_card；作品巧思/结构设计/符号系统/命名暗线用 propose_design_element；外部资料与联网结果先走 request_external_research / submit_research_note；引用作品边界与风险用 propose_reference_work。',
       '巧思、设计、符号系统、结构回扣、命名规律不能只写进正文、普通 Markdown 或聊天说明；如果它们会影响后续创作，必须通过 propose_design_element 提交。',
       '外部资料、网页摘录、检索结论和来源说明不能直接冒充长期设定；先形成 research request / research note，再根据稳定性决定是否提升为 knowledge card 或 design element proposal。',
+      '发起资料收集时要显式区分 collection_mode：联网资料用 network，导入资料用 import，两者都需要时用 hybrid；客观事实、历史、科学、技术、法律、医学等资料必须在 source_requirements 中要求 rigorous sources，并保留不确定性。',
+      '当项目涉及架空历史、历史科技、制度边界、生产工艺、普通人可否实施、阶层/许可/成本/风险等可行性问题时，资料收集不能只查时代背景；应同时收集技术基线、材料工具、制度/法律/行业管制、社会执行成本，并按用户世界观严谨度判断是严格遵循、软架空放宽，还是明确作为有意违背规则的剧情设计。',
+      '联网研究要尽量保留多个候选来源、来源质量、引用地址和不确定性；导入研究要保留候选片段，不要把导入文本直接改写成未经确认的长期规则。',
       '如果只是发现来源证据、章节片段和已有知识/设计之间的可追踪关系，优先使用 link_information_evidence，而不是把来源线索埋进自然语言。',
       '如果本轮没有显著的新长期信息、没有稳定证据、或仍然只是模糊猜测，就不要编造 knowledge/design/research/reference 交付，也不要为了显得积极而强行调用信息工具。',
       '示例只能说明工具形态，不是题材、文化母题、世界观或叙事套路范本；不要把任何示例当作默认方案。',
@@ -253,7 +258,7 @@ class ProjectPromptContract {
     }
     if (_isResearcher(agent, normalizedIntent)) {
       lines.addAll(<String>[
-        'researcher 重点：需要外部资料时，先 request_external_research，拿到来源后再 submit_research_note；只有当研究结论已经稳定且适合进入项目长期记忆时，才继续 propose_knowledge_card 或 propose_design_element。',
+        'researcher 重点：需要外部资料时，先 request_external_research，并填写 collection_mode、information_domain、source_requirements、extraction_policy；拿到来源后再 submit_research_note。只有当研究结论已经稳定且适合进入项目长期记忆时，才继续 propose_knowledge_card 或 propose_design_element。',
         '不要把联网摘录、引用原文或未经确认的研究结论直接包装成项目既定设定。',
       ]);
       return lines.join('\n');
@@ -268,6 +273,9 @@ class ProjectPromptContract {
     if (_isWriter(agent, normalizedIntent)) {
       lines.addAll(<String>[
         'writer 重点：写作中如果顺带确定了新的长期世界事实，可用 propose_knowledge_card；如果发现了可复用的巧思、结构呼应、象征系统或命名规律，必须用 propose_design_element，不要只留在正文里等下一轮遗忘。',
+        '如果本章形成了明确且稳定的状态变化，优先在 submit_chapter_delivery 的 submission.claims 中附带，或单独调用 submit_narrative_state_claims；如果没有显著变化，允许空 claims，不要编造。',
+        '如果当前任务承接前文，submit_chapter_delivery 的 submission 不要只留空壳；至少填写本章 summary，并在 final_state_summary 中写明章末人物所处位置、正在进行的动作/目标、仍未完成的悬念，以及下一章应从哪个已落定状态继续，避免开头倒带重演上一章末尾。',
+        '如果会话上下文里出现“章节承接 Gate”或 continuity_checkpoint，把它当成章节推进硬约束，不是表达风格建议：正文第一段就要承接上一章已落定状态，直接推进新的回应、动作或结果，不要回退重演寻路、敲门、到达、开门或重复对话开场。',
         '如果本轮只是正常推进章节、没有新增显著长期信息，就专注交付正文，不要为了凑工具而编造知识卡或设计卡。',
       ]);
       return lines.join('\n');
@@ -352,5 +360,24 @@ class ProjectPromptContract {
       }
     }
     return false;
+  }
+
+  String _projectPathForPrompt(JsonMap project) {
+    final pathHint = ValueReaders.stringValue(project['path_hint']).trim();
+    if (pathHint.isNotEmpty) {
+      return pathHint;
+    }
+    final rawPath = ValueReaders.stringValue(project['path']).trim();
+    if (rawPath.isEmpty || _looksAbsolutePath(rawPath)) {
+      return '项目工作区根目录';
+    }
+    return rawPath;
+  }
+
+  bool _looksAbsolutePath(String path) {
+    if (path.startsWith('/')) {
+      return true;
+    }
+    return RegExp(r'^[A-Za-z]:[\\/]').hasMatch(path);
   }
 }

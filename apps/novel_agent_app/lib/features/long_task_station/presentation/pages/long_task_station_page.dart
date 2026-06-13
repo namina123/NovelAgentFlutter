@@ -89,6 +89,7 @@ class _LongTaskStationPageState extends State<LongTaskStationPage> {
               child: LongTaskRunDetailPanel(
                 detail: viewData.selectedRun,
                 actionHandler: widget.controller,
+                pendingResearchActionHandler: widget.controller,
               ),
             ),
           ),

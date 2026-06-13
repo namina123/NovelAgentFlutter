@@ -32,6 +32,34 @@ void main() {
     expect(guide.openingState!.preferSingleAction, isTrue);
   });
 
+  test('长任务 opening guide 在已有项目基础时保留真实 foundation 状态', () {
+    final service = ConversationGuideViewDataService();
+    final guide = service.build(
+      projectType: 'long_novel',
+      needsGoalSelection: true,
+      isGenerating: false,
+      openingMaturity: const ProjectOpeningMaturityAssessment(
+        stage: ProjectOpeningMaturityStage.openingInProgress,
+        summary: '当前项目已有章节与大纲，后台仍在等待继续动作。',
+        authoredFoundationFileCount: 4,
+        narrativeFileCount: 2,
+      ),
+      openingProjection: _longTaskProjection(
+        const OpeningSuggestedAction(
+          id: 'opening.continue_mode_guidance',
+          commandId: 'opening.continue_mode_guidance',
+          title: '继续补齐开局',
+          description: '继续确认少量约束。',
+        ),
+      ),
+    );
+
+    expect(guide.workflowTitle, '长任务开局');
+    expect(guide.openingState, isNotNull);
+    expect(guide.openingState!.hasProjectFoundation, isTrue);
+    expect(guide.openingState!.firstPrompt, '先补齐长任务开局缺口。');
+  });
+
   test('普通项目在已有 opening projection 时会保留原会话入口并补状态摘要', () {
     final service = ConversationGuideViewDataService();
     final guide = service.build(
@@ -46,7 +74,10 @@ void main() {
     expect(guide.workflowDescription, contains('当前智能体组：默认小说开局'));
     expect(guide.primaryActions, isNotEmpty);
     expect(guide.openingState, isNotNull);
-    expect(guide.openingState!.firstPrompt, '先说一句你现在想让智能体做什么。');
+    expect(
+      guide.openingState!.firstPrompt,
+      '先说这部作品想写什么、主角和冲突大概是什么，或者你想先整理哪部分设定。',
+    );
     expect(guide.openingState!.nextStepLabel, guide.primaryActions.first.title);
   });
 
@@ -70,7 +101,7 @@ void main() {
     expect(guide.workflowDescription, contains('当前项目已经有正文或结构基础'));
     expect(guide.openingState, isNotNull);
     expect(guide.openingState!.hasProjectFoundation, isTrue);
-    expect(guide.openingState!.firstPrompt, '直接描述当前要继续推进的内容即可。');
+    expect(guide.openingState!.firstPrompt, '直接描述当前要继续推进的章节、场景或设定即可。');
   });
 
   test('已有基础的长任务项目仍只保留唯一启动动作', () {
@@ -89,6 +120,30 @@ void main() {
     expect(guide.primaryActions.single.description, contains('直接启动正式长任务链'));
     expect(guide.openingState, isNotNull);
     expect(guide.openingState!.preferSingleAction, isTrue);
+  });
+
+  test('已有基础但 projection 未收束的长任务项目不会再提示缺少旧开局项', () {
+    final service = ConversationGuideViewDataService();
+    final guide = service.build(
+      projectType: 'long_novel',
+      needsGoalSelection: true,
+      isGenerating: false,
+      openingMaturity: _groundedMaturity(),
+      openingProjection: _longTaskProjection(
+        const OpeningSuggestedAction(
+          id: 'opening.continue_mode_guidance',
+          commandId: 'opening.continue_mode_guidance',
+          title: '继续补齐开局',
+          description: '继续确认少量约束。',
+        ),
+      ),
+    );
+
+    expect(guide.workflowTitle, '长篇小说工作台');
+    expect(guide.primaryActions, hasLength(1));
+    expect(guide.primaryActions.single.commandId, 'opening.launch_long_task');
+    expect(guide.primaryActions.single.description, contains('继续或恢复正式长任务链'));
+    expect(guide.primaryActions.single.description, isNot(contains('当前还缺')));
   });
 }
 

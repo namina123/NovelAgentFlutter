@@ -81,7 +81,7 @@ class _WorkbenchPrimaryCanvasHostState
           canRender: modePolicy.canRender,
           hasDocument: modePolicy.hasDocument,
         ),
-        SizedBox(height: style.headerGap),
+        SizedBox(height: style.headerGap - 5.8),
         Expanded(child: DocumentResourceCanvasHost(request: request)),
       ],
     );

@@ -1,5 +1,6 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import 'chapter_delivery_failure.dart';
 
 class WritingExecutionDeliverySummary {
   const WritingExecutionDeliverySummary({
@@ -16,6 +17,7 @@ class WritingExecutionDeliverySummary {
     this.chapterBodyDelivered = false,
     this.submissionAccepted = false,
     this.retryable = false,
+    this.deliveryFailure,
     this.metadata = const <String, Object?>{},
   });
 
@@ -32,6 +34,7 @@ class WritingExecutionDeliverySummary {
   final bool chapterBodyDelivered;
   final bool submissionAccepted;
   final bool retryable;
+  final ChapterDeliveryFailure? deliveryFailure;
   final JsonMap metadata;
 
   factory WritingExecutionDeliverySummary.fromJson(JsonMap json) {
@@ -58,6 +61,9 @@ class WritingExecutionDeliverySummary {
       ),
       submissionAccepted: ValueReaders.boolValue(json['submission_accepted']),
       retryable: ValueReaders.boolValue(json['retryable']),
+      deliveryFailure: _deliveryFailureFromJson(
+        ValueReaders.mapValue(json['delivery_failure']),
+      ),
       metadata: ValueReaders.deepCopyMap(
         ValueReaders.mapValue(json['metadata']),
       ),
@@ -80,6 +86,8 @@ class WritingExecutionDeliverySummary {
       'chapter_body_delivered': chapterBodyDelivered,
       'submission_accepted': submissionAccepted,
       'retryable': retryable,
+      if (deliveryFailure != null)
+        'delivery_failure': deliveryFailure!.toJson(),
       'metadata': ValueReaders.deepCopyMap(metadata),
     };
   }
@@ -99,6 +107,16 @@ class WritingExecutionDeliverySummary {
     if (recommendedAction.trim().isEmpty) {
       result.add('missing_writing_execution_delivery_action');
     }
+    if (deliveryFailure != null) {
+      result.addAll(deliveryFailure!.validateBasics());
+    }
     return result;
+  }
+
+  static ChapterDeliveryFailure? _deliveryFailureFromJson(JsonMap json) {
+    if (json.isEmpty) {
+      return null;
+    }
+    return ChapterDeliveryFailure.fromJson(json);
   }
 }

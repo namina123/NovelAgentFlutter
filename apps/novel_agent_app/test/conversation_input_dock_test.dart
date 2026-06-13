@@ -7,6 +7,7 @@ import 'package:novel_agent_app/features/workbench/presentation/models/selector_
 import 'package:novel_agent_app/features/workbench/presentation/models/user_option_view_data.dart';
 import 'package:novel_agent_app/features/workbench/presentation/widgets/conversation_input_action_row.dart';
 import 'package:novel_agent_app/features/workbench/presentation/widgets/conversation_input_dock.dart';
+import 'package:novel_agent_app/features/workbench/presentation/widgets/conversation_model_strip.dart';
 import 'package:novel_agent_app/features/workbench/presentation/widgets/conversation_reasoning_toggle_chip.dart';
 import 'package:novel_agent_app/features/workbench/presentation/widgets/conversation_send_config_bar.dart';
 
@@ -71,7 +72,7 @@ void main() {
       expect(textField.maxLines, isNull);
       expect(fieldBox.size.height, greaterThanOrEqualTo(90));
       expect(find.byType(ConversationSendConfigBar), findsOneWidget);
-      expect(find.text('模型'), findsOneWidget);
+      expect(find.byType(ConversationModelStrip), findsOneWidget);
 
       final configBarTop = tester.getTopLeft(
         find.byType(ConversationSendConfigBar),
@@ -260,12 +261,15 @@ void main() {
       await tester.pumpAndSettle();
 
       final offContainer = tester.widget<AnimatedContainer>(
-        find.descendant(
-          of: find.byKey(ConversationReasoningToggleChip.containerKey),
-          matching: find.byType(AnimatedContainer),
-        ),
+        find
+            .descendant(
+              of: find.byKey(ConversationReasoningToggleChip.containerKey),
+              matching: find.byType(AnimatedContainer),
+            )
+            .first,
       );
       final offDecoration = offContainer.decoration! as BoxDecoration;
+      final offBorder = offDecoration.border! as Border;
 
       expect(offDecoration.color, isNot(AppTheme.light().colorScheme.primary));
 
@@ -273,14 +277,18 @@ void main() {
       await tester.pumpAndSettle();
 
       final onContainer = tester.widget<AnimatedContainer>(
-        find.descendant(
-          of: find.byKey(ConversationReasoningToggleChip.containerKey),
-          matching: find.byType(AnimatedContainer),
-        ),
+        find
+            .descendant(
+              of: find.byKey(ConversationReasoningToggleChip.containerKey),
+              matching: find.byType(AnimatedContainer),
+            )
+            .first,
       );
       final onDecoration = onContainer.decoration! as BoxDecoration;
+      final onBorder = onDecoration.border! as Border;
 
-      expect(onDecoration.color, AppTheme.light().colorScheme.primary);
+      expect(onDecoration.color, isNot(offDecoration.color));
+      expect(onBorder.top.color, isNot(offBorder.top.color));
     },
   );
 }

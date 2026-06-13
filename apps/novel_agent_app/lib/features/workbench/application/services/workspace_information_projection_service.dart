@@ -5,7 +5,12 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 import '../../presentation/models/workbench_information_view_data.dart';
 
 class WorkspaceInformationProjectionService {
-  const WorkspaceInformationProjectionService();
+  const WorkspaceInformationProjectionService({
+    ContextActivationCodecService? contextActivationCodecService,
+  }) : _contextActivationCodecService =
+           contextActivationCodecService ?? const ContextActivationCodecService();
+
+  final ContextActivationCodecService _contextActivationCodecService;
 
   WorkbenchInformationViewData build({
     required List<JsonMap> workspaceEntries,
@@ -24,14 +29,9 @@ class WorkspaceInformationProjectionService {
       }
     }
 
-    final selectedSections = _activationSections(
-      fileMap,
-      bucket: 'selected_context_sections',
-    );
-    final omittedSections = _activationSections(
-      fileMap,
-      bucket: 'omitted_context_sections',
-    );
+    final activationReport = _latestActivationReport(fileMap);
+    final selectedSections = _selectedActivationItems(activationReport);
+    final omittedSections = _omittedActivationItems(activationReport);
 
     final usageByPath = <String, _UsageProjection>{};
     for (final section in selectedSections) {
@@ -74,8 +74,12 @@ class WorkspaceInformationProjectionService {
           subtitle: '已整理的长期设定与世界事实',
           summary: '查看当前 knowledge 卡片的用户可读摘要。',
           statusLabel: '知识',
-          relativePath: InformationProjectionDocument.knowledgeSummaryRelativePath,
-          usage: usageByPath[InformationProjectionDocument.knowledgeSummaryRelativePath],
+          relativePath:
+              InformationProjectionDocument.knowledgeSummaryRelativePath,
+          fileMap: fileMap,
+          usage:
+              usageByPath[InformationProjectionDocument
+                  .knowledgeSummaryRelativePath],
         ),
       if (normalizedPaths.contains(
         InformationProjectionDocument.designSummaryRelativePath,
@@ -87,7 +91,10 @@ class WorkspaceInformationProjectionService {
           summary: '查看 design element 的用户可读投影。',
           statusLabel: '巧思',
           relativePath: InformationProjectionDocument.designSummaryRelativePath,
-          usage: usageByPath[InformationProjectionDocument.designSummaryRelativePath],
+          fileMap: fileMap,
+          usage:
+              usageByPath[InformationProjectionDocument
+                  .designSummaryRelativePath],
         ),
       if (normalizedPaths.contains(
         InformationProjectionDocument.researchSummaryRelativePath,
@@ -98,8 +105,12 @@ class WorkspaceInformationProjectionService {
           subtitle: '资料研究、事实摘录与创作建议',
           summary: '查看 research note 的用户可读摘要。',
           statusLabel: '研究',
-          relativePath: InformationProjectionDocument.researchSummaryRelativePath,
-          usage: usageByPath[InformationProjectionDocument.researchSummaryRelativePath],
+          relativePath:
+              InformationProjectionDocument.researchSummaryRelativePath,
+          fileMap: fileMap,
+          usage:
+              usageByPath[InformationProjectionDocument
+                  .researchSummaryRelativePath],
         ),
       if (normalizedPaths.contains(
         InformationProjectionDocument.referenceBoundaryRelativePath,
@@ -110,8 +121,12 @@ class WorkspaceInformationProjectionService {
           subtitle: '引用作品关系、用途边界与风险说明',
           summary: '查看 reference work 的边界与风险摘要。',
           statusLabel: '引用',
-          relativePath: InformationProjectionDocument.referenceBoundaryRelativePath,
-          usage: usageByPath[InformationProjectionDocument.referenceBoundaryRelativePath],
+          relativePath:
+              InformationProjectionDocument.referenceBoundaryRelativePath,
+          fileMap: fileMap,
+          usage:
+              usageByPath[InformationProjectionDocument
+                  .referenceBoundaryRelativePath],
         ),
     ];
 
@@ -136,8 +151,10 @@ class WorkspaceInformationProjectionService {
     required String summary,
     required String statusLabel,
     required String relativePath,
+    required Map<String, String> fileMap,
     required _UsageProjection? usage,
   }) {
+    final projectionMetadata = _projectionMetadata(fileMap[relativePath]);
     return WorkbenchInformationEntryViewData(
       id: id,
       title: title,
@@ -146,6 +163,9 @@ class WorkspaceInformationProjectionService {
       statusLabel: statusLabel,
       usageLabel: _usageLabel(usage),
       riskLabel: _riskLabel(usage),
+      mountStatusLabel: projectionMetadata.mountStatusLabel,
+      sourceOfTruthSummary: projectionMetadata.sourceOfTruthSummary,
+      sourceIdentitySummary: projectionMetadata.sourceIdentitySummary,
       actionLabel: '打开摘要',
       relativePath: relativePath,
     );
@@ -165,7 +185,9 @@ class WorkspaceInformationProjectionService {
               id: card.cardId,
               title: '待确认知识',
               subtitle: card.title,
-              summary: card.summary.trim().isEmpty ? '这条长期设定需要确认后再进入主知识层。' : card.summary.trim(),
+              summary: card.summary.trim().isEmpty
+                  ? '这条长期设定需要确认后再进入主知识层。'
+                  : card.summary.trim(),
               statusLabel: '待确认',
               usageLabel: '需要确认后才能稳定复用',
               riskLabel: '会影响后续写作与信息激活',
@@ -191,7 +213,9 @@ class WorkspaceInformationProjectionService {
             ),
           );
         }
-      } else if (path.startsWith('.novel_agent/information/research_requests/')) {
+      } else if (path.startsWith(
+        '.novel_agent/information/research_requests/',
+      )) {
         final record = _decodedMap(fileMap[path]);
         final requestState = _string(record['request_state']);
         if (requestState.isNotEmpty && requestState != 'completed') {
@@ -207,6 +231,7 @@ class WorkspaceInformationProjectionService {
               riskLabel: '可能涉及事实缺口或外部资料风险',
               actionLabel: '查看待确认',
               relativePath: path,
+              pendingResearchRequestId: _string(record['request_id'], path),
             ),
           );
         }
@@ -311,19 +336,169 @@ class WorkspaceInformationProjectionService {
     return labels.toList(growable: false);
   }
 
-  List<JsonMap> _activationSections(
-    Map<String, String> fileMap, {
-    required String bucket,
-  }) {
-    final reportPath = fileMap.keys
-        .where((path) => path.contains('activation_report.json'))
-        .toList(growable: false)
-      ..sort();
+  _ProjectionMetadata _projectionMetadata(String? markdown) {
+    final normalizedMarkdown = (markdown ?? '').replaceAll('\r\n', '\n');
+    if (normalizedMarkdown.trim().isEmpty) {
+      return const _ProjectionMetadata();
+    }
+    final sourceOfTruthPaths = _sourceOfTruthPaths(normalizedMarkdown);
+    final sourceIdentityItems = _sourceIdentityItems(normalizedMarkdown);
+    return _ProjectionMetadata(
+      mountStatusLabel: sourceOfTruthPaths.isEmpty ? '' : '已挂载',
+      sourceOfTruthSummary: sourceOfTruthPaths.isEmpty
+          ? ''
+          : '真相源：${_joinedSummary(sourceOfTruthPaths)}',
+      sourceIdentitySummary: sourceIdentityItems.isEmpty
+          ? ''
+          : '来源身份：${_joinedSummary(sourceIdentityItems)}',
+    );
+  }
+
+  List<String> _sourceOfTruthPaths(String markdown) {
+    final frontmatter = _frontmatter(markdown);
+    if (frontmatter.isEmpty) {
+      return const <String>[];
+    }
+    final paths = <String>[];
+    var inSourceOfTruthBlock = false;
+    for (final rawLine in frontmatter.split('\n')) {
+      final trimmedLine = rawLine.trim();
+      if (!inSourceOfTruthBlock) {
+        if (trimmedLine == 'source_of_truth_paths:') {
+          inSourceOfTruthBlock = true;
+        }
+        continue;
+      }
+      if (trimmedLine.isEmpty) {
+        continue;
+      }
+      if (!trimmedLine.startsWith('- ')) {
+        break;
+      }
+      final path = _trimYamlScalar(trimmedLine.substring(2));
+      if (path.isNotEmpty) {
+        paths.add(path);
+      }
+    }
+    return _deduplicatedOrdered(paths);
+  }
+
+  List<String> _sourceIdentityItems(String markdown) {
+    final items = <String>[];
+    for (final rawLine in markdown.split('\n')) {
+      final trimmedLine = rawLine.trim();
+      if (!trimmedLine.startsWith('- 来源身份：')) {
+        continue;
+      }
+      final item = _string(trimmedLine.substring('- 来源身份：'.length));
+      if (item.isNotEmpty) {
+        items.add(item);
+      }
+    }
+    return _deduplicatedOrdered(items);
+  }
+
+  String _frontmatter(String markdown) {
+    if (!markdown.startsWith('---\n')) {
+      return '';
+    }
+    final closingIndex = markdown.indexOf('\n---\n', 4);
+    if (closingIndex < 0) {
+      return '';
+    }
+    return markdown.substring(4, closingIndex);
+  }
+
+  String _joinedSummary(List<String> items) {
+    if (items.isEmpty) {
+      return '';
+    }
+    if (items.length == 1) {
+      return items.first;
+    }
+    if (items.length == 2) {
+      return '${items.first}；${items.last}';
+    }
+    return '${items[0]}；${items[1]}；另 ${items.length - 2} 条';
+  }
+
+  List<String> _deduplicatedOrdered(Iterable<String> items) {
+    final result = <String>[];
+    final seen = <String>{};
+    for (final item in items) {
+      if (seen.add(item)) {
+        result.add(item);
+      }
+    }
+    return result;
+  }
+
+  String _trimYamlScalar(String value) {
+    final text = value.trim();
+    if (text.length >= 2 &&
+        ((text.startsWith("'") && text.endsWith("'")) ||
+            (text.startsWith('"') && text.endsWith('"')))) {
+      return text.substring(1, text.length - 1).trim();
+    }
+    return text;
+  }
+
+  ContextActivationReport? _latestActivationReport(Map<String, String> fileMap) {
+    final reportPath =
+        fileMap.keys
+            .where((path) => path.contains('activation_report.json'))
+            .toList(growable: false)
+          ..sort();
     if (reportPath.isEmpty) {
-      return const <JsonMap>[];
+      return null;
     }
     final report = _decodedMap(fileMap[reportPath.last]);
-    return ValueReaders.mapList(_map(report['metadata'])[bucket]);
+    if (report.isEmpty) {
+      return null;
+    }
+    return _contextActivationCodecService.reportFromJson(report);
+  }
+
+  List<JsonMap> _selectedActivationItems(ContextActivationReport? report) {
+    if (report == null) {
+      return const <JsonMap>[];
+    }
+    return report.items
+        .where((item) => item.selected)
+        .map(_activationItemJson)
+        .toList(growable: false);
+  }
+
+  List<JsonMap> _omittedActivationItems(ContextActivationReport? report) {
+    if (report == null) {
+      return const <JsonMap>[];
+    }
+    return report.items
+        .where((item) => item.omitted)
+        .map(_activationItemJson)
+        .toList(growable: false);
+  }
+
+  JsonMap _activationItemJson(ContextActivationItem item) {
+    return <String, Object?>{
+      'item_id': item.itemId,
+      'source': item.source,
+      'title': item.title,
+      'target_path': item.targetPath,
+      'requested_chars': item.requestedChars,
+      'included_chars': item.includedChars,
+      'selected': item.selected,
+      'omitted': item.omitted,
+      'truncated': item.truncated,
+      'omission_reason': item.omissionReason,
+      'truncation_reason': item.truncationReason,
+      'source_kind': ValueReaders.stringValue(item.metadata['source_kind']),
+      'source_of_truth_locator': ValueReaders.stringValue(
+        item.metadata['source_of_truth_locator'],
+      ),
+      'source_display': ValueReaders.stringValue(item.metadata['source_display']),
+      'explanation': ValueReaders.stringValue(item.metadata['explanation']),
+    };
   }
 
   JsonMap _decodedMap(String? raw) {
@@ -384,4 +559,16 @@ class _UsageProjection {
       omittedReasons: omittedReasons ?? this.omittedReasons,
     );
   }
+}
+
+class _ProjectionMetadata {
+  const _ProjectionMetadata({
+    this.mountStatusLabel = '',
+    this.sourceOfTruthSummary = '',
+    this.sourceIdentitySummary = '',
+  });
+
+  final String mountStatusLabel;
+  final String sourceOfTruthSummary;
+  final String sourceIdentitySummary;
 }

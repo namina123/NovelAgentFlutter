@@ -4,6 +4,7 @@ import 'package:novel_agent_app/app/theme/app_theme.dart';
 import 'package:novel_agent_app/features/workbench/presentation/contracts/resource_manager_action_handler.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/project_agent_group_panel_view_data.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/project_create_request_view_data.dart';
+import 'package:novel_agent_app/features/workbench/presentation/models/project_long_task_summary_view_data.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/workbench_project_panel_action_view_data.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/workbench_project_panel_view_data.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/workspace_command_request_view_data.dart';
@@ -40,6 +41,36 @@ void main() {
                   actionTitle: '项目智能体组',
                   actionDescription: '查看当前项目协作摘要，并按需调整默认协作组。',
                   canConfigure: true,
+                ),
+                projectLongTaskSummary: ProjectLongTaskSummaryViewData(
+                  title: '长任务运行',
+                  summary: '运行中 1 · 待处理 1 · 共 2 条',
+                  isLoading: false,
+                  totalCount: 2,
+                  activeCount: 1,
+                  attentionCount: 1,
+                  runs: <ProjectLongTaskRunSummaryViewData>[
+                    ProjectLongTaskRunSummaryViewData(
+                      id: 'run_waiting',
+                      title: '连续不断的长任务',
+                      subtitle: '按大纲自动推进',
+                      statusLabel: '等待用户确认',
+                      taskLabel: '检查点确认',
+                      recentActivityLabel: '5 分钟前',
+                      requiresAttention: true,
+                      isActive: false,
+                      attentionCalloutTitle: '当前运行停在待确认节点。',
+                      attentionCalloutSummary: '',
+                      diagnosisLabel: '',
+                      diagnosisSummary: '当前运行正在等待用户确认。',
+                      nextStepLabel: '下一步',
+                      nextStepSummary: '先完成待确认事项，任务才会继续。',
+                      reviewSummaryLine: '最近审稿：第 12 章审稿，建议补强冲突。',
+                      repairSummaryLine: '返工状态：等待确认 · 第 12 章返工，待确认后进入返工。',
+                      checkpointSummaryLine: '最近检查点：检查点确认，需要先确认本章检查点再继续。',
+                      pendingSummaryLine: '待确认事项：待确认问题，请先确认是否接受当前审稿建议。',
+                    ),
+                  ],
                 ),
                 hasActiveProject: true,
                 primaryActions: [
@@ -80,11 +111,20 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('项目摘要'), findsOneWidget);
+    expect(find.text('长任务现场'), findsOneWidget);
     expect(find.text('当前项目动作'), findsOneWidget);
     expect(find.text('当前协作摘要'), findsOneWidget);
     expect(find.text('项目资料'), findsOneWidget);
     expect(find.text('项目资产'), findsOneWidget);
     expect(find.text('项目智能体组'), findsNothing);
+    expect(find.text('当前运行停在待确认节点。'), findsOneWidget);
+    expect(find.text('当前运行正在等待用户确认。'), findsOneWidget);
+    expect(find.text('等待用户确认'), findsOneWidget);
+    expect(find.textContaining('先完成待确认事项，任务才会继续。'), findsOneWidget);
+    expect(find.textContaining('最近审稿：第 12 章审稿'), findsOneWidget);
+    expect(find.textContaining('返工状态：等待确认'), findsOneWidget);
+    expect(find.textContaining('最近检查点：检查点确认'), findsOneWidget);
+    expect(find.textContaining('待确认事项：待确认问题'), findsOneWidget);
     expect(find.text('整理设定'), findsOneWidget);
     expect(find.text('写作准备'), findsOneWidget);
     expect(find.text('开始写作'), findsOneWidget);
@@ -101,9 +141,15 @@ void main() {
     expect(find.textContaining('tool_call'), findsNothing);
     expect(find.textContaining('session.goal'), findsNothing);
 
+    await tester.ensureVisible(find.text('整理设定'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('整理设定'));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('写作准备'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('写作准备'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('开始写作'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('开始写作'));
     await tester.pumpAndSettle();

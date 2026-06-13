@@ -1,5 +1,7 @@
 import '../common/json_types.dart';
+import '../workflow/long_task_recovery_state.dart';
 import 'long_task_run_status.dart';
+import 'long_task_stop_outcome.dart';
 import 'run_project_reference.dart';
 
 class RunInstance {
@@ -19,6 +21,8 @@ class RunInstance {
     this.activeTaskTitle = '',
     this.note = '',
     this.stopReason = '',
+    this.stopOutcome = const LongTaskStopOutcome(),
+    this.recoveryState = const LongTaskRecoveryState(),
     this.metadata = const <String, Object?>{},
   });
 
@@ -37,6 +41,8 @@ class RunInstance {
   final String activeTaskTitle;
   final String note;
   final String stopReason;
+  final LongTaskStopOutcome stopOutcome;
+  final LongTaskRecoveryState recoveryState;
   final JsonMap metadata;
 
   bool get isGlobal => true;
@@ -66,6 +72,8 @@ class RunInstance {
     String? activeTaskTitle,
     String? note,
     String? stopReason,
+    LongTaskStopOutcome? stopOutcome,
+    LongTaskRecoveryState? recoveryState,
     JsonMap? metadata,
   }) {
     return RunInstance(
@@ -86,6 +94,8 @@ class RunInstance {
       activeTaskTitle: activeTaskTitle ?? this.activeTaskTitle,
       note: note ?? this.note,
       stopReason: stopReason ?? this.stopReason,
+      stopOutcome: stopOutcome ?? this.stopOutcome,
+      recoveryState: recoveryState ?? this.recoveryState,
       metadata: metadata ?? this.metadata,
     );
   }

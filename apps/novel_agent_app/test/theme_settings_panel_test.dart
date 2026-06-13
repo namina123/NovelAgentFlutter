@@ -214,6 +214,11 @@ class _FakeSettingsActionHandler implements SettingsActionHandler {
   void onProviderSelected(String providerId) {}
 
   @override
+  void onProjectCreationExpressionConstraintDefaultsSaved(
+    Map<String, Object?> payload,
+  ) {}
+
+  @override
   void onSettingsBackRequested() {}
 
   @override

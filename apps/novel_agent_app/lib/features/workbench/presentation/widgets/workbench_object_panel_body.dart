@@ -23,12 +23,14 @@ class WorkbenchObjectPanelBody extends StatelessWidget {
         key: const ValueKey<String>('workbench_object_panel_body'),
         decoration: BoxDecoration(
           color: surface.backgroundColor.withValues(
-            alpha: visual.auxiliaryFillAlpha,
+            alpha: visual.auxiliaryFillAlpha - 0.04,
           ),
           borderRadius: BorderRadius.circular(visual.sectionRadius),
-          border: Border.all(
-            color: visual.subtleBorder(surface.borderColor),
-            width: surface.borderWidth,
+          border: Border(
+            top: BorderSide(
+              color: surface.borderColor.withValues(alpha: 0.24),
+              width: surface.borderWidth,
+            ),
           ),
         ),
         child: ClipRRect(

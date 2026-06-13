@@ -1,5 +1,6 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import '../creative/expression_constraint_execution_policy.dart';
 import 'task_queue_constants.dart';
 
 class TaskQueueOptionService {
@@ -60,7 +61,19 @@ class TaskQueueOptionService {
         'allow_independent_tasks_after_checkpoint',
         false,
       ),
+      'expression_constraint_policy_mode':
+          _expressionConstraintPolicyMode(options),
     };
+  }
+
+  String _expressionConstraintPolicyMode(JsonMap options) {
+    final value = ValueReaders.stringValue(
+      options['expression_constraint_policy_mode'],
+      ValueReaders.stringValue(options['expressionConstraintPolicyMode']),
+    ).trim().toLowerCase();
+    return ExpressionConstraintExecutionPolicyModes.knownValues.contains(value)
+        ? value
+        : '';
   }
 
   bool _boolOption(JsonMap options, String key, bool defaultValue) {

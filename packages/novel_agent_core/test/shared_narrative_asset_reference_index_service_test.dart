@@ -91,5 +91,25 @@ void main() {
         expect(index.neighborsOf('foreshadow', 'missing_case'), isEmpty);
       },
     );
+
+    test('can resolve a shared reference by formal reference key', () {
+      final service = SharedNarrativeAssetReferenceIndexService();
+      final index = service.buildIndex(
+        foreshadows: const <ForeshadowRecord>[
+          ForeshadowRecord(
+            id: 'tower_secret',
+            title: '高塔秘密',
+            status: 'planted',
+          ),
+        ],
+      );
+
+      expect(
+        index.referenceByKey('foreshadow:tower_secret')?.displayName,
+        '高塔秘密',
+      );
+      expect(index.referenceByKey('unknown:key'), isNull);
+      expect(index.referenceByKey(''), isNull);
+    });
   });
 }

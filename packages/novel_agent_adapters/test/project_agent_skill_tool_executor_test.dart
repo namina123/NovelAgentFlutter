@@ -104,6 +104,14 @@ activation_hints:
       expect(result['instructions'], contains('先搭结构'));
       expect(result['detail_level'], 'summary');
       expect(result.containsKey('instruction_markdown'), isFalse);
+      expect(
+        result['entry_file_path'],
+        'builtin://skills/generate_outline/SKILL.md',
+      );
+      expect(
+        ValueReaders.stringValue(result['entry_file_path']),
+        isNot(contains(tempRoot.path)),
+      );
     });
 
     test(
@@ -147,6 +155,42 @@ activation_hints:
         expect(
           ValueReaders.intValue(result['instruction_character_count']),
           greaterThan(10),
+        );
+        expect(
+          result['entry_file_path'],
+          'builtin://skills/generate_outline/SKILL.md',
+        );
+      },
+    );
+
+    test(
+      'returns project-relative locator for project skill packages',
+      () async {
+        await loadoutRepository.saveLoadouts(project, const <AgentSkillLoadout>[
+          AgentSkillLoadout(
+            agentId: 'default_generalist',
+            source: AgentSkillLoadoutSource.projectSelection,
+            extraSkillIds: <String>['custom_style_review'],
+          ),
+        ]);
+        final executor = buildExecutor();
+
+        final result = await executor.loadAgentSkill(project, <String, Object?>{
+          'skill_id': 'custom_style_review',
+          '_agent': <String, Object?>{
+            'id': 'default_generalist',
+            'skills': const <String>[],
+          },
+        });
+
+        expect(result['ok'], isTrue);
+        expect(
+          result['entry_file_path'],
+          'skills/custom_style_review/SKILL.md',
+        );
+        expect(
+          ValueReaders.stringValue(result['entry_file_path']),
+          isNot(contains(tempRoot.path)),
         );
       },
     );

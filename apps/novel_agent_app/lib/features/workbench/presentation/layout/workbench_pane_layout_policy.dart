@@ -4,18 +4,18 @@ class WorkbenchPaneLayoutPolicy {
   static const double dividerWidth = 1;
   static const double dividerHitWidth = 12;
 
-  static const double _desktopMinLeftWidth = 252;
-  static const double _desktopMinDocumentWidth = 560;
-  static const double _desktopMinConversationWidth = 360;
-  static const double _desktopMaxConversationWidth = 456;
-  static const double _desktopMaxConversationRatio = 0.31;
+  static const double _desktopMinLeftWidth = 204;
+  static const double _desktopMinDocumentWidth = 700;
+  static const double _desktopMinConversationWidth = 304;
+  static const double _desktopMaxConversationWidth = 356;
+  static const double _desktopMaxConversationRatio = 0.224;
 
   static const double _compactWideMinLeftWidth = 272;
   static const double _compactWideMaxLeftWidth = 336;
-  static const double _compactWideMinDocumentWidth = 440;
-  static const double _compactWideMinConversationWidth = 460;
-  static const double _compactWideMaxConversationWidth = 560;
-  static const double _compactWideMaxConversationRatio = 0.35;
+  static const double _compactWideMinDocumentWidth = 500;
+  static const double _compactWideMinConversationWidth = 420;
+  static const double _compactWideMaxConversationWidth = 520;
+  static const double _compactWideMaxConversationRatio = 0.33;
 
   const WorkbenchPaneLayoutPolicy._();
 
@@ -40,7 +40,7 @@ class WorkbenchPaneLayoutPolicy {
         _compactWideMaxLeftWidth,
       );
     }
-    return _clamp(totalWidth * 0.24, _desktopMinLeftWidth, 312);
+    return _clamp(totalWidth * 0.184, _desktopMinLeftWidth, 252);
   }
 
   static double minDocumentWidth(AppLayoutMetrics metrics) {
@@ -78,7 +78,7 @@ class WorkbenchPaneLayoutPolicy {
 
   static double defaultLeftWidth(double totalWidth, AppLayoutMetrics metrics) {
     // 中文注释: 默认左栏宽度取旧项目理念里的“可扫读但不喧宾夺主”区间，用来初始化和重置布局。
-    final target = useCompactWideLayout(metrics) ? 296.0 : 278.0;
+    final target = useCompactWideLayout(metrics) ? 284.0 : 216.0;
     return _clamp(
       target,
       minLeftWidth(metrics),
@@ -91,7 +91,7 @@ class WorkbenchPaneLayoutPolicy {
     AppLayoutMetrics metrics,
   ) {
     // 中文注释: 默认右栏宽度优先保证会话与输入舒适，再由正文区吃掉剩余空间。
-    final target = useCompactWideLayout(metrics) ? 500.0 : 396.0;
+    final target = useCompactWideLayout(metrics) ? 452.0 : 316.0;
     return _clamp(
       target,
       minConversationWidth(metrics),

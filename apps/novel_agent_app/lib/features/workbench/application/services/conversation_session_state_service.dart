@@ -453,6 +453,12 @@ class ConversationSessionStateService {
     );
   }
 
+  List<ConversationEntryViewData> toolEntriesFromPendingCalls(
+    List<Object?> pendingToolCalls,
+  ) {
+    return _toolEntryProjectionService.buildPendingCallEntries(pendingToolCalls);
+  }
+
   List<SubAgentRunViewData> mergeSubAgentRunsFromExecutedTools(
     List<SubAgentRunViewData> currentRuns,
     List<Object?> executedTools,

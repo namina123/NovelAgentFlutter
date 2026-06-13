@@ -12,8 +12,9 @@ Future<void> main(List<String> arguments) async {
   final repoRoot = resolveLocalProbeRepoRoot();
   final bundle = AdapterBundle.standard(workingDirectoryPath: repoRoot);
   final localSettings = await bundle.settingsRepository.load();
-  final sourceProjectPath =
-      arguments.isEmpty ? localSettings.defaultProjectPath.trim() : arguments.first;
+  final sourceProjectPath = arguments.isEmpty
+      ? localSettings.defaultProjectPath.trim()
+      : arguments.first;
   if (sourceProjectPath.trim().isEmpty) {
     stderr.writeln('请传入源项目路径，或先在本地设置中配置 defaultProjectPath。');
     exitCode = 2;
@@ -29,6 +30,8 @@ Future<void> main(List<String> arguments) async {
   final apiConfig = await loadLocalProbeApiConfig(
     probeName: 'real_workflow_loop_probe',
     requireRealProbeOptIn: false,
+    allowLegacyTestApi: false,
+    allowTempSettingsFallback: false,
     repoRootOverride: repoRoot,
   );
   final provider = ProviderEndpointSettings(
@@ -144,8 +147,12 @@ Future<void> main(List<String> arguments) async {
   }
 
   stdout.writeln('ok: ${ValueReaders.boolValue(result['ok'])}');
-  stdout.writeln('changed_paths: ${ValueReaders.stringList(result['changed_paths']).join(', ')}');
-  stdout.writeln('output_paths: ${ValueReaders.stringList(result['output_paths']).join(', ')}');
+  stdout.writeln(
+    'changed_paths: ${ValueReaders.stringList(result['changed_paths']).join(', ')}',
+  );
+  stdout.writeln(
+    'output_paths: ${ValueReaders.stringList(result['output_paths']).join(', ')}',
+  );
   stdout.writeln('tool_counts: ${jsonEncode(toolNameCounts)}');
   stdout.writeln('read_path_counts: ${jsonEncode(readPathCounts)}');
   stdout.writeln('read_path_summary:');
@@ -167,16 +174,17 @@ Future<void> main(List<String> arguments) async {
       );
       continue;
     }
-    stdout.writeln(
-      'tool=$toolName path=$relativePath',
-    );
+    stdout.writeln('tool=$toolName path=$relativePath');
   }
 }
 
 Future<void> _copyDirectory(Directory source, Directory target) async {
   // 中文注释: 真实项目必须复制到隔离副本再跑探针，避免 run-next 直接污染用户工作目录。
   await target.create(recursive: true);
-  await for (final entity in source.list(recursive: false, followLinks: false)) {
+  await for (final entity in source.list(
+    recursive: false,
+    followLinks: false,
+  )) {
     final nextPath =
         '${target.path}${Platform.pathSeparator}${entity.uri.pathSegments.last}';
     if (entity is Directory) {

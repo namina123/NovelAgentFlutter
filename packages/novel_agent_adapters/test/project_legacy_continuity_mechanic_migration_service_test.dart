@@ -101,6 +101,10 @@ void main() {
         ValueReaders.stringValue(result['legacy_namespace_root']),
         'legacy.special_mechanic',
       );
+      expect(
+        ValueReaders.stringList(result['compatibility_aliases']),
+        contains('legacy.special_mechanic'),
+      );
 
       final profile = await profileRepository.readProfile(
         project,
@@ -111,11 +115,18 @@ void main() {
       expect(profile, isNotNull);
       expect(profile!.profileNamespace, 'legacy.special_mechanic.profile');
       expect(profile.lifecycleStatus, NarrativeProfileLifecycleStatus.deprecated);
+      expect(profile.profileLabel, contains('Legacy continuity bridge'));
       expect(
         ValueReaders.mapValue(
           profile.profileExtensions['legacy_special_mechanic_input_profile'],
         )['uses_replay_resets'],
         isTrue,
+      );
+      expect(
+        ValueReaders.stringList(
+          profile.profileExtensions['compatibility_aliases'],
+        ),
+        contains('legacy.special_mechanic'),
       );
       expect(
         claims.map((claim) => claim.claimNamespace),
@@ -135,6 +146,10 @@ void main() {
       expect(
         await projectionFile.readAsString(),
         contains('legacy.special_mechanic.profile'),
+      );
+      expect(
+        ValueReaders.stringValue(result['pressure_probe_note']),
+        contains('Historical special-mechanic labels remain readable'),
       );
     });
 

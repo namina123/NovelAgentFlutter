@@ -7,10 +7,13 @@ class ProjectLongTaskStationNarrativeSummary {
     required this.review,
     required this.continuity,
     required this.information,
+    this.expressionConstraint,
     required this.projectionItems,
     required this.permissionItems,
     required this.informationProjectionItems,
     required this.informationPermissionItems,
+    this.recentExpressionConstraintItems =
+        const <ProjectLongTaskStationItemSummary>[],
   });
 
   final ProjectLongTaskStationItemSummary? activation;
@@ -18,10 +21,12 @@ class ProjectLongTaskStationNarrativeSummary {
   final ProjectLongTaskStationItemSummary? review;
   final ProjectLongTaskStationItemSummary? continuity;
   final ProjectLongTaskStationItemSummary? information;
+  final ProjectLongTaskStationItemSummary? expressionConstraint;
   final List<ProjectLongTaskStationItemSummary> projectionItems;
   final List<ProjectLongTaskStationItemSummary> permissionItems;
   final List<ProjectLongTaskStationItemSummary> informationProjectionItems;
   final List<ProjectLongTaskStationItemSummary> informationPermissionItems;
+  final List<ProjectLongTaskStationItemSummary> recentExpressionConstraintItems;
 
   bool get hasContent =>
       activation != null ||
@@ -29,8 +34,10 @@ class ProjectLongTaskStationNarrativeSummary {
       review != null ||
       continuity != null ||
       information != null ||
+      expressionConstraint != null ||
       projectionItems.isNotEmpty ||
       permissionItems.isNotEmpty ||
       informationProjectionItems.isNotEmpty ||
-      informationPermissionItems.isNotEmpty;
+      informationPermissionItems.isNotEmpty ||
+      recentExpressionConstraintItems.isNotEmpty;
 }

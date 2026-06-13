@@ -4,6 +4,7 @@ import 'package:novel_agent_app/features/workbench/presentation/models/conversat
 import 'package:novel_agent_app/features/workbench/presentation/models/conversation_group_selector_view_data.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/conversation_input_capability_context.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/conversation_transcript_lane_view_data.dart';
+import 'package:novel_agent_app/features/workbench/presentation/models/project_long_task_summary_view_data.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/selector_option_view_data.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/workbench_canvas_view_data.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/workbench_conversation_view_data.dart';
@@ -20,6 +21,27 @@ void main() {
           projectName: '星港档案',
           projectSubtitle: '长篇科幻项目',
           resourceEntries: [],
+          projectLongTaskSummary: ProjectLongTaskSummaryViewData(
+            title: '长任务运行',
+            summary: '运行中 1 · 待处理 1 · 共 2 条',
+            isLoading: false,
+            totalCount: 2,
+            activeCount: 1,
+            attentionCount: 1,
+            runs: <ProjectLongTaskRunSummaryViewData>[
+              ProjectLongTaskRunSummaryViewData(
+                id: 'run_1',
+                title: '连续不断的长任务',
+                subtitle: '按大纲自动推进',
+                statusLabel: '等待人工处理',
+                taskLabel: '第 10 章返工',
+                recentActivityLabel: '5 分钟前',
+                requiresAttention: true,
+                isActive: false,
+                diagnosisLabel: '需要人工处理',
+              ),
+            ],
+          ),
         ),
         canvas: const WorkbenchCanvasViewData(
           documents: [],
@@ -85,6 +107,8 @@ void main() {
         viewData.projectAgentGroupPanel.actionDescription,
         '查看当前项目协作摘要，并按需调整默认协作组。',
       );
+      expect(viewData.projectLongTaskSummary, isNotNull);
+      expect(viewData.projectLongTaskSummary!.runs.single.diagnosisLabel, '需要人工处理');
     },
   );
 }

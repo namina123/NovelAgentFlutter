@@ -77,13 +77,13 @@ String resolveLocalProbeRepoRoot({Directory? startDirectory}) {
 Future<LocalProbeApiConfig> loadLocalProbeApiConfig({
   bool requireRealProbeOptIn = true,
   String probeName = 'probe',
-  bool allowLegacyTestApi = true,
-  bool allowTempSettingsFallback = true,
+  bool allowLegacyTestApi = false,
+  bool allowTempSettingsFallback = false,
   String? repoRootOverride,
   Directory? startDirectory,
   Map<String, String>? environment,
 }) async {
-  // 中文注释: 真实探针统一优先读取 local/probe_api.txt，其次兼容旧 test_api.txt，最后才回退到本地 temp 设置。
+  // 中文注释: 真实探针默认只认 local/probe_api.txt 或环境变量显式指定的文件；旧 test_api/temp 回退仅在兼容场景下显式放开。
   final resolvedEnvironment = environment ?? Platform.environment;
   if (requireRealProbeOptIn) {
     await ensureLocalRealProbeOptInWithEnvironment(
@@ -137,7 +137,8 @@ Future<LocalProbeApiConfig> loadLocalProbeApiConfig({
   throw StateError(
     '未找到可用探针配置。'
     '请优先创建 local/probe_api.txt，'
-    '或通过 $_probeApiFileEnv 指向本地配置文件。',
+    '或通过 $_probeApiFileEnv 指向本地配置文件。'
+    '如确需兼容旧 test_api.txt / temp 设置，请在脚本里显式开启对应 fallback。',
   );
 }
 

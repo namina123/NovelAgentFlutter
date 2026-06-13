@@ -212,7 +212,9 @@ class ToolSchemaBuilderService {
         return _objectSchema(
           required: const <String>['agent_id', 'task'],
           properties: <String, Object?>{
-            'agent_id': _stringSchema('子智能体 ID。'),
+            'agent_id': _stringSchema(
+              '子智能体 ID。优先填写协作视角清单里的 agent_id；如果一时拿不准精确 id，也可以传空字符串，运行时会按 task 自动兜底选取最匹配的子智能体。',
+            ),
             'task': _stringSchema('委派任务说明。'),
             'context_excerpt': _stringSchema('传给子智能体的上下文摘录。'),
             'expected_output': _stringSchema('期望产物格式。'),

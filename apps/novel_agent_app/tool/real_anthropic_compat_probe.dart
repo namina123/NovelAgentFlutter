@@ -7,7 +7,9 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 import 'probe_support.dart';
 
 Future<void> main() async {
-  final apiConfig = await loadProbeApiConfig();
+  final apiConfig = await loadProbeApiConfig(
+    probeName: 'real_anthropic_compat_probe',
+  );
   final baseUrl = apiConfig.baseUrl;
   final apiKey = apiConfig.apiKey;
   final modelId = apiConfig.modelId;

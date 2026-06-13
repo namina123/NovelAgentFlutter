@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 
 class AppPalette {
-  static const Color background = Color(0xFFF7F2E7);
-  static const Color panel = Color(0xFFF9F6ED);
-  static const Color line = Color(0xFF9FC8D6);
-  static const Color lineStrong = Color(0xFF2E687A);
-  static const Color accent = Color(0xFF2D7A8C);
-  static const Color accentSoft = Color(0xFFD8EEF4);
-  static const Color warm = Color(0xFFF8E7BE);
-  static const Color warmStrong = Color(0xFFC47B1C);
-  static const Color dangerSoft = Color(0xFFFFE5E1);
-  static const Color text = Color(0xFF1E2A32);
-  static const Color mutedText = Color(0xFF5E6E74);
+  static const Color background = Color(0xFF070B14);
+  static const Color panel = Color(0xFF101826);
+  static const Color line = Color(0xFF233149);
+  static const Color lineStrong = Color(0xFF7FA6FF);
+  static const Color accent = Color(0xFF4D7CFE);
+  static const Color accentSoft = Color(0xFF162543);
+  static const Color warm = Color(0xFF3D3221);
+  static const Color warmStrong = Color(0xFFD6A96A);
+  static const Color dangerSoft = Color(0xFF3D1F28);
+  static const Color text = Color(0xFFF3F7FF);
+  static const Color mutedText = Color(0xFF92A0BC);
   static const Color white = Colors.white;
 
   const AppPalette._();

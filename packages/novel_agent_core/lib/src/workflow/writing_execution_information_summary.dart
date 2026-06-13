@@ -1,5 +1,8 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import '../review/review_contract.dart';
+import '../review/review_summary.dart';
+import 'information_evidence_gate_signal.dart';
 
 class WritingExecutionInformationSummary {
   const WritingExecutionInformationSummary({
@@ -22,6 +25,9 @@ class WritingExecutionInformationSummary {
     this.waitingUser = false,
     this.requiresRepair = false,
     this.manualAttentionRequired = false,
+    this.evidenceGate = const InformationEvidenceGateSignal(),
+    this.informationEvidenceReviewContract,
+    this.informationEvidenceReviewSummary,
     this.metadata = const <String, Object?>{},
   });
 
@@ -44,10 +50,23 @@ class WritingExecutionInformationSummary {
   final bool waitingUser;
   final bool requiresRepair;
   final bool manualAttentionRequired;
+  final InformationEvidenceGateSignal evidenceGate;
+  final ReviewContract? informationEvidenceReviewContract;
+  final ReviewSummary? informationEvidenceReviewSummary;
   final JsonMap metadata;
 
   factory WritingExecutionInformationSummary.fromJson(JsonMap json) {
     // 中文注释: information summary 负责把激活和风险信号合并回读，避免上层重新解读 activation report 明细。
+    final evidenceGateJson = ValueReaders.mapValue(json['evidence_gate']);
+    final informationEvidenceReviewContractJson = ValueReaders.mapValue(
+      json['information_evidence_review_contract'],
+    );
+    final informationEvidenceReviewSummaryJson = ValueReaders.mapValue(
+      json['information_evidence_review_summary'],
+    );
+    final evidenceGate = InformationEvidenceGateSignal.fromJson(
+      evidenceGateJson.isNotEmpty ? evidenceGateJson : json,
+    );
     return WritingExecutionInformationSummary(
       present: ValueReaders.boolValue(json['present']),
       activationReportId: ValueReaders.stringValue(
@@ -80,6 +99,15 @@ class WritingExecutionInformationSummary {
       manualAttentionRequired: ValueReaders.boolValue(
         json['manual_attention_required'],
       ),
+      evidenceGate: evidenceGate,
+      informationEvidenceReviewContract:
+          informationEvidenceReviewContractJson.isEmpty
+          ? null
+          : ReviewContract.fromJson(informationEvidenceReviewContractJson),
+      informationEvidenceReviewSummary:
+          informationEvidenceReviewSummaryJson.isEmpty
+          ? null
+          : ReviewSummary.fromJson(informationEvidenceReviewSummaryJson),
       metadata: ValueReaders.deepCopyMap(
         ValueReaders.mapValue(json['metadata']),
       ),
@@ -108,6 +136,13 @@ class WritingExecutionInformationSummary {
       'waiting_user': waitingUser,
       'requires_repair': requiresRepair,
       'manual_attention_required': manualAttentionRequired,
+      'evidence_gate': evidenceGate.toJson(),
+      if (informationEvidenceReviewContract != null)
+        'information_evidence_review_contract':
+            informationEvidenceReviewContract!.toJson(),
+      if (informationEvidenceReviewSummary != null)
+        'information_evidence_review_summary':
+            informationEvidenceReviewSummary!.toJson(),
       'metadata': ValueReaders.deepCopyMap(metadata),
     };
   }
@@ -127,6 +162,13 @@ class WritingExecutionInformationSummary {
         truncatedItemCount < 0 ||
         changedPathCount < 0) {
       result.add('invalid_writing_execution_information_counts');
+    }
+    result.addAll(evidenceGate.validateBasics());
+    if (informationEvidenceReviewContract != null) {
+      result.addAll(informationEvidenceReviewContract!.validateBasics());
+    }
+    if (informationEvidenceReviewSummary != null) {
+      result.addAll(informationEvidenceReviewSummary!.validateBasics());
     }
     return result;
   }

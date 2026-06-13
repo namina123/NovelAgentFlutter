@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 
 class AppChrome {
-  static const double surfaceRadius = 0;
-  static const double controlRadius = 0;
+  static const double surfaceRadius = 10;
+  static const double controlRadius = 10;
   static const double borderWidth = 1;
-  static const BorderRadius surfaceBorderRadius = BorderRadius.zero;
-  static const BorderRadius controlBorderRadius = BorderRadius.zero;
+  static const BorderRadius surfaceBorderRadius = BorderRadius.all(
+    Radius.circular(surfaceRadius),
+  );
+  static const BorderRadius controlBorderRadius = BorderRadius.all(
+    Radius.circular(controlRadius),
+  );
   static const List<BoxShadow> noShadow = <BoxShadow>[];
 
   const AppChrome._();

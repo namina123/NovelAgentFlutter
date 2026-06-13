@@ -1,5 +1,10 @@
+import 'dart:async';
+
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../config/project_information_permission_settings_resolver_service.dart';
+import '../runtime/long_task_supervisor.dart';
+import '../runtime/project_long_task_run_registry_sync_service.dart';
 import '../storage/project_mode_guidance_repository.dart';
 import '../storage/project_prompt_template_service.dart';
 import '../storage/project_review_report_service.dart';
@@ -12,30 +17,49 @@ import 'project_long_task_checkpoint_action_service.dart';
 import 'project_long_task_chapter_gate_service.dart';
 import 'project_long_task_checkpoint_review_service.dart';
 import 'project_long_task_checkpoint_review_task_service.dart';
+import 'project_long_task_execution_constraint_repair_task_service.dart';
 import 'project_long_task_postprocess_result_service.dart';
 import 'project_long_task_revision_resolution_service.dart';
 import 'project_long_task_review_repair_task_service.dart';
 import 'project_mode_guidance_memory_section_service.dart';
 import 'project_task_queue_runtime_option_resolver.dart';
+import 'project_writing_execution_contract_service.dart';
 import 'project_workflow_runtime_bridge_service.dart';
 import 'project_workflow_review_runtime_service.dart';
+import 'project_workflow_reviewer_dispatch_service.dart';
+import 'workflow_runtime_satisfied_output_path_service.dart';
+import 'workflow_runtime_task_semantics_service.dart';
 
 typedef WorkflowGenerateDraftUseCaseFactory =
     GenerateDraftUseCase Function(
       ProviderEndpointSettings provider,
       JsonMap networkSettings,
     );
+typedef WorkflowHostAwareGenerateDraftUseCaseFactory =
+    GenerateDraftUseCase Function(
+      ProviderEndpointSettings provider,
+      JsonMap networkSettings, {
+      HostInformationPermissionContext? hostInformationPermissionContext,
+    });
 typedef LoadWorkflowProjectAgentGroupSelections =
     Future<List<ProjectAgentGroupSelection>> Function(
       ProjectDescriptor project,
     );
+typedef LoadWorkflowAvailableAgents =
+    Future<List<JsonMap>> Function(ProjectDescriptor project);
+typedef LoadWorkflowAvailableAgentGroups =
+    Future<List<JsonMap>> Function(ProjectDescriptor project);
 
 class ProjectWorkflowRuntimeService {
   ProjectWorkflowRuntimeService({
     required ProjectTaskRepository taskRepository,
     required ProjectPromptTemplateService promptTemplateService,
     required WorkflowGenerateDraftUseCaseFactory generateDraftUseCaseFactory,
+    WorkflowHostAwareGenerateDraftUseCaseFactory?
+    hostAwareGenerateDraftUseCaseFactory,
     LoadWorkflowProjectAgentGroupSelections? loadProjectAgentGroupSelections,
+    LoadWorkflowAvailableAgents? loadAvailableAgents,
+    LoadWorkflowAvailableAgentGroups? loadAvailableAgentGroups,
     TaskDefinitionService? taskDefinitionService,
     TaskSelectionService? taskSelectionService,
     TaskQueueOptionService? taskQueueOptionService,
@@ -73,6 +97,8 @@ class ProjectWorkflowRuntimeService {
     ProjectLongTaskChapterQueueRuntimeService? chapterQueueRuntimeService,
     ProjectLongTaskPostprocessResultService? postprocessResultService,
     ProjectLongTaskReviewRepairTaskService? reviewRepairTaskService,
+    ProjectLongTaskExecutionConstraintRepairTaskService?
+    executionConstraintRepairTaskService,
     ProjectLongTaskRevisionResolutionService? revisionResolutionService,
     ProjectLongTaskChapterGateService? chapterGateService,
     ProjectTaskQueueRuntimeOptionResolver? taskQueueRuntimeOptionResolver,
@@ -82,10 +108,22 @@ class ProjectWorkflowRuntimeService {
     ProjectWorkflowReviewRuntimeService? workflowReviewRuntimeService,
     WritingExecutionResultNormalizerService?
     writingExecutionResultNormalizerService,
+    ProjectWritingExecutionContractService? writingExecutionContractService,
+    WorkflowRuntimeTaskSemanticsService? workflowRuntimeTaskSemanticsService,
+    WorkflowRuntimeSatisfiedOutputPathService?
+    workflowRuntimeSatisfiedOutputPathService,
+    ProjectInformationPermissionSettingsResolverService?
+    informationPermissionSettingsResolverService,
+    LongTaskSupervisor? longTaskSupervisor,
+    ProjectLongTaskRunRegistrySyncService? longTaskRunRegistrySyncService,
   }) : _taskRepository = taskRepository,
        _promptTemplateService = promptTemplateService,
        _generateDraftUseCaseFactory = generateDraftUseCaseFactory,
+       _hostAwareGenerateDraftUseCaseFactory =
+           hostAwareGenerateDraftUseCaseFactory,
        _loadProjectAgentGroupSelections = loadProjectAgentGroupSelections,
+       _loadAvailableAgents = loadAvailableAgents,
+       _loadAvailableAgentGroups = loadAvailableAgentGroups,
        _taskDefinitionService =
            taskDefinitionService ?? TaskDefinitionService(),
        _taskSelectionService =
@@ -248,6 +286,7 @@ class ProjectWorkflowRuntimeService {
            checkpointActionService ??
            ProjectLongTaskCheckpointActionService(
              taskRepository: taskRepository,
+             longTaskSupervisor: longTaskSupervisor,
              checkpointReviewTaskService:
                  checkpointReviewTaskService ??
                  ProjectLongTaskCheckpointReviewTaskService(
@@ -271,6 +310,11 @@ class ProjectWorkflowRuntimeService {
                workspacePort: taskRepository.workspacePort,
                taskRepository: taskRepository,
              ),
+           ),
+       _executionConstraintRepairTaskService =
+           executionConstraintRepairTaskService ??
+           ProjectLongTaskExecutionConstraintRepairTaskService(
+             taskRepository: taskRepository,
            ),
        _chapterGateService =
            chapterGateService ??
@@ -326,17 +370,44 @@ class ProjectWorkflowRuntimeService {
        _workflowReviewRuntimeService =
            workflowReviewRuntimeService ??
            ProjectWorkflowReviewRuntimeService(taskRepository: taskRepository),
+       _reviewerDispatchService = ProjectWorkflowReviewerDispatchService(),
+       _workflowRuntimeTaskSemanticsService =
+           workflowRuntimeTaskSemanticsService ??
+           WorkflowRuntimeTaskSemanticsService(),
+       _workflowRuntimeSatisfiedOutputPathService =
+           workflowRuntimeSatisfiedOutputPathService ??
+           WorkflowRuntimeSatisfiedOutputPathService(
+             taskRepository: taskRepository,
+           ),
        _projectAgentGroupSelectionResolverService =
            const ProjectAgentGroupSelectionResolverService(),
        _writingExecutionResultNormalizerService =
            writingExecutionResultNormalizerService ??
-           WritingExecutionResultNormalizerService();
+           WritingExecutionResultNormalizerService(),
+       _writingExecutionContractService =
+           writingExecutionContractService ??
+           const ProjectWritingExecutionContractService(),
+       _informationPermissionSettingsResolverService =
+           informationPermissionSettingsResolverService ??
+           const ProjectInformationPermissionSettingsResolverService(),
+       _longTaskRunRegistrySyncService =
+           longTaskRunRegistrySyncService ??
+           (longTaskSupervisor == null
+               ? null
+               : ProjectLongTaskRunRegistrySyncService(
+                   supervisor: longTaskSupervisor,
+                   taskRepository: taskRepository,
+                 ));
 
   final ProjectTaskRepository _taskRepository;
   final ProjectPromptTemplateService _promptTemplateService;
   final WorkflowGenerateDraftUseCaseFactory _generateDraftUseCaseFactory;
+  final WorkflowHostAwareGenerateDraftUseCaseFactory?
+  _hostAwareGenerateDraftUseCaseFactory;
   final LoadWorkflowProjectAgentGroupSelections?
   _loadProjectAgentGroupSelections;
+  final LoadWorkflowAvailableAgents? _loadAvailableAgents;
+  final LoadWorkflowAvailableAgentGroups? _loadAvailableAgentGroups;
   final TaskDefinitionService _taskDefinitionService;
   final TaskSelectionService _taskSelectionService;
   final TaskQueueOptionService _taskQueueOptionService;
@@ -375,6 +446,8 @@ class ProjectWorkflowRuntimeService {
   final ProjectLongTaskCheckpointActionService _checkpointActionService;
   final ProjectLongTaskChapterQueueRuntimeService _chapterQueueRuntimeService;
   final ProjectLongTaskReviewRepairTaskService _reviewRepairTaskService;
+  final ProjectLongTaskExecutionConstraintRepairTaskService
+  _executionConstraintRepairTaskService;
   final ProjectLongTaskChapterGateService _chapterGateService;
   final ProjectTaskQueueRuntimeOptionResolver _taskQueueRuntimeOptionResolver;
   final ProjectDraftExecutionConstraintRuntimeService
@@ -382,10 +455,19 @@ class ProjectWorkflowRuntimeService {
   final ProjectLongTaskRevisionResolutionService _revisionResolutionService;
   final ProjectWorkflowRuntimeBridgeService _workflowRuntimeBridgeService;
   final ProjectWorkflowReviewRuntimeService _workflowReviewRuntimeService;
+  final ProjectWorkflowReviewerDispatchService _reviewerDispatchService;
+  final WorkflowRuntimeTaskSemanticsService
+  _workflowRuntimeTaskSemanticsService;
+  final WorkflowRuntimeSatisfiedOutputPathService
+  _workflowRuntimeSatisfiedOutputPathService;
   final ProjectAgentGroupSelectionResolverService
   _projectAgentGroupSelectionResolverService;
   final WritingExecutionResultNormalizerService
   _writingExecutionResultNormalizerService;
+  final ProjectWritingExecutionContractService _writingExecutionContractService;
+  final ProjectInformationPermissionSettingsResolverService
+  _informationPermissionSettingsResolverService;
+  final ProjectLongTaskRunRegistrySyncService? _longTaskRunRegistrySyncService;
 
   List<JsonMap> listTaskRuntimeModes() {
     // 中文注释: 模式定义直接来自 core，确保任务中心和 CLI 的枚举完全同源。
@@ -463,13 +545,28 @@ class ProjectWorkflowRuntimeService {
     return _taskSelectionService.sortTasks(tasks, filters: filters);
   }
 
+  Future<List<JsonMap>> _currentWorkflowTasks(
+    ProjectDescriptor project, {
+    JsonMap filters = const <String, Object?>{},
+  }) async {
+    return _workflowScopedTasks(
+      await listWorkflowTasks(project, filters: filters),
+    );
+  }
+
   Future<JsonMap> nextWorkflowTask(
     ProjectDescriptor project, {
     JsonMap filters = const <String, Object?>{},
   }) async {
     // 中文注释: 下一可运行任务完全复用共享调度规则。
-    var tasks = await listWorkflowTasks(project, filters: filters);
-    var nextTask = _taskSelectionService.nextRunnableTaskFromTasks(tasks);
+    var tasks = _workflowScopedTasks(
+      await listWorkflowTasks(project, filters: filters),
+    );
+    var primaryTasks = _workflowPrimaryTasks(tasks);
+    var nextTask = _nextRunnablePrimaryTask(
+      primaryTasks: primaryTasks,
+      allTasks: tasks,
+    );
     if (nextTask.isNotEmpty) {
       return nextTask;
     }
@@ -478,12 +575,73 @@ class ProjectWorkflowRuntimeService {
     if (!ValueReaders.boolValue(materialized['ok'])) {
       return <String, Object?>{};
     }
-    if (!ValueReaders.boolValue(materialized['materialized'])) {
-      return const <String, Object?>{};
+    if (ValueReaders.boolValue(materialized['materialized'])) {
+      tasks = _workflowScopedTasks(
+        await listWorkflowTasks(project, filters: filters),
+      );
+      primaryTasks = _workflowPrimaryTasks(tasks);
+      nextTask = _nextRunnablePrimaryTask(
+        primaryTasks: primaryTasks,
+        allTasks: tasks,
+      );
+      if (nextTask.isNotEmpty) {
+        return nextTask;
+      }
     }
-    tasks = await listWorkflowTasks(project, filters: filters);
     nextTask = _taskSelectionService.nextRunnableTaskFromTasks(tasks);
-    return nextTask;
+    if (nextTask.isNotEmpty) {
+      return nextTask;
+    }
+    final recoveredTask = await _recoverResumeDispatchRunningTask(
+      project,
+      tasks,
+    );
+    if (recoveredTask.isNotEmpty) {
+      return recoveredTask;
+    }
+    return const <String, Object?>{};
+  }
+
+  Future<JsonMap> _nextWorkflowQueueTask(
+    ProjectDescriptor project, {
+    JsonMap filters = const <String, Object?>{},
+  }) async {
+    // 中文注释: 受控队列默认只推进主链 primary task，checkpoint follow-up 留给显式动作或人工检查点收口。
+    var tasks = _workflowScopedTasks(
+      await listWorkflowTasks(project, filters: filters),
+    );
+    var primaryTasks = _workflowPrimaryTasks(tasks);
+    var nextTask = _nextRunnablePrimaryTask(
+      primaryTasks: primaryTasks,
+      allTasks: tasks,
+    );
+    if (nextTask.isNotEmpty) {
+      return nextTask;
+    }
+    final materialized = await _chapterQueueRuntimeService
+        .ensureMaterializedQueueForNextTask(project, tasks);
+    if (ValueReaders.boolValue(materialized['ok']) &&
+        ValueReaders.boolValue(materialized['materialized'])) {
+      tasks = _workflowScopedTasks(
+        await listWorkflowTasks(project, filters: filters),
+      );
+      primaryTasks = _workflowPrimaryTasks(tasks);
+      nextTask = _nextRunnablePrimaryTask(
+        primaryTasks: primaryTasks,
+        allTasks: tasks,
+      );
+      if (nextTask.isNotEmpty) {
+        return nextTask;
+      }
+    }
+    final deferredFollowupTask = _nextBlockingDeferredCheckpointFollowupTask(
+      tasks,
+      primaryTasks: primaryTasks,
+    );
+    if (deferredFollowupTask.isNotEmpty) {
+      return deferredFollowupTask;
+    }
+    return _recoverResumeDispatchRunningTask(project, primaryTasks);
   }
 
   Future<JsonMap> nextWorkflowPostprocessTask(
@@ -491,7 +649,9 @@ class ProjectWorkflowRuntimeService {
     JsonMap filters = const <String, Object?>{},
   }) async {
     // 中文注释: 下一后处理任务与普通 runnable 分离选择，保持旧项目语义。
-    final tasks = await listWorkflowTasks(project, filters: filters);
+    final tasks = _workflowScopedTasks(
+      await listWorkflowTasks(project, filters: filters),
+    );
     return _taskSelectionService.nextPostprocessTaskFromTasks(tasks);
   }
 
@@ -500,7 +660,9 @@ class ProjectWorkflowRuntimeService {
     JsonMap filters = const <String, Object?>{},
   }) async {
     // 中文注释: 链路视图按 plan 分组并保留依赖/检查点信息，供 GUI/CLI 共用同一份恢复快照。
-    final tasks = await listWorkflowTasks(project, filters: filters);
+    final tasks = _workflowScopedTasks(
+      await listWorkflowTasks(project, filters: filters),
+    );
     final view = _taskChainViewService.buildView(tasks);
     return <String, Object?>{
       ...view,
@@ -560,7 +722,7 @@ class ProjectWorkflowRuntimeService {
     }
     final schedulerSnapshot = _buildLongTaskSchedulerSnapshotUseCase.execute(
       record,
-      await listWorkflowTasks(project),
+      await _currentWorkflowTasks(project),
       options: ValueReaders.mapValue(record['options']),
     );
     final runCenterContract = _runCenterContractFromSchedulerSnapshot(
@@ -580,7 +742,7 @@ class ProjectWorkflowRuntimeService {
     ProjectDescriptor project,
     JsonMap selector,
   ) async {
-    // 中文注释: 该入口把已有检查点复盘手动物化成审稿任务，供 GUI/CLI 共用，不自动影响调度。
+    // 中文注释: 该入口把已有检查点复盘物化成正式审稿门，供 GUI/CLI 与 runtime 共用同一条接线。
     final task = await _taskRepository.loadTask(project, selector);
     if (task.isEmpty) {
       return <String, Object?>{
@@ -748,6 +910,7 @@ class ProjectWorkflowRuntimeService {
     JsonMap agent = const <String, Object?>{},
     JsonMap modelProfile = const <String, Object?>{},
     JsonMap contextSettings = const <String, Object?>{},
+    String expressionConstraintPolicyMode = '',
   }) async {
     // 中文注释: 执行包准备会把 execution JSON 和 checklist Markdown 一起落盘。
     final task = await _taskRepository.loadTask(project, selector);
@@ -768,34 +931,53 @@ class ProjectWorkflowRuntimeService {
       project,
       task,
     );
+    final runtimeTask = _workflowRuntimeTaskSemanticsService.taskForRuntime(
+      task,
+    );
+    final recentExpressionConstraintSummaries =
+        await _recentExpressionConstraintSummariesForTask(project, task);
+    final selectedCollaborationGroup =
+        await _resolveSelectedCollaborationGroupForTask(
+          project: project,
+          task: task,
+          agent: agent,
+        );
     final executionConstraints = await _draftExecutionConstraintRuntimeService
         .resolve(
           project,
-          appliesTo: _constraintAppliesToForTask(task),
+          appliesTo: _constraintAppliesToForTask(runtimeTask),
           agentId: ValueReaders.stringValue(agent['id']),
-          modeId: ValueReaders.stringValue(task['mode']),
+          modeId: ValueReaders.stringValue(runtimeTask['mode']),
           stageId: ValueReaders.stringValue(
-            ValueReaders.mapValue(task['metadata'])['stage'],
+            ValueReaders.mapValue(runtimeTask['metadata'])['stage'],
             'draft',
           ),
           intent: 'workflow_task',
-          taskType: ValueReaders.stringValue(task['task_type']),
-          legacyChapterLengthOptions: ValueReaders.mapValue(task['metadata']),
+          taskType: ValueReaders.stringValue(runtimeTask['task_type']),
+          expressionConstraintPolicyMode: expressionConstraintPolicyMode,
+          legacyChapterLengthOptions: ValueReaders.mapValue(
+            runtimeTask['metadata'],
+          ),
+          recentExpressionConstraintSummaries:
+              recentExpressionConstraintSummaries,
         );
     final effectiveTask = _taskWithExecutionConstraintMetadata(
-      task,
+      runtimeTask,
       executionConstraints,
     );
     final workflowBridge = await _workflowRuntimeBridgeService.buildTaskBridge(
       project,
-      task,
+      runtimeTask,
+      selectedCollaborationGroup: selectedCollaborationGroup,
     );
     final projectFileContents = await _readPlannedProjectFileContents(
       project,
       task,
     );
     final prompt = _buildLongTaskPromptUseCase.execute(
-      effectiveTask,
+      _taskWithResumeDispatchPromptAppendix(
+        _taskWithSelectedUserChoiceContext(effectiveTask),
+      ),
       options: <String, Object?>{
         'project_templates': await _templateMap(project),
         'memory_sections': memorySections,
@@ -843,7 +1025,7 @@ class ProjectWorkflowRuntimeService {
         executionConstraints['project_expression_constraint_bindings'],
       ),
       'project_file_section_plan': _longTaskProjectFileSectionPlanService.build(
-        task,
+        runtimeTask,
       ),
       'project_file_contents': projectFileContents,
     });
@@ -862,17 +1044,16 @@ class ProjectWorkflowRuntimeService {
     );
     final activationReportPath =
         'tracking/chapter_atomic/$safeId.activation_report.json';
-    final execution =
-        _workflowRuntimeBridgeService.attachPreparationArtifacts(
-            ValueReaders.mapValue(result['execution'])
-              ..['prompt_preview_markdown'] = prompt,
-            workflowBridge,
-            activationReportPath: activationReportPath,
-          )
-          ..['effective_task'] = ValueReaders.deepCopyMap(effectiveTask)
-          ..['execution_constraint_bridge_report'] = ValueReaders.deepCopyMap(
-            ValueReaders.mapValue(executionConstraints['runtime_report']),
-          );
+    final execution = _workflowRuntimeBridgeService.attachPreparationArtifacts(
+      ValueReaders.mapValue(result['execution'])
+        ..['prompt_preview_markdown'] = prompt,
+      workflowBridge,
+      activationReportPath: activationReportPath,
+    )..['effective_task'] = ValueReaders.deepCopyMap(effectiveTask);
+    final persistedExecution = _attachExecutionConstraintArtifacts(
+      execution,
+      executionConstraints,
+    );
     final executionPath = ValueReaders.stringValue(result['execution_path']);
     final checklistPath = ValueReaders.stringValue(result['checklist_path']);
     await _taskRepository.saveRecord(
@@ -880,7 +1061,11 @@ class ProjectWorkflowRuntimeService {
       activationReportPath,
       ValueReaders.mapValue(workflowBridge['activation_report']),
     );
-    await _taskRepository.saveRecord(project, executionPath, execution);
+    await _taskRepository.saveRecord(
+      project,
+      executionPath,
+      persistedExecution,
+    );
     await _taskRepository.writeTextFile(project, checklistPath, prompt);
     await _taskRepository.transitionTask(
       project,
@@ -907,7 +1092,7 @@ class ProjectWorkflowRuntimeService {
       'relative_path': executionPath,
       'context_pack_id': ValueReaders.stringValue(result['context_pack_id']),
       'activation_report_path': activationReportPath,
-      'execution': execution,
+      'execution': persistedExecution,
       'changed_paths': <Object?>[
         executionPath,
         checklistPath,
@@ -940,6 +1125,8 @@ class ProjectWorkflowRuntimeService {
     JsonMap selector, {
     JsonMap runRecord = const <String, Object?>{},
     JsonMap agent = const <String, Object?>{},
+    JsonMap options = const <String, Object?>{},
+    DraftGenerationCancellationToken? cancellationToken,
   }) async {
     // 中文注释: 单步执行复用共享生成用例和项目工具调度，形成 GUI/CLI 共用运行链。
     final provider = settings.defaultProvider();
@@ -958,6 +1145,7 @@ class ProjectWorkflowRuntimeService {
         'response': <String, Object?>{},
       };
     }
+    var runtimeTask = _workflowRuntimeTaskSemanticsService.taskForRuntime(task);
     final reviewPreflight = await _workflowReviewRuntimeService
         .preflightReviewTask(project: project, task: task);
     if (ValueReaders.stringValue(reviewPreflight['action']) ==
@@ -985,7 +1173,7 @@ class ProjectWorkflowRuntimeService {
         },
       );
       final writingExecutionResult = _buildWritingExecutionResult(
-        task: task,
+        task: runtimeTask,
         executionRecord: const <String, Object?>{},
         executionConstraints: const <String, Object?>{},
         checkpointReview: const <String, Object?>{},
@@ -1021,6 +1209,8 @@ class ProjectWorkflowRuntimeService {
           'model_id': provider.modelId,
         },
         contextSettings: settings.contextSettings,
+        expressionConstraintPolicyMode:
+            _expressionConstraintPolicyModeFromOptions(options),
       );
       if (!ValueReaders.boolValue(prepared['ok'])) {
         return <String, Object?>{
@@ -1033,42 +1223,60 @@ class ProjectWorkflowRuntimeService {
         };
       }
       task = await _taskRepository.loadTask(project, selector);
+      runtimeTask = _workflowRuntimeTaskSemanticsService.taskForRuntime(task);
     }
+    final selectedCollaborationGroup =
+        await _resolveSelectedCollaborationGroupForTask(
+          project: project,
+          task: task,
+          agent: agent,
+        );
     final memorySections = await _modeGuidanceMemorySectionService.buildForTask(
       project,
       task,
     );
+    final recentExpressionConstraintSummaries =
+        await _recentExpressionConstraintSummariesForTask(project, task);
     final executionConstraints = await _draftExecutionConstraintRuntimeService
         .resolve(
           project,
-          appliesTo: _constraintAppliesToForTask(task),
+          appliesTo: _constraintAppliesToForTask(runtimeTask),
           agentId: ValueReaders.stringValue(agent['id']),
-          modeId: ValueReaders.stringValue(task['mode']),
+          modeId: ValueReaders.stringValue(runtimeTask['mode']),
           stageId: ValueReaders.stringValue(
-            ValueReaders.mapValue(task['metadata'])['stage'],
+            ValueReaders.mapValue(runtimeTask['metadata'])['stage'],
             'draft',
           ),
           intent: 'workflow_task',
-          taskType: ValueReaders.stringValue(task['task_type']),
-          legacyChapterLengthOptions: ValueReaders.mapValue(task['metadata']),
+          taskType: ValueReaders.stringValue(runtimeTask['task_type']),
+          expressionConstraintPolicyMode:
+              _expressionConstraintPolicyModeFromOptions(options),
+          legacyChapterLengthOptions: ValueReaders.mapValue(
+            runtimeTask['metadata'],
+          ),
+          recentExpressionConstraintSummaries:
+              recentExpressionConstraintSummaries,
         );
     final effectiveTask = _taskWithExecutionConstraintMetadata(
-      task,
+      runtimeTask,
       executionConstraints,
     );
     final workflowBridge = await _workflowRuntimeBridgeService.buildTaskBridge(
       project,
-      task,
+      runtimeTask,
+      selectedCollaborationGroup: selectedCollaborationGroup,
     );
     final projectFileSectionPlan = _longTaskProjectFileSectionPlanService.build(
-      task,
+      runtimeTask,
     );
     final projectFileContents = await _readPlannedProjectFileContents(
       project,
       task,
     );
     final prompt = _buildLongTaskPromptUseCase.execute(
-      effectiveTask,
+      _taskWithResumeDispatchPromptAppendix(
+        _taskWithSelectedUserChoiceContext(effectiveTask),
+      ),
       runRecord: runRecord,
       options: <String, Object?>{
         'project_templates': await _templateMap(project),
@@ -1087,12 +1295,16 @@ class ProjectWorkflowRuntimeService {
       selector,
       TaskRuntimeConstants.statusRunning,
       note: '章节原子任务开始单步模型执行。',
-      extra: const <String, Object?>{
+      extra: <String, Object?>{
         'postprocess_ran_at': '',
         'postprocess_review_report_path': '',
         'postprocess_review_report_json_path': '',
         'postprocess_checkpoint_review_path': '',
         'postprocess_checkpoint_review_summary': '',
+        'selected_user_option_prompt': '',
+        'selected_user_option_label': '',
+        'selected_user_option_description': '',
+        'selected_user_option_question': '',
       },
     );
     final executionProfile = _modelExecutionProfileService.resolve(
@@ -1100,73 +1312,166 @@ class ProjectWorkflowRuntimeService {
       provider: provider,
       agent: agent,
     );
-    final useCase = _generateDraftUseCaseFactory(
-      provider,
-      settings.networkSettings,
+    final useCase = _workflowGenerateDraftUseCase(
+      provider: provider,
+      settings: settings,
     );
-    final selectedCollaborationGroup =
-        await _resolveSelectedCollaborationGroupForTask(
-          project: project,
-          task: task,
-          agent: agent,
-        );
-    final result = await useCase.execute(
+    final reviewerDispatch = await _resolveReviewerDispatchForTask(
       project: project,
-      userPrompt: prompt,
-      modelId: ValueReaders.stringValue(
-        executionProfile['resolved_model_id'],
-        settings.defaultModelId.trim().isEmpty
-            ? provider.modelId
-            : settings.defaultModelId,
-      ),
-      title: ValueReaders.stringValue(task['title']),
-      intent: 'workflow_task',
+      task: task,
       agent: agent,
       selectedCollaborationGroup: selectedCollaborationGroup,
-      requestOptions: ValueReaders.mapValue(
-        executionProfile['request_options'],
+    );
+    final resolvedModelId = ValueReaders.stringValue(
+      executionProfile['resolved_model_id'],
+      settings.defaultModelId.trim().isEmpty
+          ? provider.modelId
+          : settings.defaultModelId,
+    );
+    final requestOptions = ValueReaders.mapValue(
+      executionProfile['request_options'],
+    );
+    final modelProfile = <String, Object?>{
+      'id': provider.id,
+      'base_url': provider.baseUrl,
+      'model_id': provider.modelId,
+    };
+    final skillRoutingContext = <String, Object?>{
+      'task_type': ValueReaders.stringValue(runtimeTask['task_type']),
+      'mode': ValueReaders.stringValue(runtimeTask['mode']),
+      'title': ValueReaders.stringValue(runtimeTask['title']),
+      'goal': ValueReaders.stringValue(runtimeTask['goal']),
+      'brief': ValueReaders.stringValue(runtimeTask['brief']),
+      'review_type': ValueReaders.stringValue(
+        ValueReaders.mapValue(runtimeTask['metadata'])['review_type'],
       ),
-      contextSettings: settings.contextSettings,
-      modelProfile: <String, Object?>{
-        'id': provider.id,
-        'base_url': provider.baseUrl,
-        'model_id': provider.modelId,
-      },
-      skillRoutingContext: <String, Object?>{
-        'task_type': ValueReaders.stringValue(task['task_type']),
-        'mode': ValueReaders.stringValue(task['mode']),
-        'title': ValueReaders.stringValue(task['title']),
-        'goal': ValueReaders.stringValue(task['goal']),
-        'brief': ValueReaders.stringValue(task['brief']),
-        'review_type': ValueReaders.stringValue(
-          ValueReaders.mapValue(task['metadata'])['review_type'],
+      'workflow_task_context': <String, Object?>{
+        'id': ValueReaders.stringValue(runtimeTask['id']),
+        'title': ValueReaders.stringValue(runtimeTask['title']),
+        'task_type': ValueReaders.stringValue(runtimeTask['task_type']),
+        'mode': ValueReaders.stringValue(runtimeTask['mode']),
+        'workflow_mode': ValueReaders.stringValue(runtimeTask['mode']),
+        'relative_path': ValueReaders.stringValue(runtimeTask['relative_path']),
+        'metadata': ValueReaders.deepCopyMap(
+          ValueReaders.mapValue(runtimeTask['metadata']),
         ),
       },
-      memorySections: memorySections,
-      projectFileSectionPlan: projectFileSectionPlan,
-      projectFileContents: projectFileContents,
-      expressionConstraintProfiles: ValueReaders.objectList(
-        executionConstraints['expression_constraint_profiles'],
-      ),
-      projectExpressionConstraintBindings: ValueReaders.objectList(
-        executionConstraints['project_expression_constraint_bindings'],
-      ),
-      subAgentRuntimeSettings: settings,
-      subAgentBindingModeId: ValueReaders.stringValue(task['mode']),
-      subAgentBindingStageId: ValueReaders.stringValue(
-        ValueReaders.mapValue(task['metadata'])['stage'],
-        'draft',
-      ),
-      sessionContext: _mergeSessionContexts(
-        ValueReaders.stringValue(workflowBridge['activation_context_markdown']),
-        ValueReaders.stringValue(
-          executionConstraints['session_context_markdown'],
-        ),
-      ),
-      exposedToolIds: ValueReaders.stringList(
-        workflowBridge['workflow_tool_ids'],
+    };
+    final sessionContext = _mergeSessionContexts(
+      ValueReaders.stringValue(workflowBridge['activation_context_markdown']),
+      ValueReaders.stringValue(
+        executionConstraints['session_context_markdown'],
       ),
     );
+    DraftGenerationResult result;
+    try {
+      result = ValueReaders.boolValue(reviewerDispatch['should_delegate'])
+          ? await useCase.executeDelegatedSubAgentTask(
+              project: project,
+              userPrompt: prompt,
+              modelId: resolvedModelId,
+              childAgentId: ValueReaders.stringValue(
+                reviewerDispatch['agent_id'],
+              ),
+              childTask: _delegatedReviewerTask(task),
+              title: ValueReaders.stringValue(runtimeTask['title']),
+              intent: 'workflow_task',
+              parentAgent: agent,
+              selectedCollaborationGroup: selectedCollaborationGroup,
+              requestOptions: requestOptions,
+              contextSettings: settings.contextSettings,
+              modelProfile: modelProfile,
+              skillRoutingContext: skillRoutingContext,
+              memorySections: memorySections,
+              projectFileSectionPlan: projectFileSectionPlan,
+              projectFileContents: projectFileContents,
+              expressionConstraintProfiles: ValueReaders.objectList(
+                executionConstraints['expression_constraint_profiles'],
+              ),
+              projectExpressionConstraintBindings: ValueReaders.objectList(
+                executionConstraints['project_expression_constraint_bindings'],
+              ),
+              subAgentRuntimeSettings: settings,
+              subAgentBindingModeId: ValueReaders.stringValue(
+                runtimeTask['mode'],
+              ),
+              subAgentBindingStageId: ValueReaders.stringValue(
+                ValueReaders.mapValue(runtimeTask['metadata'])['stage'],
+                'draft',
+              ),
+              sessionContext: sessionContext,
+              sourcePaths: ValueReaders.stringList(runtimeTask['source_paths']),
+              constraints: _delegatedReviewerConstraints(task),
+              expectedOutput:
+                  '返回可合并的审稿结论；形成正式结论时优先使用 submit_semantic_review 提交结构化结果。',
+            )
+          : await useCase.execute(
+              project: project,
+              userPrompt: prompt,
+              modelId: resolvedModelId,
+              title: ValueReaders.stringValue(runtimeTask['title']),
+              intent: 'workflow_task',
+              agent: agent,
+              selectedCollaborationGroup: selectedCollaborationGroup,
+              requestOptions: requestOptions,
+              contextSettings: settings.contextSettings,
+              modelProfile: modelProfile,
+              skillRoutingContext: skillRoutingContext,
+              memorySections: memorySections,
+              projectFileSectionPlan: projectFileSectionPlan,
+              projectFileContents: projectFileContents,
+              expressionConstraintProfiles: ValueReaders.objectList(
+                executionConstraints['expression_constraint_profiles'],
+              ),
+              projectExpressionConstraintBindings: ValueReaders.objectList(
+                executionConstraints['project_expression_constraint_bindings'],
+              ),
+              subAgentRuntimeSettings: settings,
+              subAgentBindingModeId: ValueReaders.stringValue(
+                runtimeTask['mode'],
+              ),
+              subAgentBindingStageId: ValueReaders.stringValue(
+                ValueReaders.mapValue(runtimeTask['metadata'])['stage'],
+                'draft',
+              ),
+              sessionContext: sessionContext,
+              exposedToolIds: ValueReaders.stringList(
+                workflowBridge['workflow_tool_ids'],
+              ),
+              cancellationToken: cancellationToken,
+            );
+    } catch (error) {
+      if (!_isRetryableWorkflowTaskTransportFailure(error)) {
+        rethrow;
+      }
+      return _handleRetryableWorkflowTaskTransportFailure(
+        project: project,
+        selector: selector,
+        task: task,
+        runtimeTask: runtimeTask,
+        executionConstraints: executionConstraints,
+        options: options,
+        error: error,
+      );
+    }
+    if (cancellationToken?.isCancellationRequested == true) {
+      await _taskRepository.transitionTask(
+        project,
+        selector,
+        TaskRuntimeConstants.statusQueued,
+        note: '当前批次已达到最长时间限制，已取消本步，等待后续继续。',
+      );
+      return <String, Object?>{
+        'ok': false,
+        'error': '当前任务执行超过本批最长时间限制。',
+        'timeout': true,
+        'response': _resultAsResponse(result),
+        'waiting_for_user_choice': false,
+        'output_paths': result.writtenPaths,
+        'changed_paths': result.changedPaths,
+        'executed_tools': result.executedTools,
+      };
+    }
     var outputPaths = _workflowRuntimeBridgeService.resolveOutputPaths(
       executedTools: result.executedTools,
       writtenPaths: result.writtenPaths,
@@ -1181,7 +1486,7 @@ class ProjectWorkflowRuntimeService {
       outputPaths,
       ValueReaders.stringList(semanticReviewArtifacts['output_paths']),
     );
-    final workflowChangedPaths = _mergePaths(
+    var workflowChangedPaths = _mergePaths(
       result.changedPaths,
       ValueReaders.stringList(semanticReviewArtifacts['changed_paths']),
     );
@@ -1231,9 +1536,25 @@ class ProjectWorkflowRuntimeService {
           writtenPaths: result.writtenPaths,
           draftPreview: result.draftMarkdown,
         );
+        nextExecution['response'] = _resultAsResponse(result);
+        nextExecution['executed_tools'] = ValueReaders.deepCopyList(
+          result.executedTools,
+        );
+        nextExecution['pending_user_options'] = ValueReaders.deepCopyList(
+          _pendingUserOptionsFromExecutedTools(result.executedTools),
+        );
+        if (ValueReaders.boolValue(reviewerDispatch['applicable'])) {
+          nextExecution['reviewer_dispatch'] = ValueReaders.deepCopyMap(
+            reviewerDispatch,
+          );
+        }
         nextExecution = _workflowReviewRuntimeService.attachReviewArtifacts(
           nextExecution,
           semanticReviewArtifacts,
+        );
+        nextExecution = _attachExecutionConstraintArtifacts(
+          nextExecution,
+          executionConstraints,
         );
         if (ValueReaders.boolValue(revisionDiff['ok'])) {
           nextExecution['revision_diff_path'] = ValueReaders.stringValue(
@@ -1244,13 +1565,266 @@ class ProjectWorkflowRuntimeService {
         executionRecord = nextExecution;
       }
     }
+    final planningBoundaryDecision = await _planningTaskBoundaryDecision(
+      project: project,
+      task: task,
+      result: result,
+      outputPaths: outputPaths,
+      executionRecord: executionRecord,
+    );
+    if (ValueReaders.stringValue(planningBoundaryDecision['action']) ==
+        'retry') {
+      final note = ValueReaders.stringValue(
+        planningBoundaryDecision['note'],
+        '自治规划尚未形成最小规划产物，已安排重试。',
+      );
+      final retryBudget = _directRecoveryRetryBudget(
+        task: task,
+        options: options,
+      );
+      final retryCount = ValueReaders.intValue(task['recovery_retry_count']);
+      final canRetry = retryCount < retryBudget;
+      final nextRetryCount = canRetry ? retryCount + 1 : retryCount;
+      final recoveryPlan = canRetry
+          ? <String, Object?>{
+              'action': 'resume_dispatch',
+              'reason': 'autonomous_planning_retry_scheduled',
+              'note': note,
+              'safe_after_crash': true,
+              'status': 'retrying',
+            }
+          : <String, Object?>{
+              'action': 'pause_for_failure',
+              'reason': 'autonomous_planning_retry_budget_exhausted',
+              'note': note,
+            };
+      final writingExecutionResult = _buildWritingExecutionResult(
+        task: runtimeTask,
+        executionRecord: executionRecord,
+        executionConstraints: executionConstraints,
+        checkpointReview: const <String, Object?>{},
+        result: result,
+        recoveryPlan: recoveryPlan,
+      );
+      final persistedFailureExtra = <String, Object?>{
+        'output_paths': outputPaths,
+        'last_writing_execution_result': writingExecutionResult,
+        'recovery_retry_count': retryCount,
+        'recovery_retry_budget': retryBudget,
+      };
+      await _taskRepository.transitionTask(
+        project,
+        selector,
+        TaskRuntimeConstants.statusFailed,
+        note: note,
+        extra: persistedFailureExtra,
+      );
+      if (canRetry) {
+        await _taskRepository.transitionTask(
+          project,
+          selector,
+          TaskRuntimeConstants.statusRetrying,
+          note: '自治规划未完整落盘，已自动安排重试继续补齐规划产物。',
+          extra: <String, Object?>{
+            ...persistedFailureExtra,
+            'recovery_retry_count': nextRetryCount,
+          },
+        );
+      }
+      executionRecord = await _persistWritingExecutionResult(
+        project,
+        executionPath,
+        executionRecord,
+        writingExecutionResult,
+      );
+      return <String, Object?>{
+        'ok': canRetry,
+        if (!canRetry) 'error': note,
+        'response': <String, Object?>{
+          ..._resultAsResponse(result),
+          'waiting_for_user_choice': false,
+        },
+        'waiting_for_user_choice': false,
+        'retry_scheduled': canRetry,
+        'output_paths': outputPaths,
+        'execution': executionRecord,
+        'activation_report_path': ValueReaders.stringValue(
+          executionRecord['activation_report_path'],
+        ),
+        'activation_report_summary': ValueReaders.stringValue(
+          executionRecord['activation_report_summary'],
+        ),
+        'chapter_delivery': ValueReaders.mapValue(
+          executionRecord['chapter_delivery'],
+        ),
+        'chapter_delivery_state': ValueReaders.stringValue(
+          executionRecord['chapter_delivery_state'],
+        ),
+        'chapter_delivery_path': ValueReaders.stringValue(
+          executionRecord['chapter_delivery_path'],
+        ),
+        'revision_diff': revisionDiff,
+        'checkpoint_review': const <String, Object?>{},
+        'gate_outcome': const <String, Object?>{},
+        'writing_execution_result': writingExecutionResult,
+        'executed_tools': result.executedTools,
+        'changed_paths': workflowChangedPaths,
+      };
+    }
+    if (ValueReaders.stringValue(planningBoundaryDecision['action']) ==
+        'fail') {
+      final error = ValueReaders.stringValue(
+        planningBoundaryDecision['error'],
+        'Planning task crossed into chapter delivery.',
+      );
+      final writingExecutionResult = _buildWritingExecutionResult(
+        task: task,
+        executionRecord: executionRecord,
+        executionConstraints: executionConstraints,
+        checkpointReview: const <String, Object?>{},
+        result: result,
+        recoveryPlan: <String, Object?>{
+          'action': 'pause_for_failure',
+          'reason': 'planning_task_boundary_violation',
+          'note': error,
+        },
+      );
+      await _taskRepository.transitionTask(
+        project,
+        selector,
+        TaskRuntimeConstants.statusFailed,
+        note: error,
+        extra: <String, Object?>{
+          'output_paths': outputPaths,
+          'last_writing_execution_result': writingExecutionResult,
+        },
+      );
+      executionRecord = await _persistWritingExecutionResult(
+        project,
+        executionPath,
+        executionRecord,
+        writingExecutionResult,
+      );
+      return <String, Object?>{
+        'ok': false,
+        'error': error,
+        'response': _resultAsResponse(result),
+        'waiting_for_user_choice': false,
+        'output_paths': outputPaths,
+        'execution': executionRecord,
+        'activation_report_path': ValueReaders.stringValue(
+          executionRecord['activation_report_path'],
+        ),
+        'activation_report_summary': ValueReaders.stringValue(
+          executionRecord['activation_report_summary'],
+        ),
+        'chapter_delivery': ValueReaders.mapValue(
+          executionRecord['chapter_delivery'],
+        ),
+        'chapter_delivery_state': ValueReaders.stringValue(
+          executionRecord['chapter_delivery_state'],
+        ),
+        'chapter_delivery_path': ValueReaders.stringValue(
+          executionRecord['chapter_delivery_path'],
+        ),
+        'revision_diff': revisionDiff,
+        'checkpoint_review': const <String, Object?>{},
+        'gate_outcome': const <String, Object?>{},
+        'writing_execution_result': writingExecutionResult,
+        'executed_tools': result.executedTools,
+        'changed_paths': workflowChangedPaths,
+      };
+    }
+    outputPaths = await _workflowRuntimeSatisfiedOutputPathService
+        .mergeSatisfiedOutputPaths(
+          project: project,
+          task: runtimeTask,
+          outputPaths: outputPaths,
+          executionRecord: executionRecord,
+        );
+    executionRecord = await _persistExecutionOutputPaths(
+      project: project,
+      executionPath: executionPath,
+      executionRecord: executionRecord,
+      outputPaths: outputPaths,
+    );
+    final reviewSubmissionDecision = _reviewTaskSubmissionDecision(
+      task: task,
+      result: result,
+      semanticReviewArtifacts: semanticReviewArtifacts,
+      executionRecord: executionRecord,
+    );
+    if (ValueReaders.stringValue(reviewSubmissionDecision['action']) ==
+        'fail') {
+      final error = ValueReaders.stringValue(
+        reviewSubmissionDecision['error'],
+        'Review task did not submit semantic review.',
+      );
+      final writingExecutionResult = _buildWritingExecutionResult(
+        task: task,
+        executionRecord: executionRecord,
+        executionConstraints: executionConstraints,
+        checkpointReview: const <String, Object?>{},
+        result: result,
+        recoveryPlan: <String, Object?>{
+          'action': 'pause_for_failure',
+          'reason': 'review_submission_missing',
+          'note': error,
+        },
+      );
+      await _taskRepository.transitionTask(
+        project,
+        selector,
+        TaskRuntimeConstants.statusFailed,
+        note: error,
+        extra: <String, Object?>{
+          'output_paths': outputPaths,
+          'last_writing_execution_result': writingExecutionResult,
+        },
+      );
+      executionRecord = await _persistWritingExecutionResult(
+        project,
+        executionPath,
+        executionRecord,
+        writingExecutionResult,
+      );
+      return <String, Object?>{
+        'ok': false,
+        'error': error,
+        'response': _resultAsResponse(result),
+        'waiting_for_user_choice': false,
+        'output_paths': outputPaths,
+        'execution': executionRecord,
+        'activation_report_path': ValueReaders.stringValue(
+          executionRecord['activation_report_path'],
+        ),
+        'activation_report_summary': ValueReaders.stringValue(
+          executionRecord['activation_report_summary'],
+        ),
+        'chapter_delivery': ValueReaders.mapValue(
+          executionRecord['chapter_delivery'],
+        ),
+        'chapter_delivery_state': ValueReaders.stringValue(
+          executionRecord['chapter_delivery_state'],
+        ),
+        'chapter_delivery_path': ValueReaders.stringValue(
+          executionRecord['chapter_delivery_path'],
+        ),
+        'revision_diff': revisionDiff,
+        'checkpoint_review': const <String, Object?>{},
+        'gate_outcome': const <String, Object?>{},
+        'writing_execution_result': writingExecutionResult,
+        'executed_tools': result.executedTools,
+        'changed_paths': workflowChangedPaths,
+      };
+    }
     JsonMap checkpointReview = const <String, Object?>{};
     if (result.executedTools.isNotEmpty ||
         outputPaths.isNotEmpty ||
         result.draftMarkdown.trim().isNotEmpty) {
       checkpointReview = await _checkpointReviewService.saveReview(
         project: project,
-        task: task,
+        task: runtimeTask,
         result: <String, Object?>{
           'ok': true,
           'output_paths': outputPaths,
@@ -1264,7 +1838,7 @@ class ProjectWorkflowRuntimeService {
     }
     final gateOutcome = await _chapterGateService.applyReviewOutcome(
       project: project,
-      task: task,
+      task: runtimeTask,
     );
     if (!ValueReaders.boolValue(gateOutcome['ok'], true)) {
       await _taskRepository.transitionTask(
@@ -1274,7 +1848,7 @@ class ProjectWorkflowRuntimeService {
         note: '章级闸门返工链创建失败：${ValueReaders.stringValue(gateOutcome["error"])}',
       );
       final writingExecutionResult = _buildWritingExecutionResult(
-        task: task,
+        task: runtimeTask,
         executionRecord: executionRecord,
         executionConstraints: executionConstraints,
         checkpointReview: checkpointReview,
@@ -1331,11 +1905,116 @@ class ProjectWorkflowRuntimeService {
       };
     }
     final formalChapterDecision = _formalChapterCompletionDecision(
-      task: task,
+      task: runtimeTask,
       result: result,
       outputPaths: outputPaths,
       executionRecord: executionRecord,
     );
+    if (ValueReaders.stringValue(formalChapterDecision['action']) == 'retry') {
+      final note = ValueReaders.stringValue(
+        formalChapterDecision['note'],
+        '自治正式章节任务在交付前停回用户选择，已安排自动重试。',
+      );
+      final retryBudget = _directRecoveryRetryBudget(
+        task: task,
+        options: options,
+      );
+      final retryCount = ValueReaders.intValue(task['recovery_retry_count']);
+      final canRetry = retryCount < retryBudget;
+      final nextRetryCount = canRetry ? retryCount + 1 : retryCount;
+      final recoveryPlan = canRetry
+          ? <String, Object?>{
+              'action': 'resume_dispatch',
+              'reason': 'autonomous_formal_chapter_retry_scheduled',
+              'note': note,
+              'safe_after_crash': true,
+              'status': 'retrying',
+            }
+          : <String, Object?>{
+              'action': 'pause_for_failure',
+              'reason': 'autonomous_formal_chapter_retry_budget_exhausted',
+              'note': note,
+            };
+      final writingExecutionResult = _buildWritingExecutionResult(
+        task: runtimeTask,
+        executionRecord: executionRecord,
+        executionConstraints: executionConstraints,
+        checkpointReview: const <String, Object?>{},
+        result: result,
+        recoveryPlan: recoveryPlan,
+      );
+      final persistedFailureExtra = <String, Object?>{
+        'output_paths': outputPaths,
+        'last_writing_execution_result': writingExecutionResult,
+        'recovery_retry_count': retryCount,
+        'recovery_retry_budget': retryBudget,
+        'waiting_for_user_choice': false,
+        if (ValueReaders.stringValue(
+          formalChapterDecision['resume_dispatch_prompt_appendix'],
+        ).trim().isNotEmpty)
+          'resume_dispatch_prompt_appendix': ValueReaders.stringValue(
+            formalChapterDecision['resume_dispatch_prompt_appendix'],
+          ),
+      };
+      await _taskRepository.transitionTask(
+        project,
+        selector,
+        TaskRuntimeConstants.statusFailed,
+        note: note,
+        extra: persistedFailureExtra,
+      );
+      if (canRetry) {
+        await _taskRepository.transitionTask(
+          project,
+          selector,
+          TaskRuntimeConstants.statusRetrying,
+          note: '自治正式章节任务在交付前误停，已自动安排重试继续完成交付。',
+          extra: <String, Object?>{
+            ...persistedFailureExtra,
+            'recovery_retry_count': nextRetryCount,
+          },
+        );
+      }
+      executionRecord = await _persistWritingExecutionResult(
+        project,
+        executionPath,
+        executionRecord,
+        writingExecutionResult,
+      );
+      return <String, Object?>{
+        'ok': canRetry,
+        if (!canRetry) 'error': note,
+        'response': <String, Object?>{
+          ..._resultAsResponse(result),
+          'waiting_for_user_choice': false,
+        },
+        'waiting_for_user_choice': false,
+        'retry_scheduled': canRetry,
+        'output_paths': outputPaths,
+        'execution': executionRecord,
+        'activation_report_path': ValueReaders.stringValue(
+          executionRecord['activation_report_path'],
+        ),
+        'activation_report_summary': ValueReaders.stringValue(
+          executionRecord['activation_report_summary'],
+        ),
+        'chapter_delivery': ValueReaders.mapValue(
+          executionRecord['chapter_delivery'],
+        ),
+        'chapter_delivery_state': ValueReaders.stringValue(
+          executionRecord['chapter_delivery_state'],
+        ),
+        'chapter_delivery_path': ValueReaders.stringValue(
+          executionRecord['chapter_delivery_path'],
+        ),
+        'revision_diff': revisionDiff,
+        'checkpoint_review': const <String, Object?>{},
+        'gate_outcome': const <String, Object?>{},
+        'writing_execution_result': writingExecutionResult,
+        'executed_tools': result.executedTools,
+        'changed_paths': workflowChangedPaths,
+      };
+    }
     if (ValueReaders.stringValue(formalChapterDecision['action']) ==
         'wait_user') {
       await _taskRepository.transitionTask(
@@ -1357,7 +2036,7 @@ class ProjectWorkflowRuntimeService {
         },
       );
       final writingExecutionResult = _buildWritingExecutionResult(
-        task: task,
+        task: runtimeTask,
         executionRecord: executionRecord,
         executionConstraints: executionConstraints,
         checkpointReview: checkpointReview,
@@ -1411,34 +2090,68 @@ class ProjectWorkflowRuntimeService {
         formalChapterDecision['error'],
         'Formal chapter completion is missing.',
       );
+      final recoveryPlan = _formalChapterRecoveryPlan(
+        executionRecord: executionRecord,
+        note: error,
+      );
+      final writingExecutionResult = _buildWritingExecutionResult(
+        task: runtimeTask,
+        executionRecord: executionRecord,
+        executionConstraints: executionConstraints,
+        checkpointReview: checkpointReview,
+        result: result,
+        deliveryOverride: _formalChapterFailureDeliveryOverride(
+          executionRecord: executionRecord,
+          note: error,
+        ),
+        recoveryPlan: recoveryPlan,
+      );
+      final autoRetryScheduled = _shouldScheduleDirectRetry(
+        task: task,
+        writingExecutionResult: writingExecutionResult,
+        options: options,
+      );
+      final nextRetryCount = autoRetryScheduled
+          ? ValueReaders.intValue(task['recovery_retry_count']) + 1
+          : ValueReaders.intValue(task['recovery_retry_count']);
+      final persistedFailureExtra = <String, Object?>{
+        'output_paths': outputPaths,
+        'last_writing_execution_result': writingExecutionResult,
+        'recovery_retry_count': ValueReaders.intValue(
+          task['recovery_retry_count'],
+        ),
+        'recovery_retry_budget': _directRecoveryRetryBudget(
+          task: task,
+          options: options,
+        ),
+        if (ValueReaders.boolValue(checkpointReview['ok']))
+          'checkpoint_review_path': ValueReaders.stringValue(
+            checkpointReview['relative_path'],
+          ),
+        if (ValueReaders.boolValue(checkpointReview['ok']))
+          'checkpoint_review_summary': ValueReaders.stringValue(
+            ValueReaders.mapValue(checkpointReview['review'])['summary'],
+          ),
+      };
       await _taskRepository.transitionTask(
         project,
         selector,
         TaskRuntimeConstants.statusFailed,
         note: error,
-        extra: <String, Object?>{
-          'output_paths': outputPaths,
-          if (ValueReaders.boolValue(checkpointReview['ok']))
-            'checkpoint_review_path': ValueReaders.stringValue(
-              checkpointReview['relative_path'],
-            ),
-          if (ValueReaders.boolValue(checkpointReview['ok']))
-            'checkpoint_review_summary': ValueReaders.stringValue(
-              ValueReaders.mapValue(checkpointReview['review'])['summary'],
-            ),
-        },
+        extra: persistedFailureExtra,
       );
-      final writingExecutionResult = _buildWritingExecutionResult(
-        task: task,
-        executionRecord: executionRecord,
-        executionConstraints: executionConstraints,
-        checkpointReview: checkpointReview,
-        result: result,
-        recoveryPlan: _formalChapterRecoveryPlan(
-          executionRecord: executionRecord,
-          note: error,
-        ),
-      );
+      if (autoRetryScheduled) {
+        await _taskRepository.transitionTask(
+          project,
+          selector,
+          TaskRuntimeConstants.statusRetrying,
+          note: '检测到可恢复的正式章节未交付，已按预算自动安排重试。',
+          extra: <String, Object?>{
+            ...persistedFailureExtra,
+            'recovery_retry_count': nextRetryCount,
+          },
+        );
+      }
       executionRecord = await _persistWritingExecutionResult(
         project,
         executionPath,
@@ -1450,6 +2163,7 @@ class ProjectWorkflowRuntimeService {
         'error': error,
         'response': _resultAsResponse(result),
         'waiting_for_user_choice': false,
+        'retry_scheduled': autoRetryScheduled,
         'output_paths': outputPaths,
         'execution': executionRecord,
         'activation_report_path': ValueReaders.stringValue(
@@ -1478,9 +2192,189 @@ class ProjectWorkflowRuntimeService {
         ),
       };
     }
+    JsonMap scheduledRepair = const <String, Object?>{};
+    if (_shouldScheduleExecutionConstraintRepair(
+      task: task,
+      checkpointReview: checkpointReview,
+    )) {
+      scheduledRepair = await _executionConstraintRepairTaskService
+          .createTaskIfNeeded(
+            project: project,
+            task: task,
+            checkpointReview: ValueReaders.mapValue(checkpointReview['review']),
+            checkpointReviewPath: ValueReaders.stringValue(
+              checkpointReview['relative_path'],
+            ),
+          );
+      if (!ValueReaders.boolValue(scheduledRepair['ok'], true)) {
+        await _taskRepository.transitionTask(
+          project,
+          selector,
+          TaskRuntimeConstants.statusPaused,
+          note:
+              '执行约束修订任务创建失败：${ValueReaders.stringValue(scheduledRepair["error"])}',
+          extra: <String, Object?>{
+            'output_paths': outputPaths,
+            if (ValueReaders.boolValue(checkpointReview['ok']))
+              'checkpoint_review_path': ValueReaders.stringValue(
+                checkpointReview['relative_path'],
+              ),
+          },
+        );
+        final writingExecutionResult = _buildWritingExecutionResult(
+          task: runtimeTask,
+          executionRecord: executionRecord,
+          executionConstraints: executionConstraints,
+          checkpointReview: checkpointReview,
+          result: result,
+          recoveryPlan: <String, Object?>{
+            'action': 'pause_for_repair',
+            'reason': 'execution_constraint_repair_task_failed',
+            'note': ValueReaders.stringValue(
+              scheduledRepair['error'],
+              '执行约束修订任务创建失败。',
+            ),
+          },
+        );
+        executionRecord = await _persistWritingExecutionResult(
+          project,
+          executionPath,
+          executionRecord,
+          writingExecutionResult,
+        );
+        return <String, Object?>{
+          'ok': false,
+          'error': ValueReaders.stringValue(
+            scheduledRepair['error'],
+            'Failed to create execution constraint repair task.',
+          ),
+          'response': _resultAsResponse(result),
+          'output_paths': outputPaths,
+          'execution': executionRecord,
+          'activation_report_path': ValueReaders.stringValue(
+            executionRecord['activation_report_path'],
+          ),
+          'activation_report_summary': ValueReaders.stringValue(
+            executionRecord['activation_report_summary'],
+          ),
+          'chapter_delivery': ValueReaders.mapValue(
+            executionRecord['chapter_delivery'],
+          ),
+          'chapter_delivery_state': ValueReaders.stringValue(
+            executionRecord['chapter_delivery_state'],
+          ),
+          'chapter_delivery_path': ValueReaders.stringValue(
+            executionRecord['chapter_delivery_path'],
+          ),
+          'revision_diff': revisionDiff,
+          'checkpoint_review': checkpointReview,
+          'gate_outcome': gateOutcome,
+          'scheduled_repair': scheduledRepair,
+          'writing_execution_result': writingExecutionResult,
+          'executed_tools': result.executedTools,
+          'changed_paths': _mergePaths(
+            workflowChangedPaths,
+            ValueReaders.stringList(scheduledRepair['changed_paths']),
+          ),
+        };
+      }
+    }
+    JsonMap checkpointFollowup = const <String, Object?>{};
+    if (!(ValueReaders.boolValue(scheduledRepair['created']) ||
+        ValueReaders.boolValue(scheduledRepair['duplicated']))) {
+      checkpointFollowup = await _autoScheduleLongTaskCheckpointFollowup(
+        project: project,
+        task: runtimeTask,
+        checkpointReview: checkpointReview,
+      );
+      if (!ValueReaders.boolValue(checkpointFollowup['ok'], true)) {
+        await _taskRepository.transitionTask(
+          project,
+          selector,
+          TaskRuntimeConstants.statusPaused,
+          note:
+              '检查点后续复核任务创建失败：${ValueReaders.stringValue(checkpointFollowup["error"])}',
+          extra: <String, Object?>{
+            'output_paths': outputPaths,
+            if (ValueReaders.boolValue(checkpointReview['ok']))
+              'checkpoint_review_path': ValueReaders.stringValue(
+                checkpointReview['relative_path'],
+              ),
+          },
+        );
+        final writingExecutionResult = _buildWritingExecutionResult(
+          task: runtimeTask,
+          executionRecord: executionRecord,
+          executionConstraints: executionConstraints,
+          checkpointReview: checkpointReview,
+          result: result,
+          recoveryPlan: <String, Object?>{
+            'action': 'pause_for_manual_attention',
+            'reason': 'checkpoint_followup_scheduling_failed',
+            'note': ValueReaders.stringValue(
+              checkpointFollowup['error'],
+              '检查点后续复核任务创建失败。',
+            ),
+          },
+        );
+        executionRecord = await _persistWritingExecutionResult(
+          project,
+          executionPath,
+          executionRecord,
+          writingExecutionResult,
+        );
+        return <String, Object?>{
+          'ok': false,
+          'error': ValueReaders.stringValue(
+            checkpointFollowup['error'],
+            'Failed to schedule checkpoint follow-up reviews.',
+          ),
+          'response': _resultAsResponse(result),
+          'output_paths': outputPaths,
+          'execution': executionRecord,
+          'activation_report_path': ValueReaders.stringValue(
+            executionRecord['activation_report_path'],
+          ),
+          'activation_report_summary': ValueReaders.stringValue(
+            executionRecord['activation_report_summary'],
+          ),
+          'chapter_delivery': ValueReaders.mapValue(
+            executionRecord['chapter_delivery'],
+          ),
+          'chapter_delivery_state': ValueReaders.stringValue(
+            executionRecord['chapter_delivery_state'],
+          ),
+          'chapter_delivery_path': ValueReaders.stringValue(
+            executionRecord['chapter_delivery_path'],
+          ),
+          'revision_diff': revisionDiff,
+          'checkpoint_review': checkpointReview,
+          'gate_outcome': gateOutcome,
+          'checkpoint_followup': checkpointFollowup,
+          'writing_execution_result': writingExecutionResult,
+          'executed_tools': result.executedTools,
+          'changed_paths': _mergePaths(
+            workflowChangedPaths,
+            ValueReaders.stringList(checkpointFollowup['changed_paths']),
+          ),
+        };
+      }
+    }
     final defaultNextStatus = _taskCompletionPolicyService
-        .statusAfterSuccessfulModelStep(task);
-    final nextStatus = _resolveStatusAfterGate(defaultNextStatus, gateOutcome);
+        .statusAfterSuccessfulModelStep(runtimeTask);
+    final nextStatus =
+        ValueReaders.boolValue(scheduledRepair['ok']) &&
+            (ValueReaders.boolValue(scheduledRepair['created']) ||
+                ValueReaders.boolValue(scheduledRepair['duplicated']))
+        ? TaskRuntimeConstants.statusSucceeded
+        : _resolveStatusAfterCheckpointReview(
+            defaultNextStatus,
+            gateOutcome,
+            checkpointReview,
+            autoScheduledFollowup: ValueReaders.boolValue(
+              checkpointFollowup['auto_scheduled'],
+            ),
+          );
     await _taskRepository.transitionTask(
       project,
       selector,
@@ -1528,18 +2422,40 @@ class ProjectWorkflowRuntimeService {
           'chapter_gate_review_report_path': ValueReaders.stringValue(
             gateOutcome['review_report_path'],
           ),
+        if (ValueReaders.boolValue(scheduledRepair['created']) ||
+            ValueReaders.boolValue(scheduledRepair['duplicated']))
+          'scheduled_repair_task_path': ValueReaders.stringValue(
+            ValueReaders.mapValue(
+              scheduledRepair['repair_task'],
+            )['relative_path'],
+          ),
+        if (ValueReaders.boolValue(scheduledRepair['created']) ||
+            ValueReaders.boolValue(scheduledRepair['duplicated']))
+          'scheduled_repair_task_id': ValueReaders.stringValue(
+            ValueReaders.mapValue(scheduledRepair['repair_task'])['id'],
+          ),
+        if (ValueReaders.boolValue(checkpointFollowup['auto_scheduled']))
+          'checkpoint_followup_action': ValueReaders.stringValue(
+            checkpointFollowup['command'],
+          ),
+        if (ValueReaders.boolValue(checkpointFollowup['auto_scheduled']))
+          'checkpoint_followup_task_ids': ValueReaders.stringList(
+            checkpointFollowup['review_task_ids'],
+          ),
       },
     );
     final writingExecutionResult = _buildWritingExecutionResult(
-      task: task,
+      task: runtimeTask,
       executionRecord: executionRecord,
       executionConstraints: executionConstraints,
       checkpointReview: checkpointReview,
       result: result,
-      recoveryPlan: _successRecoveryPlan(
+      recoveryPlan: _recoveryPlanAfterSuccessfulStep(
         nextStatus: nextStatus,
         gateOutcome: gateOutcome,
+        checkpointReview: checkpointReview,
         waitingForUserChoice: result.waitingForUserChoice,
+        scheduledRepair: scheduledRepair,
       ),
     );
     executionRecord = await _persistWritingExecutionResult(
@@ -1572,11 +2488,19 @@ class ProjectWorkflowRuntimeService {
       'revision_diff': revisionDiff,
       'checkpoint_review': checkpointReview,
       'gate_outcome': gateOutcome,
+      'scheduled_repair': scheduledRepair,
+      'checkpoint_followup': checkpointFollowup,
       'writing_execution_result': writingExecutionResult,
       'executed_tools': result.executedTools,
       'changed_paths': _mergePaths(
-        workflowChangedPaths,
-        ValueReaders.stringList(gateOutcome['changed_paths']),
+        _mergePaths(
+          workflowChangedPaths,
+          ValueReaders.stringList(gateOutcome['changed_paths']),
+        ),
+        _mergePaths(
+          ValueReaders.stringList(scheduledRepair['changed_paths']),
+          ValueReaders.stringList(checkpointFollowup['changed_paths']),
+        ),
       ),
     };
   }
@@ -1607,6 +2531,17 @@ class ProjectWorkflowRuntimeService {
       return const <String, Object?>{'action': 'pass'};
     }
     if (result.waitingForUserChoice) {
+      if (_isContinuousAutonomousFormalChapterTask(task)) {
+        return <String, Object?>{
+          'action': 'retry',
+          'note': _autonomousFormalChapterRetryMessage(result),
+          'resume_dispatch_prompt_appendix':
+              _autonomousFormalChapterRetryPromptAppendix(
+                task,
+                reason: _formalWorkflowChapterWaitingMessage(result),
+              ),
+        };
+      }
       return <String, Object?>{
         'action': 'wait_user',
         'note': _formalWorkflowChapterWaitingMessage(result),
@@ -1618,9 +2553,106 @@ class ProjectWorkflowRuntimeService {
     };
   }
 
+  Future<JsonMap> _planningTaskBoundaryDecision({
+    required ProjectDescriptor project,
+    required JsonMap task,
+    required DraftGenerationResult result,
+    required List<String> outputPaths,
+    required JsonMap executionRecord,
+  }) async {
+    if (!_isPlanningStageWorkflowTask(task)) {
+      return const <String, Object?>{'action': 'pass'};
+    }
+    final forbiddenPaths =
+        <String>[
+              ...outputPaths.where(_isForbiddenPlanningOutputPath),
+              ...ValueReaders.stringList(
+                executionRecord['output_paths'],
+              ).where(_isForbiddenPlanningOutputPath),
+              ValueReaders.stringValue(
+                executionRecord['chapter_delivery_path'],
+              ),
+              ValueReaders.stringValue(
+                ValueReaders.mapValue(
+                  executionRecord['chapter_delivery'],
+                )['chapter_path'],
+              ),
+            ]
+            .map((item) => item.trim())
+            .where((item) => item.isNotEmpty)
+            .toSet()
+            .toList(growable: false);
+    final usedFormalDelivery = result.executedTools.any(
+      (rawTool) =>
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(rawTool)['name'],
+          ).trim() ==
+          'submit_chapter_delivery',
+    );
+    if (forbiddenPaths.isEmpty && !usedFormalDelivery) {
+      if (!_requiresCanonicalPlanningArtifacts(task)) {
+        return const <String, Object?>{'action': 'pass'};
+      }
+      final missingPlanningArtifacts = await _missingPlanningArtifactPaths(
+        project,
+        outputPaths,
+        executionRecord,
+      );
+      if (missingPlanningArtifacts.isEmpty || result.cancelledByUser) {
+        return const <String, Object?>{'action': 'pass'};
+      }
+      if (_isContinuousAutonomousPlanningTask(task)) {
+        return <String, Object?>{
+          'action': 'retry',
+          'note': _planningTaskIncompleteArtifactMessage(
+            missingPaths: missingPlanningArtifacts,
+            result: result,
+          ),
+        };
+      }
+      return const <String, Object?>{'action': 'pass'};
+    }
+    return <String, Object?>{
+      'action': 'fail',
+      'error': _planningTaskBoundaryFailureMessage(
+        forbiddenPaths: forbiddenPaths,
+        result: result,
+      ),
+    };
+  }
+
+  JsonMap _reviewTaskSubmissionDecision({
+    required JsonMap task,
+    required DraftGenerationResult result,
+    required JsonMap semanticReviewArtifacts,
+    required JsonMap executionRecord,
+  }) {
+    if (ValueReaders.stringValue(task['task_type']).trim() != 'review') {
+      return const <String, Object?>{'action': 'pass'};
+    }
+    if (ValueReaders.stringList(
+      semanticReviewArtifacts['review_ids'],
+    ).isNotEmpty) {
+      return const <String, Object?>{'action': 'pass'};
+    }
+    return <String, Object?>{
+      'action': 'fail',
+      'error': _reviewTaskMissingSubmissionMessage(
+        result: result,
+        executionRecord: executionRecord,
+      ),
+    };
+  }
+
   bool _requiresFormalWorkflowChapterCompletion(JsonMap task) {
     final taskType = ValueReaders.stringValue(task['task_type']).trim();
-    return taskType == 'chapter' || taskType == 'revision';
+    if (taskType == 'chapter') {
+      return true;
+    }
+    if (taskType != 'revision') {
+      return false;
+    }
+    return _targetsWorkflowChapterOutput(task);
   }
 
   bool _hasFormalWorkflowChapterArtifact(
@@ -1649,6 +2681,27 @@ class ProjectWorkflowRuntimeService {
     return clean.startsWith('chapters/') && clean.endsWith('.md');
   }
 
+  bool _targetsWorkflowChapterOutput(JsonMap task) {
+    final metadata = ValueReaders.mapValue(task['metadata']);
+    final candidatePaths = <String>[
+      ...ValueReaders.stringList(task['output_paths']),
+      ...ValueReaders.stringList(task['source_paths']),
+      ValueReaders.stringValue(task['chapter']),
+      ValueReaders.stringValue(metadata['chapter_path']),
+      ValueReaders.stringValue(metadata['resolved_chapter_path']),
+    ];
+    return candidatePaths.any(_isWorkflowChapterPath);
+  }
+
+  bool _isForbiddenPlanningOutputPath(String path) {
+    final clean = path.trim().replaceAll('\\', '/').toLowerCase();
+    if (clean.isEmpty) {
+      return false;
+    }
+    return _isWorkflowChapterPath(clean) ||
+        (clean.startsWith('tasks/') && clean.endsWith('.json'));
+  }
+
   String _formalWorkflowChapterWaitingMessage(DraftGenerationResult result) {
     final trace = _formalWorkflowChapterToolTrace(result);
     return '长任务正式章节任务停在用户选择点：本轮只执行了用户选项/计划/读取类工具（$trace），没有形成正式章节正文或交付。';
@@ -1668,6 +2721,225 @@ class ProjectWorkflowRuntimeService {
   String _formalWorkflowChapterToolTrace(DraftGenerationResult result) {
     final toolNames = _distinctWorkflowToolNames(result.executedTools);
     return toolNames.isEmpty ? '无工具调用' : toolNames.join('、');
+  }
+
+  String _planningTaskBoundaryFailureMessage({
+    required List<String> forbiddenPaths,
+    required DraftGenerationResult result,
+  }) {
+    final toolTrace = _formalWorkflowChapterToolTrace(result);
+    final pathSummary = forbiddenPaths.isEmpty
+        ? '未记录到章节路径，但已触发正式章节交付'
+        : forbiddenPaths.join('、');
+    return '规划任务越界：planning 阶段任务只允许产出规格/大纲，不允许写章节正文、tasks/*.json 任务文件或提交正式章节交付。'
+        '本轮越界产物：$pathSummary。工具轨迹：$toolTrace';
+  }
+
+  String _planningTaskIncompleteArtifactMessage({
+    required List<String> missingPaths,
+    required DraftGenerationResult result,
+  }) {
+    final toolTrace = _formalWorkflowChapterToolTrace(result);
+    return 'continuous_autonomous 规划任务未形成最小规划产物：仍缺少 ${missingPaths.join('、')}。'
+        '本轮不会停在 waiting_user，而是自动重试继续补齐规划。工具轨迹：$toolTrace';
+  }
+
+  String _reviewTaskMissingSubmissionMessage({
+    required DraftGenerationResult result,
+    required JsonMap executionRecord,
+  }) {
+    final toolTrace = _formalWorkflowChapterToolTrace(result);
+    final chapterDeliveryPath = ValueReaders.stringValue(
+      executionRecord['chapter_delivery_path'],
+      ValueReaders.stringValue(
+        ValueReaders.mapValue(
+          executionRecord['chapter_delivery'],
+        )['chapter_path'],
+      ),
+    ).trim();
+    if (chapterDeliveryPath.isNotEmpty) {
+      return '审稿任务未形成正式语义审稿交付：检测到 submit_chapter_delivery 写入 $chapterDeliveryPath。'
+          'review task 必须用 submit_semantic_review 提交结构化结论，不能用章节交付冒充完成。工具轨迹：$toolTrace';
+    }
+    final invalidSemanticReview = _firstInvalidSemanticReviewAttempt(
+      result.executedTools,
+    );
+    if (invalidSemanticReview.isNotEmpty) {
+      final parseIssues = ValueReaders.mapList(
+        ValueReaders.mapValue(
+          invalidSemanticReview['result'],
+        )['domain_parse_issues'],
+      );
+      final parseSummary = parseIssues
+          .map(
+            (issue) =>
+                '${ValueReaders.stringValue(issue['field_path'])}: '
+                '${ValueReaders.stringValue(issue['message'])}',
+          )
+          .where((item) => item.trim().isNotEmpty)
+          .join('；');
+      return '审稿任务未形成正式语义审稿交付：本轮尝试调用了 submit_semantic_review，'
+          '但结构化参数未通过校验。'
+          '${parseSummary.trim().isEmpty ? '' : '校验问题：$parseSummary。'}'
+          'review task 必须提交合法的 findings / recommended_disposition 合同。工具轨迹：$toolTrace';
+    }
+    return '审稿任务未形成正式语义审稿交付：本轮没有 submit_semantic_review。'
+        'review task 必须提交结构化 findings 和 recommended_disposition。工具轨迹：$toolTrace';
+  }
+
+  Future<JsonMap> _recoverResumeDispatchRunningTask(
+    ProjectDescriptor project,
+    List<JsonMap> tasks,
+  ) async {
+    for (final task in tasks) {
+      if (ValueReaders.stringValue(task['status']) !=
+          TaskRuntimeConstants.statusRunning) {
+        continue;
+      }
+      final writingExecution = ValueReaders.mapValue(
+        task['last_writing_execution_result'],
+      );
+      final recovery = ValueReaders.mapValue(writingExecution['recovery']);
+      final nextAction = ValueReaders.stringValue(
+        writingExecution['next_action'],
+        ValueReaders.stringValue(recovery['recommended_action']),
+      ).trim();
+      if (nextAction != 'resume_dispatch') {
+        continue;
+      }
+      await _taskRepository.transitionTask(
+        project,
+        <String, Object?>{
+          'relative_path': ValueReaders.stringValue(task['relative_path']),
+        },
+        TaskRuntimeConstants.statusFailed,
+        note: '检测到遗留 running 恢复态任务，先标记为 failed 以进入受控重试。',
+      );
+      final recovered = await _taskRepository.transitionTask(
+        project,
+        <String, Object?>{
+          'relative_path': ValueReaders.stringValue(task['relative_path']),
+        },
+        TaskRuntimeConstants.statusRetrying,
+        note: '检测到遗留 running 恢复态任务，已恢复为 retrying 继续调度。',
+      );
+      return ValueReaders.mapValue(recovered['task']);
+    }
+    return const <String, Object?>{};
+  }
+
+  JsonMap _firstInvalidSemanticReviewAttempt(List<Object?> executedTools) {
+    for (final rawTool in executedTools) {
+      final tool = ValueReaders.mapValue(rawTool);
+      final name = ValueReaders.stringValue(tool['name']).trim();
+      if (name == 'submit_semantic_review') {
+        final result = ValueReaders.mapValue(tool['result']);
+        if (ValueReaders.boolValue(tool['not_executed']) ||
+            ValueReaders.boolValue(result['not_executed']) ||
+            ValueReaders.mapList(result['domain_parse_issues']).isNotEmpty) {
+          return tool;
+        }
+      }
+      if (name != 'call_sub_agent') {
+        continue;
+      }
+      final nested = _firstInvalidSemanticReviewAttempt(
+        ValueReaders.objectList(
+          ValueReaders.mapValue(tool['result'])['tool_calls'],
+        ),
+      );
+      if (nested.isNotEmpty) {
+        return nested;
+      }
+    }
+    return const <String, Object?>{};
+  }
+
+  Future<List<String>> _missingPlanningArtifactPaths(
+    ProjectDescriptor project,
+    List<String> outputPaths,
+    JsonMap executionRecord,
+  ) async {
+    final planningArtifactPathService =
+        const LongTaskPlanningArtifactPathService();
+    final actualPaths = <String>{
+      ...outputPaths.map((item) => item.trim().replaceAll('\\', '/')),
+      ...ValueReaders.stringList(
+        executionRecord['output_paths'],
+      ).map((item) => item.trim().replaceAll('\\', '/')),
+    }.where((item) => item.isNotEmpty).toSet();
+    final requiredPaths = <String>[
+      LongTaskPlanningArtifactPathService.projectSpecPath,
+      planningArtifactPathService.storyOutlinePath(),
+      planningArtifactPathService.chapterPlanPath(),
+    ];
+    final missingPaths = <String>[];
+    for (final path in requiredPaths) {
+      if (actualPaths.contains(path)) {
+        continue;
+      }
+      final existing = await _taskRepository.readTextFile(project, path);
+      if (existing != null) {
+        continue;
+      }
+      missingPaths.add(path);
+    }
+    return List<String>.unmodifiable(missingPaths);
+  }
+
+  bool _isContinuousAutonomousPlanningTask(JsonMap task) {
+    final metadata = ValueReaders.mapValue(task['metadata']);
+    return _requiresCanonicalPlanningArtifacts(task) &&
+        ValueReaders.stringValue(metadata['runtime_baseline_id']).trim() ==
+            'continuous_autonomous';
+  }
+
+  bool _isPlanningStageWorkflowTask(JsonMap task) {
+    final metadata = ValueReaders.mapValue(task['metadata']);
+    if (ValueReaders.stringValue(metadata['stage']).trim() != 'planning') {
+      return false;
+    }
+    return ValueReaders.stringValue(task['task_type']).trim() == 'planning' ||
+        _isLongTaskManagedWorkflowTask(task);
+  }
+
+  bool _requiresCanonicalPlanningArtifacts(JsonMap task) {
+    return ValueReaders.stringValue(task['task_type']).trim() == 'planning';
+  }
+
+  bool _isContinuousAutonomousFormalChapterTask(JsonMap task) {
+    final metadata = ValueReaders.mapValue(task['metadata']);
+    return _requiresFormalWorkflowChapterCompletion(task) &&
+        ValueReaders.stringValue(metadata['runtime_baseline_id']).trim() ==
+            'continuous_autonomous';
+  }
+
+  String _autonomousFormalChapterRetryMessage(DraftGenerationResult result) {
+    final trace = _formalWorkflowChapterToolTrace(result);
+    return 'continuous_autonomous 正式章节任务不允许在正式交付前停回 waiting_user：'
+        '本轮只执行了用户选项/计划/读取类工具（$trace），没有形成正式章节正文或 submit_chapter_delivery。'
+        '系统将自动重试，并要求直接读取现有规划继续完成交付。';
+  }
+
+  String _autonomousFormalChapterRetryPromptAppendix(
+    JsonMap task, {
+    String reason = '',
+  }) {
+    final planningArtifactPathService =
+        const LongTaskPlanningArtifactPathService();
+    final sourceChapterPaths = ValueReaders.stringList(
+      task['source_paths'],
+    ).where(_isWorkflowChapterPath).toSet().toList(growable: false);
+    final lines = <String>[
+      '自治续跑补充：上轮在正式章节交付前错误停回用户选择点，系统现已改为自动续跑。',
+      if (reason.trim().isNotEmpty) '上轮停顿原因：${reason.trim()}',
+      '优先读取并尊重既有规划：${LongTaskPlanningArtifactPathService.projectSpecPath}、${planningArtifactPathService.storyOutlinePath()}、${planningArtifactPathService.chapterPlanPath()}。',
+      if (sourceChapterPaths.isNotEmpty)
+        '如需承接前情，只读取必要的既有章节正文：${sourceChapterPaths.join('、')}。',
+      '不要再次因为“规划不完整”或一般方向分叉调用 present_user_options；只要关键文件真实存在，就继续写作并通过 submit_chapter_delivery 交付当前任务。',
+      '只有在关键规划、必要前文或修订依据真实缺失到无法成稿时，才允许提出新的用户阻塞。',
+    ];
+    return lines.join('\n\n');
   }
 
   List<String> _distinctWorkflowToolNames(List<Object?> executedTools) {
@@ -1712,6 +2984,142 @@ class ProjectWorkflowRuntimeService {
       decision,
       defaultStatus,
     );
+  }
+
+  String _resolveStatusAfterCheckpointReview(
+    String defaultStatus,
+    JsonMap gateOutcome,
+    JsonMap checkpointReview, {
+    bool autoScheduledFollowup = false,
+  }) {
+    final review = ValueReaders.mapValue(checkpointReview['review']);
+    final continuationDisposition = ValueReaders.stringValue(
+      review['continuation_disposition'],
+      ValueReaders.stringValue(
+        ValueReaders.mapValue(review['disposition'])['disposition'],
+      ),
+    ).trim();
+    if (continuationDisposition == 'manual_attention') {
+      return TaskRuntimeConstants.statusPaused;
+    }
+    if (continuationDisposition == 'blocked_wait_user') {
+      if (autoScheduledFollowup) {
+        final gateResolvedStatus = _resolveStatusAfterGate(
+          defaultStatus,
+          gateOutcome,
+        );
+        return gateResolvedStatus == TaskRuntimeConstants.statusWaitingUser
+            ? TaskRuntimeConstants.statusSucceeded
+            : gateResolvedStatus;
+      }
+      return TaskRuntimeConstants.statusWaitingUser;
+    }
+    return _resolveStatusAfterGate(defaultStatus, gateOutcome);
+  }
+
+  Future<JsonMap> _autoScheduleLongTaskCheckpointFollowup({
+    required ProjectDescriptor project,
+    required JsonMap task,
+    required JsonMap checkpointReview,
+  }) async {
+    if (!ValueReaders.boolValue(checkpointReview['ok'])) {
+      return const <String, Object?>{
+        'ok': true,
+        'auto_scheduled': false,
+        'changed_paths': <Object?>[],
+      };
+    }
+    if (!_isLongTaskManagedWorkflowTask(task)) {
+      return const <String, Object?>{
+        'ok': true,
+        'auto_scheduled': false,
+        'changed_paths': <Object?>[],
+      };
+    }
+    final review = ValueReaders.mapValue(checkpointReview['review']);
+    if (review.isEmpty) {
+      return const <String, Object?>{
+        'ok': true,
+        'auto_scheduled': false,
+        'changed_paths': <Object?>[],
+      };
+    }
+    final disposition = ValueReaders.mapValue(review['disposition']);
+    String command = '';
+    if (ValueReaders.boolValue(disposition['request_revision_followup'])) {
+      command = 'request_revision_followup';
+    } else if (ValueReaders.boolValue(
+      disposition['create_followup_review_tasks'],
+    )) {
+      command = 'create_followup_review_tasks';
+    }
+    if (command.isEmpty) {
+      return const <String, Object?>{
+        'ok': true,
+        'auto_scheduled': false,
+        'changed_paths': <Object?>[],
+      };
+    }
+    final checkpointReviewPath = ValueReaders.stringValue(
+      checkpointReview['relative_path'],
+    ).trim();
+    if (checkpointReviewPath.isEmpty) {
+      return <String, Object?>{
+        'ok': false,
+        'error': 'Checkpoint review path is missing for follow-up scheduling.',
+        'command': command,
+        'changed_paths': const <Object?>[],
+      };
+    }
+    final applied = await _checkpointActionService.applyAction(
+      project,
+      checkpointReviewPath,
+      command,
+    );
+    if (!ValueReaders.boolValue(applied['ok'], true)) {
+      return <String, Object?>{
+        'ok': false,
+        'error': ValueReaders.stringValue(
+          applied['error'],
+          'Checkpoint follow-up scheduling failed.',
+        ),
+        'command': command,
+        'changed_paths': ValueReaders.objectList(applied['changed_paths']),
+      };
+    }
+    final relatedTasks =
+        ValueReaders.mapList(applied['review_tasks']).isNotEmpty
+        ? ValueReaders.mapList(applied['review_tasks'])
+        : ValueReaders.mapList(applied['tasks']);
+    return <String, Object?>{
+      ...applied,
+      'ok': true,
+      'command': command,
+      'auto_scheduled':
+          relatedTasks.isNotEmpty ||
+          ValueReaders.mapList(applied['rewired_tasks']).isNotEmpty,
+      'review_task_ids': relatedTasks
+          .map((item) => ValueReaders.stringValue(item['id']))
+          .where((id) => id.trim().isNotEmpty)
+          .toList(growable: false),
+    };
+  }
+
+  bool _isLongTaskManagedWorkflowTask(JsonMap task) {
+    final metadata = ValueReaders.mapValue(task['metadata']);
+    if (ValueReaders.stringValue(metadata['plan_id']).trim().isNotEmpty ||
+        ValueReaders.stringValue(
+          metadata['runtime_baseline_id'],
+        ).trim().isNotEmpty ||
+        ValueReaders.stringValue(metadata['generated_by']).trim() ==
+            'LongTaskPlanner') {
+      return true;
+    }
+    final mode = _longTaskModeService.normalizeMode(
+      ValueReaders.stringValue(task['mode']),
+    );
+    return mode == TaskRuntimeConstants.modeSeedToFullNovel ||
+        mode == TaskRuntimeConstants.modeSupervisedChapterQueue;
   }
 
   Future<JsonMap> runNextWorkflowTaskOnce(
@@ -1799,7 +3207,7 @@ class ProjectWorkflowRuntimeService {
     }
     final snapshot = _buildLongTaskSchedulerSnapshotUseCase.execute(
       record,
-      await listWorkflowTasks(project),
+      await _currentWorkflowTasks(project),
       options: options,
     );
     return <String, Object?>{
@@ -1828,18 +3236,23 @@ class ProjectWorkflowRuntimeService {
       reason: 'manual_pause',
       note: note,
     );
-    await _taskRepository.saveRecord(project, relativePath, updated);
-    final schedulerSnapshot = _buildLongTaskSchedulerSnapshotUseCase.execute(
+    final savedRecord = await _taskRepository.saveRecord(
+      project,
+      relativePath,
       updated,
-      await listWorkflowTasks(project),
-      options: ValueReaders.mapValue(updated['options']),
+    );
+    await _syncLongTaskRunRecord(project, savedRecord);
+    final schedulerSnapshot = _buildLongTaskSchedulerSnapshotUseCase.execute(
+      savedRecord,
+      await _currentWorkflowTasks(project),
+      options: ValueReaders.mapValue(savedRecord['options']),
     );
     final runCenterContract = _runCenterContractFromSchedulerSnapshot(
       schedulerSnapshot,
     );
     return <String, Object?>{
       'ok': true,
-      'record': updated,
+      'record': savedRecord,
       'run_center_contract': runCenterContract,
       'scheduler_snapshot': <String, Object?>{
         ...schedulerSnapshot,
@@ -1854,8 +3267,9 @@ class ProjectWorkflowRuntimeService {
     String relativePath, {
     JsonMap options = const <String, Object?>{},
     JsonMap agent = const <String, Object?>{},
-  }) {
+  }) async {
     // 中文注释: 恢复长任务直接复用队列运行入口，并显式传入继续的运行记录路径。
+    await _autoConfirmCheckpointBeforeResumeIfPossible(project, relativePath);
     return runWorkflowTaskQueue(
       project,
       settings,
@@ -1865,6 +3279,102 @@ class ProjectWorkflowRuntimeService {
       },
       agent: agent,
     );
+  }
+
+  Future<void> _autoConfirmCheckpointBeforeResumeIfPossible(
+    ProjectDescriptor project,
+    String longTaskRunPath,
+  ) async {
+    final cleanRunPath = longTaskRunPath.trim();
+    if (cleanRunPath.isEmpty) {
+      return;
+    }
+    final runRecord = await _taskRepository.loadRecord(project, cleanRunPath);
+    if (runRecord.isEmpty) {
+      return;
+    }
+    final checkpointReviewPath = ValueReaders.stringValue(
+      runRecord['last_checkpoint_review_path'],
+    ).trim();
+    if (checkpointReviewPath.isEmpty) {
+      return;
+    }
+    final actionPackage = await _checkpointActionService.buildActionPackage(
+      project,
+      checkpointReviewPath,
+    );
+    if (!ValueReaders.boolValue(actionPackage['ok'])) {
+      return;
+    }
+    final command = _preferredCheckpointResumeCommand(actionPackage);
+    if (command.isEmpty) {
+      return;
+    }
+    await _checkpointActionService.applyAction(
+      project,
+      checkpointReviewPath,
+      command,
+    );
+  }
+
+  String _preferredCheckpointResumeCommand(JsonMap actionPackage) {
+    final actions = ValueReaders.mapList(actionPackage['actions']);
+    for (final preferred in const <String>[
+      'continue_long_task',
+      'confirm_checkpoint_continue',
+    ]) {
+      for (final action in actions) {
+        if (ValueReaders.stringValue(action['id']).trim() != preferred) {
+          continue;
+        }
+        if (ValueReaders.boolValue(action['enabled'])) {
+          return preferred;
+        }
+      }
+    }
+    return '';
+  }
+
+  Future<JsonMap> stopLongTaskRun(
+    ProjectDescriptor project,
+    String relativePath, {
+    String note = '用户请求停止长任务。',
+  }) async {
+    final record = await _taskRepository.loadRecord(project, relativePath);
+    if (record.isEmpty) {
+      return <String, Object?>{
+        'ok': false,
+        'error': 'Long task run not found.',
+      };
+    }
+    final updated = _lifecycleService.finishRecord(
+      record,
+      reason: 'manual_stop',
+      note: note,
+    );
+    final savedRecord = await _taskRepository.saveRecord(
+      project,
+      relativePath,
+      updated,
+    );
+    await _syncLongTaskRunRecord(project, savedRecord);
+    final schedulerSnapshot = _buildLongTaskSchedulerSnapshotUseCase.execute(
+      savedRecord,
+      await _currentWorkflowTasks(project),
+      options: ValueReaders.mapValue(savedRecord['options']),
+    );
+    final runCenterContract = _runCenterContractFromSchedulerSnapshot(
+      schedulerSnapshot,
+    );
+    return <String, Object?>{
+      'ok': true,
+      'record': savedRecord,
+      'run_center_contract': runCenterContract,
+      'scheduler_snapshot': <String, Object?>{
+        ...schedulerSnapshot,
+        'run_center_contract': runCenterContract,
+      },
+    };
   }
 
   Future<JsonMap> runWorkflowTaskQueue(
@@ -1902,19 +3412,51 @@ class ProjectWorkflowRuntimeService {
       ValueReaders.stringValue(resolvedOptions['long_task_run_path']),
     ).trim();
     JsonMap longRunRecord = const <String, Object?>{};
+    final workflowTasks = await _currentWorkflowTasks(project);
     if (longRunPath.isEmpty) {
-      final start = _startLongTaskRunUseCase.execute(
-        await listWorkflowTasks(project),
+      final inferredStart = _startLongTaskRunUseCase.execute(
+        workflowTasks,
         options: cleanOptions,
       );
-      longRunPath = ValueReaders.stringValue(start['relative_path']);
-      longRunRecord = ValueReaders.mapValue(start['record']);
-      await _taskRepository.saveRecord(project, longRunPath, longRunRecord);
+      final inferredPath = ValueReaders.stringValue(
+        inferredStart['relative_path'],
+      );
+      if (inferredPath.isNotEmpty) {
+        final existing = await _taskRepository.loadRecord(
+          project,
+          inferredPath,
+        );
+        if (existing.isNotEmpty) {
+          longRunPath = inferredPath;
+          longRunRecord = _lifecycleService.resumeRecord(existing);
+          longRunRecord = await _taskRepository.saveRecord(
+            project,
+            longRunPath,
+            longRunRecord,
+          );
+          await _syncLongTaskRunRecord(project, longRunRecord);
+        }
+      }
+      if (longRunRecord.isEmpty) {
+        longRunPath = ValueReaders.stringValue(inferredStart['relative_path']);
+        longRunRecord = ValueReaders.mapValue(inferredStart['record']);
+        longRunRecord = await _taskRepository.saveRecord(
+          project,
+          longRunPath,
+          longRunRecord,
+        );
+        await _syncLongTaskRunRecord(project, longRunRecord);
+      }
     } else {
       longRunRecord = await _taskRepository.loadRecord(project, longRunPath);
       if (longRunRecord.isNotEmpty) {
         longRunRecord = _lifecycleService.resumeRecord(longRunRecord);
-        await _taskRepository.saveRecord(project, longRunPath, longRunRecord);
+        longRunRecord = await _taskRepository.saveRecord(
+          project,
+          longRunPath,
+          longRunRecord,
+        );
+        await _syncLongTaskRunRecord(project, longRunRecord);
       }
     }
 
@@ -1922,22 +3464,78 @@ class ProjectWorkflowRuntimeService {
     var stopReason = '';
     var stopNote = '';
     JsonMap lastResult = const <String, Object?>{};
+    final batchStartedAt = DateTime.now();
     while (stepsRun < ValueReaders.intValue(cleanOptions['max_steps'], 3)) {
-      final nextTask = await nextWorkflowTask(project);
+      final maxSeconds = ValueReaders.intValue(cleanOptions['max_seconds'], -1);
+      if (maxSeconds > 0 &&
+          DateTime.now().difference(batchStartedAt).inSeconds >= maxSeconds) {
+        stopReason = 'max_seconds';
+        stopNote = '已达到本次运行的最长时间限制，长任务已暂停，可稍后继续。';
+        break;
+      }
+      final nextTask = await _nextWorkflowQueueTask(project);
       if (nextTask.isEmpty) {
         stopReason = 'no_runnable_task';
         stopNote = '当前没有依赖满足且处于 queued/retrying 的任务。';
         break;
       }
-      lastResult = await runWorkflowTaskOnce(
+      final remainingDuration = maxSeconds <= 0
+          ? null
+          : Duration(seconds: maxSeconds) -
+                DateTime.now().difference(batchStartedAt);
+      final cancellationToken = remainingDuration == null
+          ? null
+          : DraftGenerationCancellationToken();
+      final safeTimeoutDuration = remainingDuration == null
+          ? null
+          : (remainingDuration <= Duration.zero
+                ? const Duration(milliseconds: 1)
+                : remainingDuration);
+      final stepSelector = <String, Object?>{
+        'relative_path': ValueReaders.stringValue(nextTask['relative_path']),
+      };
+      final stepFuture = runWorkflowTaskOnce(
         project,
         settings,
-        <String, Object?>{
-          'relative_path': ValueReaders.stringValue(nextTask['relative_path']),
-        },
+        stepSelector,
         runRecord: longRunRecord,
         agent: agent,
+        options: cleanOptions,
+        cancellationToken: cancellationToken,
       );
+      if (cancellationToken == null || safeTimeoutDuration == null) {
+        lastResult = await stepFuture;
+      } else {
+        final timeoutResult = Completer<JsonMap>();
+        final timeoutTimer = Timer(safeTimeoutDuration, () {
+          cancellationToken.cancel();
+          if (!timeoutResult.isCompleted) {
+            timeoutResult.complete(_workflowTaskTimeoutResult());
+          }
+        });
+        stepFuture.then(
+          (value) {
+            if (!timeoutResult.isCompleted) {
+              timeoutResult.complete(value);
+            }
+          },
+          onError: (Object error, StackTrace stackTrace) {
+            if (!timeoutResult.isCompleted) {
+              timeoutResult.completeError(error, stackTrace);
+            }
+          },
+        );
+        lastResult = await timeoutResult.future;
+        timeoutTimer.cancel();
+        if (ValueReaders.boolValue(lastResult['timeout'])) {
+          await _taskRepository.transitionTask(
+            project,
+            stepSelector,
+            TaskRuntimeConstants.statusQueued,
+            note: '当前批次已达到最长时间限制，已取消本步，等待后续继续。',
+          );
+        }
+      }
       stepsRun += 1;
       final updatedTask = await _taskRepository.loadTask(
         project,
@@ -1959,7 +3557,18 @@ class ProjectWorkflowRuntimeService {
           updatedTask,
           lastResult,
         );
-        await _taskRepository.saveRecord(project, longRunPath, longRunRecord);
+        longRunRecord = await _taskRepository.saveRecord(
+          project,
+          longRunPath,
+          longRunRecord,
+        );
+        await _syncLongTaskRunRecord(project, longRunRecord);
+      }
+
+      if (ValueReaders.boolValue(lastResult['timeout'])) {
+        stopReason = 'max_seconds';
+        stopNote = '已达到本次运行的最长时间限制，长任务已暂停，可稍后继续。';
+        break;
       }
 
       final stopDecision = _taskQueueStopPolicyService.stopAfterStep(
@@ -2016,10 +3625,15 @@ class ProjectWorkflowRuntimeService {
               reason: ValueReaders.stringValue(disposition['terminal_reason']),
               note: ValueReaders.stringValue(disposition['note']),
             );
-      await _taskRepository.saveRecord(project, longRunPath, longRunRecord);
+      longRunRecord = await _taskRepository.saveRecord(
+        project,
+        longRunPath,
+        longRunRecord,
+      );
+      await _syncLongTaskRunRecord(project, longRunRecord);
       final schedulerSnapshot = _buildLongTaskSchedulerSnapshotUseCase.execute(
         longRunRecord,
-        await listWorkflowTasks(project),
+        await _currentWorkflowTasks(project),
         options: cleanOptions,
       );
       await _taskRepository.writeTextFile(
@@ -2045,10 +3659,210 @@ class ProjectWorkflowRuntimeService {
           : _runCenterContractFromSchedulerSnapshot(
               _buildLongTaskSchedulerSnapshotUseCase.execute(
                 longRunRecord,
-                await listWorkflowTasks(project),
+                await _currentWorkflowTasks(project),
                 options: cleanOptions,
               ),
             ),
+    };
+  }
+
+  Future<void> _syncLongTaskRunRecord(
+    ProjectDescriptor project,
+    JsonMap runRecord,
+  ) async {
+    final service = _longTaskRunRegistrySyncService;
+    if (service == null || runRecord.isEmpty) {
+      return;
+    }
+    await service.syncRecord(project, runRecord);
+  }
+
+  JsonMap _workflowTaskTimeoutResult() {
+    return const <String, Object?>{
+      'ok': false,
+      'error': '当前任务执行超过本批最长时间限制。',
+      'timeout': true,
+      'response': <String, Object?>{},
+      'waiting_for_user_choice': false,
+      'output_paths': <Object?>[],
+      'changed_paths': <Object?>[],
+      'executed_tools': <Object?>[],
+    };
+  }
+
+  bool _isRetryableWorkflowTaskTransportFailure(Object error) {
+    if (error is TimeoutException) {
+      return true;
+    }
+    final message = '$error'.toLowerCase();
+    return message.contains('socketexception') ||
+        message.contains('handshakeexception') ||
+        message.contains('connection closed before full header') ||
+        message.contains('connection reset') ||
+        message.contains('connection terminated') ||
+        message.contains('broken pipe') ||
+        message.contains('流式响应在完成前被中断') ||
+        message.contains('模型请求失败(502)') ||
+        message.contains('模型请求失败(503)') ||
+        message.contains('模型请求失败(504)') ||
+        message.contains('模型请求失败(520)') ||
+        message.contains('模型请求失败(522)') ||
+        message.contains('模型请求失败(524)');
+  }
+
+  Future<JsonMap> _handleRetryableWorkflowTaskTransportFailure({
+    required ProjectDescriptor project,
+    required JsonMap selector,
+    required JsonMap task,
+    required JsonMap runtimeTask,
+    required JsonMap executionConstraints,
+    required JsonMap options,
+    required Object error,
+  }) async {
+    final executionPath = ValueReaders.stringValue(
+      task['atomic_execution_path'],
+    );
+    var executionRecord = executionPath.trim().isEmpty
+        ? const <String, Object?>{}
+        : await _taskRepository.loadRecord(project, executionPath);
+    final isPlanning = _isContinuousAutonomousPlanningTask(runtimeTask);
+    final isFormalChapter = _isContinuousAutonomousFormalChapterTask(
+      runtimeTask,
+    );
+    final retryBudget = _directRecoveryRetryBudget(
+      task: task,
+      options: options,
+    );
+    final retryCount = ValueReaders.intValue(task['recovery_retry_count']);
+    final canRetry =
+        (isPlanning || isFormalChapter) && retryCount < retryBudget;
+    final nextRetryCount = canRetry ? retryCount + 1 : retryCount;
+    final errorDetail = '$error'.trim();
+    final detailSuffix = errorDetail.isEmpty ? '' : '：$errorDetail';
+    final note = canRetry
+        ? (isPlanning
+              ? '自治规划任务模型传输中断$detailSuffix，已按预算自动安排重试。'
+              : '自治正式章节任务模型传输中断$detailSuffix，已按预算自动安排重试继续完成交付。')
+        : (isPlanning
+              ? '自治规划任务模型传输中断$detailSuffix，自动重试预算已耗尽，已暂停等待处理。'
+              : isFormalChapter
+              ? '自治正式章节任务模型传输中断$detailSuffix，自动重试预算已耗尽，已暂停等待处理。'
+              : '工作流任务模型传输中断$detailSuffix，本步已暂停等待重试或人工处理。');
+    final recoveryPlan = canRetry
+        ? <String, Object?>{
+            'action': 'resume_dispatch',
+            'reason': isPlanning
+                ? 'autonomous_planning_transport_retry_scheduled'
+                : 'autonomous_formal_chapter_transport_retry_scheduled',
+            'note': note,
+            'safe_after_crash': true,
+            'status': 'retrying',
+          }
+        : <String, Object?>{
+            'action': 'pause_for_failure',
+            'reason': isPlanning || isFormalChapter
+                ? 'workflow_task_transport_retry_budget_exhausted'
+                : 'workflow_task_transport_failed',
+            'note': note,
+          };
+    final outputPaths = await _workflowRuntimeSatisfiedOutputPathService
+        .mergeSatisfiedOutputPaths(
+          project: project,
+          task: task,
+          outputPaths: ValueReaders.stringList(task['output_paths']),
+          executionRecord: executionRecord,
+        );
+    final writingExecutionResult = _buildWritingExecutionResult(
+      task: runtimeTask,
+      executionRecord: executionRecord,
+      executionConstraints: executionConstraints,
+      checkpointReview: const <String, Object?>{},
+      recoveryPlan: recoveryPlan,
+      transportFailed: true,
+    );
+    final persistedFailureExtra = <String, Object?>{
+      'output_paths': outputPaths,
+      'last_writing_execution_result': writingExecutionResult,
+      'recovery_retry_count': retryCount,
+      'recovery_retry_budget': retryBudget,
+      'waiting_for_user_choice': false,
+      if (canRetry && isFormalChapter)
+        'resume_dispatch_prompt_appendix':
+            _autonomousFormalChapterRetryPromptAppendix(
+              task,
+              reason: errorDetail.isEmpty
+                  ? '上轮在模型传输阶段中断。'
+                  : '上轮在模型传输阶段中断：$errorDetail',
+            ),
+    };
+    await _taskRepository.transitionTask(
+      project,
+      selector,
+      TaskRuntimeConstants.statusFailed,
+      note: note,
+      extra: persistedFailureExtra,
+    );
+    if (canRetry) {
+      await _taskRepository.transitionTask(
+        project,
+        selector,
+        TaskRuntimeConstants.statusRetrying,
+        note: isPlanning
+            ? '检测到可重试的规划传输故障，已自动安排重试。'
+            : '检测到可重试的正式章节传输故障，已自动安排重试。',
+        extra: <String, Object?>{
+          ...persistedFailureExtra,
+          'recovery_retry_count': nextRetryCount,
+        },
+      );
+    }
+    final resolvedExecutionPath = ValueReaders.stringValue(
+      executionRecord['relative_path'],
+      executionPath,
+    );
+    var nextExecutionRecord = executionRecord;
+    if (resolvedExecutionPath.trim().isNotEmpty) {
+      nextExecutionRecord = await _persistExecutionOutputPaths(
+        project: project,
+        executionPath: resolvedExecutionPath,
+        executionRecord: executionRecord,
+        outputPaths: outputPaths,
+      );
+      nextExecutionRecord = await _persistWritingExecutionResult(
+        project,
+        resolvedExecutionPath,
+        nextExecutionRecord,
+        writingExecutionResult,
+      );
+    }
+    return <String, Object?>{
+      'ok': false,
+      'error': note,
+      'response': const <String, Object?>{'waiting_for_user_choice': false},
+      'waiting_for_user_choice': false,
+      'retry_scheduled': canRetry,
+      'output_paths': outputPaths,
+      'execution': nextExecutionRecord,
+      'activation_report_path': ValueReaders.stringValue(
+        nextExecutionRecord['activation_report_path'],
+      ),
+      'activation_report_summary': ValueReaders.stringValue(
+        nextExecutionRecord['activation_report_summary'],
+      ),
+      'chapter_delivery': ValueReaders.mapValue(
+        nextExecutionRecord['chapter_delivery'],
+      ),
+      'chapter_delivery_state': ValueReaders.stringValue(
+        nextExecutionRecord['chapter_delivery_state'],
+      ),
+      'chapter_delivery_path': ValueReaders.stringValue(
+        nextExecutionRecord['chapter_delivery_path'],
+      ),
+      'checkpoint_review': const <String, Object?>{},
+      'gate_outcome': const <String, Object?>{},
+      'writing_execution_result': writingExecutionResult,
+      'executed_tools': const <Object?>[],
+      'changed_paths': const <Object?>[],
     };
   }
 
@@ -2119,9 +3933,9 @@ class ProjectWorkflowRuntimeService {
       provider: provider,
       agent: agent,
     );
-    final useCase = _generateDraftUseCaseFactory(
-      provider,
-      settings.networkSettings,
+    final useCase = _workflowGenerateDraftUseCase(
+      provider: provider,
+      settings: settings,
     );
     final selectedCollaborationGroup =
         await _resolveSelectedCollaborationGroupForTask(
@@ -2349,6 +4163,88 @@ class ProjectWorkflowRuntimeService {
     );
   }
 
+  Future<JsonMap> applyWorkflowTaskUserChoice(
+    ProjectDescriptor project,
+    JsonMap selector, {
+    required String prompt,
+    String label = '',
+    String description = '',
+    String sourceQuestion = '',
+  }) async {
+    final cleanPrompt = prompt.trim();
+    if (cleanPrompt.isEmpty) {
+      return <String, Object?>{
+        'ok': false,
+        'error': 'User option prompt is empty.',
+      };
+    }
+    final task = await _taskRepository.loadTask(project, selector);
+    if (task.isEmpty) {
+      return <String, Object?>{'ok': false, 'error': 'Task not found.'};
+    }
+    final taskType = ValueReaders.stringValue(task['task_type']).trim();
+    final nextStatus = taskType == 'checkpoint'
+        ? TaskRuntimeConstants.statusSucceeded
+        : TaskRuntimeConstants.statusQueued;
+    final transition = await _taskRepository.transitionTask(
+      project,
+      selector,
+      nextStatus,
+      note: taskType == 'checkpoint'
+          ? (label.trim().isEmpty
+                ? '已记录用户选择，并确认当前检查点继续。'
+                : '已记录用户选择：$label，并确认当前检查点继续。')
+          : (label.trim().isEmpty
+                ? '已记录用户选择，任务将按确认方向继续。'
+                : '已记录用户选择：$label，任务将按确认方向继续。'),
+      extra: <String, Object?>{
+        'selected_user_option_prompt': cleanPrompt,
+        'selected_user_option_label': label.trim(),
+        'selected_user_option_description': description.trim(),
+        'selected_user_option_question': sourceQuestion.trim(),
+        'waiting_for_user_choice': false,
+        'auto_confirmed_from_user_option': taskType == 'checkpoint',
+      },
+    );
+    final changedPaths = <String>[];
+    final transitionPath = ValueReaders.stringValue(
+      transition['relative_path'],
+      ValueReaders.stringValue(task['relative_path']),
+    ).trim();
+    if (transitionPath.isNotEmpty) {
+      changedPaths.add(transitionPath);
+    }
+    final executionPath = ValueReaders.stringValue(
+      task['atomic_execution_path'],
+    ).trim();
+    JsonMap execution = const <String, Object?>{};
+    if (executionPath.isNotEmpty) {
+      execution = await _taskRepository.loadRecord(project, executionPath);
+      if (execution.isNotEmpty) {
+        final nextExecution = ValueReaders.deepCopyMap(execution)
+          ..['selected_user_option'] = <String, Object?>{
+            'label': label.trim(),
+            'description': description.trim(),
+            'prompt': cleanPrompt,
+            'source_question': sourceQuestion.trim(),
+            'selected_at': DateTime.now().toIso8601String(),
+          };
+        await _taskRepository.saveRecord(project, executionPath, nextExecution);
+        execution = nextExecution;
+        changedPaths.add(executionPath);
+      }
+    }
+    return <String, Object?>{
+      'ok': true,
+      'task': await _taskRepository.loadTask(project, selector),
+      'transition': transition,
+      'execution': execution,
+      'relative_path': ValueReaders.stringValue(task['relative_path']),
+      'changed_paths': changedPaths,
+      'auto_confirmed_checkpoint': taskType == 'checkpoint',
+    };
+  }
+
   Future<JsonMap> buildLongTaskRevisionPlan(
     ProjectDescriptor project,
     String command, {
@@ -2399,6 +4295,87 @@ class ProjectWorkflowRuntimeService {
     };
   }
 
+  Future<JsonMap> applyLongTaskFailureAction(
+    ProjectDescriptor project, {
+    required JsonMap selector,
+    required String command,
+    String runPath = '',
+  }) async {
+    // 中文注释: 失败恢复入口让 GUI/CLI 都走同一条正式 runtime 链，而不是各自手写任务与运行记录补丁。
+    JsonMap record = const <String, Object?>{};
+    if (runPath.trim().isNotEmpty) {
+      record = await _taskRepository.loadRecord(project, runPath);
+    } else {
+      final recentRuns = await listLongTaskRuns(project, limit: 1);
+      if (recentRuns.isNotEmpty) {
+        record = recentRuns.first;
+      }
+    }
+    if (record.isEmpty) {
+      return <String, Object?>{
+        'ok': false,
+        'error': 'Long task run not found.',
+      };
+    }
+    final task = await _taskRepository.loadTask(project, selector);
+    if (task.isEmpty) {
+      return <String, Object?>{'ok': false, 'error': 'Task not found.'};
+    }
+    final failureActionService = LongTaskFailureActionService(
+      lifecycleService: _lifecycleService,
+    );
+    final result = failureActionService.failureAction(
+      record,
+      task,
+      command,
+      createdAt: DateTime.now().toIso8601String(),
+    );
+    if (!ValueReaders.boolValue(result['ok'])) {
+      return result;
+    }
+    final recordPath = ValueReaders.stringValue(record['relative_path']).trim();
+    if (recordPath.isEmpty) {
+      return <String, Object?>{
+        'ok': false,
+        'error': 'Long task run path is missing.',
+      };
+    }
+    final savedRecord = await _taskRepository.saveRecord(
+      project,
+      recordPath,
+      ValueReaders.mapValue(result['record']),
+    );
+    final taskTransition = await _taskRepository.transitionTask(
+      project,
+      selector,
+      ValueReaders.stringValue(result['task_status']),
+      note: ValueReaders.stringValue(result['note']),
+    );
+    if (!ValueReaders.boolValue(taskTransition['ok'])) {
+      return taskTransition;
+    }
+    final reloadedRun = await loadLongTaskRun(project, recordPath);
+    final changedPaths = <String>{
+      recordPath,
+      ValueReaders.stringValue(taskTransition['relative_path']).trim(),
+    }..removeWhere((path) => path.isEmpty);
+    return <String, Object?>{
+      'ok': true,
+      'record': savedRecord,
+      'task': ValueReaders.mapValue(taskTransition['task']),
+      'relative_path': ValueReaders.stringValue(
+        taskTransition['relative_path'],
+      ),
+      'run_center_contract': ValueReaders.mapValue(
+        reloadedRun['run_center_contract'],
+      ),
+      'scheduler_snapshot': ValueReaders.mapValue(
+        reloadedRun['scheduler_snapshot'],
+      ),
+      'changed_paths': changedPaths.toList(growable: false),
+    };
+  }
+
   Future<JsonMap> _templateMap(ProjectDescriptor project) async {
     // 中文注释: 模板映射给任务提示和后处理提示复用，避免上层反复组装。
     final result = <String, Object?>{};
@@ -2421,6 +4398,13 @@ class ProjectWorkflowRuntimeService {
       'review' => ConstraintBindingAppliesTo.review,
       _ => ConstraintBindingAppliesTo.writing,
     };
+  }
+
+  String _expressionConstraintPolicyModeFromOptions(JsonMap options) {
+    return ValueReaders.stringValue(
+      options['expression_constraint_policy_mode'],
+      ValueReaders.stringValue(options['expressionConstraintPolicyMode']),
+    ).trim();
   }
 
   JsonMap _taskWithExecutionConstraintMetadata(
@@ -2474,6 +4458,7 @@ class ProjectWorkflowRuntimeService {
     required JsonMap agent,
   }) async {
     // 中文注释: workflow runtime 优先尊重项目已保存的组选择；旧单智能体项目则退化为单成员组合同。
+    final availableGroups = await _loadAvailableAgentGroupsSafe(project);
     final loader = _loadProjectAgentGroupSelections;
     if (loader != null) {
       try {
@@ -2487,17 +4472,31 @@ class ProjectWorkflowRuntimeService {
               ),
             );
         if (preferred != null) {
+          final fullGroup = _groupById(preferred.groupId, availableGroups);
+          final base = fullGroup.isEmpty
+              ? const <String, Object?>{}
+              : ValueReaders.deepCopyMap(fullGroup);
+          final baseMetadata = ValueReaders.mapValue(base['metadata']);
           return <String, Object?>{
+            ...base,
             'id': preferred.groupId,
             'name': preferred.displayName.trim().isNotEmpty
                 ? preferred.displayName.trim()
-                : preferred.groupId,
-            'source': 'project_group_selection',
+                : ValueReaders.stringValue(
+                    base['name'],
+                    preferred.groupId,
+                  ).trim(),
+            'source': ValueReaders.stringValue(
+              base['source'],
+              'project_group_selection',
+            ),
             'enabled': preferred.enabled,
             'metadata': <String, Object?>{
+              ...baseMetadata,
               'selected_by_default': preferred.selectedByDefault,
               'mode_ids': preferred.modeIds,
               'stage_ids': preferred.stageIds,
+              'task_family_ids': preferred.taskFamilyIds,
               ...preferred.metadata,
             },
           };
@@ -2505,6 +4504,80 @@ class ProjectWorkflowRuntimeService {
       } catch (_) {}
     }
     return _singleMemberCollaborationGroup(agent);
+  }
+
+  JsonMap _groupById(String groupId, List<JsonMap> groups) {
+    final cleanGroupId = groupId.trim();
+    for (final group in groups) {
+      if (ValueReaders.stringValue(group['id']).trim() == cleanGroupId) {
+        return ValueReaders.deepCopyMap(group);
+      }
+    }
+    return const <String, Object?>{};
+  }
+
+  Future<JsonMap> _resolveReviewerDispatchForTask({
+    required ProjectDescriptor project,
+    required JsonMap task,
+    required JsonMap agent,
+    required JsonMap selectedCollaborationGroup,
+  }) async {
+    final availableAgents = await _loadAvailableAgentsSafe(project);
+    final availableGroups = await _loadAvailableAgentGroupsSafe(project);
+    return _reviewerDispatchService.resolve(
+      task: task,
+      mainAgent: agent,
+      selectedCollaborationGroup: selectedCollaborationGroup,
+      availableAgents: availableAgents,
+      availableGroups: availableGroups,
+    );
+  }
+
+  Future<List<JsonMap>> _loadAvailableAgentsSafe(
+    ProjectDescriptor project,
+  ) async {
+    final loader = _loadAvailableAgents;
+    if (loader == null) {
+      return const <JsonMap>[];
+    }
+    try {
+      return await loader(project);
+    } catch (_) {
+      return const <JsonMap>[];
+    }
+  }
+
+  Future<List<JsonMap>> _loadAvailableAgentGroupsSafe(
+    ProjectDescriptor project,
+  ) async {
+    final loader = _loadAvailableAgentGroups;
+    if (loader == null) {
+      return const <JsonMap>[];
+    }
+    try {
+      return await loader(project);
+    } catch (_) {
+      return const <JsonMap>[];
+    }
+  }
+
+  String _delegatedReviewerTask(JsonMap task) {
+    final reviewType = ValueReaders.stringValue(
+      ValueReaders.mapValue(task['metadata'])['review_type'],
+      ReviewTypeConstants.general,
+    );
+    return '请以当前 workflow 审稿执行者身份完成本次 $reviewType review task。'
+        '必要时读取项目文件，形成结构化审稿结论后优先使用 submit_semantic_review 提交；'
+        '不要请求用户，不要调度其他任务，也不要直接推进章节交付。';
+  }
+
+  List<String> _delegatedReviewerConstraints(JsonMap task) {
+    return <String>[
+      '只处理当前 review task，不扩展到其他任务。',
+      '保持审稿结果可供主流程合并与持久化。',
+      if (ValueReaders.stringValue(task['chapter']).trim().isNotEmpty)
+        '聚焦章节：${ValueReaders.stringValue(task['chapter'])}',
+    ];
   }
 
   JsonMap _singleMemberCollaborationGroup(JsonMap agent) {
@@ -2524,6 +4597,12 @@ class ProjectWorkflowRuntimeService {
       'metadata': <String, Object?>{
         'derived_from_single_agent': true,
         'agent_id': agentId,
+        'tool_capability_family_ids': <String>[
+          ToolCapabilityFamilyCatalogService.mountedReferenceConsumption,
+          ToolCapabilityFamilyCatalogService.writing,
+          ToolCapabilityFamilyCatalogService.review,
+          ToolCapabilityFamilyCatalogService.research,
+        ],
       },
     };
   }
@@ -2589,31 +4668,44 @@ class ProjectWorkflowRuntimeService {
     JsonMap recoveryPlan = const <String, Object?>{},
     bool transportFailed = false,
   }) {
+    final effectiveExecutionConstraints = executionConstraints.isEmpty
+        ? ValueReaders.mapValue(executionRecord['execution_constraints'])
+        : executionConstraints;
     final executionId = ValueReaders.stringValue(
       executionRecord['relative_path'],
       ValueReaders.stringValue(task['id']),
     ).trim();
     final review = ValueReaders.mapValue(checkpointReview['review']);
-    return _writingExecutionResultNormalizerService
+    final resultJson = _writingExecutionResultNormalizerService
         .normalize(
           executionId: executionId.isEmpty
               ? 'workflow_task_${DateTime.now().microsecondsSinceEpoch}'
               : executionId,
           workflowKind: 'workflow_task',
-          deliveryState: _chapterDeliveryStateResultFromMaps(
-            executionRecord: executionRecord,
-            deliveryOverride: deliveryOverride,
-          ),
-          constraintBridgeResult: executionConstraints.isEmpty
-              ? null
-              : WritingExecutionConstraintBridgeResult.fromJson(
-                  executionConstraints,
+          deliveryState: _writingExecutionContractService
+              .chapterDeliveryStateFromDelivery(
+                delivery: deliveryOverride.isNotEmpty
+                    ? deliveryOverride
+                    : ValueReaders.mapValue(
+                        executionRecord['chapter_delivery'],
+                      ),
+                fallbackState: ValueReaders.stringValue(
+                  executionRecord['chapter_delivery_state'],
                 ),
+                fallbackChapterPath: ValueReaders.stringValue(
+                  executionRecord['chapter_delivery_path'],
+                ),
+              ),
+          constraintBridgeResult: _writingExecutionContractService
+              .constraintBridgeResult(effectiveExecutionConstraints),
+          activationReport: _writingExecutionContractService
+              .activationReportFromJson(
+                ValueReaders.mapValue(executionRecord['activation_report']),
+              ),
           expressionConstraintReview:
               ExpressionConstraintReviewProjection.fromJson(
                 ValueReaders.mapValue(review['expression_constraint_review']),
               ),
-          activationReport: _activationReportFromExecution(executionRecord),
           informationSignal: _informationSignal(checkpointReview),
           collaborationResults: _collaborationResults(result),
           recoveryPlan: recoveryPlan,
@@ -2624,9 +4716,17 @@ class ProjectWorkflowRuntimeService {
             'checkpoint_review_path': ValueReaders.stringValue(
               checkpointReview['relative_path'],
             ),
+            'formal_review_completed':
+                ValueReaders.stringValue(task['task_type']) == 'review' &&
+                ValueReaders.mapValue(
+                  executionRecord['semantic_review'],
+                ).isNotEmpty,
           },
         )
         .toJson();
+    return _writingExecutionContractService.attachDerivedProjections(
+      resultJson,
+    );
   }
 
   Future<JsonMap> _persistWritingExecutionResult(
@@ -2646,71 +4746,125 @@ class ProjectWorkflowRuntimeService {
     return next;
   }
 
-  ChapterDeliveryStateResult? _chapterDeliveryStateResultFromMaps({
-    required JsonMap executionRecord,
-    required JsonMap deliveryOverride,
-  }) {
-    final delivery = deliveryOverride.isNotEmpty
-        ? deliveryOverride
-        : ValueReaders.mapValue(executionRecord['chapter_delivery']);
-    final stateResult = ValueReaders.mapValue(delivery['state_result']);
-    final state = ValueReaders.stringValue(
-      stateResult['state'],
-      ValueReaders.stringValue(
-        delivery['delivery_state'],
-        ValueReaders.stringValue(executionRecord['chapter_delivery_state']),
-      ),
-    ).trim();
-    if (state.isEmpty) {
-      return null;
+  JsonMap _attachExecutionConstraintArtifacts(
+    JsonMap execution,
+    JsonMap executionConstraints,
+  ) {
+    final next = ValueReaders.deepCopyMap(execution);
+    if (executionConstraints.isNotEmpty) {
+      next['execution_constraints'] = ValueReaders.deepCopyMap(
+        executionConstraints,
+      );
     }
-    return ChapterDeliveryStateResult(
-      deliveryId: ValueReaders.stringValue(
-        stateResult['delivery_id'],
-        ValueReaders.stringValue(delivery['delivery_id']),
-      ),
-      state: state,
-      recommendedAction: ValueReaders.stringValue(
-        stateResult['recommended_action'],
-      ),
-      suggestedOutcomeStatus: ValueReaders.stringValue(
-        stateResult['suggested_outcome_status'],
-      ),
-      reason: ValueReaders.stringValue(stateResult['reason']),
-      summary: ValueReaders.stringValue(stateResult['summary']),
-      blocksProgress: ValueReaders.boolValue(stateResult['blocks_progress']),
-      chapterBodyDelivered: ValueReaders.boolValue(
-        stateResult['chapter_body_delivered'],
-      ),
-      submissionAccepted: ValueReaders.boolValue(
-        stateResult['submission_accepted'],
-      ),
-      retryable: ValueReaders.boolValue(stateResult['retryable']),
-      metadata: ValueReaders.deepCopyMap(
-        ValueReaders.mapValue(stateResult['metadata']).isNotEmpty
-            ? ValueReaders.mapValue(stateResult['metadata'])
-            : <String, Object?>{
-                'chapter_path': ValueReaders.stringValue(
-                  delivery['chapter_path'],
-                  ValueReaders.stringValue(
-                    executionRecord['chapter_delivery_path'],
-                  ),
-                ),
-              },
-      ),
+    final runtimeReport = ValueReaders.mapValue(
+      executionConstraints['runtime_report'],
     );
+    if (runtimeReport.isNotEmpty) {
+      next['execution_constraint_bridge_report'] = ValueReaders.deepCopyMap(
+        runtimeReport,
+      );
+    }
+    return next;
   }
 
-  ContextActivationReport? _activationReportFromExecution(
+  Future<List<WritingExecutionConstraintSummary>>
+  _recentExpressionConstraintSummariesForTask(
+    ProjectDescriptor project,
+    JsonMap task,
+  ) async {
+    final planId = ValueReaders.stringValue(
+      ValueReaders.mapValue(task['metadata'])['plan_id'],
+    ).trim();
+    if (planId.isEmpty) {
+      return const <WritingExecutionConstraintSummary>[];
+    }
+    final currentTaskId = ValueReaders.stringValue(task['id']).trim();
+    final currentExecutionPath = ValueReaders.stringValue(
+      task['atomic_execution_path'],
+    ).trim();
+    final tasks = await _taskRepository.listTasks(project);
+    final candidates =
+        tasks
+            .where((candidate) {
+              if (ValueReaders.stringValue(
+                    ValueReaders.mapValue(candidate['metadata'])['plan_id'],
+                  ).trim() !=
+                  planId) {
+                return false;
+              }
+              if (ValueReaders.stringValue(candidate['id']).trim() ==
+                  currentTaskId) {
+                return false;
+              }
+              final taskType = ValueReaders.stringValue(
+                candidate['task_type'],
+              ).trim();
+              if (!<String>{'chapter', 'revision'}.contains(taskType)) {
+                return false;
+              }
+              final executionPath = ValueReaders.stringValue(
+                candidate['atomic_execution_path'],
+              ).trim();
+              return executionPath.isNotEmpty &&
+                  executionPath != currentExecutionPath;
+            })
+            .toList(growable: false)
+          ..sort(_compareConstraintSummaryCandidateTasks);
+    final summaries = <WritingExecutionConstraintSummary>[];
+    for (final candidate in candidates) {
+      final executionRecord = await _taskRepository.loadRecord(
+        project,
+        ValueReaders.stringValue(candidate['atomic_execution_path']),
+      );
+      final summary = _constraintSummaryFromExecutionRecord(executionRecord);
+      if (summary == null) {
+        continue;
+      }
+      summaries.add(summary);
+      if (summaries.length >= 4) {
+        break;
+      }
+    }
+    return List<WritingExecutionConstraintSummary>.unmodifiable(summaries);
+  }
+
+  int _compareConstraintSummaryCandidateTasks(JsonMap left, JsonMap right) {
+    final leftSort = ValueReaders.intValue(
+      ValueReaders.mapValue(left['metadata'])['sort_order'],
+    );
+    final rightSort = ValueReaders.intValue(
+      ValueReaders.mapValue(right['metadata'])['sort_order'],
+    );
+    if (leftSort != rightSort) {
+      return rightSort.compareTo(leftSort);
+    }
+    final leftUpdated = ValueReaders.stringValue(
+      left['updated_at'],
+      ValueReaders.stringValue(left['created_at']),
+    );
+    final rightUpdated = ValueReaders.stringValue(
+      right['updated_at'],
+      ValueReaders.stringValue(right['created_at']),
+    );
+    return rightUpdated.compareTo(leftUpdated);
+  }
+
+  WritingExecutionConstraintSummary? _constraintSummaryFromExecutionRecord(
     JsonMap executionRecord,
   ) {
-    final activationReport = ValueReaders.mapValue(
-      executionRecord['activation_report'],
+    final writingExecutionResult = ValueReaders.mapValue(
+      executionRecord['writing_execution_result'],
     );
-    if (activationReport.isEmpty) {
+    if (writingExecutionResult.isEmpty) {
       return null;
     }
-    return ContextActivationReport.fromJson(activationReport);
+    final constraints = ValueReaders.mapValue(
+      writingExecutionResult['constraints'],
+    );
+    if (constraints.isEmpty) {
+      return null;
+    }
+    return WritingExecutionConstraintSummary.fromJson(constraints);
   }
 
   JsonMap _informationSignal(JsonMap checkpointReview) {
@@ -2751,16 +4905,41 @@ class ProjectWorkflowRuntimeService {
     final deliveryState = ValueReaders.stringValue(
       executionRecord['chapter_delivery_state'],
     ).trim();
+    if (deliveryState == ChapterDeliveryStateStatuses.waitingUserChoice) {
+      return <String, Object?>{
+        'action': 'resume_when_user_confirms',
+        'reason': 'formal_chapter_waiting_user',
+        'note': note,
+      };
+    }
     if (<String>{
-      ChapterDeliveryStateStatuses.missingOutputRecoverable,
-      ChapterDeliveryStateStatuses.pathMismatchRecoverable,
-      ChapterDeliveryStateStatuses.deliveredNeedsRepair,
-      ChapterDeliveryStateStatuses.waitingUserChoice,
       ChapterDeliveryStateStatuses.invalidOutputRewriteRequired,
       ChapterDeliveryStateStatuses.manualAttentionRequired,
       ChapterDeliveryStateStatuses.hardFailure,
     }.contains(deliveryState)) {
-      return const <String, Object?>{};
+      return <String, Object?>{
+        'action': 'pause_for_manual_attention',
+        'reason': 'formal_chapter_manual_attention_required',
+        'note': note,
+      };
+    }
+    if (deliveryState == ChapterDeliveryStateStatuses.deliveredNeedsRepair) {
+      return <String, Object?>{
+        'action': 'pause_for_repair',
+        'reason': 'formal_chapter_repair_required',
+        'note': note,
+      };
+    }
+    if (<String>{
+      '',
+      ChapterDeliveryStateStatuses.missingOutputRecoverable,
+      ChapterDeliveryStateStatuses.pathMismatchRecoverable,
+    }.contains(deliveryState)) {
+      return <String, Object?>{
+        'action': 'pause_for_failure',
+        'reason': 'formal_chapter_retryable_failure',
+        'note': note,
+      };
     }
     return <String, Object?>{
       'action': 'pause_for_repair',
@@ -2769,11 +4948,172 @@ class ProjectWorkflowRuntimeService {
     };
   }
 
+  JsonMap _formalChapterFailureDeliveryOverride({
+    required JsonMap executionRecord,
+    required String note,
+  }) {
+    if (ValueReaders.stringValue(
+      executionRecord['chapter_delivery_state'],
+    ).trim().isNotEmpty) {
+      return const <String, Object?>{};
+    }
+    return <String, Object?>{
+      'present': true,
+      'delivery_state': ChapterDeliveryStateStatuses.missingOutputRecoverable,
+      'state_result': <String, Object?>{
+        'state': ChapterDeliveryStateStatuses.missingOutputRecoverable,
+        'summary': note,
+        'reason': 'formal_chapter_missing_delivery',
+        'retryable': true,
+        'blocks_progress': true,
+        'chapter_body_delivered': false,
+        'submission_accepted': false,
+      },
+      'submission_present': false,
+    };
+  }
+
+  bool _shouldScheduleDirectRetry({
+    required JsonMap task,
+    required JsonMap writingExecutionResult,
+    required JsonMap options,
+  }) {
+    if (!ValueReaders.boolValue(writingExecutionResult['retryable'])) {
+      return false;
+    }
+    if (ValueReaders.stringValue(
+          writingExecutionResult['next_action'],
+        ).trim() !=
+        'pause_for_failure') {
+      return false;
+    }
+    final budget = _directRecoveryRetryBudget(task: task, options: options);
+    if (budget <= 0) {
+      return false;
+    }
+    final retryCount = ValueReaders.intValue(task['recovery_retry_count']);
+    return retryCount < budget;
+  }
+
+  int _directRecoveryRetryBudget({
+    required JsonMap task,
+    required JsonMap options,
+  }) {
+    return ValueReaders.intValue(
+      options['recovery_retry_budget'],
+      ValueReaders.intValue(task['recovery_retry_budget'], 1),
+    ).clamp(0, 10);
+  }
+
+  bool _shouldScheduleExecutionConstraintRepair({
+    required JsonMap task,
+    required JsonMap checkpointReview,
+  }) {
+    if (!ValueReaders.boolValue(checkpointReview['ok'])) {
+      return false;
+    }
+    final taskType = ValueReaders.stringValue(task['task_type']).trim();
+    if (!<String>{'chapter', 'revision'}.contains(taskType)) {
+      return false;
+    }
+    final review = ValueReaders.mapValue(checkpointReview['review']);
+    final expressionSignal = ValueReaders.mapValue(
+      review['expression_constraint_signal'],
+    );
+    final narrativeExpression = ValueReaders.mapValue(
+      ValueReaders.mapValue(
+        review['narrative_supervisor_risk'],
+      )['expression_constraints'],
+    );
+    final gateDisposition = ValueReaders.stringValue(
+      expressionSignal['gate_disposition'],
+      ValueReaders.stringValue(narrativeExpression['gate_disposition']),
+    ).trim();
+    return ValueReaders.boolValue(expressionSignal['repair_required']) ||
+        ValueReaders.boolValue(narrativeExpression['repair_required']) ||
+        gateDisposition ==
+            ExpressionConstraintGateRecommendedDispositions.repair;
+  }
+
+  JsonMap _recoveryPlanAfterSuccessfulStep({
+    required String nextStatus,
+    required JsonMap gateOutcome,
+    required JsonMap checkpointReview,
+    required bool waitingForUserChoice,
+    required JsonMap scheduledRepair,
+  }) {
+    final repairTask = ValueReaders.mapValue(scheduledRepair['repair_task']);
+    if (repairTask.isNotEmpty &&
+        (ValueReaders.boolValue(scheduledRepair['created']) ||
+            ValueReaders.boolValue(scheduledRepair['duplicated']))) {
+      return <String, Object?>{
+        'action': 'run_scheduled_repair',
+        'reason': 'execution_constraint_repair_scheduled',
+        'note': '执行约束风险已物化为队列内修订任务，下一步应先运行该修订再继续主链。',
+        'task': repairTask,
+        'status': ValueReaders.boolValue(scheduledRepair['created'])
+            ? 'created'
+            : 'duplicated',
+        'safe_after_crash': true,
+      };
+    }
+    return _successRecoveryPlan(
+      nextStatus: nextStatus,
+      gateOutcome: gateOutcome,
+      checkpointReview: checkpointReview,
+      waitingForUserChoice: waitingForUserChoice,
+    );
+  }
+
   JsonMap _successRecoveryPlan({
     required String nextStatus,
     required JsonMap gateOutcome,
+    required JsonMap checkpointReview,
     required bool waitingForUserChoice,
   }) {
+    final informationSignal = _informationSignal(checkpointReview);
+    final informationCategory = ValueReaders.stringValue(
+      informationSignal['category'],
+    ).trim();
+    final informationSummary = ValueReaders.stringValue(
+      informationSignal['summary'],
+    ).trim();
+    if (informationCategory == 'manual_attention') {
+      return <String, Object?>{
+        'action': 'pause_for_manual_attention',
+        'reason': ValueReaders.stringValue(
+          informationSignal['reason'],
+          'information_manual_attention',
+        ),
+        'note': informationSummary.isEmpty
+            ? '信息层信号要求人工介入后再继续。'
+            : informationSummary,
+      };
+    }
+    if (informationCategory == 'repair') {
+      return <String, Object?>{
+        'action': 'pause_for_repair',
+        'reason': ValueReaders.stringValue(
+          informationSignal['reason'],
+          'information_repair_required',
+        ),
+        'note': informationSummary.isEmpty
+            ? '信息层信号要求先补研究、补上下文或修复资料链路。'
+            : informationSummary,
+      };
+    }
+    if (informationCategory == 'checkpoint_user') {
+      return <String, Object?>{
+        'action': 'resume_when_user_confirms',
+        'reason': ValueReaders.stringValue(
+          informationSignal['reason'],
+          'information_waiting_user',
+        ),
+        'note': informationSummary.isEmpty
+            ? '信息层信号要求先停在用户确认点。'
+            : informationSummary,
+      };
+    }
     if (ValueReaders.boolValue(gateOutcome['manual_attention_required'])) {
       return <String, Object?>{
         'action': 'pause_for_manual_attention',
@@ -2800,6 +5140,25 @@ class ProjectWorkflowRuntimeService {
     return const <String, Object?>{};
   }
 
+  GenerateDraftUseCase _workflowGenerateDraftUseCase({
+    required ProviderEndpointSettings provider,
+    required AppSettings settings,
+  }) {
+    final hostAwareFactory = _hostAwareGenerateDraftUseCaseFactory;
+    if (hostAwareFactory == null) {
+      return _generateDraftUseCaseFactory(provider, settings.networkSettings);
+    }
+    return hostAwareFactory(
+      provider,
+      settings.networkSettings,
+      hostInformationPermissionContext:
+          _informationPermissionSettingsResolverService.resolveFromAppSettings(
+            settings,
+            source: 'workflow_runtime.app_settings.permission_settings',
+          ),
+    );
+  }
+
   List<String> _mergePaths(List<String> left, List<String> right) {
     // 中文注释: 输出路径合并后保持先前顺序，避免后处理覆盖正文阶段的重要定位。
     final result = <String>[...left];
@@ -2809,6 +5168,39 @@ class ProjectWorkflowRuntimeService {
       }
     }
     return result;
+  }
+
+  Future<JsonMap> _persistExecutionOutputPaths({
+    required ProjectDescriptor project,
+    required String executionPath,
+    required JsonMap executionRecord,
+    required List<String> outputPaths,
+  }) async {
+    if (executionPath.trim().isEmpty || executionRecord.isEmpty) {
+      return executionRecord;
+    }
+    final currentPaths = ValueReaders.stringList(
+      executionRecord['output_paths'],
+    );
+    if (_samePathList(currentPaths, outputPaths)) {
+      return executionRecord;
+    }
+    final nextExecution = ValueReaders.deepCopyMap(executionRecord)
+      ..['output_paths'] = outputPaths;
+    await _taskRepository.saveRecord(project, executionPath, nextExecution);
+    return nextExecution;
+  }
+
+  bool _samePathList(List<String> left, List<String> right) {
+    if (left.length != right.length) {
+      return false;
+    }
+    for (var index = 0; index < left.length; index++) {
+      if (left[index] != right[index]) {
+        return false;
+      }
+    }
+    return true;
   }
 
   List<String> _toolNamesFromExecutedTools(List<Object?> executedTools) {
@@ -2837,6 +5229,101 @@ class ProjectWorkflowRuntimeService {
         schedulerSnapshot['scheduler_plan'],
       )['run_center_contract'],
     );
+  }
+
+  List<Object?> _pendingUserOptionsFromExecutedTools(
+    List<Object?> executedTools,
+  ) {
+    for (final rawTool in executedTools.reversed) {
+      final tool = ValueReaders.mapValue(rawTool);
+      if (ValueReaders.stringValue(tool['name']) != 'present_user_options') {
+        continue;
+      }
+      final result = ValueReaders.mapValue(tool['result']);
+      final question = ValueReaders.stringValue(result['question']);
+      return ValueReaders.objectList(result['options'])
+          .map(ValueReaders.mapValue)
+          .where((entry) => entry.isNotEmpty)
+          .map(
+            (entry) => <String, Object?>{
+              'label': ValueReaders.stringValue(
+                entry['label'],
+                ValueReaders.stringValue(
+                  entry['title'],
+                  ValueReaders.stringValue(entry['name'], '选项'),
+                ),
+              ),
+              'description': ValueReaders.stringValue(
+                entry['description'],
+                ValueReaders.stringValue(
+                  entry['detail'],
+                  ValueReaders.stringValue(entry['summary']),
+                ),
+              ),
+              'prompt': ValueReaders.stringValue(
+                entry['prompt'],
+                ValueReaders.stringValue(
+                  entry['value'],
+                  ValueReaders.stringValue(
+                    entry['title'],
+                    ValueReaders.stringValue(entry['label']),
+                  ),
+                ),
+              ),
+              'source_question': question,
+            },
+          )
+          .toList(growable: false);
+    }
+    return const <Object?>[];
+  }
+
+  JsonMap _taskWithSelectedUserChoiceContext(JsonMap task) {
+    final selectedPrompt = ValueReaders.stringValue(
+      task['selected_user_option_prompt'],
+    ).trim();
+    if (selectedPrompt.isEmpty) {
+      return task;
+    }
+    final selectedLabel = ValueReaders.stringValue(
+      task['selected_user_option_label'],
+    ).trim();
+    final selectedDescription = ValueReaders.stringValue(
+      task['selected_user_option_description'],
+    ).trim();
+    final selectedQuestion = ValueReaders.stringValue(
+      task['selected_user_option_question'],
+    ).trim();
+    final originalBrief = ValueReaders.stringValue(task['brief']).trim();
+    final continuationLines = <String>[
+      if (originalBrief.isNotEmpty) originalBrief,
+      '续跑补充：上轮这里停在用户选择点，用户现在已经给出明确确认。',
+      if (selectedQuestion.isNotEmpty) '上轮问题：$selectedQuestion',
+      if (selectedLabel.isNotEmpty) '用户所选方向：$selectedLabel',
+      if (selectedDescription.isNotEmpty) '补充说明：$selectedDescription',
+      '用户确认内容：$selectedPrompt',
+      if (_isPlanningStageWorkflowTask(task))
+        '当前任务仍处于 planning 阶段：只允许完善 specs/project_spec.md、outlines/story/总纲.md、outlines/chapters/章节任务清单.md 等规划产物；不要写 chapters/ 正文，不要写 tasks/*.json 任务文件，不要提交正式章节交付，也不要提前生成后续审稿任务。',
+      '请吸收这个确认后继续推进当前任务，不要重复提出同一选择，除非出现新的真实阻塞。',
+    ];
+    return ValueReaders.deepCopyMap(task)
+      ..['brief'] = continuationLines.join('\n\n');
+  }
+
+  JsonMap _taskWithResumeDispatchPromptAppendix(JsonMap task) {
+    final appendix = ValueReaders.stringValue(
+      task['resume_dispatch_prompt_appendix'],
+    ).trim();
+    if (appendix.isEmpty) {
+      return task;
+    }
+    final originalBrief = ValueReaders.stringValue(task['brief']).trim();
+    final continuationLines = <String>[
+      if (originalBrief.isNotEmpty) originalBrief,
+      appendix,
+    ];
+    return ValueReaders.deepCopyMap(task)
+      ..['brief'] = continuationLines.join('\n\n');
   }
 
   Future<JsonMap> _saveRevisionDiffIfNeeded(
@@ -2900,6 +5387,155 @@ class ProjectWorkflowRuntimeService {
       'report': report,
       'changed_paths': <Object?>[jsonPath, markdownPath],
     };
+  }
+
+  List<JsonMap> _workflowScopedTasks(List<JsonMap> tasks) {
+    // 中文注释: workflow runtime 优先只调度正式 plan 链任务，避免项目内普通/遗留任务把长任务 next 选偏。
+    final plannedTasks = tasks
+        .where(_belongsToWorkflowPlan)
+        .toList(growable: false);
+    if (plannedTasks.isEmpty) {
+      return tasks;
+    }
+    final recognizedPlannedTasks = plannedTasks
+        .where(_isRecognizedWorkflowPlanTask)
+        .toList(growable: false);
+    return recognizedPlannedTasks.isNotEmpty
+        ? recognizedPlannedTasks
+        : plannedTasks;
+  }
+
+  List<JsonMap> _workflowPrimaryTasks(List<JsonMap> tasks) {
+    // 中文注释: checkpoint follow-up review 仍是正式任务，但不应默认卡住主链章节推进与扩窗。
+    final primaryTasks = tasks
+        .where((task) => !_isDeferredCheckpointFollowupTask(task))
+        .toList(growable: false);
+    return primaryTasks.isEmpty ? tasks : primaryTasks;
+  }
+
+  JsonMap _nextRunnablePrimaryTask({
+    required List<JsonMap> primaryTasks,
+    required List<JsonMap> allTasks,
+  }) {
+    if (primaryTasks.isEmpty) {
+      return const <String, Object?>{};
+    }
+    // 中文注释: 主链筛选时仍需保留已成功的 deferred follow-up 作为依赖证据，
+    // 否则 revision/后续章节会因为依赖图被截断而被误判成不可运行。
+    final selectionPool = <JsonMap>[
+      ...primaryTasks,
+      ...allTasks.where(
+        (task) =>
+            !primaryTasks.contains(task) &&
+            ValueReaders.stringValue(task['status']) ==
+                TaskRuntimeConstants.statusSucceeded,
+      ),
+    ];
+    return _taskSelectionService.nextRunnableTaskFromTasks(selectionPool);
+  }
+
+  bool _belongsToWorkflowPlan(JsonMap task) {
+    final metadata = ValueReaders.mapValue(task['metadata']);
+    if (ValueReaders.stringValue(metadata['plan_id']).trim().isNotEmpty) {
+      return true;
+    }
+    if (ValueReaders.stringValue(metadata['generated_by']).trim().isNotEmpty) {
+      return true;
+    }
+    if (ValueReaders.stringValue(metadata['origin']).trim().isNotEmpty) {
+      return true;
+    }
+    final id = ValueReaders.stringValue(task['id']).trim();
+    final relativePath = ValueReaders.stringValue(task['relative_path']).trim();
+    return id.startsWith('plan_') || relativePath.contains('plan_');
+  }
+
+  bool _isRecognizedWorkflowPlanTask(JsonMap task) {
+    final metadata = ValueReaders.mapValue(task['metadata']);
+    if (ValueReaders.stringValue(metadata['origin']).trim().isNotEmpty) {
+      return true;
+    }
+    final generatedBy = ValueReaders.stringValue(
+      metadata['generated_by'],
+    ).trim();
+    if (generatedBy == 'LongTaskPlanner' || generatedBy == 'LongTaskRevision') {
+      return true;
+    }
+    final planId = ValueReaders.stringValue(metadata['plan_id']).trim();
+    if (planId.isEmpty) {
+      return true;
+    }
+    return _hasCanonicalWorkflowTaskPath(task);
+  }
+
+  bool _hasCanonicalWorkflowTaskPath(JsonMap task) {
+    final taskId = ValueReaders.stringValue(task['id']).trim();
+    if (taskId.isEmpty) {
+      return false;
+    }
+    final expectedPath =
+        'tasks/${_longTaskPathPolicyService.safeId(taskId, fallbackPrefix: 'task')}.json';
+    return ValueReaders.stringValue(
+          task['relative_path'],
+        ).trim().replaceAll('\\', '/') ==
+        expectedPath;
+  }
+
+  bool _isDeferredCheckpointFollowupTask(JsonMap task) {
+    return ValueReaders.stringValue(
+          ValueReaders.mapValue(task['metadata'])['origin'],
+        ).trim() ==
+        'checkpoint_review_suggestion';
+  }
+
+  JsonMap _nextBlockingDeferredCheckpointFollowupTask(
+    List<JsonMap> tasks, {
+    required List<JsonMap> primaryTasks,
+  }) {
+    // 中文注释: 若主链任务被自动派生的 checkpoint follow-up 依赖卡住，队列需要先跑这些 follow-up 解锁主链。
+    final deferredById = <String, JsonMap>{};
+    for (final task in tasks) {
+      if (!_isDeferredCheckpointFollowupTask(task)) {
+        continue;
+      }
+      final taskId = ValueReaders.stringValue(task['id']).trim();
+      if (taskId.isEmpty) {
+        continue;
+      }
+      deferredById[taskId] = task;
+    }
+    if (deferredById.isEmpty) {
+      return const <String, Object?>{};
+    }
+    final blockingDeferredTasks = <JsonMap>[];
+    final addedIds = <String>{};
+    for (final task in primaryTasks) {
+      final status = ValueReaders.stringValue(task['status']).trim();
+      if (TaskRuntimeConstants.terminalStatuses.contains(status)) {
+        continue;
+      }
+      for (final dependency in ValueReaders.stringList(task['depends_on'])) {
+        final deferredTask = deferredById[dependency];
+        if (deferredTask == null) {
+          continue;
+        }
+        if (addedIds.add(dependency)) {
+          blockingDeferredTasks.add(deferredTask);
+        }
+      }
+    }
+    if (blockingDeferredTasks.isEmpty) {
+      return const <String, Object?>{};
+    }
+    final candidatePool = <JsonMap>[
+      ...blockingDeferredTasks,
+      ...tasks.where(
+        (task) =>
+            ValueReaders.stringValue(task['status']).trim() ==
+            TaskRuntimeConstants.statusSucceeded,
+      ),
+    ];
+    return _taskSelectionService.nextRunnableTaskFromTasks(candidatePool);
   }
 
   static BuildLongTaskPlanUseCase _defaultBuildLongTaskPlanUseCase(

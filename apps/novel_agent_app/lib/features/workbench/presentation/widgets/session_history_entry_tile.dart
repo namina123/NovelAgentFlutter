@@ -16,21 +16,25 @@ class SessionHistoryEntryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 中文注释: 历史列表项只负责展示并回传所选会话 id，不耦合全局历史面板开关。
+    // 中文注释: 历史列表项继续朝导航列表项收紧，而不是内容卡片。
     final colors = context.novelThemeColors;
     return InkWell(
-      borderRadius: AppChrome.surfaceBorderRadius,
+      borderRadius: BorderRadius.circular(8),
       onTap: () => onSelected(entry.id),
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
         decoration: BoxDecoration(
           color: entry.isSelected
-              ? colors.accentSoftColor.withValues(alpha: 0.92)
-              : Colors.transparent,
-          borderRadius: AppChrome.surfaceBorderRadius,
-          border: Border.all(
-            color: entry.isSelected ? colors.lineStrongColor : colors.lineColor,
-            width: AppChrome.borderWidth,
+              ? colors.accentSoftColor.withValues(alpha: 0.72)
+              : colors.panelBackground.withValues(alpha: 0.16),
+          borderRadius: BorderRadius.circular(8),
+          border: Border(
+            top: BorderSide(
+              color:
+                  (entry.isSelected ? colors.lineStrongColor : colors.lineColor)
+                      .withValues(alpha: entry.isSelected ? 0.72 : 0.28),
+              width: AppChrome.borderWidth,
+            ),
           ),
         ),
         child: Column(
@@ -40,14 +44,18 @@ class SessionHistoryEntryTile extends StatelessWidget {
               entry.title,
               style: TextStyle(
                 color: colors.textColor,
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
               ),
             ),
             const SizedBox(height: 4),
             Text(
               '${entry.status} · ${entry.updatedAt}',
-              style: TextStyle(color: colors.mutedTextColor, fontSize: 12),
+              style: TextStyle(
+                color: colors.mutedTextColor,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ],
         ),

@@ -35,9 +35,9 @@ class ThemeSettingsViewDataService {
             id: descriptor.id,
             label: descriptor.label,
             description: descriptor.brightness == Brightness.dark
-                ? '更适合夜间连续创作与低照环境。'
-                : '更适合白天编辑、资料整理与长时间扫描。',
-            badgeLabel: descriptor.brightness == Brightness.dark ? '偏暗' : '明亮',
+                ? '更接近现代 IDE 工作台，适合连续创作、代码和文档并行处理。'
+                : '更适合白天整理资料、批量阅读和长时间扫描内容。',
+            badgeLabel: descriptor.brightness == Brightness.dark ? 'IDE' : '日间',
             previewSwatches: <Color>[
               colors.canvasBackground,
               colors.panelBackground,

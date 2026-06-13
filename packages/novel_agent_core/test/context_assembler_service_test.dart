@@ -274,5 +274,49 @@ right_entity_id: mentor
         expect(result['expression_constraint_injection_mode'], 'disabled');
       },
     );
+
+    test(
+      'elevates chapter continuity and delivery gates from session context into dedicated sections',
+      () {
+        final assembler = ContextAssemblerService(
+          budgetService: ContextBudgetService(),
+          staticSectionService: ContextStaticSectionService(
+            projectPromptContract: ProjectPromptContract(),
+          ),
+          projectFileSectionService: ContextProjectFileSectionService(),
+        );
+
+        final result = assembler.assemble(<String, Object?>{
+          'project': <String, Object?>{
+            'title': '分章续写项目',
+            'project_type': 'novel',
+            'stage': 'draft',
+            'path': 'D:/projects/demo',
+          },
+          'user_prompt': '继续写第03章',
+          'session_context': '''
+## Execution Constraints
+- 字数约束：目标约 2200 字；不少于 1800 字；尽量不超过 2600 字
+- 正式交付 gate：低于 1800 字不得提交正式章节；高于 2600 字需先压缩后再提交。
+
+- continuity_checkpoint:
+  - 下一章必须直接承接：直接从王保正的回应继续。
+  - 上一章已完成，不要重演：第02章末尾已经完成了找路、敲门和发问。
+  - 当前落点：王保正家门口
+  - 开篇先推进到新情节点；不要把上一章末尾已完成的动作、对话或到达重新播放一遍。
+''',
+          'intent': 'draft',
+          'agent': <String, Object?>{'name': '综合创作智能体', 'role': '写作'},
+        });
+
+        final contextText = ValueReaders.stringValue(result['context_text']);
+        expect(contextText, contains('章节承接 Gate'));
+        expect(contextText, contains('正式交付 Gate'));
+        expect(contextText, contains('直接从王保正的回应继续'));
+        expect(contextText, contains('低于 1800 字不得提交正式章节'));
+        expect(contextText, contains('不是一般表达风格建议'));
+        expect(contextText, contains('第一段先推进新的回应、动作或结果'));
+      },
+    );
   });
 }

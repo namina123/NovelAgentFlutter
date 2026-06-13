@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../../../../../app/theme/app_chrome.dart';
 import '../../../../../shared/theme/novel_theme_context.dart';
 import '../../../../../shared/widgets/action_button.dart';
 import '../models/project_create_request_view_data.dart';
@@ -117,150 +118,225 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
   Widget build(BuildContext context) {
     // 中文注释: 这里统一承接“基础信息”和“运行基准补选”两阶段，但字段职责仍然按区块拆开。
     final colors = context.novelThemeColors;
+    final surface = context.novelThemeSurfaces.panel;
     final selectedOption = _selectedOption();
     final phaseTitle = _phaseLabel(widget.creationPhase);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
-          child: Scrollbar(
-            controller: _scrollController,
-            thumbVisibility: true,
-            child: SingleChildScrollView(
+          child: Container(
+            decoration: BoxDecoration(
+              color: surface.backgroundColor.withValues(alpha: 0.34),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: surface.borderColor.withValues(alpha: 0.66),
+                width: AppChrome.borderWidth,
+              ),
+            ),
+            child: Scrollbar(
               controller: _scrollController,
-              primary: false,
-              padding: const EdgeInsets.only(right: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.title,
-                    style: TextStyle(
-                      color: colors.textColor,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    widget.description,
-                    style: TextStyle(
-                      color: colors.mutedTextColor,
-                      fontSize: 12,
-                      height: 1.5,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    '创建位置：${widget.projectsRootPath}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: colors.mutedTextColor,
-                      fontSize: 12,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  _StepStrip(
-                    currentPhase: widget.creationPhase,
-                    projectTypeRequiresRuntimeBaseline:
-                        _selectedTypeRequiresRuntimeBaseline(),
-                  ),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: _controller,
-                    decoration: const InputDecoration(
-                      labelText: '项目名',
-                      hintText: '输入要创建的小说项目名称',
-                    ),
-                    onSubmitted: _submit,
-                  ),
-                  const SizedBox(height: 12),
-                  _SectionLabel(title: phaseTitle),
-                  const SizedBox(height: 8),
-                  ..._buildPhaseContent(selectedOption),
-                  if (_supportsContinuityInput()) ...[
-                    const SizedBox(height: 12),
-                    _AdvancedContinuitySection(
-                      expanded: _showAdvancedContinuity,
-                      hasUserInput: _hasContinuityInput(_continuityInput),
-                      compact:
-                          widget.creationPhase !=
-                          ProjectCreationPhase.projectType,
-                      input: _continuityInput,
-                      onToggle: () {
-                        setState(() {
-                          _showAdvancedContinuity = !_showAdvancedContinuity;
-                        });
-                      },
-                      onChanged: _handleContinuityInputChanged,
-                    ),
-                  ],
-                  if ((selectedOption?.description ?? '').trim().isNotEmpty &&
-                      widget.creationPhase ==
-                          ProjectCreationPhase.projectType) ...[
-                    const SizedBox(height: 10),
+              thumbVisibility: true,
+              child: SingleChildScrollView(
+                controller: _scrollController,
+                primary: false,
+                padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text(
-                      selectedOption!.description,
+                      'PROJECT SETUP',
                       style: TextStyle(
                         color: colors.mutedTextColor,
-                        fontSize: 12,
-                        height: 1.45,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.24,
                       ),
                     ),
-                  ],
-                  if (widget.status.trim().isNotEmpty) ...[
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
                     Text(
-                      widget.status,
+                      widget.title,
                       style: TextStyle(
-                        color: colors.lineStrongColor,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
+                        color: colors.textColor,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        height: 1.2,
                       ),
                     ),
+                    const SizedBox(height: 6),
+                    Text(
+                      widget.description,
+                      style: TextStyle(
+                        color: colors.mutedTextColor,
+                        fontSize: 11.5,
+                        height: 1.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                      decoration: BoxDecoration(
+                        color: colors.inputBackground.withValues(alpha: 0.76),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: colors.lineColor.withValues(alpha: 0.7),
+                          width: AppChrome.borderWidth,
+                        ),
+                      ),
+                      child: Text(
+                        '创建位置：${widget.projectsRootPath}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: colors.mutedTextColor,
+                          fontSize: 11,
+                          height: 1.45,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    _StepStrip(
+                      currentPhase: widget.creationPhase,
+                      projectTypeRequiresRuntimeBaseline:
+                          _selectedTypeRequiresRuntimeBaseline(),
+                    ),
+                    const SizedBox(height: 14),
+                    _FieldBand(
+                      title: '项目名',
+                      child: TextField(
+                        controller: _controller,
+                        decoration: const InputDecoration(
+                          hintText: '输入要创建的小说项目名称',
+                        ),
+                        onSubmitted: _submit,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _SectionLabel(title: phaseTitle),
+                    const SizedBox(height: 8),
+                    ..._buildPhaseContent(selectedOption),
+                    if (_supportsContinuityInput()) ...[
+                      const SizedBox(height: 12),
+                      _AdvancedContinuitySection(
+                        expanded: _showAdvancedContinuity,
+                        hasUserInput: _hasContinuityInput(_continuityInput),
+                        compact:
+                            widget.creationPhase !=
+                            ProjectCreationPhase.projectType,
+                        input: _continuityInput,
+                        onToggle: () {
+                          setState(() {
+                            _showAdvancedContinuity = !_showAdvancedContinuity;
+                          });
+                        },
+                        onChanged: _handleContinuityInputChanged,
+                      ),
+                    ],
+                    if ((selectedOption?.description ?? '').trim().isNotEmpty &&
+                        widget.creationPhase ==
+                            ProjectCreationPhase.projectType) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                        decoration: BoxDecoration(
+                          color: colors.panelBackground.withValues(alpha: 0.34),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: colors.lineColor.withValues(alpha: 0.6),
+                            width: AppChrome.borderWidth,
+                          ),
+                        ),
+                        child: Text(
+                          selectedOption!.description,
+                          style: TextStyle(
+                            color: colors.mutedTextColor,
+                            fontSize: 11.5,
+                            height: 1.45,
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (widget.status.trim().isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                        decoration: BoxDecoration(
+                          color: colors.accentSoftColor.withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: colors.lineColor.withValues(alpha: 0.74),
+                            width: AppChrome.borderWidth,
+                          ),
+                        ),
+                        child: Text(
+                          widget.status,
+                          style: TextStyle(
+                            color: colors.lineStrongColor,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            height: 1.45,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),
         ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            if (_showBackButton()) ...[
-              Expanded(
-                child: ActionButton(
-                  label: '上一步',
-                  icon: Icons.arrow_back_rounded,
-                  expanded: true,
-                  tone: ActionButtonTone.neutral,
-                  onPressed: widget.onBackRequested,
-                ),
-              ),
-              const SizedBox(width: 10),
-            ] else if (widget.allowOpenExisting) ...[
-              Expanded(
-                child: ActionButton(
-                  label: '打开已有项目',
-                  icon: Icons.folder_open_outlined,
-                  expanded: true,
-                  tone: ActionButtonTone.neutral,
-                  onPressed: widget.onOpenExistingRequested,
-                ),
-              ),
-              const SizedBox(width: 10),
-            ],
-            Expanded(
-              child: ActionButton(
-                label: _submitButtonLabel(),
-                icon: Icons.add_business_outlined,
-                expanded: true,
-                tone: ActionButtonTone.warm,
-                onPressed: () => _submit(_controller.text),
+        const SizedBox(height: 12),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(0, 12, 0, 0),
+          decoration: BoxDecoration(
+            border: Border(
+              top: BorderSide(
+                color: surface.borderColor.withValues(alpha: 0.66),
+                width: AppChrome.borderWidth,
               ),
             ),
-          ],
+          ),
+          child: Row(
+            children: [
+              if (_showBackButton()) ...[
+                Expanded(
+                  child: ActionButton(
+                    label: '上一步',
+                    icon: Icons.arrow_back_rounded,
+                    expanded: true,
+                    tone: ActionButtonTone.neutral,
+                    onPressed: widget.onBackRequested,
+                  ),
+                ),
+                const SizedBox(width: 10),
+              ] else if (widget.allowOpenExisting) ...[
+                Expanded(
+                  child: ActionButton(
+                    label: '打开已有项目',
+                    icon: Icons.folder_open_outlined,
+                    expanded: true,
+                    tone: ActionButtonTone.neutral,
+                    onPressed: widget.onOpenExistingRequested,
+                  ),
+                ),
+                const SizedBox(width: 10),
+              ],
+              Expanded(
+                child: ActionButton(
+                  label: _submitButtonLabel(),
+                  icon: Icons.add_business_outlined,
+                  expanded: true,
+                  tone: ActionButtonTone.warm,
+                  onPressed: () => _submit(_controller.text),
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -527,12 +603,20 @@ class _AdvancedContinuitySection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.novelThemeColors;
-    return DecoratedBox(
-      decoration: BoxDecoration(border: Border.all(color: colors.lineColor)),
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.panelBackground.withValues(alpha: 0.28),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: colors.lineColor.withValues(alpha: 0.68),
+          width: AppChrome.borderWidth,
+        ),
+      ),
       child: Column(
         children: [
           InkWell(
             onTap: onToggle,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               child: Row(
@@ -547,7 +631,7 @@ class _AdvancedContinuitySection extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      '高级设置',
+                      '连续性高级设置',
                       style: TextStyle(
                         color: colors.textColor,
                         fontSize: 13,
@@ -559,7 +643,7 @@ class _AdvancedContinuitySection extends StatelessWidget {
                     hasUserInput ? '已配置' : '可选',
                     style: TextStyle(
                       color: colors.mutedTextColor,
-                      fontSize: 12,
+                      fontSize: 10.5,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -593,23 +677,36 @@ class _StepStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.novelThemeColors;
     final phases = <ProjectCreationPhase>[
       ProjectCreationPhase.projectType,
       ProjectCreationPhase.storageStrategy,
       if (projectTypeRequiresRuntimeBaseline)
         ProjectCreationPhase.runtimeBaseline,
     ];
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        for (var index = 0; index < phases.length; index += 1)
-          _StepChip(
-            index: index + 1,
-            label: _stepLabel(phases[index]),
-            active: phases[index] == currentPhase,
-          ),
-      ],
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+      decoration: BoxDecoration(
+        color: colors.panelBackground.withValues(alpha: 0.28),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: colors.lineColor.withValues(alpha: 0.68),
+          width: AppChrome.borderWidth,
+        ),
+      ),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (var index = 0; index < phases.length; index += 1)
+            _StepChip(
+              index: index + 1,
+              label: _stepLabel(phases[index]),
+              active: phases[index] == currentPhase,
+            ),
+        ],
+      ),
     );
   }
 
@@ -641,12 +738,13 @@ class _StepChip extends StatelessWidget {
     final colors = context.novelThemeColors;
     final borderColor = active ? colors.accentColor : colors.lineColor;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
         border: Border.all(color: borderColor, width: 1),
         color: active
-            ? colors.accentSoftColor.withValues(alpha: 0.92)
-            : colors.panelBackground,
+            ? colors.accentSoftColor.withValues(alpha: 0.22)
+            : colors.inputBackground.withValues(alpha: 0.56),
       ),
       child: Text(
         '$index. $label',
@@ -671,9 +769,49 @@ class _SectionLabel extends StatelessWidget {
     return Text(
       title,
       style: TextStyle(
-        color: colors.textColor,
-        fontSize: 13,
-        fontWeight: FontWeight.w700,
+        color: colors.mutedTextColor,
+        fontSize: 10.5,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0.18,
+      ),
+    );
+  }
+}
+
+class _FieldBand extends StatelessWidget {
+  const _FieldBand({required this.title, required this.child});
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.novelThemeColors;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+      decoration: BoxDecoration(
+        color: colors.panelBackground.withValues(alpha: 0.28),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: colors.lineColor.withValues(alpha: 0.68),
+          width: AppChrome.borderWidth,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              color: colors.mutedTextColor,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          child,
+        ],
       ),
     );
   }

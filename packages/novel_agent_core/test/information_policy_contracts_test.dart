@@ -22,6 +22,11 @@ void main() {
       expect(source.validateBasics(), isEmpty);
       expect(source.sourceRef.sourceType, NarrativeSourceTypes.deconstruction);
       expect(
+        source.sourceIdentity.sourceKind,
+        NarrativeSourceTypes.deconstruction,
+      );
+      expect(source.sourceIdentity.sourceAssetId, 'deconstruction-001');
+      expect(
         source.sourceAuthority,
         InformationSourceAuthorities.deconstructionExtracted,
       );
@@ -32,6 +37,12 @@ void main() {
           ValueReaders.mapValue(encoded['future_extension'])['retain'],
         ),
         isTrue,
+      );
+      expect(
+        ValueReaders.stringValue(
+          ValueReaders.mapValue(encoded['source_ref'])['display_name'],
+        ),
+        '拆书抽取',
       );
     });
 
@@ -163,6 +174,119 @@ void main() {
           InformationValidationCodes.missingInformationActivationPriority,
           InformationValidationCodes.invalidInformationPreferredBudgetChars,
         ]),
+      );
+    });
+
+    test(
+      'collection policy normalizes objective research into rigorous broad collection',
+      () {
+        const service = InformationCollectionPolicyService();
+
+        final request = service.normalize(
+          InformationCollectionRequest(
+            query: '唐代天文历法的客观资料',
+            requestedDepth: InformationResearchDepths.deep,
+            informationDomain: InformationDomains.history,
+            sourceRequirements: const InformationSourceRequirements(
+              preferredDomains: <String>['gov.cn'],
+            ),
+            extractionPolicy: const InformationExtractionPolicy(
+              maxCandidateCount: 4,
+            ),
+          ),
+        );
+
+        expect(request.collectionMode, InformationCollectionModes.network);
+        expect(request.informationDomain, InformationDomains.history);
+        expect(request.sourceRequirements.requiresRigorousSources, isTrue);
+        expect(request.sourceRequirements.minSourceCount, 2);
+        expect(request.extractionPolicy.collectBroadly, isTrue);
+        expect(request.extractionPolicy.maxCandidateCount, 4);
+        expect(request.extractionPolicy.maxFetchCount, 6);
+        expect(
+          request.sourceRequirements.networkRegionHint,
+          InformationNetworkRegionHints.mainlandChinaPossible,
+        );
+      },
+    );
+
+    test(
+      'collection policy routes import mode without import source back to network',
+      () {
+        const service = InformationCollectionPolicyService();
+
+        final request = service.normalize(
+          const InformationCollectionRequest(
+            query: '明代江南士绅家庭仆役称谓',
+            collectionMode: InformationCollectionModes.import,
+            informationDomain: InformationDomains.history,
+          ),
+        );
+
+        expect(request.collectionMode, InformationCollectionModes.network);
+        expect(
+          ValueReaders.stringValue(request.metadata['raw_collection_mode']),
+          InformationCollectionModes.import,
+        );
+        expect(
+          ValueReaders.stringValue(
+            request.metadata['collection_mode_normalization_reason'],
+          ),
+          'missing_import_source_for_import_collection',
+        );
+      },
+    );
+
+    test(
+      'collection policy keeps import mode when an import source is present',
+      () {
+        const service = InformationCollectionPolicyService();
+
+        final request = service.normalize(
+          InformationCollectionRequest.fromJson(<String, Object?>{
+            'query': '导入资料中的命名线索',
+            'collection_mode': InformationCollectionModes.import,
+            'import_relative_path': 'research/source.md',
+          }),
+        );
+
+        expect(request.collectionMode, InformationCollectionModes.import);
+        expect(request.metadata['raw_collection_mode'], isNull);
+      },
+    );
+
+    test('source quality marks rigorous and reference-only candidates', () {
+      const service = InformationSourceQualityService();
+      const requirements = InformationSourceRequirements(
+        requiresRigorousSources: true,
+        minSourceCount: 2,
+      );
+
+      final official = service.assessSearchCandidate(
+        <String, Object?>{
+          'title': '国家统计局数据',
+          'url': 'https://www.stats.gov.cn/sj/',
+          'snippet': '官方统计资料',
+        },
+        requirements: requirements,
+        informationDomain: InformationDomains.objective,
+      );
+      final forum = service.assessSearchCandidate(
+        <String, Object?>{
+          'title': '知乎讨论',
+          'url': 'https://www.zhihu.com/question/1',
+          'snippet': '网友解释',
+        },
+        requirements: requirements,
+        informationDomain: InformationDomains.objective,
+      );
+
+      expect(official.isRigorous, isTrue);
+      expect(official.sourceKind, 'government');
+      expect(forum.isRigorous, isFalse);
+      expect(
+        forum.reasons,
+        contains('does_not_satisfy_rigorous_source_requirement'),
       );
     });
   });

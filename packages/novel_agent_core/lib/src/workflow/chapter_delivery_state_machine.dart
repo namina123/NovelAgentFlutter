@@ -3,6 +3,7 @@ import '../common/value_readers.dart';
 import '../continuity/narrative_state/chapter_narrative_submission_validator.dart';
 import '../creative/expression_constraint_review_projection.dart';
 import '../tools/domain/domain_tool_outcome_statuses.dart';
+import 'chapter_delivery_failure.dart';
 import 'chapter_length_evaluation.dart';
 import 'chapter_delivery_state_request.dart';
 import 'chapter_delivery_state_result.dart';
@@ -37,6 +38,7 @@ class ChapterDeliveryStateMachine {
         chapterBodyDelivered: false,
         submissionAccepted: false,
         retryable: request.retryableFailure,
+        deliveryFailureCategory: ChapterDeliveryFailureCategories.writeFailed,
       );
     }
 
@@ -53,6 +55,7 @@ class ChapterDeliveryStateMachine {
         chapterBodyDelivered: false,
         submissionAccepted: false,
         retryable: true,
+        deliveryFailureCategory: ChapterDeliveryFailureCategories.emptyBody,
       );
     }
 
@@ -68,6 +71,8 @@ class ChapterDeliveryStateMachine {
         chapterBodyDelivered: false,
         submissionAccepted: false,
         retryable: false,
+        deliveryFailureCategory:
+            ChapterDeliveryFailureCategories.titleOnlyOutput,
       );
     }
 
@@ -88,6 +93,7 @@ class ChapterDeliveryStateMachine {
         chapterBodyDelivered: false,
         submissionAccepted: false,
         retryable: true,
+        deliveryFailureCategory: ChapterDeliveryFailureCategories.pathMismatch,
       );
     }
 
@@ -136,6 +142,8 @@ class ChapterDeliveryStateMachine {
         chapterBodyDelivered: true,
         submissionAccepted: false,
         retryable: true,
+        deliveryFailureCategory:
+            ChapterDeliveryFailureCategories.sidecarMissing,
       );
     }
 
@@ -153,6 +161,8 @@ class ChapterDeliveryStateMachine {
           chapterBodyDelivered: true,
           submissionAccepted: false,
           retryable: true,
+          deliveryFailureCategory:
+              ChapterDeliveryFailureCategories.deliveryEvidenceMissing,
         );
       }
       return null;
@@ -169,6 +179,7 @@ class ChapterDeliveryStateMachine {
       chapterBodyDelivered: true,
       submissionAccepted: false,
       retryable: true,
+      deliveryFailureCategory: ChapterDeliveryFailureCategories.sidecarInvalid,
       metadata: <String, Object?>{
         'submission_validation_errors': validationErrors,
       },
@@ -198,6 +209,7 @@ class ChapterDeliveryStateMachine {
       chapterBodyDelivered: false,
       submissionAccepted: false,
       retryable: false,
+      deliveryFailureCategory: ChapterDeliveryFailureCategories.bodyTooShort,
       metadata: <String, Object?>{
         'body_length': effectiveLength,
         'minimum_body_length': minimumBodyLength,
@@ -419,8 +431,15 @@ class ChapterDeliveryStateMachine {
     required bool chapterBodyDelivered,
     required bool submissionAccepted,
     required bool retryable,
+    String deliveryFailureCategory = '',
     JsonMap metadata = const <String, Object?>{},
   }) {
+    final resultMetadata = ValueReaders.deepCopyMap(<String, Object?>{
+      ...request.metadata,
+      ...metadata,
+      'chapter_path': request.chapterPath,
+      'resolved_chapter_path': request.resolvedChapterPath,
+    });
     return ChapterDeliveryStateResult(
       deliveryId: request.deliveryId,
       state: state,
@@ -432,12 +451,21 @@ class ChapterDeliveryStateMachine {
       chapterBodyDelivered: chapterBodyDelivered,
       submissionAccepted: submissionAccepted,
       retryable: retryable,
-      metadata: ValueReaders.deepCopyMap(<String, Object?>{
-        ...request.metadata,
-        ...metadata,
-        'chapter_path': request.chapterPath,
-        'resolved_chapter_path': request.resolvedChapterPath,
-      }),
+      deliveryFailure: deliveryFailureCategory.trim().isEmpty
+          ? null
+          : ChapterDeliveryFailure(
+              category: deliveryFailureCategory.trim(),
+              reason: reason,
+              summary: summary,
+              deliveryState: state,
+              chapterPath: request.chapterPath,
+              resolvedChapterPath: request.resolvedChapterPath,
+              retryable: retryable,
+              chapterBodyDelivered: chapterBodyDelivered,
+              submissionAccepted: submissionAccepted,
+              metadata: resultMetadata,
+            ),
+      metadata: resultMetadata,
     );
   }
 }

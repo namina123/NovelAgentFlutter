@@ -2,6 +2,7 @@ import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../../../../shared/services/activity_time_label_service.dart';
+import '../../../../shared/services/long_task_station_item_humanizer_service.dart';
 import '../../../../shared/services/runtime_exposure_policy_service.dart';
 import '../../../../shared/services/runtime_label_service.dart';
 import '../models/long_task_station_snapshot.dart';
@@ -14,6 +15,8 @@ class LongTaskStationViewDataService {
     RuntimeLabelService? runtimeLabelService,
     ActivityTimeLabelService? activityTimeLabelService,
     RuntimeExposurePolicyService? runtimeExposurePolicyService,
+    LongTaskStopDiagnosisProjectionService? stopDiagnosisProjectionService,
+    LongTaskStationItemHumanizerService? itemHumanizerService,
     RuntimeExposureTier exposureTier = RuntimeExposureTier.standard,
   }) : _runtimeBaselineCatalogService =
            runtimeBaselineCatalogService ??
@@ -25,6 +28,11 @@ class LongTaskStationViewDataService {
            activityTimeLabelService ?? const ActivityTimeLabelService(),
        _runtimeExposurePolicyService =
            runtimeExposurePolicyService ?? const RuntimeExposurePolicyService(),
+       _stopDiagnosisProjectionService =
+           stopDiagnosisProjectionService ??
+           const LongTaskStopDiagnosisProjectionService(),
+       _itemHumanizerService =
+           itemHumanizerService ?? const LongTaskStationItemHumanizerService(),
        _exposureTier = exposureTier;
 
   final RuntimeBaselineCatalogService _runtimeBaselineCatalogService;
@@ -32,6 +40,8 @@ class LongTaskStationViewDataService {
   final RuntimeLabelService _runtimeLabelService;
   final ActivityTimeLabelService _activityTimeLabelService;
   final RuntimeExposurePolicyService _runtimeExposurePolicyService;
+  final LongTaskStopDiagnosisProjectionService _stopDiagnosisProjectionService;
+  final LongTaskStationItemHumanizerService _itemHumanizerService;
   final RuntimeExposureTier _exposureTier;
 
   LongTaskStationViewData build(LongTaskStationSnapshot snapshot) {
@@ -108,6 +118,8 @@ class LongTaskStationViewDataService {
     final chain = detail?.chain;
     final exposesInternal = _runtimeExposurePolicyService
         .exposesInternalRuntimeTerms(_exposureTier);
+    final stopDiagnosis = _stopDiagnosis(run, detail: detail, blocker: blocker);
+    final expressionConstraintStatus = _expressionConstraintStatus(detail);
     final pendingUserAction = _pendingUserAction(detail, blocker: blocker);
     final preferredRecentOutput = _preferredRecentOutput(detail);
     final canResume = _runStateMachine.canTransition(
@@ -126,7 +138,6 @@ class LongTaskStationViewDataService {
       modeId: exposesInternal ? run.modeId : '',
       workflowStrategyId: exposesInternal ? run.workflowStrategyId : '',
       statusLabel: _runtimeLabelService.longTaskRunStatusLabel(run.status),
-      stopReasonLabel: _runtimeLabelService.blockerLabel(run.stopReason),
       storageStrategyLabel: exposesInternal
           ? _runtimeLabelService.storageStrategyLabel(
               run.project.storageStrategy,
@@ -232,12 +243,16 @@ class LongTaskStationViewDataService {
         run.status,
         LongTaskRunStatus.stopped,
       ),
+      stopDiagnosis: stopDiagnosis,
+      expressionConstraintStatus: expressionConstraintStatus,
       overviewBlocks: _overviewBlocks(
         run,
         detail,
         activeTask: activeTask,
         blocker: blocker,
         chain: chain,
+        stopDiagnosis: stopDiagnosis,
+        expressionConstraintStatus: expressionConstraintStatus,
       ),
       primaryMetadata: _primaryMetadata(
         run,
@@ -249,6 +264,16 @@ class LongTaskStationViewDataService {
         run: run,
         blocker: blocker,
         canResume: canResume,
+      ),
+      attentionCalloutTitle: _attentionCalloutTitle(
+        run: run,
+        stopDiagnosis: stopDiagnosis,
+        pendingUserAction: pendingUserAction,
+      ),
+      attentionCalloutSummary: _attentionCalloutSummary(
+        run: run,
+        blocker: blocker,
+        stopDiagnosis: stopDiagnosis,
       ),
       pendingUserActionLabel: _pendingUserActionLabel(blocker),
       pendingUserAction: pendingUserAction,
@@ -273,16 +298,34 @@ class LongTaskStationViewDataService {
     required ProjectLongTaskStationItemSummary? activeTask,
     required ProjectLongTaskStationBlockerSummary? blocker,
     required ProjectLongTaskStationChainSummary? chain,
+    required LongTaskRunStopDiagnosisViewData? stopDiagnosis,
+    required LongTaskRunExpressionConstraintStatusViewData?
+    expressionConstraintStatus,
   }) {
     return <LongTaskRunOverviewBlockViewData>[
-      _progressOverviewBlock(run, activeTask: activeTask, chain: chain),
+      _progressOverviewBlock(
+        run,
+        activeTask: activeTask,
+        chain: chain,
+        stopDiagnosis: stopDiagnosis,
+        expressionConstraintStatus: expressionConstraintStatus,
+      ),
       _currentActionOverviewBlock(
         run,
         activeTask: activeTask,
         blocker: blocker,
+        stopDiagnosis: stopDiagnosis,
+        expressionConstraintStatus: expressionConstraintStatus,
       ),
-      _pendingActionOverviewBlock(detail, blocker: blocker),
-      _recentOutputOverviewBlock(detail),
+      _pendingActionOverviewBlock(
+        detail,
+        blocker: blocker,
+        expressionConstraintStatus: expressionConstraintStatus,
+      ),
+      _recentOutputOverviewBlock(
+        detail,
+        expressionConstraintStatus: expressionConstraintStatus,
+      ),
     ];
   }
 
@@ -290,6 +333,9 @@ class LongTaskStationViewDataService {
     RunInstance run, {
     required ProjectLongTaskStationItemSummary? activeTask,
     required ProjectLongTaskStationChainSummary? chain,
+    required LongTaskRunStopDiagnosisViewData? stopDiagnosis,
+    required LongTaskRunExpressionConstraintStatusViewData?
+    expressionConstraintStatus,
   }) {
     final entries = <LongTaskRunMetaItemViewData>[
       LongTaskRunMetaItemViewData(
@@ -314,6 +360,13 @@ class LongTaskStationViewDataService {
         label: '任务链',
         value: chain?.subtitle ?? '尚未读到可用链路。',
       ),
+      if (stopDiagnosis != null)
+        LongTaskRunMetaItemViewData(label: '停点分类', value: stopDiagnosis.label),
+      if (expressionConstraintStatus != null)
+        LongTaskRunMetaItemViewData(
+          label: '表达规则',
+          value: expressionConstraintStatus.label,
+        ),
     ];
     return LongTaskRunOverviewBlockViewData(
       title: '当前进度',
@@ -330,6 +383,9 @@ class LongTaskStationViewDataService {
     RunInstance run, {
     required ProjectLongTaskStationItemSummary? activeTask,
     required ProjectLongTaskStationBlockerSummary? blocker,
+    required LongTaskRunStopDiagnosisViewData? stopDiagnosis,
+    required LongTaskRunExpressionConstraintStatusViewData?
+    expressionConstraintStatus,
   }) {
     final entries = <LongTaskRunMetaItemViewData>[
       LongTaskRunMetaItemViewData(
@@ -342,6 +398,13 @@ class LongTaskStationViewDataService {
             ? blocker!.controlSummary.trim()
             : '可以继续查看当前任务或直接推进。',
       ),
+      if (stopDiagnosis != null)
+        LongTaskRunMetaItemViewData(label: '当前停点', value: stopDiagnosis.label),
+      if (expressionConstraintStatus != null)
+        LongTaskRunMetaItemViewData(
+          label: '表达规则状态',
+          value: expressionConstraintStatus.label,
+        ),
     ];
     if (activeTask?.relativePath.trim().isNotEmpty == true) {
       entries.add(
@@ -355,6 +418,8 @@ class LongTaskStationViewDataService {
       title: '当前动作',
       summary: activeTask?.subtitle.trim().isNotEmpty == true
           ? activeTask!.subtitle.trim()
+          : stopDiagnosis?.summary.trim().isNotEmpty == true
+          ? stopDiagnosis!.summary.trim()
           : blocker?.note ?? '当前没有明显阻塞。',
       entries: entries,
       resources: activeTask == null
@@ -374,6 +439,8 @@ class LongTaskStationViewDataService {
   LongTaskRunOverviewBlockViewData _pendingActionOverviewBlock(
     ProjectLongTaskStationDetail? detail, {
     required ProjectLongTaskStationBlockerSummary? blocker,
+    required LongTaskRunExpressionConstraintStatusViewData?
+    expressionConstraintStatus,
   }) {
     final pendingUserAction = _pendingUserAction(detail, blocker: blocker);
     final entries = <LongTaskRunMetaItemViewData>[
@@ -398,9 +465,13 @@ class LongTaskStationViewDataService {
       title: '需要你处理',
       summary:
           pendingUserAction?.summary ??
-          (blocker?.controlSummary.trim().isNotEmpty == true
-              ? blocker!.controlSummary.trim()
-              : '当前没有待确认事项。'),
+          (expressionConstraintStatus?.blocksRepair == true
+              ? (expressionConstraintStatus!.summary.trim().isEmpty
+                    ? expressionConstraintStatus.label
+                    : expressionConstraintStatus.summary.trim())
+              : (blocker?.controlSummary.trim().isNotEmpty == true
+                    ? blocker!.controlSummary.trim()
+                    : '当前没有待确认事项。')),
       entries: entries,
       resources: pendingUserAction == null
           ? const <LongTaskRunRelatedItemViewData>[]
@@ -409,8 +480,10 @@ class LongTaskStationViewDataService {
   }
 
   LongTaskRunOverviewBlockViewData _recentOutputOverviewBlock(
-    ProjectLongTaskStationDetail? detail,
-  ) {
+    ProjectLongTaskStationDetail? detail, {
+    required LongTaskRunExpressionConstraintStatusViewData?
+    expressionConstraintStatus,
+  }) {
     final preferredRecentOutput = _preferredRecentOutput(detail);
     final relatedItems = <LongTaskRunRelatedItemViewData>[
       ?preferredRecentOutput,
@@ -421,26 +494,146 @@ class LongTaskStationViewDataService {
         actionLabel: '查看最近产物',
         titleOverride: _narrativeItemLabel('delivery'),
       ),
+      ?expressionConstraintStatus?.currentItem,
+      ...?expressionConstraintStatus?.recentItems,
     ];
     final deduped = <LongTaskRunRelatedItemViewData>[];
     final seen = <String>{};
     for (final item in relatedItems) {
-      final key = '${item.title}|${item.relativePath}|${item.actionLabel}';
+      final key = _recentOutputDedupKey(item);
       if (seen.add(key)) {
         deduped.add(item);
       }
     }
+    final dedicatedResultKeys = _dedicatedRelatedResultKeys(detail);
+    final visibleResources = deduped
+        .where(
+          (item) => !dedicatedResultKeys.contains(_recentOutputDedupKey(item)),
+        )
+        .toList(growable: false);
+    final onlyBottomResultsRemain =
+        visibleResources.isEmpty && dedicatedResultKeys.isNotEmpty;
     return LongTaskRunOverviewBlockViewData(
       title: '最近产物',
-      summary: deduped.isEmpty ? '当前还没有可回看的最近产物。' : '可以直接打开最近生成的正文、审稿或检查点结果。',
+      summary: visibleResources.isEmpty
+          ? (onlyBottomResultsRemain
+                ? '最近审稿、检查点或返工结果已整理到下方最近关联结果。'
+                : '当前还没有可回看的最近产物。')
+          : '可以直接打开最近生成的正文、审稿或检查点结果。',
       entries: <LongTaskRunMetaItemViewData>[
         LongTaskRunMetaItemViewData(
           label: '最近可查看内容',
-          value: deduped.isEmpty ? '暂无' : '${deduped.length} 项',
+          value: visibleResources.isEmpty
+              ? (onlyBottomResultsRemain ? '请看下方结果区' : '暂无')
+              : '${visibleResources.length} 项',
         ),
+        if (expressionConstraintStatus != null)
+          LongTaskRunMetaItemViewData(
+            label: '表达规则摘要',
+            value: expressionConstraintStatus.label,
+          ),
       ],
-      resources: deduped,
+      resources: visibleResources,
     );
+  }
+
+  LongTaskRunStopDiagnosisViewData? _stopDiagnosis(
+    RunInstance run, {
+    required ProjectLongTaskStationDetail? detail,
+    required ProjectLongTaskStationBlockerSummary? blocker,
+  }) {
+    final projection = _stopDiagnosisProjectionService.project(
+      stopOutcome: run.stopOutcome,
+      recoveryState: run.recoveryState,
+      legacyReason: blocker?.code ?? run.stopReason,
+      runStatus: run.status.id,
+      note: blocker?.note ?? run.note,
+      reviewSummary: _firstNonBlank(<String>[
+        detail?.latestReviewReport?.summary ?? '',
+        detail?.latestCheckpointReview?.summary ?? '',
+        detail?.narrativeSummary?.review?.summary ?? '',
+      ]),
+      informationSummary: _firstNonBlank(<String>[
+        detail?.narrativeSummary?.information?.summary ?? '',
+      ]),
+      detail: blocker?.detail ?? '',
+      metadata: <String, Object?>{'source': 'long_task_station_view_data'},
+    );
+    if (!projection.present) {
+      return null;
+    }
+    return LongTaskRunStopDiagnosisViewData(
+      code: projection.code,
+      category: projection.category,
+      label: projection.label,
+      summary: projection.summary,
+      detail: projection.detail,
+    );
+  }
+
+  LongTaskRunExpressionConstraintStatusViewData? _expressionConstraintStatus(
+    ProjectLongTaskStationDetail? detail,
+  ) {
+    final narrativeSummary = detail?.narrativeSummary;
+    final current = narrativeSummary?.expressionConstraint;
+    final recentItems =
+        narrativeSummary?.recentExpressionConstraintItems
+            .map(
+              (item) => _relatedItem(
+                item,
+                actionLabel: '查看章节状态',
+                titleOverride: item.title,
+              ),
+            )
+            .whereType<LongTaskRunRelatedItemViewData>()
+            .toList(growable: false) ??
+        const <LongTaskRunRelatedItemViewData>[];
+    if (current == null && recentItems.isEmpty) {
+      return null;
+    }
+    final category = current?.status.trim().isNotEmpty == true
+        ? current!.status.trim()
+        : 'configured';
+    final label = _expressionConstraintStatusLabel(category);
+    final summary = current?.summary.trim().isNotEmpty == true
+        ? current!.summary.trim()
+        : (current?.subtitle ?? '');
+    return LongTaskRunExpressionConstraintStatusViewData(
+      category: category,
+      label: label,
+      summary: summary,
+      currentItem: current == null
+          ? null
+          : _relatedItem(
+              current,
+              actionLabel: '查看表达规则',
+              titleOverride: '表达规则状态',
+            ),
+      recentItems: recentItems,
+      blocksRepair: category == 'repair_blocked',
+      suggestsStrengthen: category == 'suggest_strengthen',
+      isDisabled: category == 'disabled',
+    );
+  }
+
+  String _expressionConstraintStatusLabel(String category) {
+    switch (category.trim()) {
+      case 'applied':
+        return '表达规则：已应用';
+      case 'suggest_strengthen':
+        return '表达规则：建议加强';
+      case 'repair_blocked':
+        return '表达规则：已阻塞修订';
+      case 'disabled':
+        return '表达规则：已关闭';
+      case 'skipped':
+      case 'inactive':
+        return '表达规则：未应用';
+      case 'configured':
+        return '表达规则：已配置';
+      default:
+        return '表达规则：状态待确认';
+    }
   }
 
   LongTaskRunRelatedItemViewData? _pendingUserAction(
@@ -508,6 +701,46 @@ class LongTaskStationViewDataService {
     return '继续推进';
   }
 
+  String _attentionCalloutTitle({
+    required RunInstance run,
+    required LongTaskRunStopDiagnosisViewData? stopDiagnosis,
+    required LongTaskRunRelatedItemViewData? pendingUserAction,
+  }) {
+    if (pendingUserAction != null ||
+        stopDiagnosis?.category == LongTaskStopOutcomeCategories.waitingUser) {
+      return '当前运行停在待确认节点。';
+    }
+    if (run.requiresManualAttention) {
+      return '当前运行停在待处理节点。';
+    }
+    return '这里有一条建议操作链。';
+  }
+
+  String _attentionCalloutSummary({
+    required RunInstance run,
+    required ProjectLongTaskStationBlockerSummary? blocker,
+    required LongTaskRunStopDiagnosisViewData? stopDiagnosis,
+  }) {
+    final segments = <String>[];
+    final stopSummary = stopDiagnosis?.summary.trim() ?? '';
+    final blockerNote = blocker?.note.trim() ?? '';
+    final blockerAction = blocker?.controlSummary.trim() ?? '';
+    if (stopSummary.isNotEmpty) {
+      segments.add(stopSummary);
+    } else if (blockerNote.isNotEmpty && blockerNote != '当前没有明显阻塞。') {
+      segments.add(blockerNote);
+    }
+    if (blockerAction.isNotEmpty) {
+      segments.add(blockerAction);
+    }
+    if (segments.isEmpty) {
+      return run.isActive
+          ? '当前运行仍在推进，可以继续查看当前任务与最近结果。'
+          : '可以从这里继续推进，或先查看当前任务与最近的审稿结果。';
+    }
+    return segments.join(' ');
+  }
+
   String _pendingUserActionLabel(
     ProjectLongTaskStationBlockerSummary? blocker,
   ) {
@@ -521,14 +754,46 @@ class LongTaskStationViewDataService {
     final normalized = code.trim();
     return normalized == 'waiting_user' ||
         normalized == 'waiting_user_checkpoint' ||
-        normalized == 'waiting_gate';
+        normalized == 'waiting_gate' ||
+        normalized == 'waiting_user_choice' ||
+        normalized == 'information_waiting_user' ||
+        normalized == 'delivery_waiting_user_choice';
   }
 
   bool _isFailureBlocker(String code) {
     final normalized = code.trim();
     return normalized == 'failed' ||
         normalized == 'step_failed' ||
-        normalized == 'manual_attention';
+        normalized == 'manual_attention' ||
+        normalized == 'delivery_manual_attention' ||
+        normalized == 'content_quality_failed';
+  }
+
+  String _recentOutputDedupKey(LongTaskRunRelatedItemViewData item) {
+    if (item.pendingResearchRequestId.trim().isNotEmpty) {
+      return 'pending:${item.pendingResearchRequestId.trim()}';
+    }
+    if (item.relativePath.trim().isNotEmpty) {
+      return 'path:${item.relativePath.trim()}';
+    }
+    return 'text:${item.title.trim()}|${item.subtitle.trim()}|${item.summary.trim()}';
+  }
+
+  Set<String> _dedicatedRelatedResultKeys(ProjectLongTaskStationDetail? detail) {
+    return <String>{
+      if (detail?.latestCheckpointReview != null)
+        _recentOutputDedupKey(
+          _relatedItem(detail!.latestCheckpointReview, actionLabel: '查看检查点')!,
+        ),
+      if (detail?.latestReviewReport != null)
+        _recentOutputDedupKey(
+          _relatedItem(detail!.latestReviewReport, actionLabel: '查看审稿结果')!,
+        ),
+      if (detail?.latestRepairTask != null)
+        _recentOutputDedupKey(
+          _relatedItem(detail!.latestRepairTask, actionLabel: '打开返工任务')!,
+        ),
+    };
   }
 
   LongTaskRunChainItemViewData _chainItem(
@@ -560,14 +825,26 @@ class LongTaskStationViewDataService {
     if (item == null) {
       return null;
     }
-    final summary = item.summary.trim().isEmpty ? item.subtitle : item.summary;
+    final subtitle = _relatedItemSubtitle(item);
+    final summary = item.summary.trim().isEmpty ? subtitle : item.summary;
     return LongTaskRunRelatedItemViewData(
-      title: titleOverride ?? item.title,
-      subtitle: item.subtitle,
+      title: _itemHumanizerService.title(item, titleOverride: titleOverride),
+      subtitle: subtitle,
       summary: summary,
       relativePath: item.relativePath,
       actionLabel: actionLabel,
+      pendingResearchRequestId: _pendingResearchRequestId(item),
     );
+  }
+
+  String _pendingResearchRequestId(ProjectLongTaskStationItemSummary item) {
+    final relativePath = item.relativePath.replaceAll('\\', '/').trim();
+    if (!relativePath.startsWith(
+      '.novel_agent/information/research_requests/',
+    )) {
+      return '';
+    }
+    return item.id.trim();
   }
 
   String _entrySubtitle(RunInstance run) {
@@ -694,6 +971,16 @@ class LongTaskStationViewDataService {
     ];
   }
 
+  String _firstNonBlank(Iterable<String> values) {
+    for (final value in values) {
+      final clean = value.trim();
+      if (clean.isNotEmpty) {
+        return clean;
+      }
+    }
+    return '';
+  }
+
   String _narrativeSectionTitle() {
     return _exposureTier == RuntimeExposureTier.diagnostic ? '开放叙事摘要' : '运行摘要';
   }
@@ -702,15 +989,15 @@ class LongTaskStationViewDataService {
     if (_exposureTier == RuntimeExposureTier.diagnostic) {
       switch (key) {
         case 'activation':
-          return 'Activation';
+          return '上下文激活';
         case 'delivery':
-          return 'Delivery';
+          return '交付结果';
         case 'review':
-          return 'Review';
+          return '审稿结论';
         case 'continuity':
-          return 'Continuity';
+          return '连续性变更';
         case 'information':
-          return 'Information';
+          return '资料状态';
       }
     }
     switch (key) {
@@ -719,7 +1006,7 @@ class LongTaskStationViewDataService {
       case 'delivery':
         return '正文交付';
       case 'review':
-        return '审查结果';
+        return '审稿结果';
       case 'continuity':
         return '连续性记录';
       case 'information':
@@ -727,6 +1014,10 @@ class LongTaskStationViewDataService {
       default:
         return '运行摘要';
     }
+  }
+
+  String _relatedItemSubtitle(ProjectLongTaskStationItemSummary item) {
+    return _itemHumanizerService.subtitle(item);
   }
 
   String _narrativeProjectionSectionTitle() {

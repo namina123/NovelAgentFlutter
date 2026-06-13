@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:novel_agent_app/features/workbench/application/models/conversation_tool_lifecycle_status.dart';
 import 'package:novel_agent_app/features/workbench/application/models/conversation_attachment_draft.dart';
 import 'package:novel_agent_app/features/workbench/application/models/conversation_session_state.dart';
 import 'package:novel_agent_app/features/workbench/application/services/conversation_session_state_service.dart';
@@ -141,5 +142,43 @@ void main() {
     expect(nextState.entries, hasLength(1));
     expect(nextState.entries.single.kind, ConversationEntryKind.tool);
     expect(nextState.entries.single.detailBody, isEmpty);
+  });
+
+  test('streaming state includes pending tool calls as running entries', () {
+    final sessionStateService = ConversationSessionStateService();
+    final streamingStateService = ConversationStreamingStateService(
+      sessionStateService: sessionStateService,
+    );
+    const baseState = ConversationSessionState(
+      sessionRecord: <String, Object?>{},
+      entries: [],
+      pendingOptions: [],
+      subAgentRuns: [],
+      attachmentDrafts: <ConversationAttachmentDraft>[],
+      retryRequest: null,
+    );
+
+    final nextState = streamingStateService.stateWithProgress(
+      baseState,
+      const DraftGenerationProgress(
+        phase: 'tool_calls_ready',
+        roundIndex: 1,
+        pendingToolCalls: <JsonMap>[
+          <String, Object?>{
+            'id': 'pending_1',
+            'name': 'request_external_research',
+            'result': <String, Object?>{'question': '明代后期汤药照护习惯'},
+          },
+        ],
+      ),
+    );
+
+    expect(nextState.entries, hasLength(1));
+    expect(nextState.entries.single.kind, ConversationEntryKind.tool);
+    expect(nextState.entries.single.body, '已发起，正在发起资料研究');
+    expect(
+      nextState.entries.single.toolLifecycleStatus,
+      ConversationToolLifecycleStatus.running,
+    );
   });
 }

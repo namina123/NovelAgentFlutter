@@ -2,16 +2,23 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../../../../shared/services/runtime_label_service.dart';
 import 'task_center_contract_action_view_data_service.dart';
+import 'task_center_chapter_length_defaults_service.dart';
+import '../../presentation/models/task_center_action_group_view_data.dart';
+import '../../presentation/models/task_center_contract_action_view_data.dart';
 import '../../presentation/models/task_center_view_data.dart';
 
 class TaskCenterViewDataService {
   const TaskCenterViewDataService({
     TaskCenterContractActionViewDataService? contractActionViewDataService,
+    TaskCenterChapterLengthDefaultsService? chapterLengthDefaultsService,
     RuntimeBaselineCatalogService? runtimeBaselineCatalogService,
     RuntimeLabelService? runtimeLabelService,
   }) : _contractActionViewDataService =
            contractActionViewDataService ??
            const TaskCenterContractActionViewDataService(),
+       _chapterLengthDefaultsService =
+           chapterLengthDefaultsService ??
+           const TaskCenterChapterLengthDefaultsService(),
        _runtimeBaselineCatalogService =
            runtimeBaselineCatalogService ??
            const RuntimeBaselineCatalogService(),
@@ -19,6 +26,7 @@ class TaskCenterViewDataService {
            runtimeLabelService ?? const RuntimeLabelService();
 
   final TaskCenterContractActionViewDataService _contractActionViewDataService;
+  final TaskCenterChapterLengthDefaultsService _chapterLengthDefaultsService;
   final RuntimeBaselineCatalogService _runtimeBaselineCatalogService;
   final RuntimeLabelService _runtimeLabelService;
 
@@ -45,11 +53,18 @@ class TaskCenterViewDataService {
     String nextTaskPath = '',
     String nextPostprocessPath = '',
     String status = '',
+    List<TaskCenterActionGroupViewData> supplementalActionGroups =
+        const <TaskCenterActionGroupViewData>[],
   }) {
     // 中文注释: 任务中心展示映射集中在这里，避免控制器继续堆积状态文案和枚举翻译。
-    final resolvedSelectedTaskId = _resolvedSelectedTaskId(
-      selectedTaskId,
-      tasks,
+    final selectedLongTaskRun = _runByPath(
+      longTaskRuns,
+      selectedLongTaskRunPath,
+    );
+    final resolvedSelectedTaskId = resolveSelectedTaskId(
+      tasks: tasks,
+      selectedTaskId: selectedTaskId,
+      selectedLongTaskRun: selectedLongTaskRun,
     );
     final entries = tasks
         .map(
@@ -74,6 +89,9 @@ class TaskCenterViewDataService {
     final baseline = runtimeProfile == null
         ? null
         : _runtimeBaselineCatalogService.byId(runtimeProfile.runtimeBaselineId);
+    final chapterLengthDefaults = _chapterLengthDefaultsService.resolve(
+      runtimeProfile,
+    );
     return TaskCenterViewData(
       title: '长篇自动化队列',
       intro:
@@ -129,16 +147,71 @@ class TaskCenterViewDataService {
       defaultMode: runtimeProfile?.runtimeMode.trim().isEmpty ?? true
           ? TaskRuntimeConstants.modeHumanOutlineAiDraft
           : runtimeProfile!.runtimeMode.trim(),
-      defaultOutlinePath: 'outline/outline.md',
+      defaultOutlinePath: 'outlines/story/总纲.md',
       defaultSeedPrompt: '',
       defaultChapterCount: 12,
       defaultCheckpointInterval: 3,
-      actionGroups: _contractActionViewDataService.buildGroups(
-        checkpointActionPackage: checkpointActionPackage,
-        revisionResolution: revisionResolution,
-      ),
+      defaultChapterLength: chapterLengthDefaults,
+      actionGroups: supplementalActionGroups
+          .followedBy(
+            _contractActionViewDataService.buildGroups(
+              checkpointActionPackage: checkpointActionPackage,
+              revisionResolution: revisionResolution,
+            ),
+          )
+          .toList(growable: false),
       guidanceRevisitBody: guidanceRevisitBody,
     );
+  }
+
+  String resolveSelectedTaskId({
+    required List<JsonMap> tasks,
+    required String selectedTaskId,
+    JsonMap selectedLongTaskRun = const <String, Object?>{},
+    JsonMap selectedTaskQueueRun = const <String, Object?>{},
+  }) {
+    final queuePreferredTask = _preferredTaskFromQueueRun(
+      tasks,
+      selectedTaskQueueRun,
+    );
+    if (queuePreferredTask.isNotEmpty) {
+      return ValueReaders.stringValue(queuePreferredTask['relative_path']);
+    }
+    final contract = _runCenterContract(selectedLongTaskRun);
+    final preferredTaskId = ValueReaders.stringValue(
+      ValueReaders.mapValue(contract['active_task'])['relative_path'],
+      ValueReaders.stringValue(
+        ValueReaders.mapValue(
+          ValueReaders.mapValue(contract['snapshot'])['active_task'],
+        )['relative_path'],
+      ),
+    ).trim();
+    return _resolvedSelectedTaskId(
+      selectedTaskId,
+      tasks,
+      preferredTaskId: preferredTaskId,
+    );
+  }
+
+  String resolveSelectedTaskQueueRunPath({
+    required List<JsonMap> taskQueueRuns,
+    required String selectedTaskQueueRunPath,
+  }) {
+    if (taskQueueRuns.isEmpty) {
+      return '';
+    }
+    final selectedRun = _runByPath(taskQueueRuns, selectedTaskQueueRunPath);
+    final newestRun = _newestRun(taskQueueRuns);
+    if (selectedRun.isEmpty) {
+      return ValueReaders.stringValue(newestRun['relative_path']);
+    }
+    if (_shouldFollowNewerTaskQueueRun(
+      selectedRun: selectedRun,
+      newestRun: newestRun,
+    )) {
+      return ValueReaders.stringValue(newestRun['relative_path']);
+    }
+    return ValueReaders.stringValue(selectedRun['relative_path']);
   }
 
   String buildDetailBody(
@@ -360,6 +433,8 @@ class TaskCenterViewDataService {
     JsonMap longTaskRun, {
     JsonMap checkpointActionPackage = const <String, Object?>{},
     JsonMap revisionResolution = const <String, Object?>{},
+    JsonMap selectedTask = const <String, Object?>{},
+    JsonMap selectedTaskExecution = const <String, Object?>{},
   }) {
     final contract = _runCenterContract(longTaskRun);
     final brief = ValueReaders.mapValue(contract['resume_brief']);
@@ -401,7 +476,317 @@ class TaskCenterViewDataService {
       lines.add('');
       lines.add('当前已有修订收口动作，可直接在右侧上下文动作区处理。');
     }
+    final pendingOptions = _pendingUserOptions(selectedTaskExecution);
+    if (pendingOptions.isNotEmpty) {
+      final question = ValueReaders.stringValue(
+        pendingOptions.first['source_question'],
+      ).trim();
+      lines.add('');
+      lines.add('当前任务还在等待一个真实用户选择。');
+      if (question.isNotEmpty) {
+        lines.add('');
+        lines.add('问题：$question');
+      }
+      lines.add('');
+      lines.add(
+        '可直接在右侧上下文动作区点击以下选项继续：${pendingOptions.map((item) => ValueReaders.stringValue(item["label"], "选项")).where((item) => item.trim().isNotEmpty).join('、')}',
+      );
+    } else if (ValueReaders.stringValue(selectedTask['status']) ==
+        TaskRuntimeConstants.statusWaitingUser) {
+      lines.add('');
+      lines.add('当前任务处于等待用户确认状态。');
+    }
     return lines.join('\n').trim();
+  }
+
+  TaskCenterActionGroupViewData? buildUserOptionActionGroup({
+    required JsonMap task,
+    required JsonMap execution,
+  }) {
+    if (task.isEmpty ||
+        ValueReaders.stringValue(task['status']) !=
+            TaskRuntimeConstants.statusWaitingUser) {
+      return null;
+    }
+    final options = _pendingUserOptions(execution);
+    if (options.isEmpty) {
+      return null;
+    }
+    final question = ValueReaders.stringValue(
+      options.first['source_question'],
+    ).trim();
+    final ownerTaskPath = ValueReaders.stringValue(task['relative_path']);
+    final actions = <TaskCenterContractActionViewData>[];
+    for (var index = 0; index < options.length; index += 1) {
+      final option = options[index];
+      final label = ValueReaders.stringValue(option['label']).trim();
+      final prompt = ValueReaders.stringValue(option['prompt'], label).trim();
+      if (label.isEmpty || prompt.isEmpty) {
+        continue;
+      }
+      actions.add(
+        TaskCenterContractActionViewData(
+          id: 'task_user_option_$index',
+          label: label,
+          note: ValueReaders.stringValue(
+            option['description'],
+            question.isEmpty ? '将这个方向作为用户确认继续当前任务。' : question,
+          ),
+          tone: index == 0 ? 'accent' : 'neutral',
+          invocationKind: 'task_user_option',
+          enabled: ownerTaskPath.trim().isNotEmpty,
+          disabledReason: ownerTaskPath.trim().isEmpty
+              ? '当前任务路径缺失，暂时不能回写用户选择。'
+              : '',
+          ownerTaskPath: ownerTaskPath,
+          checkpointReviewPath: '',
+          isRecommended: index == 0,
+          userOptionPrompt: prompt,
+          userOptionDescription: ValueReaders.stringValue(
+            option['description'],
+          ),
+          userOptionQuestion: question,
+        ),
+      );
+    }
+    if (actions.isEmpty) {
+      return null;
+    }
+    return TaskCenterActionGroupViewData(
+      id: 'task_user_options',
+      title: '任务选项',
+      summary: question.isEmpty ? '当前任务需要用户先选一个方向。' : question,
+      actions: actions,
+    );
+  }
+
+  TaskCenterActionGroupViewData? buildRunControlActionGroup({
+    required JsonMap longTaskRun,
+    required JsonMap task,
+    required String selectedLongTaskRunPath,
+  }) {
+    if (task.isEmpty) {
+      return null;
+    }
+    final taskPath = ValueReaders.stringValue(task['relative_path']).trim();
+    final taskId = ValueReaders.stringValue(task['id']).trim();
+    final taskStatus = ValueReaders.stringValue(task['status']).trim();
+    final taskType = ValueReaders.stringValue(task['task_type']).trim();
+    final checkpointAwaitingConfirmation =
+        taskType == 'checkpoint' &&
+        <String>{
+          TaskRuntimeConstants.statusWaitingUser,
+          TaskRuntimeConstants.statusPaused,
+        }.contains(taskStatus);
+    if (taskPath.isEmpty) {
+      return null;
+    }
+    final controls = ValueReaders.mapList(
+      _runCenterContract(longTaskRun)['controls'],
+    );
+    final actions = <TaskCenterContractActionViewData>[];
+    for (final control in controls) {
+      if (!ValueReaders.boolValue(control['enabled'])) {
+        continue;
+      }
+      final controlId = ValueReaders.stringValue(control['id']).trim();
+      final hostCommand = ValueReaders.stringValue(
+        control['host_command'],
+      ).trim();
+      final arguments = ValueReaders.mapValue(control['arguments']);
+      switch (controlId) {
+        case 'pause':
+        case 'resume':
+        case 'stop':
+          final genericAction = _genericRunControlAction(
+            control: control,
+            controlId: controlId,
+            hostCommand: hostCommand,
+            taskPath: taskPath,
+            taskId: taskId,
+            longTaskRunPath: selectedLongTaskRunPath,
+          );
+          if (genericAction != null) {
+            actions.add(genericAction);
+          }
+          continue;
+        case 'confirm_checkpoint':
+          if (hostCommand != 'apply_long_task_revision') {
+            continue;
+          }
+          final revisionCommand = ValueReaders.stringValue(
+            arguments['revision_command'],
+          ).trim();
+          if (revisionCommand.isNotEmpty &&
+              revisionCommand != 'confirm_checkpoint') {
+            continue;
+          }
+          final controlTaskPath = ValueReaders.stringValue(
+            arguments['relative_path'],
+          ).trim();
+          final controlTaskId = ValueReaders.stringValue(
+            arguments['task_id'],
+          ).trim();
+          final ownerTaskPath = controlTaskPath.isNotEmpty
+              ? controlTaskPath
+              : taskPath;
+          final ownerTaskId = controlTaskId.isNotEmpty ? controlTaskId : taskId;
+          if (ownerTaskPath.isEmpty ||
+              (!checkpointAwaitingConfirmation &&
+                  controlTaskPath.isEmpty &&
+                  controlTaskId.isEmpty)) {
+            continue;
+          }
+          actions.add(
+            TaskCenterContractActionViewData(
+              id: controlId,
+              label: ValueReaders.stringValue(control['label'], '确认检查点'),
+              note: '将当前等待确认的检查点标记为已确认，并解锁下一步长任务调度。',
+              tone: ValueReaders.stringValue(control['tone'], 'success'),
+              invocationKind: 'run_center_control',
+              enabled: true,
+              disabledReason: '',
+              ownerTaskPath: ownerTaskPath,
+              checkpointReviewPath: '',
+              ownerTaskId: ownerTaskId,
+              longTaskRunPath: selectedLongTaskRunPath.trim(),
+              isRecommended: true,
+            ),
+          );
+        case 'retry_failed':
+          if (hostCommand != 'long_task_failure_action' ||
+              ValueReaders.stringValue(task['status']) !=
+                  TaskRuntimeConstants.statusFailed ||
+              ValueReaders.stringValue(arguments['failure_command']).trim() !=
+                  'retry') {
+            continue;
+          }
+          actions.add(
+            TaskCenterContractActionViewData(
+              id: controlId,
+              label: ValueReaders.stringValue(control['label'], '重试失败任务'),
+              note: '将当前失败任务重新排队，并恢复长任务运行。',
+              tone: ValueReaders.stringValue(control['tone'], 'accent'),
+              invocationKind: 'run_center_control',
+              enabled: true,
+              disabledReason: '',
+              ownerTaskPath: taskPath,
+              checkpointReviewPath: '',
+              ownerTaskId: taskId,
+              longTaskRunPath: selectedLongTaskRunPath.trim(),
+              isRecommended: true,
+            ),
+          );
+        case 'skip_failed':
+          if (hostCommand != 'long_task_failure_action' ||
+              ValueReaders.stringValue(task['status']) !=
+                  TaskRuntimeConstants.statusFailed ||
+              ValueReaders.stringValue(arguments['failure_command']).trim() !=
+                  'skip') {
+            continue;
+          }
+          actions.add(
+            TaskCenterContractActionViewData(
+              id: controlId,
+              label: ValueReaders.stringValue(control['label'], '跳过失败任务'),
+              note: '将当前失败任务标记为取消，并尝试继续后续长任务链路。',
+              tone: ValueReaders.stringValue(control['tone'], 'warm'),
+              invocationKind: 'run_center_control',
+              enabled: true,
+              disabledReason: '',
+              ownerTaskPath: taskPath,
+              checkpointReviewPath: '',
+              ownerTaskId: taskId,
+              longTaskRunPath: selectedLongTaskRunPath.trim(),
+              isRecommended: false,
+            ),
+          );
+      }
+    }
+    if (actions.isEmpty) {
+      return null;
+    }
+    final hasCheckpointConfirmAction = actions.any(
+      (action) => action.id == 'confirm_checkpoint',
+    );
+    final hasFailureRecoveryAction = actions.any(
+      (action) => action.id == 'retry_failed' || action.id == 'skip_failed',
+    );
+    final hasResumeAction = actions.any((action) => action.id == 'resume');
+    final hasPauseAction = actions.any((action) => action.id == 'pause');
+    final hasStopAction = actions.any((action) => action.id == 'stop');
+    final summary = hasCheckpointConfirmAction
+        ? '当前长任务停在检查点确认处，可直接确认后继续主链。'
+        : hasFailureRecoveryAction
+        ? '当前任务已失败，可选择重试或跳过后继续恢复长任务。'
+        : hasResumeAction && hasStopAction
+        ? '当前长任务已暂停，可继续恢复主链推进，或直接停止本轮运行。'
+        : hasResumeAction
+        ? '当前长任务已暂停，可继续恢复主链推进。'
+        : hasPauseAction && hasStopAction
+        ? '当前长任务正在运行，可随时暂停或停止本轮运行。'
+        : hasPauseAction
+        ? '当前长任务正在运行，可随时暂停。'
+        : hasStopAction
+        ? '当前长任务可直接停止本轮运行。'
+        : taskType == 'checkpoint'
+        ? '当前任务是显式检查点，可直接确认后继续主链。'
+        : '当前运行状态已提供可执行控制。';
+    return TaskCenterActionGroupViewData(
+      id: 'run_center_control',
+      title: '运行控制',
+      summary: summary,
+      actions: actions,
+    );
+  }
+
+  TaskCenterContractActionViewData? _genericRunControlAction({
+    required JsonMap control,
+    required String controlId,
+    required String hostCommand,
+    required String taskPath,
+    required String taskId,
+    required String longTaskRunPath,
+  }) {
+    final note = switch (controlId) {
+      'pause' => '暂停当前长任务运行，保留现场，稍后可从当前状态继续。',
+      'resume' => '恢复当前长任务运行，从已暂停的主链位置继续推进。',
+      'stop' => '停止当前长任务运行，并将本轮连续任务记录收束为已结束。',
+      _ => '',
+    };
+    final expectedHostCommand = switch (controlId) {
+      'pause' => 'pause_long_task_run',
+      'resume' => 'resume_long_task_run',
+      'stop' => 'stop_long_task_run',
+      _ => '',
+    };
+    if (expectedHostCommand.isEmpty || hostCommand != expectedHostCommand) {
+      return null;
+    }
+    return TaskCenterContractActionViewData(
+      id: controlId,
+      label: ValueReaders.stringValue(control['label'], switch (controlId) {
+        'pause' => '暂停',
+        'resume' => '继续',
+        'stop' => '停止',
+        _ => '',
+      }),
+      note: note,
+      tone: ValueReaders.stringValue(control['tone'], switch (controlId) {
+        'pause' => 'warm',
+        'resume' => 'accent',
+        'stop' => 'danger',
+        _ => 'neutral',
+      }),
+      invocationKind: 'run_center_control',
+      enabled: true,
+      disabledReason: '',
+      ownerTaskPath: taskPath,
+      checkpointReviewPath: '',
+      ownerTaskId: taskId,
+      longTaskRunPath: longTaskRunPath.trim(),
+      isRecommended: controlId == 'resume',
+    );
   }
 
   List<TaskCenterRunItemViewData> _runItems(
@@ -448,7 +833,35 @@ class TaskCenterViewDataService {
         .toList(growable: false);
   }
 
-  String _resolvedSelectedTaskId(String selectedTaskId, List<JsonMap> tasks) {
+  String _resolvedSelectedTaskId(
+    String selectedTaskId,
+    List<JsonMap> tasks, {
+    String preferredTaskId = '',
+  }) {
+    final selectedTask = _taskByPath(tasks, selectedTaskId);
+    final preferredTask = _taskByPath(tasks, preferredTaskId);
+    final bestTask = _bestSelectionTask(tasks);
+    JsonMap resolvedTask = selectedTask;
+    for (final candidate in <JsonMap>[preferredTask, bestTask]) {
+      if (candidate.isEmpty) {
+        continue;
+      }
+      final candidatePriority = _selectionPriority(candidate);
+      final resolvedPriority = _selectionPriority(resolvedTask);
+      final prefersCandidateOnTie =
+          preferredTaskId.isNotEmpty &&
+          ValueReaders.stringValue(candidate['relative_path']) ==
+              preferredTaskId &&
+          candidatePriority == resolvedPriority;
+      if (resolvedTask.isEmpty ||
+          candidatePriority > resolvedPriority ||
+          prefersCandidateOnTie) {
+        resolvedTask = candidate;
+      }
+    }
+    if (resolvedTask.isNotEmpty) {
+      return ValueReaders.stringValue(resolvedTask['relative_path']);
+    }
     for (final task in tasks) {
       if (ValueReaders.stringValue(task['relative_path']) == selectedTaskId) {
         return selectedTaskId;
@@ -596,6 +1009,230 @@ class TaskCenterViewDataService {
         schedulerSnapshot['scheduler_plan'],
       )['run_center_contract'],
     );
+  }
+
+  JsonMap _taskByPath(List<JsonMap> tasks, String taskPath) {
+    for (final task in tasks) {
+      if (ValueReaders.stringValue(task['relative_path']) == taskPath) {
+        return task;
+      }
+    }
+    return const <String, Object?>{};
+  }
+
+  JsonMap _runByPath(List<JsonMap> runs, String runPath) {
+    for (final run in runs) {
+      if (ValueReaders.stringValue(run['relative_path']) == runPath) {
+        return run;
+      }
+    }
+    return const <String, Object?>{};
+  }
+
+  JsonMap _newestRun(List<JsonMap> runs) {
+    JsonMap newest = const <String, Object?>{};
+    var newestTimestamp = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+    for (final run in runs) {
+      final updatedAt = _runUpdatedAt(run);
+      if (newest.isEmpty || updatedAt.isAfter(newestTimestamp)) {
+        newest = run;
+        newestTimestamp = updatedAt;
+      }
+    }
+    return newest.isEmpty ? runs.first : newest;
+  }
+
+  bool _shouldFollowNewerTaskQueueRun({
+    required JsonMap selectedRun,
+    required JsonMap newestRun,
+  }) {
+    final selectedPath = ValueReaders.stringValue(
+      selectedRun['relative_path'],
+    ).trim();
+    final newestPath = ValueReaders.stringValue(newestRun['relative_path'])
+        .trim();
+    if (selectedPath.isEmpty || newestPath.isEmpty || selectedPath == newestPath) {
+      return false;
+    }
+    final selectedUpdatedAt = _runUpdatedAt(selectedRun);
+    final newestUpdatedAt = _runUpdatedAt(newestRun);
+    if (!newestUpdatedAt.isAfter(selectedUpdatedAt)) {
+      return false;
+    }
+    final selectedStatus = ValueReaders.stringValue(selectedRun['status']).trim();
+    if (_isTaskQueueRunActive(selectedStatus)) {
+      return false;
+    }
+    return true;
+  }
+
+  bool _isTaskQueueRunActive(String status) {
+    return status == TaskRuntimeConstants.statusRunning ||
+        status == TaskRuntimeConstants.statusPlanning ||
+        status == TaskRuntimeConstants.statusRetrying;
+  }
+
+  DateTime _runUpdatedAt(JsonMap run) {
+    final updatedAt = DateTime.tryParse(
+      ValueReaders.stringValue(run['updated_at']).trim(),
+    );
+    return updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+  }
+
+  JsonMap _bestSelectionTask(List<JsonMap> tasks) {
+    JsonMap bestTask = const <String, Object?>{};
+    var bestPriority = -1;
+    for (final task in tasks) {
+      final priority = _selectionPriority(task);
+      if (priority > bestPriority) {
+        bestTask = task;
+        bestPriority = priority;
+      }
+    }
+    return bestTask;
+  }
+
+  int _selectionPriority(JsonMap task) {
+    final taskType = ValueReaders.stringValue(task['task_type']).trim();
+    final waitingForUserChoice = ValueReaders.boolValue(
+      task['waiting_for_user_choice'],
+    );
+    switch (ValueReaders.stringValue(task['status']).trim()) {
+      case TaskRuntimeConstants.statusFailed:
+        return 70;
+      case TaskRuntimeConstants.statusWaitingUser:
+        if (waitingForUserChoice) {
+          return 68;
+        }
+        if (taskType == 'checkpoint') {
+          return 64;
+        }
+        return 60;
+      case TaskRuntimeConstants.statusRunning:
+        return 50;
+      case TaskRuntimeConstants.statusRetrying:
+        return 45;
+      case TaskRuntimeConstants.statusPlanning:
+        return 40;
+      case TaskRuntimeConstants.statusQueued:
+        return 35;
+      case TaskRuntimeConstants.statusPaused:
+        return 30;
+      case TaskRuntimeConstants.statusSucceeded:
+        return 10;
+      case TaskRuntimeConstants.statusCancelled:
+        return 0;
+      default:
+        return 20;
+    }
+  }
+
+  JsonMap _preferredTaskFromQueueRun(
+    List<JsonMap> tasks,
+    JsonMap selectedTaskQueueRun,
+  ) {
+    if (selectedTaskQueueRun.isEmpty) {
+      return const <String, Object?>{};
+    }
+    final stopReason = ValueReaders.stringValue(
+      selectedTaskQueueRun['stop_reason'],
+    ).trim();
+    if (!_queueStopReasonRequiresSourceTaskFocus(stopReason)) {
+      return const <String, Object?>{};
+    }
+    final queueTaskPath = ValueReaders.stringValue(
+      selectedTaskQueueRun['last_task_relative_path'],
+    ).trim();
+    final queueTask = _taskByPath(tasks, queueTaskPath);
+    if (queueTask.isEmpty) {
+      return const <String, Object?>{};
+    }
+    if (_taskHasFollowupCheckpoint(queueTask)) {
+      return queueTask;
+    }
+    final status = ValueReaders.stringValue(queueTask['status']).trim();
+    if (status == TaskRuntimeConstants.statusWaitingUser ||
+        status == TaskRuntimeConstants.statusFailed) {
+      return queueTask;
+    }
+    return const <String, Object?>{};
+  }
+
+  bool _queueStopReasonRequiresSourceTaskFocus(String stopReason) {
+    return stopReason == 'constraint_gate_pause' ||
+        stopReason == 'waiting_user_choice' ||
+        stopReason == 'delivery_waiting_user_choice' ||
+        stopReason == 'waiting_user';
+  }
+
+  bool _taskHasFollowupCheckpoint(JsonMap task) {
+    final metadata = ValueReaders.mapValue(task['metadata']);
+    for (final candidate in <String>[
+      ValueReaders.stringValue(task['checkpoint_review_path']),
+      ValueReaders.stringValue(task['postprocess_checkpoint_review_path']),
+      ValueReaders.stringValue(task['followup_review_checkpoint_review_path']),
+      ValueReaders.stringValue(metadata['checkpoint_review_path']),
+      ValueReaders.stringValue(
+        metadata['followup_review_checkpoint_review_path'],
+      ),
+      ValueReaders.stringValue(metadata['origin_checkpoint_review_path']),
+    ]) {
+      if (candidate.trim().isNotEmpty) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  List<JsonMap> _pendingUserOptions(JsonMap execution) {
+    final stored = ValueReaders.mapList(execution['pending_user_options']);
+    if (stored.isNotEmpty) {
+      return stored;
+    }
+    for (final rawTool in ValueReaders.objectList(
+      execution['executed_tools'],
+    ).reversed) {
+      final tool = ValueReaders.mapValue(rawTool);
+      if (ValueReaders.stringValue(tool['name']) != 'present_user_options') {
+        continue;
+      }
+      final result = ValueReaders.mapValue(tool['result']);
+      final question = ValueReaders.stringValue(result['question']);
+      return ValueReaders.objectList(result['options'])
+          .map(ValueReaders.mapValue)
+          .where((entry) => entry.isNotEmpty)
+          .map(
+            (entry) => <String, Object?>{
+              'label': ValueReaders.stringValue(
+                entry['label'],
+                ValueReaders.stringValue(
+                  entry['title'],
+                  ValueReaders.stringValue(entry['name'], '选项'),
+                ),
+              ),
+              'description': ValueReaders.stringValue(
+                entry['description'],
+                ValueReaders.stringValue(
+                  entry['detail'],
+                  ValueReaders.stringValue(entry['summary']),
+                ),
+              ),
+              'prompt': ValueReaders.stringValue(
+                entry['prompt'],
+                ValueReaders.stringValue(
+                  entry['value'],
+                  ValueReaders.stringValue(
+                    entry['title'],
+                    ValueReaders.stringValue(entry['label']),
+                  ),
+                ),
+              ),
+              'source_question': question,
+            },
+          )
+          .toList(growable: false);
+    }
+    return const <JsonMap>[];
   }
 
   String _runItemStatusLabel(JsonMap record, JsonMap contract) {

@@ -23,7 +23,6 @@ class ResourcePanelSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 中文注释: 资源面板的内层分区统一用一套轻量壳，避免项目动作、目录树、底部入口各写各的边框和底色。
     final surface = context.novelThemeSurfaces.panel;
     final visual = WorkbenchVisualStyle.of(context);
     final background = visual.sectionBackground(
@@ -36,9 +35,15 @@ class ResourcePanelSection extends StatelessWidget {
         : <Widget>[trailingWidget];
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: background,
+        color: background.withValues(alpha: emphasized ? 0.64 : 0.2),
+        borderRadius: BorderRadius.circular(visual.sectionRadius),
         border: showBorder
-            ? Border.all(color: surface.borderColor, width: surface.borderWidth)
+            ? Border(
+                top: BorderSide(
+                  color: surface.borderColor.withValues(alpha: 0.28),
+                  width: surface.borderWidth,
+                ),
+              )
             : null,
       ),
       child: Padding(
@@ -55,7 +60,8 @@ class ResourcePanelSection extends StatelessWidget {
                         title!,
                         style: TextStyle(
                           fontSize: visual.compactLabelFontSize,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.08,
                           color: emphasized
                               ? surface.foregroundColor
                               : surface.mutedForegroundColor,
@@ -65,7 +71,13 @@ class ResourcePanelSection extends StatelessWidget {
                   ...trailingWidgets,
                 ],
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: visual.microGap + 2),
+              Divider(
+                height: 1,
+                thickness: surface.borderWidth,
+                color: surface.borderColor.withValues(alpha: 0.08),
+              ),
+              SizedBox(height: visual.compactGap + 1),
             ],
             child,
           ],

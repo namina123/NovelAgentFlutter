@@ -11,6 +11,7 @@ class ProjectLongTaskChapterQueueRuntimeService {
     BuildLongTaskRevisionPlanUseCase? buildLongTaskRevisionPlanUseCase,
     LongTaskRevisionApplyService? longTaskRevisionApplyService,
     LongTaskPlanMarkdownRenderer? planMarkdownRenderer,
+    LongTaskPlanningArtifactPathService? planningArtifactPathService,
   }) : _taskRepository = taskRepository,
        _modeService = modeService ?? LongTaskModeService(),
        _pathPolicyService = pathPolicyService ?? LongTaskPathPolicyService(),
@@ -39,7 +40,10 @@ class ProjectLongTaskChapterQueueRuntimeService {
                  taskDefinitionService ?? TaskDefinitionService(),
            ),
        _planMarkdownRenderer =
-           planMarkdownRenderer ?? LongTaskPlanMarkdownRenderer();
+           planMarkdownRenderer ?? LongTaskPlanMarkdownRenderer(),
+       _planningArtifactPathService =
+           planningArtifactPathService ??
+           const LongTaskPlanningArtifactPathService();
 
   final ProjectTaskRepository _taskRepository;
   final LongTaskModeService _modeService;
@@ -48,6 +52,7 @@ class ProjectLongTaskChapterQueueRuntimeService {
   final BuildLongTaskRevisionPlanUseCase _buildLongTaskRevisionPlanUseCase;
   final LongTaskRevisionApplyService _longTaskRevisionApplyService;
   final LongTaskPlanMarkdownRenderer _planMarkdownRenderer;
+  final LongTaskPlanningArtifactPathService _planningArtifactPathService;
 
   JsonMap materializeInitialPlanWindow(
     String mode,
@@ -75,10 +80,14 @@ class ProjectLongTaskChapterQueueRuntimeService {
     ProjectDescriptor project,
     List<JsonMap> tasks,
   ) async {
-    if (tasks.isEmpty) {
+    final queueTasks = tasks
+        .where(_isMaterializedSeedQueueTask)
+        .map(ValueReaders.deepCopyMap)
+        .toList(growable: false);
+    if (queueTasks.isEmpty) {
       return _noopResult();
     }
-    final planId = _singlePlanId(tasks);
+    final planId = _singlePlanId(queueTasks);
     if (planId.isEmpty) {
       return _noopResult();
     }
@@ -89,7 +98,7 @@ class ProjectLongTaskChapterQueueRuntimeService {
             TaskRuntimeConstants.modeSeedToFullNovel) {
       return _noopResult();
     }
-    if (!_canExtendSeedQueue(tasks)) {
+    if (!_canExtendSeedQueue(queueTasks)) {
       return _noopResult();
     }
     final planOptions = ValueReaders.mapValue(plan['options']);
@@ -97,7 +106,7 @@ class ProjectLongTaskChapterQueueRuntimeService {
       planOptions['chapter_count'],
       8,
     ).clamp(1, 200);
-    final highestMaterializedChapter = _highestChapterNumber(tasks);
+    final highestMaterializedChapter = _highestChapterNumber(queueTasks);
     if (highestMaterializedChapter >= chapterCount) {
       return _noopResult();
     }
@@ -204,7 +213,7 @@ class ProjectLongTaskChapterQueueRuntimeService {
       nextTasks,
       totalTaskCount: ValueReaders.intValue(
         plan['planned_task_count'],
-        tasks.length,
+        queueTasks.length,
       ),
     );
     final planMarkdownPath = 'tracking/long_task/$planId.plan.md';
@@ -347,9 +356,9 @@ class ProjectLongTaskChapterQueueRuntimeService {
           : '根据规划任务生成的作品规格、总纲和章纲写作。初始种子：$seedPrompt',
       'stage': 'draft',
       'source_paths': <Object?>[
-        'specs/project_spec.md',
-        'outline/总纲.md',
-        'chapter_outlines/章节任务清单.md',
+        LongTaskPlanningArtifactPathService.projectSpecPath,
+        _planningArtifactPathService.storyOutlinePath(),
+        _planningArtifactPathService.chapterPlanPath(),
         ...persistentContextPaths,
       ],
       'persistent_context_paths': persistentContextPaths,
@@ -554,6 +563,32 @@ class ProjectLongTaskChapterQueueRuntimeService {
         target.add(clean);
       }
     }
+  }
+
+  bool _isDeferredCheckpointFollowupTask(JsonMap task) {
+    if (ValueReaders.stringValue(task['task_type']) != 'review') {
+      return false;
+    }
+    return ValueReaders.stringValue(
+          ValueReaders.mapValue(task['metadata'])['origin'],
+        ).trim() ==
+        'checkpoint_review_suggestion';
+  }
+
+  bool _isMaterializedSeedQueueTask(JsonMap task) {
+    if (_isDeferredCheckpointFollowupTask(task)) {
+      return false;
+    }
+    final taskId = ValueReaders.stringValue(task['id']).trim();
+    if (!taskId.startsWith('plan_')) {
+      return false;
+    }
+    final expectedPath =
+        'tasks/${_pathPolicyService.safeId(taskId, fallbackPrefix: 'task')}.json';
+    final relativePath = ValueReaders.stringValue(
+      task['relative_path'],
+    ).trim().replaceAll('\\', '/');
+    return relativePath == expectedPath;
   }
 
   JsonMap _noopResult() {

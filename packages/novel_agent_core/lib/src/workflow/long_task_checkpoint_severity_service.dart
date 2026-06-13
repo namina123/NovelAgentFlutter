@@ -24,9 +24,21 @@ class LongTaskCheckpointSeverityService {
     final overallRisk = ValueReaders.mapValue(narrativeRisk['overall']);
     final reviewRisk = ValueReaders.mapValue(narrativeRisk['review']);
     final permissionRisk = ValueReaders.mapValue(narrativeRisk['permission']);
+    final expressionConstraintRisk = ValueReaders.mapValue(
+      narrativeRisk['expression_constraints'],
+    );
     final collaborationSignal = ValueReaders.mapValue(
       review['collaboration_signal'],
     );
+    final overallCategory = ValueReaders.stringValue(
+      overallRisk['category'],
+    ).trim();
+    final collaborationCategory = ValueReaders.stringValue(
+      collaborationSignal['category'],
+    ).trim();
+    final expressionConstraintCategory = ValueReaders.stringValue(
+      expressionConstraintRisk['category'],
+    ).trim();
 
     var severity = 'low';
     if (!resultOk || error.isNotEmpty) {
@@ -65,6 +77,35 @@ class LongTaskCheckpointSeverityService {
       'repair' => 'high',
       _ => 'low',
     });
+    severity = _maxSeverity(severity, switch (ValueReaders.stringValue(
+      expressionConstraintRisk['category'],
+    )) {
+      'waiting_review_evidence' => 'high',
+      'light_repair' => 'high',
+      'suggest_strengthen' => 'medium',
+      _ => 'low',
+    });
+    if (_shouldCapSampleAdvisorySeverity(
+      review,
+      taskType: taskType,
+      stage: stage,
+      resultOk: resultOk,
+      error: error,
+      outputPaths: outputPaths,
+      overallCategory: overallCategory,
+      collaborationCategory: collaborationCategory,
+      expressionConstraintCategory: expressionConstraintCategory,
+      permissionWaiting: ValueReaders.boolValue(permissionRisk['waiting_for_user']),
+      questionedClaimCount: ValueReaders.intValue(
+        reviewRisk['questioned_claim_count'],
+      ),
+      blockingFindingCount: ValueReaders.intValue(
+        reviewRisk['blocking_finding_count'],
+      ),
+      severity: severity,
+    )) {
+      severity = 'medium';
+    }
 
     if (taskType == 'chapter' && stage == 'sample') {
       reasons.add('样章阶段决定长期可写性，建议提高人工确认强度。');
@@ -102,6 +143,14 @@ class LongTaskCheckpointSeverityService {
     ).trim();
     if (collaborationSummary.isNotEmpty) {
       reasons.add(collaborationSummary);
+    }
+    final expressionConstraintSummary = ValueReaders.stringValue(
+      expressionConstraintRisk['summary'],
+    ).trim();
+    if (expressionConstraintSummary.isNotEmpty &&
+        ValueReaders.stringValue(expressionConstraintRisk['category']).trim() !=
+            'policy_disabled') {
+      reasons.add(expressionConstraintSummary);
     }
     if (ValueReaders.boolValue(permissionRisk['waiting_for_user'])) {
       reasons.add('本轮存在真实权限确认等待，waiting_user 应只保留给这种用户确认场景。');
@@ -173,5 +222,55 @@ class LongTaskCheckpointSeverityService {
 
   String _maxSeverity(String left, String right) {
     return _severityRank(right) > _severityRank(left) ? right : left;
+  }
+
+  bool _shouldCapSampleAdvisorySeverity(
+    JsonMap review, {
+    required String taskType,
+    required String stage,
+    required bool resultOk,
+    required String error,
+    required List<String> outputPaths,
+    required String overallCategory,
+    required String collaborationCategory,
+    required String expressionConstraintCategory,
+    required bool permissionWaiting,
+    required int questionedClaimCount,
+    required int blockingFindingCount,
+    required String severity,
+  }) {
+    // 中文注释: 样章阶段天然会触发较多“建议审视”信号；若没有真实 repair/user gate，只保留 medium，避免把 advisory review 误升级成阻断返工。
+    if (taskType != 'chapter' || stage != 'sample' || severity != 'high') {
+      return false;
+    }
+    if (!resultOk || error.isNotEmpty || outputPaths.isEmpty) {
+      return false;
+    }
+    if (permissionWaiting || questionedClaimCount > 0 || blockingFindingCount > 0) {
+      return false;
+    }
+    if (!_isAdvisoryOnlyCategory(overallCategory) ||
+        !_isAdvisoryOnlyCategory(collaborationCategory) ||
+        !_isAdvisoryExpressionCategory(expressionConstraintCategory)) {
+      return false;
+    }
+    final informationCategory = ValueReaders.stringValue(
+      ValueReaders.mapValue(review['information_signal'])['category'],
+    ).trim();
+    if (!_isAdvisoryOnlyCategory(informationCategory)) {
+      return false;
+    }
+    return true;
+  }
+
+  bool _isAdvisoryOnlyCategory(String category) {
+    return category.isEmpty || category == 'accept';
+  }
+
+  bool _isAdvisoryExpressionCategory(String category) {
+    return category.isEmpty ||
+        category == 'accept' ||
+        category == 'suggest_strengthen' ||
+        category == 'policy_disabled';
   }
 }

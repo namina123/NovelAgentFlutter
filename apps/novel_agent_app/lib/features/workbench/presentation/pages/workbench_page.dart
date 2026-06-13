@@ -7,6 +7,7 @@ import '../../../../../app/layout/app_layout_scope.dart';
 import '../../../../../shared/widgets/panel_surface.dart';
 import '../contracts/conversation_action_handler.dart';
 import '../contracts/document_workspace_action_handler.dart';
+import '../contracts/pending_research_action_handler.dart';
 import '../contracts/resource_manager_action_handler.dart';
 import '../layout/workbench_surface_layout.dart';
 import '../layout/workbench_surface_layout_policy.dart';
@@ -15,6 +16,7 @@ import '../models/workbench_canvas_view_data.dart';
 import '../models/workbench_conversation_view_data.dart';
 import '../models/workbench_overlay_view_data.dart';
 import '../models/workbench_resource_view_data.dart';
+import '../../application/services/workbench_workspace_shell_view_data_service.dart';
 import '../widgets/conversation_sidebar.dart';
 import '../widgets/documents_workspace_shell.dart';
 import '../widgets/document_workspace_panel.dart';
@@ -25,6 +27,7 @@ import '../widgets/resource_manager_panel.dart';
 import '../widgets/workbench_canvas_workspace_shell.dart';
 import '../widgets/workbench_compact_workspace_shell.dart';
 import '../widgets/workbench_desktop_surface.dart';
+import '../widgets/workbench_ide_shell.dart';
 import '../widgets/workbench_desktop_section_id.dart';
 import '../widgets/workbench_navigation_sidebar.dart';
 import '../widgets/workbench_pane_shell.dart';
@@ -109,6 +112,9 @@ class _WorkbenchLayoutHost extends StatelessWidget {
     required this.conversationHandler,
   });
 
+  static const WorkbenchWorkspaceShellViewDataService _shellViewDataService =
+      WorkbenchWorkspaceShellViewDataService();
+
   final AppLayoutMetrics metrics;
   final WorkbenchSurfaceLayout layout;
   final ValueListenable<WorkbenchResourceViewData> resourceListenable;
@@ -121,6 +127,11 @@ class _WorkbenchLayoutHost extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final shellViewData = _shellViewDataService.build(
+      resource: resourceListenable.value,
+      canvas: canvasViewData,
+      conversation: conversationListenable.value,
+    );
     switch (layout.mode) {
       case WorkbenchSurfaceMode.immersiveConversation:
         return WorkbenchSlotHost(
@@ -134,6 +145,7 @@ class _WorkbenchLayoutHost extends StatelessWidget {
         );
       case WorkbenchSurfaceMode.compactWorkbench:
         return WorkbenchCompactWorkspaceShell(
+          viewData: shellViewData,
           workspacePane: _CompactWorkspacePaneHost(
             resourceListenable: resourceListenable,
             canvasListenable: canvasListenable,
@@ -189,12 +201,16 @@ class _WorkbenchLayoutHost extends StatelessWidget {
             conversationDesktopShowRightOuterBorder: true,
           ),
           builder: (context, slots) {
-            return WorkbenchDesktopSurface(
-              child: WorkbenchTwoPaneLayout(
-                metrics: metrics,
-                documentPane: slots.require(WorkbenchSlotId.canvasPane),
-                conversationPane: slots.require(
-                  WorkbenchSlotId.conversationPane,
+            return WorkbenchIdeShell(
+              metrics: metrics,
+              viewData: shellViewData,
+              child: WorkbenchDesktopSurface(
+                child: WorkbenchTwoPaneLayout(
+                  metrics: metrics,
+                  documentPane: slots.require(WorkbenchSlotId.canvasPane),
+                  conversationPane: slots.require(
+                    WorkbenchSlotId.conversationPane,
+                  ),
                 ),
               ),
             );
@@ -207,13 +223,17 @@ class _WorkbenchLayoutHost extends StatelessWidget {
             conversationDesktopShowRightOuterBorder: true,
           ),
           builder: (context, slots) {
-            return WorkbenchDesktopSurface(
-              child: ResizableWorkbenchLayout(
-                metrics: metrics,
-                leftPane: slots.require(WorkbenchSlotId.resourcePane),
-                documentPane: slots.require(WorkbenchSlotId.canvasPane),
-                conversationPane: slots.require(
-                  WorkbenchSlotId.conversationPane,
+            return WorkbenchIdeShell(
+              metrics: metrics,
+              viewData: shellViewData,
+              child: WorkbenchDesktopSurface(
+                child: ResizableWorkbenchLayout(
+                  metrics: metrics,
+                  leftPane: slots.require(WorkbenchSlotId.resourcePane),
+                  documentPane: slots.require(WorkbenchSlotId.canvasPane),
+                  conversationPane: slots.require(
+                    WorkbenchSlotId.conversationPane,
+                  ),
                 ),
               ),
             );
@@ -297,9 +317,14 @@ class _ResourcePaneHost extends StatelessWidget {
     return ValueListenableBuilder<WorkbenchResourceViewData>(
       valueListenable: resourceListenable,
       builder: (context, viewData, _) {
+        final pendingResearchActionHandler =
+            actionHandler is PendingResearchActionHandler
+            ? actionHandler as PendingResearchActionHandler
+            : null;
         return ResourceManagerPanel(
           viewData: viewData,
           actionHandler: actionHandler,
+          pendingResearchActionHandler: pendingResearchActionHandler,
         );
       },
     );

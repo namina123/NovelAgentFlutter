@@ -50,9 +50,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('项目目录'), findsOneWidget);
-    expect(find.text('2 项'), findsOneWidget);
-    expect(find.text('大纲(3)'), findsOneWidget);
+    expect(find.byType(ResourceTreeCard), findsOneWidget);
+    expect(find.text('大纲'), findsOneWidget);
+    expect(find.text('3'), findsOneWidget);
     expect(find.text('第一章'), findsOneWidget);
 
     await tester.tap(find.text('第一章'));

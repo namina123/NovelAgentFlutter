@@ -119,6 +119,27 @@ void main() {
         );
         expect(detail.narrativeSummary!.continuity?.subtitle, '更新 2 项');
         expect(detail.narrativeSummary!.information, isNotNull);
+        expect(detail.narrativeSummary!.expressionConstraint, isNotNull);
+        expect(
+          detail.narrativeSummary!.expressionConstraint!.status,
+          'suggest_strengthen',
+        );
+        expect(
+          detail.narrativeSummary!.expressionConstraint!.subtitle,
+          contains('adaptive'),
+        );
+        expect(
+          detail.narrativeSummary!.recentExpressionConstraintItems,
+          hasLength(1),
+        );
+        expect(
+          detail
+              .narrativeSummary!
+              .recentExpressionConstraintItems
+              .first
+              .summary,
+          contains('建议加强'),
+        );
         expect(
           detail.narrativeSummary!.information?.subtitle,
           contains('knowledge 1 | design 1 | research 0 | reference 1'),
@@ -173,17 +194,55 @@ void main() {
           detail.narrativeSummary!.informationPermissionItems.map(
             (item) => item.title,
           ),
-          containsAll(<String>[
-            'Knowledge Confirmation',
-            'Design Confirmation',
-            'Research Pending',
-            'Reference Confirmation',
-          ]),
+          containsAll(<String>['知识待确认', '设计待确认', '资料待确认', '引用待确认']),
         );
 
         expect(detail.blocker.code, 'waiting_user_checkpoint');
+        expect(
+          detail.blocker.category,
+          LongTaskStopOutcomeCategories.waitingUser,
+        );
+        expect(detail.blocker.label, '等待用户确认');
         expect(detail.blocker.note, isNotEmpty);
         expect(detail.blocker.detail, contains('当前任务'));
+      },
+    );
+
+    test(
+      'classifies content quality stop reasons separately from expression constraint status',
+      () async {
+        final baseline = const RuntimeBaselineCatalogService().byId(
+          'continuous_autonomous',
+        )!;
+        final run = const RunInstanceFactoryService()
+            .createLongTaskInstance(
+              runId: 'run_station_content_gate',
+              project: project,
+              runtimeBaseline: baseline,
+              modeId: TaskRuntimeConstants.modeSeedToFullNovel,
+              workflowStrategyId: 'resumable_long_task',
+              initialStatus: LongTaskRunStatus.failedManualAttention,
+              now: DateTime.parse('2026-05-26T08:20:00.000Z'),
+            )
+            .copyWith(
+              activeTaskId: 'chapter_001',
+              activeTaskTitle: '第01章：风雪旧城',
+              stopReason: 'delivery_manual_attention',
+              note: 'content quality gate triggered',
+            );
+
+        final detail = await service.loadForRun(run);
+
+        expect(detail.blocker.code, 'delivery_manual_attention');
+        expect(
+          detail.blocker.category,
+          LongTaskStopOutcomeCategories.manualAttention,
+        );
+        expect(detail.blocker.label, '需要人工处理');
+        expect(
+          detail.narrativeSummary?.expressionConstraint?.status,
+          'suggest_strengthen',
+        );
       },
     );
   });
@@ -263,6 +322,17 @@ Future<void> _seedProject(
       'activation_report_summary': 'selected 8, omitted 2, files 8.',
       'chapter_delivery_state': 'delivered',
       'chapter_delivery_path': 'chapters/ch01.md',
+      'writing_execution_result': <String, Object?>{
+        'constraints': <String, Object?>{
+          'present': true,
+          'expression_constraint_active': true,
+          'expression_constraint_policy_mode': 'adaptive',
+          'expression_constraint_applied': true,
+          'expression_constraint_runtime_escalated': true,
+          'review_suggested': true,
+          'summary': '表达限制当前建议加强后续章节执行。',
+        },
+      },
       'changed_paths': <Object?>[
         '.novel_agent/continuity/ledgers/main-ledger/entries.jsonl',
         '.novel_agent/continuity/reviews/review-001.json',
@@ -495,6 +565,17 @@ Future<void> _seedProject(
       ],
       'last_information_summary': '待研究 1 项，高风险引用 1 项，information 改动 8 项',
       'last_information_risk_category': 'manual_attention',
+      'last_writing_execution_result': <String, Object?>{
+        'constraints': <String, Object?>{
+          'present': true,
+          'expression_constraint_active': true,
+          'expression_constraint_policy_mode': 'adaptive',
+          'expression_constraint_applied': true,
+          'expression_constraint_runtime_escalated': true,
+          'review_suggested': true,
+          'summary': '表达限制当前建议加强后续章节执行。',
+        },
+      },
       'last_checkpoint_review_path':
           'tracking/checkpoint_reviews/ch01_checkpoint.json',
       'steps': <Object?>[
@@ -534,6 +615,17 @@ Future<void> _seedProject(
           ],
           'information_summary': '待研究 1 项，高风险引用 1 项，information 改动 8 项',
           'information_risk_category': 'manual_attention',
+          'writing_execution_result': <String, Object?>{
+            'constraints': <String, Object?>{
+              'present': true,
+              'expression_constraint_active': true,
+              'expression_constraint_policy_mode': 'adaptive',
+              'expression_constraint_applied': true,
+              'expression_constraint_runtime_escalated': true,
+              'review_suggested': true,
+              'summary': '表达限制当前建议加强后续章节执行。',
+            },
+          },
           'created_at': '2026-05-26T08:06:30.000Z',
         },
       ],

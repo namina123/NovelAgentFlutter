@@ -55,6 +55,14 @@ void main() {
       );
       expect(missingBody.reason, 'chapter_content_missing');
       expect(titleOnly.reason, 'title_only_output');
+      expect(
+        missingBody.deliveryFailure?.category,
+        ChapterDeliveryFailureCategories.emptyBody,
+      );
+      expect(
+        titleOnly.deliveryFailure?.category,
+        ChapterDeliveryFailureCategories.titleOnlyOutput,
+      );
     });
 
     test(
@@ -87,11 +95,19 @@ void main() {
         );
         expect(pathMismatch.chapterBodyDelivered, isFalse);
         expect(
+          pathMismatch.deliveryFailure?.category,
+          ChapterDeliveryFailureCategories.pathMismatch,
+        );
+        expect(
           missingSubmission.state,
           ChapterDeliveryStateStatuses.deliveredNeedsRepair,
         );
         expect(missingSubmission.chapterBodyDelivered, isTrue);
         expect(missingSubmission.recommendedAction, 'request_sidecar_repair');
+        expect(
+          missingSubmission.deliveryFailure?.category,
+          ChapterDeliveryFailureCategories.sidecarMissing,
+        );
       },
     );
 
@@ -118,6 +134,10 @@ void main() {
         expect(result.reason, 'chapter_body_too_short');
         expect(result.chapterBodyDelivered, isFalse);
         expect(result.metadata['minimum_body_length'], 80);
+        expect(
+          result.deliveryFailure?.category,
+          ChapterDeliveryFailureCategories.bodyTooShort,
+        );
       },
     );
 
@@ -146,6 +166,10 @@ void main() {
         expect(result.chapterBodyDelivered, isTrue);
         expect(result.submissionAccepted, isFalse);
         expect(result.metadata['submission_validation_errors'], isNotEmpty);
+        expect(
+          result.deliveryFailure?.category,
+          ChapterDeliveryFailureCategories.sidecarInvalid,
+        );
       },
     );
 
@@ -169,6 +193,10 @@ void main() {
         expect(result.reason, 'submission_evidence_missing');
         expect(result.chapterBodyDelivered, isTrue);
         expect(result.submissionAccepted, isFalse);
+        expect(
+          result.deliveryFailure?.category,
+          ChapterDeliveryFailureCategories.deliveryEvidenceMissing,
+        );
       },
     );
 
@@ -241,8 +269,16 @@ void main() {
         ChapterDeliveryStateStatuses.missingOutputRecoverable,
       );
       expect(retryableFailure.retryable, isTrue);
+      expect(
+        retryableFailure.deliveryFailure?.category,
+        ChapterDeliveryFailureCategories.writeFailed,
+      );
       expect(hardFailure.state, ChapterDeliveryStateStatuses.hardFailure);
       expect(hardFailure.retryable, isFalse);
+      expect(
+        hardFailure.deliveryFailure?.category,
+        ChapterDeliveryFailureCategories.writeFailed,
+      );
     });
 
     test(

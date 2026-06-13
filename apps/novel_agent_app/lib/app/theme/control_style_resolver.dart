@@ -102,7 +102,7 @@ class ControlStyleResolver {
         borderColor: colors.lineColor,
         foregroundColor: colors.textColor,
         mutedForegroundColor: colors.mutedTextColor,
-        highlightBackgroundColor: colors.accentColor.withValues(alpha: 0.14),
+        highlightBackgroundColor: colors.accentColor.withValues(alpha: 0.12),
         highlightBorderColor: colors.lineStrongColor,
         highlightForegroundColor: colors.textColor,
         radius: chipChrome.radius,

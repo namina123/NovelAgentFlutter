@@ -1,5 +1,7 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import 'long_task_checkpoint_cadence_policy_service.dart';
+import 'long_task_covered_source_task_service.dart';
 import 'long_task_controller_profile_service.dart';
 import 'long_task_mode_service.dart';
 import 'long_task_task_summary_service.dart';
@@ -14,17 +16,26 @@ class LongTaskNextBatchPlanService {
     required LongTaskUnattendedStrategyService unattendedStrategyService,
     required LongTaskTaskSummaryService taskSummaryService,
     required TaskSelectionService taskSelectionService,
+    LongTaskCheckpointCadencePolicyService? checkpointCadencePolicyService,
+    LongTaskCoveredSourceTaskService? coveredSourceTaskService,
   }) : _modeService = modeService,
        _profileService = profileService,
        _unattendedStrategyService = unattendedStrategyService,
        _taskSummaryService = taskSummaryService,
-       _taskSelectionService = taskSelectionService;
+       _taskSelectionService = taskSelectionService,
+       _coveredSourceTaskService =
+           coveredSourceTaskService ?? const LongTaskCoveredSourceTaskService(),
+       _checkpointCadencePolicyService =
+           checkpointCadencePolicyService ??
+           const LongTaskCheckpointCadencePolicyService();
 
   final LongTaskModeService _modeService;
   final LongTaskControllerProfileService _profileService;
   final LongTaskUnattendedStrategyService _unattendedStrategyService;
   final LongTaskTaskSummaryService _taskSummaryService;
   final TaskSelectionService _taskSelectionService;
+  final LongTaskCoveredSourceTaskService _coveredSourceTaskService;
+  final LongTaskCheckpointCadencePolicyService _checkpointCadencePolicyService;
 
   JsonMap nextBatchPlan(
     JsonMap record,
@@ -39,8 +50,14 @@ class LongTaskNextBatchPlanService {
       tasks,
       options: options,
     );
+    final cadence = _checkpointCadencePolicyService.policyForRuntime(
+      mode,
+      record: record,
+      options: options,
+      controllerProfile: profile,
+    );
     final sortedTasks = _taskSelectionService.sortTasks(tasks);
-    final base = _baseResult(mode, sortedTasks, profile, strategy);
+    final base = _baseResult(mode, sortedTasks, profile, strategy, cadence.toJson());
 
     if (ValueReaders.boolValue(options['stop_requested'])) {
       return <String, Object?>{
@@ -73,7 +90,7 @@ class LongTaskNextBatchPlanService {
       };
     }
 
-    final failed = _firstTaskByStatus(
+    final failed = _coveredSourceTaskService.firstUncoveredTaskByStatus(
       sortedTasks,
       TaskRuntimeConstants.statusFailed,
     );
@@ -101,17 +118,14 @@ class LongTaskNextBatchPlanService {
       };
     }
 
-    final maxSteps = ValueReaders.intValue(
-      profile['max_steps'],
-      1,
-    ).clamp(1, 80);
+    final maxSteps = cadence.effectiveBatchSteps.clamp(1, 80);
     final plannedTasks = <JsonMap>[];
     final blockers = <JsonMap>[];
     var boundaryReason = '';
     final optimisticSucceeded = <String, bool>{...succeeded};
     for (final task in sortedTasks) {
       final status = ValueReaders.stringValue(task['status']).trim();
-      if (_isCheckpointTask(task) &&
+      if (_isReadyCheckpointTask(task, status) &&
           _missingDependencies(task, optimisticSucceeded).isEmpty) {
         if (plannedTasks.isEmpty) {
           return <String, Object?>{
@@ -150,7 +164,11 @@ class LongTaskNextBatchPlanService {
       );
       if (boundaryReason.isNotEmpty || plannedTasks.length >= maxSteps) {
         if (boundaryReason.isEmpty) {
-          boundaryReason = 'max_steps';
+          boundaryReason =
+              cadence.tighteningApplied &&
+                  cadence.effectiveBatchSteps < cadence.baseBatchSteps
+              ? 'risk_tightened_batch'
+              : 'max_steps';
         }
         break;
       }
@@ -197,6 +215,7 @@ class LongTaskNextBatchPlanService {
           .where((path) => path.isNotEmpty)
           .toList(growable: false),
       'recommended_max_steps': summaries.length,
+      'max_seconds': cadence.effectiveBatchSeconds,
       'optimistic_dependency_simulation': true,
       'boundary_reason': boundaryReason,
       'boundary_note': boundaryReason.isEmpty
@@ -219,6 +238,7 @@ class LongTaskNextBatchPlanService {
     List<JsonMap> tasks,
     JsonMap profile,
     JsonMap strategy,
+    JsonMap checkpointCadence,
   ) {
     // 中文注释: 批次规划返回值的公共骨架集中在这里，确保所有出口字段稳定一致。
     return <String, Object?>{
@@ -226,9 +246,16 @@ class LongTaskNextBatchPlanService {
       'schema_version': 1,
       'mode': mode,
       'strategy': strategy,
+      'checkpoint_cadence': checkpointCadence,
       'status_counts': _statusCounts(tasks),
-      'recommended_max_steps': ValueReaders.intValue(profile['max_steps'], 1),
-      'max_seconds': ValueReaders.intValue(profile['max_seconds'], 7200),
+      'recommended_max_steps': ValueReaders.intValue(
+        checkpointCadence['effective_batch_steps'],
+        ValueReaders.intValue(profile['max_steps'], 1),
+      ),
+      'max_seconds': ValueReaders.intValue(
+        checkpointCadence['effective_batch_seconds'],
+        ValueReaders.intValue(profile['max_seconds'], 7200),
+      ),
       'tasks': <Object?>[],
       'task_ids': <Object?>[],
       'task_paths': <Object?>[],
@@ -272,16 +299,6 @@ class LongTaskNextBatchPlanService {
     return counts;
   }
 
-  JsonMap _firstTaskByStatus(List<JsonMap> tasks, String status) {
-    // 中文注释: 失败任务和等待任务只需要拿第一条即可驱动运行中心和宿主动作。
-    for (final task in tasks) {
-      if (ValueReaders.stringValue(task['status']) == status) {
-        return task;
-      }
-    }
-    return <String, Object?>{};
-  }
-
   Map<String, bool> _succeededMap(List<JsonMap> tasks) {
     // 中文注释: 批次规划通过乐观成功模拟依赖解锁，这里先收敛出已成功索引。
     final result = <String, bool>{};
@@ -313,7 +330,11 @@ class LongTaskNextBatchPlanService {
     for (final task in tasks) {
       if (ValueReaders.stringValue(task['status']) ==
               TaskRuntimeConstants.statusWaitingUser &&
-          _missingDependencies(task, succeeded).isEmpty) {
+          _missingDependencies(task, succeeded).isEmpty &&
+          !_coveredSourceTaskService.isCoveredBySucceededDependent(
+            task,
+            tasks,
+          )) {
         return task;
       }
     }
@@ -327,6 +348,15 @@ class LongTaskNextBatchPlanService {
               ValueReaders.mapValue(task['metadata'])['stage'],
             ).trim() ==
             'checkpoint';
+  }
+
+  bool _isReadyCheckpointTask(JsonMap task, String status) {
+    // 中文注释: 只有仍待处理的 checkpoint 才能阻断批次，历史已成功检查点必须被跳过。
+    if (!_isCheckpointTask(task)) {
+      return false;
+    }
+    return status == TaskRuntimeConstants.statusQueued ||
+        status == TaskRuntimeConstants.statusWaitingUser;
   }
 
   bool _allTasksTerminal(List<JsonMap> tasks) {
@@ -381,6 +411,8 @@ class LongTaskNextBatchPlanService {
         return '样章完成后需要用户确认口吻、节奏和入口。';
       case 'checkpoint_ahead':
         return '下一批前方存在人工检查点，先把当前安全批次跑完。';
+      case 'risk_tightened_batch':
+        return '最近结构化风险升高，已自动缩短本轮批次并收紧节奏。';
       default:
         return '本批次到达安全边界。';
     }

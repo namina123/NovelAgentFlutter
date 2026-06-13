@@ -2,6 +2,7 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 
 import 'project_json_document_service.dart';
 import 'project_task_repository.dart';
+import '../workflow/project_review_repair_task_contract_service.dart';
 
 class ProjectReviewReportService {
   ProjectReviewReportService({
@@ -13,6 +14,7 @@ class ProjectReviewReportService {
     ReviewTaskFactoryService? taskFactoryService,
     ReviewTypeCatalogService? reviewTypeCatalogService,
     ReviewPathPolicyService? pathPolicyService,
+    ProjectReviewRepairTaskContractService? reviewRepairTaskContractService,
   }) : _workspacePort = workspacePort,
        _taskRepository = taskRepository,
        _jsonDocumentService =
@@ -24,7 +26,10 @@ class ProjectReviewReportService {
        _taskFactoryService = taskFactoryService ?? ReviewTaskFactoryService(),
        _reviewTypeCatalogService =
            reviewTypeCatalogService ?? ReviewTypeCatalogService(),
-       _pathPolicyService = pathPolicyService ?? ReviewPathPolicyService();
+       _pathPolicyService = pathPolicyService ?? ReviewPathPolicyService(),
+       _reviewRepairTaskContractService =
+           reviewRepairTaskContractService ??
+           ProjectReviewRepairTaskContractService();
 
   final ProjectWorkspacePort _workspacePort;
   final ProjectTaskRepository _taskRepository;
@@ -34,6 +39,7 @@ class ProjectReviewReportService {
   final ReviewTaskFactoryService _taskFactoryService;
   final ReviewTypeCatalogService _reviewTypeCatalogService;
   final ReviewPathPolicyService _pathPolicyService;
+  final ProjectReviewRepairTaskContractService _reviewRepairTaskContractService;
 
   List<JsonMap> listReviewTypeDefs() {
     // 中文注释: 审稿类型定义直接复用 core 目录，保证 GUI/CLI 展示口径一致。
@@ -123,7 +129,21 @@ class ProjectReviewReportService {
         jsonPath,
       );
       if (report.isNotEmpty) {
-        final normalized = _reportNormalizerService.normalizeReport(report);
+        final normalized = _reportNormalizerService.normalizeReport(report)
+          ..addAll(<String, Object?>{
+            'review_authority_policy': ValueReaders.deepCopyMap(
+              ValueReaders.mapValue(report['review_authority_policy']),
+            ),
+            'review_contract': ValueReaders.deepCopyMap(
+              ValueReaders.mapValue(report['review_contract']),
+            ),
+            'review_summary': ValueReaders.deepCopyMap(
+              ValueReaders.mapValue(report['review_summary']),
+            ),
+            'review_repair_handoff': ValueReaders.deepCopyMap(
+              ValueReaders.mapValue(report['review_repair_handoff']),
+            ),
+          });
         final markdownPath = _markdownPathFor(jsonPath);
         final markdownBody =
             await _workspacePort.readTextFile(project.rootPath, markdownPath) ??
@@ -170,8 +190,9 @@ class ProjectReviewReportService {
 
   Future<JsonMap> createReviewRepairTask(
     ProjectDescriptor project,
-    String markdownOrJsonPath,
-  ) async {
+    String markdownOrJsonPath, {
+    JsonMap sourceTask = const <String, Object?>{},
+  }) async {
     // 中文注释: 审稿修复任务创建保持只写任务文件，不在这里直接触发模型执行。
     final loaded = await loadReport(project, markdownOrJsonPath);
     if (!ValueReaders.boolValue(loaded['ok'])) {
@@ -183,10 +204,16 @@ class ProjectReviewReportService {
         ),
       };
     }
-    final task = _taskFactoryService.repairTaskFromReport(
-      ValueReaders.mapValue(loaded['report']),
-      reportPath: ValueReaders.stringValue(loaded['markdown_path']),
-    );
+    final task =
+        _repairTaskFromSharedContracts(
+          ValueReaders.mapValue(loaded['report']),
+          reviewReportPath: ValueReaders.stringValue(loaded['markdown_path']),
+          sourceTask: sourceTask,
+        ) ??
+        _taskFactoryService.repairTaskFromReport(
+          ValueReaders.mapValue(loaded['report']),
+          reportPath: ValueReaders.stringValue(loaded['markdown_path']),
+        );
     final saved = await _taskRepository.saveTask(project, task);
     return <String, Object?>{
       'ok': true,
@@ -195,6 +222,42 @@ class ProjectReviewReportService {
       'review_report_path': ValueReaders.stringValue(loaded['markdown_path']),
       'task_arguments': task,
     };
+  }
+
+  JsonMap? _repairTaskFromSharedContracts(
+    JsonMap report, {
+    required String reviewReportPath,
+    required JsonMap sourceTask,
+  }) {
+    final reviewContract = ReviewContract.fromJson(
+      ValueReaders.mapValue(report['review_contract']),
+    );
+    final repairHandoff = RepairHandoffDecision.fromJson(
+      ValueReaders.mapValue(report['review_repair_handoff']),
+    );
+    if (reviewContract.validateBasics().isNotEmpty ||
+        repairHandoff.validateBasics().isNotEmpty ||
+        !repairHandoff.requiresRepairTask ||
+        repairHandoff.repairRequest == null) {
+      return null;
+    }
+    final sourceMetadata = ValueReaders.mapValue(sourceTask['metadata']);
+    return _reviewRepairTaskContractService.buildWorkflowRevisionTask(
+      reviewContract: reviewContract,
+      repairHandoff: repairHandoff,
+      reviewReportPath: reviewReportPath,
+      workflowMode: ValueReaders.stringValue(
+        sourceTask['mode'],
+        ValueReaders.stringValue(
+          sourceMetadata['workflow_mode'],
+          TaskRuntimeConstants.modeSingleChapterAtomic,
+        ),
+      ),
+      sourceTaskMetadata: sourceMetadata,
+      sourceTaskId: ValueReaders.stringValue(sourceTask['id']),
+      sourceTaskPath: ValueReaders.stringValue(sourceTask['relative_path']),
+      inheritedDependsOn: ValueReaders.stringList(sourceTask['depends_on']),
+    );
   }
 
   Future<JsonMap> createReviewTask(

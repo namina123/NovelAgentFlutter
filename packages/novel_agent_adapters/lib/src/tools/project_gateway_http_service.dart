@@ -88,7 +88,56 @@ class ProjectGatewayHttpService {
         break;
       }
     }
+    if (results.length < limit) {
+      results.addAll(
+        _parseGenericSearchResults(
+          html,
+          limit: limit - results.length,
+          seenUrls: results
+              .map((entry) => ValueReaders.stringValue(entry['url']))
+              .toSet(),
+        ),
+      );
+    }
     return results;
+  }
+
+  List<JsonMap> _parseGenericSearchResults(
+    String html, {
+    required int limit,
+    required Set<String> seenUrls,
+  }) {
+    final results = <JsonMap>[];
+    final anchorPattern = RegExp(
+      r'<a[^>]*href="([^"]+)"[^>]*>([\s\S]{0,240}?)</a>',
+      caseSensitive: false,
+    );
+    for (final match in anchorPattern.allMatches(html)) {
+      final url = _decodeHtml(match.group(1) ?? '').trim();
+      final title = _stripHtml(match.group(2) ?? '').trim();
+      if (title.isEmpty ||
+          !url.startsWith('http') ||
+          seenUrls.contains(url) ||
+          _isSearchEngineNavigationUrl(url)) {
+        continue;
+      }
+      seenUrls.add(url);
+      results.add(<String, Object?>{'title': title, 'url': url, 'snippet': ''});
+      if (results.length >= limit) {
+        break;
+      }
+    }
+    return results;
+  }
+
+  bool _isSearchEngineNavigationUrl(String url) {
+    final uri = Uri.tryParse(url);
+    final host = uri?.host.toLowerCase() ?? '';
+    return host.contains('duckduckgo.com') ||
+        host.contains('bing.com') ||
+        host.contains('baidu.com') ||
+        url.contains('/settings') ||
+        url.contains('/account');
   }
 
   String _stripHtml(String value) {

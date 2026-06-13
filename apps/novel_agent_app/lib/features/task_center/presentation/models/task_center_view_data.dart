@@ -28,6 +28,7 @@ class TaskCenterViewData {
     required this.defaultSeedPrompt,
     required this.defaultChapterCount,
     required this.defaultCheckpointInterval,
+    required this.defaultChapterLength,
     required this.actionGroups,
     required this.guidanceRevisitBody,
   });
@@ -58,6 +59,7 @@ class TaskCenterViewData {
   final String defaultSeedPrompt;
   final int defaultChapterCount;
   final int defaultCheckpointInterval;
+  final TaskCenterChapterLengthConfigViewData defaultChapterLength;
   final List<TaskCenterActionGroupViewData> actionGroups;
   final String guidanceRevisitBody;
 
@@ -89,6 +91,7 @@ class TaskCenterViewData {
       defaultSeedPrompt: '',
       defaultChapterCount: 6,
       defaultCheckpointInterval: 3,
+      defaultChapterLength: TaskCenterChapterLengthConfigViewData.fallback(),
       actionGroups: <TaskCenterActionGroupViewData>[],
       guidanceRevisitBody: '',
     );
@@ -160,6 +163,7 @@ class TaskWorkflowCreateRequestViewData {
     required this.seedPrompt,
     required this.chapterCount,
     required this.checkpointInterval,
+    required this.chapterLength,
   });
 
   final String mode;
@@ -167,4 +171,34 @@ class TaskWorkflowCreateRequestViewData {
   final String seedPrompt;
   final int chapterCount;
   final int checkpointInterval;
+  final TaskCenterChapterLengthConfigViewData chapterLength;
+}
+
+class TaskCenterChapterLengthConfigViewData {
+  const TaskCenterChapterLengthConfigViewData({
+    required this.enableChapterWordConstraints,
+    required this.chapterWordTarget,
+    required this.chapterWordMin,
+    required this.chapterWordMax,
+    required this.sampleChapterWordTarget,
+    required this.sampleChapterWordMin,
+    required this.sampleChapterWordMax,
+  });
+
+  final bool enableChapterWordConstraints;
+  final int chapterWordTarget;
+  final int chapterWordMin;
+  final int chapterWordMax;
+  final int sampleChapterWordTarget;
+  final int sampleChapterWordMin;
+  final int sampleChapterWordMax;
+
+  const TaskCenterChapterLengthConfigViewData.fallback()
+    : enableChapterWordConstraints = true,
+      chapterWordTarget = 2000,
+      chapterWordMin = 1600,
+      chapterWordMax = 2600,
+      sampleChapterWordTarget = 1800,
+      sampleChapterWordMin = 1400,
+      sampleChapterWordMax = 2400;
 }

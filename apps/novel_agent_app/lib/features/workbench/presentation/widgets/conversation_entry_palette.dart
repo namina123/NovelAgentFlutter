@@ -39,8 +39,8 @@ class ConversationEntryPalette {
     switch (entry.kind) {
       case ConversationEntryKind.user:
         return ConversationEntryPalette(
-          background: colors.accentSoftColor,
-          border: colors.lineColor,
+          background: colors.accentSoftColor.withValues(alpha: 0.42),
+          border: colors.lineStrongColor.withValues(alpha: 0.42),
           foreground: colors.lineStrongColor,
           icon: Icons.person_outline_rounded,
           detailBackground: colors.panelBackground.withValues(alpha: 0.72),
@@ -48,20 +48,20 @@ class ConversationEntryPalette {
         );
       case ConversationEntryKind.assistant:
         return ConversationEntryPalette(
-          background: colors.warmColor.withValues(alpha: 0.56),
-          border: colors.warmStrongColor.withValues(alpha: 0.48),
+          background: colors.panelBackground.withValues(alpha: 0.86),
+          border: colors.lineColor.withValues(alpha: 0.74),
           foreground: colors.textColor,
           icon: Icons.auto_awesome_rounded,
-          detailBackground: colors.panelBackground.withValues(alpha: 0.78),
+          detailBackground: colors.inputBackground.withValues(alpha: 0.86),
           detailForeground: colors.mutedTextColor,
         );
       case ConversationEntryKind.tool:
         return ConversationEntryPalette(
-          background: surfaces.toolRow.backgroundColor,
-          border: surfaces.toolRow.borderColor,
-          foreground: surfaces.toolRow.mutedForegroundColor,
+          background: surfaces.toolRow.backgroundColor.withValues(alpha: 0.82),
+          border: surfaces.toolRow.borderColor.withValues(alpha: 0.76),
+          foreground: surfaces.toolRow.foregroundColor,
           icon: Icons.build_circle_outlined,
-          detailBackground: colors.panelBackground,
+          detailBackground: colors.inputBackground.withValues(alpha: 0.84),
           detailForeground: colors.mutedTextColor,
         );
       case ConversationEntryKind.system:

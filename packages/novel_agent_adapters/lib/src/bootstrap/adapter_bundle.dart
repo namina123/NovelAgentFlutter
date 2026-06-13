@@ -16,6 +16,7 @@ import '../providers/openai_llm_gateway.dart';
 import '../runtime/local_long_task_run_registry.dart';
 import '../runtime/long_task_heartbeat_scheduler.dart';
 import '../runtime/long_task_supervisor.dart';
+import '../runtime/long_task_watchdog.dart';
 import '../storage/local_project_file_mutation_adapter.dart';
 import '../storage/local_project_repository.dart';
 import '../storage/local_project_workspace_port.dart';
@@ -52,6 +53,7 @@ class AdapterBundle {
     required this.projectToolExecutionPort,
     required this.longTaskRunRegistry,
     required this.longTaskSupervisor,
+    required this.longTaskWatchdog,
     required this.agentCatalogOverlayRepository,
     required this.agentGroupCatalogOverlayRepository,
     required this.projectAgentGroupBindingRepository,
@@ -113,9 +115,13 @@ class AdapterBundle {
       runRegistry: longTaskRunRegistry,
       runtimeBaselineCatalogService: const RuntimeBaselineCatalogService(),
     );
-    final longTaskSupervisor = LongTaskSupervisor(
+    final longTaskWatchdog = LongTaskWatchdog(
       runRegistry: longTaskRunRegistry,
       heartbeatScheduler: longTaskHeartbeatScheduler,
+    );
+    final longTaskSupervisor = LongTaskSupervisor(
+      runRegistry: longTaskRunRegistry,
+      watchdogDispatchPort: longTaskWatchdog,
     );
     final toolHostPort = ProjectWorkspaceToolHostAdapter(
       workspacePort: projectWorkspacePort,
@@ -195,6 +201,7 @@ class AdapterBundle {
       projectToolHostPort: toolHostPort,
       longTaskRunRegistry: longTaskRunRegistry,
       longTaskSupervisor: longTaskSupervisor,
+      longTaskWatchdog: longTaskWatchdog,
       agentCatalogOverlayRepository: agentCatalogOverlayRepository,
       agentGroupCatalogOverlayRepository: agentGroupCatalogOverlayRepository,
       projectAgentGroupBindingRepository: projectAgentGroupBindingRepository,
@@ -228,6 +235,7 @@ class AdapterBundle {
   final ToolExecutionPort projectToolExecutionPort;
   final LongTaskRunRegistry longTaskRunRegistry;
   final LongTaskSupervisor longTaskSupervisor;
+  final LongTaskWatchdog longTaskWatchdog;
   final AgentCatalogOverlayRepository agentCatalogOverlayRepository;
   final AgentGroupCatalogOverlayRepository agentGroupCatalogOverlayRepository;
   final ProjectAgentGroupBindingRepository projectAgentGroupBindingRepository;

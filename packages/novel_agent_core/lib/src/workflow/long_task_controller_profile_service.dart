@@ -1,5 +1,6 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import 'long_task_checkpoint_cadence_policy_service.dart';
 import 'long_task_chapter_gate_policy_service.dart';
 import 'long_task_mode_service.dart';
 import 'long_task_mode_strategy_service.dart';
@@ -10,14 +11,19 @@ class LongTaskControllerProfileService {
     required LongTaskModeService modeService,
     required LongTaskModeStrategyService strategyService,
     LongTaskChapterGatePolicyService? chapterGatePolicyService,
+    LongTaskCheckpointCadencePolicyService? checkpointCadencePolicyService,
   }) : _modeService = modeService,
        _strategyService = strategyService,
        _chapterGatePolicyService =
-           chapterGatePolicyService ?? const LongTaskChapterGatePolicyService();
+           chapterGatePolicyService ?? const LongTaskChapterGatePolicyService(),
+       _checkpointCadencePolicyService =
+           checkpointCadencePolicyService ??
+           const LongTaskCheckpointCadencePolicyService();
 
   final LongTaskModeService _modeService;
   final LongTaskModeStrategyService _strategyService;
   final LongTaskChapterGatePolicyService _chapterGatePolicyService;
+  final LongTaskCheckpointCadencePolicyService _checkpointCadencePolicyService;
 
   JsonMap controllerProfile(
     String mode, {
@@ -26,41 +32,40 @@ class LongTaskControllerProfileService {
     // 中文注释: 控制器画像集中描述各模式的运行边界，供调度、运行中心和宿主合同复用。
     final cleanMode = _modeService.normalizeMode(mode);
     final profile = _profileBase(cleanMode);
-    final runtimeBaselineId = _runtimeBaselineId(options);
     profile['agent_id'] = ValueReaders.stringValue(
       options['agent_id'],
       'default_generalist',
     );
+    final runtimeBaselineId = _runtimeBaselineId(options);
     if (runtimeBaselineId == 'chapter_collaboration_autorun') {
-      profile['max_steps'] = 4;
-      profile['max_seconds'] = 10800;
-      profile['checkpoint_policy'] = 'after_chapter_gate';
       profile['stop_on_waiting_user'] = false;
       profile['stop_on_user_checkpoint'] = false;
       profile['description'] = '逐章协作自动推进基准会在每章后先走共享审稿/返工闸门，通过后再自动解锁下一章。';
     } else if (cleanMode == TaskRuntimeConstants.modeSingleChapterAtomic) {
-      profile['max_steps'] = 1;
-      profile['max_seconds'] = 1800;
       profile['stop_after_successful_single_step'] = true;
-      profile['checkpoint_policy'] = 'after_single_step';
       profile['description'] = '单章原子任务只跑一个模型单步，完成后交给用户确认。';
     } else if (cleanMode == TaskRuntimeConstants.modeSupervisedChapterQueue) {
-      profile['max_steps'] = 1;
-      profile['max_seconds'] = 3600;
-      profile['checkpoint_policy'] = 'after_each_chapter';
       profile['description'] = '监督式章节队列每次只推进一章或一个检查点，避免无人值守连写。';
     } else if (cleanMode == TaskRuntimeConstants.modeSeedToFullNovel) {
-      profile['max_steps'] = 2;
-      profile['max_seconds'] = 7200;
-      profile['checkpoint_policy'] = 'planning_outline_sample';
       profile['description'] = '种子长篇先规划与样章确认，确认后再允许章节队列分段推进。';
     } else {
-      profile['max_steps'] = 3;
-      profile['max_seconds'] = 7200;
-      profile['checkpoint_policy'] = 'interval_manual';
       profile['description'] = '人定大纲模式按章纲推进，在间隔检查点和用户选择处停下。';
     }
-    return _mergeRuntimeOptions(profile, options);
+    final merged = _mergeRuntimeOptions(profile, options);
+    final cadenceOptions = ValueReaders.deepCopyMap(options);
+    if (runtimeBaselineId.isNotEmpty) {
+      cadenceOptions['runtime_baseline_id'] = runtimeBaselineId;
+    }
+    final cadence = _checkpointCadencePolicyService.policyForMode(
+      cleanMode,
+      options: cadenceOptions,
+    );
+    merged['checkpoint_policy'] = cadence.checkpointPolicy;
+    merged['checkpoint_interval'] = cadence.effectiveCheckpointInterval;
+    merged['max_steps'] = cadence.effectiveBatchSteps;
+    merged['max_seconds'] = cadence.effectiveBatchSeconds;
+    merged['checkpoint_cadence'] = cadence.toJson();
+    return merged;
   }
 
   JsonMap _profileBase(String mode) {
@@ -70,6 +75,8 @@ class LongTaskControllerProfileService {
       'mode': mode,
       'strategy': _strategyService.modeStrategy(mode),
       'max_seconds': 7200,
+      'max_steps': 3,
+      'checkpoint_interval': 3,
       'stop_on_waiting_user': true,
       'stop_on_user_choice': true,
       'stop_on_no_output': true,
@@ -133,6 +140,10 @@ class LongTaskControllerProfileService {
         false,
       ),
     );
+    result['checkpoint_interval'] = ValueReaders.intValue(
+      options['checkpoint_interval'],
+      ValueReaders.intValue(profile['checkpoint_interval'], 3),
+    ).clamp(0, 30);
     return result;
   }
 

@@ -31,6 +31,7 @@ class WorkbenchPaneViewDataMapperService {
       projectSubtitle: source.projectSubtitle,
       resourceEntries: source.resourceEntries,
       informationViewData: source.informationViewData,
+      projectLongTaskSummary: source.projectLongTaskSummary,
     );
   }
 

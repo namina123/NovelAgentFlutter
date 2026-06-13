@@ -45,6 +45,19 @@ void main() {
       expect(decision['reason'], 'waiting_user_choice');
     });
 
+    test('options preserve expression constraint policy mode', () {
+      final normalized = optionService.normalizeOptions(const <String, Object?>{
+        'expression_constraint_policy_mode': 'force',
+      });
+
+      expect(
+        ValueReaders.stringValue(
+          normalized['expression_constraint_policy_mode'],
+        ),
+        ExpressionConstraintExecutionPolicyModes.force,
+      );
+    });
+
     test('stop policy pauses on delivery state machine repair signal', () {
       // 中文注释: 这里验证队列刹车会直接读取章节交付状态，而不是只靠无输出兜底。
       final decision = stopPolicyService.stopAfterStep(
@@ -130,6 +143,95 @@ void main() {
           decision['writing_execution_category'],
           'content_quality_failed',
         );
+      },
+    );
+
+    test(
+      'stop policy continues when content quality repair is already queued',
+      () {
+        final decision = stopPolicyService.stopAfterStep(
+          <String, Object?>{
+            'ok': true,
+            'writing_execution_result': <String, Object?>{
+              'execution_id': 'task_001',
+              'workflow_kind': 'workflow_task',
+              'overall_status':
+                  WritingExecutionOutcomeStatuses.contentQualityIssue,
+              'summary': '表达限制需要先修订。',
+              'delivery': const <String, Object?>{
+                'present': true,
+                'state': 'delivered',
+                'summary': '章节已交付。',
+                'blocks_progress': false,
+              },
+              'constraints': const <String, Object?>{
+                'present': true,
+                'repair_required': true,
+                'content_quality_risk': true,
+                'expression_constraint_gate': <String, Object?>{
+                  'present': true,
+                  'recommended_disposition': 'repair',
+                  'repair_required': true,
+                },
+              },
+              'information': const <String, Object?>{},
+              'collaboration': const <String, Object?>{},
+              'recovery': const <String, Object?>{
+                'present': true,
+                'recommended_action': 'run_scheduled_repair',
+                'reason': 'execution_constraint_repair_scheduled',
+                'task': <String, Object?>{
+                  'id': 'chapter_001_constraint_repair_1',
+                  'relative_path': 'tasks/chapter_001_constraint_repair_1.json',
+                },
+              },
+              'next_action': 'run_scheduled_repair',
+              'blocks_progress': true,
+              'retryable': true,
+              'requires_user_action': false,
+              'schema_version': 1,
+              'metadata': const <String, Object?>{},
+            },
+            'scheduled_repair': const <String, Object?>{
+              'ok': true,
+              'created': true,
+              'repair_task': <String, Object?>{
+                'id': 'chapter_001_constraint_repair_1',
+                'relative_path': 'tasks/chapter_001_constraint_repair_1.json',
+              },
+            },
+            'response': const <String, Object?>{},
+            'output_paths': const <Object?>['chapters/ch01.md'],
+          },
+          <String, Object?>{'status': TaskRuntimeConstants.statusSucceeded},
+        );
+
+        expect(decision['stop'], isFalse);
+        expect(decision['reason'], 'scheduled_repair_task');
+      },
+    );
+
+    test(
+      'stop policy ignores no-output pause for continuous autonomous revision agent task',
+      () {
+        final decision = stopPolicyService.stopAfterStep(
+          <String, Object?>{
+            'ok': true,
+            'response': const <String, Object?>{},
+            'output_paths': const <Object?>[],
+          },
+          <String, Object?>{
+            'status': TaskRuntimeConstants.statusSucceeded,
+            'task_type': 'agent_task',
+            'mode': TaskRuntimeConstants.modeSeedToFullNovel,
+            'metadata': <String, Object?>{
+              'runtime_baseline_id': 'continuous_autonomous',
+              'generated_by': 'LongTaskRevision',
+            },
+          },
+        );
+
+        expect(decision['stop'], isFalse);
       },
     );
   });

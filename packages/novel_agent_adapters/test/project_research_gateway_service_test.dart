@@ -46,6 +46,7 @@ void main() {
               'purpose': '补充卷末资料',
               'requested_depth': InformationResearchDepths.standard,
               'reference_relationship': 'inspiration',
+              'information_domain': InformationDomains.culture,
               'user_granted_network_access': true,
               'target_refs': <Object?>[
                 <String, Object?>{
@@ -127,8 +128,138 @@ void main() {
           await researchFile.readAsString(),
           isNot(contains('"content":"镜潮互文通常承担身份错位与回声式命运提示。')),
         );
+        final note = result.generatedResearchNote!;
+        final gatewaySummary = ValueReaders.mapValue(
+          note.metadata['gateway_summary'],
+        );
+        expect(
+          ValueReaders.mapList(gatewaySummary['search_candidates']),
+          hasLength(1),
+        );
+        expect(
+          ValueReaders.mapValue(
+            gatewaySummary['source_quality_summary'],
+          )['candidate_count'],
+          1,
+        );
       },
     );
+
+    test(
+      'objective gateway research preserves multiple candidates and source rigor audit',
+      () async {
+        await informationExecutor.execute(
+          project,
+          DomainToolRequest(
+            callId: 'objective-call-1',
+            toolName: NarrativeDomainToolNames.requestExternalResearch,
+            source: _source(NarrativeSourceTypes.reviewer),
+            requestPayload: <String, Object?>{
+              'query': '历史城市人口客观资料',
+              'purpose': '核查客观事实',
+              'requested_depth': InformationResearchDepths.standard,
+              'information_domain': InformationDomains.history,
+              'source_requirements': <String, Object?>{
+                'requires_rigorous_sources': true,
+                'min_source_count': 2,
+              },
+              'user_granted_network_access': true,
+            },
+          ),
+        );
+        final fakeGateway = _FakeGatewayToolExecutor(
+          responses: <String, JsonMap>{
+            'search_internet': <String, Object?>{
+              'ok': true,
+              'results': <Object?>[
+                <String, Object?>{
+                  'title': 'Official city archive',
+                  'url': 'https://example.gov/history',
+                  'snippet': 'official archive snippet',
+                },
+                <String, Object?>{
+                  'title': 'Forum summary',
+                  'url': 'https://www.zhihu.com/question/1',
+                  'snippet': 'forum snippet',
+                },
+              ],
+            },
+            'fetch_url_content': <String, Object?>{
+              'ok': true,
+              'status_code': 200,
+              'content_type': 'text/plain',
+              'content': 'official archive excerpt',
+              'truncated': false,
+            },
+          },
+        );
+        final service = ProjectResearchGatewayService(
+          workspacePort: workspacePort,
+          gatewayToolExecutor: fakeGateway,
+        );
+
+        final result = await service.processPendingRequest(
+          project,
+          requestId: 'research_request_objective-call-1',
+          allowGatewayExecution: true,
+        );
+
+        expect(result.executed, isTrue);
+        final note = result.generatedResearchNote!;
+        expect(note.uncertainty, 'insufficient_rigorous_sources');
+        final gatewaySummary = ValueReaders.mapValue(
+          note.metadata['gateway_summary'],
+        );
+        expect(
+          ValueReaders.mapList(gatewaySummary['search_candidates']),
+          hasLength(2),
+        );
+        expect(
+          ValueReaders.mapValue(
+            gatewaySummary['source_quality_summary'],
+          )['rigorous_source_count'],
+          1,
+        );
+        expect(
+          note.usableFacts
+              .map(ValueReaders.mapValue)
+              .map((entry) => entry['verification_status']),
+          contains('reference_only_needs_rigorous_cross_check'),
+        );
+      },
+    );
+
+    test('import collection saves source excerpts as research note', () async {
+      await workspacePort.writeTextFile(
+        project.rootPath,
+        'research/source.md',
+        '第一段：星象命名规则。\n\n第二段：八卦方位对应。\n\n第三段：待核查的民俗说法。',
+      );
+      final service = ProjectInformationImportCollectionService(
+        workspacePort: workspacePort,
+      );
+
+      final result = await service.collectProjectFile(
+        project,
+        relativePath: 'research/source.md',
+        query: '导入资料里的命名线索',
+        informationDomain: InformationDomains.creativeDesign,
+      );
+
+      expect(result.saved, isTrue);
+      expect(result.researchNote, isNotNull);
+      expect(result.researchNote!.sourceKind, 'imported_document');
+      expect(result.researchNote!.usableFacts, hasLength(3));
+      expect(
+        ValueReaders.mapValue(result.researchNote!.usableFacts.first)['kind'],
+        'imported_source_excerpt',
+      );
+      final researchFile = File(
+        '${tempDirectory.path}${Platform.pathSeparator}.novel_agent${Platform.pathSeparator}information${Platform.pathSeparator}research_notes${Platform.pathSeparator}${result.researchNote!.researchId}.json',
+      );
+      expect(result.changedPaths, contains(contains('research_notes')));
+      expect(await researchFile.exists(), isTrue);
+    });
 
     test('without permission it does not call gateway', () async {
       await informationExecutor.execute(

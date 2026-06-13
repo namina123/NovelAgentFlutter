@@ -30,15 +30,24 @@ class TaskCenterPage extends StatefulWidget {
 
 class _TaskCenterPageState extends State<TaskCenterPage> {
   late String _mode;
+  late bool _enableChapterWordConstraints;
   late final TextEditingController _outlineController;
   late final TextEditingController _seedController;
   late final TextEditingController _chapterCountController;
   late final TextEditingController _checkpointController;
+  late final TextEditingController _chapterWordTargetController;
+  late final TextEditingController _chapterWordMinController;
+  late final TextEditingController _chapterWordMaxController;
+  late final TextEditingController _sampleChapterWordTargetController;
+  late final TextEditingController _sampleChapterWordMinController;
+  late final TextEditingController _sampleChapterWordMaxController;
 
   @override
   void initState() {
     super.initState();
     _mode = widget.viewData.defaultMode;
+    final chapterLength = widget.viewData.defaultChapterLength;
+    _enableChapterWordConstraints = chapterLength.enableChapterWordConstraints;
     _outlineController = TextEditingController(
       text: widget.viewData.defaultOutlinePath,
     );
@@ -50,6 +59,24 @@ class _TaskCenterPageState extends State<TaskCenterPage> {
     );
     _checkpointController = TextEditingController(
       text: widget.viewData.defaultCheckpointInterval.toString(),
+    );
+    _chapterWordTargetController = TextEditingController(
+      text: chapterLength.chapterWordTarget.toString(),
+    );
+    _chapterWordMinController = TextEditingController(
+      text: chapterLength.chapterWordMin.toString(),
+    );
+    _chapterWordMaxController = TextEditingController(
+      text: chapterLength.chapterWordMax.toString(),
+    );
+    _sampleChapterWordTargetController = TextEditingController(
+      text: chapterLength.sampleChapterWordTarget.toString(),
+    );
+    _sampleChapterWordMinController = TextEditingController(
+      text: chapterLength.sampleChapterWordMin.toString(),
+    );
+    _sampleChapterWordMaxController = TextEditingController(
+      text: chapterLength.sampleChapterWordMax.toString(),
     );
   }
 
@@ -68,6 +95,12 @@ class _TaskCenterPageState extends State<TaskCenterPage> {
     _seedController.dispose();
     _chapterCountController.dispose();
     _checkpointController.dispose();
+    _chapterWordTargetController.dispose();
+    _chapterWordMinController.dispose();
+    _chapterWordMaxController.dispose();
+    _sampleChapterWordTargetController.dispose();
+    _sampleChapterWordMinController.dispose();
+    _sampleChapterWordMaxController.dispose();
     super.dispose();
   }
 
@@ -202,6 +235,74 @@ class _TaskCenterPageState extends State<TaskCenterPage> {
                         controller: _checkpointController,
                         keyboardType: TextInputType.number,
                         decoration: const InputDecoration(labelText: '检查点间隔'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  value: _enableChapterWordConstraints,
+                  title: const Text('启用章节字数约束'),
+                  subtitle: const Text('把字数目标作为长任务参数传入共享 runtime。'),
+                  onChanged: (value) {
+                    setState(() {
+                      _enableChapterWordConstraints = value;
+                    });
+                  },
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _chapterWordTargetController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: '正文章节目标'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: _chapterWordMinController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: '正文最小值'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: _chapterWordMaxController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: '正文最大值'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _sampleChapterWordTargetController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: '样章目标'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: _sampleChapterWordMinController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: '样章最小值'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: _sampleChapterWordMaxController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: '样章最大值'),
                       ),
                     ),
                   ],
@@ -367,6 +468,22 @@ class _TaskCenterPageState extends State<TaskCenterPage> {
         chapterCount: int.tryParse(_chapterCountController.text.trim()) ?? 6,
         checkpointInterval:
             int.tryParse(_checkpointController.text.trim()) ?? 3,
+        chapterLength: TaskCenterChapterLengthConfigViewData(
+          enableChapterWordConstraints: _enableChapterWordConstraints,
+          chapterWordTarget:
+              int.tryParse(_chapterWordTargetController.text.trim()) ?? 2000,
+          chapterWordMin:
+              int.tryParse(_chapterWordMinController.text.trim()) ?? 1600,
+          chapterWordMax:
+              int.tryParse(_chapterWordMaxController.text.trim()) ?? 2600,
+          sampleChapterWordTarget:
+              int.tryParse(_sampleChapterWordTargetController.text.trim()) ??
+              1800,
+          sampleChapterWordMin:
+              int.tryParse(_sampleChapterWordMinController.text.trim()) ?? 1400,
+          sampleChapterWordMax:
+              int.tryParse(_sampleChapterWordMaxController.text.trim()) ?? 2400,
+        ),
       ),
     );
   }

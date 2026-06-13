@@ -9,10 +9,10 @@ void main() {
     late Directory tempDirectory;
     late LocalProjectWorkspacePort workspacePort;
     late ProjectDescriptor project;
-    late LocalKnowledgeCardRepository knowledgeCardRepository;
-    late LocalDesignElementRepository designElementRepository;
-    late LocalResearchNoteRepository researchNoteRepository;
-    late LocalReferenceWorkRepository referenceWorkRepository;
+    late KnowledgeCardRepository knowledgeCardRepository;
+    late DesignElementRepository designElementRepository;
+    late ResearchNoteRepository researchNoteRepository;
+    late ReferenceWorkRepository referenceWorkRepository;
     late ProjectInformationActivationBridgeService service;
 
     setUp(() async {
@@ -25,24 +25,12 @@ void main() {
         name: '信息激活桥接测试',
         rootPath: tempDirectory.path,
       );
-      knowledgeCardRepository = LocalKnowledgeCardRepository(
-        workspacePort: workspacePort,
-      );
-      designElementRepository = LocalDesignElementRepository(
-        workspacePort: workspacePort,
-      );
-      researchNoteRepository = LocalResearchNoteRepository(
-        workspacePort: workspacePort,
-      );
-      referenceWorkRepository = LocalReferenceWorkRepository(
-        workspacePort: workspacePort,
-      );
+      knowledgeCardRepository = SqliteKnowledgeCardRepository();
+      designElementRepository = SqliteDesignElementRepository();
+      researchNoteRepository = SqliteResearchNoteRepository();
+      referenceWorkRepository = SqliteReferenceWorkRepository();
       service = ProjectInformationActivationBridgeService(
         workspacePort: workspacePort,
-        knowledgeCardRepository: knowledgeCardRepository,
-        designElementRepository: designElementRepository,
-        researchNoteRepository: researchNoteRepository,
-        referenceWorkRepository: referenceWorkRepository,
       );
     });
 
@@ -68,6 +56,13 @@ void main() {
               'note': '不要让旁白直接解释原因',
             },
             sourceRefs: <InformationSourceRef>[_sourceRef()],
+            evidenceRefs: const <NarrativeEvidenceRef>[
+              NarrativeEvidenceRef(
+                evidenceType: 'reference_excerpt',
+                evidenceId: 'knowledge-evidence-1',
+                summary: '月蚀回忆段落摘录',
+              ),
+            ],
             activationPolicy: const InformationActivationPolicy(
               activationPriority: InformationActivationPriorities.normal,
               preferredBudgetChars: 80,
@@ -88,6 +83,13 @@ void main() {
             designLabel: '镜潮回扣',
             designPayload: const <String, Object?>{'pattern': '镜与潮在章首章尾回扣'},
             sourceRefs: <InformationSourceRef>[_sourceRef()],
+            evidenceRefs: const <NarrativeEvidenceRef>[
+              NarrativeEvidenceRef(
+                evidenceType: 'design_note',
+                evidenceId: 'design-evidence-1',
+                summary: '镜潮设计草图',
+              ),
+            ],
             activationPolicy: const InformationActivationPolicy(
               activationPriority: InformationActivationPriorities.pinned,
               preferredBudgetChars: 180,
@@ -175,12 +177,38 @@ void main() {
           isNotEmpty,
         );
         expect(
+          ValueReaders.mapList(knowledgeItem.metadata['evidence_refs']),
+          isNotEmpty,
+        );
+        expect(
+          knowledgeItem.targetPath,
+          'project-information://knowledge_cards/knowledge-1',
+        );
+        expect(
+          ValueReaders.stringValue(
+            knowledgeItem.metadata['source_of_truth_locator'],
+          ),
+          'project-information://knowledge_cards/knowledge-1',
+        );
+        expect(
+          ValueReaders.stringValue(knowledgeItem.metadata['source_display']),
+          isNotEmpty,
+        );
+        expect(
           designItem.activationReasons,
           contains(ContextActivationReasonCodes.manualPin),
         );
         expect(
           ValueReaders.mapList(designItem.metadata['source_refs']),
           isNotEmpty,
+        );
+        expect(
+          ValueReaders.mapList(designItem.metadata['evidence_refs']),
+          isNotEmpty,
+        );
+        expect(
+          designItem.targetPath,
+          'project-information://design_elements/design-1',
         );
         expect(
           ValueReaders.stringValue(
@@ -192,10 +220,32 @@ void main() {
           ValueReaders.stringValue(researchItem.metadata['source_url_or_ref']),
           'https://example.com/mirror-tide',
         );
-        expect(referenceItem.reasonDetails['required'], isTrue);
+        expect(
+          ValueReaders.stringValue(researchItem.metadata['source_display']),
+          'Mirror Tide',
+        );
+        expect(referenceItem.reasonDetails['required'], isFalse);
         expect(
           ValueReaders.mapList(referenceItem.metadata['source_refs']),
           isNotEmpty,
+        );
+        final referenceActivationText = ValueReaders.stringValue(
+          referenceItem.metadata['activation_text'],
+        );
+        expect(referenceActivationText, contains('source_display:'));
+        expect(referenceActivationText, contains('source_ref_count: 1'));
+        expect(referenceActivationText, isNot(contains('source_refs:')));
+        expect(
+          ValueReaders.stringValue(
+            referenceItem.metadata['source_of_truth_locator'],
+          ),
+          'project-information://reference_works/reference-1',
+        );
+        expect(
+          File(
+            '${project.rootPath}${Platform.pathSeparator}.novel_agent${Platform.pathSeparator}information${Platform.pathSeparator}knowledge_cards${Platform.pathSeparator}knowledge-1.json',
+          ).existsSync(),
+          isFalse,
         );
       },
     );

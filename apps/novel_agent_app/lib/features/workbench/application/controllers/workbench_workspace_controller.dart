@@ -7,6 +7,7 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 import '../../../book_deconstruction/application/services/book_deconstruction_narrative_persistence_service.dart';
 import '../../../project_creation/application/controllers/project_creation_controller.dart';
 import '../../presentation/contracts/document_workspace_action_handler.dart';
+import '../../presentation/contracts/pending_research_action_handler.dart';
 import '../../presentation/contracts/resource_manager_action_handler.dart';
 import '../../presentation/models/conversation_agent_selector_view_data.dart';
 import '../../presentation/models/project_create_request_view_data.dart';
@@ -27,8 +28,14 @@ import '../services/workspace_command_default_target_service.dart';
 import '../services/workspace_information_projection_service.dart';
 import '../services/workspace_resource_display_service.dart';
 
+typedef WorkbenchProjectLongTaskDetailLoader =
+    Future<ProjectLongTaskStationDetail> Function(RunInstance run);
+
 class WorkbenchWorkspaceController
-    implements ResourceManagerActionHandler, DocumentWorkspaceActionHandler {
+    implements
+        ResourceManagerActionHandler,
+        DocumentWorkspaceActionHandler,
+        PendingResearchActionHandler {
   WorkbenchWorkspaceController({
     required LoadProjectWorkspaceUseCase loadProjectWorkspaceUseCase,
     required ReadProjectFileUseCase readProjectFileUseCase,
@@ -89,6 +96,8 @@ class WorkbenchWorkspaceController
     ProjectImportExecutionService? projectImportExecutionService,
     WorkspaceInformationProjectionService?
     workspaceInformationProjectionService,
+    ProjectPendingResearchActionService? pendingResearchActionService,
+    WorkbenchProjectLongTaskDetailLoader? projectLongTaskDetailLoader,
   }) : _loadProjectWorkspaceUseCase = loadProjectWorkspaceUseCase,
        _readProjectFileUseCase = readProjectFileUseCase,
        _saveDraftUseCase = saveDraftUseCase,
@@ -148,7 +157,9 @@ class WorkbenchWorkspaceController
            ),
        _workspaceInformationProjectionService =
            workspaceInformationProjectionService ??
-           const WorkspaceInformationProjectionService();
+           const WorkspaceInformationProjectionService(),
+       _pendingResearchActionService = pendingResearchActionService,
+       _projectLongTaskDetailLoader = projectLongTaskDetailLoader;
 
   final LoadProjectWorkspaceUseCase _loadProjectWorkspaceUseCase;
   final ReadProjectFileUseCase _readProjectFileUseCase;
@@ -200,6 +211,8 @@ class WorkbenchWorkspaceController
   final ProjectImportExecutionService _projectImportExecutionService;
   final WorkspaceInformationProjectionService
   _workspaceInformationProjectionService;
+  final ProjectPendingResearchActionService? _pendingResearchActionService;
+  final WorkbenchProjectLongTaskDetailLoader? _projectLongTaskDetailLoader;
   final WorkspaceResourceDisplayService _workspaceResourceDisplayService =
       const WorkspaceResourceDisplayService();
   WorkbenchInformationViewData _latestInformationViewData =
@@ -216,6 +229,9 @@ class WorkbenchWorkspaceController
 
   ProjectRuntimeProfile? get currentProjectRuntimeProfile =>
       _readProjectState().currentRuntimeProfile;
+
+  WorkbenchProjectRuntimeState get currentProjectRuntimeState =>
+      _readProjectState();
 
   JsonMap currentProjectInfo() {
     // 中文注释: 会话与主动作需要轻量项目摘要，这里只返回运行时真正需要的字段。
@@ -255,6 +271,7 @@ class WorkbenchWorkspaceController
       projectLongTaskSummary: _projectLongTaskSummaryViewDataService.build(
         project: state.currentProject,
         runs: state.currentProjectLongTaskRuns,
+        runDetails: state.currentProjectLongTaskRunDetails,
         isLoading: state.isProjectLongTaskSummaryLoading,
       ),
       documents: state.openDocuments
@@ -294,6 +311,8 @@ class WorkbenchWorkspaceController
           openDocuments: const <OpenDocumentState>[],
           activeOpenDocumentId: '',
           currentProjectLongTaskRuns: const <RunInstance>[],
+          currentProjectLongTaskRunDetails:
+              const <String, ProjectLongTaskStationDetail>{},
           isProjectLongTaskSummaryLoading: false,
         ),
       );
@@ -317,6 +336,8 @@ class WorkbenchWorkspaceController
         openDocuments: const <OpenDocumentState>[],
         activeOpenDocumentId: '',
         currentProjectLongTaskRuns: const <RunInstance>[],
+        currentProjectLongTaskRunDetails:
+            const <String, ProjectLongTaskStationDetail>{},
         isProjectLongTaskSummaryLoading: true,
       ),
     );
@@ -396,6 +417,8 @@ class WorkbenchWorkspaceController
       _writeProjectState(
         _readProjectState().copyWith(
           currentProjectLongTaskRuns: const <RunInstance>[],
+          currentProjectLongTaskRunDetails:
+              const <String, ProjectLongTaskStationDetail>{},
           isProjectLongTaskSummaryLoading: false,
         ),
       );
@@ -408,18 +431,49 @@ class WorkbenchWorkspaceController
     _mutateWorkbench((current) => applyWorkbenchState(current));
     try {
       final runs = await _longTaskSupervisor.listProjectRuns(project.rootPath);
+      final runDetails = await _loadProjectLongTaskRunDetails(runs);
       _writeProjectState(
         _readProjectState().copyWith(
           currentProjectLongTaskRuns: runs,
+          currentProjectLongTaskRunDetails: runDetails,
           isProjectLongTaskSummaryLoading: false,
         ),
       );
     } catch (_) {
       _writeProjectState(
-        _readProjectState().copyWith(isProjectLongTaskSummaryLoading: false),
+        _readProjectState().copyWith(
+          currentProjectLongTaskRunDetails:
+              const <String, ProjectLongTaskStationDetail>{},
+          isProjectLongTaskSummaryLoading: false,
+        ),
       );
     }
     _mutateWorkbench((current) => applyWorkbenchState(current));
+  }
+
+  Future<Map<String, ProjectLongTaskStationDetail>>
+  _loadProjectLongTaskRunDetails(List<RunInstance> runs) async {
+    final loader = _projectLongTaskDetailLoader;
+    if (loader == null || runs.isEmpty) {
+      return const <String, ProjectLongTaskStationDetail>{};
+    }
+    final loadedEntries = await Future.wait(
+      runs.map((run) async {
+        try {
+          final detail = await loader(run);
+          return MapEntry(run.id, detail);
+        } catch (_) {
+          return null;
+        }
+      }),
+    );
+    final result = <String, ProjectLongTaskStationDetail>{};
+    for (final entry in loadedEntries) {
+      if (entry != null) {
+        result[entry.key] = entry.value;
+      }
+    }
+    return result;
   }
 
   void resetToProjectlessWorkbench({required String status}) {
@@ -434,6 +488,8 @@ class WorkbenchWorkspaceController
         openDocuments: const <OpenDocumentState>[],
         activeOpenDocumentId: '',
         currentProjectLongTaskRuns: const <RunInstance>[],
+        currentProjectLongTaskRunDetails:
+            const <String, ProjectLongTaskStationDetail>{},
         isProjectLongTaskSummaryLoading: false,
       ),
     );
@@ -921,6 +977,34 @@ class WorkbenchWorkspaceController
   void onResourceEntrySelected(String entryId) {
     // 中文注释: 资源树点击统一走真实工作区读取链，避免 widget 直接读文件。
     _openResource(entryId);
+  }
+
+  @override
+  Future<void> onPendingResearchApproved(String requestId) async {
+    await _applyPendingResearchAction(
+      requestId,
+      successMessage: '已确认资料请求。',
+      action: (service, project, cleanRequestId) => service.approve(
+        project,
+        requestId: cleanRequestId,
+        actorId: 'workbench_gui',
+        note: '在工作台中确认继续研究',
+      ),
+    );
+  }
+
+  @override
+  Future<void> onPendingResearchRejected(String requestId) async {
+    await _applyPendingResearchAction(
+      requestId,
+      successMessage: '已拒绝资料请求。',
+      action: (service, project, cleanRequestId) => service.reject(
+        project,
+        requestId: cleanRequestId,
+        actorId: 'workbench_gui',
+        note: '在工作台中拒绝继续研究',
+      ),
+    );
   }
 
   @override
@@ -1667,24 +1751,71 @@ class WorkbenchWorkspaceController
     String rootPath,
     String relativeRoot,
   ) async* {
+    final normalizedRoot = _normalizeRelativePath(relativeRoot);
     final directory = Directory(
-      _resolveProjectFilePath(rootPath, relativeRoot),
+      _resolveProjectFilePath(rootPath, normalizedRoot),
     );
     if (!await directory.exists()) {
       return;
     }
-    await for (final entity in directory.list(
-      recursive: true,
-      followLinks: false,
-    )) {
-      if (entity is! File) {
-        continue;
-      }
-      final relativePath = _relativePathFromAbsolute(rootPath, entity.path);
-      if (relativePath.isNotEmpty) {
-        yield relativePath;
+    FileSystemException? lastError;
+    for (
+      var attempt = 1;
+      attempt <= _maxInformationSupportScanAttempts;
+      attempt++
+    ) {
+      final pendingDirectories = <Directory>[directory];
+      try {
+        while (pendingDirectories.isNotEmpty) {
+          final currentDirectory = pendingDirectories.removeLast();
+          await for (final entity in currentDirectory.list(
+            recursive: false,
+            followLinks: false,
+          )) {
+            final relativePath = _relativePathFromAbsolute(
+              rootPath,
+              entity.path,
+            );
+            if (relativePath.isEmpty ||
+                _shouldSkipInformationSupportScanPath(
+                  scanRoot: normalizedRoot,
+                  relativePath: relativePath,
+                )) {
+              continue;
+            }
+            if (entity is File) {
+              yield relativePath;
+              continue;
+            }
+            if (entity is Directory) {
+              pendingDirectories.add(entity);
+            }
+          }
+        }
+        return;
+      } on FileSystemException catch (error) {
+        lastError = error;
+        if (attempt >= _maxInformationSupportScanAttempts) {
+          rethrow;
+        }
+        await Future<void>.delayed(Duration(milliseconds: 80 * attempt));
       }
     }
+    throw lastError ?? FileSystemException('扫描资料支持文件失败。', directory.path);
+  }
+
+  bool _shouldSkipInformationSupportScanPath({
+    required String scanRoot,
+    required String relativePath,
+  }) {
+    if (!scanRoot.startsWith('.novel_agent')) {
+      return false;
+    }
+    return _informationSupportIgnoredRoots.any(
+      (ignoredRoot) =>
+          relativePath == ignoredRoot ||
+          relativePath.startsWith('$ignoredRoot/'),
+    );
   }
 
   bool _shouldReadInformationProjectionFile(String relativePath) {
@@ -1930,6 +2061,59 @@ class WorkbenchWorkspaceController
     }
     return const <String, Object?>{};
   }
+
+  Future<void> _applyPendingResearchAction(
+    String requestId, {
+    required String successMessage,
+    required Future<JsonMap> Function(
+      ProjectPendingResearchActionService service,
+      ProjectDescriptor project,
+      String requestId,
+    )
+    action,
+  }) async {
+    final project = currentProject;
+    final service = _pendingResearchActionService;
+    final cleanRequestId = requestId.trim();
+    if (project == null || service == null || cleanRequestId.isEmpty) {
+      return;
+    }
+    _mutateWorkbench(
+      (current) => applyWorkbenchState(
+        current.copyWith(generationStatus: '正在更新资料请求...'),
+      ),
+    );
+    try {
+      final result = await action(service, project, cleanRequestId);
+      if (!ValueReaders.boolValue(result['ok'])) {
+        final error = _stringValue(result['error'], '资料请求更新失败。');
+        _mutateWorkbench(
+          (current) =>
+              applyWorkbenchState(current.copyWith(generationStatus: error)),
+        );
+        return;
+      }
+      final selectedId = _readWorkbench().activeDocumentPath;
+      final resourceEntries = await reloadResourceEntries(
+        selectedId: selectedId,
+      );
+      _mutateWorkbench(
+        (current) => applyWorkbenchState(
+          current.copyWith(
+            resourceEntries: resourceEntries,
+            informationViewData: _latestInformationViewData,
+            generationStatus: successMessage,
+          ),
+        ),
+      );
+    } catch (error) {
+      _mutateWorkbench(
+        (current) => applyWorkbenchState(
+          current.copyWith(generationStatus: '资料请求更新失败：$error'),
+        ),
+      );
+    }
+  }
 }
 
 const Set<String> _informationProjectionPaths = <String>{
@@ -1937,4 +2121,10 @@ const Set<String> _informationProjectionPaths = <String>{
   InformationProjectionDocument.designSummaryRelativePath,
   InformationProjectionDocument.researchSummaryRelativePath,
   InformationProjectionDocument.referenceBoundaryRelativePath,
+};
+
+const int _maxInformationSupportScanAttempts = 3;
+
+const Set<String> _informationSupportIgnoredRoots = <String>{
+  '.novel_agent/reference_extraction',
 };

@@ -23,16 +23,23 @@ class LongTaskFailureActionService {
         ? DateTime.now().toIso8601String()
         : createdAt;
     if (clean == 'retry') {
+      final updatedRecord = _lifecycleService.resumeRecord(
+        record,
+        note: ValueReaders.boolValue(options['auto_retry'])
+            ? '恢复状态机触发自动重试，调度器会从当前失败任务继续。'
+            : '失败任务将重试，调度器会从当前任务状态继续。',
+        createdAt: now,
+      );
+      _incrementRetryCount(
+        updatedRecord,
+        ValueReaders.stringValue(task['id']).trim(),
+      );
       return <String, Object?>{
         'ok': true,
         'command': clean,
         'created_at': now,
         'task': _taskSummary(task),
-        'record': _lifecycleService.resumeRecord(
-          record,
-          note: '失败任务将重试，调度器会从当前任务状态继续。',
-          createdAt: now,
-        ),
+        'record': updatedRecord,
         'task_status': TaskRuntimeConstants.statusQueued,
         'note': '将失败任务重新排队。',
       };
@@ -82,6 +89,18 @@ class LongTaskFailureActionService {
       'task_status': TaskRuntimeConstants.statusFailed,
       'note': '保持暂停，等待用户选择重试、跳过或取消。',
     };
+  }
+
+  void _incrementRetryCount(JsonMap record, String taskId) {
+    // 中文注释: 重试计数写回运行记录，供恢复状态机判断自动重试预算是否已经耗尽。
+    if (taskId.isEmpty) {
+      return;
+    }
+    final counts = ValueReaders.deepCopyMap(
+      ValueReaders.mapValue(record['recovery_retry_counts']),
+    );
+    counts[taskId] = ValueReaders.intValue(counts[taskId]) + 1;
+    record['recovery_retry_counts'] = counts;
   }
 
   JsonMap _taskSummary(JsonMap task) {

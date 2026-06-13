@@ -1,11 +1,38 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import 'long_task_planning_artifact_path_service.dart';
 
 class ChapterAtomicOutputPathService {
+  ChapterAtomicOutputPathService({
+    LongTaskPlanningArtifactPathService? planningArtifactPathService,
+  }) : _planningArtifactPathService =
+           planningArtifactPathService ??
+           const LongTaskPlanningArtifactPathService();
+
+  final LongTaskPlanningArtifactPathService _planningArtifactPathService;
+
   Map<String, Object?> proposedOutputPaths(JsonMap task) {
     // 中文注释: 拟写入路径只是计划合同，不表示已经真实落盘，因此在 core 里单独生成。
     final title = artifactTitle(task);
-    switch (ValueReaders.stringValue(task['task_type'], 'chapter')) {
+    final taskType = ValueReaders.stringValue(task['task_type'], 'chapter');
+    if (_isPlanningStageWorkflowTask(task)) {
+      if (taskType == 'planning') {
+        return <String, Object?>{
+          'spec': LongTaskPlanningArtifactPathService.projectSpecPath,
+          'outline': _planningArtifactPathService.storyOutlinePath(),
+          'chapter_plan': _planningArtifactPathService.chapterPlanPath(),
+        };
+      }
+      return <String, Object?>{
+        'primary': _firstOrDefault(
+          ValueReaders.stringList(task['output_paths']),
+          'outlines/story/$title.md',
+        ),
+        'planning_note': 'tracking/planning/$title.md',
+        'memory_note': 'tracking/memory_updates/$title.md',
+      };
+    }
+    switch (taskType) {
       case 'summary':
         return <String, Object?>{
           'summary': 'summaries/$title.md',
@@ -35,10 +62,9 @@ class ChapterAtomicOutputPathService {
         };
       case 'planning':
         return <String, Object?>{
-          'spec': 'specs/project_spec.md',
-          'outline': 'outline/总纲.md',
-          'chapter_plan': 'chapter_outlines/章节任务清单.md',
-          'tasks': 'tasks/<generated>.json',
+          'spec': LongTaskPlanningArtifactPathService.projectSpecPath,
+          'outline': _planningArtifactPathService.storyOutlinePath(),
+          'chapter_plan': _planningArtifactPathService.chapterPlanPath(),
         };
       case 'checkpoint':
         return <String, Object?>{
@@ -102,10 +128,39 @@ class ChapterAtomicOutputPathService {
 
   String firstWritableTarget(JsonMap task) {
     // 中文注释: 这个入口给后处理或宿主层拿默认目标路径时复用，不必重复推导。
+    if (_isPlanningStageWorkflowTask(task)) {
+      return _firstOrDefault(
+        ValueReaders.stringList(task['output_paths']),
+        ValueReaders.stringValue(task['task_type']).trim() == 'planning'
+            ? LongTaskPlanningArtifactPathService.projectSpecPath
+            : 'outlines/story/${artifactTitle(task)}.md',
+      );
+    }
     return _firstOrDefault(
       ValueReaders.stringList(task['output_paths']),
       'chapters/${artifactTitle(task)}.md',
     );
+  }
+
+  bool _isPlanningStageWorkflowTask(JsonMap task) {
+    final metadata = ValueReaders.mapValue(task['metadata']);
+    if (ValueReaders.stringValue(metadata['stage']).trim() != 'planning') {
+      return false;
+    }
+    if (ValueReaders.stringValue(task['task_type']).trim() == 'planning') {
+      return true;
+    }
+    if (ValueReaders.stringValue(metadata['plan_id']).trim().isNotEmpty ||
+        ValueReaders.stringValue(
+          metadata['runtime_baseline_id'],
+        ).trim().isNotEmpty) {
+      return true;
+    }
+    final generatedBy = ValueReaders.stringValue(
+      metadata['generated_by'],
+    ).trim();
+    return generatedBy == 'LongTaskPlanner' ||
+        generatedBy == 'LongTaskRevision';
   }
 
   String _firstOrDefault(List<String> values, String fallback) {

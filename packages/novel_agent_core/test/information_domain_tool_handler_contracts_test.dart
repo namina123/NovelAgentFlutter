@@ -20,6 +20,15 @@ void main() {
               'purpose': '补充设定考据',
               'requested_depth': InformationResearchDepths.quick,
               'reference_relationship': 'inspiration',
+              'collection_mode': InformationCollectionModes.network,
+              'information_domain': InformationDomains.culture,
+              'source_requirements': <String, Object?>{
+                'preferred_languages': <Object?>['zh-CN', 'en'],
+              },
+              'extraction_policy': <String, Object?>{
+                'max_candidate_count': 7,
+                'max_fetch_count': 3,
+              },
               'user_granted_network_access': true,
               'target_refs': <Object?>[
                 <String, Object?>{
@@ -45,6 +54,59 @@ void main() {
             outcome.outcomePayload['research_request'] as Map<String, Object?>;
         expect(researchRequest['query'], '北欧神话中的世界树象征');
         expect(researchRequest['requested_by'], NarrativeSourceTypes.writer);
+        expect(
+          researchRequest['collection_mode'],
+          InformationCollectionModes.network,
+        );
+        expect(
+          ValueReaders.intValue(
+            ValueReaders.mapValue(
+              researchRequest['extraction_policy'],
+            )['max_candidate_count'],
+          ),
+          7,
+        );
+      },
+    );
+
+    test(
+      'request external research can register import collection without network grant',
+      () async {
+        const handler = RequestExternalResearchHandler();
+
+        final outcome = await handler.handle(
+          request: DomainToolRequest.fromJson(<String, Object?>{
+            'call_id': 'research-import-call-001',
+            'tool_name': NarrativeDomainToolNames.requestExternalResearch,
+            'source': <String, Object?>{
+              'source_type': NarrativeSourceTypes.user,
+            },
+            'request_payload': <String, Object?>{
+              'query': '导入资料中的星象命名线索',
+              'purpose': '从用户导入资料中收集候选片段',
+              'collection_mode': InformationCollectionModes.import,
+              'information_domain': InformationDomains.creativeDesign,
+              'source_text': '用户导入资料：星象命名以七曜、北斗和节气作为候选。',
+              'source_requirements': <String, Object?>{
+                'requires_rigorous_sources': false,
+              },
+              'user_granted_network_access': false,
+            },
+          }),
+          permissionDecision: const DomainToolPermissionDecision(
+            disposition: DomainToolPermissionDispositions.accepted,
+          ),
+        );
+
+        expect(outcome.outcomeStatus, DomainToolOutcomeStatuses.accepted);
+        final researchRequest =
+            outcome.outcomePayload['research_request'] as Map<String, Object?>;
+        expect(
+          researchRequest['collection_mode'],
+          InformationCollectionModes.import,
+        );
+        expect(researchRequest['user_granted_network_access'], isFalse);
+        expect(outcome.outcomePayload['network_execution_performed'], isFalse);
       },
     );
 

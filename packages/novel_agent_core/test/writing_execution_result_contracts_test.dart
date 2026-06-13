@@ -80,6 +80,44 @@ void main() {
         expect(decoded.overallStatus, WritingExecutionOutcomeStatuses.success);
         expect(decoded.information.selectedItemCount, 1);
         expect(decoded.collaboration.totalCollaboratorCount, 1);
+        expect(
+          decoded.constraints.expressionConstraintPolicyMode,
+          ExpressionConstraintExecutionPolicyModes.adaptive,
+        );
+        expect(decoded.constraints.expressionConstraintApplied, isTrue);
+        expect(decoded.constraints.expressionConstraintSkipped, isFalse);
+        expect(
+          decoded.constraints.expressionConstraintGate.severity,
+          ExpressionConstraintGateSeverities.info,
+        );
+        expect(
+          decoded.constraints.expressionConstraintReviewContract,
+          isNotNull,
+        );
+        expect(
+          decoded
+              .constraints
+              .expressionConstraintReviewContract
+              ?.recommendedDisposition,
+          ReviewRecommendedDispositions.accept,
+        );
+        expect(
+          decoded.constraints.expressionConstraintReviewSummary,
+          isNotNull,
+        );
+        expect(
+          decoded.constraints.expressionConstraintReviewSummary?.reviewType,
+          ReviewTypeConstants.style,
+        );
+        expect(
+          decoded.information.informationEvidenceReviewContract,
+          isNull,
+        );
+        expect(
+          decoded.information.informationEvidenceReviewSummary,
+          isNull,
+        );
+        expect(decoded.delivery.deliveryFailure, isNull);
         expect(decoded.validateBasics(), isEmpty);
       },
     );
@@ -123,7 +161,88 @@ void main() {
         expect(result.retryable, isTrue);
         expect(result.nextAction, 'pause_for_repair');
         expect(result.recovery.requiresRepair, isTrue);
+        expect(
+          result.delivery.deliveryFailure?.category,
+          ChapterDeliveryFailureCategories.emptyBody,
+        );
         expect(result.validateBasics(), isEmpty);
+      },
+    );
+
+    test(
+      'round-trips stable delivery failure contract through shared result codec',
+      () {
+        final failure = ChapterDeliveryFailure(
+          category: ChapterDeliveryFailureCategories.sidecarMissing,
+          reason: 'submission_missing',
+          summary: '章节正文已交付，但缺少结构化 submission。',
+          deliveryState: ChapterDeliveryStateStatuses.deliveredNeedsRepair,
+          chapterPath: 'chapters/ch12.md',
+          resolvedChapterPath: 'chapters/ch12.md',
+          retryable: true,
+          chapterBodyDelivered: true,
+          submissionAccepted: false,
+        );
+        final result = normalizer.normalize(
+          executionId: 'delivery_failure_roundtrip_001',
+          workflowKind: 'long_task',
+          deliveryState: _deliveryState(
+            state: ChapterDeliveryStateStatuses.deliveredNeedsRepair,
+            recommendedAction: 'request_sidecar_repair',
+            suggestedOutcomeStatus: DomainToolOutcomeStatuses.accepted,
+            reason: 'submission_missing',
+            summary: '章节正文已交付，但缺少结构化 submission。',
+            blocksProgress: true,
+            chapterBodyDelivered: true,
+            submissionAccepted: false,
+            retryable: true,
+            deliveryFailure: failure,
+            metadata: const <String, Object?>{
+              'chapter_path': 'chapters/ch12.md',
+              'resolved_chapter_path': 'chapters/ch12.md',
+            },
+          ),
+        );
+        final decoded = codec.fromJson(codec.toJson(result));
+
+        expect(
+          decoded.delivery.deliveryFailure?.category,
+          ChapterDeliveryFailureCategories.sidecarMissing,
+        );
+        expect(decoded.delivery.deliveryFailure?.reason, 'submission_missing');
+        expect(decoded.validateBasics(), isEmpty);
+      },
+    );
+
+    test(
+      'backfills delivery failure from legacy reason when old delivery state lacks typed contract',
+      () {
+        final result = normalizer.normalize(
+          executionId: 'delivery_failure_legacy_001',
+          workflowKind: 'long_task',
+          deliveryState: _deliveryState(
+            state: ChapterDeliveryStateStatuses.pathMismatchRecoverable,
+            recommendedAction: 'request_chapter_repair',
+            suggestedOutcomeStatus: DomainToolOutcomeStatuses.executionFailed,
+            reason: 'chapter_path_mismatch',
+            summary: '章节写入路径与预期路径不一致。',
+            blocksProgress: true,
+            retryable: true,
+            metadata: const <String, Object?>{
+              'chapter_path': 'chapters/ch13.md',
+              'resolved_chapter_path': 'drafts/ch13.md',
+            },
+          ),
+        );
+
+        expect(
+          result.delivery.deliveryFailure?.category,
+          ChapterDeliveryFailureCategories.pathMismatch,
+        );
+        expect(
+          result.delivery.deliveryFailure?.resolvedChapterPath,
+          'drafts/ch13.md',
+        );
       },
     );
 
@@ -159,6 +278,93 @@ void main() {
       expect(result.recovery.waitingUser, isTrue);
       expect(result.validateBasics(), isEmpty);
     });
+
+    test(
+      'keeps pending research as evidence warning without forcing waiting user',
+      () {
+        final result = normalizer.normalize(
+          executionId: 'information_pending_001',
+          workflowKind: 'ordinary_project',
+          informationSignal: const <String, Object?>{
+            'pending_research_count': 1,
+            'changed_paths': <Object?>[
+              '.novel_agent/information/research_requests/request_2.json',
+            ],
+          },
+        );
+
+        expect(result.overallStatus, WritingExecutionOutcomeStatuses.success);
+        expect(result.requiresUserAction, isFalse);
+        expect(result.information.waitingUser, isFalse);
+        expect(
+          result.information.evidenceGate.severity,
+          InformationEvidenceGateSeverities.warning,
+        );
+        expect(
+          result.information.evidenceGate.recommendedDisposition,
+          InformationEvidenceRecommendedDispositions.accept,
+        );
+        expect(result.information.summary, contains('待研究 1 项'));
+        expect(result.summary, contains('Information：待研究 1 项'));
+      },
+    );
+
+    test(
+      'keeps rigorous source insufficiency as evidence warning instead of repair',
+      () {
+        final result = normalizer.normalize(
+          executionId: 'information_rigorous_001',
+          workflowKind: 'ordinary_project',
+          informationSignal: const <String, Object?>{
+            'rigorous_source_insufficient_count': 1,
+            'requires_repair': true,
+            'reason': 'information_rigorous_source_insufficient',
+            'changed_paths': <Object?>['research/资料研究摘要.md'],
+          },
+        );
+
+        expect(result.overallStatus, WritingExecutionOutcomeStatuses.success);
+        expect(result.blocksProgress, isFalse);
+        expect(result.information.requiresRepair, isFalse);
+        expect(
+          result.information.evidenceGate.severity,
+          InformationEvidenceGateSeverities.warning,
+        );
+        expect(
+          result.information.evidenceGate.recommendedDisposition,
+          InformationEvidenceRecommendedDispositions.accept,
+        );
+        expect(result.information.summary, contains('严谨来源不足 1 项'));
+        expect(result.summary, contains('Information：严谨来源不足 1 项'));
+      },
+    );
+
+    test(
+      'normalizes gateway failure into recoverable failure instead of user wait',
+      () {
+        final result = normalizer.normalize(
+          executionId: 'information_gateway_failed_001',
+          workflowKind: 'ordinary_project',
+          informationSignal: const <String, Object?>{
+            'gateway_failure_count': 1,
+            'requires_repair': true,
+            'reason': 'information_gateway_failed',
+            'changed_paths': <Object?>[
+              '.novel_agent/information/research_requests/request_3.json',
+            ],
+          },
+        );
+
+        expect(
+          result.overallStatus,
+          WritingExecutionOutcomeStatuses.recoverableFailure,
+        );
+        expect(result.requiresUserAction, isFalse);
+        expect(result.information.waitingUser, isFalse);
+        expect(result.information.requiresRepair, isTrue);
+        expect(result.information.summary, contains('研究网关失败 1 项'));
+      },
+    );
 
     test(
       'carries activation selected omitted truncated ids and source refs into shared information metadata',
@@ -283,6 +489,17 @@ void main() {
       );
       expect(result.constraints.contentQualityRisk, isTrue);
       expect(result.constraints.hardConstraintTriggered, isTrue);
+      expect(result.constraints.chapterLengthDiscipline.present, isTrue);
+      expect(result.constraints.chapterLengthDiscipline.level, 'severely_off');
+      expect(
+        result.constraints.chapterLengthDiscipline.hardGateTriggered,
+        isTrue,
+      );
+      expect(result.constraints.chapterLengthDiscipline.repairRequired, isTrue);
+      expect(
+        result.constraints.chapterLengthDiscipline.severeDeviationRatioThreshold,
+        0.35,
+      );
       expect(result.summary, contains('章节输出只包含标题'));
       expect(result.validateBasics(), isEmpty);
     });
@@ -442,6 +659,75 @@ void main() {
     );
 
     test(
+      'downgrades retry-child collaboration failure after formal review delivery',
+      () {
+        final result = normalizer.normalize(
+          executionId: 'formal_review_retry_child_001',
+          workflowKind: 'workflow_task',
+          collaborationResults: const <Object?>[
+            <String, Object?>{
+              'ok': false,
+              'retryable': true,
+              'failure_disposition': 'retry_child',
+              'strategy': 'main_with_children',
+              'agent_id': 'continuity_keeper',
+              'agent_name': '设定专家',
+              'task': '对当前审稿结论补一轮连续性复核。',
+              'summary': '子智能体空返回，建议局部重试：Sub-agent returned empty content.',
+              'tool_calls': <Object?>[],
+              'collaboration_result_package': <String, Object?>{
+                'package_id': 'collab_pkg_retry_child_001',
+                'execution_package_id': 'exec_retry_child_001',
+                'child_run_package_id': 'child_retry_child_001',
+                'agent_id': 'continuity_keeper',
+                'agent_name': '设定专家',
+                'task': '对当前审稿结论补一轮连续性复核。',
+                'status': 'failed',
+                'retryable': true,
+                'cancelled': false,
+                'used_tool_count': 0,
+                'result_summary':
+                    '子智能体空返回，建议局部重试：Sub-agent returned empty content.',
+                'result_markdown': '',
+                'merge_contract': <String, Object?>{
+                  'merge_mode': 'main_agent_merges',
+                  'parent_review_required': true,
+                  'allows_direct_delivery': false,
+                  'accepted_result_types': <Object?>['risk'],
+                  'relation_to_writing_execution_result':
+                      'consumed_by_writing_execution_collaboration_summary',
+                },
+                'conflicts': const <Object?>[],
+                'metadata': <String, Object?>{
+                  'failure_disposition': 'retry_child',
+                  'collaboration_failure_summary':
+                      '子智能体空返回，建议局部重试：Sub-agent returned empty content.',
+                },
+              },
+            },
+          ],
+          metadata: const <String, Object?>{
+            'task_id': 'review_task_001',
+            'task_type': 'review',
+            'formal_review_completed': true,
+          },
+        );
+
+        expect(result.overallStatus, WritingExecutionOutcomeStatuses.success);
+        expect(result.blocksProgress, isFalse);
+        expect(result.collaboration.failedCollaboratorCount, 1);
+        expect(result.collaboration.blockingFailureCount, 0);
+        expect(result.collaboration.degraded, isTrue);
+        expect(
+          ValueReaders.boolValue(
+            result.collaboration.metadata['formal_review_retry_child_downgraded'],
+          ),
+          isTrue,
+        );
+      },
+    );
+
+    test(
       'keeps mild chapter drift in reminder-only gate instead of repair',
       () {
         // 中文注释: 这里验证轻微或可回调的字数偏差只会留下提醒，不会被误升格成返修阻断。
@@ -470,9 +756,34 @@ void main() {
         expect(result.constraints.hardConstraintTriggered, isFalse);
         expect(result.constraints.repairRequired, isFalse);
         expect(result.constraints.reminderOnly, isTrue);
+        expect(result.constraints.chapterLengthDiscipline.present, isTrue);
+        expect(
+          result.constraints.chapterLengthDiscipline.level,
+          'needs_rebalance',
+        );
+        expect(
+          result.constraints.chapterLengthDiscipline.reviewSuggested,
+          isTrue,
+        );
+        expect(
+          result.constraints.chapterLengthDiscipline.hardGateTriggered,
+          isFalse,
+        );
+        expect(
+          result.constraints.chapterLengthDiscipline.recommendedAction,
+          'adjust_next_chapter',
+        );
+        expect(
+          result.constraints.expressionConstraintGate.recommendedDisposition,
+          ExpressionConstraintGateRecommendedDispositions.remind,
+        );
         expect(
           result.constraints.softGateReasons,
           contains('chapter_length_needs_rebalance'),
+        );
+        expect(
+          result.constraints.softGateReasons,
+          contains('expression_constraint_remind'),
         );
         expect(result.validateBasics(), isEmpty);
       },
@@ -507,12 +818,244 @@ void main() {
         expect(result.constraints.expressionConstraintEvidenceMissing, isTrue);
         expect(result.constraints.hardConstraintTriggered, isTrue);
         expect(
+          result.constraints.expressionConstraintGate.recommendedDisposition,
+          ExpressionConstraintGateRecommendedDispositions.repair,
+        );
+        expect(
+          result.constraints.expressionConstraintGate.repairRequired,
+          isTrue,
+        );
+        expect(
           result.constraints.hardGateReasons,
           contains('expression_constraint_review_missing'),
         );
         expect(result.validateBasics(), isEmpty);
       },
     );
+
+    test(
+      'does not treat disabled expression policy as missing review evidence',
+      () {
+        final result = normalizer.normalize(
+          executionId: 'draft_constraint_disabled_001',
+          workflowKind: 'ordinary_project',
+          deliveryState: _deliveryState(
+            state: ChapterDeliveryStateStatuses.delivered,
+            recommendedAction: 'accept',
+            suggestedOutcomeStatus: DomainToolOutcomeStatuses.accepted,
+            summary: '章节正文已交付。',
+            chapterBodyDelivered: true,
+            submissionAccepted: true,
+          ),
+          constraintBridgeResult: _disabledConstraintBridge(),
+          chapterLengthEvaluation: _balancedEvaluation(),
+        );
+
+        expect(result.overallStatus, WritingExecutionOutcomeStatuses.success);
+        expect(result.constraints.expressionConstraintActive, isTrue);
+        expect(result.constraints.expressionConstraintDisabled, isTrue);
+        expect(result.constraints.expressionConstraintApplied, isFalse);
+        expect(result.constraints.expressionConstraintSkipped, isFalse);
+        expect(result.constraints.expressionConstraintReviewRequired, isFalse);
+        expect(result.constraints.expressionConstraintEvidenceMissing, isFalse);
+        expect(result.constraints.expressionConstraintGate.present, isFalse);
+        expect(
+          result.constraints.hardGateReasons,
+          isNot(contains('expression_constraint_review_missing')),
+        );
+        expect(result.constraints.summary, contains('当前策略已关闭'));
+      },
+    );
+
+    test(
+      'surfaces skipped expression policy without forcing missing review',
+      () {
+        final result = normalizer.normalize(
+          executionId: 'draft_constraint_skipped_001',
+          workflowKind: 'ordinary_project',
+          deliveryState: _deliveryState(
+            state: ChapterDeliveryStateStatuses.delivered,
+            recommendedAction: 'accept',
+            suggestedOutcomeStatus: DomainToolOutcomeStatuses.accepted,
+            summary: '章节正文已交付。',
+            chapterBodyDelivered: true,
+            submissionAccepted: true,
+          ),
+          constraintBridgeResult: _skippedConstraintBridge(),
+          chapterLengthEvaluation: _balancedEvaluation(),
+        );
+
+        expect(result.overallStatus, WritingExecutionOutcomeStatuses.success);
+        expect(result.constraints.expressionConstraintActive, isTrue);
+        expect(result.constraints.expressionConstraintDisabled, isFalse);
+        expect(result.constraints.expressionConstraintApplied, isFalse);
+        expect(result.constraints.expressionConstraintSkipped, isTrue);
+        expect(result.constraints.expressionConstraintReviewRequired, isFalse);
+        expect(result.constraints.expressionConstraintEvidenceMissing, isFalse);
+        expect(result.constraints.expressionConstraintGate.present, isFalse);
+        expect(
+          result.constraints.softGateReasons,
+          contains('expression_constraint_skipped'),
+        );
+        expect(result.constraints.summary, contains('当前轮次未应用'));
+      },
+    );
+
+    test(
+      'does not hard gate force policy when workflow orchestration is skipped',
+      () {
+        final result = normalizer.normalize(
+          executionId: 'draft_constraint_force_orchestration_skip_001',
+          workflowKind: 'long_task',
+          constraintBridgeResult: _forceOrchestrationSkippedConstraintBridge(),
+          chapterLengthEvaluation: _balancedEvaluation(),
+        );
+
+        expect(result.overallStatus, WritingExecutionOutcomeStatuses.success);
+        expect(result.constraints.expressionConstraintActive, isTrue);
+        expect(
+          result.constraints.expressionConstraintPolicyMode,
+          ExpressionConstraintExecutionPolicyModes.force,
+        );
+        expect(result.constraints.expressionConstraintApplied, isFalse);
+        expect(result.constraints.expressionConstraintSkipped, isTrue);
+        expect(result.constraints.expressionConstraintReviewRequired, isFalse);
+        expect(result.constraints.expressionConstraintEvidenceMissing, isFalse);
+        expect(result.constraints.expressionConstraintGate.present, isFalse);
+        expect(
+          result.constraints.hardGateReasons,
+          isNot(contains('expression_constraint_review_missing')),
+        );
+        expect(
+          result.constraints.softGateReasons,
+          contains('expression_constraint_skipped'),
+        );
+        expect(result.validateBasics(), isEmpty);
+      },
+    );
+
+    test('uses adjust-next gate signal for repeated adaptive review risks', () {
+      final result = normalizer.normalize(
+        executionId: 'draft_constraint_adjust_next_001',
+        workflowKind: 'ordinary_project',
+        deliveryState: _deliveryState(
+          state: ChapterDeliveryStateStatuses.delivered,
+          recommendedAction: 'accept',
+          suggestedOutcomeStatus: DomainToolOutcomeStatuses.accepted,
+          summary: '章节正文已交付。',
+          chapterBodyDelivered: true,
+          submissionAccepted: true,
+        ),
+        constraintBridgeResult: _runtimeEscalatedConstraintBridge(),
+        chapterLengthEvaluation: _balancedEvaluation(),
+        expressionConstraintReview: const ExpressionConstraintReviewProjection(
+          authenticityPassLevel:
+              ExpressionConstraintReviewProjection.authenticityAggressive,
+          miniRecheckItems: <String>['检查结尾是否又回到概述句', '检查中段是否重复解释'],
+        ),
+      );
+
+      expect(result.overallStatus, WritingExecutionOutcomeStatuses.success);
+      expect(
+        result.constraints.expressionConstraintGate.recommendedDisposition,
+        ExpressionConstraintGateRecommendedDispositions.adjustNext,
+      );
+      expect(
+        result.constraints.expressionConstraintGate.adjustNextChapter,
+        isTrue,
+      );
+      expect(
+        result.constraints.expressionConstraintGate.repairRequired,
+        isFalse,
+      );
+      expect(result.nextAction, 'accept');
+      expect(
+        result.constraints.softGateReasons,
+        contains('expression_constraint_adjust_next_chapter'),
+      );
+    });
+
+    test('uses force repair gate signal for structural expression risk', () {
+      final result = normalizer.normalize(
+        executionId: 'draft_constraint_force_repair_001',
+        workflowKind: 'ordinary_project',
+        constraintBridgeResult: _forceConstraintBridge(),
+        chapterLengthEvaluation: _balancedEvaluation(),
+        expressionConstraintReview: const ExpressionConstraintReviewProjection(
+          authenticityPassLevel:
+              ExpressionConstraintReviewProjection.authenticityAggressive,
+          continuityWatchItems: <String>['视角泄漏'],
+          miniRecheckItems: <String>['检查是否越过当前角色可知边界'],
+        ),
+      );
+
+      expect(
+        result.overallStatus,
+        WritingExecutionOutcomeStatuses.contentQualityIssue,
+      );
+      expect(
+        result.constraints.expressionConstraintGate.recommendedDisposition,
+        ExpressionConstraintGateRecommendedDispositions.repair,
+      );
+      expect(
+        result.constraints.expressionConstraintGate.repairRequired,
+        isTrue,
+      );
+      expect(
+        result.constraints.hardGateReasons,
+        contains('expression_constraint_force_repair_continuity_risk'),
+      );
+    });
+
+    test(
+      'keeps profile-only expression constraints inactive until project binding exists',
+      () {
+        final result = normalizer.normalize(
+          executionId: 'draft_constraint_profile_only_001',
+          workflowKind: 'ordinary_project',
+          deliveryState: _deliveryState(
+            state: ChapterDeliveryStateStatuses.delivered,
+            recommendedAction: 'accept',
+            suggestedOutcomeStatus: DomainToolOutcomeStatuses.accepted,
+            summary: '章节正文已交付。',
+            chapterBodyDelivered: true,
+            submissionAccepted: true,
+          ),
+          constraintBridgeResult: _profileOnlyConstraintBridge(),
+          chapterLengthEvaluation: _balancedEvaluation(),
+        );
+
+        expect(result.overallStatus, WritingExecutionOutcomeStatuses.success);
+        expect(result.constraints.expressionConstraintProfileCount, 1);
+        expect(result.constraints.expressionConstraintBindingCount, 0);
+        expect(result.constraints.expressionConstraintActive, isFalse);
+        expect(result.constraints.expressionConstraintReviewRequired, isFalse);
+        expect(result.constraints.expressionConstraintEvidenceMissing, isFalse);
+        expect(
+          result.constraints.hardGateReasons,
+          isNot(contains('expression_constraint_review_missing')),
+        );
+        expect(result.constraints.hardConstraintTriggered, isFalse);
+        expect(result.constraints.summary, contains('当前项目没有启用 binding'));
+        expect(result.validateBasics(), isEmpty);
+      },
+    );
+
+    test('keeps external fact unverified as evidence repair signal', () {
+      final result = normalizer.normalize(
+        executionId: 'information_unverified_001',
+        workflowKind: 'ordinary_project',
+        informationSignal: const <String, Object?>{
+          'external_fact_unverified_count': 2,
+          'requires_repair': true,
+          'reason': 'information_external_fact_unverified',
+        },
+      );
+
+      expect(result.information.evidenceGate.externalFactUnverifiedCount, 2);
+      expect(result.information.summary, contains('外部事实未核验 2 项'));
+      expect(result.information.requiresRepair, isTrue);
+    });
   });
 }
 
@@ -546,11 +1089,235 @@ WritingExecutionConstraintBridgeResult _constraintBridge() {
         defaultForProject: true,
       ),
     ],
+    expressionConstraintPolicyMode:
+        ExpressionConstraintExecutionPolicyModes.adaptive,
+    expressionConstraintInjectionStrength:
+        ExpressionConstraintInjectionStrengths.sections,
+    expressionConstraintReviewRequirement:
+        ExpressionConstraintReviewRequirements.whenApplied,
+    expressionConstraintViolationDisposition:
+        ExpressionConstraintViolationDispositions.adjustNext,
+    expressionConstraintApplied: true,
+    expressionConstraintAppliedReasons: <String>['primary_writing_turn'],
     expressionConstraintInjectionMode: 'brief_and_sections',
     expressionConstraintReviewRequired: true,
     runtimeReport: <String, Object?>{
       'chapter_length': <String, Object?>{'applied': true, 'source': 'legacy'},
+      'expression_constraints': <String, Object?>{
+        'policy_mode': 'adaptive',
+        'policy_applied': true,
+      },
     },
+  );
+}
+
+WritingExecutionConstraintBridgeResult _profileOnlyConstraintBridge() {
+  return const WritingExecutionConstraintBridgeResult(
+    chapterLengthMetadata: <String, Object?>{
+      'chapter_word_target': 2200,
+      'chapter_length_profile': <String, Object?>{
+        'enabled': true,
+        'target_length': 2200,
+        'preferred_min': 1800,
+        'preferred_max': 2600,
+        'stage': 'draft',
+        'metric_unit': 'visible_characters',
+      },
+    },
+    expressionConstraintProfiles: <ExpressionConstraintProfile>[
+      ExpressionConstraintProfile(
+        id: 'natural_voice',
+        displayName: '自然口语',
+        summary: '避免模板化解释腔。',
+        kind: ExpressionConstraintKind.naturalExpression,
+        rules: <String>['减少工整排比。'],
+      ),
+    ],
+    expressionConstraintPolicyMode:
+        ExpressionConstraintExecutionPolicyModes.adaptive,
+    expressionConstraintInjectionStrength:
+        ExpressionConstraintInjectionStrengths.sections,
+    expressionConstraintReviewRequirement:
+        ExpressionConstraintReviewRequirements.whenApplied,
+    expressionConstraintViolationDisposition:
+        ExpressionConstraintViolationDispositions.adjustNext,
+    expressionConstraintInjectionMode: 'disabled',
+    expressionConstraintReviewRequired: false,
+    expressionConstraintApplied: false,
+    expressionConstraintSkippedReasons: <String>[
+      'no_expression_constraint_bindings',
+    ],
+    runtimeReport: <String, Object?>{
+      'chapter_length': <String, Object?>{'applied': true, 'source': 'legacy'},
+    },
+  );
+}
+
+WritingExecutionConstraintBridgeResult _disabledConstraintBridge() {
+  return const WritingExecutionConstraintBridgeResult(
+    expressionConstraintProfiles: <ExpressionConstraintProfile>[
+      ExpressionConstraintProfile(
+        id: 'natural_voice',
+        displayName: '自然口语',
+        summary: '避免模板化解释腔。',
+        kind: ExpressionConstraintKind.naturalExpression,
+        rules: <String>['减少工整排比。'],
+      ),
+    ],
+    projectExpressionConstraintBindings: <ProjectExpressionConstraintBinding>[
+      ProjectExpressionConstraintBinding(
+        id: 'binding_1',
+        profileId: 'natural_voice',
+        defaultForProject: true,
+      ),
+    ],
+    expressionConstraintPolicyMode:
+        ExpressionConstraintExecutionPolicyModes.disabled,
+    expressionConstraintInjectionStrength:
+        ExpressionConstraintInjectionStrengths.none,
+    expressionConstraintReviewRequirement:
+        ExpressionConstraintReviewRequirements.none,
+    expressionConstraintViolationDisposition:
+        ExpressionConstraintViolationDispositions.remind,
+    expressionConstraintApplied: false,
+    expressionConstraintSkippedReasons: <String>['policy_disabled'],
+    expressionConstraintInjectionMode: 'disabled',
+    expressionConstraintReviewRequired: false,
+  );
+}
+
+WritingExecutionConstraintBridgeResult _skippedConstraintBridge() {
+  return const WritingExecutionConstraintBridgeResult(
+    expressionConstraintProfiles: <ExpressionConstraintProfile>[
+      ExpressionConstraintProfile(
+        id: 'natural_voice',
+        displayName: '自然口语',
+        summary: '避免模板化解释腔。',
+        kind: ExpressionConstraintKind.naturalExpression,
+        rules: <String>['减少工整排比。'],
+      ),
+    ],
+    projectExpressionConstraintBindings: <ProjectExpressionConstraintBinding>[
+      ProjectExpressionConstraintBinding(
+        id: 'binding_1',
+        profileId: 'natural_voice',
+        defaultForProject: true,
+      ),
+    ],
+    expressionConstraintPolicyMode:
+        ExpressionConstraintExecutionPolicyModes.adaptive,
+    expressionConstraintInjectionStrength:
+        ExpressionConstraintInjectionStrengths.sections,
+    expressionConstraintReviewRequirement:
+        ExpressionConstraintReviewRequirements.whenApplied,
+    expressionConstraintViolationDisposition:
+        ExpressionConstraintViolationDispositions.adjustNext,
+    expressionConstraintApplied: false,
+    expressionConstraintTechnicalTurnExcluded: true,
+    expressionConstraintSkippedReasons: <String>['tool_protocol_turn'],
+    expressionConstraintInjectionMode: 'disabled',
+    expressionConstraintReviewRequired: false,
+  );
+}
+
+WritingExecutionConstraintBridgeResult
+_forceOrchestrationSkippedConstraintBridge() {
+  return const WritingExecutionConstraintBridgeResult(
+    expressionConstraintProfiles: <ExpressionConstraintProfile>[
+      ExpressionConstraintProfile(
+        id: 'natural_voice',
+        displayName: '自然口语',
+        summary: '避免模板化解释腔。',
+        kind: ExpressionConstraintKind.naturalExpression,
+        rules: <String>['减少工整排比。'],
+      ),
+    ],
+    projectExpressionConstraintBindings: <ProjectExpressionConstraintBinding>[
+      ProjectExpressionConstraintBinding(
+        id: 'binding_1',
+        profileId: 'natural_voice',
+        defaultForProject: true,
+      ),
+    ],
+    expressionConstraintPolicyMode:
+        ExpressionConstraintExecutionPolicyModes.force,
+    expressionConstraintInjectionStrength:
+        ExpressionConstraintInjectionStrengths.full,
+    expressionConstraintReviewRequirement:
+        ExpressionConstraintReviewRequirements.alwaysForWriting,
+    expressionConstraintViolationDisposition:
+        ExpressionConstraintViolationDispositions.repair,
+    expressionConstraintApplied: false,
+    expressionConstraintTechnicalTurnExcluded: true,
+    expressionConstraintSkippedReasons: <String>['workflow_orchestration_turn'],
+    expressionConstraintInjectionMode: 'disabled',
+    expressionConstraintReviewRequired: false,
+  );
+}
+
+WritingExecutionConstraintBridgeResult _runtimeEscalatedConstraintBridge() {
+  return const WritingExecutionConstraintBridgeResult(
+    expressionConstraintProfiles: <ExpressionConstraintProfile>[
+      ExpressionConstraintProfile(
+        id: 'de_ai',
+        displayName: '去 AI 风',
+        summary: '避免模板化解释腔。',
+        kind: ExpressionConstraintKind.naturalExpression,
+        rules: <String>['减少工整排比。'],
+        riskSignals: <String>['总而言之', '不是……而是……'],
+      ),
+    ],
+    projectExpressionConstraintBindings: <ProjectExpressionConstraintBinding>[
+      ProjectExpressionConstraintBinding(
+        id: 'binding_1',
+        profileId: 'de_ai',
+        defaultForProject: true,
+      ),
+    ],
+    expressionConstraintPolicyMode:
+        ExpressionConstraintExecutionPolicyModes.adaptive,
+    expressionConstraintInjectionStrength:
+        ExpressionConstraintInjectionStrengths.full,
+    expressionConstraintReviewRequirement:
+        ExpressionConstraintReviewRequirements.alwaysForWriting,
+    expressionConstraintViolationDisposition:
+        ExpressionConstraintViolationDispositions.repair,
+    expressionConstraintApplied: true,
+    expressionConstraintRuntimeEscalated: true,
+    expressionConstraintInjectionMode: 'brief_and_sections',
+    expressionConstraintReviewRequired: true,
+  );
+}
+
+WritingExecutionConstraintBridgeResult _forceConstraintBridge() {
+  return const WritingExecutionConstraintBridgeResult(
+    expressionConstraintProfiles: <ExpressionConstraintProfile>[
+      ExpressionConstraintProfile(
+        id: 'strict_pov_boundary',
+        displayName: '严格 POV 边界',
+        summary: '限制未知信息越界。',
+        kind: ExpressionConstraintKind.narrativeBoundary,
+        rules: <String>['只保留 POV 可知信息。'],
+      ),
+    ],
+    projectExpressionConstraintBindings: <ProjectExpressionConstraintBinding>[
+      ProjectExpressionConstraintBinding(
+        id: 'binding_1',
+        profileId: 'strict_pov_boundary',
+        defaultForProject: true,
+      ),
+    ],
+    expressionConstraintPolicyMode:
+        ExpressionConstraintExecutionPolicyModes.force,
+    expressionConstraintInjectionStrength:
+        ExpressionConstraintInjectionStrengths.full,
+    expressionConstraintReviewRequirement:
+        ExpressionConstraintReviewRequirements.alwaysForWriting,
+    expressionConstraintViolationDisposition:
+        ExpressionConstraintViolationDispositions.repair,
+    expressionConstraintApplied: true,
+    expressionConstraintInjectionMode: 'brief_and_sections',
+    expressionConstraintReviewRequired: true,
   );
 }
 
@@ -752,6 +1519,7 @@ ChapterDeliveryStateResult _deliveryState({
   bool chapterBodyDelivered = false,
   bool submissionAccepted = false,
   bool retryable = false,
+  ChapterDeliveryFailure? deliveryFailure,
   JsonMap metadata = const <String, Object?>{},
 }) {
   // 中文注释: 章节交付夹具直接复用现有状态机结果合同，验证新共享合同不会重新造平行 delivery 类型。
@@ -766,6 +1534,7 @@ ChapterDeliveryStateResult _deliveryState({
     chapterBodyDelivered: chapterBodyDelivered,
     submissionAccepted: submissionAccepted,
     retryable: retryable,
+    deliveryFailure: deliveryFailure,
     metadata: metadata,
   );
 }

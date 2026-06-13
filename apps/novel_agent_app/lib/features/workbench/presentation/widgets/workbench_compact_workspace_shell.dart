@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../shared/theme/novel_theme_context.dart';
+import '../models/workbench_workspace_shell_view_data.dart';
 import '../models/workbench_compact_primary_view.dart';
 import '../services/workbench_compact_primary_view_resolver.dart';
 import 'workbench_compact_view_switcher.dart';
-import 'workbench_pane_shell.dart';
+import 'workbench_visual_style.dart';
 
 class WorkbenchCompactWorkspaceShell extends StatefulWidget {
   const WorkbenchCompactWorkspaceShell({
     super.key,
+    required this.viewData,
     required this.workspacePane,
     required this.documentPane,
     required this.conversationPane,
@@ -16,6 +19,7 @@ class WorkbenchCompactWorkspaceShell extends StatefulWidget {
     required this.onNonDocumentViewRequested,
   });
 
+  final WorkbenchWorkspaceShellViewData viewData;
   final Widget workspacePane;
   final Widget documentPane;
   final Widget conversationPane;
@@ -60,11 +64,15 @@ class _WorkbenchCompactWorkspaceShellState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        _WorkbenchCompactChromeBar(
+          viewData: widget.viewData,
+          activeView: _activeView,
+        ),
         WorkbenchCompactViewSwitcher(
           activeView: _activeView,
           onViewSelected: _handleViewSelected,
+          showOverview: false,
         ),
-        const SizedBox(height: 12),
         Expanded(
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 180),
@@ -72,18 +80,12 @@ class _WorkbenchCompactWorkspaceShellState
             switchOutCurve: Curves.easeOut,
             child: KeyedSubtree(
               key: ValueKey(_activeView),
-              child: WorkbenchPaneShell(
-                sectionId: _activeView.sectionId,
-                showLeftOuterBorder: true,
-                showRightOuterBorder: true,
-                child: switch (_activeView) {
-                  WorkbenchCompactPrimaryView.workspace =>
-                    widget.workspacePane,
-                  WorkbenchCompactPrimaryView.document => widget.documentPane,
-                  WorkbenchCompactPrimaryView.conversation =>
-                    widget.conversationPane,
-                },
-              ),
+              child: switch (_activeView) {
+                WorkbenchCompactPrimaryView.workspace => widget.workspacePane,
+                WorkbenchCompactPrimaryView.document => widget.documentPane,
+                WorkbenchCompactPrimaryView.conversation =>
+                  widget.conversationPane,
+              },
             ),
           ),
         ),
@@ -103,5 +105,77 @@ class _WorkbenchCompactWorkspaceShellState
       return;
     }
     widget.onNonDocumentViewRequested();
+  }
+}
+
+class _WorkbenchCompactChromeBar extends StatelessWidget {
+  const _WorkbenchCompactChromeBar({
+    required this.viewData,
+    required this.activeView,
+  });
+
+  final WorkbenchWorkspaceShellViewData viewData;
+  final WorkbenchCompactPrimaryView activeView;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.novelThemeColors;
+    final visual = WorkbenchVisualStyle.of(context);
+    final projectName = viewData.projectName.trim().isEmpty
+        ? '未命名项目'
+        : viewData.projectName.trim();
+    final activeTitle = switch (activeView) {
+      WorkbenchCompactPrimaryView.workspace => '目录',
+      WorkbenchCompactPrimaryView.document => '文档',
+      WorkbenchCompactPrimaryView.conversation => '会话',
+    };
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        visual.panelPadding.left,
+        visual.microGap,
+        visual.panelPadding.right,
+        visual.microGap,
+      ),
+      decoration: BoxDecoration(
+        color: colors.panelBackground.withValues(alpha: 0.42),
+        border: Border(
+          bottom: BorderSide(color: colors.lineColor.withValues(alpha: 0.1)),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Text(
+              projectName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: visual.titleFontSize - 0.6,
+                fontWeight: FontWeight.w800,
+                color: colors.textColor,
+              ),
+            ),
+          ),
+          Text(
+            activeTitle,
+            style: TextStyle(
+              fontSize: visual.metaFontSize - 0.1,
+              fontWeight: FontWeight.w700,
+              color: colors.mutedTextColor,
+            ),
+          ),
+          SizedBox(width: visual.microGap + 1),
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: colors.accentColor.withValues(alpha: 0.72),
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

@@ -30,6 +30,7 @@ class ConversationPanelBand extends StatelessWidget {
         color: emphasized
             ? style.accentBandBackgroundColor
             : style.bandBackgroundColor,
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: style.bandBorderColor,
           width: AppChrome.borderWidth,
@@ -56,7 +57,11 @@ class ConversationPanelBand extends StatelessWidget {
     }
     return Material(
       color: Colors.transparent,
-      child: InkWell(onTap: onTap, child: content),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: content,
+      ),
     );
   }
 }

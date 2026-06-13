@@ -122,8 +122,8 @@ class LegacyContinuityMechanicImporterService {
       profileId: 'legacy_special_mechanic_profile',
       profileNamespace: '$_legacySpecialMechanicNamespaceRoot.profile',
       profileLabel: bundle.displayName.isEmpty
-          ? 'Legacy special mechanic bridge'
-          : 'Legacy special mechanic: ${bundle.displayName}',
+          ? 'Legacy continuity bridge'
+          : 'Legacy continuity bridge: ${bundle.displayName}',
       lifecycleStatus: NarrativeProfileLifecycleStatus.deprecated,
       profilePayload: <String, Object?>{
         'project_id': project.id,
@@ -136,6 +136,7 @@ class LegacyContinuityMechanicImporterService {
         'scope_count': bundle.scopes.length,
         'scope_overlay_count': bundle.scopeOverlays.length,
         'legacy_namespace_root': _legacySpecialMechanicNamespaceRoot,
+        'compatibility_aliases': const <String>['legacy.special_mechanic'],
       },
       profileExtensions: <String, Object?>{
         'bridge_status': 'deprecated_bridge_only',
@@ -143,8 +144,9 @@ class LegacyContinuityMechanicImporterService {
         if (inputProfile != null)
           'legacy_special_mechanic_input_profile':
               _inputProfileToJson(inputProfile),
+        'compatibility_aliases': const <String>['legacy.special_mechanic'],
         'pressure_probe_note':
-            'Legacy special mechanic labels remain importable probe input only.',
+            'Historical special-mechanic labels remain readable as probe input only.',
       },
       source: _legacySource(),
       confidence: 1,
@@ -154,6 +156,7 @@ class LegacyContinuityMechanicImporterService {
       metadata: const <String, Object?>{
         'bridge_status': 'deprecated_bridge_only',
         'legacy_namespace_root': _legacySpecialMechanicNamespaceRoot,
+        'compatibility_aliases': <String>['legacy.special_mechanic'],
       },
     );
     return LegacyContinuityMechanicImportPackage(
@@ -192,12 +195,13 @@ class LegacyContinuityMechanicImporterService {
     return const NarrativeSourceRef(
       sourceType: NarrativeSourceTypes.system,
       sourceId: 'legacy_continuity_mechanic_importer',
-      label: 'Legacy continuity mechanic importer',
+      label: 'Legacy continuity bridge importer',
       description:
-          'Deprecated bridge-only importer for pre-ONS continuity/mechanic state.',
+          'Deprecated bridge-only importer for pre-ONS continuity state and historical special-mechanic aliases.',
       metadata: <String, Object?>{
         'bridge_status': 'deprecated_bridge_only',
         'legacy_namespace_root': _legacySpecialMechanicNamespaceRoot,
+        'compatibility_aliases': <String>['legacy.special_mechanic'],
       },
     );
   }

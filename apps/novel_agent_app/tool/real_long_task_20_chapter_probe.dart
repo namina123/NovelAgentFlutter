@@ -7,10 +7,14 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 import '../../../tools/probe_config_support.dart';
 import 'probe_support.dart';
 
-Future<void> main() async {
-  // 中文注释: 这支探针专门从“创建长篇项目”开始，真实压一轮 20 章左右的 mode 1 长任务链，用于排查检查点、后处理和持续推进是否会中途卡死。
+Future<void> main(List<String> arguments) async {
+  // 中文注释: 这支探针专门从“创建长篇项目”开始，真实压一轮可配置章数的 mode 1 长任务链，用于排查检查点、后处理和持续推进是否会中途卡死。
   await ensureLocalRealProbeOptIn(probeName: 'real_long_task_20_chapter_probe');
   final repoRoot = resolveLocalProbeRepoRoot();
+  final targetChapterCount = _chapterCountFromArgs(arguments);
+  final checkpointInterval = _checkpointIntervalForChapterCount(
+    targetChapterCount,
+  );
   final provider = await _loadProvider(repoRoot);
   final settings = AppSettings(
     defaultProviderId: provider.id,
@@ -32,6 +36,10 @@ Future<void> main() async {
 
   final bundle = AdapterBundle.standard(workingDirectoryPath: repoRoot);
   final runId = DateTime.now().toIso8601String().replaceAll(':', '-');
+  final runArtifactDir = Directory(
+    '$repoRoot${Platform.pathSeparator}artifacts${Platform.pathSeparator}real_long_task_chapter_probe_runs${Platform.pathSeparator}${runId}_chapters_$targetChapterCount',
+  );
+  await runArtifactDir.create(recursive: true);
   final createProjectWorkspaceUseCase = CreateProjectWorkspaceUseCase(
     projectRepository: bundle.projectRepository,
     projectWorkspacePort: bundle.projectWorkspacePort,
@@ -88,12 +96,15 @@ Future<void> main() async {
     'run_id': runId,
     'started_at': DateTime.now().toIso8601String(),
     'workspace_root': workspaceRoot.path,
+    'run_artifact_dir': runArtifactDir.path,
+    'requested_chapter_count': targetChapterCount,
+    'checkpoint_interval': checkpointInterval,
   };
 
   try {
     final project = await createProjectWorkspaceUseCase.execute(
       projectsRootPath: workspaceRoot.path,
-      title: '二十章真实长任务探针',
+      title: '$targetChapterCount章真实长任务探针',
       projectType: 'long_novel',
       runtimeBaselineId: 'continuous_autonomous',
     );
@@ -114,8 +125,8 @@ Future<void> main() async {
       planInput.runtimeMode,
       options: <String, Object?>{
         ...planInput.options,
-        'chapter_count': 20,
-        'checkpoint_interval': 5,
+        'chapter_count': targetChapterCount,
+        'checkpoint_interval': checkpointInterval,
         'enable_chapter_word_constraints': true,
         'chapter_word_target': 2200,
         'chapter_word_min': 1600,
@@ -127,18 +138,18 @@ Future<void> main() async {
     );
 
     final stepLogs = <Object?>[];
-    var chapterCount = 0;
+    var completedChapterCount = 0;
     var postprocessCount = 0;
     var safetyCounter = 0;
-    await _writeProgressSnapshot(repoRoot, <String, Object?>{
+    await _writeProgressSnapshot(runArtifactDir, repoRoot, <String, Object?>{
       'project_root': project.rootPath,
       'phase': 'workflow_created',
-      'chapter_file_count': chapterCount,
+      'chapter_file_count': completedChapterCount,
       'postprocess_count': postprocessCount,
       'safety_counter': safetyCounter,
       'last_step': const <String, Object?>{},
     });
-    while (chapterCount < 20 && safetyCounter < 160) {
+    while (completedChapterCount < targetChapterCount && safetyCounter < 400) {
       safetyCounter += 1;
       final postprocessTask = await workflowRuntimeService
           .nextWorkflowPostprocessTask(project);
@@ -170,10 +181,10 @@ Future<void> main() async {
             postprocessCheckpointReviewPath,
           );
         }
-        await _writeProgressSnapshot(repoRoot, <String, Object?>{
+        await _writeProgressSnapshot(runArtifactDir, repoRoot, <String, Object?>{
           'project_root': project.rootPath,
           'phase': 'postprocess',
-          'chapter_file_count': chapterCount,
+          'chapter_file_count': completedChapterCount,
           'postprocess_count': postprocessCount,
           'safety_counter': safetyCounter,
           'last_step': stepLogs.isEmpty
@@ -211,10 +222,10 @@ Future<void> main() async {
           'task_path': taskPath,
           'ok': ValueReaders.boolValue(transitioned['ok']),
         });
-        await _writeProgressSnapshot(repoRoot, <String, Object?>{
+        await _writeProgressSnapshot(runArtifactDir, repoRoot, <String, Object?>{
           'project_root': project.rootPath,
           'phase': 'checkpoint_confirm',
-          'chapter_file_count': chapterCount,
+          'chapter_file_count': completedChapterCount,
           'postprocess_count': postprocessCount,
           'safety_counter': safetyCounter,
           'last_step': ValueReaders.mapValue(stepLogs.last),
@@ -250,12 +261,12 @@ Future<void> main() async {
 
       if (taskType == 'chapter' &&
           ValueReaders.stringValue(nextTask['chapter']).trim().isNotEmpty) {
-        chapterCount = await _countChapterFiles(bundle, project);
+        completedChapterCount = await _countChapterFiles(bundle, project);
       }
-      await _writeProgressSnapshot(repoRoot, <String, Object?>{
+      await _writeProgressSnapshot(runArtifactDir, repoRoot, <String, Object?>{
         'project_root': project.rootPath,
         'phase': 'task',
-        'chapter_file_count': chapterCount,
+        'chapter_file_count': completedChapterCount,
         'postprocess_count': postprocessCount,
         'safety_counter': safetyCounter,
         'last_step': stepLogs.isEmpty
@@ -264,20 +275,36 @@ Future<void> main() async {
       });
     }
 
-    chapterCount = await _countChapterFiles(bundle, project);
+    completedChapterCount = await _countChapterFiles(bundle, project);
     final tasks = await workflowRuntimeService.listWorkflowTasks(project);
     final projectFiles = await bundle.projectWorkspacePort.listEntries(
       project.rootPath,
     );
+    final checkpointConfirmCount = stepLogs
+        .where(
+          (step) =>
+              ValueReaders.stringValue(ValueReaders.mapValue(step)['kind']) ==
+              'checkpoint_confirm',
+        )
+        .length;
+    final manualResolutionCount = stepLogs
+        .where(
+          (step) =>
+              ValueReaders.stringValue(ValueReaders.mapValue(step)['kind']) ==
+              'manual_resolution',
+        )
+        .length;
     report.addAll(<String, Object?>{
-      'ok': chapterCount >= 20,
-      'report_category': chapterCount >= 20
+      'ok': completedChapterCount >= targetChapterCount,
+      'report_category': completedChapterCount >= targetChapterCount
           ? ProbeReportCategories.success
           : ProbeReportCategories.contentQualityFailure,
       'project_root': project.rootPath,
       'created_plan_path': ValueReaders.stringValue(created['plan_path']),
-      'chapter_file_count': chapterCount,
+      'chapter_file_count': completedChapterCount,
       'postprocess_count': postprocessCount,
+      'checkpoint_confirm_count': checkpointConfirmCount,
+      'manual_resolution_count': manualResolutionCount,
       'safety_counter': safetyCounter,
       'task_status_counts': _taskStatusCounts(tasks),
       'chapter_paths': projectFiles
@@ -289,8 +316,9 @@ Future<void> main() async {
           .toList(growable: false),
       'steps': stepLogs,
     });
-    if (chapterCount < 20) {
-      report['error'] = '只生成到 $chapterCount 章，未达到 20 章目标。';
+    if (completedChapterCount < targetChapterCount) {
+      report['error'] =
+          '只生成到 $completedChapterCount 章，未达到 $targetChapterCount 章目标。';
     }
   } catch (error, stackTrace) {
     report['ok'] = false;
@@ -302,36 +330,77 @@ Future<void> main() async {
     );
   } finally {
     report['finished_at'] = DateTime.now().toIso8601String();
-    final reportFile = File(
+    final runReportFile = File(
+      '${runArtifactDir.path}${Platform.pathSeparator}report.json',
+    );
+    final latestReportFile = File(
       '$repoRoot${Platform.pathSeparator}artifacts${Platform.pathSeparator}real_long_task_20_probe_report.json',
     );
-    await reportFile.parent.create(recursive: true);
-    await reportFile.writeAsString(
-      const JsonEncoder.withIndent('  ').convert(report),
-    );
-    stdout.writeln('report: ${reportFile.path}');
+    report['run_report_path'] = runReportFile.path;
+    report['latest_report_path'] = latestReportFile.path;
+    final reportText = const JsonEncoder.withIndent('  ').convert(report);
+    await runReportFile.parent.create(recursive: true);
+    await runReportFile.writeAsString(reportText);
+    await latestReportFile.parent.create(recursive: true);
+    await latestReportFile.writeAsString(reportText);
+    stdout.writeln('run_report: ${runReportFile.path}');
+    stdout.writeln('report: ${latestReportFile.path}');
     stdout.writeln(ValueReaders.boolValue(report['ok']) ? 'PASS' : 'FAIL');
+    if (!ValueReaders.boolValue(report['ok'])) {
+      exitCode = 1;
+    }
   }
 }
 
 Future<void> _writeProgressSnapshot(
+  Directory runArtifactDir,
   String repoRoot,
   Map<String, Object?> snapshot,
 ) async {
-  // 中文注释: 长链探针边跑边写进度，便于中断后直接定位卡在第几步。
-  final file = File(
+  // 中文注释: 长链探针边跑边写进度，便于中断后直接定位卡在第几步，同时保留本次 run 的独立进度文件。
+  final runFile = File(
+    '${runArtifactDir.path}${Platform.pathSeparator}progress.json',
+  );
+  final latestFile = File(
     '$repoRoot${Platform.pathSeparator}artifacts${Platform.pathSeparator}real_long_task_20_probe_progress.json',
   );
-  await file.parent.create(recursive: true);
-  await file.writeAsString(
-    const JsonEncoder.withIndent('  ').convert(snapshot),
-  );
+  final text = const JsonEncoder.withIndent('  ').convert(snapshot);
+  await runFile.parent.create(recursive: true);
+  await runFile.writeAsString(text);
+  await latestFile.parent.create(recursive: true);
+  await latestFile.writeAsString(text);
+}
+
+int _chapterCountFromArgs(List<String> arguments) {
+  for (final argument in arguments) {
+    final value = argument.trim();
+    if (!value.startsWith('--chapter-count=')) {
+      continue;
+    }
+    final parsed = int.tryParse(value.split('=').last.trim());
+    if (parsed != null && parsed > 0) {
+      return parsed.clamp(1, 50);
+    }
+  }
+  return 20;
+}
+
+int _checkpointIntervalForChapterCount(int chapterCount) {
+  if (chapterCount <= 10) {
+    return 3;
+  }
+  if (chapterCount <= 20) {
+    return 5;
+  }
+  return 7;
 }
 
 Future<ProviderEndpointSettings> _loadProvider(String repoRoot) async {
   // 中文注释: 真实探针统一读取 local/probe_api.txt 或环境变量指定文件，不再私吃 temp/test_api 配置。
   final config = await loadLocalProbeApiConfig(
     probeName: 'real_long_task_20_chapter_probe',
+    allowLegacyTestApi: false,
+    allowTempSettingsFallback: false,
     repoRootOverride: repoRoot,
   );
   return ProviderEndpointSettings(

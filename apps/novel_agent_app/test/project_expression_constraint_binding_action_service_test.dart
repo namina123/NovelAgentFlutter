@@ -16,6 +16,7 @@ void main() {
       ),
       request: const ExpressionConstraintBindingEditorRequestViewData(
         profileId: 'de_ai',
+        selectedPolicyMode: 'adaptive',
         enabled: true,
         defaultForProject: false,
         selectedAgentIds: <String>['reviewer', 'writer'],
@@ -31,31 +32,36 @@ void main() {
     expect(bindings.single.targetAgentIds, <String>['reviewer', 'writer']);
   });
 
-  test('uses structured selected mode and stage ids before legacy text parsing', () {
-    const service = ProjectExpressionConstraintBindingActionService();
+  test(
+    'uses structured selected mode and stage ids before legacy text parsing',
+    () {
+      const service = ProjectExpressionConstraintBindingActionService();
 
-    final bindings = service.upsertBinding(
-      currentBindings: const <ProjectExpressionConstraintBinding>[],
-      profile: const ExpressionConstraintProfile(
-        id: 'de_ai',
-        displayName: '去 AI 风',
-        summary: '压低模板化表达。',
-      ),
-      request: const ExpressionConstraintBindingEditorRequestViewData(
-        profileId: 'de_ai',
-        enabled: true,
-        defaultForProject: false,
-        selectedAgentIds: <String>[],
-        selectedModeIds: <String>['full_outline_consensus'],
-        selectedStageIds: <String>['book_premise'],
-        targetAgentIdsText: '',
-        targetModeIdsText: 'legacy-mode',
-        targetStageIdsText: 'legacy-stage',
-        weightText: '100',
-      ),
-    );
+      final bindings = service.upsertBinding(
+        currentBindings: const <ProjectExpressionConstraintBinding>[],
+        profile: const ExpressionConstraintProfile(
+          id: 'de_ai',
+          displayName: '去 AI 风',
+          summary: '压低模板化表达。',
+        ),
+        request: const ExpressionConstraintBindingEditorRequestViewData(
+          profileId: 'de_ai',
+          selectedPolicyMode: 'force',
+          enabled: true,
+          defaultForProject: false,
+          selectedAgentIds: <String>[],
+          selectedModeIds: <String>['full_outline_consensus'],
+          selectedStageIds: <String>['book_premise'],
+          targetAgentIdsText: '',
+          targetModeIdsText: 'legacy-mode',
+          targetStageIdsText: 'legacy-stage',
+          weightText: '100',
+        ),
+      );
 
-    expect(bindings.single.targetModeIds, <String>['full_outline_consensus']);
-    expect(bindings.single.targetStageIds, <String>['book_premise']);
-  });
+      expect(bindings.single.targetModeIds, <String>['full_outline_consensus']);
+      expect(bindings.single.targetStageIds, <String>['book_premise']);
+      expect(bindings.single.metadata['policy_mode'], 'force');
+    },
+  );
 }

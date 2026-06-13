@@ -20,23 +20,39 @@ class WorkbenchActivityRail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final visual = WorkbenchVisualStyle.of(context);
-    return Wrap(
-      spacing: visual.compactGap,
-      runSpacing: visual.compactGap,
-      children: panelContracts
-          .map(
-            (contract) => _WorkbenchActivityRailButton(
-              item: _WorkbenchActivityRailItem(
-                panelId: contract.panelId,
-                label: contract.label,
-                tooltip: contract.tooltip,
-                icon: _iconOf(contract.panelId),
+    final surface = context.novelThemeSurfaces.sidebar;
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: surface.backgroundColor.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(visual.sectionRadius + 1),
+        border: Border(
+          top: BorderSide(color: surface.borderColor.withValues(alpha: 0.18)),
+        ),
+      ),
+      child: Row(
+        children: panelContracts
+            .map(
+              (contract) => Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    right: contract == panelContracts.last ? 0 : 3,
+                  ),
+                  child: _WorkbenchActivityRailButton(
+                    item: _WorkbenchActivityRailItem(
+                      panelId: contract.panelId,
+                      label: contract.label,
+                      tooltip: contract.tooltip,
+                      icon: _iconOf(contract.panelId),
+                    ),
+                    isSelected: contract.panelId == selectedPanelId,
+                    onPressed: () => onPanelSelected(contract.panelId),
+                  ),
+                ),
               ),
-              isSelected: contract.panelId == selectedPanelId,
-              onPressed: () => onPanelSelected(contract.panelId),
-            ),
-          )
-          .toList(growable: false),
+            )
+            .toList(growable: false),
+      ),
     );
   }
 }
@@ -54,41 +70,48 @@ class _WorkbenchActivityRailButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final optionSurface = context.novelThemeSurfaces.optionTile;
     final visual = WorkbenchVisualStyle.of(context);
+    final optionSurface = context.novelThemeSurfaces.optionTile;
+    final sidebarSurface = context.novelThemeSurfaces.sidebar;
     final foreground = isSelected
         ? optionSurface.highlightForegroundColor
-        : optionSurface.foregroundColor;
+        : sidebarSurface.mutedForegroundColor;
+    final iconForeground = isSelected
+        ? optionSurface.highlightForegroundColor
+        : sidebarSurface.foregroundColor.withValues(alpha: 0.82);
     return Tooltip(
       message: item.tooltip,
       waitDuration: const Duration(milliseconds: 300),
       child: InkWell(
         onTap: onPressed,
-        borderRadius: BorderRadius.circular(optionSurface.radius),
+        borderRadius: BorderRadius.circular(visual.sectionRadius),
         child: Container(
-          constraints: BoxConstraints(
-            minHeight: context.novelChipChrome.minHeight,
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          constraints: const BoxConstraints(minHeight: 34),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
           decoration: BoxDecoration(
-            color: visual.optionBackground(optionSurface, selected: isSelected),
-            borderRadius: BorderRadius.circular(optionSurface.radius),
-            border: Border.all(
-              color: isSelected
-                  ? optionSurface.highlightBorderColor
-                  : optionSurface.borderColor,
-              width: optionSurface.borderWidth,
+            color: isSelected
+                ? optionSurface.highlightBackgroundColor.withValues(alpha: 0.54)
+                : sidebarSurface.backgroundColor.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(visual.sectionRadius),
+            border: Border(
+              top: BorderSide(
+                color: isSelected
+                    ? optionSurface.highlightBorderColor.withValues(alpha: 0.58)
+                    : sidebarSurface.borderColor.withValues(alpha: 0.14),
+                width: optionSurface.borderWidth,
+              ),
             ),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(item.icon, size: 14, color: foreground),
-              SizedBox(width: visual.compactGap),
+              Icon(item.icon, size: 13, color: iconForeground),
+              SizedBox(height: visual.microGap),
               Text(
                 item.label,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: visual.compactLabelFontSize,
+                  fontSize: visual.compactLabelFontSize - 0.4,
                   fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
                   color: foreground,
                 ),
@@ -117,7 +140,7 @@ class _WorkbenchActivityRailItem {
 
 IconData _iconOf(WorkbenchNavigationPanelId panelId) {
   return switch (panelId) {
-    WorkbenchNavigationPanelId.files => Icons.folder_copy_outlined,
+    WorkbenchNavigationPanelId.files => Icons.folder_outlined,
     WorkbenchNavigationPanelId.project => Icons.inventory_2_outlined,
     WorkbenchNavigationPanelId.agent => Icons.smart_toy_outlined,
   };

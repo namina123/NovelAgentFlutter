@@ -1,0 +1,19 @@
+/// 参考证据基座命名空间的聚合导出。
+///
+/// 这里只导出应用级参考证据基座、项目参考挂载层和项目知识能力层桥接所需的稳定合同与纯领域服务。
+export 'reference_substrate/project_information_promotion_mapper_service.dart';
+export 'reference_substrate/project_reference_access_policy_service.dart';
+export 'reference_substrate/reference_access_models.dart';
+export 'reference_substrate/reference_attachment_pointer.dart';
+export 'reference_substrate/reference_bundle_models.dart';
+export 'reference_substrate/reference_entry_projection_mapper_service.dart';
+export 'reference_substrate/reference_entry_search_text_builder_service.dart';
+export 'reference_substrate/reference_evidence_substrate_state_models.dart';
+export 'reference_substrate/reference_package_models.dart';
+export 'reference_substrate/reference_projection_models.dart';
+export 'reference_substrate/reference_query.dart';
+export 'reference_substrate/reference_source_document_extraction_service.dart';
+export 'reference_substrate/reference_source_document_models.dart';
+export 'reference_substrate/reference_source_document_structure_service.dart';
+export 'reference_substrate/reference_substrate_constants.dart';
+export 'reference_substrate/reference_substrate_validation_codes.dart';

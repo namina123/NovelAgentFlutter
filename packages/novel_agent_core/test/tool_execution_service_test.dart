@@ -104,6 +104,140 @@ void main() {
       },
     );
 
+    test(
+      'injects workflow task context into set_agent_tasks arguments',
+      () async {
+        final port = _FakeToolExecutionPort(
+          resultByToolName: <String, JsonMap>{
+            'set_agent_tasks': <String, Object?>{
+              'ok': true,
+              'changed_paths': const <Object?>[],
+            },
+          },
+        );
+        final service = ToolExecutionService(toolExecutionPort: port);
+
+        await service.executeRound(
+          project: const ProjectDescriptor(
+            id: 'demo',
+            name: '示例项目',
+            rootPath: 'D:/demo',
+          ),
+          assistantMessage: const <String, Object?>{
+            'role': 'assistant',
+            'content': '',
+          },
+          toolCalls: const <Object?>[
+            <String, Object?>{
+              'id': 'call_1',
+              'name': 'set_agent_tasks',
+              'arguments': <String, Object?>{
+                'goal': '补齐规划产物',
+                'tasks': <Object?>[
+                  <String, Object?>{'id': 'write_spec', 'title': '写入项目规格'},
+                ],
+              },
+            },
+          ],
+          mainContext: const <String, Object?>{
+            'workflow_task_context': <String, Object?>{
+              'id': 'planning_seed_001',
+              'mode': 'seed_to_full_novel',
+              'metadata': <String, Object?>{
+                'plan_id': 'plan_seed_001',
+                'runtime_baseline_id': 'continuous_autonomous',
+              },
+            },
+          },
+        );
+
+        final injected = ValueReaders.mapValue(
+          port.lastCallArguments['_workflow_task_context'],
+        );
+        expect(ValueReaders.stringValue(injected['id']), 'planning_seed_001');
+        expect(
+          ValueReaders.stringValue(injected['mode']),
+          'seed_to_full_novel',
+        );
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(injected['metadata'])['plan_id'],
+          ),
+          'plan_seed_001',
+        );
+      },
+    );
+
+    test(
+      'injects chapter length metadata into submit_chapter_delivery when runtime constraints exist',
+      () async {
+        final port = _FakeToolExecutionPort(
+          resultByToolName: <String, JsonMap>{
+            NarrativeDomainToolNames.submitChapterDelivery: <String, Object?>{
+              'ok': true,
+              'changed_paths': const <Object?>[],
+            },
+          },
+        );
+        final service = ToolExecutionService(toolExecutionPort: port);
+
+        await service.executeRound(
+          project: const ProjectDescriptor(
+            id: 'demo',
+            name: '示例项目',
+            rootPath: 'D:/demo',
+          ),
+          assistantMessage: const <String, Object?>{
+            'role': 'assistant',
+            'content': '',
+          },
+          toolCalls: const <Object?>[
+            <String, Object?>{
+              'id': 'call_1',
+              'name': NarrativeDomainToolNames.submitChapterDelivery,
+              'arguments': <String, Object?>{
+                'chapter_path': 'chapters/第03章.md',
+                'chapter_content': '# 第03章\n\n正文',
+                'title': '第03章',
+              },
+            },
+          ],
+          mainContext: const <String, Object?>{
+            'writing_execution_constraints': <String, Object?>{
+              'chapter_length_metadata': <String, Object?>{
+                'chapter_length_profile': <String, Object?>{
+                  'enabled': true,
+                  'target_length': 2200,
+                  'preferred_min': 1800,
+                  'preferred_max': 2600,
+                },
+              },
+            },
+          },
+        );
+
+        final chapterLengthProfile = ValueReaders.mapValue(
+          ValueReaders.mapValue(
+            ValueReaders.mapValue(
+              port.lastCallArguments['metadata'],
+            )['chapter_length_metadata'],
+          )['chapter_length_profile'],
+        );
+        expect(
+          ValueReaders.intValue(chapterLengthProfile['target_length']),
+          2200,
+        );
+        expect(
+          ValueReaders.intValue(chapterLengthProfile['preferred_min']),
+          1800,
+        );
+        expect(
+          ValueReaders.intValue(chapterLengthProfile['preferred_max']),
+          2600,
+        );
+      },
+    );
+
     test('deduplicates repeated load_agent_skill calls in one run', () async {
       // 中文注释: 这里验证同一任务中重复读取同一技能会被执行层直接拦下，不再重复打到宿主工具端口。
       final port = _FakeToolExecutionPort(
@@ -165,10 +299,15 @@ void main() {
         skillLoadMemory: memory,
       );
 
-      expect(port.executedToolNames.where((name) => name == 'load_agent_skill'), hasLength(1));
+      expect(
+        port.executedToolNames.where((name) => name == 'load_agent_skill'),
+        hasLength(1),
+      );
       expect(
         ValueReaders.boolValue(
-          ValueReaders.mapValue(secondRound.executedTools.single)['not_executed'],
+          ValueReaders.mapValue(
+            secondRound.executedTools.single,
+          )['not_executed'],
         ),
         isTrue,
       );
@@ -196,4 +335,3 @@ class _FakeToolExecutionPort implements ToolExecutionPort {
         <String, Object?>{'ok': true, 'changed_paths': const <Object?>[]};
   }
 }
-

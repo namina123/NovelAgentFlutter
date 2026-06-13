@@ -133,9 +133,22 @@ void main() {
         expect(await designFile.exists(), isTrue);
         expect(await researchFile.exists(), isTrue);
         expect(await referenceFile.exists(), isTrue);
+        final knowledgeMarkdown = await knowledgeFile.readAsString();
+        expect(knowledgeMarkdown, contains('这份 Markdown 只保留轻摘要与人工补充入口'));
         expect(
-          await knowledgeFile.readAsString(),
-          contains('这份 Markdown 只是结构化信息事实源的可读投影'),
+          knowledgeMarkdown,
+          contains(
+            '来源身份：来源-source-1 / `imports/reference/source-1.txt` / kind:`user`',
+          ),
+        );
+        expect(
+          knowledgeMarkdown,
+          contains('project-information://knowledge_cards'),
+        );
+        expect(knowledgeMarkdown, isNot(contains('结构化参考快照')));
+        expect(
+          knowledgeMarkdown,
+          isNot(contains(r'D:\reference\source-1.txt')),
         );
 
         await knowledgeFile.delete();
@@ -178,6 +191,11 @@ Map<String, Object?> _sourceRefJson() {
     'source_ref': <String, Object?>{
       'source_type': NarrativeSourceTypes.user,
       'source_id': 'source-1',
+      'source_asset_id': 'imports/reference/source-1.txt',
+      'display_name': '来源-source-1',
+      'source_kind': NarrativeSourceTypes.user,
+      'resolver_uri': 'project-source://source-1',
+      'local_hint_path': r'D:\reference\source-1.txt',
     },
     'source_authority': InformationSourceAuthorities.userDeclared,
     'role_authority': InformationRoleAuthorities.user,
