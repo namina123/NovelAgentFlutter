@@ -1,6 +1,7 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
 import 'session_message_service.dart';
+import 'session_record_constants.dart';
 
 class SessionHistoryService {
   SessionHistoryService({required SessionMessageService messageService})
@@ -52,7 +53,8 @@ class SessionHistoryService {
   }) {
     // 中文注释: 历史窗口从尾部倒着取消息，保证最近对话优先保留下来。
     final messages = _messageService.normalizeMessages(
-      session['context_messages'],
+      session[SessionRecordConstants.workingContextMessagesField] ??
+          session[SessionRecordConstants.legacyContextMessagesField],
     );
     final kept = <JsonMap>[];
     var chars = 0;
@@ -89,7 +91,9 @@ class SessionHistoryService {
       maxMessages: maxMessages <= 0 ? 1000000 : maxMessages,
       maxChars: maxChars <= 0 ? 1000000000 : maxChars,
     );
-    final meta = ValueReaders.deepCopyMap(session)..remove('context_messages');
+    final meta = ValueReaders.deepCopyMap(session)
+      ..remove(SessionRecordConstants.legacyContextMessagesField)
+      ..remove(SessionRecordConstants.workingContextMessagesField);
     meta['jsonl_omitted_message_count'] = ValueReaders.intValue(
       window['omitted_count'],
     );

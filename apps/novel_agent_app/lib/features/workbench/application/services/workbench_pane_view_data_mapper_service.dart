@@ -60,6 +60,7 @@ class WorkbenchPaneViewDataMapperService {
       pendingOptions: source.pendingOptions,
       subAgentRuns: source.subAgentRuns,
       retryRequest: source.retryRequest,
+      contextProjection: source.conversationContextProjection,
     );
     return WorkbenchConversationViewData(
       hasActiveProject: source.projectPath.trim().isNotEmpty,
@@ -74,6 +75,7 @@ class WorkbenchPaneViewDataMapperService {
         hasActiveProject: source.projectPath.trim().isNotEmpty,
       ),
       contextSummary: source.contextSummary,
+      conversationContextProjection: source.conversationContextProjection,
       workflowTitle: source.workflowTitle,
       workflowDescription: source.workflowDescription,
       primaryActions: source.primaryActions,

@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:novel_agent_core/novel_agent_core.dart';
 import 'package:novel_agent_app/app/theme/app_theme.dart';
 import 'package:novel_agent_app/features/workbench/application/models/conversation_tool_lifecycle_status.dart';
 import 'package:novel_agent_app/features/workbench/application/services/workbench_pane_view_data_mapper_service.dart';
 import 'package:novel_agent_app/features/workbench/presentation/contracts/conversation_action_handler.dart';
+import 'package:novel_agent_app/features/workbench/presentation/models/conversation_context_compaction_segment_view_data.dart';
+import 'package:novel_agent_app/features/workbench/presentation/models/conversation_context_projection_view_data.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/conversation_agent_selector_view_data.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/conversation_entry_view_data.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/conversation_group_selector_view_data.dart';
@@ -599,6 +602,65 @@ void main() {
     expect(find.text('待确认'), findsWidgets);
     expect(find.text('请先确认资料研究方向。'), findsWidgets);
   });
+
+  testWidgets(
+    'conversation sidebar shows context pressure chips and archive folds from the stable projection',
+    (tester) async {
+      _setLargeTestViewport(tester);
+      final projection = ConversationContextProjectionViewData(
+        pressureSnapshot: SessionContextPressureSnapshot(
+          settings: SessionTokenBudgetSettings(
+            modelContextWindowTokens: 1000,
+            reservedOutputTokens: 100,
+          ),
+          estimate: SessionTokenBudgetEstimate(
+            systemPromptTokens: 20,
+            messageTokens: 820,
+            framingTokens: 12,
+          ),
+        ),
+        transcriptMessageCount: 7,
+        workingContextMessageCount: 4,
+        compactionSegments: const [
+          ConversationContextCompactionSegmentViewData(
+            id: 'segment_1',
+            title: '发送前压缩',
+            summary: '已压缩保存更早历史',
+            sourceMessageCount: 3,
+            createdAt: '2026-06-14T00:00:00.000Z',
+            sourceMessageRoles: ['user', 'assistant'],
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        _buildSidebarHost(
+          viewData: WorkbenchViewData.initial().copyWith(
+            conversationContextProjection: projection,
+            conversationEntries: const [
+              ConversationEntryViewData(
+                id: 'user_1',
+                kind: ConversationEntryKind.user,
+                title: '你',
+                body: '继续写。',
+              ),
+            ],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('上下文概览'), findsOneWidget);
+      expect(find.textContaining('压力'), findsWidgets);
+      expect(find.textContaining('完整历史'), findsWidgets);
+      expect(find.textContaining('归档压缩'), findsWidgets);
+      expect(find.textContaining('工作窗口'), findsWidgets);
+      expect(find.textContaining('预警'), findsWidgets);
+      expect(find.textContaining('1 段 / 3 条'), findsWidgets);
+      expect(find.text('发送前压缩'), findsOneWidget);
+      expect(find.text('已压缩保存更早历史'), findsOneWidget);
+    },
+  );
 }
 
 Widget _buildSidebarHost({

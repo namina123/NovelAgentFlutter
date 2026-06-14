@@ -54,6 +54,8 @@ class WorkbenchWorkspaceController
     required void Function(WorkbenchProjectRuntimeState state)
     writeProjectState,
     required void Function() resetConversationRuntimeState,
+    required Future<void> Function(ProjectDescriptor project)
+    restoreConversationRuntimeState,
     required WorkbenchViewData Function() readWorkbench,
     required void Function(
       WorkbenchViewData Function(WorkbenchViewData current),
@@ -109,6 +111,7 @@ class WorkbenchWorkspaceController
        _readProjectState = readProjectState,
        _writeProjectState = writeProjectState,
        _resetConversationRuntimeState = resetConversationRuntimeState,
+       _restoreConversationRuntimeState = restoreConversationRuntimeState,
        _readWorkbench = readWorkbench,
        _mutateWorkbench = mutateWorkbench,
        _applyConversationState = applyConversationState,
@@ -172,6 +175,8 @@ class WorkbenchWorkspaceController
   final WorkbenchProjectRuntimeState Function() _readProjectState;
   final void Function(WorkbenchProjectRuntimeState state) _writeProjectState;
   final void Function() _resetConversationRuntimeState;
+  final Future<void> Function(ProjectDescriptor project)
+  _restoreConversationRuntimeState;
   final WorkbenchViewData Function() _readWorkbench;
   final void Function(WorkbenchViewData Function(WorkbenchViewData current))
   _mutateWorkbench;
@@ -342,6 +347,7 @@ class WorkbenchWorkspaceController
       ),
     );
     _resetConversationRuntimeState();
+    await _restoreConversationRuntimeState(snapshot.project);
     _latestInformationViewData = await _buildInformationViewData(
       snapshot.project,
       snapshot.entries,

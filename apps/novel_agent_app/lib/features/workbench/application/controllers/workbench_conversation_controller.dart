@@ -6,6 +6,7 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 import '../../../../app/theme/theme_preference_resolver.dart';
 import '../../presentation/contracts/conversation_action_handler.dart';
 import '../../presentation/models/conversation_agent_selector_view_data.dart';
+import '../../presentation/models/conversation_context_projection_view_data.dart';
 import '../../presentation/models/conversation_entry_view_data.dart';
 import '../../presentation/models/retry_request_view_data.dart';
 import '../../presentation/models/user_option_view_data.dart';
@@ -30,10 +31,12 @@ import '../services/conversation_guide_view_data_service.dart';
 import '../services/conversation_group_selector_view_data_service.dart';
 import '../services/conversation_opening_panel_view_data_service.dart';
 import '../services/conversation_draft_autosave_policy_service.dart';
+import '../services/conversation_session_context_projection_service.dart';
 import '../services/project_opening_maturity_assessment_service.dart';
 import '../services/project_opening_session_projection_service.dart';
 import '../services/project_opening_agent_group_binding_service.dart';
 import '../services/ordinary_conversation_task_profile_service.dart';
+import '../services/conversation_session_preflight_service.dart';
 import '../services/conversation_request_runtime_service.dart';
 import '../services/conversation_session_state_service.dart';
 import '../services/conversation_streaming_state_service.dart';
@@ -51,6 +54,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
     HostAwareGenerateDraftUseCaseFactory? hostAwareGenerateDraftUseCaseFactory,
     required ModelExecutionProfileService modelExecutionProfileService,
     required ConversationSessionStateService conversationSessionStateService,
+    required ProjectSessionWorkspaceService projectSessionWorkspaceService,
     required ConversationStreamingStateService
     conversationStreamingStateService,
     required ConversationGuideViewDataService conversationGuideViewDataService,
@@ -74,6 +78,9 @@ class WorkbenchConversationController implements ConversationActionHandler {
     ConversationDraftAutosavePolicyService? draftAutosavePolicyService,
     ConversationAttachmentPickerService? conversationAttachmentPickerService,
     ConversationAttachmentDraftService? conversationAttachmentDraftService,
+    ConversationSessionPreflightService? conversationSessionPreflightService,
+    ConversationSessionContextProjectionService?
+    conversationSessionContextProjectionService,
     required UserOptionPromptBuilderService userOptionPromptBuilderService,
     required LoadModeGuidanceStateUseCase loadModeGuidanceStateUseCase,
     required AnswerModeGuidanceStageUseCase answerModeGuidanceStageUseCase,
@@ -121,6 +128,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
            hostAwareGenerateDraftUseCaseFactory,
        _modelExecutionProfileService = modelExecutionProfileService,
        _conversationSessionStateService = conversationSessionStateService,
+       _projectSessionWorkspaceService = projectSessionWorkspaceService,
        _conversationStreamingStateService = conversationStreamingStateService,
        _conversationGuideViewDataService = conversationGuideViewDataService,
        _conversationOpeningPanelViewDataService =
@@ -151,6 +159,14 @@ class WorkbenchConversationController implements ConversationActionHandler {
        _conversationAttachmentDraftService =
            conversationAttachmentDraftService ??
            const ConversationAttachmentDraftService(),
+       _conversationSessionPreflightService =
+           conversationSessionPreflightService ??
+           ConversationSessionPreflightService(
+             sessionStateService: conversationSessionStateService,
+           ),
+       _conversationSessionContextProjectionService =
+           conversationSessionContextProjectionService ??
+           ConversationSessionContextProjectionService(),
        _userOptionPromptBuilderService = userOptionPromptBuilderService,
        _loadModeGuidanceStateUseCase = loadModeGuidanceStateUseCase,
        _answerModeGuidanceStageUseCase = answerModeGuidanceStageUseCase,
@@ -202,6 +218,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
   _hostAwareGenerateDraftUseCaseFactory;
   final ModelExecutionProfileService _modelExecutionProfileService;
   final ConversationSessionStateService _conversationSessionStateService;
+  final ProjectSessionWorkspaceService _projectSessionWorkspaceService;
   final ConversationStreamingStateService _conversationStreamingStateService;
   final ConversationGuideViewDataService _conversationGuideViewDataService;
   final ConversationOpeningPanelViewDataService
@@ -224,6 +241,10 @@ class WorkbenchConversationController implements ConversationActionHandler {
   final ConversationAttachmentPickerService
   _conversationAttachmentPickerService;
   final ConversationAttachmentDraftService _conversationAttachmentDraftService;
+  final ConversationSessionPreflightService
+  _conversationSessionPreflightService;
+  final ConversationSessionContextProjectionService
+  _conversationSessionContextProjectionService;
   final UserOptionPromptBuilderService _userOptionPromptBuilderService;
   final LoadModeGuidanceStateUseCase _loadModeGuidanceStateUseCase;
   final AnswerModeGuidanceStageUseCase _answerModeGuidanceStageUseCase;
@@ -265,12 +286,31 @@ class WorkbenchConversationController implements ConversationActionHandler {
   final ThemePreferenceResolver _themePreferenceResolver =
       ThemePreferenceResolver();
   ConversationRequestHandle? _activeRequestHandle;
+  Future<void> _sessionPersistenceChain = Future<void>.value();
 
   void resetRuntimeState() {
     // 中文注释: 切换项目时会话运行时状态必须整体重置，避免旧项目会话残留继续投影到新工作区。
     _activeRequestHandle?.requestCancellation();
     _activeRequestHandle = null;
     _writeRuntimeState(const WorkbenchConversationRuntimeState());
+  }
+
+  Future<void> restoreProjectSessions(ProjectDescriptor project) async {
+    // 中文注释: 项目重载时优先恢复已持久化的会话骨架，让历史列表和当前活动会话都来自项目真实记录。
+    final snapshot = await _projectSessionWorkspaceService.loadSessions(
+      project,
+    );
+    final restoredSessions = snapshot.sessionRecords
+        .map(_conversationSessionStateService.restoreSession)
+        .toList(growable: false);
+    _writeRuntimeState(
+      _readRuntimeState().copyWith(
+        sessions: restoredSessions,
+        activeSessionId: snapshot.activeSessionId,
+        showSessionHistory: false,
+        guideScope: '',
+      ),
+    );
   }
 
   WorkbenchViewData applyConversationState(
@@ -280,6 +320,11 @@ class WorkbenchConversationController implements ConversationActionHandler {
     // 中文注释: 会话视图投影统一在这里完成，避免壳层和工作区各自手拼右栏状态。
     final runtimeState = _readRuntimeState();
     final activeState = _activeConversationState();
+    final runtimeProfile = _conversationRuntimeProfileFor();
+    final conversationContextProjection = _exposedConversationContextProjection(
+      activeState,
+      runtimeProfile: runtimeProfile,
+    );
     _scheduleOpeningProjectionRefresh(
       runtimeState: runtimeState,
       activeState: activeState,
@@ -331,6 +376,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
       ),
       activeSessionId: runtimeState.activeSessionId,
       showSessionHistory: runtimeState.showSessionHistory,
+      conversationContextProjection: conversationContextProjection,
       contextSummary:
           contextSummaryOverride ??
           _conversationSummary(activeState, fallback: base.contextSummary),
@@ -345,12 +391,17 @@ class WorkbenchConversationController implements ConversationActionHandler {
     required String toolCoreStatus,
   }) {
     // 中文注释: 流式阶段只刷新会话相关字段，避免每个分片都重算引导、历史和其他工作台投影。
+    final conversationContextProjection = _exposedConversationContextProjection(
+      activeState,
+      runtimeProfile: _conversationRuntimeProfileFor(),
+    );
     return base.copyWith(
       conversationEntries: activeState.entries,
       pendingOptions: activeState.pendingOptions,
       subAgentRuns: activeState.subAgentRuns,
       retryRequest: _retryRequestViewData(activeState.retryRequest),
       contextSummary: contextSummary,
+      conversationContextProjection: conversationContextProjection,
       generationStatus: generationStatus,
       toolCoreStatus: toolCoreStatus,
       isGenerating: true,
@@ -675,6 +726,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
         guideScope: '',
       ),
     );
+    _scheduleSessionPersistence();
     _mutateWorkbench(
       (current) => applyConversationState(
         current.copyWith(generationStatus: '已切换到所选历史会话。'),
@@ -942,10 +994,16 @@ class WorkbenchConversationController implements ConversationActionHandler {
             strategySettings: contextStrategySettings,
             modelProfile: runtimeProfile,
           );
-    _replaceConversationSession(userPromptState, activate: true);
+    final preflight = _conversationSessionPreflightService.prepareForSend(
+      state: userPromptState,
+      runtimeProfile: runtimeProfile,
+      excludeLatestUserContent: cleanText,
+      retryLastFailure: retryLastFailure,
+    );
+    _replaceConversationSession(preflight.sessionState, activate: true);
     unawaited(
       _refreshOpeningProjection(
-        activeState: userPromptState,
+        activeState: preflight.sessionState,
         forceReloadModeGuidance: false,
       ),
     );
@@ -960,21 +1018,17 @@ class WorkbenchConversationController implements ConversationActionHandler {
           toolCoreStatus: '',
         ),
         contextSummaryOverride: _conversationSummary(
-          userPromptState,
+          preflight.sessionState,
           fallback: '正在整理会话与项目上下文',
         ),
       ),
     );
-    final sessionContext = _conversationSessionStateService
-        .sessionContextMarkdown(
-          userPromptState,
-          excludeLatestUserContent: cleanText,
-        );
+    final sessionContext = preflight.sessionContextMarkdown;
     final streamingContextSummary = _conversationSummary(
-      userPromptState,
+      preflight.sessionState,
       fallback: '正在接收模型输出',
     );
-    var streamingBaseState = userPromptState;
+    var streamingBaseState = preflight.sessionState;
     ProjectConversationDraftRuntimePreparation? conversationDraftRuntime;
     final taskProfile = _ordinaryConversationTaskProfile(
       agent: requestAgent.agent,
@@ -990,7 +1044,11 @@ class WorkbenchConversationController implements ConversationActionHandler {
           final streamingState = _conversationStreamingStateService
               .stateWithProgress(streamingBaseState, progress);
           streamingBaseState = streamingState;
-          _replaceConversationSession(streamingState, activate: true);
+          _replaceConversationSession(
+            streamingState,
+            activate: true,
+            persist: false,
+          );
           _mutateWorkbench(
             (current) => applyStreamingConversationState(
               current,
@@ -1094,7 +1152,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
       }
       _applyRequestFailure(
         error: error,
-        userPromptState: userPromptState,
+        userPromptState: preflight.sessionState,
         cleanText: cleanText,
         visibleText: visibleText,
         contextStrategySettings: contextStrategySettings,
@@ -1650,6 +1708,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
   void _replaceConversationSession(
     ConversationSessionState state, {
     bool activate = false,
+    bool persist = true,
   }) {
     final runtimeState = _readRuntimeState();
     final sessionId = _sessionIdOf(state);
@@ -1674,6 +1733,9 @@ class WorkbenchConversationController implements ConversationActionHandler {
             : runtimeState.activeSessionId,
       ),
     );
+    if (persist) {
+      _scheduleSessionPersistence();
+    }
   }
 
   String _sessionIdOf(ConversationSessionState state) {
@@ -1682,6 +1744,30 @@ class WorkbenchConversationController implements ConversationActionHandler {
       return id;
     }
     return _stringValue(state.sessionRecord['id']);
+  }
+
+  void _scheduleSessionPersistence() {
+    final project = _workspaceController.currentProject;
+    if (project == null) {
+      return;
+    }
+    final runtimeState = _readRuntimeState();
+    final sessionRecords = runtimeState.sessions
+        .map((state) => ValueReaders.deepCopyMap(state.sessionRecord))
+        .toList(growable: false);
+    final activeSessionId = runtimeState.activeSessionId.trim();
+    _sessionPersistenceChain = _sessionPersistenceChain
+        .catchError((_) {})
+        .then(
+          (_) => _projectSessionWorkspaceService.saveSessions(
+            project,
+            sessionRecords: sessionRecords,
+            activeSessionId: activeSessionId,
+          ),
+        )
+        .catchError((error, _) {
+          _announce('会话历史保存失败：$error');
+        });
   }
 
   JsonMap _selectedCollaborationGroupForRuntime(
@@ -1779,6 +1865,45 @@ class WorkbenchConversationController implements ConversationActionHandler {
         .publicSummary(state)
         .trim();
     return summary.isEmpty ? fallback : summary;
+  }
+
+  JsonMap _conversationRuntimeProfileFor() {
+    // 中文注释: 上下文压力投影尽量复用当前模型执行 profile，但在 settings 或 provider 尚未就绪时允许退回空配置。
+    final settings = _readSettings();
+    if (settings == null || _workspaceController.currentProject == null) {
+      return const <String, Object?>{};
+    }
+    final provider = _selectedModelProvider(settings);
+    if (provider == null) {
+      return const <String, Object?>{};
+    }
+    final requestAgent = _resolveRequestAgent();
+    final executionProfile = _modelExecutionProfileService.resolve(
+      settings: settings,
+      provider: provider,
+      agent: requestAgent.agent,
+    );
+    return _mapValue(executionProfile['runtime_profile']);
+  }
+
+  ConversationContextProjectionViewData? _exposedConversationContextProjection(
+    ConversationSessionState? state, {
+    required JsonMap runtimeProfile,
+  }) {
+    // 中文注释: 只在会话确实有可展示的压力、完整历史或归档时才把投影抬到 GUI，避免空会话也出现噪音徽标。
+    if (state == null) {
+      return null;
+    }
+    final projection = _conversationSessionContextProjectionService.build(
+      state: state,
+      runtimeProfile: runtimeProfile,
+    );
+    if (projection.transcriptMessageCount <= 0 &&
+        projection.workingContextMessageCount <= 0 &&
+        !projection.hasArchive) {
+      return null;
+    }
+    return projection;
   }
 
   bool _isActiveRequestHandle(ConversationRequestHandle handle) {

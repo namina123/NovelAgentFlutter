@@ -231,7 +231,7 @@ void main() {
       final next = service.stateWithAssistantResult(created, result);
       expect(next.entries.single.kind, ConversationEntryKind.tool);
       expect(next.entries.single.isError, isFalse);
-      expect(next.entries.single.body, contains('list_project_files'));
+      expect(next.entries.single.body, contains('需要确认'));
     });
 
     test('pending options fallback to title and prompt aliases', () {
@@ -342,13 +342,13 @@ void main() {
           ),
         );
 
-        expect(first.entries, hasLength(2));
-        expect(first.entries.last.kind, ConversationEntryKind.assistant);
-        expect(first.entries.last.body, contains('正在出现'));
-        expect(second.entries, hasLength(2));
-        expect(second.entries.last.kind, ConversationEntryKind.assistant);
-        expect(second.entries.last.body, contains('正在出现'));
-      },
+      expect(first.entries, hasLength(3));
+      expect(first.entries.last.kind, ConversationEntryKind.assistant);
+      expect(first.entries.last.body, contains('正在出现'));
+      expect(second.entries, hasLength(3));
+      expect(second.entries.last.kind, ConversationEntryKind.assistant);
+      expect(second.entries.last.body, contains('正在出现'));
+    },
     );
 
     test(
@@ -509,6 +509,102 @@ void main() {
         expect(next.retryRequest!.label, '重试这次已停止请求');
         expect(next.retryRequest!.visibleText, '用户看到的入口文案');
         expect(next.retryRequest!.errorMessage, isEmpty);
+      },
+    );
+
+    test(
+      'restoreSession rebuilds visible entries from persisted session record',
+      () {
+        final service = ConversationSessionStateService();
+        final restored = service.restoreSession(<String, Object?>{
+          'id': 'restored_session',
+          'title': '历史会话',
+          'mode': SessionRecordConstants.modeContinueWriting,
+          'workflow_stage': 'draft',
+          'public_status': '继续写作',
+          'needs_goal_selection': false,
+          'is_creative': true,
+          'context_messages': <Object?>[
+            <String, Object?>{'role': 'user', 'content': '先看设定'},
+            <String, Object?>{'role': 'assistant', 'content': '我先整理人物。'},
+          ],
+          'compressed_context': 'older summary',
+          'compression_count': 1,
+          'compression_threshold_chars': 12000,
+          'total_context_chars': 20,
+          'created_at': '2026-06-14T00:00:00.000Z',
+          'updated_at': '2026-06-14T00:02:00.000Z',
+        });
+
+        expect(restored.entries, hasLength(3));
+        expect(restored.entries.first.kind, ConversationEntryKind.system);
+        expect(restored.entries.first.title, '更早历史');
+        expect(restored.entries[1].kind, ConversationEntryKind.user);
+        expect(restored.entries[1].body, '先看设定');
+        expect(restored.entries[2].kind, ConversationEntryKind.assistant);
+        expect(restored.entries[2].body, '我先整理人物。');
+      },
+    );
+
+    test(
+      'restoreSession restores archive folds and working window from split session record',
+      () {
+        // 中文注释: 新三分记录恢复后应先回放 archive fold，再回放完整 transcript，最后补一个工作窗口提示。
+        final service = ConversationSessionStateService();
+        final restored = service.restoreSession(<String, Object?>{
+          'id': 'split_session',
+          'title': '分层会话',
+          'mode': SessionRecordConstants.modeContinueWriting,
+          'workflow_stage': 'draft',
+          'public_status': '继续写作',
+          'needs_goal_selection': false,
+          'is_creative': true,
+          'transcript_messages': <Object?>[
+            <String, Object?>{'role': 'user', 'content': '第一轮：先看前情'},
+            <String, Object?>{'role': 'assistant', 'content': '我先整理前情。'},
+            <String, Object?>{'role': 'user', 'content': '第二轮：继续推进'},
+          ],
+          'working_context_messages': <Object?>[
+            <String, Object?>{'role': 'assistant', 'content': '我先整理前情。'},
+            <String, Object?>{'role': 'user', 'content': '第二轮：继续推进'},
+          ],
+          'compaction_segments': <Object?>[
+            <String, Object?>{
+              'id': 'segment_1',
+              'kind': 'preflight_compaction',
+              'title': '更早历史',
+              'summary': '压缩片段 1（自动）：\n更早历史摘要',
+              'source_message_count': 2,
+              'source_message_roles': <String>['user', 'assistant'],
+              'created_at': '2026-06-14T00:00:00.000Z',
+            },
+          ],
+          'pinned_context_refs': <Object?>['scene.anchor'],
+          'compressed_context': '',
+          'compression_count': 1,
+          'compression_threshold_chars': 12000,
+          'total_context_chars': 20,
+          'created_at': '2026-06-14T00:00:00.000Z',
+          'updated_at': '2026-06-14T00:05:00.000Z',
+        });
+
+        expect(restored.entries, hasLength(5));
+        expect(restored.entries[0].kind, ConversationEntryKind.system);
+        expect(restored.entries[0].title, '更早历史');
+        expect(restored.entries[0].body, contains('更早历史摘要'));
+        expect(restored.entries[1].kind, ConversationEntryKind.user);
+        expect(restored.entries[1].body, '第一轮：先看前情');
+        expect(restored.entries[3].kind, ConversationEntryKind.user);
+        expect(restored.entries[3].body, '第二轮：继续推进');
+        expect(restored.entries[4].kind, ConversationEntryKind.system);
+        expect(restored.entries[4].title, '当前工作上下文');
+        expect(restored.entries[4].body, contains('最近 2 条消息'));
+        expect(restored.entries[4].detailBody, contains('assistant: 我先整理前情。'));
+        expect(restored.sessionRecord['transcript_messages'], hasLength(3));
+        expect(
+          restored.sessionRecord['working_context_messages'],
+          hasLength(2),
+        );
       },
     );
   });

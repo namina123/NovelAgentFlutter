@@ -14,6 +14,7 @@ import 'resource_entry_view_data.dart';
 import 'retry_request_view_data.dart';
 import 'selector_option_view_data.dart';
 import 'session_history_entry_view_data.dart';
+import 'conversation_context_projection_view_data.dart';
 import 'sub_agent_run_view_data.dart';
 import 'user_option_view_data.dart';
 import 'workbench_information_view_data.dart';
@@ -41,6 +42,7 @@ class WorkbenchViewData {
     this.agentSelector = const ConversationAgentSelectorViewData.initial(),
     required this.inputCapabilityContext,
     required this.contextSummary,
+    this.conversationContextProjection,
     required this.workflowTitle,
     required this.workflowDescription,
     required this.primaryActions,
@@ -83,6 +85,7 @@ class WorkbenchViewData {
   final ConversationAgentSelectorViewData agentSelector;
   final ConversationInputCapabilityContext inputCapabilityContext;
   final String contextSummary;
+  final ConversationContextProjectionViewData? conversationContextProjection;
   final String workflowTitle;
   final String workflowDescription;
   final List<PrimaryActionViewData> primaryActions;
@@ -187,6 +190,8 @@ class WorkbenchViewData {
     ConversationAgentSelectorViewData? agentSelector,
     ConversationInputCapabilityContext? inputCapabilityContext,
     String? contextSummary,
+    Object? conversationContextProjection =
+        _conversationContextProjectionSentinel,
     String? workflowTitle,
     String? workflowDescription,
     List<PrimaryActionViewData>? primaryActions,
@@ -236,6 +241,14 @@ class WorkbenchViewData {
       inputCapabilityContext:
           inputCapabilityContext ?? this.inputCapabilityContext,
       contextSummary: contextSummary ?? this.contextSummary,
+      conversationContextProjection:
+          identical(
+            conversationContextProjection,
+            _conversationContextProjectionSentinel,
+          )
+          ? this.conversationContextProjection
+          : conversationContextProjection
+                as ConversationContextProjectionViewData?,
       workflowTitle: workflowTitle ?? this.workflowTitle,
       workflowDescription: workflowDescription ?? this.workflowDescription,
       primaryActions: primaryActions ?? this.primaryActions,
@@ -290,5 +303,6 @@ const Object _projectAgentGroupWorkspaceSentinel = Object();
 const Object _workspaceCommandSentinel = Object();
 const Object _retryRequestViewSentinel = Object();
 const Object _projectLongTaskSummarySentinel = Object();
+const Object _conversationContextProjectionSentinel = Object();
 const Object _openingPanelSentinel = Object();
 const Object _conversationOpeningStateSentinel = Object();

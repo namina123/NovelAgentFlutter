@@ -24,6 +24,7 @@ import '../services/conversation_sub_agent_detail_route_service.dart';
 import 'conversation_composer_panel.dart';
 import 'conversation_empty_state_panel.dart';
 import 'conversation_fullscreen_host.dart';
+import 'context_status_badge.dart';
 import 'conversation_panel_header.dart';
 import 'conversation_panel_status_group.dart';
 import 'conversation_runtime_status_strip.dart';
@@ -405,22 +406,48 @@ class _ConversationStatusDeck extends StatelessWidget {
     final runtimeText = _runtimeText();
     final runtimeStatus = _runtimeStatus();
     final cleanRuntimeText = runtimeText.trim();
-    if (statusSummary.items.isEmpty && cleanRuntimeText.isEmpty) {
+    final contextProjection = viewData.conversationContextProjection;
+    if (statusSummary.items.isEmpty &&
+        cleanRuntimeText.isEmpty &&
+        contextProjection == null) {
       return const SizedBox.shrink();
     }
     if (minimal) {
-      if (cleanRuntimeText.isEmpty) {
-        return const SizedBox.shrink();
-      }
-      return ConversationRuntimeStatusStrip(
-        text: cleanRuntimeText,
-        status: runtimeStatus,
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (contextProjection != null) ...[
+            ContextStatusBadge(projection: contextProjection),
+            SizedBox(
+              height: ConversationPanelStyle.of(context).gap(-0.75, min: 4),
+            ),
+          ],
+          if (statusSummary.items.isNotEmpty) ...[
+            ConversationPanelStatusGroup(
+              viewData: statusSummary,
+              onItemPressed: (_) {},
+            ),
+            if (cleanRuntimeText.isNotEmpty)
+              SizedBox(
+                height: ConversationPanelStyle.of(context).gap(-0.5, min: 3),
+              ),
+          ],
+          if (cleanRuntimeText.isNotEmpty)
+            ConversationRuntimeStatusStrip(
+              text: cleanRuntimeText,
+              status: runtimeStatus,
+            ),
+        ],
       );
     }
     final style = ConversationPanelStyle.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (contextProjection != null) ...[
+          ContextStatusBadge(projection: contextProjection),
+          SizedBox(height: style.gap(-0.8, min: 4)),
+        ],
         if (statusSummary.items.isNotEmpty) ...[
           ConversationPanelStatusGroup(
             viewData: statusSummary,

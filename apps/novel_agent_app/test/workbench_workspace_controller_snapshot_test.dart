@@ -303,6 +303,97 @@ void main() {
         );
       },
     );
+
+    test('loadProject restores persisted conversation runtime state', () async {
+      final workspacePort = LocalProjectWorkspacePort();
+      final tempDirectory = await Directory.systemTemp.createTemp(
+        'workbench_session_restore_',
+      );
+      addTearDown(() async {
+        if (await tempDirectory.exists()) {
+          await tempDirectory.delete(recursive: true);
+        }
+      });
+      await _writeProjectFile(
+        tempDirectory.path,
+        'sessions/session_1.json',
+        const JsonEncoder.withIndent('  ').convert(<String, Object?>{
+          'id': 'session_1',
+          'title': '历史会话',
+          'mode': SessionRecordConstants.modeContinueWriting,
+          'workflow_stage': 'draft',
+          'public_status': '继续写作',
+          'needs_goal_selection': false,
+          'is_creative': true,
+          'transcript_messages': <Object?>[
+            <String, Object?>{'role': 'user', 'content': '先看前情提要'},
+            <String, Object?>{'role': 'assistant', 'content': '好的，我先整理。'},
+            <String, Object?>{'role': 'user', 'content': '继续写下一段。'},
+          ],
+          'working_context_messages': <Object?>[
+            <String, Object?>{'role': 'assistant', 'content': '好的，我先整理。'},
+            <String, Object?>{'role': 'user', 'content': '继续写下一段。'},
+          ],
+          'compaction_segments': <Object?>[
+            <String, Object?>{
+              'id': 'segment_1',
+              'kind': 'preflight_compaction',
+              'title': '更早历史',
+              'summary': '压缩片段 1（自动）：\n先看前情提要。',
+              'source_message_count': 1,
+              'source_message_roles': <String>['user'],
+              'created_at': '2026-06-14T00:00:00.000Z',
+            },
+          ],
+          'pinned_context_refs': <Object?>['scene.anchor'],
+          'context_messages': <Object?>[
+            <String, Object?>{'role': 'assistant', 'content': '好的，我先整理。'},
+            <String, Object?>{'role': 'user', 'content': '继续写下一段。'},
+          ],
+          'compressed_context': '压缩片段 1（自动）：\n先看前情提要。',
+          'compression_count': 1,
+          'compression_threshold_chars': 12000,
+          'transcript_context_chars': 23,
+          'working_context_chars': 15,
+          'compaction_archive_chars': 16,
+          'total_context_chars': 31,
+          'created_at': '2026-06-14T00:00:00.000Z',
+          'updated_at': '2026-06-14T00:05:00.000Z',
+        }),
+      );
+      await _writeProjectFile(
+        tempDirectory.path,
+        'sessions/session_index.json',
+        const JsonEncoder.withIndent('  ').convert(<String, Object?>{
+          'current_session_id': 'session_1',
+          'sessions': <Object?>[
+            <String, Object?>{
+              'id': 'session_1',
+              'title': '历史会话',
+              'updated_at': '2026-06-14T00:05:00.000Z',
+            },
+          ],
+        }),
+      );
+      final harness = _ControllerHarness(
+        settings: _baseSettings(),
+        workbench: WorkbenchViewData.initial(),
+        projectState: const WorkbenchProjectRuntimeState(),
+        projectRepository: _FixedProjectRepository(
+          _project(tempDirectory.path),
+        ),
+        workspacePort: workspacePort,
+        toolHostPort: ProjectWorkspaceToolHostAdapter(
+          workspacePort: workspacePort,
+          fileMutationAdapter: LocalProjectFileMutationAdapter(),
+        ),
+      );
+
+      final loaded = await harness.controller.loadProject(tempDirectory.path);
+
+      expect(loaded, isTrue);
+      expect(harness.restoredProjects, <String>[tempDirectory.path]);
+    });
   });
 }
 
@@ -338,6 +429,9 @@ class _ControllerHarness {
       writeProjectState: (next) {
         _projectState = next;
       },
+      restoreConversationRuntimeState: (project) async {
+        _restoredProjects.add(project.rootPath);
+      },
     );
   }
 
@@ -345,11 +439,14 @@ class _ControllerHarness {
   WorkbenchViewData _workbench;
   WorkbenchProjectRuntimeState _projectState;
   final List<AppSettings> _savedSettings = <AppSettings>[];
+  final List<String> _restoredProjects = <String>[];
 
   late final WorkbenchWorkspaceController controller;
 
   WorkbenchViewData get workbench => _workbench;
   WorkbenchProjectRuntimeState get projectState => _projectState;
+  List<String> get restoredProjects =>
+      List<String>.unmodifiable(_restoredProjects);
   List<AppSettings> get savedSettings =>
       List<AppSettings>.unmodifiable(_savedSettings);
 }
@@ -367,8 +464,11 @@ WorkbenchWorkspaceController _createController({
   mutateWorkbench,
   required WorkbenchProjectRuntimeState Function() readProjectState,
   required void Function(WorkbenchProjectRuntimeState state) writeProjectState,
+  required Future<void> Function(ProjectDescriptor project)
+  restoreConversationRuntimeState,
 }) {
-  final effectiveProjectRepository = projectRepository ?? _NoopProjectRepository();
+  final effectiveProjectRepository =
+      projectRepository ?? _NoopProjectRepository();
   final effectiveWorkspacePort = workspacePort ?? _NoopProjectWorkspacePort();
   final effectiveToolHostPort = toolHostPort ?? _NoopProjectToolHostPort();
   return WorkbenchWorkspaceController(
@@ -406,6 +506,7 @@ WorkbenchWorkspaceController _createController({
     readProjectState: readProjectState,
     writeProjectState: writeProjectState,
     resetConversationRuntimeState: () {},
+    restoreConversationRuntimeState: restoreConversationRuntimeState,
     readWorkbench: readWorkbench,
     mutateWorkbench: mutateWorkbench,
     applyConversationState: (base) => base,
@@ -623,7 +724,10 @@ Future<void> _writeProjectFile(
   String relativePath,
   String content,
 ) async {
-  final normalizedRelative = relativePath.replaceAll('/', Platform.pathSeparator);
+  final normalizedRelative = relativePath.replaceAll(
+    '/',
+    Platform.pathSeparator,
+  );
   final file = File('$rootPath${Platform.pathSeparator}$normalizedRelative');
   await file.parent.create(recursive: true);
   await file.writeAsString(content);

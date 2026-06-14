@@ -5,6 +5,7 @@ import 'conversation_input_capability_context.dart';
 import 'conversation_group_selector_view_data.dart';
 import 'tool_preview_mode.dart';
 import 'conversation_entry_view_data.dart';
+import 'conversation_context_projection_view_data.dart';
 import 'conversation_opening_state_view_data.dart';
 import 'conversation_transcript_lane_view_data.dart';
 import 'opening_panel_view_data.dart';
@@ -27,6 +28,7 @@ class WorkbenchConversationViewData {
     this.agentSelector = const ConversationAgentSelectorViewData.initial(),
     required this.inputCapabilityContext,
     required this.contextSummary,
+    this.conversationContextProjection,
     required this.workflowTitle,
     required this.workflowDescription,
     required this.primaryActions,
@@ -55,6 +57,7 @@ class WorkbenchConversationViewData {
   final ConversationAgentSelectorViewData agentSelector;
   final ConversationInputCapabilityContext inputCapabilityContext;
   final String contextSummary;
+  final ConversationContextProjectionViewData? conversationContextProjection;
   final String workflowTitle;
   final String workflowDescription;
   final List<PrimaryActionViewData> primaryActions;
@@ -86,6 +89,8 @@ class WorkbenchConversationViewData {
             other.agentSelector == agentSelector &&
             other.inputCapabilityContext == inputCapabilityContext &&
             other.contextSummary == contextSummary &&
+            other.conversationContextProjection ==
+                conversationContextProjection &&
             other.workflowTitle == workflowTitle &&
             other.workflowDescription == workflowDescription &&
             listEquals(other.primaryActions, primaryActions) &&
@@ -116,6 +121,7 @@ class WorkbenchConversationViewData {
     agentSelector,
     inputCapabilityContext,
     contextSummary,
+    conversationContextProjection,
     workflowTitle,
     workflowDescription,
     Object.hashAll(primaryActions),

@@ -65,6 +65,44 @@ void main() {
     );
 
     test(
+      'preflights and compacts session context before the model request is built',
+      () async {
+        final harness = _ConversationControllerHarness(
+          modelContextWindowTokens: 220,
+          maxOutputTokens: 20,
+          compressionContextLength: 220,
+        );
+
+        await harness.controller.onSendRequested(
+          '第一轮：${'为了验证发送前压缩会话上下文与分层注入。' * 18}',
+        );
+        await harness.controller.onSendRequested(
+          '第二轮：${'为了继续累积足够长的工作上下文。' * 18}',
+        );
+        final uniquePrompt =
+            '第三轮：${'本轮应该先触发 preflight compact，再把内部指令单独成层。' * 18}';
+        await harness.controller.onSendRequested(uniquePrompt);
+
+        expect(
+          harness.generateDraftUseCase.lastSessionContext,
+          contains('【压缩指导】'),
+        );
+        expect(
+          harness.generateDraftUseCase.lastSessionContext,
+          contains('【压缩归档】'),
+        );
+        expect(
+          harness.generateDraftUseCase.lastSessionContext,
+          contains('【工作上下文】'),
+        );
+        expect(
+          harness.generateDraftUseCase.lastSessionContext,
+          isNot(contains(uniquePrompt)),
+        );
+      },
+    );
+
+    test(
       'projects two child collaboration runs and keeps degraded child recoverable in GUI state',
       () async {
         final harness = _ConversationControllerHarness(
@@ -588,6 +626,9 @@ class _ConversationControllerHarness {
     ProjectDraftExecutionConstraintRuntimeService?
     draftExecutionConstraintRuntimeService,
     _RecordingGenerateDraftUseCase? generateDraftUseCase,
+    int modelContextWindowTokens = 100000,
+    int maxOutputTokens = 4096,
+    int compressionContextLength = 80000,
   }) : _settings = initialSettings ?? _buildSettings(),
        _workbench = initialWorkbench ?? WorkbenchViewData.initial(),
        _projectState = WorkbenchProjectRuntimeState(
@@ -605,7 +646,11 @@ class _ConversationControllerHarness {
        ),
        generateDraftUseCase =
            generateDraftUseCase ?? _RecordingGenerateDraftUseCase(),
-       modelExecutionProfileService = _RecordingModelExecutionProfileService() {
+       modelExecutionProfileService = _RecordingModelExecutionProfileService(
+         modelContextWindowTokens: modelContextWindowTokens,
+         maxOutputTokens: maxOutputTokens,
+         compressionContextLength: compressionContextLength,
+       ) {
     final workspacePort = _NoopProjectWorkspacePort();
     final toolHostPort = _NoopProjectToolHostPort();
     workspaceController = WorkbenchWorkspaceController(
@@ -642,6 +687,7 @@ class _ConversationControllerHarness {
         _projectState = next;
       },
       resetConversationRuntimeState: () {},
+      restoreConversationRuntimeState: (_) async {},
       readWorkbench: () => _workbench,
       mutateWorkbench: (updater) {
         _workbench = updater(_workbench);
@@ -690,6 +736,9 @@ class _ConversationControllerHarness {
           },
       modelExecutionProfileService: modelExecutionProfileService,
       conversationSessionStateService: ConversationSessionStateService(),
+      projectSessionWorkspaceService: ProjectSessionWorkspaceService(
+        hostPort: toolHostPort,
+      ),
       conversationStreamingStateService: ConversationStreamingStateService(
         sessionStateService: ConversationSessionStateService(),
       ),
@@ -770,6 +819,16 @@ class _ConversationControllerHarness {
 
 class _RecordingModelExecutionProfileService
     extends ModelExecutionProfileService {
+  _RecordingModelExecutionProfileService({
+    required this.modelContextWindowTokens,
+    required this.maxOutputTokens,
+    required this.compressionContextLength,
+  });
+
+  final int modelContextWindowTokens;
+  final int maxOutputTokens;
+  final int compressionContextLength;
+
   String lastAgentId = '';
 
   @override
@@ -785,7 +844,12 @@ class _RecordingModelExecutionProfileService
     return <String, Object?>{
       'provider_id': provider?.id ?? '',
       'resolved_model_id': 'selected-model',
-      'runtime_profile': <String, Object?>{'model': 'selected-model'},
+      'runtime_profile': <String, Object?>{
+        'model': 'selected-model',
+        'context_length': modelContextWindowTokens,
+        'compression_context_length': compressionContextLength,
+        'max_output_tokens': maxOutputTokens,
+      },
       'request_options': <String, Object?>{'agent_id': lastAgentId},
       'model_settings': const <String, Object?>{},
     };

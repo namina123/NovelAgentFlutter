@@ -58,7 +58,7 @@ class SessionRecordMutationService {
     String content, {
     String createdAt = '',
   }) {
-    // 中文注释: 添加消息时会同时推进公开状态并在超阈值时触发自动压缩。
+    // 中文注释: 添加消息时只推进公开状态与消息链，不在这里触发自动压缩。
     final timestamp = createdAt.trim().isEmpty
         ? DateTime.now().toIso8601String()
         : createdAt;
@@ -71,19 +71,38 @@ class SessionRecordMutationService {
     if (cleanContent.isEmpty) {
       return result;
     }
-    final messages = List<JsonMap>.from(
-      _messageService.normalizeMessages(result['context_messages']),
+    final transcriptMessages = List<JsonMap>.from(
+      _messageService.normalizeMessages(
+        result[SessionRecordConstants.transcriptMessagesField],
+      ),
     );
-    messages.add(<String, Object?>{
+    final workingMessages = List<JsonMap>.from(
+      _messageService.normalizeMessages(
+        result[SessionRecordConstants.workingContextMessagesField],
+      ),
+    );
+    final newMessage = <String, Object?>{
       'role': role,
       'content': cleanContent,
       'created_at': timestamp,
-    });
-    result['context_messages'] = messages;
+    };
+    transcriptMessages.add(newMessage);
+    workingMessages.add(newMessage);
+    result[SessionRecordConstants.transcriptMessagesField] = transcriptMessages;
+    result[SessionRecordConstants.workingContextMessagesField] =
+        workingMessages;
+    result[SessionRecordConstants.legacyContextMessagesField] = workingMessages;
     _updateProgress(result, cleanContent);
-    _maybeCompress(result);
-    result['updated_at'] = timestamp;
-    return result;
+    final normalizedResult = _normalizerService.normalizeSessionRecord(
+      result,
+      defaultThresholdChars: ValueReaders.intValue(
+        result['compression_threshold_chars'],
+        SessionRecordConstants.defaultThresholdChars,
+      ),
+      now: timestamp,
+    );
+    normalizedResult['updated_at'] = timestamp;
+    return normalizedResult;
   }
 
   void _updateProgress(JsonMap session, String content) {
@@ -120,51 +139,5 @@ class SessionRecordMutationService {
     session['workflow_stage'] = stage;
     session['is_creative'] = creative;
     session['public_status'] = _modeService.publicStatus(mode, stage, creative);
-  }
-
-  void _maybeCompress(JsonMap session) {
-    // 中文注释: 自动压缩只保留后半段消息，把前半段折叠成可读摘要，避免上下文无限增长。
-    final messages = _messageService.normalizeMessages(
-      session['context_messages'],
-    );
-    final compressed = ValueReaders.stringValue(session['compressed_context']);
-    final threshold = _modeService.clampThreshold(
-      ValueReaders.intValue(
-        session['compression_threshold_chars'],
-        SessionRecordConstants.defaultThresholdChars,
-      ),
-    );
-    final totalChars =
-        _messageService.messagesChars(messages) + compressed.length;
-    session['total_context_chars'] = totalChars;
-    if (totalChars <= threshold || messages.length < 4) {
-      return;
-    }
-    var keepCount = messages.length ~/ 2;
-    if (keepCount < 2) {
-      keepCount = 2;
-    }
-    final compressCount = messages.length - keepCount;
-    final compressedLines = <String>[];
-    for (var index = 0; index < compressCount; index += 1) {
-      final message = messages[index];
-      compressedLines.add(
-        '${ValueReaders.stringValue(message['role'], 'user')}：${_modeService.clip(ValueReaders.stringValue(message['content']), 180)}',
-      );
-    }
-    final header =
-        '压缩片段 ${ValueReaders.intValue(session['compression_count']) + 1}（自动）：\n${compressedLines.join('\n')}';
-    final oldCompressed = compressed.trim();
-    session['compressed_context'] = oldCompressed.isEmpty
-        ? header
-        : '$oldCompressed\n\n$header';
-    session['context_messages'] = messages.sublist(compressCount);
-    session['compression_count'] =
-        ValueReaders.intValue(session['compression_count']) + 1;
-    session['total_context_chars'] =
-        _messageService.messagesChars(
-          _messageService.normalizeMessages(session['context_messages']),
-        ) +
-        ValueReaders.stringValue(session['compressed_context']).length;
   }
 }

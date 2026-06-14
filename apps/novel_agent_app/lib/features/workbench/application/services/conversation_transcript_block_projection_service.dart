@@ -1,4 +1,5 @@
 import '../../presentation/models/conversation_entry_view_data.dart';
+import '../../presentation/models/conversation_context_projection_view_data.dart';
 import '../../presentation/models/retry_request_view_data.dart';
 import '../../presentation/models/sub_agent_run_view_data.dart';
 import '../../presentation/models/transcript_block_view_data.dart';
@@ -13,8 +14,10 @@ class ConversationTranscriptBlockProjectionService {
     required List<UserOptionViewData> pendingOptions,
     required List<SubAgentRunViewData> subAgentRuns,
     required RetryRequestViewData? retryRequest,
+    ConversationContextProjectionViewData? contextProjection,
   }) {
     final blocks = <TranscriptBlockViewData>[
+      ..._archiveBlocksFrom(contextProjection),
       ...entries.map(_blockFromEntry).whereType<TranscriptBlockViewData>(),
     ];
     if (isGenerating && !_hasStreamingAssistant(entries)) {
@@ -57,6 +60,32 @@ class ConversationTranscriptBlockProjectionService {
       );
     }
     return blocks;
+  }
+
+  List<TranscriptBlockViewData> _archiveBlocksFrom(
+    ConversationContextProjectionViewData? contextProjection,
+  ) {
+    // 中文注释: 归档段在时间线上以折叠系统记录回放，保留 archive 事实，但不把压缩段展开成第二份正文。
+    if (contextProjection == null || !contextProjection.hasArchive) {
+      return const <TranscriptBlockViewData>[];
+    }
+    return contextProjection.compactionSegments
+        .map(
+          (segment) => TranscriptRuntimeNoticeBlockViewData(
+            id: 'archive_${segment.id}',
+            entry: ConversationEntryViewData(
+              id: 'archive_${segment.id}',
+              kind: ConversationEntryKind.system,
+              title: segment.title,
+              body: segment.foldedSummary,
+              detailTitle: '压缩段',
+              detailSummary: segment.sourceSummary,
+              detailBody: segment.summary.trim(),
+              detailExpandedByDefault: false,
+            ),
+          ),
+        )
+        .toList(growable: false);
   }
 
   TranscriptBlockViewData? _blockFromEntry(ConversationEntryViewData entry) {

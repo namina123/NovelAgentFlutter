@@ -7,6 +7,7 @@ import '../../presentation/models/conversation_entry_view_data.dart';
 import '../../presentation/models/session_history_entry_view_data.dart';
 import '../../presentation/models/sub_agent_run_view_data.dart';
 import '../../presentation/models/user_option_view_data.dart';
+import 'conversation_session_restore_projection_service.dart';
 import 'conversation_tool_entry_projection_service.dart';
 import 'sub_agent_run_projection_service.dart';
 
@@ -18,6 +19,7 @@ class ConversationSessionStateService {
     SessionRecordMutationService? mutationService,
     SessionHistoryService? historyService,
     SessionContextRendererService? contextRendererService,
+    ConversationSessionRestoreProjectionService? restoreProjectionService,
     ToolEventPresenterService? toolEventPresenterService,
     ConversationToolEntryProjectionService? toolEntryProjectionService,
     SubAgentRunProjectionService? subAgentRunProjectionService,
@@ -44,6 +46,11 @@ class ConversationSessionStateService {
        _historyService =
            historyService ??
            SessionHistoryService(
+             messageService: messageService ?? SessionMessageService(),
+           ),
+       _restoreProjectionService =
+           restoreProjectionService ??
+           ConversationSessionRestoreProjectionService(
              messageService: messageService ?? SessionMessageService(),
            ),
        _contextRendererService =
@@ -74,6 +81,7 @@ class ConversationSessionStateService {
   final SessionRecordNormalizerService _normalizerService;
   final SessionRecordMutationService _mutationService;
   final SessionHistoryService _historyService;
+  final ConversationSessionRestoreProjectionService _restoreProjectionService;
   final SessionContextRendererService _contextRendererService;
   final ConversationToolEntryProjectionService _toolEntryProjectionService;
   final SubAgentRunProjectionService _subAgentRunProjectionService;
@@ -114,6 +122,22 @@ class ConversationSessionStateService {
     return ConversationSessionState(
       sessionRecord: seededRecord,
       entries: const <ConversationEntryViewData>[],
+      pendingOptions: const <UserOptionViewData>[],
+      subAgentRuns: const <SubAgentRunViewData>[],
+      attachmentDrafts: const <ConversationAttachmentDraft>[],
+      retryRequest: null,
+    );
+  }
+
+  ConversationSessionState restoreSession(JsonMap sessionRecord) {
+    // 中文注释: 项目重载时只从已持久化的 sessionRecord 恢复稳定展示状态，不回放临时工具流或附件草稿。
+    final normalized = _normalizerService.normalizeSessionRecord(
+      sessionRecord,
+      defaultThresholdChars: SessionRecordConstants.defaultThresholdChars,
+    );
+    return ConversationSessionState(
+      sessionRecord: normalized,
+      entries: _restoreProjectionService.build(normalized),
       pendingOptions: const <UserOptionViewData>[],
       subAgentRuns: const <SubAgentRunViewData>[],
       attachmentDrafts: const <ConversationAttachmentDraft>[],
@@ -308,13 +332,27 @@ class ConversationSessionStateService {
   String sessionContextMarkdown(
     ConversationSessionState state, {
     String excludeLatestUserContent = '',
+    SessionContextPressureSnapshot? pressureSnapshot,
+    CompactionGuidanceContract? compactionGuidance,
+    CompactionOutputPolicy? compactionOutputPolicy,
+    CompactionSourceScope? compactionSourceScope,
+    RuntimeContinuationInstructionContract? runtimeContinuationInstruction,
   }) {
     // 中文注释: 多轮交互给模型的会话上下文统一由这里渲染，避免不同入口重复拼接历史。
+    final options = <String, Object?>{
+      'exclude_latest_user_content': excludeLatestUserContent,
+      if (pressureSnapshot != null) 'pressure_snapshot': pressureSnapshot,
+      if (compactionGuidance != null) 'compaction_guidance': compactionGuidance,
+      if (compactionOutputPolicy != null)
+        'compaction_output_policy': compactionOutputPolicy,
+      if (compactionSourceScope != null)
+        'compaction_source_scope': compactionSourceScope,
+      if (runtimeContinuationInstruction != null)
+        'runtime_continuation_instruction': runtimeContinuationInstruction,
+    };
     return _contextRendererService.sessionContextMarkdown(
       state.sessionRecord,
-      options: <String, Object?>{
-        'exclude_latest_user_content': excludeLatestUserContent,
-      },
+      options: options,
     );
   }
 
@@ -456,7 +494,9 @@ class ConversationSessionStateService {
   List<ConversationEntryViewData> toolEntriesFromPendingCalls(
     List<Object?> pendingToolCalls,
   ) {
-    return _toolEntryProjectionService.buildPendingCallEntries(pendingToolCalls);
+    return _toolEntryProjectionService.buildPendingCallEntries(
+      pendingToolCalls,
+    );
   }
 
   List<SubAgentRunViewData> mergeSubAgentRunsFromExecutedTools(

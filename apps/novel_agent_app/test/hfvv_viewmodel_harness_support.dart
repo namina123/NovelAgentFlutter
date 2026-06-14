@@ -675,6 +675,7 @@ class ScriptedGenerateDraftUseCase extends GenerateDraftUseCase {
   DraftGenerationResult? lastResult;
   String lastUserPrompt = '';
   String lastModelId = '';
+  String lastSessionContext = '';
   JsonMap lastAgent = const <String, Object?>{};
   JsonMap lastSelectedCollaborationGroup = const <String, Object?>{};
 
@@ -716,6 +717,7 @@ class ScriptedGenerateDraftUseCase extends GenerateDraftUseCase {
   }) async {
     lastUserPrompt = userPrompt;
     lastModelId = modelId;
+    lastSessionContext = sessionContext;
     lastAgent = ValueReaders.deepCopyMap(agent);
     lastSelectedCollaborationGroup = ValueReaders.deepCopyMap(
       selectedCollaborationGroup,

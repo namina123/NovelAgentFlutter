@@ -51,6 +51,7 @@ import '../../features/review_center/application/services/review_center_playback
 import '../../features/review_center/presentation/contracts/review_center_action_handler.dart';
 import '../../features/review_center/presentation/models/review_center_view_data.dart';
 import '../../features/settings/application/services/model_settings_view_data_service.dart';
+import '../../features/settings/application/services/context_settings_contract_service.dart';
 import '../../features/settings/application/services/project_creation_expression_constraint_defaults_view_data_service.dart';
 import '../../features/settings/application/services/provider_settings_directory_service.dart';
 import '../../features/settings/application/services/theme_settings_view_data_service.dart';
@@ -437,6 +438,8 @@ class AppShellController extends ChangeNotifier
         _workbenchConversationRuntimeState =
             const WorkbenchConversationRuntimeState();
       },
+      restoreConversationRuntimeState: (project) =>
+          _workbenchConversationController.restoreProjectSessions(project),
       readWorkbench: () => _viewModel.workbench,
       mutateWorkbench: _mutateWorkbench,
       applyConversationState: (base) =>
@@ -489,6 +492,9 @@ class AppShellController extends ChangeNotifier
           _hostAwareGenerateDraftUseCaseFactory,
       modelExecutionProfileService: _modelExecutionProfileService,
       conversationSessionStateService: _conversationSessionStateService,
+      projectSessionWorkspaceService: ProjectSessionWorkspaceService(
+        hostPort: _projectToolHostPort,
+      ),
       conversationStreamingStateService: _conversationStreamingStateService,
       conversationGuideViewDataService: _conversationGuideViewDataService,
       conversationUserVisibleTextService: _conversationUserVisibleTextService,
@@ -705,6 +711,8 @@ class AppShellController extends ChangeNotifier
   final PromptTemplatePreviewService _promptTemplatePreviewService;
   final PromptTemplateNormalizerService _promptTemplateNormalizerService;
   final ModelSettingsViewDataService _modelSettingsViewDataService;
+  final ContextSettingsContractService _contextSettingsContractService =
+      const ContextSettingsContractService();
   final ProjectCreationExpressionConstraintDefaultsViewDataService
   _projectCreationExpressionConstraintDefaultsViewDataService;
   final ProviderSettingsDirectoryService _providerSettingsDirectoryService;
@@ -1567,8 +1575,9 @@ class AppShellController extends ChangeNotifier
         settings.defaultProjectPath,
       );
     }
-    final contextSettings = Map<String, Object?>.from(payload)
-      ..remove('default_project_path');
+    final contextSettings = _contextSettingsContractService.normalizeForStorage(
+      Map<String, Object?>.from(payload)..remove('default_project_path'),
+    );
     _persistSettings(
       settings.copyWith(
         defaultProjectPath: nextProjectPath,
@@ -5261,14 +5270,9 @@ class AppShellController extends ChangeNotifier
 
   JsonMap _contextStrategySettingsOf(AppSettings settings) {
     // 中文注释: 控制器只负责收集上下文策略配置，不解释具体策略含义。
-    final context = settings.contextSettings;
-    return <String, Object?>{
-      'compression_threshold_percent': context['compression_threshold_percent'],
-      'context_pack_budget_percent': context['context_pack_budget_percent'],
-      'max_context_file_chars': context['max_context_file_chars'],
-      'max_context_files_per_kind': context['max_context_files_per_kind'],
-      'reserved_output_chars': context['reserved_output_chars'],
-    };
+    return _contextSettingsContractService.runtimeStrategySettings(
+      settings.contextSettings,
+    );
   }
 
   void _changeDestination(AppDestination destination) {

@@ -23,6 +23,7 @@ export 'src/packages/local_skill_package_catalog.dart';
 export 'src/packages/package_root_path_resolver.dart';
 export 'src/providers/openai_llm_gateway.dart';
 export 'src/providers/anthropic_llm_gateway.dart';
+export 'src/providers/provider_token_count_port_adapter.dart';
 export 'src/runtime/local_long_task_run_registry.dart';
 export 'src/runtime/continuous_task_supervisor_bridge_service.dart';
 export 'src/runtime/local_long_task_runtime_path_service.dart';
