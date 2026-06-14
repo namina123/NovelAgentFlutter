@@ -876,6 +876,69 @@
 
 ---
 
+## 9.1 恢复规则（CTC 主线已落地后）
+
+这条规则专门用于解决一个已经出现过的“假阻塞”：
+
+```text
+上下文压缩 / token / compaction 主线（CTC）已经完成并进入提交历史，
+但 SQLite 主线在恢复时，仍把 app/workbench 相关脏文件误判成“外部并行冲突”，
+导致明明应该继续做 SPT-15 / SPT-16，却一直原地等待。
+```
+
+当前冻结判断：
+
+1. 如果 `git log --oneline -5` 中已经出现：
+   - `d6d678a feat: finalize ctc context pressure mainline`
+2. 且当前没有新的、明确来自另一条未收口主线的并行任务说明
+
+那么后续恢复 SQLite 主线时，必须采用下面这条更精确的判断：
+
+1. `app_shell_controller.dart`
+2. `workbench_workspace_controller.dart`
+3. `project_launcher_view_data_service.dart`
+4. `workspace_information_projection_service.dart`
+5. `workspace_resource_visibility_service.dart`
+6. `document_resource_renderer_resolver.dart`
+7. 以及它们所对应的 workbench / renderer / sidebar / visual regression tests
+
+即使当前仍是脏文件，也不能再仅凭“dirty”这个事实，就自动判定为外部冲突。
+
+因为在 CTC 已收口后，这些文件更高概率代表的是：
+
+1. SQLite 主线自己在 `SPT-12 ~ SPT-16` 阶段形成的未提交工作
+2. 需要继续被当前恢复 run 读入、对齐和收口的“当前真相”
+
+恢复时必须这样判断：
+
+1. 先读当前文件内容，把它们视为最新 production truth。
+2. 再判断 `SPT-15` / `SPT-16` 的回归、golden、ViewModel harness 是否需要跟随当前真相更新。
+3. 不要因为这些文件仍是 dirty，就自动等待。
+
+只有在下面两种情况下，才允许继续判定阻塞：
+
+1. 明确存在另一条尚未收口、且仍在实时改动这些同一文件的并行主线。
+2. 在当前恢复 run 内，发现这些文件在你未修改的情况下持续变化，足以证明存在外部并发写入。
+
+换句话说：
+
+```text
+CTC 已落地后，
+“dirty app/workbench files”
+不再是 SQLite 主线恢复到 SPT-15 / SPT-16 的充分阻塞条件。
+```
+
+SQLite 主线恢复时，新的默认策略应是：
+
+1. 读当前 app/workbench 真相
+2. 对齐回归与 golden
+3. 完成 SPT-15
+4. 再进入 SPT-16
+
+而不是继续无限等待一个已经完成的并行主线。
+
+---
+
 ## 10. Session 完成记录占位
 
 - `SPT-01`：已完成。冻结矩阵为 `novel / long_novel / book_deconstruction` 保持双策略，`knowledge_base` 收束为 `sqlite_project_store` only，第一阶段类型转换图仅保留 `novel <-> long_novel`，并明确 `类型转换 != 存储迁移`。
@@ -928,3 +991,64 @@
    - 验收标准
    - 可直接复制的提示词
 10. 已包含总启动提示词与完成记录占位。
+
+---
+
+## 12. 目标模式恢复提示词（CTC 已提交后）
+
+```text
+你现在恢复执行 `docs/sqlite-project-visibility-and-type-transition-session-order-2026-06-14.md` 的 SQLite 主线，但要先应用其中的“9.1 恢复规则（CTC 主线已落地后）”。
+
+恢复前先执行并确认：
+
+1. 读取：
+   - `agent.md`
+   - `docs/sqlite-project-visibility-and-type-transition-session-order-2026-06-14.md`
+   - `docs/important/sqlite-project-visibility-and-type-transition-analysis-2026-06-14.md`
+2. 执行：
+   - `git log --oneline -5`
+   - `git status --short`
+3. 如果日志里已经有：
+   - `d6d678a feat: finalize ctc context pressure mainline`
+   则视为 CTC 主线已经收口。
+
+恢复判断规则：
+
+1. 不要再把下面这些 dirty 文件自动判定成外部并行阻塞：
+   - `apps/novel_agent_app/lib/app/state/app_shell_controller.dart`
+   - `apps/novel_agent_app/lib/features/workbench/application/controllers/workbench_workspace_controller.dart`
+   - `apps/novel_agent_app/lib/features/workbench/application/services/project_launcher_view_data_service.dart`
+   - `apps/novel_agent_app/lib/features/workbench/application/services/workspace_information_projection_service.dart`
+   - `apps/novel_agent_app/lib/features/workbench/application/services/workspace_resource_visibility_service.dart`
+   - `apps/novel_agent_app/lib/features/workbench/presentation/renderers/document_resource_renderer_resolver.dart`
+   - 以及相关 workbench / renderer / sidebar / visual regression tests
+2. 在 CTC 已提交后，这些文件默认视为 SQLite 主线当前 production truth 的一部分。
+3. 你必须直接读取这些文件的当前内容，并基于当前内容继续完成 `SPT-15` 和 `SPT-16`。
+4. 只有在你发现“同一批文件在当前 run 中持续被外部再次改动”时，才允许重新判定阻塞。
+
+执行目标：
+
+1. 从 `SPT-15` 开始恢复。
+2. 先统一修复和更新：
+   - `workbench_left_sidebar_compact_height_test.dart`
+   - `workbench_rc13_regression_test.dart`
+   - `workbench_sr14_visual_regression_test.dart`
+   - 以及任何直接依赖当前 workbench 壳层语义的相关回归 / golden
+3. 跑 `SPT-15` 需要的 focused tests，直到通过。
+4. 然后继续 `SPT-16`，完成 ViewModel 级探针、验收与文档收口。
+
+严格限制：
+
+1. 不能新造第二套 app 壳层真相。
+2. 不能为了省事回退当前 workbench 语义去迎合旧测试。
+3. 只能让测试、golden、ViewModel harness 对齐当前 production truth。
+4. 如果发现确实是外部并发写入，而不是当前 SQLite 主线自己的未提交改动，再报告阻塞。
+
+完成每个 session 后，汇报：
+
+1. session 编号
+2. 修改文件
+3. 测试结果
+4. 是否进入下一 session
+5. 若阻塞，给出“当前 run 内发现的实时外部并发证据”，不要只说文件是 dirty
+```
