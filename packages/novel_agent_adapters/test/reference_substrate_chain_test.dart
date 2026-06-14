@@ -58,6 +58,7 @@ void main() {
       projectionService = ProjectReferenceProjectionService(
         substrate: substrate,
         attachmentLayer: attachmentLayer,
+        workspacePort: workspacePort,
         knowledgeCardRepository: knowledgeRepository,
         designElementRepository: designRepository,
         researchNoteRepository: researchRepository,

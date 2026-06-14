@@ -1,3 +1,4 @@
+import '../common/json_types.dart';
 import '../common/source_asset_identity.dart';
 import '../common/value_readers.dart';
 import '../continuity/narrative_state/narrative_source_ref.dart';
@@ -80,12 +81,11 @@ class ReferenceEntryProjectionMapperService {
       usagePolicy: entry.usagePolicy,
       confidence: entry.confidence,
       lifecycleStatus: entry.lifecycleStatus,
-      metadata: <String, Object?>{
-        ...entry.metadata,
-        'reference_package_id': packageRecord.packageId,
-        'reference_package_version_id': versionRecord.packageVersionId,
-        'reference_entry_id': entry.entryId,
-      },
+      metadata: _projectAssetMetadata(
+        packageRecord: packageRecord,
+        versionRecord: versionRecord,
+        entry: entry,
+      ),
     );
   }
 
@@ -105,12 +105,11 @@ class ReferenceEntryProjectionMapperService {
       confidence: entry.confidence,
       uncertainty: entry.summary,
       lifecycleStatus: entry.lifecycleStatus,
-      metadata: <String, Object?>{
-        ...entry.metadata,
-        'reference_package_id': packageRecord.packageId,
-        'reference_package_version_id': versionRecord.packageVersionId,
-        'reference_entry_id': entry.entryId,
-      },
+      metadata: _projectAssetMetadata(
+        packageRecord: packageRecord,
+        versionRecord: versionRecord,
+        entry: entry,
+      ),
     );
   }
 
@@ -142,12 +141,11 @@ class ReferenceEntryProjectionMapperService {
           : versionRecord.createdBy,
       linkedCards: const [],
       usagePolicy: entry.usagePolicy,
-      metadata: <String, Object?>{
-        ...entry.metadata,
-        'reference_package_id': packageRecord.packageId,
-        'reference_package_version_id': versionRecord.packageVersionId,
-        'reference_entry_id': entry.entryId,
-      },
+      metadata: _projectAssetMetadata(
+        packageRecord: packageRecord,
+        versionRecord: versionRecord,
+        entry: entry,
+      ),
     );
   }
 
@@ -175,12 +173,11 @@ class ReferenceEntryProjectionMapperService {
         ValueReaders.objectList(entry.payload['risk_notes']),
       ),
       requiresConfirmation: entry.usagePolicy.requiresConfirmation,
-      metadata: <String, Object?>{
-        ...entry.metadata,
-        'reference_package_id': packageRecord.packageId,
-        'reference_package_version_id': versionRecord.packageVersionId,
-        'reference_entry_id': entry.entryId,
-      },
+      metadata: _projectAssetMetadata(
+        packageRecord: packageRecord,
+        versionRecord: versionRecord,
+        entry: entry,
+      ),
     );
   }
 
@@ -216,4 +213,82 @@ class ReferenceEntryProjectionMapperService {
       ...entry.sourceRefs,
     ];
   }
+
+  JsonMap _projectAssetMetadata({
+    required ReferencePackageRecord packageRecord,
+    required ReferencePackageVersionRecord versionRecord,
+    required ReferenceEntryRecord entry,
+  }) {
+    // 中文注释: 这里把项目资料、项目资料挂载和参考资产库的统一文案写进元数据，便于 projection / summary / probe 共用同一套口径。
+    final state = _projectVisibilityStateOf(entry.lifecycleStatus);
+    return <String, Object?>{
+      ...entry.metadata,
+      'reference_package_id': packageRecord.packageId,
+      'reference_package_version_id': versionRecord.packageVersionId,
+      'reference_entry_id': entry.entryId,
+      'project_surface_label': '项目资料',
+      'project_mount_label': '项目资料挂载',
+      'reference_library_label': '参考资产库',
+      'project_visibility_state': state.id,
+      'project_visibility_state_label': state.label,
+      'project_visibility_state_detail': state.detail,
+    };
+  }
+
+  _ProjectVisibilityStateProfile _projectVisibilityStateOf(
+    String lifecycleStatus,
+  ) {
+    // 中文注释: 生命周期这里仅做轻量状态映射，不把 reference 条目重新塞回一套新的重型状态机。
+    final normalized = lifecycleStatus.trim().toLowerCase();
+    if (normalized.isEmpty ||
+        normalized == 'draft' ||
+        normalized == 'staged' ||
+        normalized == 'working') {
+      return const _ProjectVisibilityStateProfile(
+        id: 'project_private_draft',
+        label: '项目私有草稿资产',
+        detail: '当前只在项目内使用，尚未进入审核或提升流程。',
+      );
+    }
+    if (normalized == 'proposed' ||
+        normalized == 'pending_review' ||
+        normalized == 'under_review' ||
+        normalized == 'review' ||
+        normalized == 'reviewing') {
+      return const _ProjectVisibilityStateProfile(
+        id: 'pending_review',
+        label: '待审核资产',
+        detail: '已进入审核路径，但还不宜直接作为正式资产对外提升。',
+      );
+    }
+    if (normalized == 'accepted' ||
+        normalized == 'active' ||
+        normalized == 'confirmed' ||
+        normalized == 'published' ||
+        normalized == 'finalized' ||
+        normalized == 'promoted') {
+      return const _ProjectVisibilityStateProfile(
+        id: 'promotable_formal',
+        label: '可提升到参考资产库的正式资产',
+        detail: '已具备对外提升或正式挂载的成熟状态。',
+      );
+    }
+    return _ProjectVisibilityStateProfile(
+      id: normalized.isEmpty ? 'project_private_draft' : normalized,
+      label: '项目私有草稿资产',
+      detail: '状态不在已知映射中时，默认先按项目私有草稿资产处理。',
+    );
+  }
+}
+
+class _ProjectVisibilityStateProfile {
+  const _ProjectVisibilityStateProfile({
+    required this.id,
+    required this.label,
+    required this.detail,
+  });
+
+  final String id;
+  final String label;
+  final String detail;
 }

@@ -95,6 +95,7 @@ class HfvvWave1AppShellHarness {
     required String laneId,
     required ProbeApiConfig apiConfig,
     Iterable<String> queuedReferenceSourcePaths = const <String>[],
+    String streamMode = 'stream',
   }) async {
     final repoRoot = Directory(resolveLocalProbeRepoRoot());
     final artifactRoot = Directory(
@@ -134,6 +135,7 @@ class HfvvWave1AppShellHarness {
       buildHfvvWave1SeedSettings(
         apiConfig: apiConfig,
         hostSettings: hostSettings,
+        streamMode: streamMode,
       ),
     );
     final savedSettings = await bundle.settingsRepository.load();
@@ -1278,6 +1280,7 @@ class HfvvWave1AppShellHarness {
 AppSettings buildHfvvWave1SeedSettings({
   required ProbeApiConfig apiConfig,
   required AppSettings hostSettings,
+  String streamMode = 'stream',
 }) {
   return AppSettings(
     defaultProviderId: 'hfvv-wave1-provider',
@@ -1312,7 +1315,7 @@ AppSettings buildHfvvWave1SeedSettings({
       'model_settings': <String, Object?>{
         'provider_id': 'hfvv-wave1-provider',
         'model_id': apiConfig.modelId,
-        'stream_mode': 'stream',
+        'stream_mode': streamMode.trim().isEmpty ? 'stream' : streamMode,
         'api_mode': 'chat',
       },
     },

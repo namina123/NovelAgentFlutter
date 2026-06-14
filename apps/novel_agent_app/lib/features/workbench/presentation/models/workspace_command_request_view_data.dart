@@ -1,5 +1,6 @@
 enum WorkspaceCommandMode {
   editProjectInfo,
+  transitionProjectType,
   createFile,
   createFolder,
   importFiles,
@@ -14,6 +15,8 @@ class WorkspaceCommandViewData {
     required this.status,
     required this.projectTitle,
     required this.projectType,
+    this.transitionTargetProjectTypeId = '',
+    this.transitionRuntimeBaselineId = '',
     required this.genre,
     required this.premise,
     required this.notes,
@@ -35,6 +38,8 @@ class WorkspaceCommandViewData {
   final String status;
   final String projectTitle;
   final String projectType;
+  final String transitionTargetProjectTypeId;
+  final String transitionRuntimeBaselineId;
   final String genre;
   final String premise;
   final String notes;
@@ -56,6 +61,8 @@ class WorkspaceCommandViewData {
     String? status,
     String? projectTitle,
     String? projectType,
+    String? transitionTargetProjectTypeId,
+    String? transitionRuntimeBaselineId,
     String? genre,
     String? premise,
     String? notes,
@@ -77,6 +84,10 @@ class WorkspaceCommandViewData {
       status: status ?? this.status,
       projectTitle: projectTitle ?? this.projectTitle,
       projectType: projectType ?? this.projectType,
+      transitionTargetProjectTypeId:
+          transitionTargetProjectTypeId ?? this.transitionTargetProjectTypeId,
+      transitionRuntimeBaselineId:
+          transitionRuntimeBaselineId ?? this.transitionRuntimeBaselineId,
       genre: genre ?? this.genre,
       premise: premise ?? this.premise,
       notes: notes ?? this.notes,
@@ -99,6 +110,8 @@ class WorkspaceCommandRequestViewData {
     required this.mode,
     this.projectTitle = '',
     this.projectType = '',
+    this.transitionTargetProjectTypeId = '',
+    this.transitionRuntimeBaselineId = '',
     this.genre = '',
     this.premise = '',
     this.notes = '',
@@ -113,6 +126,8 @@ class WorkspaceCommandRequestViewData {
   final WorkspaceCommandMode mode;
   final String projectTitle;
   final String projectType;
+  final String transitionTargetProjectTypeId;
+  final String transitionRuntimeBaselineId;
   final String genre;
   final String premise;
   final String notes;
@@ -133,6 +148,8 @@ class WorkspaceCommandRequestViewData {
     WorkspaceCommandMode? mode,
     String? projectTitle,
     String? projectType,
+    String? transitionTargetProjectTypeId,
+    String? transitionRuntimeBaselineId,
     String? genre,
     String? premise,
     String? notes,
@@ -147,6 +164,10 @@ class WorkspaceCommandRequestViewData {
       mode: mode ?? this.mode,
       projectTitle: projectTitle ?? this.projectTitle,
       projectType: projectType ?? this.projectType,
+      transitionTargetProjectTypeId:
+          transitionTargetProjectTypeId ?? this.transitionTargetProjectTypeId,
+      transitionRuntimeBaselineId:
+          transitionRuntimeBaselineId ?? this.transitionRuntimeBaselineId,
       genre: genre ?? this.genre,
       premise: premise ?? this.premise,
       notes: notes ?? this.notes,

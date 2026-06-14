@@ -37,6 +37,7 @@ class ProjectToolDispatcher implements ToolExecutionPort {
     ProjectWorkflowRuntimeService? workflowRuntimeService,
     ProjectLongTaskToolExecutor? longTaskToolExecutor,
     ProjectAgentSkillRuntimeLoadoutService? agentSkillRuntimeLoadoutService,
+    ProjectStorageAwareToolCapabilityMatrix? toolCapabilityMatrix,
   }) : _toolCallNormalizerService =
            toolCallNormalizerService ?? ToolCallNormalizerService(),
        _hostPort = hostPort,
@@ -47,6 +48,9 @@ class ProjectToolDispatcher implements ToolExecutionPort {
        _buildModeGuidancePlanInputUseCase = buildModeGuidancePlanInputUseCase,
        _workflowRuntimeService = workflowRuntimeService,
        _agentSkillRuntimeLoadoutService = agentSkillRuntimeLoadoutService,
+       _toolCapabilityMatrix =
+           toolCapabilityMatrix ??
+           const ProjectStorageAwareToolCapabilityMatrix(),
        _resultFactory = resultFactory ?? ProjectToolResultFactory(),
        _relativePathResolver = ProjectToolRelativePathResolver(
          hostPort: hostPort,
@@ -133,11 +137,11 @@ class ProjectToolDispatcher implements ToolExecutionPort {
   final LocalSkillGroupCatalog? _skillGroupCatalog;
   final ProjectToolPathPolicy? _pathPolicy;
   final ProjectTreeOrderService? _treeOrderService;
-  final BuildModeGuidancePlanInputUseCase?
-  _buildModeGuidancePlanInputUseCase;
+  final BuildModeGuidancePlanInputUseCase? _buildModeGuidancePlanInputUseCase;
   final ProjectWorkflowRuntimeService? _workflowRuntimeService;
   final ProjectAgentSkillRuntimeLoadoutService?
   _agentSkillRuntimeLoadoutService;
+  final ProjectStorageAwareToolCapabilityMatrix _toolCapabilityMatrix;
   final ProjectToolResultFactory _resultFactory;
   final ProjectToolRelativePathResolver _relativePathResolver;
   final ProjectFileReadToolExecutor _readToolExecutor;
@@ -168,11 +172,11 @@ class ProjectToolDispatcher implements ToolExecutionPort {
       pathPolicy: _pathPolicy,
       resultFactory: _resultFactory,
       treeOrderService: _treeOrderService,
-      buildModeGuidancePlanInputUseCase:
-          _buildModeGuidancePlanInputUseCase,
+      buildModeGuidancePlanInputUseCase: _buildModeGuidancePlanInputUseCase,
       workflowRuntimeService: _workflowRuntimeService,
       longTaskToolExecutor: _longTaskToolExecutor,
       agentSkillRuntimeLoadoutService: _agentSkillRuntimeLoadoutService,
+      toolCapabilityMatrix: _toolCapabilityMatrix,
     );
   }
 
@@ -261,7 +265,7 @@ class ProjectToolDispatcher implements ToolExecutionPort {
       toolName: toolName,
       arguments: arguments,
     );
-    return _annotateToolResult(toolName, result);
+    return _annotateToolResult(project, toolName, result);
   }
 
   Future<JsonMap> _executeProjectTool({
@@ -269,6 +273,14 @@ class ProjectToolDispatcher implements ToolExecutionPort {
     required String toolName,
     required JsonMap arguments,
   }) async {
+    final storageRejection = _storageAwareRejection(
+      project: project,
+      toolName: toolName,
+      arguments: arguments,
+    );
+    if (storageRejection != null) {
+      return storageRejection;
+    }
     switch (toolName) {
       case 'list_project_files':
         return _readToolExecutor.listProjectFiles(project, arguments);
@@ -361,6 +373,48 @@ class ProjectToolDispatcher implements ToolExecutionPort {
       default:
         return _resultFactory.error('Unknown project tool: $toolName');
     }
+  }
+
+  JsonMap? _storageAwareRejection({
+    required ProjectDescriptor project,
+    required String toolName,
+    required JsonMap arguments,
+  }) {
+    // 中文注释: SQLite 项目里某些低层文件路径属于只读投影或兼容镜像，这里先拦掉再让上层改走正式语义工具。
+    if (project.storageStrategy != ProjectStorageStrategy.sqliteProjectStore) {
+      return null;
+    }
+    if (!_lowLevelToolNames.contains(toolName)) {
+      return null;
+    }
+    final candidatePaths = <String>[
+      ValueReaders.stringValue(arguments['relative_path']),
+      ValueReaders.stringValue(arguments['target_relative_path']),
+      ValueReaders.stringValue(arguments['backup_path']),
+      ValueReaders.stringValue(arguments['target_path']),
+    ];
+    for (final candidate in candidatePaths) {
+      final clean = _pathPolicy?.cleanRelativePath(candidate).trim() ?? '';
+      if (clean.isEmpty) {
+        continue;
+      }
+      final contentType =
+          _pathPolicy?.inferContentTypeFromPath(clean).trim() ?? '';
+      if (clean.startsWith('knowledge/') ||
+          clean.startsWith('research/') ||
+          clean.startsWith('references/') ||
+          contentType == 'knowledge') {
+        return _resultFactory.notExecuted(
+          'SQLite 项目中的知识/研究/引用投影为只读入口，请改用语义工具或主事实源写入链。',
+          data: <String, Object?>{
+            'relative_path': clean,
+            'storage_strategy': project.storageStrategy.id,
+            'storage_surface_role': 'compatibility_rejected_projection',
+          },
+        );
+      }
+    }
+    return null;
   }
 
   Future<JsonMap> _normalizeArguments({
@@ -494,7 +548,8 @@ class ProjectToolDispatcher implements ToolExecutionPort {
               },
             )
             .toList(growable: false),
-        'tool_result_summary': '领域工具参数不合法，工具尚未执行；请根据 domain_parse_issues 修正参数后重试。',
+        'tool_result_summary':
+            '领域工具参数不合法，工具尚未执行；请根据 domain_parse_issues 修正参数后重试。',
       };
     }
 
@@ -688,7 +743,9 @@ class ProjectToolDispatcher implements ToolExecutionPort {
     DomainToolOutcome outcome,
     List<String> changedPaths,
   ) {
-    final label = _domainDisplayName(NarrativeDomainToolNames.requestExternalResearch);
+    final label = _domainDisplayName(
+      NarrativeDomainToolNames.requestExternalResearch,
+    );
     final payload = ValueReaders.mapValue(outcome.outcomePayload);
     final execution = ValueReaders.mapValue(payload['research_execution']);
     final executedNetwork = ValueReaders.boolValue(
@@ -713,7 +770,8 @@ class ProjectToolDispatcher implements ToolExecutionPort {
       return '已登记并执行导入研究：$label$pathPreview';
     }
     if (waitingForConfirmation ||
-        outcome.outcomeStatus == DomainToolOutcomeStatuses.needsUserConfirmation) {
+        outcome.outcomeStatus ==
+            DomainToolOutcomeStatuses.needsUserConfirmation) {
       return '已登记待研究请求，等待用户确认：$label';
     }
     if (blocked) {
@@ -727,10 +785,23 @@ class ProjectToolDispatcher implements ToolExecutionPort {
     return definition?.displayName ?? toolName;
   }
 
-  JsonMap _annotateToolResult(String toolName, JsonMap result) {
-    if (ValueReaders.stringValue(result['tool_layer']).trim().isNotEmpty) {
-      return result;
-    }
+  JsonMap _annotateToolResult(
+    ProjectDescriptor project,
+    String toolName,
+    JsonMap result,
+  ) {
+    final resolvedStorageRole = ValueReaders.stringValue(
+      result['storage_surface_role'],
+    ).trim();
+    final fallbackStorageRole = _toolCapabilityMatrix
+        .roleForTool(
+          toolName,
+          context: ProjectToolExposureContext(
+            projectType: project.projectType,
+            storageStrategy: project.storageStrategy,
+          ),
+        )
+        .name;
     final toolLayer = _toolLayerFor(toolName);
     return <String, Object?>{
       ...result,
@@ -742,6 +813,10 @@ class ProjectToolDispatcher implements ToolExecutionPort {
             ? 'project_low_level_tool'
             : 'project_tool',
       ),
+      'storage_strategy': project.storageStrategy.id,
+      'storage_surface_role': resolvedStorageRole.isNotEmpty
+          ? resolvedStorageRole
+          : fallbackStorageRole,
     };
   }
 

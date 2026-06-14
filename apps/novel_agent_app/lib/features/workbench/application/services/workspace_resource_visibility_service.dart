@@ -28,6 +28,9 @@ class WorkspaceResourceVisibilityService {
     if (isLegacyCompatibilityPath(cleanPath)) {
       return true;
     }
+    if (cleanPath.endsWith('.db') || cleanPath.endsWith('.sqlite')) {
+      return true;
+    }
     if (cleanPath.endsWith('.json') || cleanPath.endsWith('.jsonl')) {
       return true;
     }

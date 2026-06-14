@@ -29,6 +29,7 @@ class WorkbenchPaneViewDataMapperService {
     return WorkbenchResourceViewData(
       projectName: source.projectName,
       projectSubtitle: source.projectSubtitle,
+      projectTypeId: source.projectTypeId,
       resourceEntries: source.resourceEntries,
       informationViewData: source.informationViewData,
       projectLongTaskSummary: source.projectLongTaskSummary,

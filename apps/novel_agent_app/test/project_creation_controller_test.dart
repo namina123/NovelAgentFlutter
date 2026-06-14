@@ -10,7 +10,7 @@ import 'package:novel_agent_app/features/workbench/presentation/models/workbench
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 void main() {
-  test('无默认项目时会进入 guard 启动器', () async {
+  test('无默认项目时会进入创建启动器', () async {
     final harness = _ProjectCreationHarness(
       settings: const AppSettings(
         defaultProviderId: '',
@@ -26,7 +26,7 @@ void main() {
 
     final launcher = harness.workbench.projectLauncher;
     expect(launcher, isNotNull);
-    expect(launcher!.mode, ProjectLauncherMode.guard);
+    expect(launcher!.mode, ProjectLauncherMode.create);
     expect(launcher.canDismiss, isFalse);
     expect(launcher.status, contains('当前还没有有效项目'));
     expect(harness.lastProjectlessStatus, contains('请先创建项目'));

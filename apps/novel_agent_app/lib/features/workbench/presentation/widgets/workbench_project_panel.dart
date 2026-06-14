@@ -39,7 +39,8 @@ class WorkbenchProjectPanel extends StatelessWidget {
                 : viewData.projectName,
             subtitle: viewData.projectSubtitle,
             badges: [
-              if (viewData.workflowTitle.trim().isNotEmpty) viewData.workflowTitle,
+              if (viewData.workflowTitle.trim().isNotEmpty)
+                viewData.workflowTitle,
               if (viewData.modelLabel.trim().isNotEmpty) viewData.modelLabel,
             ],
           ),
@@ -147,6 +148,9 @@ class WorkbenchProjectPanel extends StatelessWidget {
         return;
       case WorkbenchProjectPanelActionIds.editProjectInfo:
         resourceHandler.onEditProjectInfoRequested();
+        return;
+      case WorkbenchProjectPanelActionIds.transitionProjectType:
+        resourceHandler.onProjectTypeTransitionRequested();
         return;
       case WorkbenchProjectPanelActionIds.refreshProject:
         resourceHandler.onRefreshFilesRequested();

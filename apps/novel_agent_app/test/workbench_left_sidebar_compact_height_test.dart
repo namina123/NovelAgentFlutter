@@ -68,7 +68,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('当前对象'), findsOneWidget);
+    expect(find.text('文件'), findsWidgets);
     expect(find.byType(WorkbenchObjectPanelBody), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('workbench_object_panel_body')),
@@ -85,7 +85,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(WorkbenchObjectPanelBody), findsOneWidget);
-    expect(find.text('项目协作基线'), findsOneWidget);
+    expect(find.text('项目摘要'), findsOneWidget);
+    expect(find.text('当前项目动作'), findsOneWidget);
+    expect(find.text('当前协作摘要'), findsOneWidget);
+    expect(find.text('项目资料'), findsOneWidget);
     expect(find.text('长任务'), findsNothing);
   });
 }
@@ -116,6 +119,9 @@ class _FakeResourceHandler implements ResourceManagerActionHandler {
 
   @override
   void onEditProjectInfoRequested() {}
+
+  @override
+  void onProjectTypeTransitionRequested() {}
 
   @override
   void onImportRequested() {}

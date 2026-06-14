@@ -31,10 +31,16 @@ class HfvvWave2RunConfig {
   const HfvvWave2RunConfig({
     required this.runId,
     this.enabledLaneIds = const <String>{},
+    this.chapterCountOverride,
+    this.checkpointIntervalOverride,
+    this.targetEffectiveChapterCountOverride,
   });
 
   final String runId;
   final Set<String> enabledLaneIds;
+  final int? chapterCountOverride;
+  final int? checkpointIntervalOverride;
+  final int? targetEffectiveChapterCountOverride;
 }
 
 HfvvWave2RunConfig parseHfvvWave2RunConfig(
@@ -125,6 +131,7 @@ Future<JsonMap> runHfvvWave2({
       switch (laneId) {
         case 'lane_f_harry_potter_fanfic_consumption':
           laneReports.add(await _runLaneF(apiConfig, runId: config.runId));
+          break;
         case 'lane_g_general_long_task_stability':
           laneReports.add(
             await _runLongTaskLane(
@@ -136,11 +143,17 @@ Future<JsonMap> runHfvvWave2({
                 seedPrompt: _laneGSeedPrompt,
                 chapterCount: 60,
                 checkpointInterval: 4,
+                targetEffectiveChapterCount: 50,
                 expectSubAgentEvidence: false,
                 expectedVarianceAnchors: <String>[],
               ),
+              chapterCountOverride: config.chapterCountOverride,
+              checkpointIntervalOverride: config.checkpointIntervalOverride,
+              targetEffectiveChapterCountOverride:
+                  config.targetEffectiveChapterCountOverride,
             ),
           );
+          break;
         case 'lane_h_general_long_task_multi_agent':
           laneReports.add(
             await _runLongTaskLane(
@@ -152,11 +165,17 @@ Future<JsonMap> runHfvvWave2({
                 seedPrompt: _laneHSeedPrompt,
                 chapterCount: 60,
                 checkpointInterval: 4,
+                targetEffectiveChapterCount: 50,
                 expectSubAgentEvidence: true,
                 expectedVarianceAnchors: <String>[],
               ),
+              chapterCountOverride: config.chapterCountOverride,
+              checkpointIntervalOverride: config.checkpointIntervalOverride,
+              targetEffectiveChapterCountOverride:
+                  config.targetEffectiveChapterCountOverride,
             ),
           );
+          break;
         case 'lane_i_high_variance_story_arc':
           laneReports.add(
             await _runLongTaskLane(
@@ -168,6 +187,7 @@ Future<JsonMap> runHfvvWave2({
                 seedPrompt: _laneISeedPrompt,
                 chapterCount: 60,
                 checkpointInterval: 3,
+                targetEffectiveChapterCount: 50,
                 expectSubAgentEvidence: false,
                 expectedVarianceAnchors: <String>[
                   '武侠世界',
@@ -176,8 +196,13 @@ Future<JsonMap> runHfvvWave2({
                   '现代都市',
                 ],
               ),
+              chapterCountOverride: config.chapterCountOverride,
+              checkpointIntervalOverride: config.checkpointIntervalOverride,
+              targetEffectiveChapterCountOverride:
+                  config.targetEffectiveChapterCountOverride,
             ),
           );
+          break;
       }
     }
     summary['lanes'] = laneReports;
@@ -356,6 +381,9 @@ Future<JsonMap> _runLongTaskLane(
   ProbeApiConfig apiConfig, {
   required String runId,
   required _LongTaskLanePlan plan,
+  int? chapterCountOverride,
+  int? checkpointIntervalOverride,
+  int? targetEffectiveChapterCountOverride,
 }) async {
   final harness = await HfvvWave1AppShellHarness.create(
     runId: runId,
@@ -423,15 +451,16 @@ Future<JsonMap> _runLongTaskLane(
               : harness.taskCenter.modeOptions.first.id);
     final createSignature = _taskCenterSignature(harness.taskCenter);
     await harness.submitTaskCenterWorkflowCreateRequest(
-      TaskWorkflowCreateRequestViewData(
-        mode: mode,
-        outlinePath: harness.taskCenter.defaultOutlinePath,
-        seedPrompt: plan.seedPrompt,
-        chapterCount: plan.chapterCount,
-        checkpointInterval: plan.checkpointInterval,
-        chapterLength: _defaultLongTaskChapterLength,
-      ),
-    );
+        TaskWorkflowCreateRequestViewData(
+          mode: mode,
+          outlinePath: harness.taskCenter.defaultOutlinePath,
+          seedPrompt: plan.seedPrompt,
+        chapterCount: chapterCountOverride ?? plan.chapterCount,
+        checkpointInterval:
+            checkpointIntervalOverride ?? plan.checkpointInterval,
+          chapterLength: _defaultLongTaskChapterLength,
+        ),
+      );
     await harness.waitUntil(
       () =>
           _taskCenterSignature(harness.taskCenter) != createSignature ||
@@ -449,13 +478,17 @@ Future<JsonMap> _runLongTaskLane(
     previousQueueSummary = harness.taskCenter.queueSummary;
     previousSchedulerSummary = harness.taskCenter.schedulerSummary;
 
-    final maxBatches = plan.chapterCount * 4;
+    final targetEffectiveChapterCount =
+        targetEffectiveChapterCountOverride ??
+        plan.targetEffectiveChapterCount;
+    final plannedBatchCount = (chapterCountOverride ?? plan.chapterCount) * 4;
+    final maxBatches = plannedBatchCount < 16 ? 16 : plannedBatchCount;
     for (var batchIndex = 1; batchIndex <= maxBatches; batchIndex += 1) {
       final effectiveChapters = await _countEffectiveChapters(harness);
       final currentAction = chooseWave2TaskCenterSharedAction(
         _flattenTaskCenterActions(harness.taskCenter),
       );
-      if (effectiveChapters >= 50) {
+      if (effectiveChapters >= targetEffectiveChapterCount) {
         break;
       }
 
@@ -562,8 +595,10 @@ Future<JsonMap> _runLongTaskLane(
     final effectiveChapterCount = effectiveChapterPaths.length;
     final longTaskRunCount = harness.taskCenter.longTaskRuns.length;
     final taskQueueRunCount = harness.taskCenter.taskQueueRuns.length;
-    final runningToolObserved = steps.any(
-      (stepId) => stepId.contains('active'),
+    final runningToolObserved = modelDecisions.any(
+      (decision) => ValueReaders.stringValue(decision['phase']).contains(
+        'active',
+      ),
     );
     final subAgentEvidenceCount = await _countFilesContainingPatterns(
       harness,
@@ -576,7 +611,7 @@ Future<JsonMap> _runLongTaskLane(
       patterns: plan.expectedVarianceAnchors,
     );
     final ok =
-        effectiveChapterCount >= 50 &&
+        effectiveChapterCount >= targetEffectiveChapterCount &&
         longTaskRunCount >= 1 &&
         taskQueueRunCount >= 1 &&
         runningToolObserved &&
@@ -584,10 +619,11 @@ Future<JsonMap> _runLongTaskLane(
         (plan.expectedVarianceAnchors.isEmpty || varianceAnchorHitCount >= 2);
 
     final failures = <Object?>[];
-    if (effectiveChapterCount < 50) {
+    if (effectiveChapterCount < targetEffectiveChapterCount) {
       failures.add(<String, Object?>{
         'category': 'runtime_stability_failure',
-        'summary': '有效章节数只有 $effectiveChapterCount，未达到 50 章验收线。',
+        'summary':
+            '有效章节数只有 $effectiveChapterCount，未达到 $targetEffectiveChapterCount 章验收线。',
       });
     }
     if (longTaskRunCount < 1 || taskQueueRunCount < 1) {
@@ -614,7 +650,7 @@ Future<JsonMap> _runLongTaskLane(
       'ok': ok,
       'report_category': ok
           ? 'success'
-          : (effectiveChapterCount < 50
+          : (effectiveChapterCount < targetEffectiveChapterCount
                 ? 'runtime_stability_failure'
                 : 'content_quality_failure'),
       'finished_at': DateTime.now().toIso8601String(),
@@ -664,6 +700,7 @@ class _LongTaskLanePlan {
     required this.seedPrompt,
     required this.chapterCount,
     required this.checkpointInterval,
+    required this.targetEffectiveChapterCount,
     required this.expectSubAgentEvidence,
     required this.expectedVarianceAnchors,
   });
@@ -673,6 +710,7 @@ class _LongTaskLanePlan {
   final String seedPrompt;
   final int chapterCount;
   final int checkpointInterval;
+  final int targetEffectiveChapterCount;
   final bool expectSubAgentEvidence;
   final List<String> expectedVarianceAnchors;
 }

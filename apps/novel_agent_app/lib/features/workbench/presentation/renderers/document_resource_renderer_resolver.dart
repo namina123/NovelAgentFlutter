@@ -53,8 +53,6 @@ class DocumentResourceRendererResolver {
     'bmp',
     'svg',
     'pdf',
-    'db',
-    'sqlite',
   };
 
   DocumentResourceRendererResolution resolve(
@@ -79,6 +77,12 @@ class DocumentResourceRendererResolver {
             reason: 'markdown-render-mode',
           );
         }
+        if (_sqliteStructuredExtensions.contains(request.fileExtension)) {
+          return const DocumentResourceRendererResolution(
+            rendererId: structuredRendererId,
+            reason: 'sqlite-structured-render-resource',
+          );
+        }
         if (_previewLikeExtensions.contains(request.fileExtension)) {
           return const DocumentResourceRendererResolution(
             rendererId: previewRendererId,
@@ -97,6 +101,12 @@ class DocumentResourceRendererResolver {
   DocumentResourceRendererResolution _resolveSourceRenderer(
     DocumentResourceRenderRequest request,
   ) {
+    if (_sqliteStructuredExtensions.contains(request.fileExtension)) {
+      return const DocumentResourceRendererResolution(
+        rendererId: structuredRendererId,
+        reason: 'sqlite-structured-source-resource',
+      );
+    }
     if (_previewLikeExtensions.contains(request.fileExtension)) {
       return const DocumentResourceRendererResolution(
         rendererId: previewRendererId,
@@ -114,4 +124,9 @@ class DocumentResourceRendererResolver {
       reason: 'default-source-resource',
     );
   }
+
+  static const Set<String> _sqliteStructuredExtensions = <String>{
+    'db',
+    'sqlite',
+  };
 }

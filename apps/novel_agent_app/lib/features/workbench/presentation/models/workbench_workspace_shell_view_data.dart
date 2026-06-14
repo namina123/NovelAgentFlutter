@@ -8,6 +8,7 @@ class WorkbenchWorkspaceShellViewData {
   const WorkbenchWorkspaceShellViewData({
     required this.projectName,
     required this.projectSubtitle,
+    this.projectTypeId = '',
     required this.resourceCount,
     required this.activeDocumentTitle,
     required this.activeDocumentPath,
@@ -31,6 +32,7 @@ class WorkbenchWorkspaceShellViewData {
 
   final String projectName;
   final String projectSubtitle;
+  final String projectTypeId;
   final int resourceCount;
   final String activeDocumentTitle;
   final String activeDocumentPath;

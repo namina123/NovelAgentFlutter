@@ -60,4 +60,40 @@ void main() {
 
     expect(selectedId, 'chapter-1');
   });
+
+  testWidgets('resource tree card shows sqlite projection metadata', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 320,
+              height: 320,
+              child: ResourceTreeCard(
+                projectTypeId: 'sqlite_project_store',
+                entries: const [
+                  ResourceEntryViewData(
+                    id: 'sqlite-index',
+                    title: 'SQLite 语义树',
+                    relativePath: 'premise/sqlite_projection/index.md',
+                    depth: 1,
+                    isDirectory: false,
+                  ),
+                ],
+                onEntrySelected: (_) {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('SQLite 语义树'), findsOneWidget);
+    expect(find.textContaining('SQLite 主事实源'), findsOneWidget);
+    expect(find.textContaining('只读投影'), findsOneWidget);
+  });
 }

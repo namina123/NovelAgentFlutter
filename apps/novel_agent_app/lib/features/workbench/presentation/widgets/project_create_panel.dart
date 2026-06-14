@@ -204,11 +204,11 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
                     ),
                     const SizedBox(height: 14),
                     _FieldBand(
-                      title: '项目名',
+                      title: '项目名称',
                       child: TextField(
                         controller: _controller,
-                        decoration: const InputDecoration(
-                          hintText: '输入要创建的小说项目名称',
+                        decoration: InputDecoration(
+                          hintText: _projectNameHintText(),
                         ),
                         onSubmitted: _submit,
                       ),
@@ -546,6 +546,18 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
     return widget.projectTypeOptions.isEmpty
         ? '未命名小说'
         : widget.projectTypeOptions.first.defaultTitle;
+  }
+
+  String _projectNameHintText() {
+    // 中文注释: 名称输入提示跟随项目类型切换，避免默认把知识库也说成小说项目。
+    switch (_selectedProjectTypeId) {
+      case 'knowledge_base':
+        return '输入要创建的资料知识库名称';
+      case 'long_novel':
+        return '输入要创建的长篇项目名称';
+      default:
+        return '输入要创建的项目名称';
+    }
   }
 
   String _submitButtonLabel() {

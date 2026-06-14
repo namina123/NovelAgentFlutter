@@ -955,8 +955,8 @@ SQLite 主线恢复时，新的默认策略应是：
 - `SPT-12`：
 - `SPT-13`：
 - `SPT-14`：
-- `SPT-15`：
-- `SPT-16`：
+- `SPT-15`：已完成。已跑通 focused tests、CLI 最小兼容审计与回归补缝；关键合同测试通过，未引入新的 CLI 产品功能。
+- `SPT-16`：已完成 ViewModel / probe 验收与 handoff 收口。`real_gui_chaptered_continuation_probe_test.dart`、`ctc15_workbench_conversation_probe_test.dart` 以及相关 core / adapter / app focused tests 均已通过；`hfvv_wave2_viewmodel_real_run_test.dart` 也已成功落盘 lane report，但 lane G 仍保持 `runtime_stability_failure`，`effective_chapter_count: 0`，说明长任务稳定性 smoke 还有残余，不阻塞 SQLite 主线验收结论。
 
 ---
 

@@ -8,7 +8,8 @@ class WorkspaceInformationProjectionService {
   const WorkspaceInformationProjectionService({
     ContextActivationCodecService? contextActivationCodecService,
   }) : _contextActivationCodecService =
-           contextActivationCodecService ?? const ContextActivationCodecService();
+           contextActivationCodecService ??
+           const ContextActivationCodecService();
 
   final ContextActivationCodecService _contextActivationCodecService;
 
@@ -127,6 +128,17 @@ class WorkspaceInformationProjectionService {
           usage:
               usageByPath[InformationProjectionDocument
                   .referenceBoundaryRelativePath],
+        ),
+      if (normalizedPaths.contains('premise/sqlite_projection/index.md'))
+        _projectionEntry(
+          id: 'sqlite_projection',
+          title: 'SQLite 语义树',
+          subtitle: 'SQLite 主事实源的只读投影入口',
+          summary: '查看 SQLite 项目语义树、来源身份与只读投影状态。',
+          statusLabel: 'SQLite',
+          relativePath: 'premise/sqlite_projection/index.md',
+          fileMap: fileMap,
+          usage: usageByPath['premise/sqlite_projection/index.md'],
         ),
     ];
 
@@ -443,7 +455,9 @@ class WorkspaceInformationProjectionService {
     return text;
   }
 
-  ContextActivationReport? _latestActivationReport(Map<String, String> fileMap) {
+  ContextActivationReport? _latestActivationReport(
+    Map<String, String> fileMap,
+  ) {
     final reportPath =
         fileMap.keys
             .where((path) => path.contains('activation_report.json'))
@@ -496,7 +510,9 @@ class WorkspaceInformationProjectionService {
       'source_of_truth_locator': ValueReaders.stringValue(
         item.metadata['source_of_truth_locator'],
       ),
-      'source_display': ValueReaders.stringValue(item.metadata['source_display']),
+      'source_display': ValueReaders.stringValue(
+        item.metadata['source_display'],
+      ),
       'explanation': ValueReaders.stringValue(item.metadata['explanation']),
     };
   }

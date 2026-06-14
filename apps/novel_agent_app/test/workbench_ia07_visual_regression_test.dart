@@ -695,6 +695,9 @@ class _FakeResourceHandler implements ResourceManagerActionHandler {
   void onEditProjectInfoRequested() {}
 
   @override
+  void onProjectTypeTransitionRequested() {}
+
+  @override
   void onImportRequested() {}
 
   @override

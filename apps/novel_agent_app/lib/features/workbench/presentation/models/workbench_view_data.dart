@@ -30,6 +30,7 @@ class WorkbenchViewData {
     required this.projectName,
     required this.projectSubtitle,
     required this.projectPath,
+    this.projectTypeId = '',
     required this.toolCoreStatus,
     this.toolPreviewMode = ToolPreviewMode.compact,
     required this.projectLongTaskSummary,
@@ -73,6 +74,7 @@ class WorkbenchViewData {
   final String projectName;
   final String projectSubtitle;
   final String projectPath;
+  final String projectTypeId;
   final String toolCoreStatus;
   final String toolPreviewMode;
   final ProjectLongTaskSummaryViewData? projectLongTaskSummary;
@@ -117,6 +119,7 @@ class WorkbenchViewData {
       projectName: '未打开项目',
       projectSubtitle: '',
       projectPath: '',
+      projectTypeId: '',
       toolCoreStatus: '',
       toolPreviewMode: ToolPreviewMode.compact,
       projectLongTaskSummary: null,
@@ -178,6 +181,7 @@ class WorkbenchViewData {
     String? projectName,
     String? projectSubtitle,
     String? projectPath,
+    String? projectTypeId,
     String? toolCoreStatus,
     String? toolPreviewMode,
     Object? projectLongTaskSummary = _projectLongTaskSummarySentinel,
@@ -223,6 +227,7 @@ class WorkbenchViewData {
       projectName: projectName ?? this.projectName,
       projectSubtitle: projectSubtitle ?? this.projectSubtitle,
       projectPath: projectPath ?? this.projectPath,
+      projectTypeId: projectTypeId ?? this.projectTypeId,
       toolCoreStatus: toolCoreStatus ?? this.toolCoreStatus,
       toolPreviewMode: ToolPreviewMode.normalize(
         toolPreviewMode ?? this.toolPreviewMode,

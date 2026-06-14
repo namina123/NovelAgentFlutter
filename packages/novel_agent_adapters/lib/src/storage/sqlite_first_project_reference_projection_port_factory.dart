@@ -56,6 +56,7 @@ class SqliteFirstProjectReferenceProjectionPortFactory
     return ProjectReferenceProjectionService(
       substrate: substrate,
       attachmentLayer: attachmentLayer,
+      workspacePort: _workspacePort,
       knowledgeCardRepository: knowledgeCardRepository,
       designElementRepository: designElementRepository,
       researchNoteRepository: researchNoteRepository,

@@ -54,5 +54,30 @@ void main() {
         isFalse,
       );
     });
+
+    test(
+      'sorts sqlite project tool surface to prefer structured tools before file compatibility tools',
+      () {
+        final exposed = service.filterExposedToolIds(
+          const <String>[
+            'write_project_file',
+            'submit_chapter_delivery',
+            'read_project_file',
+          ],
+          hostPlatform: HostPlatform.windows,
+          projectType: 'novel',
+          storageStrategy: ProjectStorageStrategy.sqliteProjectStore,
+        );
+
+        expect(
+          exposed,
+          orderedEquals(const <String>[
+            'submit_chapter_delivery',
+            'read_project_file',
+            'write_project_file',
+          ]),
+        );
+      },
+    );
   });
 }

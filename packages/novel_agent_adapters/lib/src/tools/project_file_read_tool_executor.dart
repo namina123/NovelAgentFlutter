@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:novel_agent_core/novel_agent_core.dart';
+import 'package:novel_agent_core/src/project/project_storage_aware_workspace_policy.dart';
 
 import '../storage/project_structured_content_bridge_service.dart';
 import 'project_tool_path_policy.dart';
@@ -12,17 +13,21 @@ class ProjectFileReadToolExecutor {
     ProjectToolPathPolicy? pathPolicy,
     ProjectToolResultFactory? resultFactory,
     ProjectStructuredContentBridgeService? structuredContentBridgeService,
+    ProjectStorageAwareWorkspacePolicy? workspacePolicy,
   }) : _hostPort = hostPort,
        _pathPolicy = pathPolicy ?? ProjectToolPathPolicy(),
        _resultFactory = resultFactory ?? ProjectToolResultFactory(),
        _structuredContentBridgeService =
            structuredContentBridgeService ??
-           ProjectStructuredContentBridgeService();
+           ProjectStructuredContentBridgeService(),
+       _workspacePolicy =
+           workspacePolicy ?? const ProjectStorageAwareWorkspacePolicy();
 
   final ProjectToolHostPort _hostPort;
   final ProjectToolPathPolicy _pathPolicy;
   final ProjectToolResultFactory _resultFactory;
   final ProjectStructuredContentBridgeService _structuredContentBridgeService;
+  final ProjectStorageAwareWorkspacePolicy _workspacePolicy;
 
   Future<JsonMap> listProjectFiles(
     ProjectDescriptor project,
@@ -120,6 +125,11 @@ class ProjectFileReadToolExecutor {
           'selected_end_line': lineWindow.endLine,
           'selected_lines': lineWindow.lines,
           'truncated': lineWindow.truncated,
+          'storage_strategy': project.storageStrategy.id,
+          'storage_surface_role': _storageSurfaceRole(
+            project: project,
+            relativePath: relativePath,
+          ),
           'changed_paths': const <Object?>[],
         },
       );
@@ -134,6 +144,11 @@ class ProjectFileReadToolExecutor {
         'content': safeContent,
         'content_chars': content.length,
         'truncated': truncated,
+        'storage_strategy': project.storageStrategy.id,
+        'storage_surface_role': _storageSurfaceRole(
+          project: project,
+          relativePath: relativePath,
+        ),
         'changed_paths': const <Object?>[],
       },
     );
@@ -562,15 +577,39 @@ class ProjectFileReadToolExecutor {
     String relativePath,
   ) async {
     // 中文注释: SQLite 项目优先回读正文主事实源，文件系统只作为兼容投影回退。
-    final projectedContent =
-        await _structuredContentBridgeService.readProjectedBodyText(
-          project,
-          relativePath,
-        );
+    final projectedContent = await _structuredContentBridgeService
+        .readProjectedBodyText(project, relativePath);
     if (projectedContent != null) {
       return projectedContent;
     }
     return _hostPort.readTextFile(project.rootPath, relativePath);
+  }
+
+  String _storageSurfaceRole({
+    required ProjectDescriptor project,
+    required String relativePath,
+  }) {
+    // 中文注释: 读取结果直接暴露是投影还是兼容镜像，方便上层和测试区分 SQLite 主事实源回读路径。
+    if (project.storageStrategy != ProjectStorageStrategy.sqliteProjectStore) {
+      return 'filesystem_primary';
+    }
+    final cleanPath = _pathPolicy.cleanRelativePath(relativePath);
+    if (_workspacePolicy.isMetadataPath(relativePath: cleanPath)) {
+      return 'workspace_metadata_read';
+    }
+    if (_workspacePolicy.isProjectionPath(
+      storageStrategy: project.storageStrategy,
+      relativePath: cleanPath,
+    )) {
+      return 'sqlite_projection_read';
+    }
+    if (_workspacePolicy.isPrimaryFactSourcePath(
+      storageStrategy: project.storageStrategy,
+      relativePath: cleanPath,
+    )) {
+      return 'filesystem_primary';
+    }
+    return 'sqlite_compatibility_read';
   }
 
   Future<JsonMap> _recoverablePathIssue(

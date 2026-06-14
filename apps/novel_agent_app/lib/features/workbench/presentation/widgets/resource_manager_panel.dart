@@ -94,6 +94,7 @@ class ResourceManagerPanel extends StatelessWidget {
                   emphasized: false,
                   child: ResourceTreeCard(
                     entries: entries,
+                    projectTypeId: viewData.projectTypeId,
                     onEntrySelected: actionHandler.onResourceEntrySelected,
                     embeddedInScrollView: true,
                   ),

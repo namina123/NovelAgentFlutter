@@ -64,9 +64,9 @@ void main() {
     );
 
     expect(find.text('剧情机制与连续性'), findsNothing);
-    expect(find.text('高级设置'), findsOneWidget);
+    expect(find.text('连续性高级设置'), findsOneWidget);
 
-    await tester.tap(find.text('高级设置'));
+    await tester.tap(find.text('连续性高级设置'));
     await tester.pumpAndSettle();
 
     expect(find.text('剧情机制与连续性'), findsOneWidget);

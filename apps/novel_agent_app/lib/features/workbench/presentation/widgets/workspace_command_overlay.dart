@@ -23,6 +23,7 @@ class WorkspaceCommandOverlay extends StatefulWidget {
 class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
   late final TextEditingController _projectTitleController;
   late final TextEditingController _projectTypeController;
+  late final TextEditingController _transitionRuntimeBaselineController;
   late final TextEditingController _genreController;
   late final TextEditingController _premiseController;
   late final TextEditingController _notesController;
@@ -41,6 +42,9 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
     );
     _projectTypeController = TextEditingController(
       text: widget.viewData.projectType,
+    );
+    _transitionRuntimeBaselineController = TextEditingController(
+      text: widget.viewData.transitionRuntimeBaselineId,
     );
     _genreController = TextEditingController(text: widget.viewData.genre);
     _premiseController = TextEditingController(text: widget.viewData.premise);
@@ -69,6 +73,10 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
     }
     _syncController(_projectTitleController, widget.viewData.projectTitle);
     _syncController(_projectTypeController, widget.viewData.projectType);
+    _syncController(
+      _transitionRuntimeBaselineController,
+      widget.viewData.transitionRuntimeBaselineId,
+    );
     _syncController(_genreController, widget.viewData.genre);
     _syncController(_premiseController, widget.viewData.premise);
     _syncController(_notesController, widget.viewData.notes);
@@ -91,6 +99,7 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
   void dispose() {
     _projectTitleController.dispose();
     _projectTypeController.dispose();
+    _transitionRuntimeBaselineController.dispose();
     _genreController.dispose();
     _premiseController.dispose();
     _notesController.dispose();
@@ -203,6 +212,17 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
             _field(_genreController, '题材'),
             _field(_premiseController, '核心设定'),
             _field(_notesController, '备注', maxLines: 5),
+          ],
+        );
+      case WorkspaceCommandMode.transitionProjectType:
+        return Column(
+          children: [
+            _field(_projectTypeController, '目标项目类型 ID', readOnly: true),
+            _field(
+              _transitionRuntimeBaselineController,
+              '运行基准 ID',
+              hint: '例如：continuous_autonomous',
+            ),
           ],
         );
       case WorkspaceCommandMode.createFile:
@@ -354,6 +374,9 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
       mode: widget.viewData.mode,
       projectTitle: _projectTitleController.text,
       projectType: _projectTypeController.text,
+      transitionTargetProjectTypeId:
+          widget.viewData.transitionTargetProjectTypeId,
+      transitionRuntimeBaselineId: _transitionRuntimeBaselineController.text,
       genre: _genreController.text,
       premise: _premiseController.text,
       notes: _notesController.text,

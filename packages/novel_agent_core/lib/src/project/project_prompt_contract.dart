@@ -1,6 +1,9 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import '../project/project_storage_strategy.dart';
 import 'project_workspace_catalog.dart';
+import '../tools/project_storage_aware_tool_capability_matrix.dart';
+import '../tools/project_tool_exposure_context.dart';
 
 class ProjectPromptContract {
   String workspaceConvention() {
@@ -183,7 +186,21 @@ class ProjectPromptContract {
       '8. 正式章节交付优先使用 submit_chapter_delivery；不要把正文、sidecar 和交付状态拆成散乱的低层文件操作来冒充完成。',
       '9. 正式语义审稿优先使用 submit_semantic_review；自然语言点评、临时备注或 run_continuity_check 报告都不能替代结构化审稿交付。',
       '10. 项目级 narrative profile / 解释器更新优先使用 propose_narrative_profile_update；关键适用范围不明确时用 request_profile_clarification 停下等待。',
+      '11. 当 sessionInfo 显示主存储策略为 sqlite_project_store 时，文件树工具只属于兼容/投影/修复层，不要把 write_project_file、edit_project_file、create_project_entry、move_project_file、delete_project_file、rename_project_file、reorder_project_file、manipulate_project_file_lines 当作默认主能力面。',
+      '12. SQLite 项目里，submit_chapter_delivery、submit_narrative_state_claims、submit_semantic_review、知识/设计/研究/引用工具优先构成主链；read_project_file、list_project_files、get_project_file_info、search_project_files 只承担投影读取与兼容读取。',
     ].join('\n');
+  }
+
+  String storageAwareToolGuidance(JsonMap project) {
+    // 中文注释: 这段把项目存储策略显式翻译成工具面说明，供 draft/system prompt 直接消费。
+    final matrix = const ProjectStorageAwareToolCapabilityMatrix();
+    final context = ProjectToolExposureContext(
+      projectType: ValueReaders.stringValue(project['project_type'], 'novel'),
+      storageStrategy: ProjectStorageStrategy.fromId(
+        ValueReaders.stringValue(project['storage_strategy']),
+      ),
+    );
+    return ['## 存储感知工具面', matrix.guidanceFor(context)].join('\n');
   }
 
   String domainToolGuidance(

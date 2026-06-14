@@ -169,14 +169,14 @@ packages:
       path: "../../packages/novel_agent_adapters"
       relative: true
     source: path
-    version: "0.1.0"
+    version: "0.1.1"
   novel_agent_core:
     dependency: "direct main"
     description:
       path: "../../packages/novel_agent_core"
       relative: true
     source: path
-    version: "0.1.0"
+    version: "0.1.1"
   path:
     dependency: transitive
     description:

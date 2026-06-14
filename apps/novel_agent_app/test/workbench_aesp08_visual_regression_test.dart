@@ -461,6 +461,9 @@ class _FakeResourceManagerActionHandler
   void onEditProjectInfoRequested() {}
 
   @override
+  void onProjectTypeTransitionRequested() {}
+
+  @override
   void onImportRequested() {}
 
   @override

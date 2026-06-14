@@ -43,6 +43,7 @@ class WorkbenchWorkspaceController
     required CreateProjectEntryUseCase createProjectEntryUseCase,
     required ImportProjectFilesUseCase importProjectFilesUseCase,
     required UpdateProjectManifestUseCase updateProjectManifestUseCase,
+    ExecuteProjectTypeTransitionUseCase? executeProjectTypeTransitionUseCase,
     required ProjectToolHostPort projectToolHostPort,
     required WriteProjectTextFileUseCase writeProjectTextFileUseCase,
     required BookDeconstructionNarrativePersistenceService
@@ -105,6 +106,8 @@ class WorkbenchWorkspaceController
        _saveDraftUseCase = saveDraftUseCase,
        _createProjectEntryUseCase = createProjectEntryUseCase,
        _updateProjectManifestUseCase = updateProjectManifestUseCase,
+       _executeProjectTypeTransitionUseCase =
+           executeProjectTypeTransitionUseCase,
        _longTaskSupervisor = longTaskSupervisor,
        _reviewReportService = reviewReportService,
        _projectRuntimeProfileRepository = projectRuntimeProfileRepository,
@@ -169,6 +172,8 @@ class WorkbenchWorkspaceController
   final SaveDraftUseCase _saveDraftUseCase;
   final CreateProjectEntryUseCase _createProjectEntryUseCase;
   final UpdateProjectManifestUseCase _updateProjectManifestUseCase;
+  final ExecuteProjectTypeTransitionUseCase?
+  _executeProjectTypeTransitionUseCase;
   final LongTaskSupervisor _longTaskSupervisor;
   final ProjectReviewReportService _reviewReportService;
   final ProjectRuntimeProfileRepository _projectRuntimeProfileRepository;
@@ -220,6 +225,9 @@ class WorkbenchWorkspaceController
   final WorkbenchProjectLongTaskDetailLoader? _projectLongTaskDetailLoader;
   final WorkspaceResourceDisplayService _workspaceResourceDisplayService =
       const WorkspaceResourceDisplayService();
+  final ProjectTypeTransitionPreparationService
+  _projectTypeTransitionPreparationService =
+      const ProjectTypeTransitionPreparationService();
   WorkbenchInformationViewData _latestInformationViewData =
       const WorkbenchInformationViewData();
 
@@ -359,6 +367,7 @@ class WorkbenchWorkspaceController
         runtimeProfile: runtimeProfile,
       ),
       projectPath: snapshot.project.rootPath,
+      projectTypeId: snapshot.project.projectType,
       toolCoreStatus: '',
       modelOptions: _readSettings() == null
           ? _readWorkbench().modelOptions
@@ -506,6 +515,7 @@ class WorkbenchWorkspaceController
           projectName: '',
           projectSubtitle: '',
           projectPath: '',
+          projectTypeId: '',
           resourceEntries: const [],
           informationViewData: const WorkbenchInformationViewData(),
           documents: const <DocumentTabViewData>[],
@@ -805,6 +815,40 @@ class WorkbenchWorkspaceController
   }
 
   @override
+  void onProjectTypeTransitionRequested() {
+    // 中文注释: 项目类型转换入口先基于 core 计划投影出 blocker，再让用户在同一命令层完成确认。
+    final project = currentProject;
+    if (project == null) {
+      _announce('请先打开项目。');
+      return;
+    }
+    final targetProjectTypeId = _projectTypeTransitionTargetId(
+      project.projectType,
+    );
+    if (targetProjectTypeId.trim().isEmpty) {
+      _announce('当前项目类型不支持转换。');
+      return;
+    }
+    final runtimeBaselineId = project.runtimeBaselineId.trim();
+    final hasActiveLongTaskRun = _readProjectState().currentProjectLongTaskRuns
+        .any((run) => run.isActive);
+    final plan = _projectTypeTransitionPreparationService.prepare(
+      project: project,
+      targetProjectTypeId: targetProjectTypeId,
+      runtimeBaselineId: runtimeBaselineId,
+      hasActiveLongTaskRun: hasActiveLongTaskRun,
+    );
+    _showWorkspaceCommand(
+      _buildProjectTypeTransitionCommandViewData(
+        project: project,
+        plan: plan,
+        runtimeBaselineId: runtimeBaselineId,
+        confirmLabel: plan.canTransition ? '执行转换' : '重新检查',
+      ),
+    );
+  }
+
+  @override
   void onRefreshFilesRequested() {
     // 中文注释: 刷新工作区时优先重载当前项目；如果还没有项目，则走默认项目恢复链。
     final project = currentProject;
@@ -1033,6 +1077,9 @@ class WorkbenchWorkspaceController
       case WorkspaceCommandMode.editProjectInfo:
         _submitProjectInfoCommand(request);
         return;
+      case WorkspaceCommandMode.transitionProjectType:
+        _submitProjectTypeTransitionCommand(request);
+        return;
       case WorkspaceCommandMode.createFile:
         _submitCreateFileCommand(request);
         return;
@@ -1248,6 +1295,68 @@ class WorkbenchWorkspaceController
       _announce('已更新项目信息。');
     } catch (error) {
       _announce('保存项目信息失败：$error');
+    }
+  }
+
+  Future<void> _submitProjectTypeTransitionCommand(
+    WorkspaceCommandRequestViewData request,
+  ) async {
+    // 中文注释: 项目类型转换只在 core 计划可通过时执行，失败时把 blocker 原样投影回命令层。
+    final project = currentProject;
+    if (project == null) {
+      _announce('请先打开项目。');
+      return;
+    }
+    final targetProjectTypeId = request.transitionTargetProjectTypeId.trim();
+    if (targetProjectTypeId.isEmpty) {
+      _announce('请先选择目标项目类型。');
+      return;
+    }
+    final runtimeBaselineId = request.transitionRuntimeBaselineId.trim();
+    final hasActiveLongTaskRun = _readProjectState().currentProjectLongTaskRuns
+        .any((run) => run.isActive);
+    final plan = _projectTypeTransitionPreparationService.prepare(
+      project: project,
+      targetProjectTypeId: targetProjectTypeId,
+      runtimeBaselineId: runtimeBaselineId,
+      hasActiveLongTaskRun: hasActiveLongTaskRun,
+    );
+    if (!plan.canTransition) {
+      _showWorkspaceCommand(
+        _buildProjectTypeTransitionCommandViewData(
+          project: project,
+          plan: plan,
+          runtimeBaselineId: runtimeBaselineId,
+          status: _projectTypeTransitionStatusOf(plan),
+          confirmLabel: '重新检查',
+        ),
+      );
+      return;
+    }
+    final executor = _executeProjectTypeTransitionUseCase;
+    if (executor == null) {
+      _announce('当前构建未接入项目类型转换执行链。');
+      return;
+    }
+    try {
+      final updatedProject = await executor.execute(
+        project: project,
+        targetProjectTypeId: targetProjectTypeId,
+        runtimeBaselineId: runtimeBaselineId,
+        hasActiveLongTaskRun: hasActiveLongTaskRun,
+      );
+      await loadProject(updatedProject.rootPath);
+      _announce('已完成项目类型转换：${updatedProject.name}');
+    } catch (error) {
+      _showWorkspaceCommand(
+        _buildProjectTypeTransitionCommandViewData(
+          project: project,
+          plan: plan,
+          runtimeBaselineId: runtimeBaselineId,
+          status: '项目类型转换失败：$error',
+          confirmLabel: '重新检查',
+        ),
+      );
     }
   }
 
@@ -1487,6 +1596,69 @@ class WorkbenchWorkspaceController
         ),
       ),
     );
+  }
+
+  WorkspaceCommandViewData _buildProjectTypeTransitionCommandViewData({
+    required ProjectDescriptor project,
+    required ProjectTypeTransitionPlan plan,
+    required String runtimeBaselineId,
+    required String confirmLabel,
+    String status = '',
+  }) {
+    // 中文注释: 转换弹层只投影 core 计划，不在 GUI 里重新推断可转范围或阻断原因。
+    final sourceLabel =
+        plan.sourceProjectTypeDefinition?.name ?? project.projectType;
+    final targetLabel =
+        plan.targetProjectTypeDefinition?.name ??
+        _projectTypeTransitionTargetId(project.projectType);
+    final targetProjectTypeId =
+        plan.targetProjectTypeDefinition?.id ??
+        _projectTypeTransitionTargetId(project.projectType);
+    final plannedStatus = status.trim().isNotEmpty
+        ? status.trim()
+        : _projectTypeTransitionStatusOf(plan);
+    return WorkspaceCommandViewData(
+      mode: WorkspaceCommandMode.transitionProjectType,
+      title: '项目类型转换',
+      description: '将 $sourceLabel 切换为 $targetLabel，存储策略保持不变。',
+      confirmLabel: confirmLabel,
+      status: plannedStatus,
+      projectTitle: project.name,
+      projectType: targetProjectTypeId,
+      transitionTargetProjectTypeId: targetProjectTypeId,
+      transitionRuntimeBaselineId: runtimeBaselineId,
+      genre: '',
+      premise: '',
+      notes: '',
+      relativePath: '',
+      entryName: '',
+      content: '',
+      sourcePathsText: '',
+      targetDirectory: '',
+    );
+  }
+
+  String _projectTypeTransitionStatusOf(ProjectTypeTransitionPlan plan) {
+    // 中文注释: blocker 文案直接回投到命令层，让用户看到的就是 core 的拒绝理由。
+    if (plan.blockers.isEmpty) {
+      if (plan.targetProjectTypeDefinition?.id == 'long_novel') {
+        return '转换条件已满足，请确认运行基准后执行。';
+      }
+      return '转换条件已满足，提交后会保留原存储策略。';
+    }
+    return plan.blockers.map((blocker) => blocker.message).join('；');
+  }
+
+  String _projectTypeTransitionTargetId(String sourceProjectTypeId) {
+    // 中文注释: 第一阶段的互转目标是固定的，workspace 只把这条静态图转成稳定 ID。
+    switch (sourceProjectTypeId.trim()) {
+      case 'novel':
+        return 'long_novel';
+      case 'long_novel':
+        return 'novel';
+      default:
+        return '';
+    }
   }
 
   void _showWorkspaceCommand(WorkspaceCommandViewData command) {

@@ -42,20 +42,11 @@ class ProjectLauncherViewDataService {
     );
     final options = _projectTypeCatalogService
         .enabledDefinitions()
-        .map(
-          (definition) => ProjectTypeOptionViewData(
-            id: definition.id,
-            title: definition.name,
-            description: definition.description,
-            defaultTitle: definition.defaultTitle,
-            requiresRuntimeBaselineSelection:
-                definition.requiresRuntimeBaselineSelection,
-          ),
-        )
+        .map(_projectTypeOptionFrom)
         .toList(growable: false);
     final storageStrategyOptions = selectedProjectType
         .supportedStorageStrategies
-        .map(_storageOptionFrom)
+        .map((strategy) => _storageOptionFrom(selectedProjectType, strategy))
         .toList(growable: false);
     return ProjectLauncherViewData(
       mode: mode,
@@ -78,7 +69,7 @@ class ProjectLauncherViewDataService {
           .toList(growable: false),
       status: status,
       draftTitle: draftTitle.trim().isEmpty
-          ? selectedProjectType.defaultTitle
+          ? _projectTypeDefaultTitleOf(selectedProjectType)
           : draftTitle,
       projectTypeOptions: options,
       selectedProjectTypeId: normalizedProjectTypeId,
@@ -147,7 +138,39 @@ class ProjectLauncherViewDataService {
     }
   }
 
+  ProjectTypeOptionViewData _projectTypeOptionFrom(
+    ProjectTypeDefinition definition,
+  ) {
+    // 中文注释: 资料知识库在 GUI 层需要更明确的治理语义，避免被默认写作壳文案带偏。
+    final displayTitle = switch (definition.id) {
+      'knowledge_base' => '资料知识库 / 参考资产治理',
+      _ => definition.name,
+    };
+    final displayDescription = switch (definition.id) {
+      'knowledge_base' =>
+        '适合导入、整理、审核和挂载参考资产，以 SQLite 作为主事实源，Markdown 仅保留投影与导出层。',
+      _ => definition.description,
+    };
+    return ProjectTypeOptionViewData(
+      id: definition.id,
+      title: displayTitle,
+      description: displayDescription,
+      defaultTitle: _projectTypeDefaultTitleOf(definition),
+      requiresRuntimeBaselineSelection:
+          definition.requiresRuntimeBaselineSelection,
+    );
+  }
+
+  String _projectTypeDefaultTitleOf(ProjectTypeDefinition definition) {
+    // 中文注释: 默认标题也跟随资料知识库的治理语义单独收束，避免继续沿用普通知识库的旧称呼。
+    return switch (definition.id) {
+      'knowledge_base' => '未命名资料知识库',
+      _ => definition.defaultTitle,
+    };
+  }
+
   ProjectStorageStrategyOptionViewData _storageOptionFrom(
+    ProjectTypeDefinition projectType,
     ProjectStorageStrategy strategy,
   ) {
     switch (strategy) {
@@ -158,6 +181,14 @@ class ProjectLauncherViewDataService {
           description: '主内容直接落到 Markdown / 普通文件，适合以文件树为主的创作方式。',
         );
       case ProjectStorageStrategy.sqliteProjectStore:
+        if (projectType.id == 'knowledge_base') {
+          return const ProjectStorageStrategyOptionViewData(
+            id: 'sqlite_project_store',
+            title: 'SQLite 参考资产库',
+            description:
+                '主内容以结构化 SQLite 承载，便于导入、整理、审核和挂载参考资产，Markdown 仅保留投影或导出层。',
+          );
+        }
         return const ProjectStorageStrategyOptionViewData(
           id: 'sqlite_project_store',
           title: 'SQLite 项目',

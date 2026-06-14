@@ -10,6 +10,8 @@ import 'package:novel_agent_app/features/workbench/application/services/workspac
 import 'probe_support.dart';
 import '../../../tools/probe_config_support.dart';
 
+const String _probeModelId = 'deepseek-v4-pro';
+
 Future<void> main(List<String> arguments) async {
   await ensureLocalRealProbeOptIn(
     probeName: 'real_gui_viewmodel_information_long_task_probe',
@@ -28,7 +30,7 @@ Future<void> main(List<String> arguments) async {
     protocol: 'openai_compatible',
     baseUrl: apiConfig.baseUrl,
     apiKey: apiConfig.apiKey,
-    modelId: apiConfig.modelId,
+    modelId: _probeModelId,
     description:
         'Real provider probe for GUI/viewmodel information evidence and long task stability.',
     isDefault: true,
@@ -50,12 +52,12 @@ Future<void> main(List<String> arguments) async {
         ? const <String, Object?>{'proxy_mode': 'system'}
         : localSettings.networkSettings,
     extraSettings: <String, Object?>{
-      'model_settings': <String, Object?>{
-        'provider_id': provider.id,
-        'model_id': provider.modelId,
-        'stream_mode': 'stream',
-        'api_mode': 'chat',
-      },
+        'model_settings': <String, Object?>{
+          'provider_id': provider.id,
+          'model_id': _probeModelId,
+          'stream_mode': 'non_stream',
+          'api_mode': 'chat',
+        },
     },
   );
 
@@ -255,7 +257,7 @@ Future<JsonMap> _runOrdinaryWorkbenchStep({
       );
   final preparation = await conversationRuntimeService.prepareDraftRun(
     project,
-    taskType: 'chapter',
+    taskType: 'information',
     pinnedRelativePaths: _ordinaryPinnedPaths,
     expressionConstraintPolicyMode:
         runtimeOptions.expressionConstraintPolicyMode,
@@ -277,7 +279,7 @@ Future<JsonMap> _runOrdinaryWorkbenchStep({
       ),
       preparation.sessionContextMarkdown,
     ),
-    requestOptions: const <String, Object?>{'stream': true},
+    requestOptions: const <String, Object?>{'stream': false},
     contextSettings: settings.contextSettings,
     modelProfile: settings.extraSettings,
     exposedToolIds: preparation.exposedToolIds,
@@ -1178,14 +1180,14 @@ Future<void> _seedHistoricalTransmigrationProject(
   );
   await workspacePort.writeTextFile(
     project.rootPath,
-    'research/待研究问题.md',
+    'research/research_questions.md',
     [
-      '# 待研究问题',
+      '# Research Questions',
       '',
-      '- 万历年间江南地方县衙、乡绅、宗族、作坊之间的关系如何呈现才合理？',
-      '- 明代肥皂/皂角/草木灰/碱液相关生活清洁技术如何避免写成硬科普？',
-      '- 水车、脚踏水车、灌溉沟渠和小规模作坊改良有哪些可写的细节？',
-      '- 白糖、酒精、玻璃、造纸或染整哪些适合作为前期小目标？',
+      '- How should the relations among county yamen, gentry, clans, and workshops in late Ming Jiangnan be presented?',
+      '- How can soap, soapberry, wood ash, and alkaline lye be handled without turning the prose into hard exposition?',
+      '- What details around water wheels, pedal pumps, irrigation ditches, and small workshop improvements are worth writing?',
+      '- Which of sugar, alcohol, glass, papermaking, or dyeing are suitable as early-stage goals?',
       '',
     ].join('\n'),
   );
@@ -1911,7 +1913,7 @@ const List<String> _ordinaryPinnedPaths = <String>[
   'outlines/story/创作起点.md',
   'assets/characters/周砚_周延璋.md',
   'assets/world/明代后期江南市镇.md',
-  'research/待研究问题.md',
+  'research/research_questions.md',
 ];
 
 const String _ordinaryWorkbenchTitle = '普通会话：开篇筹备与资料核查';

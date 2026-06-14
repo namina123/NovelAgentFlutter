@@ -191,16 +191,22 @@ void main() {
 
         final database = sqlite3.open(sqliteDbPath);
         try {
-          final rows = database.select('''
+          final rows = database.select(
+            '''
             SELECT document_id, document_kind, title, plain_text, markdown_path, state_path, status
             FROM body_text_document
             WHERE document_id = ?
-            ''', <Object?>['chapters/chapter_02.md']);
+            ''',
+            <Object?>['chapters/chapter_02.md'],
+          );
           expect(rows, hasLength(1));
           expect(rows.first['document_kind']?.toString(), 'chapter');
           expect(rows.first['title']?.toString(), '第二章');
           expect(rows.first['plain_text']?.toString(), contains('正文进入 SQLite'));
-          expect(rows.first['markdown_path']?.toString(), 'chapters/chapter_02.md');
+          expect(
+            rows.first['markdown_path']?.toString(),
+            'chapters/chapter_02.md',
+          );
           expect(rows.first['status']?.toString(), isNotEmpty);
         } finally {
           database.dispose();
@@ -211,13 +217,13 @@ void main() {
         final readExecutor = ProjectFileReadToolExecutor(hostPort: hostPort);
         final readResult = await readExecutor.readProjectFile(
           sqliteProject,
-          <String, Object?>{
-            'relative_path': 'chapters/chapter_02.md',
-          },
+          <String, Object?>{'relative_path': 'chapters/chapter_02.md'},
         );
 
         expect(readResult['ok'], isTrue);
         expect(readResult['content']?.toString(), contains('正文进入 SQLite'));
+        expect(readResult['storage_strategy'], 'sqlite_project_store');
+        expect(readResult['storage_surface_role'], 'sqlite_projection_read');
       },
     );
 

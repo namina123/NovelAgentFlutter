@@ -227,6 +227,41 @@ void main() {
     );
 
     test(
+      'write_project_file rejects sqlite knowledge projections as compatibility_rejected_projection',
+      () async {
+        // 中文注释: SQLite 项目里的知识投影应停留在语义工具和投影层，不能再让低层写工具把它当主写入口。
+        final hostPort = _FakeProjectToolHostPort(
+          files: const <String, String>{},
+        );
+        final dispatcher = ProjectToolDispatcher(hostPort: hostPort);
+        final result = await dispatcher.execute(
+          project: const ProjectDescriptor(
+            id: 'demo',
+            name: '示例项目',
+            rootPath: 'D:/demo',
+            storageStrategy: ProjectStorageStrategy.sqliteProjectStore,
+          ),
+          toolCall: const <String, Object?>{
+            'name': 'write_project_file',
+            'arguments': <String, Object?>{
+              'relative_path': 'knowledge/cards/card_01.md',
+              'content_type': 'knowledge',
+              'content': '# 札记',
+            },
+          },
+        );
+        expect(result['ok'], isFalse);
+        expect(result['not_executed'], isTrue);
+        expect(result['storage_strategy'], 'sqlite_project_store');
+        expect(
+          result['storage_surface_role'],
+          'compatibility_rejected_projection',
+        );
+        expect(result['error'], contains('只读入口'));
+      },
+    );
+
+    test(
       'present_user_options accepts choices alias and normalizes title to label',
       () async {
         // 中文注释: 模型把选项数组写成 choices/items 时，入口层也应能兼容，避免按钮区被吞成空列表。

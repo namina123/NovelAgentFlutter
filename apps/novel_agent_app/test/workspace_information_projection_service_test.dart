@@ -30,6 +30,10 @@ void main() {
               'is_dir': false,
             },
             <String, Object?>{
+              'relative_path': 'premise/sqlite_projection/index.md',
+              'is_dir': false,
+            },
+            <String, Object?>{
               'relative_path':
                   '.novel_agent/information/knowledge_cards/knowledge_1.json',
               'is_dir': false,
@@ -79,6 +83,12 @@ void main() {
               sourceOfTruthPath: 'project-information://reference_works',
               sourceIdentity:
                   '引用-source-1 / `imports/reference/reference-1.txt` / kind:`user`',
+            ),
+            'premise/sqlite_projection/index.md': _projectionMarkdown(
+              title: 'SQLite 语义树',
+              sourceOfTruthPath: 'sqlite_project_store://semantic_tree',
+              sourceIdentity:
+                  'SQLite-source-1 / `premise/sqlite_projection/index.md` / kind:`projection`',
             ),
             '.novel_agent/information/knowledge_cards/knowledge_1.json':
                 jsonEncode(<String, Object?>{
@@ -210,11 +220,11 @@ void main() {
           },
         );
 
-        expect(viewData.summary, '已整理 4 组资料摘要，4 项待确认');
+        expect(viewData.summary, '已整理 5 组资料摘要，4 项待确认');
         expect(viewData.usageSummary, '本轮已使用：知识、巧思；本轮未使用：研究、引用边界');
         expect(
           viewData.entries.map((entry) => entry.title).toList(growable: false),
-          <String>['知识摘要', '巧思与设计', '研究摘要', '引用边界'],
+          <String>['知识摘要', '巧思与设计', '研究摘要', '引用边界', 'SQLite 语义树'],
         );
         expect(
           viewData.pendingEntries.map((entry) => entry.title).toSet(),
@@ -242,6 +252,20 @@ void main() {
         expect(
           researchEntry.sourceOfTruthSummary,
           '真相源：project-information://research_notes',
+        );
+
+        final sqliteProjectionEntry = viewData.entries.firstWhere(
+          (entry) => entry.title == 'SQLite 语义树',
+        );
+        expect(sqliteProjectionEntry.subtitle, 'SQLite 主事实源的只读投影入口');
+        expect(sqliteProjectionEntry.statusLabel, 'SQLite');
+        expect(
+          sqliteProjectionEntry.sourceOfTruthSummary,
+          '真相源：sqlite_project_store://semantic_tree',
+        );
+        expect(
+          sqliteProjectionEntry.sourceIdentitySummary,
+          contains('SQLite-source-1'),
         );
 
         final pendingKnowledge = viewData.pendingEntries.firstWhere(

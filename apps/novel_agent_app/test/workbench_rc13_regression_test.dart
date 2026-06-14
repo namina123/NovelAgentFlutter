@@ -141,11 +141,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('当前对象'), findsOneWidget);
-    expect(find.text('正文工作区'), findsOneWidget);
+    expect(find.text('NovelAgent'), findsOneWidget);
+    expect(find.text('文件'), findsWidgets);
     expect(find.text('会话'), findsOneWidget);
     expect(find.text('综合创作智能体'), findsWidgets);
-    expect(find.text('当前会话智能体'), findsOneWidget);
     expect(find.text('default_generalist'), findsNothing);
     expect(find.text('结果面板'), findsNothing);
     expect(find.text('智能体配置'), findsNothing);
@@ -346,6 +345,9 @@ class _FakeResourceHandler implements ResourceManagerActionHandler {
 
   @override
   void onEditProjectInfoRequested() {}
+
+  @override
+  void onProjectTypeTransitionRequested() {}
 
   @override
   void onImportRequested() {}

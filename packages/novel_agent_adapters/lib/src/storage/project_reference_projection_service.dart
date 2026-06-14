@@ -1,5 +1,6 @@
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import 'project_reference_alignment_summary_service.dart';
 import 'project_information_projection_compatibility_exporter.dart';
 import 'project_information_projection_writer_service.dart';
 import 'project_reference_projection_port.dart';
@@ -9,21 +10,26 @@ class ProjectReferenceProjectionService
   ProjectReferenceProjectionService({
     required ReferenceEvidenceSubstrate substrate,
     required ProjectReferenceAttachmentLayer attachmentLayer,
+    required ProjectWorkspacePort workspacePort,
     required KnowledgeCardRepository knowledgeCardRepository,
     required DesignElementRepository designElementRepository,
     required ResearchNoteRepository researchNoteRepository,
     required ReferenceWorkRepository referenceWorkRepository,
     required ProjectInformationProjectionWriterService projectionWriterService,
+    ProjectReferenceAlignmentSummaryService? alignmentSummaryService,
     ProjectInformationProjectionCompatibilityExporter? compatibilityExporter,
     ProjectReferenceAccessPolicyService? accessPolicyService,
     ReferenceEntryProjectionMapperService? entryProjectionMapperService,
   }) : _substrate = substrate,
        _attachmentLayer = attachmentLayer,
+       _workspacePort = workspacePort,
        _knowledgeCardRepository = knowledgeCardRepository,
        _designElementRepository = designElementRepository,
        _researchNoteRepository = researchNoteRepository,
        _referenceWorkRepository = referenceWorkRepository,
        _projectionWriterService = projectionWriterService,
+       _alignmentSummaryService =
+           alignmentSummaryService ?? const ProjectReferenceAlignmentSummaryService(),
        _compatibilityExporter = compatibilityExporter,
        _accessPolicyService =
            accessPolicyService ?? const ProjectReferenceAccessPolicyService(),
@@ -33,11 +39,13 @@ class ProjectReferenceProjectionService
 
   final ReferenceEvidenceSubstrate _substrate;
   final ProjectReferenceAttachmentLayer _attachmentLayer;
+  final ProjectWorkspacePort _workspacePort;
   final KnowledgeCardRepository _knowledgeCardRepository;
   final DesignElementRepository _designElementRepository;
   final ResearchNoteRepository _researchNoteRepository;
   final ReferenceWorkRepository _referenceWorkRepository;
   final ProjectInformationProjectionWriterService _projectionWriterService;
+  final ProjectReferenceAlignmentSummaryService _alignmentSummaryService;
   final ProjectInformationProjectionCompatibilityExporter?
   _compatibilityExporter;
   final ProjectReferenceAccessPolicyService _accessPolicyService;
@@ -113,6 +121,13 @@ class ProjectReferenceProjectionService
       await _compatibilityExporter.exportDraftBundle(project, bundle);
     }
     final projections = await _projectionWriterService.writeProjection(project);
+    final alignmentSummaryPath = await _writeAlignmentSummary(
+      project: project,
+      attachment: attachment,
+      packageRecord: snapshot.packageRecord,
+      packageVersionRecord: snapshot.packageVersionRecord,
+      bundle: bundle,
+    );
     return ReferenceProjectionResult(
       status: ReferenceProjectionStatuses.applied,
       packageId: request.packageId,
@@ -131,7 +146,32 @@ class ProjectReferenceProjectionService
           .toList(growable: false),
       generatedProjectionPaths: projections
           .map((item) => item.relativePath)
+          .followedBy(<String>[alignmentSummaryPath])
           .toList(growable: false),
     );
+  }
+
+  Future<String> _writeAlignmentSummary({
+    required ProjectDescriptor project,
+    required ProjectReferenceAttachment attachment,
+    required ReferencePackageRecord packageRecord,
+    required ReferencePackageVersionRecord packageVersionRecord,
+    required InformationProjectionDraftBundle bundle,
+  }) async {
+    // 中文注释: 对齐摘要文件由独立服务生成，主 projection service 只负责把它落到知识目录。
+    final markdown = _alignmentSummaryService.buildMarkdown(
+      project: project,
+      attachment: attachment,
+      packageRecord: packageRecord,
+      packageVersionRecord: packageVersionRecord,
+      bundle: bundle,
+    );
+    await _workspacePort.createDirectory(project.rootPath, 'knowledge');
+    await _workspacePort.writeTextFile(
+      project.rootPath,
+      ProjectReferenceAlignmentSummaryService.summaryRelativePath,
+      markdown,
+    );
+    return ProjectReferenceAlignmentSummaryService.summaryRelativePath;
   }
 }

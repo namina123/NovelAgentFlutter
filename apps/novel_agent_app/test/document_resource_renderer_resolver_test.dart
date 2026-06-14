@@ -103,4 +103,30 @@ void main() {
       DocumentResourceRendererResolver.previewRendererId,
     );
   });
+
+  test('resolver returns structured renderer for sqlite resources', () {
+    final sourceResolution = resolver.resolve(
+      buildRequest(
+        hasDocument: true,
+        relativePath: '.novel_agent/sqlite/novel_agent.db',
+        displayMode: DocumentWorkspaceDisplayMode.source,
+      ),
+    );
+    final renderResolution = resolver.resolve(
+      buildRequest(
+        hasDocument: true,
+        relativePath: 'premise/sqlite_projection/index.sqlite',
+        displayMode: DocumentWorkspaceDisplayMode.render,
+      ),
+    );
+
+    expect(
+      sourceResolution.rendererId,
+      DocumentResourceRendererResolver.structuredRendererId,
+    );
+    expect(
+      renderResolution.rendererId,
+      DocumentResourceRendererResolver.structuredRendererId,
+    );
+  });
 }

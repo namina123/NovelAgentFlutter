@@ -113,6 +113,7 @@ class ProjectWorkflowRuntimeBridgeService {
       toolExposureResolution.visibleToolIds,
       hostPlatform: _hostPlatform,
       projectType: project.projectType,
+      storageStrategy: project.storageStrategy,
     );
     final filteredWorkflowToolIds = _filterWorkflowToolIdsForTask(
       workflowToolIds,
@@ -391,16 +392,9 @@ class ProjectWorkflowRuntimeBridgeService {
       return const _ChapterContinuitySnapshot();
     }
     notes.add('开篇先推进到新情节点；不要把上一章末尾已完成的动作、对话或到达重新播放一遍。');
-    guardLines.add(
-      '开篇先推进到新情节点，不要把上一章末尾已完成的动作、对话、到达或同一段铺垫重新播放一遍。',
-    );
-    guardLines.add(
-      '如果上一章末尾已经敲门、开口、达成请求或进入某地，本章从回应、结果或后续动作继续，不要从同一动作重新起笔。',
-    );
-    return _ChapterContinuitySnapshot(
-      notes: notes,
-      guardLines: guardLines,
-    );
+    guardLines.add('开篇先推进到新情节点，不要把上一章末尾已完成的动作、对话、到达或同一段铺垫重新播放一遍。');
+    guardLines.add('如果上一章末尾已经敲门、开口、达成请求或进入某地，本章从回应、结果或后续动作继续，不要从同一动作重新起笔。');
+    return _ChapterContinuitySnapshot(notes: notes, guardLines: guardLines);
   }
 
   String _extractLineValue(String text, String prefix) {

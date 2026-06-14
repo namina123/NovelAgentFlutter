@@ -576,6 +576,7 @@ class GenerateDraftUseCase {
       toolExposureResolution.visibleToolIds,
       hostPlatform: _hostPlatform,
       projectType: project.projectType,
+      storageStrategy: project.storageStrategy,
     );
     final toolSchemas = _toolSchemaBuilderService.buildOpenAiSchemas(
       filteredToolIds,

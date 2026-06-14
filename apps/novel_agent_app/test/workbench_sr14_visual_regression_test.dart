@@ -191,6 +191,7 @@ void main() {
     expect(find.text('深度思考'), findsOneWidget);
     expect(find.text('发送'), findsOneWidget);
     expect(find.text('审阅智能体'), findsWidgets);
+    expect(find.text('已完成'), findsOneWidget);
     expect(find.text('把会话结尾再压低一点，别急着给角色台阶。'), findsOneWidget);
 
     await expectLater(
@@ -781,6 +782,9 @@ class _FakeResourceHandler implements ResourceManagerActionHandler {
 
   @override
   void onEditProjectInfoRequested() {}
+
+  @override
+  void onProjectTypeTransitionRequested() {}
 
   @override
   void onImportRequested() {}

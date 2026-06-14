@@ -8,9 +8,11 @@ class ResourceTreeEntryTile extends StatelessWidget {
     super.key,
     required this.entry,
     required this.onPressed,
+    this.secondaryLabel = '',
   });
 
   final ResourceEntryViewData entry;
+  final String secondaryLabel;
   final VoidCallback onPressed;
 
   @override
@@ -18,6 +20,7 @@ class ResourceTreeEntryTile extends StatelessWidget {
     final optionSurface = context.novelThemeSurfaces.optionTile;
     final panelSurface = context.novelThemeSurfaces.panel;
     final colors = context.novelThemeColors;
+    final hasSecondaryLabel = secondaryLabel.trim().isNotEmpty;
     final foreground = entry.isSelected
         ? optionSurface.highlightForegroundColor
         : panelSurface.foregroundColor;
@@ -46,8 +49,15 @@ class ResourceTreeEntryTile extends StatelessWidget {
         child: Stack(
           children: [
             Container(
-              constraints: const BoxConstraints(minHeight: 32),
-              padding: const EdgeInsets.fromLTRB(8, 3, 8, 3),
+              constraints: BoxConstraints(
+                minHeight: hasSecondaryLabel ? 40 : 32,
+              ),
+              padding: EdgeInsets.fromLTRB(
+                8,
+                hasSecondaryLabel ? 4 : 3,
+                8,
+                hasSecondaryLabel ? 4 : 3,
+              ),
               decoration: BoxDecoration(
                 color: background,
                 borderRadius: BorderRadius.circular(8),
@@ -82,41 +92,61 @@ class ResourceTreeEntryTile extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Text(
-                            entry.title,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                entry.title,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12.2,
+                                  fontWeight: entry.isSelected
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                                  color: foreground,
+                                ),
+                              ),
+                            ),
+                            if (entry.isDirectory && entry.childCount > 0) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 5,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: panelSurface.backgroundColor
+                                      .withValues(
+                                        alpha: entry.isSelected ? 0.18 : 0.06,
+                                      ),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(
+                                  '${entry.childCount}',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: mutedForeground,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        if (secondaryLabel.trim().isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            secondaryLabel,
+                            maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontSize: 12.2,
-                              fontWeight: entry.isSelected
-                                  ? FontWeight.w700
-                                  : FontWeight.w500,
-                              color: foreground,
-                            ),
-                          ),
-                        ),
-                        if (entry.isDirectory && entry.childCount > 0) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 5,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: panelSurface.backgroundColor.withValues(
-                                alpha: entry.isSelected ? 0.18 : 0.06,
-                              ),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              '${entry.childCount}',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                color: mutedForeground,
-                              ),
+                              fontSize: 10,
+                              height: 1.2,
+                              fontWeight: FontWeight.w500,
+                              color: mutedForeground,
                             ),
                           ),
                         ],

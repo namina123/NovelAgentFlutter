@@ -23,6 +23,7 @@ class WorkbenchWorkspaceShellViewDataService {
     return WorkbenchWorkspaceShellViewData(
       projectName: resource.projectName,
       projectSubtitle: resource.projectSubtitle,
+      projectTypeId: resource.projectTypeId,
       resourceCount: resource.resourceEntries.length,
       activeDocumentTitle: canvas.activeDocumentTitle,
       activeDocumentPath: canvas.activeDocumentPath,

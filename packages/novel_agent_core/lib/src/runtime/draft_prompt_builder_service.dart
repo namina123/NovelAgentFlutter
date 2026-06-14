@@ -29,6 +29,8 @@ class DraftPromptBuilderService {
       '',
       _projectPromptContract.toolDecisionContract(),
       '',
+      _projectPromptContract.storageAwareToolGuidance(project),
+      '',
       _projectPromptContract.domainToolGuidance(intent, agent: agent),
       '',
       _projectPromptContract.informationToolGuidance(intent, agent: agent),

@@ -83,11 +83,77 @@ void main() {
       expect(find.text('已选择 1 个文件。'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'workspace command overlay carries project type transition target and runtime baseline',
+    (WidgetTester tester) async {
+      final handler = _FakeResourceManagerActionHandler();
+      final viewData = const WorkspaceCommandViewData(
+        mode: WorkspaceCommandMode.transitionProjectType,
+        title: '项目类型转换',
+        description: '将当前项目切换到另一个类型。',
+        confirmLabel: '执行转换',
+        status: '转换条件已满足。',
+        projectTitle: '星港档案',
+        projectType: 'long_novel',
+        transitionTargetProjectTypeId: 'long_novel',
+        transitionRuntimeBaselineId: 'continuous_autonomous',
+        genre: '',
+        premise: '',
+        notes: '',
+        relativePath: '',
+        entryName: '',
+        content: '',
+        sourcePathsText: '',
+        targetDirectory: '',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light(),
+          home: Scaffold(
+            body: Stack(
+              children: [
+                WorkspaceCommandOverlay(
+                  viewData: viewData,
+                  actionHandler: handler,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('目标项目类型 ID'), findsOneWidget);
+      expect(find.text('运行基准 ID'), findsOneWidget);
+      expect(find.text('continuous_autonomous'), findsOneWidget);
+      expect(find.text('执行转换'), findsOneWidget);
+
+      await tester.tap(find.text('执行转换'));
+      await tester.pump();
+
+      expect(handler.lastSubmittedRequest, isNotNull);
+      expect(
+        handler.lastSubmittedRequest!.mode,
+        WorkspaceCommandMode.transitionProjectType,
+      );
+      expect(
+        handler.lastSubmittedRequest!.transitionTargetProjectTypeId,
+        'long_novel',
+      );
+      expect(
+        handler.lastSubmittedRequest!.transitionRuntimeBaselineId,
+        'continuous_autonomous',
+      );
+    },
+  );
 }
 
 class _FakeResourceManagerActionHandler
     implements ResourceManagerActionHandler {
   WorkspaceCommandRequestViewData? lastPickRequest;
+  WorkspaceCommandRequestViewData? lastSubmittedRequest;
 
   @override
   void onAgentEcosystemRequested() {}
@@ -112,6 +178,9 @@ class _FakeResourceManagerActionHandler
 
   @override
   void onEditProjectInfoRequested() {}
+
+  @override
+  void onProjectTypeTransitionRequested() {}
 
   @override
   void onImportRequested() {}
@@ -178,5 +247,7 @@ class _FakeResourceManagerActionHandler
   }
 
   @override
-  void onWorkspaceCommandSubmitted(WorkspaceCommandRequestViewData request) {}
+  void onWorkspaceCommandSubmitted(WorkspaceCommandRequestViewData request) {
+    lastSubmittedRequest = request;
+  }
 }

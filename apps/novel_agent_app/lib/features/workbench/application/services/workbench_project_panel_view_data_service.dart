@@ -6,13 +6,12 @@ class WorkbenchProjectPanelViewDataService {
   const WorkbenchProjectPanelViewDataService({
     WorkbenchProjectPanelActionPolicyService? actionPolicyService,
   }) : _actionPolicyService =
-           actionPolicyService ?? const WorkbenchProjectPanelActionPolicyService();
+           actionPolicyService ??
+           const WorkbenchProjectPanelActionPolicyService();
 
   final WorkbenchProjectPanelActionPolicyService _actionPolicyService;
 
-  WorkbenchProjectPanelViewData build(
-    WorkbenchWorkspaceShellViewData source,
-  ) {
+  WorkbenchProjectPanelViewData build(WorkbenchWorkspaceShellViewData source) {
     final hasActiveProject = source.projectName.trim().isNotEmpty;
     return WorkbenchProjectPanelViewData(
       projectName: source.projectName,
@@ -26,6 +25,7 @@ class WorkbenchProjectPanelViewDataService {
       hasActiveProject: hasActiveProject,
       primaryActions: _actionPolicyService.primaryActions(
         hasActiveProject: hasActiveProject,
+        projectTypeId: source.projectTypeId,
       ),
       assetActions: _actionPolicyService.assetActions(
         hasActiveProject: hasActiveProject,

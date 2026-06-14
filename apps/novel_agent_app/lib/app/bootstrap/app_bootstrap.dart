@@ -62,6 +62,16 @@ class AppBootstrap {
           continuityRepository: projectContinuityRepository,
           inputRepository: projectContinuityInputRepository,
         );
+    final updateProjectManifestUseCase = UpdateProjectManifestUseCase(
+      writeProjectTextFileUseCase: writeProjectTextFileUseCase,
+    );
+    final executeProjectTypeTransitionUseCase =
+        ExecuteProjectTypeTransitionUseCase(
+          projectTypeTransitionPreparationService:
+              const ProjectTypeTransitionPreparationService(),
+          updateProjectManifestUseCase: updateProjectManifestUseCase,
+          writeProjectTextFileUseCase: writeProjectTextFileUseCase,
+        );
     final projectAgentSkillLoadoutRepository =
         ProjectAgentSkillLoadoutRepository(
           workspacePort: bundle.projectWorkspacePort,
@@ -228,9 +238,8 @@ class AppBootstrap {
       importProjectFilesUseCase: ImportProjectFilesUseCase(
         projectToolHostPort: bundle.projectToolHostPort,
       ),
-      updateProjectManifestUseCase: UpdateProjectManifestUseCase(
-        writeProjectTextFileUseCase: writeProjectTextFileUseCase,
-      ),
+      updateProjectManifestUseCase: updateProjectManifestUseCase,
+      executeProjectTypeTransitionUseCase: executeProjectTypeTransitionUseCase,
       projectToolHostPort: bundle.projectToolHostPort,
       bookDeconstructionNarrativePersistenceService:
           bookDeconstructionNarrativePersistenceService,

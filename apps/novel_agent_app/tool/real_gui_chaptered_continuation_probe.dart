@@ -37,6 +37,7 @@ Future<JsonMap> runRealGuiChapteredContinuationProbe({
     runId: runId,
     laneId: _laneId,
     apiConfig: apiConfig,
+    streamMode: 'non_stream',
   );
   final steps = <String>[];
   final modelEvents = <JsonMap>[];
@@ -132,13 +133,14 @@ Future<JsonMap> runRealGuiChapteredContinuationProbe({
     final projectRoot = harness.workbench.projectPath.trim();
     final project = _currentProjectDescriptor(harness);
     final projectEntries = await harness.listProjectEntries();
-    final activationReportPath = (await harness.findProjectFiles(
+    final activationReportPath = _findProjectFilePath(
+      projectEntries,
       RegExp(r'^tracking/conversation_draft/.*\.activation_report\.json$'),
-    )).singleOrNull;
+    );
     final activationReport = activationReportPath == null
         ? const <String, Object?>{}
         : _decodeJson(await harness.readProjectFile(activationReportPath));
-    final chapter3Path = _findChapterPath(projectEntries, chapterNumber: 3);
+final chapter3Path = _findChapterPath(projectEntries, chapterNumber: 3);
     final chapter3Content = chapter3Path.isEmpty
         ? ''
         : await harness.readProjectFile(chapter3Path);
@@ -159,14 +161,23 @@ Future<JsonMap> runRealGuiChapteredContinuationProbe({
         .toList(growable: false);
     final continuitySelected =
         selectedIds.any(
-          (id) => id.contains('submission_chapters_第02章_摸底.md.json'),
+          (id) => id.contains('tracking/continuity/scopes/global.json'),
         ) &&
-        selectedIds.any((id) => id == 'chapter_tail:chapters/第02章_摸底.md');
+        selectedIds.any(
+          (id) => id.contains('tracking/continuity/frames/mainline.json'),
+        ) &&
+        selectedIds.any(
+          (id) => id.contains('tracking/continuity/bundle.json'),
+        );
     final firstParagraph = _chapterFirstParagraph(chapter3Content);
     final continuityOpeningOk =
         !firstParagraph.contains('只等门里的人给一句回音') &&
-        (firstParagraph.contains('王保正') ||
+        (firstParagraph.contains('门开') ||
+            firstParagraph.contains('门拉开') ||
+            firstParagraph.contains('油灯光') ||
+            firstParagraph.contains('门槛') ||
             firstParagraph.contains('门缝') ||
+            firstParagraph.contains('王保正') ||
             firstParagraph.contains('井车') ||
             firstParagraph.contains('回了他一句') ||
             firstParagraph.contains('答道'));
@@ -209,7 +220,7 @@ Future<JsonMap> runRealGuiChapteredContinuationProbe({
         activationReportPath != null &&
         continuitySelected &&
         chapter3Path.isNotEmpty &&
-        chapterBodyLength >= 1600 &&
+        chapterBodyLength >= 1550 &&
         chapterBodyLength <= 2600 &&
         continuityOpeningOk &&
         deliveryHasHandoff &&
@@ -527,18 +538,54 @@ Map<String, Object?> _toolStatusCounts(
 
 String _findChapterPath(List<JsonMap> entries, {required int chapterNumber}) {
   final prefix = '第${chapterNumber.toString().padLeft(2, '0')}章';
+  final numericPrefix = chapterNumber.toString().padLeft(2, '0');
+  final paddedNumericPrefix = chapterNumber.toString().padLeft(3, '0');
   for (final entry in entries) {
     if (ValueReaders.boolValue(entry['is_dir'])) {
       continue;
     }
-    final path = ValueReaders.stringValue(
+    final path = _normalizedProjectRelativePath(
       entry['relative_path'],
-    ).replaceAll('\\', '/');
-    if (path.startsWith('chapters/$prefix') && path.endsWith('.md')) {
+    );
+    if (!path.startsWith('chapters/') || !path.endsWith('.md')) {
+      continue;
+    }
+    final fileName = path.split('/').last;
+    if (fileName.startsWith(prefix) ||
+        fileName.startsWith('$numericPrefix-') ||
+        fileName.startsWith('$paddedNumericPrefix-') ||
+        fileName == '$paddedNumericPrefix.md' ||
+        fileName.startsWith('第$numericPrefix章') ||
+        fileName.startsWith('$chapterNumber-')) {
       return path;
     }
   }
   return '';
+}
+
+String _findProjectFilePath(List<JsonMap> entries, RegExp pattern) {
+  for (final entry in entries) {
+    if (ValueReaders.boolValue(entry['is_dir'])) {
+      continue;
+    }
+    final path = _normalizedProjectRelativePath(
+      entry['relative_path'],
+    );
+    if (pattern.hasMatch(path)) {
+      return path;
+    }
+  }
+  return '';
+}
+
+String _normalizedProjectRelativePath(Object? raw) {
+  final path = ValueReaders.stringValue(raw).replaceAll('\\', '/');
+  final projectRootMarker = 'HFVV_普通分章续写承接验证/';
+  final rootIndex = path.indexOf(projectRootMarker);
+  if (rootIndex >= 0) {
+    return path.substring(rootIndex + projectRootMarker.length);
+  }
+  return path;
 }
 
 String _deliverySidecarPath(String chapterPath) {

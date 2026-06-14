@@ -5,6 +5,8 @@ abstract class WorkbenchProjectPanelActionHandler {
 
   void onEditProjectInfoRequested();
 
+  void onProjectTypeTransitionRequested() {}
+
   void onRefreshFilesRequested();
 
   void onProjectAgentGroupRequested();

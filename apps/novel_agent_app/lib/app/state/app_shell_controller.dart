@@ -163,6 +163,7 @@ class AppShellController extends ChangeNotifier
     required CreateProjectEntryUseCase createProjectEntryUseCase,
     required ImportProjectFilesUseCase importProjectFilesUseCase,
     required UpdateProjectManifestUseCase updateProjectManifestUseCase,
+    ExecuteProjectTypeTransitionUseCase? executeProjectTypeTransitionUseCase,
     required ProjectToolHostPort projectToolHostPort,
     required BookDeconstructionNarrativePersistenceService
     bookDeconstructionNarrativePersistenceService,
@@ -271,6 +272,8 @@ class AppShellController extends ChangeNotifier
        _createProjectEntryUseCase = createProjectEntryUseCase,
        _importProjectFilesUseCase = importProjectFilesUseCase,
        _updateProjectManifestUseCase = updateProjectManifestUseCase,
+       _executeProjectTypeTransitionUseCase =
+           executeProjectTypeTransitionUseCase,
        _projectToolHostPort = projectToolHostPort,
        _bookDeconstructionNarrativePersistenceService =
            bookDeconstructionNarrativePersistenceService,
@@ -423,6 +426,7 @@ class AppShellController extends ChangeNotifier
       createProjectEntryUseCase: _createProjectEntryUseCase,
       importProjectFilesUseCase: _importProjectFilesUseCase,
       updateProjectManifestUseCase: _updateProjectManifestUseCase,
+      executeProjectTypeTransitionUseCase: _executeProjectTypeTransitionUseCase,
       projectToolHostPort: _projectToolHostPort,
       writeProjectTextFileUseCase: _writeProjectTextFileUseCase,
       narrativePersistenceService:
@@ -634,6 +638,8 @@ class AppShellController extends ChangeNotifier
   final CreateProjectEntryUseCase _createProjectEntryUseCase;
   final ImportProjectFilesUseCase _importProjectFilesUseCase;
   final UpdateProjectManifestUseCase _updateProjectManifestUseCase;
+  final ExecuteProjectTypeTransitionUseCase?
+  _executeProjectTypeTransitionUseCase;
   final ProjectToolHostPort _projectToolHostPort;
   final BookDeconstructionNarrativePersistenceService
   _bookDeconstructionNarrativePersistenceService;
@@ -1160,6 +1166,10 @@ class AppShellController extends ChangeNotifier
 
   void onEditProjectInfoRequested() =>
       _workbenchWorkspaceController.onEditProjectInfoRequested();
+
+  @override
+  void onProjectTypeTransitionRequested() =>
+      _workbenchWorkspaceController.onProjectTypeTransitionRequested();
 
   void onRefreshFilesRequested() =>
       _workbenchWorkspaceController.onRefreshFilesRequested();

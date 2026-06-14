@@ -7,17 +7,26 @@ void main() {
 
     test('hides legacy compatibility roots from default resource tree', () {
       expect(service.shouldHideFromDefaultTree('drafts/ch01.md'), isTrue);
-      expect(service.shouldHideFromDefaultTree('specs/project_brief.md'), isTrue);
+      expect(
+        service.shouldHideFromDefaultTree('specs/project_brief.md'),
+        isTrue,
+      );
       expect(service.shouldHideFromDefaultTree('characters/苏九.md'), isTrue);
       expect(service.shouldHideFromDefaultTree('inspiration/seed.md'), isTrue);
       expect(service.isLegacyCompatibilityPath('drafts/ch01.md'), isTrue);
-      expect(service.isLegacyCompatibilityPath('specs/project_brief.md'), isTrue);
+      expect(
+        service.isLegacyCompatibilityPath('specs/project_brief.md'),
+        isTrue,
+      );
       expect(service.isLegacyCompatibilityPath('characters/苏九.md'), isTrue);
       expect(service.isLegacyCompatibilityPath('inspiration/seed.md'), isTrue);
     });
 
     test('keeps new user-facing directories visible by default', () {
-      expect(service.shouldHideFromDefaultTree('premise/project_brief.md'), isFalse);
+      expect(
+        service.shouldHideFromDefaultTree('premise/project_brief.md'),
+        isFalse,
+      );
       expect(
         service.shouldHideFromDefaultTree('outlines/story/story_outline.md'),
         isFalse,
@@ -45,6 +54,21 @@ void main() {
         isTrue,
       );
       expect(service.shouldHideFromDefaultTree('prompts/opening.md'), isTrue);
+    });
+
+    test('hides SQLite database files from the default resource tree', () {
+      expect(
+        service.shouldHideFromDefaultTree('.novel_agent/sqlite/novel_agent.db'),
+        isTrue,
+      );
+      expect(
+        service.shouldHideFromDefaultTree('premise/project.sqlite'),
+        isTrue,
+      );
+      expect(
+        service.shouldHideFromDefaultTree('exports/projection.sqlite'),
+        isTrue,
+      );
     });
   });
 }

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:novel_agent_core/novel_agent_core.dart';
+import 'package:novel_agent_core/src/project/project_storage_aware_workspace_policy.dart';
 
 import 'project_tool_path_policy.dart';
 import 'project_tool_result_factory.dart';
@@ -10,13 +11,17 @@ class ProjectFileWriteToolExecutor {
     required ProjectToolHostPort hostPort,
     ProjectToolPathPolicy? pathPolicy,
     ProjectToolResultFactory? resultFactory,
+    ProjectStorageAwareWorkspacePolicy? workspacePolicy,
   }) : _hostPort = hostPort,
        _pathPolicy = pathPolicy ?? ProjectToolPathPolicy(),
-       _resultFactory = resultFactory ?? ProjectToolResultFactory();
+       _resultFactory = resultFactory ?? ProjectToolResultFactory(),
+       _workspacePolicy =
+           workspacePolicy ?? const ProjectStorageAwareWorkspacePolicy();
 
   final ProjectToolHostPort _hostPort;
   final ProjectToolPathPolicy _pathPolicy;
   final ProjectToolResultFactory _resultFactory;
+  final ProjectStorageAwareWorkspacePolicy _workspacePolicy;
 
   Future<JsonMap> writeProjectFile(
     ProjectDescriptor project,
@@ -48,6 +53,14 @@ class ProjectFileWriteToolExecutor {
         data: <String, Object?>{'relative_path': relativePath},
       );
     }
+    final storageRejection = _storageAwareProjectionRejection(
+      project: project,
+      relativePath: relativePath,
+      contentType: contentType,
+    );
+    if (storageRejection != null) {
+      return storageRejection;
+    }
     final overwrite = ValueReaders.boolValue(arguments['overwrite']);
     final targetPath = overwrite
         ? relativePath
@@ -64,6 +77,12 @@ class ProjectFileWriteToolExecutor {
         'content_type': contentType,
         'overwritten': overwrite && targetPath == relativePath,
         'changed_paths': <Object?>[targetPath],
+        'storage_strategy': project.storageStrategy.id,
+        'storage_surface_role': _storageSurfaceRole(
+          project: project,
+          relativePath: targetPath,
+          contentType: contentType,
+        ),
       },
     );
   }
@@ -86,6 +105,14 @@ class ProjectFileWriteToolExecutor {
         (!relativePath.split('/').last.contains('.') &&
             ValueReaders.stringValue(arguments['content']).trim().isEmpty);
     if (isFolder) {
+      final storageRejection = _storageAwareProjectionRejection(
+        project: project,
+        relativePath: relativePath,
+        contentType: _pathPolicy.inferContentTypeFromPath(relativePath),
+      );
+      if (storageRejection != null) {
+        return storageRejection;
+      }
       if (!_pathPolicy.isSafeScopePath(relativePath)) {
         return _resultFactory.error(
           'Unsafe folder path.',
@@ -104,6 +131,11 @@ class ProjectFileWriteToolExecutor {
           'relative_path': relativePath,
           'is_folder': true,
           'changed_paths': <Object?>[relativePath],
+          'storage_strategy': project.storageStrategy.id,
+          'storage_surface_role': _storageSurfaceRole(
+            project: project,
+            relativePath: relativePath,
+          ),
         },
       );
     }
@@ -115,6 +147,14 @@ class ProjectFileWriteToolExecutor {
         'Unsafe file path.',
         data: <String, Object?>{'relative_path': relativePath},
       );
+    }
+    final storageRejection = _storageAwareProjectionRejection(
+      project: project,
+      relativePath: relativePath,
+      contentType: _pathPolicy.inferContentTypeFromPath(relativePath),
+    );
+    if (storageRejection != null) {
+      return storageRejection;
     }
     final overwrite = ValueReaders.boolValue(arguments['overwrite']);
     final exists = await _hostPort.entryExists(project.rootPath, relativePath);
@@ -142,6 +182,11 @@ class ProjectFileWriteToolExecutor {
         'relative_path': targetPath,
         'is_folder': false,
         'changed_paths': <Object?>[targetPath],
+        'storage_strategy': project.storageStrategy.id,
+        'storage_surface_role': _storageSurfaceRole(
+          project: project,
+          relativePath: targetPath,
+        ),
       },
     );
   }
@@ -167,6 +212,22 @@ class ProjectFileWriteToolExecutor {
         },
       );
     }
+    final storageRejection = _storageAwareProjectionRejection(
+      project: project,
+      relativePath: source,
+      contentType: _pathPolicy.inferContentTypeFromPath(source),
+    );
+    if (storageRejection != null) {
+      return storageRejection;
+    }
+    final targetRejection = _storageAwareProjectionRejection(
+      project: project,
+      relativePath: target,
+      contentType: _pathPolicy.inferContentTypeFromPath(target),
+    );
+    if (targetRejection != null) {
+      return targetRejection;
+    }
     if (!await _hostPort.entryExists(project.rootPath, source)) {
       return _resultFactory.notExecuted(
         'move_project_file 未找到源文件。请先调用 list_project_files 确认英文 relative_path。',
@@ -190,6 +251,11 @@ class ProjectFileWriteToolExecutor {
         'relative_path': target,
         'source_relative_path': source,
         'changed_paths': <Object?>[source, target],
+        'storage_strategy': project.storageStrategy.id,
+        'storage_surface_role': _storageSurfaceRole(
+          project: project,
+          relativePath: target,
+        ),
       },
     );
   }
@@ -210,6 +276,14 @@ class ProjectFileWriteToolExecutor {
         'rename_project_file 缺少 relative_path 或 new_name。',
         data: <String, Object?>{'relative_path': source},
       );
+    }
+    final storageRejection = _storageAwareProjectionRejection(
+      project: project,
+      relativePath: source,
+      contentType: _pathPolicy.inferContentTypeFromPath(source),
+    );
+    if (storageRejection != null) {
+      return storageRejection;
     }
     final slashIndex = source.lastIndexOf('/');
     final target = slashIndex >= 0
@@ -236,6 +310,14 @@ class ProjectFileWriteToolExecutor {
         data: <String, Object?>{'relative_path': relativePath},
       );
     }
+    final storageRejection = _storageAwareProjectionRejection(
+      project: project,
+      relativePath: relativePath,
+      contentType: _pathPolicy.inferContentTypeFromPath(relativePath),
+    );
+    if (storageRejection != null) {
+      return storageRejection;
+    }
     if (!await _hostPort.entryExists(project.rootPath, relativePath)) {
       return _resultFactory.notExecuted(
         'delete_project_file 未找到目标文件。请先调用 list_project_files 确认英文 relative_path。',
@@ -257,6 +339,11 @@ class ProjectFileWriteToolExecutor {
         'relative_path': relativePath,
         'backup_path': backupPath,
         'changed_paths': <Object?>[relativePath],
+        'storage_strategy': project.storageStrategy.id,
+        'storage_surface_role': _storageSurfaceRole(
+          project: project,
+          relativePath: relativePath,
+        ),
       },
     );
   }
@@ -324,6 +411,8 @@ class ProjectFileWriteToolExecutor {
         'relative_path': relativePath,
         'backup_path': backupPath,
         'changed_paths': <Object?>[backupPath],
+        'storage_strategy': project.storageStrategy.id,
+        'storage_surface_role': 'compatibility_backup',
       },
     );
   }
@@ -390,7 +479,83 @@ class ProjectFileWriteToolExecutor {
         'backup_path': backupPath,
         'relative_path': targetPath,
         'changed_paths': <Object?>[targetPath],
+        'storage_strategy': project.storageStrategy.id,
+        'storage_surface_role': 'compatibility_restore',
       },
     );
+  }
+
+  JsonMap? _storageAwareProjectionRejection({
+    required ProjectDescriptor project,
+    required String relativePath,
+    required String contentType,
+  }) {
+    // 中文注释: SQLite 项目里知识/研究/引用投影是只读入口，低层写工具碰到这些路径要显式退回。
+    if (project.storageStrategy != ProjectStorageStrategy.sqliteProjectStore) {
+      return null;
+    }
+    final cleanPath = _pathPolicy.cleanRelativePath(relativePath);
+    if (cleanPath.startsWith('knowledge/') ||
+        cleanPath.startsWith('research/') ||
+        cleanPath.startsWith('references/') ||
+        contentType == 'knowledge') {
+      return _resultFactory.notExecuted(
+        'SQLite 项目中的知识/研究/引用投影为只读入口，请改用语义工具或主事实源写入链。',
+        data: <String, Object?>{
+          'relative_path': cleanPath,
+          'storage_strategy': project.storageStrategy.id,
+          'storage_surface_role': 'compatibility_rejected_projection',
+        },
+      );
+    }
+    return null;
+  }
+
+  String _storageSurfaceRole({
+    required ProjectDescriptor project,
+    required String relativePath,
+    String contentType = '',
+  }) {
+    // 中文注释: 写工具结果里主动标注当前路径属于主链、兼容层还是投影层，方便 prompt 和测试读取。
+    if (project.storageStrategy != ProjectStorageStrategy.sqliteProjectStore) {
+      return 'filesystem_primary';
+    }
+    final cleanPath = _pathPolicy.cleanRelativePath(relativePath);
+    if (_workspacePolicy.isMetadataPath(relativePath: cleanPath)) {
+      return 'workspace_metadata_read';
+    }
+    if (_workspacePolicy.isProjectionPath(
+      storageStrategy: project.storageStrategy,
+      relativePath: cleanPath,
+    )) {
+      final inferredType = contentType.trim().isNotEmpty
+          ? contentType.trim()
+          : _pathPolicy.inferContentTypeFromPath(cleanPath);
+      if (inferredType == 'knowledge') {
+        return 'compatibility_rejected_projection';
+      }
+      return 'compatibility_projection';
+    }
+    final inferredType = contentType.trim().isNotEmpty
+        ? contentType.trim()
+        : _pathPolicy.inferContentTypeFromPath(cleanPath);
+    if (cleanPath.startsWith('knowledge/') ||
+        cleanPath.startsWith('research/') ||
+        cleanPath.startsWith('references/') ||
+        inferredType == 'knowledge') {
+      return 'compatibility_rejected_projection';
+    }
+    if (inferredType == 'chapter' ||
+        inferredType == 'scene' ||
+        inferredType == 'outline' ||
+        inferredType == 'volume_outline' ||
+        inferredType == 'chapter_outline' ||
+        inferredType == 'setting' ||
+        inferredType == 'character' ||
+        inferredType == 'style' ||
+        inferredType == 'summary') {
+      return 'compatibility_projection';
+    }
+    return 'compatibility_mirror';
   }
 }
