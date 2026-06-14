@@ -72,6 +72,35 @@ void main() {
       expect(plan.nextStep, ProjectCreationNextStep.readyToCreate);
     });
 
+    test('prepare normalizes knowledge base to sqlite storage', () {
+      // 中文注释: 知识库创建在 core 层就应该被收束到 SQLite，避免调用方先传出 Markdown 再靠 UI 纠偏。
+      final useCase = CreateProjectWorkspaceUseCase(
+        projectRepository: _FakeProjectRepository(),
+        projectWorkspacePort: _FakeProjectWorkspacePort(),
+        projectContentRepository: _FakeProjectContentRepository(),
+        projectReadableProjectionService:
+            _FakeProjectReadableProjectionService(),
+      );
+
+      final plan = useCase.prepare(
+        const ProjectCreateRequest(
+          title: '知识库测试',
+          projectTypeId: 'knowledge_base',
+          storageStrategy: ProjectStorageStrategy.markdownProjectStore,
+        ),
+      );
+
+      expect(
+        plan.request.storageStrategy,
+        ProjectStorageStrategy.sqliteProjectStore,
+      );
+      expect(
+        plan.projectTypeDefinition.supportedStorageStrategies,
+        <ProjectStorageStrategy>[ProjectStorageStrategy.sqliteProjectStore],
+      );
+      expect(plan.canCreate, isTrue);
+    });
+
     test(
       'executePrepared persists runtime baseline into manifest and profile',
       () async {

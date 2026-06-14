@@ -8,6 +8,7 @@ import '../storage/local_semantic_review_repository.dart';
 import '../storage/open_narrative_state_path_service.dart';
 import '../storage/open_narrative_state_projection_writer_service.dart';
 import '../storage/open_narrative_state_record_document_service.dart';
+import '../storage/project_structured_content_bridge_service.dart';
 import '../storage/project_task_repository.dart';
 import 'project_chapter_length_delivery_guard_service.dart';
 import 'project_chapter_opening_continuity_guard_service.dart';
@@ -34,6 +35,8 @@ class ProjectNarrativeDomainToolExecutor {
     NarrativeStateClaimCodecService? claimCodecService,
     NarrativeProfileCodecService? profileCodecService,
     NarrativeConstraintBindingCodecService? bindingCodecService,
+    ProjectStructuredContentBridgeService?
+    structuredContentBridgeService,
   }) : _hostPort = hostPort,
        _dispatcher =
            dispatcher ??
@@ -85,6 +88,9 @@ class ProjectNarrativeDomainToolExecutor {
        _bindingCodecService =
            bindingCodecService ??
            const NarrativeConstraintBindingCodecService(),
+       _structuredContentBridgeService =
+           structuredContentBridgeService ??
+           ProjectStructuredContentBridgeService(),
        _projectionWriterService =
            projectionWriterService ??
            OpenNarrativeStateProjectionWriterService(
@@ -123,6 +129,7 @@ class ProjectNarrativeDomainToolExecutor {
   final NarrativeStateClaimCodecService _claimCodecService;
   final NarrativeProfileCodecService _profileCodecService;
   final NarrativeConstraintBindingCodecService _bindingCodecService;
+  final ProjectStructuredContentBridgeService _structuredContentBridgeService;
 
   Future<DomainToolOutcome> execute(
     ProjectDescriptor project,
@@ -355,6 +362,14 @@ class ProjectNarrativeDomainToolExecutor {
     if (deliveryId.isEmpty) {
       throw StateError('submit_chapter_delivery 结果缺少 delivery_id。');
     }
+    await _structuredContentBridgeService.persistChapterDelivery(
+      project: project,
+      chapterPath: chapterPath,
+      chapterTitle: ValueReaders.stringValue(payload['title']),
+      chapterContent: chapterContent,
+      recordPath: _pathService.deliveryPath(deliveryId),
+      status: ValueReaders.stringValue(stateResult['state'], 'delivered'),
+    );
     final recordPath = _pathService.deliveryPath(deliveryId);
     await _recordDocumentService.writeIndexedRecord(
       rootPath: project.rootPath,

@@ -3,6 +3,22 @@ import 'package:test/test.dart';
 
 void main() {
   group('ProjectManifest storage strategy', () {
+    test('create normalizes knowledge base to sqlite storage', () {
+      // 中文注释: 这里验证新建知识库时即使调用方误传 Markdown，manifest 也会在 core 创建阶段收束为 SQLite。
+      final codec = ProjectManifestCodecService();
+      final manifest = codec.create(
+        title: '资料知识库',
+        projectType: 'knowledge_base',
+        storageStrategy: ProjectStorageStrategy.markdownProjectStore,
+      );
+
+      expect(
+        manifest.storageStrategy,
+        ProjectStorageStrategy.sqliteProjectStore,
+      );
+      expect(manifest.projectType, 'knowledge_base');
+    });
+
     test('codec round trip preserves explicit storage strategy', () {
       // 中文注释: 这里验证 manifest 一旦声明 SQLite 主存储策略，编解码后不会悄悄回退成 Markdown。
       final codec = ProjectManifestCodecService();

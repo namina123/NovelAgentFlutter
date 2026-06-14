@@ -2,7 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
+import 'package:novel_agent_adapters/src/tools/project_file_read_tool_executor.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
+import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -143,6 +145,79 @@ void main() {
             '.novel_agent/continuity/claims/claims.jsonl',
           ]),
         );
+      },
+    );
+
+    test(
+      'submit_chapter_delivery writes sqlite body text and read_project_file can still read it after the projection file is removed',
+      () async {
+        final sqliteProject = ProjectDescriptor(
+          id: 'project_sqlite',
+          name: 'SQLite 项目',
+          rootPath: tempDirectory.path,
+          projectType: 'novel',
+          storageStrategy: ProjectStorageStrategy.sqliteProjectStore,
+        );
+        final request = DomainToolRequest(
+          callId: 'call-sqlite-1',
+          toolName: NarrativeDomainToolNames.submitChapterDelivery,
+          source: _source(NarrativeSourceTypes.writer),
+          requestPayload: <String, Object?>{
+            'chapter_path': 'chapters/chapter_02.md',
+            'chapter_content': '# 第二章\n\n正文进入 SQLite。',
+            'title': '第二章',
+            'submission': <String, Object?>{
+              'submission_id': 'delivery-sqlite-1',
+              'chapter_ref': <String, Object?>{
+                'ref_type': NarrativeRefTypes.chapter,
+                'ref_id': 'chapters/chapter_02.md',
+                'relative_path': 'chapters/chapter_02.md',
+              },
+              'title': '第二章',
+              'summary': 'SQLite 正文写穿测试',
+            },
+          },
+        );
+
+        final outcome = await executor.execute(sqliteProject, request);
+
+        expect(outcome.outcomeStatus, DomainToolOutcomeStatuses.accepted);
+        final sqliteDbPath =
+            '${tempDirectory.path}${Platform.pathSeparator}.novel_agent${Platform.pathSeparator}sqlite${Platform.pathSeparator}novel_agent.db';
+        final chapterFile = File(
+          '${tempDirectory.path}${Platform.pathSeparator}chapters${Platform.pathSeparator}chapter_02.md',
+        );
+        expect(await chapterFile.exists(), isTrue);
+
+        final database = sqlite3.open(sqliteDbPath);
+        try {
+          final rows = database.select('''
+            SELECT document_id, document_kind, title, plain_text, markdown_path, state_path, status
+            FROM body_text_document
+            WHERE document_id = ?
+            ''', <Object?>['chapters/chapter_02.md']);
+          expect(rows, hasLength(1));
+          expect(rows.first['document_kind']?.toString(), 'chapter');
+          expect(rows.first['title']?.toString(), '第二章');
+          expect(rows.first['plain_text']?.toString(), contains('正文进入 SQLite'));
+          expect(rows.first['markdown_path']?.toString(), 'chapters/chapter_02.md');
+          expect(rows.first['status']?.toString(), isNotEmpty);
+        } finally {
+          database.dispose();
+        }
+
+        await chapterFile.delete();
+
+        final readExecutor = ProjectFileReadToolExecutor(hostPort: hostPort);
+        final readResult = await readExecutor.readProjectFile(
+          sqliteProject,
+          <String, Object?>{
+            'relative_path': 'chapters/chapter_02.md',
+          },
+        );
+
+        expect(readResult['ok'], isTrue);
+        expect(readResult['content']?.toString(), contains('正文进入 SQLite'));
       },
     );
 

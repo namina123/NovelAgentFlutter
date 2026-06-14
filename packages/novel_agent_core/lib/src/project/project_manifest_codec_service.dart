@@ -36,12 +36,16 @@ class ProjectManifestCodecService {
     final cleanTitle = title.trim().isEmpty
         ? _projectTypeCatalogService.defaultTitle(normalizedType)
         : title.trim();
+    final normalizedStorageStrategy = _normalizeStorageStrategy(
+      normalizedType,
+      storageStrategy,
+    );
     final normalizedRuntimeBaselineId = _projectRuntimeBaselineCatalogService
         .normalizeForProjectType(normalizedType, runtimeBaselineId);
     return ProjectManifest(
       title: cleanTitle,
       projectType: normalizedType,
-      storageStrategy: storageStrategy,
+      storageStrategy: normalizedStorageStrategy,
       runtimeBaselineId: normalizedRuntimeBaselineId,
     );
   }
@@ -145,5 +149,22 @@ class ProjectManifestCodecService {
   String encode(ProjectManifest manifest) {
     // 中文注释: 持久化格式统一使用可读缩进 JSON，方便用户和调试工具直接查看。
     return const JsonEncoder.withIndent('  ').convert(toJson(manifest));
+  }
+
+  ProjectStorageStrategy _normalizeStorageStrategy(
+    String projectType,
+    ProjectStorageStrategy storageStrategy,
+  ) {
+    // 中文注释: manifest 创建阶段需要跟随项目类型收束存储策略，避免知识库等受限类型在 core 层写出错误组合。
+    final definition = _projectTypeCatalogService.definitionOf(projectType);
+    if (definition.supportedStorageStrategies.isEmpty) {
+      return ProjectStorageStrategy.markdownProjectStore;
+    }
+    for (final supportedStrategy in definition.supportedStorageStrategies) {
+      if (supportedStrategy == storageStrategy) {
+        return supportedStrategy;
+      }
+    }
+    return definition.supportedStorageStrategies.first;
   }
 }

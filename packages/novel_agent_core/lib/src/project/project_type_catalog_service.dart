@@ -1,4 +1,5 @@
 import 'project_type_definition.dart';
+import 'project_storage_strategy.dart';
 import 'project_trait.dart';
 
 class ProjectTypeCatalogService {
@@ -11,6 +12,10 @@ class ProjectTypeCatalogService {
           name: '普通小说',
           description: '适合常规小说创作，先围绕开局、章节续写、大纲和设定逐步推进。',
           defaultTitle: '未命名小说',
+          supportedStorageStrategies: <ProjectStorageStrategy>[
+            ProjectStorageStrategy.markdownProjectStore,
+            ProjectStorageStrategy.sqliteProjectStore,
+          ],
           defaultTraits: <ProjectTrait>[ProjectTrait.openingGuided],
         ),
         ProjectTypeDefinition(
@@ -18,6 +23,10 @@ class ProjectTypeCatalogService {
           name: '长篇长任务',
           description: '适合长篇推进和多步骤协作，强调队列、检查点与可恢复运行。',
           defaultTitle: '未命名长篇',
+          supportedStorageStrategies: <ProjectStorageStrategy>[
+            ProjectStorageStrategy.markdownProjectStore,
+            ProjectStorageStrategy.sqliteProjectStore,
+          ],
           defaultTraits: <ProjectTrait>[
             ProjectTrait.longTask,
             ProjectTrait.openingGuided,
@@ -29,6 +38,9 @@ class ProjectTypeCatalogService {
           name: '资料知识库',
           description: '适合导入、整理和检索资料，把材料沉淀成可复用知识库。',
           defaultTitle: '未命名知识库',
+          supportedStorageStrategies: <ProjectStorageStrategy>[
+            ProjectStorageStrategy.sqliteProjectStore,
+          ],
         ),
         ProjectTypeDefinition(
           id: 'short_collection',
@@ -42,6 +54,10 @@ class ProjectTypeCatalogService {
           name: '拆书承接',
           description: '适合导入外部作品，抽取结构、角色和连续性信息，再衔接后续续写。',
           defaultTitle: '未命名拆书项目',
+          supportedStorageStrategies: <ProjectStorageStrategy>[
+            ProjectStorageStrategy.markdownProjectStore,
+            ProjectStorageStrategy.sqliteProjectStore,
+          ],
           defaultTraits: <ProjectTrait>[ProjectTrait.bookDeconstruction],
         ),
       ];
@@ -54,6 +70,17 @@ class ProjectTypeCatalogService {
   List<ProjectTypeDefinition> enabledDefinitions() {
     // 中文注释: 创建项目时通常只展示启用项，因此单独给出过滤后的稳定列表。
     return definitions().where((item) => item.enabled).toList(growable: false);
+  }
+
+  bool contains(String projectType) {
+    // 中文注释: 转换和校验场景需要先判断项目类型是否真实登记，不能把未知值直接 normalize 成默认项。
+    final cleanType = projectType.trim();
+    for (final definition in _definitions) {
+      if (definition.id == cleanType) {
+        return true;
+      }
+    }
+    return false;
   }
 
   String normalize(String projectType) {

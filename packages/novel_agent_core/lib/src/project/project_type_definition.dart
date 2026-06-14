@@ -24,4 +24,9 @@ class ProjectTypeDefinition {
   final List<ProjectTrait> defaultTraits;
   final bool requiresRuntimeBaselineSelection;
   final bool enabled;
+
+  bool supportsStorageStrategy(ProjectStorageStrategy strategy) {
+    // 中文注释: 类型层只负责回答“这个策略是否在当前类型允许范围内”，避免上层反复手写列表判断。
+    return supportedStorageStrategies.contains(strategy);
+  }
 }

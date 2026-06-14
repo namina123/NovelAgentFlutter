@@ -19,6 +19,7 @@ class UpdateProjectManifestUseCase {
     required String title,
     required String projectType,
     ProjectStorageStrategy? storageStrategy,
+    String? runtimeBaselineId,
     String genre = '',
     String premise = '',
     String notes = '',
@@ -28,7 +29,7 @@ class UpdateProjectManifestUseCase {
       title: title,
       projectType: projectType,
       storageStrategy: storageStrategy ?? project.storageStrategy,
-      runtimeBaselineId: project.runtimeBaselineId,
+      runtimeBaselineId: runtimeBaselineId ?? project.runtimeBaselineId,
     );
     await _writeProjectTextFileUseCase.execute(
       project: project,

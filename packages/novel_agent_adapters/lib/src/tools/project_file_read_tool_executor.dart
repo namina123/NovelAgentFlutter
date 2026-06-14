@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../storage/project_structured_content_bridge_service.dart';
 import 'project_tool_path_policy.dart';
 import 'project_tool_result_factory.dart';
 
@@ -10,13 +11,18 @@ class ProjectFileReadToolExecutor {
     required ProjectToolHostPort hostPort,
     ProjectToolPathPolicy? pathPolicy,
     ProjectToolResultFactory? resultFactory,
+    ProjectStructuredContentBridgeService? structuredContentBridgeService,
   }) : _hostPort = hostPort,
        _pathPolicy = pathPolicy ?? ProjectToolPathPolicy(),
-       _resultFactory = resultFactory ?? ProjectToolResultFactory();
+       _resultFactory = resultFactory ?? ProjectToolResultFactory(),
+       _structuredContentBridgeService =
+           structuredContentBridgeService ??
+           ProjectStructuredContentBridgeService();
 
   final ProjectToolHostPort _hostPort;
   final ProjectToolPathPolicy _pathPolicy;
   final ProjectToolResultFactory _resultFactory;
+  final ProjectStructuredContentBridgeService _structuredContentBridgeService;
 
   Future<JsonMap> listProjectFiles(
     ProjectDescriptor project,
@@ -86,10 +92,7 @@ class ProjectFileReadToolExecutor {
             'read_project_file 的 relative_path 无效。请使用 list_project_files 返回的英文 relative_path。',
       );
     }
-    final content = await _hostPort.readTextFile(
-      project.rootPath,
-      relativePath,
-    );
+    final content = await _readProjectFileContent(project, relativePath);
     if (content == null) {
       return _recoverablePathIssue(
         project,
@@ -159,10 +162,7 @@ class ProjectFileReadToolExecutor {
             'get_project_file_info 的 relative_path 无效。请使用 list_project_files 返回的英文 relative_path。',
       );
     }
-    final content = await _hostPort.readTextFile(
-      project.rootPath,
-      relativePath,
-    );
+    final content = await _readProjectFileContent(project, relativePath);
     if (content == null) {
       return _recoverablePathIssue(
         project,
@@ -555,6 +555,22 @@ class ProjectFileReadToolExecutor {
         })
         .map(ValueReaders.deepCopyMap)
         .toList(growable: false);
+  }
+
+  Future<String?> _readProjectFileContent(
+    ProjectDescriptor project,
+    String relativePath,
+  ) async {
+    // 中文注释: SQLite 项目优先回读正文主事实源，文件系统只作为兼容投影回退。
+    final projectedContent =
+        await _structuredContentBridgeService.readProjectedBodyText(
+          project,
+          relativePath,
+        );
+    if (projectedContent != null) {
+      return projectedContent;
+    }
+    return _hostPort.readTextFile(project.rootPath, relativePath);
   }
 
   Future<JsonMap> _recoverablePathIssue(
