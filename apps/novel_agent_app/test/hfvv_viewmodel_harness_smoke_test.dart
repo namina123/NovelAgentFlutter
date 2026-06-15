@@ -225,7 +225,9 @@ void main() {
         ValueReaders.mapValue(waitingUserSnapshot['conversation'])['entries'],
       ).map(ValueReaders.mapValue).toList(growable: false);
       final failedToolEntry = snapshotEntries.firstWhere(
-        (entry) => ValueReaders.stringValue(entry['tool_lifecycle_status']) == 'failed',
+        (entry) =>
+            ValueReaders.stringValue(entry['tool_lifecycle_status']) ==
+            'failed',
       );
       expect(
         ValueReaders.stringValue(failedToolEntry['detail_title']),

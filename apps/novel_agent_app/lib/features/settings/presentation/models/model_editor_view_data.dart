@@ -26,6 +26,7 @@ class ModelEditorViewData {
     required this.thinkingParameterLabel,
     required this.thinkingEnabled,
     required this.thinkingEffortSupported,
+    required this.thinkingEffortParameterLabel,
     required this.thinkingEffort,
     required this.thinkingEffortOptions,
     required this.temperature,
@@ -60,6 +61,7 @@ class ModelEditorViewData {
   final String thinkingParameterLabel;
   final bool thinkingEnabled;
   final bool thinkingEffortSupported;
+  final String thinkingEffortParameterLabel;
   final String thinkingEffort;
   final List<String> thinkingEffortOptions;
   final double temperature;
@@ -94,6 +96,7 @@ class ModelEditorViewData {
     thinkingParameterLabel: '深度思考',
     thinkingEnabled: false,
     thinkingEffortSupported: false,
+    thinkingEffortParameterLabel: '深度思考强度',
     thinkingEffort: 'high',
     thinkingEffortOptions: <String>[],
     temperature: 0.8,

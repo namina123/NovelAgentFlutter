@@ -42,7 +42,10 @@ void main() {
       NarrativeSourceTypes.explainerInterpreted,
     );
     expect(result.followupMenu.highlightedGroupId, 'fanfic');
-    expect(result.followupMenu.highlightedOptionId, 'fanfic_seed_autopilot_novel');
+    expect(
+      result.followupMenu.highlightedOptionId,
+      'fanfic_seed_autopilot_novel',
+    );
     expect(
       result.followupMenu.highlightedBuildTier,
       ContinuityBuildTier.standardFoundation,

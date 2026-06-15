@@ -142,9 +142,7 @@ void main() {
                   },
                   'reasoning_effort_parameter_strategy': <String, Object?>{
                     'key': 'thinking_level',
-                    'values': <String, Object?>{
-                      'medium': 'mid',
-                    },
+                    'values': <String, Object?>{'medium': 'mid'},
                   },
                 },
               },
@@ -162,6 +160,37 @@ void main() {
 
         expect(options.containsKey('thinking_mode'), isFalse);
         expect(options['thinking_level'], 'mid');
+      },
+    );
+
+    test(
+      'preserves model-specific reasoning effort values for budget-style builtin models',
+      () {
+        final runtime =
+            ProviderProfileService(
+              catalogPort: ProviderCatalogService.seeded(),
+              capabilityPort: ProviderCapabilityResolver.seeded(),
+            ).runtimeProfiles.composeRuntimeProfile(
+              <String, Object?>{
+                'name': 'Gemini 2.5 Pro',
+                'model': 'gemini-2.5-pro',
+                'thinking_effort': 'dynamic',
+              },
+              <String, Object?>{
+                'name': 'Google 主接口',
+                'provider_id': 'google',
+                'kind': 'openai_compatible',
+                'base_url': 'https://generativelanguage.googleapis.com',
+              },
+            );
+
+        final options = ProviderRequestOptionsService().buildRequestOptions(
+          runtime,
+        );
+
+        expect(options['thinkingBudget'], 'dynamic');
+        expect(options.containsKey('reasoning_effort'), isFalse);
+        expect(options.containsKey('enable_thinking'), isFalse);
       },
     );
   });

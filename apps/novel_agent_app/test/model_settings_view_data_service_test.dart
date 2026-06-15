@@ -245,11 +245,7 @@ void main() {
               },
               'reasoning_effort_parameter_strategy': {
                 'key': 'thinking_level',
-                'values': {
-                  'low': 'low',
-                  'medium': 'mid',
-                  'high': 'high',
-                },
+                'values': {'low': 'low', 'medium': 'mid', 'high': 'high'},
               },
             },
           },
@@ -274,11 +270,7 @@ void main() {
           },
           'reasoning_effort_parameter_strategy': {
             'key': 'thinking_level',
-            'values': {
-              'low': 'low',
-              'medium': 'mid',
-              'high': 'high',
-            },
+            'values': {'low': 'low', 'medium': 'mid', 'high': 'high'},
           },
         },
       });
@@ -289,7 +281,10 @@ void main() {
       expect(editor.thinkingParameterFormat, 'reasoning_effort_only');
       expect(editor.thinkingEffortSupported, isTrue);
       expect(editor.thinkingEffort, 'medium');
-      expect(editor.thinkingEffortOptions, containsAll(['low', 'medium', 'high']));
+      expect(
+        editor.thinkingEffortOptions,
+        containsAll(['low', 'medium', 'high']),
+      );
       expect(editor.customReasoningOverride.showCustomOverrideEditor, isTrue);
       expect(editor.customReasoningOverride.reasoningCanToggle, isFalse);
       expect(editor.customReasoningOverride.reasoningSupportsEffort, isTrue);
@@ -322,9 +317,7 @@ void main() {
           'model_settings': {
             'provider_id': 'custom_provider',
             'model_id': 'custom-writer-v1',
-            'custom_reasoning_override': {
-              'supports_reasoning': false,
-            },
+            'custom_reasoning_override': {'supports_reasoning': false},
           },
         },
       );
@@ -339,9 +332,7 @@ void main() {
           'reasoning_supports_effort': true,
           'reasoning_effort_parameter_strategy': {
             'key': 'thinking_level',
-            'values': {
-              'medium': 'mid',
-            },
+            'values': {'medium': 'mid'},
           },
         },
       });
@@ -351,6 +342,57 @@ void main() {
       expect(editor.customReasoningOverride.reasoningSupportsEffort, isTrue);
       expect(editor.customReasoningOverride.effortKey, 'thinking_level');
       expect(editor.customReasoningOverride.effortValues['medium'], 'mid');
+    },
+  );
+
+  test(
+    'editor custom reasoning override keeps empty effort values empty for unknown models',
+    () {
+      final service = ModelSettingsViewDataService();
+      const settings = AppSettings(
+        defaultProviderId: 'custom_provider',
+        defaultAgentId: 'default_generalist',
+        defaultModelId: 'custom-writer-v1',
+        defaultProjectPath: 'D:/NovelAgent/default_project',
+        autoSaveDrafts: true,
+        providers: [
+          ProviderEndpointSettings(
+            id: 'custom_provider',
+            title: 'Custom Provider',
+            protocol: 'openai_compatible',
+            baseUrl: 'https://custom.example.com/v1',
+            apiKey: 'secret',
+            modelId: 'custom-writer-v1',
+            description: 'custom provider',
+            isDefault: true,
+          ),
+        ],
+        extraSettings: {
+          'model_settings': {
+            'provider_id': 'custom_provider',
+            'model_id': 'custom-writer-v1',
+          },
+        },
+      );
+
+      final editor = service.build(settings, const <String, Object?>{
+        'provider_id': 'custom_provider',
+        'model_id': 'custom-writer-v1',
+        'custom_reasoning_override': {
+          'supports_reasoning': true,
+          'reasoning_can_toggle': true,
+          'reasoning_default_enabled': false,
+          'reasoning_supports_effort': true,
+          'reasoning_effort_parameter_strategy': {
+            'key': 'thinking_level',
+            'values': <String, Object?>{},
+          },
+        },
+      });
+
+      expect(editor.customReasoningOverride.showCustomOverrideEditor, isTrue);
+      expect(editor.customReasoningOverride.reasoningSupportsEffort, isTrue);
+      expect(editor.customReasoningOverride.effortValues, isEmpty);
     },
   );
 
@@ -396,9 +438,7 @@ void main() {
       final editor = service.build(settings, const <String, Object?>{
         'provider_id': 'moonshot',
         'model_id': 'kimi-k2-thinking',
-        'custom_reasoning_override': {
-          'supports_reasoning': true,
-        },
+        'custom_reasoning_override': {'supports_reasoning': true},
       });
 
       expect(editor.providerId, 'moonshot');
@@ -463,61 +503,54 @@ void main() {
     },
   );
 
-  test(
-    'editor custom parameters use the passed model settings overrides',
-    () {
-      final service = ModelSettingsViewDataService();
-      const settings = AppSettings(
-        defaultProviderId: 'deepseek',
-        defaultAgentId: 'default_generalist',
-        defaultModelId: 'deepseek-v4-pro',
-        defaultProjectPath: 'D:/NovelAgent/default_project',
-        autoSaveDrafts: true,
-        providers: [
-          ProviderEndpointSettings(
-            id: 'deepseek',
-            title: 'DeepSeek',
-            protocol: 'openai_compatible',
-            baseUrl: 'https://api.deepseek.com',
-            apiKey: 'secret',
-            modelId: 'deepseek-v4-pro',
-            description: 'deepseek provider',
-            isDefault: true,
-          ),
-        ],
-        extraSettings: {
-          'model_settings': {
-            'provider_id': 'deepseek',
-            'model_id': 'deepseek-v4-pro',
-            'custom_parameters': [
-              {
-                'key': 'response_format',
-                'type': 'json',
-                'value': {'type': 'json_object'},
-              },
-            ],
-          },
+  test('editor custom parameters use the passed model settings overrides', () {
+    final service = ModelSettingsViewDataService();
+    const settings = AppSettings(
+      defaultProviderId: 'deepseek',
+      defaultAgentId: 'default_generalist',
+      defaultModelId: 'deepseek-v4-pro',
+      defaultProjectPath: 'D:/NovelAgent/default_project',
+      autoSaveDrafts: true,
+      providers: [
+        ProviderEndpointSettings(
+          id: 'deepseek',
+          title: 'DeepSeek',
+          protocol: 'openai_compatible',
+          baseUrl: 'https://api.deepseek.com',
+          apiKey: 'secret',
+          modelId: 'deepseek-v4-pro',
+          description: 'deepseek provider',
+          isDefault: true,
+        ),
+      ],
+      extraSettings: {
+        'model_settings': {
+          'provider_id': 'deepseek',
+          'model_id': 'deepseek-v4-pro',
+          'custom_parameters': [
+            {
+              'key': 'response_format',
+              'type': 'json',
+              'value': {'type': 'json_object'},
+            },
+          ],
         },
-      );
+      },
+    );
 
-      final editor = service.build(settings, const <String, Object?>{
-        'provider_id': 'deepseek',
-        'model_id': 'deepseek-v4-pro',
-        'custom_parameters': [
-          {
-            'key': 'max_tokens',
-            'type': 'integer',
-            'value': 2048,
-          },
-        ],
-      });
+    final editor = service.build(settings, const <String, Object?>{
+      'provider_id': 'deepseek',
+      'model_id': 'deepseek-v4-pro',
+      'custom_parameters': [
+        {'key': 'max_tokens', 'type': 'integer', 'value': 2048},
+      ],
+    });
 
-      expect(editor.customParameters, hasLength(1));
-      expect(editor.customParameters.first.keyName, 'max_tokens');
-      expect(editor.customParameters.first.valueType, 'integer');
-      expect(editor.customParameters.first.value, 2048);
-    },
-  );
+    expect(editor.customParameters, hasLength(1));
+    expect(editor.customParameters.first.keyName, 'max_tokens');
+    expect(editor.customParameters.first.valueType, 'integer');
+    expect(editor.customParameters.first.value, 2048);
+  });
 
   test(
     'editor custom parameters are empty when passed model settings do not provide them and resolved runtime has none',
@@ -747,11 +780,15 @@ void main() {
       expect(editor.providerId, 'deepseek');
       expect(editor.modelSuggestions, isNotEmpty);
       expect(
-        editor.modelSuggestions.any((entry) => entry.value == 'deepseek-v4-pro'),
+        editor.modelSuggestions.any(
+          (entry) => entry.value == 'deepseek-v4-pro',
+        ),
         isTrue,
       );
       expect(
-        editor.modelSuggestions.any((entry) => entry.value == 'kimi-k2-thinking'),
+        editor.modelSuggestions.any(
+          (entry) => entry.value == 'kimi-k2-thinking',
+        ),
         isFalse,
       );
     },

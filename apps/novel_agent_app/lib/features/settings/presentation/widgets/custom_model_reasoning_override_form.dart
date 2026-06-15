@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../shared/widgets/action_button.dart';
+import '../models/custom_model_reasoning_effort_entry_view_data.dart';
 import '../models/custom_model_reasoning_override_view_data.dart';
 import 'settings_labeled_dropdown_field.dart';
 import 'settings_labeled_text_field.dart';
@@ -18,12 +20,16 @@ class CustomModelReasoningOverrideForm extends StatelessWidget {
     required this.toggleEnabledValueController,
     required this.toggleDisabledValueController,
     required this.effortKeyController,
-    required this.effortValueControllers,
+    required this.effortEntries,
     required this.onSupportsReasoningChanged,
     required this.onReasoningCanToggleChanged,
     required this.onReasoningDefaultEnabledChanged,
     required this.onReasoningSupportsEffortChanged,
     required this.onToggleStrategyKindChanged,
+    required this.onEffortEntryAdded,
+    required this.onEffortEntryRemoved,
+    required this.onEffortEntryKeyChanged,
+    required this.onEffortEntryValueChanged,
   });
 
   final CustomModelReasoningOverrideViewData viewData;
@@ -36,12 +42,16 @@ class CustomModelReasoningOverrideForm extends StatelessWidget {
   final TextEditingController toggleEnabledValueController;
   final TextEditingController toggleDisabledValueController;
   final TextEditingController effortKeyController;
-  final Map<String, TextEditingController> effortValueControllers;
+  final List<CustomModelReasoningEffortEntryViewData> effortEntries;
   final ValueChanged<bool> onSupportsReasoningChanged;
   final ValueChanged<bool> onReasoningCanToggleChanged;
   final ValueChanged<bool> onReasoningDefaultEnabledChanged;
   final ValueChanged<bool> onReasoningSupportsEffortChanged;
   final ValueChanged<String?> onToggleStrategyKindChanged;
+  final VoidCallback onEffortEntryAdded;
+  final void Function(int index) onEffortEntryRemoved;
+  final void Function(int index, String value) onEffortEntryKeyChanged;
+  final void Function(int index, String value) onEffortEntryValueChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -135,23 +145,127 @@ class CustomModelReasoningOverrideForm extends StatelessWidget {
               controller: effortKeyController,
               hintText: '例如 reasoning_effort',
             ),
-            for (final option in const [
-              'auto',
-              'low',
-              'medium',
-              'high',
-              'max',
-            ]) ...[
-              const SizedBox(height: 12),
-              SettingsLabeledTextField(
-                label: '$option 传值',
-                controller: effortValueControllers[option],
-                hintText: option,
+            const SizedBox(height: 12),
+            if (effortEntries.isEmpty)
+              const Text(
+                '当前没有值项，点击“添加值项”后可以继续配置。',
+                style: TextStyle(fontSize: 12, height: 1.45),
+              )
+            else
+              for (var index = 0; index < effortEntries.length; index++) ...[
+                const SizedBox(height: 12),
+                _EffortEntryRow(
+                  key: ValueKey(effortEntries[index].id),
+                  keyName: effortEntries[index].keyName,
+                  valueText: effortEntries[index].valueText,
+                  onKeyChanged: (value) =>
+                      onEffortEntryKeyChanged(index, value),
+                  onValueChanged: (value) =>
+                      onEffortEntryValueChanged(index, value),
+                  onRemoved: () => onEffortEntryRemoved(index),
+                ),
+              ],
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: ActionButton(
+                label: '添加值项',
+                compact: true,
+                icon: Icons.add_outlined,
+                onPressed: onEffortEntryAdded,
               ),
-            ],
+            ),
           ],
         ],
       ],
+    );
+  }
+}
+
+class _EffortEntryRow extends StatelessWidget {
+  const _EffortEntryRow({
+    super.key,
+    required this.keyName,
+    required this.valueText,
+    required this.onKeyChanged,
+    required this.onValueChanged,
+    required this.onRemoved,
+  });
+
+  final String keyName;
+  final String valueText;
+  final ValueChanged<String> onKeyChanged;
+  final ValueChanged<String> onValueChanged;
+  final VoidCallback onRemoved;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 760;
+        if (wide) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                flex: 3,
+                child: SettingsLabeledTextField(
+                  label: '项名称',
+                  initialValue: keyName,
+                  hintText: '例如 dynamic',
+                  onChanged: onKeyChanged,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 4,
+                child: SettingsLabeledTextField(
+                  label: '传值',
+                  initialValue: valueText,
+                  hintText: '例如 dynamic / budget / 200',
+                  onChanged: onValueChanged,
+                ),
+              ),
+              const SizedBox(width: 12),
+              ActionButton(
+                label: '删除',
+                compact: true,
+                icon: Icons.delete_outline,
+                tone: ActionButtonTone.danger,
+                onPressed: onRemoved,
+              ),
+            ],
+          );
+        }
+        return Column(
+          children: [
+            SettingsLabeledTextField(
+              label: '项名称',
+              initialValue: keyName,
+              hintText: '例如 dynamic',
+              onChanged: onKeyChanged,
+            ),
+            const SizedBox(height: 12),
+            SettingsLabeledTextField(
+              label: '传值',
+              initialValue: valueText,
+              hintText: '例如 dynamic / budget / 200',
+              onChanged: onValueChanged,
+            ),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerRight,
+              child: ActionButton(
+                label: '删除',
+                compact: true,
+                icon: Icons.delete_outline,
+                tone: ActionButtonTone.danger,
+                onPressed: onRemoved,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

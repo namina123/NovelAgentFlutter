@@ -63,9 +63,7 @@ void main() {
                   prompt: userPrompt,
                   modelId: modelId,
                   draftMarkdown: '',
-                  contextPack: const <String, Object?>{
-                    'summary': '首轮先整理前情',
-                  },
+                  contextPack: const <String, Object?>{'summary': '首轮先整理前情'},
                   selectedPaths: const <String>[],
                   executedTools: sharedTools,
                   writtenPaths: const <String>[],
@@ -92,9 +90,7 @@ void main() {
                 prompt: userPrompt,
                 modelId: modelId,
                 draftMarkdown: '重试后正文已经整理好。',
-                contextPack: const <String, Object?>{
-                  'summary': '重试后继续推进',
-                },
+                contextPack: const <String, Object?>{'summary': '重试后继续推进'},
                 selectedPaths: const <String>[],
                 executedTools: sharedTools,
                 writtenPaths: const <String>[],
@@ -121,7 +117,8 @@ void main() {
       await harness.waitUntil(
         () => harness.conversation.conversationEntries.any(
           (entry) =>
-              entry.toolLifecycleStatus == ConversationToolLifecycleStatus.running,
+              entry.toolLifecycleStatus ==
+              ConversationToolLifecycleStatus.running,
         ),
         description: 'tool round entered from controller path',
       );
@@ -135,10 +132,7 @@ void main() {
       expect(useCase.lastUserPrompt, isNot(contains('压缩指导')));
       expect(useCase.lastSessionContext, contains('【压缩指导】'));
       expect(useCase.lastUserPrompt, isNot(contains('恢复续跑指令')));
-      expect(
-        harness.conversation.conversationContextProjection,
-        isNotNull,
-      );
+      expect(harness.conversation.conversationContextProjection, isNotNull);
       expect(
         harness.conversation.conversationContextProjection!.headlineSummary,
         contains('完整历史'),
@@ -159,16 +153,16 @@ void main() {
       expect(useCase.lastSessionContext, contains('【压缩指导】'));
       expect(useCase.lastSessionContext, contains('恢复续跑指令'));
       expect(useCase.lastUserPrompt, isNot(contains('恢复续跑指令')));
-      expect(
-        harness.conversation.conversationContextProjection,
-        isNotNull,
-      );
+      expect(harness.conversation.conversationContextProjection, isNotNull);
       expect(
         harness.conversation.conversationContextProjection!.pressureSummary,
         contains('安全'),
       );
       expect(
-        harness.conversation.conversationContextProjection!.workingWindowSummary,
+        harness
+            .conversation
+            .conversationContextProjection!
+            .workingWindowSummary,
         isNotEmpty,
       );
     },

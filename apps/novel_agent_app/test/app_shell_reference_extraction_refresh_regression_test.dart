@@ -53,22 +53,33 @@ void main() {
       final projectPath = harness.workbench.projectPath;
       expect(projectPath, isNotEmpty);
       expect(
-        File('$projectPath${Platform.pathSeparator}knowledge${Platform.pathSeparator}项目知识摘要.md').existsSync(),
+        File(
+          '$projectPath${Platform.pathSeparator}knowledge${Platform.pathSeparator}项目知识摘要.md',
+        ).existsSync(),
         isTrue,
       );
       expect(
-        File('$projectPath${Platform.pathSeparator}knowledge${Platform.pathSeparator}设计元素摘要.md').existsSync(),
+        File(
+          '$projectPath${Platform.pathSeparator}knowledge${Platform.pathSeparator}设计元素摘要.md',
+        ).existsSync(),
         isTrue,
       );
       expect(
-        File('$projectPath${Platform.pathSeparator}research${Platform.pathSeparator}资料研究摘要.md').existsSync(),
+        File(
+          '$projectPath${Platform.pathSeparator}research${Platform.pathSeparator}资料研究摘要.md',
+        ).existsSync(),
         isTrue,
       );
       expect(
-        File('$projectPath${Platform.pathSeparator}references${Platform.pathSeparator}引用作品边界.md').existsSync(),
+        File(
+          '$projectPath${Platform.pathSeparator}references${Platform.pathSeparator}引用作品边界.md',
+        ).existsSync(),
         isTrue,
       );
-      expect(harness.controller.projectAssetsController.viewData.isLoading, isFalse);
+      expect(
+        harness.controller.projectAssetsController.viewData.isLoading,
+        isFalse,
+      );
       expect(
         harness.controller.projectAssetsController.viewData.status,
         contains('参考资料提取完成'),
@@ -109,10 +120,7 @@ class _SeededProjectionReferenceExtractionService
   }
 
   Future<void> _seedProjectionFiles(String rootPath) async {
-    await _writeFile(
-      rootPath,
-      'knowledge/项目知识摘要.md',
-      '''---
+    await _writeFile(rootPath, 'knowledge/项目知识摘要.md', '''---
 projection_id: "project_knowledge_summary"
 title: "项目知识摘要"
 projection_only: true
@@ -130,12 +138,8 @@ source_of_truth_paths:
 
 - Card ID：`ref_harry_character_001`
 - 摘要：哈利在进入霍格沃茨前，对魔法世界几乎一无所知。
-''',
-    );
-    await _writeFile(
-      rootPath,
-      'knowledge/设计元素摘要.md',
-      '''---
+''');
+    await _writeFile(rootPath, 'knowledge/设计元素摘要.md', '''---
 projection_id: "project_design_summary"
 title: "设计元素摘要"
 projection_only: true
@@ -147,12 +151,8 @@ source_of_truth_paths:
 
 - 魔法学校入学入口
 - 对角巷采购流程
-''',
-    );
-    await _writeFile(
-      rootPath,
-      'research/资料研究摘要.md',
-      '''---
+''');
+    await _writeFile(rootPath, 'research/资料研究摘要.md', '''---
 projection_id: "project_research_summary"
 title: "资料研究摘要"
 projection_only: true
@@ -163,12 +163,8 @@ source_of_truth_paths:
 # 资料研究摘要
 
 - 需要确认原作边界和改写偏移代价。
-''',
-    );
-    await _writeFile(
-      rootPath,
-      'references/引用作品边界.md',
-      '''---
+''');
+    await _writeFile(rootPath, 'references/引用作品边界.md', '''---
 projection_id: "reference_work_boundary_summary"
 title: "引用作品边界"
 projection_only: true
@@ -180,8 +176,7 @@ source_of_truth_paths:
 
 - Requires Confirmation：true
 - Allowed Usage Summary：仅使用结构化提取结果，不直接引用原文句段。
-''',
-    );
+''');
     await _writeFile(
       rootPath,
       '.novel_agent/reference_extraction/staging/reference_extraction_gui_fake.json',

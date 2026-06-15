@@ -28,7 +28,9 @@ void main() {
     });
 
     test('sanitizes missing run back to idle', () {
-      const state = ConversationSubAgentDetailRouteState(activeRunId: 'missing');
+      const state = ConversationSubAgentDetailRouteState(
+        activeRunId: 'missing',
+      );
 
       final sanitized = service.sanitize(state, const [run]);
 

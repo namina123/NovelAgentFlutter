@@ -39,8 +39,7 @@ const String providerModelCapabilitiesSeed = r'''
         {
           "key": "reasoning_effort",
           "type": "string",
-          "allowed_values": ["low", "medium", "high"],
-          "description": "推理模型的思考强度。NOVEL Agent 会优先通过模型的 thinking_parameter_format 和智能体思考设置生成该字段。"
+          "description": "推理模型的思考强度。具体可用取值由模型层或中转层决定，NOVEL Agent 只负责按模型语义透传。"
         }
       ],
       "models": [
@@ -110,8 +109,7 @@ const String providerModelCapabilitiesSeed = r'''
         {
           "key": "reasoning_effort",
           "type": "string",
-          "allowed_values": ["low", "medium", "high"],
-          "description": "DeepSeek 深度思考强度。由智能体层的思考强度映射得到。",
+          "description": "DeepSeek 深度思考强度。实际取值由具体模型版本决定，可能与通用 low/medium/high 词表不同。",
           "exclusive_group": "thinking_effort"
         }
       ],
@@ -201,8 +199,7 @@ const String providerModelCapabilitiesSeed = r'''
         {
           "key": "reasoning_effort",
           "type": "string",
-          "allowed_values": ["low", "medium", "high"],
-          "description": "部分模型接受的思考强度字段；应与模型的思考参数格式配套使用。"
+          "description": "部分模型接受的思考强度字段；应与模型的思考参数格式配套使用，取值由模型或中转层决定。"
         }
       ]
     }
@@ -230,8 +227,7 @@ const String providerModelCapabilitiesSeed = r'''
         {
           "key": "reasoning_effort",
           "type": "string",
-          "allowed_values": ["low", "medium", "high"],
-          "description": "DeepSeek V4 Flash 的思考强度字段，由智能体层映射。"
+          "description": "DeepSeek V4 Flash 的思考强度字段，由智能体层映射，具体词表取决于服务商版本。"
         }
       ],
       "excluded_parameters": ["tool_choice"]

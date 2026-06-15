@@ -1,4 +1,4 @@
-import 'book_deconstruction_draft_build_result.dart';
+import 'package:novel_agent_core/novel_agent_core.dart';
 import 'book_deconstruction_step_id.dart';
 
 class BookDeconstructionSnapshot {

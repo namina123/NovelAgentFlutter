@@ -31,9 +31,7 @@ void main() {
         isFalse,
       );
       expect(
-        containsProbableAbsolutePathLeak(
-          'reference-entry://pkg/v1/entry-1',
-        ),
+        containsProbableAbsolutePathLeak('reference-entry://pkg/v1/entry-1'),
         isFalse,
       );
     });

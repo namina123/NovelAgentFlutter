@@ -53,8 +53,14 @@ void main() {
 
       expect(result.tasks, hasLength(1));
       expect(result.selectedTaskId, 'tasks/task_001.json');
-      expect(result.selectedLongTaskRunPath, 'tracking/long_task_runs/run_001.json');
-      expect(result.selectedTaskQueueRunPath, 'tracking/task_queue_runs/queue_001.json');
+      expect(
+        result.selectedLongTaskRunPath,
+        'tracking/long_task_runs/run_001.json',
+      );
+      expect(
+        result.selectedTaskQueueRunPath,
+        'tracking/task_queue_runs/queue_001.json',
+      );
       expect(result.statusMessage, '当前任务已进入等待确认，可使用右侧动作继续。');
       expect(result.viewData.status, '当前任务已进入等待确认，可使用右侧动作继续。');
       expect(result.viewData.detailBody, contains('待确认任务'));
@@ -183,7 +189,10 @@ class _FakeRuntimeQueryPort implements TaskCenterRuntimeQueryPort {
   }
 
   @override
-  Future<JsonMap> loadLongTaskRun(ProjectDescriptor project, String relativePath) async {
+  Future<JsonMap> loadLongTaskRun(
+    ProjectDescriptor project,
+    String relativePath,
+  ) async {
     return const <String, Object?>{
       'relative_path': 'tracking/long_task_runs/run_001.json',
       'status': 'waiting_gate',
@@ -203,8 +212,14 @@ class _FakeRuntimeQueryPort implements TaskCenterRuntimeQueryPort {
   }
 
   @override
-  Future<JsonMap> loadTaskQueueRun(ProjectDescriptor project, String relativePath) async {
-    return const <String, Object?>{'relative_path': 'tracking/task_queue_runs/queue_001.json', 'status': 'completed'};
+  Future<JsonMap> loadTaskQueueRun(
+    ProjectDescriptor project,
+    String relativePath,
+  ) async {
+    return const <String, Object?>{
+      'relative_path': 'tracking/task_queue_runs/queue_001.json',
+      'status': 'completed',
+    };
   }
 
   @override

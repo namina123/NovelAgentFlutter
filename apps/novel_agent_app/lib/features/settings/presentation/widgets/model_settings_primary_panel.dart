@@ -89,7 +89,7 @@ class ModelSettingsPrimaryPanel extends StatelessWidget {
           if (editor.supportsReasoning && editor.thinkingEffortSupported) ...[
             const SizedBox(height: 12),
             SettingsLabeledDropdownField<String>(
-              label: '深度思考强度',
+              label: editor.thinkingEffortParameterLabel,
               value: thinkingEffort,
               options: editor.thinkingEffortOptions
                   .map(

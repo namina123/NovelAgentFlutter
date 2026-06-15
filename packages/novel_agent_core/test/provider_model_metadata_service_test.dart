@@ -210,9 +210,7 @@ void main() {
               },
               'reasoning_effort_parameter_strategy': <String, Object?>{
                 'key': 'thinking_level',
-                'values': <String, Object?>{
-                  'medium': 'med',
-                },
+                'values': <String, Object?>{'medium': 'med'},
               },
             },
           },
@@ -231,6 +229,36 @@ void main() {
         expect(metadata['thinking_enable_parameter_keys'], isEmpty);
         expect(metadata['thinking_effort_supported'], isTrue);
         expect(metadata['thinking_effort_options'], contains('medium'));
+      },
+    );
+
+    test(
+      'exports model-specific effort vocabulary for budget-style builtin models',
+      () {
+        final runtime = profileService.runtimeProfiles.composeRuntimeProfile(
+          <String, Object?>{
+            'name': 'Gemini 2.5 Pro',
+            'model': 'gemini-2.5-pro',
+            'thinking_effort': 'dynamic',
+          },
+          <String, Object?>{
+            'name': 'Google 主接口',
+            'provider_id': 'google',
+            'kind': 'openai_compatible',
+            'base_url': 'https://generativelanguage.googleapis.com',
+          },
+        );
+        final metadata = profileService.metadata.buildEditorMetadata(runtime);
+
+        expect(metadata['supports_reasoning'], isTrue);
+        expect(metadata['thinking_effort_supported'], isTrue);
+        expect(
+          metadata['thinking_effort_options'],
+          containsAll(['dynamic', 'budget']),
+        );
+        expect(metadata['thinking_effort_parameter_key'], 'thinkingBudget');
+        expect(metadata['thinking_effort_parameter_label'], '深度思考预算');
+        expect(metadata['thinking_parameter_label'], isNotEmpty);
       },
     );
   });

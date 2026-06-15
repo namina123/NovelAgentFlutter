@@ -55,7 +55,9 @@ class ProviderModelMetadataService {
         : writingReasoning;
     final matchedCanonicalModelId = customReasoning.isNotEmpty
         ? ''
-        : ValueReaders.stringValue(writingReasoning['matched_canonical_model_id']);
+        : ValueReaders.stringValue(
+            writingReasoning['matched_canonical_model_id'],
+          );
     final thinkingMetadata = customReasoning.isNotEmpty
         ? <String, Object?>{
             'thinking_supported': ValueReaders.boolValue(
@@ -73,6 +75,13 @@ class ProviderModelMetadataService {
             'thinking_effort_options': ValueReaders.stringList(
               effectiveReasoning['reasoning_effort_options'],
             ),
+            'thinking_effort_parameter_key': ValueReaders.stringValue(
+              ValueReaders.mapValue(
+                effectiveReasoning['reasoning_effort_parameter_strategy'],
+              )['key'],
+            ),
+            'thinking_effort_parameter_label': _customReasoningOverrideService
+                .effortParameterLabel(customReasoning),
           }
         : _thinkingService.thinkingMetadata(thinkingFormat);
     final reasoningModeBehavior = ValueReaders.stringValue(
@@ -148,6 +157,16 @@ class ProviderModelMetadataService {
       'thinking_enable_parameter_keys':
           thinkingMetadata['thinking_enable_parameter_keys'],
       'thinking_effort_supported': reasoningSupportsEffort,
+      'thinking_effort_parameter_key': ValueReaders.stringValue(
+        ValueReaders.mapValue(
+          effectiveReasoning['reasoning_effort_parameter_strategy'],
+        )['key'],
+      ),
+      'thinking_effort_parameter_label': _effortParameterLabel(
+        ValueReaders.mapValue(
+          effectiveReasoning['reasoning_effort_parameter_strategy'],
+        ),
+      ),
       'thinking_effort_options': reasoningEffortOptions.isNotEmpty
           ? reasoningEffortOptions
           : thinkingMetadata['thinking_effort_options'],
@@ -285,5 +304,23 @@ class ProviderModelMetadataService {
       return supported.contains(key);
     }
     return true;
+  }
+
+  String _effortParameterLabel(JsonMap strategy) {
+    final kind = ValueReaders.stringValue(strategy['kind']).trim();
+    switch (kind) {
+      case 'boolean':
+        return '深度思考布尔值';
+      case 'thinking_object':
+        return '深度思考对象';
+      case 'custom_text':
+        return '深度思考文本';
+      case 'level_enum':
+        return '深度思考等级';
+      case 'budget_tokens':
+        return '深度思考预算';
+      default:
+        return '深度思考强度协议';
+    }
   }
 }

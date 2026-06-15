@@ -1,0 +1,36 @@
+import 'package:novel_agent_core/novel_agent_core.dart';
+import 'package:test/test.dart';
+
+void main() {
+  group('BuildBookDeconstructionDraftUseCase', () {
+    final useCase = BuildBookDeconstructionDraftUseCase();
+
+    test('会把输入、抽取、应用计划、followup 和 narrative 桥串成正式预演结果', () {
+      final result = useCase.execute(
+        sourceTitle: '海上城邦',
+        sourceContent:
+            '第一章 港口风暴\n主角在港口被迫卷入一场追捕。\n\n第二章 议会阴影\n城邦议会开始浮出水面。',
+        sourceAbsolutePath: 'D:/books/harbor_story.txt',
+        operatorNotes: '先保留章纲和角色。',
+        styleSummary: '节奏偏商业，冲突推进快。',
+        worldRulesText: '城邦权力依靠航线垄断。\n超常能力必须通过印记媒介释放。',
+        characterLinesText: '林砚：被迫卷入城邦风暴的主角\n议长：操控议会的核心人物',
+        organizationLinesText: '黑潮议会：掌控港口秩序的势力',
+        preferredContinuationDirection:
+            BookDeconstructionContinuationDirection.longTaskPreferred,
+      );
+
+      expect(result.input.title, '海上城邦');
+      expect(result.extractionResult.chapterOutlines, hasLength(2));
+      expect(result.extractionResult.characterProfiles, hasLength(2));
+      expect(result.extractionResult.organizationProfiles, hasLength(1));
+      expect(result.applicationPlan.items, isNotEmpty);
+      expect(result.followupMenu.highlightedGroupId, 'fanfic');
+      expect(result.narrativeArtifacts.claims, isNotEmpty);
+      expect(
+        result.narrativeArtifacts.profileProposals.single.source.sourceType,
+        NarrativeSourceTypes.explainerInterpreted,
+      );
+    });
+  });
+}

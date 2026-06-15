@@ -121,7 +121,9 @@ void main() {
 
       expect(controller.viewData.activeTabId, ProjectAssetsTabId.timelines);
       expect(
-        controller.viewData.timeline.items.singleWhere((item) => item.isSelected).id,
+        controller.viewData.timeline.items
+            .singleWhere((item) => item.isSelected)
+            .id,
         'event-1',
       );
     },
@@ -199,7 +201,8 @@ class _RecordingProjectAssetsLoaderService extends ProjectAssetsLoaderService {
   }
 }
 
-class _GraphSeededProjectAssetsLoaderService extends ProjectAssetsLoaderService {
+class _GraphSeededProjectAssetsLoaderService
+    extends ProjectAssetsLoaderService {
   _GraphSeededProjectAssetsLoaderService()
     : super(
         projectAssetLibraryService: _NoopProjectAssetLibraryService(),

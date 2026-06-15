@@ -67,10 +67,7 @@ void main() {
       expect(find.text('检查点动作｜高风险'), findsOneWidget);
       expect(find.text('建议先生成后续审稿，再决定是否继续主链。'), findsOneWidget);
       expect(find.text('生成后续审稿（推荐）'), findsOneWidget);
-      expect(
-        find.text('- 继续主链：当前图形界面还未接通该建议动作。'),
-        findsOneWidget,
-      );
+      expect(find.text('- 继续主链：当前图形界面还未接通该建议动作。'), findsOneWidget);
       expect(find.text('继续主链'), findsNothing);
 
       await tester.tap(find.text('生成后续审稿（推荐）'));

@@ -108,7 +108,10 @@ void main() {
         '查看当前项目协作摘要，并按需调整默认协作组。',
       );
       expect(viewData.projectLongTaskSummary, isNotNull);
-      expect(viewData.projectLongTaskSummary!.runs.single.diagnosisLabel, '需要人工处理');
+      expect(
+        viewData.projectLongTaskSummary!.runs.single.diagnosisLabel,
+        '需要人工处理',
+      );
     },
   );
 }

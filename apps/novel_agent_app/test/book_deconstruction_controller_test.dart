@@ -17,7 +17,6 @@ void main() {
       projectType: 'book_deconstruction',
     );
     final controller = BookDeconstructionController(
-      projectToolHostPort: _FakeProjectToolHostPort(),
       writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
         projectWorkspacePort: workspacePort,
       ),
@@ -154,7 +153,6 @@ void main() {
       projectType: 'book_deconstruction',
     );
     final controller = BookDeconstructionController(
-      projectToolHostPort: _FakeProjectToolHostPort(),
       writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
         projectWorkspacePort: workspacePort,
       ),

@@ -221,7 +221,7 @@ void main() {
         final plan = derivedPlanBuilder.build(
           input: input,
           followupMenu: menu,
-          followupOptionId: 'general_novel',
+          followupOptionId: 'continuation_novel',
           narrativeArtifacts: promoted,
         );
 

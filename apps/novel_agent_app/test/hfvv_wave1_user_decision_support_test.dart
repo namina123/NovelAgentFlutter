@@ -6,19 +6,22 @@ import '../tool/hfvv_wave1_user_decision_support.dart';
 
 void main() {
   group('decideLaneAResearchFirstStep', () {
-    test('sends follow-up when options mention research loosely but not first', () {
-      final decision = decideLaneAResearchFirstStep(<UserOptionViewData>[
-        _option('A. 轻松优先，资料为辅'),
-        _option('B. 轻考据，有依据地改良'),
-        _option('C. 先定框架，再按领域分级'),
-        _option('D. 先定主角和开局，资料边走边查'),
-      ]);
+    test(
+      'sends follow-up when options mention research loosely but not first',
+      () {
+        final decision = decideLaneAResearchFirstStep(<UserOptionViewData>[
+          _option('A. 轻松优先，资料为辅'),
+          _option('B. 轻考据，有依据地改良'),
+          _option('C. 先定框架，再按领域分级'),
+          _option('D. 先定主角和开局，资料边走边查'),
+        ]);
 
-      expect(decision.strategy, 'send_follow_up_prompt');
-      expect(decision.option, isNull);
-      expect(decision.followUpPrompt, contains('我选择信息先行路线'));
-      expect(decision.reason, 'no_explicit_research_first_option');
-    });
+        expect(decision.strategy, 'send_follow_up_prompt');
+        expect(decision.option, isNull);
+        expect(decision.followUpPrompt, contains('我选择信息先行路线'));
+        expect(decision.reason, 'no_explicit_research_first_option');
+      },
+    );
 
     test('selects an explicit research-first option when one exists', () {
       final target = _option('B. 先做资料整理，再定主角和开局');

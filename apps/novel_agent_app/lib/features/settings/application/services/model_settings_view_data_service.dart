@@ -40,10 +40,7 @@ class ModelSettingsViewDataService {
     final metadata = _profileService.metadata.buildEditorMetadata(
       runtimeProfile,
     );
-    final customParameters = _customParameters(
-      modelSettingsDocument,
-      metadata,
-    );
+    final customParameters = _customParameters(modelSettingsDocument, metadata);
     return ModelEditorViewData(
       providerId: ValueReaders.stringValue(metadata['provider_id']),
       providerLabel: ValueReaders.stringValue(metadata['provider_label']),
@@ -101,12 +98,17 @@ class ModelSettingsViewDataService {
       thinkingEffortSupported: ValueReaders.boolValue(
         metadata['thinking_effort_supported'],
       ),
+      thinkingEffortParameterLabel: ValueReaders.stringValue(
+        metadata['thinking_effort_parameter_label'],
+        '深度思考强度',
+      ),
       thinkingEffort: ValueReaders.stringValue(
         modelSettingsDocument['thinking_effort'],
         'high',
       ),
-      thinkingEffortOptions: ValueReaders.stringList(
-        metadata['thinking_effort_options'],
+      thinkingEffortOptions: _thinkingEffortOptions(
+        metadata,
+        modelSettingsDocument,
       ),
       temperature: ValueReaders.doubleValue(
         modelSettingsDocument['temperature'],
@@ -137,6 +139,29 @@ class ModelSettingsViewDataService {
     );
   }
 
+  List<String> _thinkingEffortOptions(
+    Map<String, Object?> metadata,
+    Map<String, Object?> modelSettingsDocument,
+  ) {
+    // 中文注释: 强度选项应尽量跟随模型/重写层的真实词表，避免把模型原生语义压回固定五项。
+    final result = <String>[];
+    for (final raw in ValueReaders.stringList(
+      metadata['thinking_effort_options'],
+    )) {
+      final value = raw.trim();
+      if (value.isNotEmpty && !result.contains(value)) {
+        result.add(value);
+      }
+    }
+    final current = ValueReaders.stringValue(
+      modelSettingsDocument['thinking_effort'],
+    ).trim();
+    if (current.isNotEmpty && !result.contains(current)) {
+      result.insert(0, current);
+    }
+    return result;
+  }
+
   List<SettingsSearchOption<String>> _modelSuggestions(String providerId) {
     final cleanProviderId = providerId.trim();
     if (cleanProviderId.isEmpty) {
@@ -149,10 +174,10 @@ class ModelSettingsViewDataService {
     if (suggestions.isEmpty) {
       final legacySuggestions = _legacyCatalogBridgeService
           .legacyModelSuggestions(
-        providerId: cleanProviderId,
-        includeImage: false,
-        limit: 48,
-      );
+            providerId: cleanProviderId,
+            includeImage: false,
+            limit: 48,
+          );
       final filtered = legacySuggestions.where(
         (entry) =>
             ValueReaders.stringValue(entry['provider_id']) == cleanProviderId,
@@ -230,11 +255,12 @@ class ModelSettingsViewDataService {
     );
     final rawEffortValues = ValueReaders.mapValue(effortStrategy['values']);
     final effortValues = <String, String>{};
-    for (final option in const ['auto', 'low', 'medium', 'high', 'max']) {
-      effortValues[option] = ValueReaders.stringValue(
-        rawEffortValues[option],
-        option,
-      );
+    for (final entry in rawEffortValues.entries) {
+      final key = entry.key.toString().trim();
+      if (key.isEmpty) {
+        continue;
+      }
+      effortValues[key] = ValueReaders.stringValue(entry.value, key);
     }
     return CustomModelReasoningOverrideViewData(
       isKnownWritingModel: ValueReaders.stringValue(

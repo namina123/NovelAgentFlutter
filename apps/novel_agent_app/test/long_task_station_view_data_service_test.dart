@@ -292,7 +292,10 @@ void main() {
       'continuity/最近状态变化.md',
     );
     expect(viewData.selectedRun!.narrativePermissionItems, hasLength(1));
-    expect(viewData.selectedRun!.narrativePermissionItems.single.title, '待确认问题');
+    expect(
+      viewData.selectedRun!.narrativePermissionItems.single.title,
+      '待确认问题',
+    );
     expect(
       viewData.selectedRun!.narrativePermissionItems.single.subtitle,
       '待你确认 · 选项 2',
@@ -315,8 +318,14 @@ void main() {
       'knowledge/项目知识摘要.md',
     );
     expect(viewData.selectedRun!.informationPermissionItems, hasLength(2));
-    expect(viewData.selectedRun!.informationPermissionItems.first.title, '待确认知识卡');
-    expect(viewData.selectedRun!.informationPermissionItems.last.title, '待确认调研请求');
+    expect(
+      viewData.selectedRun!.informationPermissionItems.first.title,
+      '待确认知识卡',
+    );
+    expect(
+      viewData.selectedRun!.informationPermissionItems.last.title,
+      '待确认调研请求',
+    );
     expect(
       viewData.selectedRun!.informationPermissionItems.first.subtitle,
       '待确认 · 设定事实 · 项目世界观',
@@ -495,10 +504,7 @@ void main() {
       );
 
       expect(failedViewData.selectedRun!.resumeActionLabel, '重试当前步骤');
-      expect(
-        failedViewData.selectedRun!.attentionCalloutTitle,
-        '当前运行停在待处理节点。',
-      );
+      expect(failedViewData.selectedRun!.attentionCalloutTitle, '当前运行停在待处理节点。');
       expect(
         failedViewData.selectedRun!.attentionCalloutSummary,
         '当前运行链有失败节点，需要先修复或重试。 建议先查看返工链或失败任务，再决定重试或修订。',
@@ -574,10 +580,7 @@ void main() {
         waitingViewData.selectedRun!.attentionCalloutSummary,
         '当前运行已经停在需要确认或复核的节点。 建议先跳到任务中心处理检查点或关口动作。',
       );
-      expect(
-        waitingViewData.selectedRun!.pendingUserAction!.title,
-        '待确认问题',
-      );
+      expect(waitingViewData.selectedRun!.pendingUserAction!.title, '待确认问题');
       expect(waitingViewData.selectedRun!.overviewBlocks, hasLength(4));
 
       final checkpointWaitingRun = waitingRun.copyWith(
@@ -662,7 +665,8 @@ void main() {
             detail: '',
             controlSummary: '建议先查看最近产物。',
             blockingCheckpointTitles: <String>[],
-            runRecordPath: 'tracking/long_task_runs/run-recent-output-dedupe.json',
+            runRecordPath:
+                'tracking/long_task_runs/run-recent-output-dedupe.json',
           ),
         ),
         statusMessage: 'ok',
@@ -674,7 +678,10 @@ void main() {
       expect(recentOutputBlock.title, '最近产物');
       expect(recentOutputBlock.resources, hasLength(1));
       expect(recentOutputBlock.resources.single.title, '正文交付');
-      expect(recentOutputBlock.resources.single.relativePath, 'chapters/ch08.md');
+      expect(
+        recentOutputBlock.resources.single.relativePath,
+        'chapters/ch08.md',
+      );
     },
   );
 
@@ -738,12 +745,11 @@ void main() {
 
       expect(recentOutputBlock.title, '最近产物');
       expect(recentOutputBlock.resources, isEmpty);
+      expect(recentOutputBlock.summary, '最近审稿、检查点或返工结果已整理到下方最近关联结果。');
       expect(
-        recentOutputBlock.summary,
-        '最近审稿、检查点或返工结果已整理到下方最近关联结果。',
-      );
-      expect(
-        recentOutputBlock.entries.firstWhere((item) => item.label == '最近可查看内容').value,
+        recentOutputBlock.entries
+            .firstWhere((item) => item.label == '最近可查看内容')
+            .value,
         '请看下方结果区',
       );
       expect(

@@ -63,12 +63,12 @@ class ProviderThinkingParameterService {
   }
 
   String normalizeThinkingEffort(String value) {
-    // 中文注释: 思考强度需要压缩到受支持集合内，保证后续参数映射稳定可预期。
-    final clean = value.trim().toLowerCase();
-    if (ProviderProfileConstants.thinkingEfforts.contains(clean)) {
-      return clean;
+    // 中文注释: 思考强度不能被压成固定小词表；这里仅做去空与空值兜底，具体取值应保留模型自己的语义。
+    final clean = value.trim();
+    if (clean.isEmpty) {
+      return 'high';
     }
-    return 'high';
+    return clean;
   }
 
   bool supportsThinking(String format) {
@@ -115,6 +115,10 @@ class ProviderThinkingParameterService {
         normalizedFormat,
       ),
       'thinking_effort_supported': supportsThinkingEffort(normalizedFormat),
+      'thinking_effort_parameter_key': _effortParameterKey(normalizedFormat),
+      'thinking_effort_parameter_label': _effortParameterLabel(
+        normalizedFormat,
+      ),
       'thinking_effort_options': supportsThinkingEffort(normalizedFormat)
           ? thinkingEffortOptions()
           : const <Object?>[],
@@ -161,6 +165,32 @@ class ProviderThinkingParameterService {
         return <String, Object?>{};
       default:
         return <String, Object?>{};
+    }
+  }
+
+  String _effortParameterKey(String format) {
+    switch (normalizeThinkingParameterFormat(format)) {
+      case ProviderProfileConstants.thinkingFormatDeepseekObject:
+      case ProviderProfileConstants.thinkingFormatEnableBooleanWithEffort:
+        return 'reasoning_effort';
+      case ProviderProfileConstants.thinkingFormatReasoningEffortOnly:
+        return 'reasoning_effort';
+      default:
+        return 'reasoning_effort';
+    }
+  }
+
+  String _effortParameterLabel(String format) {
+    switch (normalizeThinkingParameterFormat(format)) {
+      case ProviderProfileConstants.thinkingFormatDeepseekObject:
+        return '深度思考对象附带的强度';
+      case ProviderProfileConstants.thinkingFormatEnableBoolean:
+      case ProviderProfileConstants.thinkingFormatEnableBooleanWithEffort:
+        return '深度思考强度';
+      case ProviderProfileConstants.thinkingFormatReasoningEffortOnly:
+        return '思考强度';
+      default:
+        return '深度思考强度';
     }
   }
 }

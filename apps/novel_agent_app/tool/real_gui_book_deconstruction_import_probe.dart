@@ -118,7 +118,6 @@ Future<JsonMap> runRealGuiBookDeconstructionImportProbe({
         const BookDeconstructionPreviewMarkdownService();
     final draftBuilderService = BookDeconstructionDraftBuilderService();
     final bookController = BookDeconstructionController(
-      projectToolHostPort: bundle.projectToolHostPort,
       writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
         projectWorkspacePort: bundle.projectWorkspacePort,
       ),
@@ -130,7 +129,6 @@ Future<JsonMap> runRealGuiBookDeconstructionImportProbe({
       draftBuilderService: draftBuilderService,
       previewMarkdownService: previewMarkdownService,
       viewDataService: const BookDeconstructionViewDataService(),
-      sourceDocumentReaderService: readerService,
     );
     await bookController.initialize();
     await bookController.onBookDeconstructionImportFileRequested();

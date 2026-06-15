@@ -596,7 +596,6 @@ class AppShellController extends ChangeNotifier
             ),
       ),
       createBookDeconstructionController: () => BookDeconstructionController(
-        projectToolHostPort: _projectToolHostPort,
         writeProjectTextFileUseCase: _writeProjectTextFileUseCase,
         narrativePersistenceService:
             _bookDeconstructionNarrativePersistenceService,

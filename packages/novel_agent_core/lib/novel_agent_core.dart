@@ -224,6 +224,7 @@ export 'src/deconstruction/book_deconstruction_derived_narrative_inheritance_ent
 export 'src/deconstruction/book_deconstruction_derived_project_plan.dart';
 export 'src/deconstruction/book_deconstruction_derived_project_narrative_inheritance_service.dart';
 export 'src/deconstruction/book_deconstruction_derived_project_plan_builder_service.dart';
+export 'src/deconstruction/book_deconstruction_draft_build_result.dart';
 export 'src/deconstruction/book_deconstruction_extraction_result.dart';
 export 'src/deconstruction/book_deconstruction_followup_group.dart';
 export 'src/deconstruction/book_deconstruction_followup_menu.dart';
@@ -239,6 +240,10 @@ export 'src/deconstruction/book_deconstruction_narrative_artifact_bundle.dart';
 export 'src/deconstruction/book_deconstruction_narrative_bridge_constants.dart';
 export 'src/deconstruction/book_deconstruction_narrative_bridge_service.dart';
 export 'src/deconstruction/book_deconstruction_narrative_promotion_service.dart';
+export 'src/deconstruction/book_deconstruction_source_text_profile_service.dart';
+export 'src/deconstruction/book_deconstruction_source_text_metadata_service.dart';
+export 'src/deconstruction/book_deconstruction_source_text_outline_service.dart';
+export 'src/use_cases/build_book_deconstruction_draft_use_case.dart';
 export 'src/deconstruction/book_deconstruction_scope_hint.dart';
 export 'src/deconstruction/book_deconstruction_scope_map.dart';
 export 'src/deconstruction/book_deconstruction_source_document.dart';

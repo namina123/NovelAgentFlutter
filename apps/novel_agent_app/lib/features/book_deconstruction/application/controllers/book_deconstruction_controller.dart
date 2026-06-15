@@ -6,6 +6,7 @@ import '../../presentation/contracts/book_deconstruction_action_handler.dart';
 import '../../presentation/models/book_deconstruction_view_data.dart';
 import '../models/book_deconstruction_snapshot.dart';
 import '../models/book_deconstruction_step_id.dart';
+import '../services/book_deconstruction_confirm_workflow_service.dart';
 import '../services/book_deconstruction_draft_builder_service.dart';
 import '../services/book_deconstruction_narrative_persistence_service.dart';
 import '../services/book_deconstruction_preview_markdown_service.dart';
@@ -15,7 +16,6 @@ import '../services/desktop_book_deconstruction_source_picker_service.dart';
 class BookDeconstructionController extends ChangeNotifier
     implements BookDeconstructionActionHandler {
   BookDeconstructionController({
-    required ProjectToolHostPort projectToolHostPort,
     required WriteProjectTextFileUseCase writeProjectTextFileUseCase,
     required BookDeconstructionNarrativePersistenceService
     narrativePersistenceService,
@@ -26,12 +26,10 @@ class BookDeconstructionController extends ChangeNotifier
     BookDeconstructionDraftBuilderService? draftBuilderService,
     BookDeconstructionPreviewMarkdownService? previewMarkdownService,
     BookDeconstructionViewDataService? viewDataService,
-    ReferenceSourceDocumentFileReaderService? sourceDocumentReaderService,
     BookDeconstructionTargetPathService? targetPathService,
-  }) : _projectToolHostPort = projectToolHostPort,
-       _writeProjectTextFileUseCase = writeProjectTextFileUseCase,
-       _narrativePersistenceService = narrativePersistenceService,
-       _readCurrentProject = readCurrentProject,
+    BookDeconstructionImportArchiveWorkflowService? importArchiveWorkflowService,
+    BookDeconstructionConfirmWorkflowService? confirmWorkflowService,
+  }) : _readCurrentProject = readCurrentProject,
        _syncWorkbenchResources = syncWorkbenchResources,
        _onBackRequested = onBackRequested,
        _sourcePickerService =
@@ -39,32 +37,33 @@ class BookDeconstructionController extends ChangeNotifier
            const DesktopBookDeconstructionSourcePickerService(),
        _draftBuilderService =
            draftBuilderService ?? BookDeconstructionDraftBuilderService(),
-       _previewMarkdownService =
-           previewMarkdownService ??
-           const BookDeconstructionPreviewMarkdownService(),
        _viewDataService =
            viewDataService ?? const BookDeconstructionViewDataService(),
-       _sourceDocumentReaderService =
-           sourceDocumentReaderService ??
-           const ReferenceSourceDocumentFileReaderService(),
-       _targetPathService =
-           targetPathService ?? const BookDeconstructionTargetPathService(),
+       _importArchiveWorkflowService =
+           importArchiveWorkflowService ??
+           BookDeconstructionImportArchiveWorkflowService(
+             writeProjectTextFileUseCase: writeProjectTextFileUseCase,
+           ),
+       _confirmWorkflowService =
+           confirmWorkflowService ??
+           BookDeconstructionConfirmWorkflowService(
+             writeProjectTextFileUseCase: writeProjectTextFileUseCase,
+             narrativePersistenceService: narrativePersistenceService,
+             previewMarkdownService: previewMarkdownService,
+             targetPathService: targetPathService,
+           ),
        _snapshot = BookDeconstructionSnapshot.initial(),
        _viewData = BookDeconstructionViewData.initial();
 
-  final ProjectToolHostPort _projectToolHostPort;
-  final WriteProjectTextFileUseCase _writeProjectTextFileUseCase;
-  final BookDeconstructionNarrativePersistenceService
-  _narrativePersistenceService;
   final ProjectDescriptor? Function() _readCurrentProject;
   final Future<void> Function() _syncWorkbenchResources;
   final VoidCallback _onBackRequested;
   final DesktopBookDeconstructionSourcePickerService _sourcePickerService;
   final BookDeconstructionDraftBuilderService _draftBuilderService;
-  final BookDeconstructionPreviewMarkdownService _previewMarkdownService;
   final BookDeconstructionViewDataService _viewDataService;
-  final ReferenceSourceDocumentFileReaderService _sourceDocumentReaderService;
-  final BookDeconstructionTargetPathService _targetPathService;
+  final BookDeconstructionImportArchiveWorkflowService
+  _importArchiveWorkflowService;
+  final BookDeconstructionConfirmWorkflowService _confirmWorkflowService;
 
   BookDeconstructionSnapshot _snapshot;
   BookDeconstructionViewData _viewData;
@@ -130,27 +129,21 @@ class BookDeconstructionController extends ChangeNotifier
     _statusMessage = '正在读取拆书源文件...';
     _rebuildView();
     try {
-      final sourceDocument = await _sourceDocumentReaderService.read(
-        sourceFilePath: selectedPath.trim(),
-      );
-      final archivePath = _targetPathService.sourceArchivePath(
-        sourceDocument.sourceFilePath,
-      );
-      await _writeProjectTextFileUseCase.execute(
+      final archiveResult = await _importArchiveWorkflowService.execute(
         project: project,
-        relativePath: archivePath,
-        content: sourceDocument.sourceText.trim(),
+        sourceFilePath: selectedPath.trim(),
       );
       _snapshot = _invalidatePreview(
         _snapshot.copyWith(
           isLoading: false,
           activeStepId: BookDeconstructionStepId.importSource,
-          sourceAbsolutePath: sourceDocument.sourceFilePath,
-          sourceTitle: sourceDocument.sourceTitle,
-          sourceContent: sourceDocument.sourceText.trim(),
+          sourceAbsolutePath: archiveResult.sourceFilePath,
+          sourceTitle: archiveResult.sourceTitle,
+          sourceContent: archiveResult.sourceText,
         ),
       );
-      _statusMessage = '原文已归档到 $archivePath，可继续补充结构说明后生成预览。';
+      _statusMessage =
+          '原文已归档到 ${archiveResult.archivePath}，可继续补充结构说明后生成预览。';
       _rebuildView();
     } catch (error) {
       _snapshot = _snapshot.copyWith(isLoading: false);
@@ -307,29 +300,20 @@ class BookDeconstructionController extends ChangeNotifier
     _snapshot = _snapshot.copyWith(isLoading: true);
     _statusMessage = '正在写入拆书预演纪要...';
     _rebuildView();
-    final previewPath = _targetPathService.previewPath();
     try {
-      final markdown = _previewMarkdownService.render(
+      final result = await _confirmWorkflowService.execute(
+        project: project,
         buildResult: buildResult,
         selectedItemIds: _snapshot.selectedItemIds,
-      );
-      await _writeProjectTextFileUseCase.execute(
-        project: project,
-        relativePath: previewPath,
-        content: markdown,
-      );
-      await _narrativePersistenceService.persist(
-        project: project,
-        narrativeArtifacts: buildResult.narrativeArtifacts,
       );
       await _syncWorkbenchResources();
       _snapshot = _snapshot.copyWith(
         isLoading: false,
         activeStepId: BookDeconstructionStepId.confirmSelection,
-        confirmedPreviewPath: previewPath,
+        confirmedPreviewPath: result.previewPath,
       );
       _statusMessage =
-          '已确认 ${_snapshot.selectedItemIds.length} 项，预演纪要已写入 $previewPath。';
+          '已确认 ${_snapshot.selectedItemIds.length} 项，预演纪要已写入 ${result.previewPath}。';
       _rebuildView();
     } catch (error) {
       _snapshot = _snapshot.copyWith(isLoading: false);

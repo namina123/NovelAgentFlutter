@@ -11,7 +11,9 @@ import 'package:novel_agent_app/features/workbench/presentation/widgets/transcri
 
 void main() {
   group('ConversationTimeline', () {
-    testWidgets('reveals latest entry on initial restore render', (tester) async {
+    testWidgets('reveals latest entry on initial restore render', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           theme: AppTheme.light(),
@@ -54,10 +56,12 @@ void main() {
       await tester.pump();
 
       final scrollable = tester.state<ScrollableState>(
-        find.descendant(
-          of: find.byType(ConversationTimeline),
-          matching: find.byType(Scrollable),
-        ).first,
+        find
+            .descendant(
+              of: find.byType(ConversationTimeline),
+              matching: find.byType(Scrollable),
+            )
+            .first,
       );
       expect(
         scrollable.position.pixels,

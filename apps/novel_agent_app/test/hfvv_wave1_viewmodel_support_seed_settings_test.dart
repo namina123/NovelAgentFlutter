@@ -38,15 +38,12 @@ void main() {
       expect(seeded.providers.single.apiKey, isEmpty);
       expect(seeded.extraSettings.containsKey('workbench_state'), isFalse);
       expect(seeded.extraSettings['custom_flag'], isNull);
-      expect(
-        seeded.extraSettings['model_settings'],
-        <String, Object?>{
-          'provider_id': 'hfvv-wave1-provider',
-          'model_id': 'hfvv-model',
-          'stream_mode': 'stream',
-          'api_mode': 'chat',
-        },
-      );
+      expect(seeded.extraSettings['model_settings'], <String, Object?>{
+        'provider_id': 'hfvv-wave1-provider',
+        'model_id': 'hfvv-model',
+        'stream_mode': 'stream',
+        'api_mode': 'chat',
+      });
     },
   );
 }

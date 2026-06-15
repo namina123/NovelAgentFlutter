@@ -161,13 +161,41 @@ class CustomModelReasoningOverrideService {
         return '自定义深度思考对象';
       case 'custom_text':
         return '自定义深度思考参数';
+      case 'level_enum':
+        return '自定义深度思考等级';
+      case 'budget_tokens':
+        return '自定义深度思考预算';
       default:
         return '自定义深度思考协议';
     }
   }
 
+  String effortParameterLabel(JsonMap normalizedOverride) {
+    final effortStrategy = ValueReaders.mapValue(
+      normalizedOverride['reasoning_effort_parameter_strategy'],
+    );
+    final kind = ValueReaders.stringValue(effortStrategy['kind']).trim();
+    switch (kind) {
+      case 'boolean':
+        return '自定义深度思考布尔值';
+      case 'thinking_object':
+        return '自定义深度思考对象';
+      case 'custom_text':
+        return '自定义深度思考文本';
+      case 'level_enum':
+        return '自定义深度思考等级';
+      case 'budget_tokens':
+        return '自定义深度思考预算';
+      default:
+        return '自定义深度思考强度协议';
+    }
+  }
+
   List<String> toggleParameterKeys(JsonMap normalizedOverride) {
-    if (!ValueReaders.boolValue(normalizedOverride['reasoning_can_toggle'], true)) {
+    if (!ValueReaders.boolValue(
+      normalizedOverride['reasoning_can_toggle'],
+      true,
+    )) {
       return const <String>[];
     }
     final toggleStrategy = ValueReaders.mapValue(
@@ -227,18 +255,21 @@ class CustomModelReasoningOverrideService {
     if (!supportsEffort) {
       return <String, Object?>{};
     }
+    final kind = ValueReaders.stringValue(raw['kind']).trim();
     final values = <String, Object?>{};
     final rawValues = ValueReaders.mapValue(raw['values']);
-    for (final option in ProviderProfileConstants.thinkingEfforts) {
-      if (rawValues.containsKey(option) &&
-          !_shouldSkipValue(rawValues[option])) {
-        values[option] = rawValues[option];
-      } else {
-        values[option] = option;
+    for (final entry in rawValues.entries) {
+      final key = entry.key.toString().trim();
+      if (key.isEmpty || _shouldSkipValue(entry.value)) {
+        continue;
       }
+      values[key] = entry.value;
+    }
+    if (values.isEmpty) {
+      values.addAll(_defaultEffortValues());
     }
     return <String, Object?>{
-      'kind': 'custom_text',
+      'kind': kind.isEmpty ? 'custom_text' : kind,
       'key': ValueReaders.stringValue(raw['key'], 'reasoning_effort').trim(),
       'values': values,
     };
@@ -252,7 +283,18 @@ class CustomModelReasoningOverrideService {
       return const <String>[];
     }
     final values = ValueReaders.mapValue(effortStrategy['values']);
+    final dynamicValues = <String>[];
     final result = <String>[];
+    for (final entry in values.entries) {
+      final key = entry.key.toString().trim();
+      if (key.isEmpty || _shouldSkipValue(entry.value)) {
+        continue;
+      }
+      dynamicValues.add(key);
+    }
+    if (dynamicValues.isNotEmpty) {
+      return dynamicValues;
+    }
     for (final option in ProviderProfileConstants.thinkingEfforts) {
       if (values.containsKey(option) && !_shouldSkipValue(values[option])) {
         result.add(option);
@@ -261,6 +303,13 @@ class CustomModelReasoningOverrideService {
     return result.isEmpty
         ? const <String>['auto', 'low', 'medium', 'high', 'max']
         : result;
+  }
+
+  JsonMap _defaultEffortValues() {
+    return <String, Object?>{
+      for (final option in ProviderProfileConstants.thinkingEfforts)
+        option: option,
+    };
   }
 
   bool _shouldSkipValue(Object? value) {

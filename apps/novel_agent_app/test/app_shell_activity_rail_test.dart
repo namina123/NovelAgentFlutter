@@ -40,7 +40,9 @@ class _FakeNavigationActionHandler implements AppShellNavigationActionHandler {
   final List<AppDestination> requestedDestinations = <AppDestination>[];
 
   @override
-  Future<void> onAppShellDestinationRequested(AppDestination destination) async {
+  Future<void> onAppShellDestinationRequested(
+    AppDestination destination,
+  ) async {
     requestedDestinations.add(destination);
   }
 }

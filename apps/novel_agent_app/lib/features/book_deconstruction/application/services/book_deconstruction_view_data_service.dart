@@ -12,7 +12,6 @@ import '../../presentation/models/book_deconstruction_preview_item_view_data.dar
 import '../../presentation/models/book_deconstruction_preview_section_view_data.dart';
 import '../../presentation/models/book_deconstruction_step_view_data.dart';
 import '../../presentation/models/book_deconstruction_view_data.dart';
-import '../models/book_deconstruction_draft_build_result.dart';
 import '../models/book_deconstruction_snapshot.dart';
 import '../models/book_deconstruction_step_id.dart';
 
@@ -33,8 +32,7 @@ class BookDeconstructionViewDataService {
         : _planGroupsOf(buildResult.applicationPlan, snapshot.selectedItemIds);
     final continuity = buildResult == null
         ? null
-        : _continuityOf(
-            buildResult.input,
+      : _continuityOf(
             buildResult.extractionResult,
             buildResult.followupMenu,
           );
@@ -73,30 +71,25 @@ class BookDeconstructionViewDataService {
     BookDeconstructionDraftBuildResult buildResult,
   ) {
     final extraction = buildResult.extractionResult;
+    final followupMenu = buildResult.followupMenu;
     final narrativeArtifacts = buildResult.narrativeArtifacts;
     final knowledgeCount = narrativeArtifacts.knowledgeCards.length;
     final designCount = narrativeArtifacts.designElements.length;
     final researchCount = narrativeArtifacts.researchNotes.length;
     final referenceCount = narrativeArtifacts.referenceWorks.length;
     final routes = <BookDeconstructionFollowupRouteViewData>[
-      BookDeconstructionFollowupRouteViewData(
-        id: 'continuation',
-        title: 'continuation',
-        summary: '把原作章节并入连续正文链，后续写作把它当作正式前情。',
-        statusLabel: _routeStatusLabel(
-          buildResult.input.preferredContinuationDirection ==
-              BookDeconstructionContinuationDirection.generalNovelPreferred,
-        ),
-      ),
-      BookDeconstructionFollowupRouteViewData(
-        id: 'fanfic',
-        title: 'fanfic',
-        summary: '把原作停留在来源 / 参考层，派生出基于原作的新作品路线。',
-        statusLabel: _routeStatusLabel(
-          buildResult.input.preferredContinuationDirection ==
-              BookDeconstructionContinuationDirection.longTaskPreferred,
-        ),
-      ),
+      ...followupMenu.groups
+          .where((group) => group.id != 'future_extensions')
+          .map(
+            (group) => BookDeconstructionFollowupRouteViewData(
+              id: group.id,
+              title: group.title,
+              summary: group.description,
+              statusLabel: _routeStatusLabel(
+                followupMenu.highlightedGroupId == group.id,
+              ),
+            ),
+          ),
       BookDeconstructionFollowupRouteViewData(
         id: 'shared_information',
         title: '共享资料沉淀',
@@ -115,6 +108,10 @@ class BookDeconstructionViewDataService {
             : '需先生成结构摘要',
       ),
     ];
+    final routeTitles = routes
+        .take(2)
+        .map((route) => route.title)
+        .join(' / ');
     final assetStatuses = <BookDeconstructionAssetStatusViewData>[
       BookDeconstructionAssetStatusViewData(
         id: 'setting_assets',
@@ -176,11 +173,13 @@ class BookDeconstructionViewDataService {
       ),
     ];
     return BookDeconstructionInformationBridgeViewData(
-      summary: '这次拆书结果不只是一次性预览。确认后既能走 continuation 进入叙事连续体，也能走 fanfic 保留来源 / 参考层，再沉淀到共享资料与分析路径。',
+      summary: routeTitles.isEmpty
+          ? '这次拆书结果不只是一次性预览。确认后可以继续派生，并沉淀到共享资料与分析路径。'
+          : '这次拆书结果不只是一次性预览。确认后既能走 $routeTitles 等后续路线，也能沉淀到共享资料与分析路径。',
       followupRoutes: routes,
       assetStatuses: assetStatuses,
       reuseSummary:
-          '确认后，相关资料会进入共享 information GUI；continuation 会继续承接正文，fanfic 会保留原作来源边界，可在“资料与设定”里继续回看知识、巧思、研究和引用边界。',
+          '确认后，相关资料会进入共享 information GUI；${routeTitles.isEmpty ? '后续路线' : routeTitles} 会继续承接正式派生，可在“资料与设定”里继续回看知识、巧思、研究和引用边界。',
     );
   }
 
@@ -455,14 +454,13 @@ class BookDeconstructionViewDataService {
   }
 
   BookDeconstructionContinuityViewData _continuityOf(
-    BookDeconstructionInput input,
     BookDeconstructionExtractionResult extraction,
     BookDeconstructionFollowupMenu followupMenu,
   ) {
     final continuityHints = extraction.continuityHints;
     return BookDeconstructionContinuityViewData(
       preferredDirectionLabel: _preferredDirectionLabel(
-        input.preferredContinuationDirection,
+        followupMenu.preferredDirection,
       ),
       highlightedBuildTierLabel: _buildTierLabel(
         followupMenu.highlightedBuildTier,
@@ -473,9 +471,9 @@ class BookDeconstructionViewDataService {
       mechanicHintCount: continuityHints.mechanicHints.length,
       followupGroups: followupMenu.groups
           .map(
-            (group) => BookDeconstructionFollowupGroupViewData(
+              (group) => BookDeconstructionFollowupGroupViewData(
               id: group.id,
-              title: _followupGroupTitle(group.id, group.title),
+              title: group.title,
               description: group.description,
               isFutureExtensionGroup: ValueReaders.boolValue(
                 group.metadata['reserved'],
@@ -498,7 +496,7 @@ class BookDeconstructionViewDataService {
           )
           .toList(growable: false),
       summary: _continuitySummary(
-        input.preferredContinuationDirection,
+        followupMenu.preferredDirection,
         followupMenu,
         continuityHints,
       ),
@@ -541,21 +539,6 @@ class BookDeconstructionViewDataService {
       }
     }
     return '暂不预选，确认后仍可多路派生';
-  }
-
-  String _followupGroupTitle(String groupId, String fallback) {
-    switch (groupId) {
-      case 'general_writing':
-      case 'continuation':
-        return 'continuation';
-      case 'long_task_writing':
-      case 'fanfic':
-        return 'fanfic';
-      case 'future_extensions':
-        return '未来其他路线';
-      default:
-        return fallback;
-    }
   }
 
   String _continuitySummary(

@@ -7,9 +7,10 @@ void main() {
   group('ConversationTranscriptLaneProjectionService', () {
     const service = ConversationTranscriptLaneProjectionService();
 
-    test('splits stable history, current round tool strip and streaming appendix', () {
-      final lanes = service.build(
-        const [
+    test(
+      'splits stable history, current round tool strip and streaming appendix',
+      () {
+        final lanes = service.build(const [
           TranscriptMessageBlockViewData(
             id: 'user_1',
             kind: TranscriptBlockKind.messageUser,
@@ -39,31 +40,27 @@ void main() {
               body: '正在出字',
             ),
           ),
-        ],
-        isGenerating: true,
-      );
+        ], isGenerating: true);
 
-      expect(lanes.stableHistoryBlocks, hasLength(1));
-      expect(lanes.currentRoundToolBlocks, hasLength(1));
-      expect(lanes.streamingAppendixBlocks, hasLength(1));
-      expect(lanes.footerBlocks, isEmpty);
-    });
+        expect(lanes.stableHistoryBlocks, hasLength(1));
+        expect(lanes.currentRoundToolBlocks, hasLength(1));
+        expect(lanes.streamingAppendixBlocks, hasLength(1));
+        expect(lanes.footerBlocks, isEmpty);
+      },
+    );
 
     test('keeps tool block in stable history after generation settles', () {
-      final lanes = service.build(
-        const [
-          TranscriptToolBlockViewData(
+      final lanes = service.build(const [
+        TranscriptToolBlockViewData(
+          id: 'tool_1',
+          entry: ConversationEntryViewData(
             id: 'tool_1',
-            entry: ConversationEntryViewData(
-              id: 'tool_1',
-              kind: ConversationEntryKind.tool,
-              title: 'write_project_file',
-              body: '写入正文',
-            ),
+            kind: ConversationEntryKind.tool,
+            title: 'write_project_file',
+            body: '写入正文',
           ),
-        ],
-        isGenerating: false,
-      );
+        ),
+      ], isGenerating: false);
 
       expect(lanes.stableHistoryBlocks, hasLength(1));
       expect(lanes.currentRoundToolBlocks, isEmpty);

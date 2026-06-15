@@ -73,8 +73,8 @@ String _resolvedRunId() {
   if (_envRunId.trim().isNotEmpty) {
     return _envRunId.trim();
   }
-  final environmentRunId =
-      (Platform.environment['HFVV_WAVE2_RUN_ID'] ?? '').trim();
+  final environmentRunId = (Platform.environment['HFVV_WAVE2_RUN_ID'] ?? '')
+      .trim();
   return environmentRunId.isEmpty ? _defaultRunIdForTest() : environmentRunId;
 }
 

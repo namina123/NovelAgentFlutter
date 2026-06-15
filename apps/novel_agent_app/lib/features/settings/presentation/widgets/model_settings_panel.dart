@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../../../../../shared/widgets/action_button.dart';
+import '../models/custom_model_reasoning_effort_entry_view_data.dart';
 import '../models/model_editor_view_data.dart';
 import '../models/model_parameter_entry_view_data.dart';
 import '../models/settings_search_option.dart';
@@ -48,7 +49,8 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
   late final TextEditingController _customToggleEnabledValueController;
   late final TextEditingController _customToggleDisabledValueController;
   late final TextEditingController _customEffortKeyController;
-  late final Map<String, TextEditingController> _customEffortValueControllers;
+  late List<CustomModelReasoningEffortEntryViewData> _customEffortEntries;
+  int _customEffortEntrySerial = 0;
 
   @override
   void initState() {
@@ -64,10 +66,7 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
     _customToggleEnabledValueController = TextEditingController();
     _customToggleDisabledValueController = TextEditingController();
     _customEffortKeyController = TextEditingController();
-    _customEffortValueControllers = {
-      for (final option in const ['auto', 'low', 'medium', 'high', 'max'])
-        option: TextEditingController(),
-    };
+    _customEffortEntries = const [];
     _sync();
   }
 
@@ -92,9 +91,6 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
     _customToggleEnabledValueController.dispose();
     _customToggleDisabledValueController.dispose();
     _customEffortKeyController.dispose();
-    for (final controller in _customEffortValueControllers.values) {
-      controller.dispose();
-    }
     super.dispose();
   }
 
@@ -130,7 +126,11 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
       children: [
         const Text(
           '首次配置建议：先到“接口”页填写 API Key 并点击“测试连接”，确认无误后再回来保存默认模型。',
-          style: TextStyle(fontSize: 13, height: 1.5, fontWeight: FontWeight.w600),
+          style: TextStyle(
+            fontSize: 13,
+            height: 1.5,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         const SizedBox(height: 16),
         ModelSettingsPrimaryPanel(
@@ -188,7 +188,7 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
           toggleEnabledValueController: _customToggleEnabledValueController,
           toggleDisabledValueController: _customToggleDisabledValueController,
           effortKeyController: _customEffortKeyController,
-          effortValueControllers: _customEffortValueControllers,
+          effortEntries: _customEffortEntries,
           onStreamModeChanged: (value) {
             if (value == null) {
               return;
@@ -233,6 +233,10 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
               _customToggleStrategyKind = value;
             });
           },
+          onEffortEntryAdded: _addEffortEntry,
+          onEffortEntryRemoved: _removeEffortEntry,
+          onEffortEntryKeyChanged: _updateEffortEntryKey,
+          onEffortEntryValueChanged: _updateEffortEntryValue,
           onAdded: _addCustomParameter,
           onKeyChanged: _updateCustomParameterKey,
           onTypeChanged: _updateCustomParameterType,
@@ -253,6 +257,7 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
   void _sync() {
     final modelSettings = widget.viewData.modelSettings;
     final editor = widget.viewData.modelEditor;
+    _customEffortEntrySerial = 0;
     _providerId = _stringValue(
       modelSettings['provider_id'],
       widget.viewData.defaultProviderId,
@@ -304,10 +309,9 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
     _customToggleDisabledValueController.text =
         editor.customReasoningOverride.toggleDisabledValue;
     _customEffortKeyController.text = editor.customReasoningOverride.effortKey;
-    for (final option in const ['auto', 'low', 'medium', 'high', 'max']) {
-      _customEffortValueControllers[option]!.text =
-          editor.customReasoningOverride.effortValues[option] ?? option;
-    }
+    _customEffortEntries = _initialEffortEntries(
+      editor.customReasoningOverride.effortValues,
+    );
   }
 
   void _save() {
@@ -424,8 +428,12 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
       return const <String, Object?>{'supports_reasoning': false};
     }
     final effortValues = <String, Object?>{};
-    for (final option in const ['auto', 'low', 'medium', 'high', 'max']) {
-      effortValues[option] = _customEffortValueControllers[option]!.text.trim();
+    for (final entry in _customEffortEntries) {
+      final key = entry.keyName.trim();
+      if (key.isEmpty) {
+        continue;
+      }
+      effortValues[key] = entry.valueText.trim();
     }
     return <String, Object?>{
       'supports_reasoning': true,
@@ -459,6 +467,79 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
             }
           : const <String, Object?>{},
     };
+  }
+
+  List<CustomModelReasoningEffortEntryViewData> _initialEffortEntries(
+    Map<String, String> values,
+  ) {
+    if (values.isEmpty) {
+      return const <CustomModelReasoningEffortEntryViewData>[];
+    }
+    return values.entries
+        .map(
+          (entry) => CustomModelReasoningEffortEntryViewData(
+            id: _nextEffortEntryId(entry.key),
+            keyName: entry.key,
+            valueText: entry.value,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  String _nextEffortEntryId(String seed) {
+    final cleanSeed = seed.trim().isEmpty ? 'entry' : seed.trim();
+    final id = 'effort_${_customEffortEntrySerial++}_$cleanSeed';
+    return id;
+  }
+
+  void _addEffortEntry() {
+    setState(() {
+      _customEffortEntries = <CustomModelReasoningEffortEntryViewData>[
+        ..._customEffortEntries,
+        CustomModelReasoningEffortEntryViewData(
+          id: _nextEffortEntryId('custom'),
+          keyName: '',
+          valueText: '',
+        ),
+      ];
+    });
+  }
+
+  void _removeEffortEntry(int index) {
+    setState(() {
+      final next = List<CustomModelReasoningEffortEntryViewData>.from(
+        _customEffortEntries,
+      );
+      next.removeAt(index);
+      _customEffortEntries = next;
+    });
+  }
+
+  void _updateEffortEntryKey(int index, String value) {
+    _updateEffortEntry(
+      index,
+      _customEffortEntries[index].copyWith(keyName: value),
+    );
+  }
+
+  void _updateEffortEntryValue(int index, String value) {
+    _updateEffortEntry(
+      index,
+      _customEffortEntries[index].copyWith(valueText: value),
+    );
+  }
+
+  void _updateEffortEntry(
+    int index,
+    CustomModelReasoningEffortEntryViewData nextEntry,
+  ) {
+    setState(() {
+      final next = List<CustomModelReasoningEffortEntryViewData>.from(
+        _customEffortEntries,
+      );
+      next[index] = nextEntry;
+      _customEffortEntries = next;
+    });
   }
 
   Object? _parseCustomReasoningValue(

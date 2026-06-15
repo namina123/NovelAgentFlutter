@@ -41,6 +41,7 @@ export 'src/runtime/project_long_task_station_detail_service.dart';
 export 'src/runtime/project_long_task_station_item_summary.dart';
 export 'src/runtime/project_long_task_station_narrative_summary.dart';
 export 'src/runtime/run_instance_document_codec_service.dart';
+export 'src/workflow/book_deconstruction_import_archive_workflow_service.dart';
 export 'src/storage/local_project_file_mutation_adapter.dart';
 export 'src/storage/delegating_project_content_repository.dart';
 export 'src/storage/delegating_project_readable_projection_service.dart';

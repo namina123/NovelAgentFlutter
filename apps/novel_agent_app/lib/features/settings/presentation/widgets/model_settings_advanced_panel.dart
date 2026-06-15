@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/custom_model_reasoning_effort_entry_view_data.dart';
 import '../models/custom_model_reasoning_override_view_data.dart';
 import '../models/model_editor_view_data.dart';
 import '../models/model_parameter_entry_view_data.dart';
@@ -29,7 +30,7 @@ class ModelSettingsAdvancedPanel extends StatelessWidget {
     required this.toggleEnabledValueController,
     required this.toggleDisabledValueController,
     required this.effortKeyController,
-    required this.effortValueControllers,
+    required this.effortEntries,
     required this.onStreamModeChanged,
     required this.onApiModeChanged,
     required this.onSupportsReasoningOverrideChanged,
@@ -37,6 +38,10 @@ class ModelSettingsAdvancedPanel extends StatelessWidget {
     required this.onReasoningDefaultEnabledOverrideChanged,
     required this.onReasoningSupportsEffortOverrideChanged,
     required this.onToggleStrategyKindOverrideChanged,
+    required this.onEffortEntryAdded,
+    required this.onEffortEntryRemoved,
+    required this.onEffortEntryKeyChanged,
+    required this.onEffortEntryValueChanged,
     required this.onAdded,
     required this.onKeyChanged,
     required this.onTypeChanged,
@@ -61,7 +66,7 @@ class ModelSettingsAdvancedPanel extends StatelessWidget {
   final TextEditingController toggleEnabledValueController;
   final TextEditingController toggleDisabledValueController;
   final TextEditingController effortKeyController;
-  final Map<String, TextEditingController> effortValueControllers;
+  final List<CustomModelReasoningEffortEntryViewData> effortEntries;
   final ValueChanged<String?> onStreamModeChanged;
   final ValueChanged<String?> onApiModeChanged;
   final ValueChanged<bool> onSupportsReasoningOverrideChanged;
@@ -69,6 +74,10 @@ class ModelSettingsAdvancedPanel extends StatelessWidget {
   final ValueChanged<bool> onReasoningDefaultEnabledOverrideChanged;
   final ValueChanged<bool> onReasoningSupportsEffortOverrideChanged;
   final ValueChanged<String?> onToggleStrategyKindOverrideChanged;
+  final VoidCallback onEffortEntryAdded;
+  final void Function(int index) onEffortEntryRemoved;
+  final void Function(int index, String value) onEffortEntryKeyChanged;
+  final void Function(int index, String value) onEffortEntryValueChanged;
   final VoidCallback onAdded;
   final void Function(int index, String value) onKeyChanged;
   final void Function(int index, String value) onTypeChanged;
@@ -150,7 +159,7 @@ class ModelSettingsAdvancedPanel extends StatelessWidget {
                   toggleEnabledValueController: toggleEnabledValueController,
                   toggleDisabledValueController: toggleDisabledValueController,
                   effortKeyController: effortKeyController,
-                  effortValueControllers: effortValueControllers,
+                  effortEntries: effortEntries,
                   onSupportsReasoningChanged:
                       onSupportsReasoningOverrideChanged,
                   onReasoningCanToggleChanged:
@@ -161,6 +170,10 @@ class ModelSettingsAdvancedPanel extends StatelessWidget {
                       onReasoningSupportsEffortOverrideChanged,
                   onToggleStrategyKindChanged:
                       onToggleStrategyKindOverrideChanged,
+                  onEffortEntryAdded: onEffortEntryAdded,
+                  onEffortEntryRemoved: onEffortEntryRemoved,
+                  onEffortEntryKeyChanged: onEffortEntryKeyChanged,
+                  onEffortEntryValueChanged: onEffortEntryValueChanged,
                 ),
               ],
               const SizedBox(height: 16),

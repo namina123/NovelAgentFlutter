@@ -342,13 +342,13 @@ void main() {
           ),
         );
 
-      expect(first.entries, hasLength(3));
-      expect(first.entries.last.kind, ConversationEntryKind.assistant);
-      expect(first.entries.last.body, contains('正在出现'));
-      expect(second.entries, hasLength(3));
-      expect(second.entries.last.kind, ConversationEntryKind.assistant);
-      expect(second.entries.last.body, contains('正在出现'));
-    },
+        expect(first.entries, hasLength(3));
+        expect(first.entries.last.kind, ConversationEntryKind.assistant);
+        expect(first.entries.last.body, contains('正在出现'));
+        expect(second.entries, hasLength(3));
+        expect(second.entries.last.kind, ConversationEntryKind.assistant);
+        expect(second.entries.last.body, contains('正在出现'));
+      },
     );
 
     test(

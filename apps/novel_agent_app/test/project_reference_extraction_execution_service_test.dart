@@ -61,14 +61,14 @@ void main() {
                 strategyProfileId: 'reference_extraction.standard',
                 executionConcurrencyMode:
                     ReferenceExtractionConcurrencyModes.single,
-              proposalCount: 6,
-              acceptedProposalCount: 3,
-              finalizedEntryCount: 12,
-              publishedSnapshotAvailable: true,
-              projectMountStatus: ProjectReferenceMountStatuses.applied,
-              generatedProjectionPaths: <String>[
-                'knowledge/项目知识摘要.md',
-                'research/资料研究摘要.md',
+                proposalCount: 6,
+                acceptedProposalCount: 3,
+                finalizedEntryCount: 12,
+                publishedSnapshotAvailable: true,
+                projectMountStatus: ProjectReferenceMountStatuses.applied,
+                generatedProjectionPaths: <String>[
+                  'knowledge/项目知识摘要.md',
+                  'research/资料研究摘要.md',
                 ],
               );
             },
@@ -166,10 +166,10 @@ void main() {
                   proposalCount: 6,
                   acceptedProposalCount: 4,
                   finalizedEntryCount: 0,
-                  runStatus:
-                      ReferenceExtractionRunStatuses
-                          .awaitingSemanticContinuation,
-                  deliveryStatus: ReferenceExtractionDeliveryStatuses.stagingOnly,
+                  runStatus: ReferenceExtractionRunStatuses
+                      .awaitingSemanticContinuation,
+                  deliveryStatus:
+                      ReferenceExtractionDeliveryStatuses.stagingOnly,
                   outputCompletionStatus:
                       OutputCompletionStatuses.coverageInsufficient,
                   needsContinuation: true,
@@ -198,9 +198,7 @@ void main() {
                 needsContinuation: false,
                 publishedSnapshotAvailable: true,
                 projectMountStatus: ProjectReferenceMountStatuses.applied,
-                generatedProjectionPaths: <String>[
-                  'knowledge/项目知识摘要.md',
-                ],
+                generatedProjectionPaths: <String>['knowledge/项目知识摘要.md'],
               );
             },
       );
@@ -238,87 +236,87 @@ void main() {
     },
   );
 
-  test(
-    'execute reports incomplete extraction instead of fake success',
-    () async {
-      final service = ProjectReferenceExtractionExecutionService(
-        readSettings: () => const AppSettings(
-          defaultProviderId: 'provider_a',
-          defaultAgentId: 'default_generalist',
-          defaultModelId: 'deepseek-v4-flash',
-          defaultProjectPath: 'D:/Projects/demo',
-          autoSaveDrafts: false,
-          providers: <ProviderEndpointSettings>[
-            ProviderEndpointSettings(
-              id: 'provider_a',
-              title: 'Provider A',
-              protocol: 'openai_compatible',
-              baseUrl: 'https://example.invalid/v1',
-              apiKey: 'test-key',
-              modelId: 'deepseek-v4-flash',
-              description: 'test',
-              isDefault: true,
-            ),
-          ],
-        ),
-        llmGatewayFactory: (_, networkSettings) => _FakeLlmGateway(),
-        executeReferenceExtraction:
-            ({
-              required project,
-              required llmGateway,
-              required modelId,
-              required request,
-            }) async => const ProjectReferenceExtractionResult(
-              runId: 'gui_run_incomplete',
-              packageId: 'pkg_incomplete',
-              packageVersionId: 'v_incomplete',
-              sourceFilePath: 'D:/source/book.txt',
-              sourceDecodeMode: 'utf8',
-              groupResolutionKind: 'single_agent_fallback',
-              selectedGroupId: 'reference_extraction_group',
-              strategyProfileId: 'reference_extraction.standard',
-              executionConcurrencyMode:
-                  ReferenceExtractionConcurrencyModes.single,
-              proposalCount: 6,
-              acceptedProposalCount: 4,
-              finalizedEntryCount: 0,
-              runStatus: ReferenceExtractionRunStatuses.awaitingSemanticContinuation,
-              deliveryStatus: ReferenceExtractionDeliveryStatuses.stagingOnly,
-              outputCompletionStatus: OutputCompletionStatuses.coverageInsufficient,
-              needsContinuation: false,
-              publishedSnapshotAvailable: false,
-              projectMountStatus: ProjectReferenceMountStatuses.snapshotUnavailable,
-              deliveryRationale: 'coverage followup required',
-            ),
-      );
-      final tempDir = await Directory.systemTemp.createTemp(
-        'project_reference_extraction_execution_service_test_',
-      );
-      final sourceFile = File(
-        '${tempDir.path}${Platform.pathSeparator}incomplete_reference_source.txt',
-      );
-      await sourceFile.writeAsString('sample');
-      addTearDown(() async {
-        if (await tempDir.exists()) {
-          await tempDir.delete(recursive: true);
-        }
-      });
+  test('execute reports incomplete extraction instead of fake success', () async {
+    final service = ProjectReferenceExtractionExecutionService(
+      readSettings: () => const AppSettings(
+        defaultProviderId: 'provider_a',
+        defaultAgentId: 'default_generalist',
+        defaultModelId: 'deepseek-v4-flash',
+        defaultProjectPath: 'D:/Projects/demo',
+        autoSaveDrafts: false,
+        providers: <ProviderEndpointSettings>[
+          ProviderEndpointSettings(
+            id: 'provider_a',
+            title: 'Provider A',
+            protocol: 'openai_compatible',
+            baseUrl: 'https://example.invalid/v1',
+            apiKey: 'test-key',
+            modelId: 'deepseek-v4-flash',
+            description: 'test',
+            isDefault: true,
+          ),
+        ],
+      ),
+      llmGatewayFactory: (_, networkSettings) => _FakeLlmGateway(),
+      executeReferenceExtraction:
+          ({
+            required project,
+            required llmGateway,
+            required modelId,
+            required request,
+          }) async => const ProjectReferenceExtractionResult(
+            runId: 'gui_run_incomplete',
+            packageId: 'pkg_incomplete',
+            packageVersionId: 'v_incomplete',
+            sourceFilePath: 'D:/source/book.txt',
+            sourceDecodeMode: 'utf8',
+            groupResolutionKind: 'single_agent_fallback',
+            selectedGroupId: 'reference_extraction_group',
+            strategyProfileId: 'reference_extraction.standard',
+            executionConcurrencyMode:
+                ReferenceExtractionConcurrencyModes.single,
+            proposalCount: 6,
+            acceptedProposalCount: 4,
+            finalizedEntryCount: 0,
+            runStatus:
+                ReferenceExtractionRunStatuses.awaitingSemanticContinuation,
+            deliveryStatus: ReferenceExtractionDeliveryStatuses.stagingOnly,
+            outputCompletionStatus:
+                OutputCompletionStatuses.coverageInsufficient,
+            needsContinuation: false,
+            publishedSnapshotAvailable: false,
+            projectMountStatus:
+                ProjectReferenceMountStatuses.snapshotUnavailable,
+            deliveryRationale: 'coverage followup required',
+          ),
+    );
+    final tempDir = await Directory.systemTemp.createTemp(
+      'project_reference_extraction_execution_service_test_',
+    );
+    final sourceFile = File(
+      '${tempDir.path}${Platform.pathSeparator}incomplete_reference_source.txt',
+    );
+    await sourceFile.writeAsString('sample');
+    addTearDown(() async {
+      if (await tempDir.exists()) {
+        await tempDir.delete(recursive: true);
+      }
+    });
 
-      final result = await service.execute(
-        project: const ProjectDescriptor(
-          id: 'project_incomplete',
-          name: '测试项目',
-          rootPath: 'D:/Projects/demo',
-        ),
-        sourceFilePath: sourceFile.path,
-      );
+    final result = await service.execute(
+      project: const ProjectDescriptor(
+        id: 'project_incomplete',
+        name: '测试项目',
+        rootPath: 'D:/Projects/demo',
+      ),
+      sourceFilePath: sourceFile.path,
+    );
 
-      expect(result.ok, isFalse);
-      expect(result.didMutateProject, isFalse);
-      expect(result.statusMessage, contains('暂未完成'));
-      expect(result.statusMessage, contains('coverage_insufficient'));
-    },
-  );
+    expect(result.ok, isFalse);
+    expect(result.didMutateProject, isFalse);
+    expect(result.statusMessage, contains('暂未完成'));
+    expect(result.statusMessage, contains('coverage_insufficient'));
+  });
 
   test('pickAndExecute reports cancel without mutating project', () async {
     final service = ProjectReferenceExtractionExecutionService(

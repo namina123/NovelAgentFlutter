@@ -82,6 +82,7 @@ void main() {
                   thinkingParameterLabel: '深度思考',
                   thinkingEnabled: true,
                   thinkingEffortSupported: true,
+                  thinkingEffortParameterLabel: '深度思考强度',
                   thinkingEffort: 'medium',
                   thinkingEffortOptions: ['low', 'medium', 'high'],
                   temperature: 0.7,
@@ -151,6 +152,8 @@ void main() {
         200,
         scrollable: find.byType(Scrollable).first,
       );
+      await tester.ensureVisible(find.text('展开高级项'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('展开高级项'));
       await tester.pumpAndSettle();
 
@@ -253,6 +256,7 @@ void main() {
                   thinkingParameterLabel: '深度思考',
                   thinkingEnabled: true,
                   thinkingEffortSupported: true,
+                  thinkingEffortParameterLabel: '深度思考强度',
                   thinkingEffort: 'medium',
                   thinkingEffortOptions: ['low', 'medium', 'high'],
                   temperature: 0.7,
@@ -373,6 +377,7 @@ void main() {
                   thinkingParameterLabel: '深度思考',
                   thinkingEnabled: false,
                   thinkingEffortSupported: false,
+                  thinkingEffortParameterLabel: '深度思考强度',
                   thinkingEffort: 'high',
                   thinkingEffortOptions: [],
                   temperature: 0.8,
@@ -393,13 +398,7 @@ void main() {
                     toggleEnabledValue: 'true',
                     toggleDisabledValue: 'false',
                     effortKey: 'reasoning_effort',
-                    effortValues: {
-                      'auto': 'auto',
-                      'low': 'low',
-                      'medium': 'medium',
-                      'high': 'high',
-                      'max': 'max',
-                    },
+                    effortValues: {},
                   ),
                 ),
                 defaultProjectPath: '',
@@ -430,6 +429,8 @@ void main() {
         200,
         scrollable: find.byType(Scrollable).first,
       );
+      await tester.ensureVisible(find.text('展开高级项'));
+      await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('展开高级项'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('展开高级项'));
@@ -469,12 +470,23 @@ void main() {
         ),
         'thinking_level',
       );
+      await tester.tap(find.text('添加值项'));
+      await tester.pumpAndSettle();
       await tester.enterText(
         find.byWidgetPredicate(
           (widget) =>
-              widget is TextField && widget.decoration?.hintText == 'medium',
+              widget is TextField &&
+              widget.decoration?.hintText == '例如 dynamic',
         ),
-        'mid',
+        'balanced',
+      );
+      await tester.enterText(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is TextField &&
+              widget.decoration?.hintText == '例如 dynamic / budget / 200',
+        ),
+        'high',
       );
 
       await tester.scrollUntilVisible(
@@ -482,9 +494,9 @@ void main() {
         200,
         scrollable: find.byType(Scrollable).first,
       );
-      await tester.ensureVisible(find.byType(OutlinedButton).last);
+      await tester.ensureVisible(find.text('保存模型设置'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(OutlinedButton).last);
+      await tester.tap(find.text('保存模型设置'));
       await tester.pumpAndSettle();
 
       final customOverride =
@@ -499,6 +511,11 @@ void main() {
         (customOverride['reasoning_effort_parameter_strategy']
             as Map<String, Object?>)['key'],
         'thinking_level',
+      );
+      expect(
+        (customOverride['reasoning_effort_parameter_strategy']
+            as Map<String, Object?>)['values'],
+        containsPair('balanced', 'high'),
       );
     },
   );
@@ -565,6 +582,7 @@ void main() {
                   thinkingParameterLabel: '深度思考',
                   thinkingEnabled: false,
                   thinkingEffortSupported: false,
+                  thinkingEffortParameterLabel: '深度思考强度',
                   thinkingEffort: 'high',
                   thinkingEffortOptions: [],
                   temperature: 0.8,
@@ -622,6 +640,8 @@ void main() {
         200,
         scrollable: find.byType(Scrollable).first,
       );
+      await tester.ensureVisible(find.text('展开高级项'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('展开高级项'));
       await tester.pumpAndSettle();
 
@@ -708,6 +728,7 @@ void main() {
                   thinkingParameterLabel: '自定义深度思考参数',
                   thinkingEnabled: true,
                   thinkingEffortSupported: true,
+                  thinkingEffortParameterLabel: '深度思考强度',
                   thinkingEffort: 'medium',
                   thinkingEffortOptions: ['low', 'medium', 'high'],
                   temperature: 0.8,
@@ -715,7 +736,11 @@ void main() {
                   topK: 0,
                   modelSuggestions: [],
                   customParameters: [],
-                  supportedParameters: ['temperature', 'top_p', 'reasoning_effort'],
+                  supportedParameters: [
+                    'temperature',
+                    'top_p',
+                    'reasoning_effort',
+                  ],
                   unsupportedParameters: ['top_k'],
                   customReasoningOverride: CustomModelReasoningOverrideViewData(
                     isKnownWritingModel: false,
@@ -841,6 +866,7 @@ void main() {
                   thinkingParameterLabel: '深度思考',
                   thinkingEnabled: false,
                   thinkingEffortSupported: false,
+                  thinkingEffortParameterLabel: '深度思考强度',
                   thinkingEffort: 'high',
                   thinkingEffortOptions: [],
                   temperature: 0.8,
@@ -898,6 +924,8 @@ void main() {
         200,
         scrollable: find.byType(Scrollable).first,
       );
+      await tester.ensureVisible(find.text('展开高级项'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('展开高级项'));
       await tester.pumpAndSettle();
 
@@ -928,8 +956,9 @@ void main() {
 
       final customOverride =
           savedPayload!['custom_reasoning_override'] as Map<String, Object?>;
-      final toggleStrategy = customOverride['reasoning_toggle_parameter_strategy']
-          as Map<String, Object?>;
+      final toggleStrategy =
+          customOverride['reasoning_toggle_parameter_strategy']
+              as Map<String, Object?>;
       expect(toggleStrategy['enabled_value'], {'type': 'enabled'});
       expect(toggleStrategy['disabled_value'], {'type': 'disabled'});
     },
@@ -997,6 +1026,7 @@ void main() {
                   thinkingParameterLabel: '深度思考',
                   thinkingEnabled: false,
                   thinkingEffortSupported: false,
+                  thinkingEffortParameterLabel: '深度思考强度',
                   thinkingEffort: 'high',
                   thinkingEffortOptions: [],
                   temperature: 0.7,
@@ -1100,6 +1130,7 @@ void main() {
                   thinkingParameterLabel: '深度思考',
                   thinkingEnabled: true,
                   thinkingEffortSupported: true,
+                  thinkingEffortParameterLabel: '深度思考强度',
                   thinkingEffort: 'high',
                   thinkingEffortOptions: ['low', 'medium', 'high'],
                   temperature: 0.0,

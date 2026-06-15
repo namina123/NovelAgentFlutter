@@ -58,17 +58,11 @@ void main() {
     expect(viewData.runs.first.id, 'run-attention');
     expect(viewData.runs.first.requiresAttention, isTrue);
     expect(viewData.runs.first.statusLabel, '需要人工处理');
-    expect(
-      viewData.runs.first.attentionCalloutTitle,
-      '当前运行停在待处理节点。',
-    );
+    expect(viewData.runs.first.attentionCalloutTitle, '当前运行停在待处理节点。');
     expect(viewData.runs.first.diagnosisLabel, '');
     expect(viewData.runs.first.diagnosisSummary, '第 9 章审稿要求人工复核。');
     expect(viewData.runs.first.nextStepSummary, contains('人工处理'));
-    expect(
-      viewData.runs.first.attentionCalloutSummary,
-      '',
-    );
+    expect(viewData.runs.first.attentionCalloutSummary, '');
   });
 
   test(
@@ -168,16 +162,10 @@ void main() {
       expect(viewData.runs.single.diagnosisLabel, '');
       expect(viewData.runs.single.diagnosisSummary, '当前运行正在等待用户确认。');
       expect(viewData.runs.single.statusLabel, '等待用户确认');
-      expect(
-        viewData.runs.single.attentionCalloutTitle,
-        '当前运行停在待确认节点。',
-      );
+      expect(viewData.runs.single.attentionCalloutTitle, '当前运行停在待确认节点。');
       expect(viewData.runs.single.nextStepLabel, '下一步');
       expect(viewData.runs.single.nextStepSummary, '先确认当前检查点和审稿意见，再继续推进。');
-      expect(
-        viewData.runs.single.attentionCalloutSummary,
-        '',
-      );
+      expect(viewData.runs.single.attentionCalloutSummary, '');
       expect(
         viewData.runs.single.reviewSummaryLine,
         '最近审稿：第 12 章审稿，建议补强冲突并确认结尾停点。',
@@ -275,10 +263,7 @@ void main() {
         viewData.runs.single.pendingSummaryLine,
         '待确认事项：待确认调研请求，等待确认 · 待你确认',
       );
-      expect(
-        viewData.runs.single.attentionCalloutTitle,
-        '当前运行停在待确认节点。',
-      );
+      expect(viewData.runs.single.attentionCalloutTitle, '当前运行停在待确认节点。');
     },
   );
 }

@@ -140,8 +140,7 @@ void main() {
       ],
       resumeActionLabel: '继续推进',
       attentionCalloutTitle: '当前运行停在待确认节点。',
-      attentionCalloutSummary:
-          '当前运行已经停在需要确认的节点。 建议先确认这一项，再决定是否继续自动推进。',
+      attentionCalloutSummary: '当前运行已经停在需要确认的节点。 建议先确认这一项，再决定是否继续自动推进。',
       pendingUserActionLabel: '等待确认',
       pendingUserAction: const LongTaskRunRelatedItemViewData(
         title: '待确认问题',
@@ -351,7 +350,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(handler.pauseRequestedRunIds, <String>['run-actions']);
-      expect(handler.resumeRequestedRunIds, <String>['run-actions', 'run-actions']);
+      expect(handler.resumeRequestedRunIds, <String>[
+        'run-actions',
+        'run-actions',
+      ]);
       expect(handler.stopRequestedRunIds, <String>['run-actions']);
       expect(handler.requestedPaths, <String>[
         'tasks/checkpoint_01.json',
@@ -449,18 +451,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(
-        find.text(
-          '当前运行需要先处理交付问题。 建议先查看返工链或失败任务。',
-        ),
-        findsOneWidget,
-      );
+      expect(find.text('当前运行需要先处理交付问题。 建议先查看返工链或失败任务。'), findsOneWidget);
       expect(find.textContaining('最近返工任务：'), findsNothing);
       expect(find.textContaining('最近审稿：'), findsNothing);
-      expect(
-        find.textContaining('查看当前任务与最近的审稿结果'),
-        findsNothing,
-      );
+      expect(find.textContaining('查看当前任务与最近的审稿结果'), findsNothing);
       expect(find.widgetWithText(OutlinedButton, '查看审稿结果'), findsOneWidget);
     },
   );

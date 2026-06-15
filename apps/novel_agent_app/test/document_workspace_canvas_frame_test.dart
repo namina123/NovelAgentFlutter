@@ -28,7 +28,9 @@ void main() {
     await tester.pumpAndSettle();
 
     final titleTop = tester.getTopLeft(find.text('project_brief.md'));
-    final pathTop = tester.getTopLeft(find.text('未命名小说/specs/project_brief.md'));
+    final pathTop = tester.getTopLeft(
+      find.text('未命名小说/specs/project_brief.md'),
+    );
     final statusTop = tester.getTopLeft(find.text('未保存修改'));
 
     expect(pathTop.dy - titleTop.dy, lessThan(28));

@@ -120,4 +120,3 @@ TaskCenterContractActionViewData _action({
     checkpointReviewPath: '',
   );
 }
-

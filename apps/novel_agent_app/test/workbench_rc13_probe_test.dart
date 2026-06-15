@@ -16,92 +16,101 @@ void main() {
     final recorder = _ProbeRecorder();
     final repoRoot = _resolveRepoRoot();
 
-    await recorder.capture('default_resource_tree_hides_internal_and_advanced', () {
-      final visiblePaths = ProjectWorkspaceCatalog
-          .defaultResourceTreeDirectoryDescriptors
-          .map((descriptor) => descriptor.path)
-          .toList(growable: false);
-      _ensure(!visiblePaths.contains('agents/'), '默认资源树不应暴露 agents/。');
-      _ensure(!visiblePaths.contains('prompts/'), '默认资源树不应暴露 prompts/。');
-      _ensure(!visiblePaths.contains('tracking/'), '默认资源树不应暴露 tracking/。');
-      _ensure(visiblePaths.contains('premise/'), '默认资源树应保留 premise/。');
-      _ensure(visiblePaths.contains('chapters/'), '默认资源树应保留 chapters/。');
-      return <String, Object?>{'visible_paths': visiblePaths};
-    });
+    await recorder.capture(
+      'default_resource_tree_hides_internal_and_advanced',
+      () {
+        final visiblePaths = ProjectWorkspaceCatalog
+            .defaultResourceTreeDirectoryDescriptors
+            .map((descriptor) => descriptor.path)
+            .toList(growable: false);
+        _ensure(!visiblePaths.contains('agents/'), '默认资源树不应暴露 agents/。');
+        _ensure(!visiblePaths.contains('prompts/'), '默认资源树不应暴露 prompts/。');
+        _ensure(!visiblePaths.contains('tracking/'), '默认资源树不应暴露 tracking/。');
+        _ensure(visiblePaths.contains('premise/'), '默认资源树应保留 premise/。');
+        _ensure(visiblePaths.contains('chapters/'), '默认资源树应保留 chapters/。');
+        return <String, Object?>{'visible_paths': visiblePaths};
+      },
+    );
 
-    await recorder.capture('legacy_paths_stay_readable_but_hidden_by_default', () {
-      const visibility = WorkspaceResourceVisibilityService();
-      const samples = <String>[
-        'drafts/ch01.md',
-        'specs/project_brief.md',
-        'characters/hero.md',
-        'inspiration/seed.md',
-      ];
-      for (final path in samples) {
-        _ensure(
-          visibility.isLegacyCompatibilityPath(path),
-          '旧目录路径应继续被识别: $path',
-        );
-        _ensure(
-          visibility.shouldHideFromDefaultTree(path),
-          '旧目录路径应默认从资源树隐藏: $path',
-        );
-      }
-      return <String, Object?>{'legacy_paths': samples};
-    });
+    await recorder.capture(
+      'legacy_paths_stay_readable_but_hidden_by_default',
+      () {
+        const visibility = WorkspaceResourceVisibilityService();
+        const samples = <String>[
+          'drafts/ch01.md',
+          'specs/project_brief.md',
+          'characters/hero.md',
+          'inspiration/seed.md',
+        ];
+        for (final path in samples) {
+          _ensure(
+            visibility.isLegacyCompatibilityPath(path),
+            '旧目录路径应继续被识别: $path',
+          );
+          _ensure(
+            visibility.shouldHideFromDefaultTree(path),
+            '旧目录路径应默认从资源树隐藏: $path',
+          );
+        }
+        return <String, Object?>{'legacy_paths': samples};
+      },
+    );
 
-    await recorder.capture('group_projection_never_leaks_internal_agent_id_copy', () {
-      const selectorService = ConversationGroupSelectorViewDataService();
-      final viewData = selectorService.build(
-        openingProjection: OpeningSessionProjection(
-          projectTypeId: 'novel',
-          currentGroupId: 'starter_novel_generalist',
-          currentGroupDisplayName: '默认小说开局',
-          groupSummaries: const <OpeningAgentGroupSummary>[
-            OpeningAgentGroupSummary(
-              groupId: 'starter_novel_generalist',
-              displayName: '默认小说开局',
-              description: '适合普通小说项目。',
-              isSupported: true,
-              isDegraded: false,
-              isCurrent: true,
-              isStarterGroup: true,
-            ),
-          ],
-          orchestration: OpeningOrchestrationResult(
-            state: const OpeningSessionState(
-              projectTypeId: 'novel',
-              status: OpeningSessionState.statusReadyForInteractiveSession,
-              intent: OpeningIntentSnapshot(
-                resolvedAgentGroupId: 'starter_novel_generalist',
-                availableAgentGroupIds: <String>['starter_novel_generalist'],
+    await recorder.capture(
+      'group_projection_never_leaks_internal_agent_id_copy',
+      () {
+        const selectorService = ConversationGroupSelectorViewDataService();
+        final viewData = selectorService.build(
+          openingProjection: OpeningSessionProjection(
+            projectTypeId: 'novel',
+            currentGroupId: 'starter_novel_generalist',
+            currentGroupDisplayName: '默认小说开局',
+            groupSummaries: const <OpeningAgentGroupSummary>[
+              OpeningAgentGroupSummary(
+                groupId: 'starter_novel_generalist',
+                displayName: '默认小说开局',
+                description: '适合普通小说项目。',
+                isSupported: true,
+                isDegraded: false,
+                isCurrent: true,
+                isStarterGroup: true,
               ),
-              stageRecords: <OpeningStageRecord>[],
-              createdAt: '2026-05-29T00:00:00.000Z',
-              updatedAt: '2026-05-29T00:00:00.000Z',
+            ],
+            orchestration: OpeningOrchestrationResult(
+              state: const OpeningSessionState(
+                projectTypeId: 'novel',
+                status: OpeningSessionState.statusReadyForInteractiveSession,
+                intent: OpeningIntentSnapshot(
+                  resolvedAgentGroupId: 'starter_novel_generalist',
+                  availableAgentGroupIds: <String>['starter_novel_generalist'],
+                ),
+                stageRecords: <OpeningStageRecord>[],
+                createdAt: '2026-05-29T00:00:00.000Z',
+                updatedAt: '2026-05-29T00:00:00.000Z',
+              ),
+              readiness: const OpeningReadinessAssessment(
+                canStartLongTask: false,
+                canStartInteractiveSession: true,
+                missingRequirements: <OpeningMissingRequirement>[],
+              ),
+              suggestedActions: const <OpeningSuggestedAction>[],
             ),
-            readiness: const OpeningReadinessAssessment(
-              canStartLongTask: false,
-              canStartInteractiveSession: true,
-              missingRequirements: <OpeningMissingRequirement>[],
+            currentPrimaryAgentSummary: const OpeningPrimaryAgentSummary(
+              agentId: 'default_generalist',
+              displayName: '',
+              role: '',
+              thinkingSupported: true,
             ),
-            suggestedActions: const <OpeningSuggestedAction>[],
           ),
-          currentPrimaryAgentSummary: const OpeningPrimaryAgentSummary(
-            agentId: 'default_generalist',
-            displayName: '',
-            role: '',
-            thinkingSupported: true,
-          ),
-        ),
-        fallbackPrimaryAgentLabel: 'default_generalist',
-      );
-      _ensure(viewData.primaryAgentLabel == '综合创作智能体', '主智能体文案不应回退成内部 id。');
-      return <String, Object?>{
-        'group_label': viewData.currentGroupLabel,
-        'primary_agent_label': viewData.primaryAgentLabel,
-      };
-    });
+          fallbackPrimaryAgentLabel: 'default_generalist',
+        );
+        _ensure(viewData.primaryAgentLabel == '综合创作智能体', '主智能体文案不应回退成内部 id。');
+        return <String, Object?>{
+          'group_label': viewData.currentGroupLabel,
+          'primary_agent_label': viewData.primaryAgentLabel,
+        };
+      },
+    );
 
     await recorder.capture('advanced_and_internal_paths_stay_classified', () {
       _ensure(

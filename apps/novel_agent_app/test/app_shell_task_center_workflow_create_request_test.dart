@@ -112,7 +112,6 @@ void main() {
       );
     },
   );
-
 }
 
 ScriptedGenerateDraftUseCase _idleGenerateDraftUseCase() {
