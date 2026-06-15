@@ -85,7 +85,29 @@ void main() {
         );
         expect(preparation.exposedToolIds.first, 'submit_chapter_delivery');
         expect(preparation.exposedToolIds, isNot(contains('set_agent_tasks')));
-        expect(preparation.exposedToolIds, contains('call_sub_agent'));
+        expect(preparation.exposedToolIds, isNot(contains('call_sub_agent')));
+      },
+    );
+
+    test(
+      'prepareDraftRun hides call_sub_agent for single-member collaboration groups',
+      () async {
+        final preparation = await service.prepareDraftRun(
+          project,
+          taskType: 'chapter',
+          selectedCollaborationGroup: const <String, Object?>{
+            'id': 'single_agent_writer',
+            'agents': <String>['writer'],
+            'primary_agent_id': 'writer',
+            'metadata': <String, Object?>{'derived_from_single_agent': true},
+          },
+        );
+
+        expect(preparation.exposedToolIds, isNot(contains('call_sub_agent')));
+        expect(
+          preparation.exposedToolIds,
+          contains(NarrativeDomainToolNames.submitChapterDelivery),
+        );
       },
     );
 

@@ -68,7 +68,7 @@ void main() {
       expect(ValueReaders.intValue(input.options['checkpoint_interval']), 4);
       expect(
         ValueReaders.stringList(input.options['persistent_context_paths']),
-        contains('styles/seed_autopilot_style.md'),
+        contains('assets/styles/seed_autopilot_style.md'),
       );
     });
   });

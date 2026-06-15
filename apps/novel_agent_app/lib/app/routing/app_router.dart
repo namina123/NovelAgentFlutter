@@ -8,6 +8,8 @@ import '../../features/project_open/presentation/pages/project_open_page.dart';
 import '../../features/project_assets/presentation/pages/project_assets_page.dart';
 import '../../features/settings/presentation/models/settings_view_data.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
+import '../../features/task_center/presentation/models/task_center_view_data.dart';
+import '../../features/task_center/presentation/pages/task_center_page.dart';
 import '../../features/workbench/presentation/pages/workbench_page.dart';
 import '../state/app_shell_controller.dart';
 import 'app_destination.dart';
@@ -56,6 +58,16 @@ class AppRouter {
         return LongTaskStationPage(
           controller: controller.longTaskStationController,
           onBackRequested: controller.showWorkbench,
+        );
+      case AppDestination.taskCenter:
+        return ValueListenableBuilder<TaskCenterViewData>(
+          valueListenable: controller.taskCenterPageListenable,
+          builder: (context, viewData, _) {
+            return TaskCenterPage(
+              viewData: viewData,
+              actionHandler: controller,
+            );
+          },
         );
       case AppDestination.settings:
         return ValueListenableBuilder<SettingsViewData>(

@@ -3,7 +3,6 @@ import '../common/value_readers.dart';
 import 'session_compaction_prompt_contracts.dart';
 import 'session_context_pressure_contracts.dart';
 import 'session_message_service.dart';
-import 'session_mode_service.dart';
 import 'session_record_constants.dart';
 import 'session_record_normalizer_service.dart';
 
@@ -11,14 +10,11 @@ class SessionContextRendererService {
   SessionContextRendererService({
     required SessionRecordNormalizerService normalizerService,
     required SessionMessageService messageService,
-    required SessionModeService modeService,
   }) : _normalizerService = normalizerService,
-       _messageService = messageService,
-       _modeService = modeService;
+       _messageService = messageService;
 
   final SessionRecordNormalizerService _normalizerService;
   final SessionMessageService _messageService;
-  final SessionModeService _modeService;
 
   String sessionContextMarkdown(
     JsonMap session, {
@@ -64,22 +60,24 @@ class SessionContextRendererService {
         lines.add('- $ref');
       }
     }
-    final messages = _messageService.messagesForContext(
-      _messageService.normalizeMessages(
-        normalized[SessionRecordConstants.workingContextMessagesField],
-      ),
-      excludeLatestUserContent: ValueReaders.stringValue(
-        options['exclude_latest_user_content'],
-      ),
-    );
-    if (messages.isNotEmpty) {
-      lines.add('');
-      lines.add('【工作上下文】');
-    }
-    for (final message in messages) {
-      lines.add(
-        '${ValueReaders.stringValue(message['role'], 'user')}: ${ValueReaders.stringValue(message['content'])}',
+    if (_includeWorkingMessagesFromOptions(options)) {
+      final messages = _messageService.messagesForContext(
+        _messageService.normalizeMessages(
+          normalized[SessionRecordConstants.workingContextMessagesField],
+        ),
+        excludeLatestUserContent: ValueReaders.stringValue(
+          options['exclude_latest_user_content'],
+        ),
       );
+      if (messages.isNotEmpty) {
+        lines.add('');
+        lines.add('【工作上下文】');
+      }
+      for (final message in messages) {
+        lines.add(
+          '${ValueReaders.stringValue(message['role'], 'user')}: ${ValueReaders.stringValue(message['content'])}',
+        );
+      }
     }
     return lines.join('\n');
   }
@@ -230,6 +228,11 @@ class SessionContextRendererService {
       return null;
     }
     return RuntimeContinuationInstructionContract.fromJson(rawMap);
+  }
+
+  bool _includeWorkingMessagesFromOptions(JsonMap options) {
+    // 中文注释: GUI 展示默认保留工作消息，模型侧构造 prompt 时可显式关闭，避免重复注入历史文本。
+    return ValueReaders.boolValue(options['include_working_messages'], true);
   }
 
   List<String> _compactionArchiveLines(JsonMap normalized) {

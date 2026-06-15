@@ -137,6 +137,103 @@ void main() {
   );
 
   test(
+    'empty state keeps guided option actions when opening state is in multi-step collection',
+    () {
+      final viewData = WorkbenchConversationViewData(
+        hasActiveProject: true,
+        toolCoreStatus: '',
+        modelLabel: '模型',
+        modelOptions: const [],
+        groupSelector: const ConversationGroupSelectorViewData(
+          currentGroupLabel: '默认组',
+          groupOptions: [],
+          primaryAgentLabel: '智能体',
+          primaryAgentDescription: '',
+          canSwitchGroup: false,
+        ),
+        inputCapabilityContext:
+            const ConversationInputCapabilityContext.initial(),
+        contextSummary: '',
+        workflowTitle: '长任务开局',
+        workflowDescription: '继续确认。',
+        primaryActions: const [
+          PrimaryActionViewData(
+            id: 'guide.back.default',
+            title: '返回长篇工作台',
+            description: '返回默认入口。',
+            commandId: 'guide.back.default',
+          ),
+          PrimaryActionViewData(
+            id: 'guide.answer.one',
+            title: '选项一',
+            description: '说明一。',
+            commandId: 'guide.answer_mode_guidance',
+          ),
+          PrimaryActionViewData(
+            id: 'guide.answer.two',
+            title: '选项二',
+            description: '说明二。',
+            commandId: 'guide.answer_mode_guidance',
+          ),
+        ],
+        openingPanel: const OpeningPanelViewData(
+          title: '项目智能体组',
+          summary: '需要选择。',
+          currentGroupDisplayName: '默认组',
+          selectionHint: '只显示支持项。',
+          supportedGroups: [],
+          unsupportedGroups: [],
+        ),
+        openingState: const ConversationOpeningStateViewData(
+          firstPrompt: '先用少量选项把这部长篇的开局信息收束清楚。',
+          nextStepLabel: '按步骤补齐关键信息',
+          hasProjectFoundation: false,
+          hasResolvedGroup: true,
+          missingRequirementTitles: ['长任务模式'],
+          preferSingleAction: false,
+          nextAction: PrimaryActionViewData(
+            id: 'guide.answer.one',
+            title: '选项一',
+            description: '说明一。',
+            commandId: 'guide.answer_mode_guidance',
+          ),
+        ),
+        composerHint: '输入需求。',
+        conversationEntries: const [],
+        transcriptBlocks: const [],
+        transcriptLanes: const ConversationTranscriptLaneViewData(
+          stableHistoryBlocks: [],
+          currentRoundToolBlocks: [],
+          streamingAppendixBlocks: [],
+          footerBlocks: [],
+        ),
+        pendingOptions: const [],
+        subAgentRuns: const [],
+        retryRequest: null,
+        sessionHistoryEntries: const [],
+        activeSessionId: '',
+        showSessionHistory: false,
+        generationStatus: '',
+        isGenerating: false,
+      );
+
+      final actions = service.visibleActions(viewData);
+
+      expect(actions, hasLength(2));
+      expect(
+        actions.map((action) => action.id),
+        isNot(contains('guide.back.default')),
+      );
+      expect(
+        actions.every(
+          (action) => action.commandId == 'guide.answer_mode_guidance',
+        ),
+        isTrue,
+      );
+    },
+  );
+
+  test(
     'empty state hides menu actions when opening state has no next action',
     () {
       final viewData = WorkbenchConversationViewData(

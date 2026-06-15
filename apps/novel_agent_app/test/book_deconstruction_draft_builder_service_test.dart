@@ -41,15 +41,15 @@ void main() {
       result.narrativeArtifacts.profileProposals.single.source.sourceType,
       NarrativeSourceTypes.explainerInterpreted,
     );
-    expect(result.followupMenu.highlightedGroupId, 'long_task_writing');
-    expect(result.followupMenu.highlightedOptionId, 'seed_autopilot_novel');
+    expect(result.followupMenu.highlightedGroupId, 'fanfic');
+    expect(result.followupMenu.highlightedOptionId, 'fanfic_seed_autopilot_novel');
     expect(
       result.followupMenu.highlightedBuildTier,
       ContinuityBuildTier.standardFoundation,
     );
     expect(
       result.followupMenu.groups[1].options.map((item) => item.id),
-      contains('salvage_restructure_existing'),
+      contains('fanfic_salvage_restructure_existing'),
     );
     expect(
       result.applicationPlan.items.map((item) => item.relativePathHint),

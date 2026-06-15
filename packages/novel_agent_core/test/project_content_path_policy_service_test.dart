@@ -28,5 +28,15 @@ void main() {
         'character',
       );
     });
+
+    test('analysis content stays rooted under analysis directory', () {
+      // 中文注释: 分析产物必须有正式分析根目录，不能回落到章节目录。
+      expect(service.normalizeContentType('分析'), 'analysis');
+      expect(service.directoryForContentType('analysis'), 'analysis');
+      expect(
+        service.inferContentTypeFromPath('analysis/ch01.continuity.analysis.json'),
+        'analysis',
+      );
+    });
   });
 }

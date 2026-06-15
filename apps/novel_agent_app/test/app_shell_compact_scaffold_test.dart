@@ -54,6 +54,53 @@ void main() {
     expect(find.text('功能入口'), findsNothing);
   });
 
+  testWidgets(
+    'compact scaffold handles system back by closing drawer before delegating',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(780, 1400);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      var backRequestCount = 0;
+      final handler = _FakeNavigationActionHandler();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light(),
+          home: AppShellCompactScaffold(
+            selectedDestination: AppDestination.workbench,
+            actionHandler: handler,
+            onSystemBackRequested: () async {
+              backRequestCount += 1;
+            },
+            page: const ColoredBox(
+              color: Color(0xFFF5F5F5),
+              child: Center(child: Text('main-page')),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byIcon(Icons.menu_rounded).first);
+      await tester.pumpAndSettle();
+      expect(find.text('功能入口'), findsOneWidget);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      expect(backRequestCount, 0);
+      expect(find.text('功能入口'), findsNothing);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      expect(backRequestCount, 1);
+    },
+  );
+
   testWidgets('compact scaffold reserves bottom space for launcher dock', (
     WidgetTester tester,
   ) async {

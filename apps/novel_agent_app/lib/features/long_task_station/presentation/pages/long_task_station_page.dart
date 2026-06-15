@@ -46,6 +46,8 @@ class _LongTaskStationPageState extends State<LongTaskStationPage> {
             description: viewData.description,
             supervisorStatusLabel: viewData.supervisorStatusLabel,
             onBackRequested: widget.onBackRequested,
+            onTaskCenterRequested:
+                widget.controller.onLongTaskStationTaskCenterRequested,
             onRefreshRequested:
                 widget.controller.onLongTaskStationRefreshRequested,
           ),

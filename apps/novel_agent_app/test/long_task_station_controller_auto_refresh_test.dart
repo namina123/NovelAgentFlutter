@@ -26,6 +26,7 @@ void main() {
       controller.attachNavigationCallbacks(
         openProjectRequested: (_) async {},
         openResourceRequested: (_, _) async {},
+        showTaskCenterRequested: () async {},
         readCurrentProjectPathRequested: () => 'D:/novels/demo',
       );
 
@@ -58,6 +59,7 @@ void main() {
       controller.attachNavigationCallbacks(
         openProjectRequested: (_) async {},
         openResourceRequested: (_, _) async {},
+        showTaskCenterRequested: () async {},
         readCurrentProjectPathRequested: () => 'D:/novels/demo',
       );
 
@@ -90,6 +92,7 @@ void main() {
       controller.attachNavigationCallbacks(
         openProjectRequested: (_) async {},
         openResourceRequested: (_, _) async {},
+        showTaskCenterRequested: () async {},
         readCurrentProjectPathRequested: () => 'D:/novels/demo',
       );
 
@@ -133,6 +136,7 @@ void main() {
       controller.attachNavigationCallbacks(
         openProjectRequested: (_) async {},
         openResourceRequested: (_, _) async {},
+        showTaskCenterRequested: () async {},
         readCurrentProjectPathRequested: () => 'D:/novels/demo',
       );
 

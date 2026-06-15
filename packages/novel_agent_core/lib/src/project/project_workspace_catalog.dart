@@ -16,7 +16,12 @@ final class ProjectWorkspaceCatalog {
         WorkspaceDirectoryDescriptor(
           path: 'chapters/',
           name: '正文',
-          purpose: '章节正文、样章与章节级可交付内容。',
+          purpose: '正式章节正文与连续正文交付内容。',
+        ),
+        WorkspaceDirectoryDescriptor(
+          path: 'samples/',
+          name: '样章',
+          purpose: '样章、开篇验证稿和非正式章节级试写交付。',
         ),
         WorkspaceDirectoryDescriptor(
           path: 'scenes/',
@@ -75,7 +80,12 @@ final class ProjectWorkspaceCatalog {
         WorkspaceDirectoryDescriptor(
           path: 'chapters/',
           name: '正文',
-          purpose: '章节正文、样章与章节级可交付内容。',
+          purpose: '正式章节正文与连续正文交付内容。',
+        ),
+        WorkspaceDirectoryDescriptor(
+          path: 'samples/',
+          name: '样章',
+          purpose: '样章、开篇验证稿和非正式章节级试写交付。',
         ),
         WorkspaceDirectoryDescriptor(
           path: 'scenes/',

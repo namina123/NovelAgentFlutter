@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_app/features/book_deconstruction/application/controllers/book_deconstruction_controller.dart';
 import 'package:novel_agent_app/features/book_deconstruction/application/services/book_deconstruction_narrative_persistence_service.dart';
+import 'package:novel_agent_app/features/book_deconstruction/application/services/desktop_book_deconstruction_source_picker_service.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 void main() {
@@ -125,18 +128,83 @@ void main() {
     final selectedKinds = selectedSections
         .map((item) => ValueReaders.stringValue(item['source_kind']))
         .toSet();
+    expect(selectedKinds, isNotEmpty);
+    expect(selectedKinds, contains('narrative_claim_submission'));
+    expect(ValueReaders.stringValue(activationReport.summary), isNotEmpty);
+  });
+
+  test('拆书控制器导入时会把原文归档到来源层并把预演留在 analysis 层', () async {
+    final tempDirectory = await Directory.systemTemp.createTemp(
+      'book_deconstruction_controller_archive_test_',
+    );
+    addTearDown(() async {
+      if (await tempDirectory.exists()) {
+        await tempDirectory.delete(recursive: true);
+      }
+    });
+    final sourceFile = File(
+      '${tempDirectory.path}${Platform.pathSeparator}source_book.md',
+    );
+    await sourceFile.writeAsString('第一章 港口风暴\n主角在港口被迫卷入一场追捕。');
+    final workspacePort = _InMemoryProjectWorkspacePort();
+    const currentProject = ProjectDescriptor(
+      id: 'project-2',
+      name: '拆书测试项目二',
+      rootPath: 'D:/Projects/deconstruction_project_archive',
+      projectType: 'book_deconstruction',
+    );
+    final controller = BookDeconstructionController(
+      projectToolHostPort: _FakeProjectToolHostPort(),
+      writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
+        projectWorkspacePort: workspacePort,
+      ),
+      narrativePersistenceService:
+          BookDeconstructionNarrativePersistenceService(
+            workspacePort: workspacePort,
+          ),
+      readCurrentProject: () => currentProject,
+      syncWorkbenchResources: () async {
+        workspacePort.syncCount += 1;
+      },
+      onBackRequested: () {},
+      sourcePickerService: _FakeDesktopBookDeconstructionSourcePickerService(
+        sourceFile.path,
+      ),
+    );
+
+    await controller.initialize();
+    await controller.onBookDeconstructionImportFileRequested();
+
+    final archivePath = const BookDeconstructionTargetPathService()
+        .sourceArchivePath(sourceFile.path);
     expect(
-      selectedKinds,
-      containsAll(<String>[
-        'project_knowledge_card',
-        'project_design_element',
-        'project_research_note',
-        'project_reference_work',
-      ]),
+      workspacePort.readStoredTextFile(currentProject.rootPath, archivePath),
+      contains('第一章 港口风暴'),
+    );
+    expect(controller.viewData.sourceAbsolutePath, sourceFile.path);
+    expect(controller.viewData.sourceContent, contains('港口风暴'));
+
+    controller.onBookDeconstructionOperatorNotesChanged('只归档原文，不混写到正文层。');
+    await controller.onBookDeconstructionBuildPreviewRequested();
+    controller.onBookDeconstructionPlanItemSelectionChanged(
+      itemId: controller.viewData.planGroups.first.items.first.id,
+      selected: true,
+    );
+    await controller.onBookDeconstructionConfirmRequested();
+
+    expect(
+      workspacePort.readStoredTextFile(
+        currentProject.rootPath,
+        'analysis/book_deconstruction_preview.md',
+      ),
+      contains('# 拆书结构化预演'),
     );
     expect(
-      ValueReaders.stringValue(activationReport.summary),
-      contains('knowledge'),
+      workspacePort.readStoredTextFile(
+        currentProject.rootPath,
+        'chapters/book_deconstruction_preview.md',
+      ),
+      isNull,
     );
   });
 }
@@ -192,6 +260,19 @@ class _FakeProjectToolHostPort implements ProjectToolHostPort {
     String relativePath,
     String content,
   ) async {}
+}
+
+class _FakeDesktopBookDeconstructionSourcePickerService
+    extends DesktopBookDeconstructionSourcePickerService {
+  _FakeDesktopBookDeconstructionSourcePickerService(this._sourceFilePath);
+
+  final String _sourceFilePath;
+
+  @override
+  Future<String?> pickSourceFile() async {
+    // 中文注释: 测试假 picker 只返回预设路径，不在这里引入任何平台对话框行为。
+    return _sourceFilePath;
+  }
 }
 
 class _InMemoryProjectWorkspacePort implements ProjectWorkspacePort {

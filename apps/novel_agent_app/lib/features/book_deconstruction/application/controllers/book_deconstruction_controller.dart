@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
+import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 
 import '../../presentation/contracts/book_deconstruction_action_handler.dart';
 import '../../presentation/models/book_deconstruction_view_data.dart';
@@ -25,6 +26,8 @@ class BookDeconstructionController extends ChangeNotifier
     BookDeconstructionDraftBuilderService? draftBuilderService,
     BookDeconstructionPreviewMarkdownService? previewMarkdownService,
     BookDeconstructionViewDataService? viewDataService,
+    ReferenceSourceDocumentFileReaderService? sourceDocumentReaderService,
+    BookDeconstructionTargetPathService? targetPathService,
   }) : _projectToolHostPort = projectToolHostPort,
        _writeProjectTextFileUseCase = writeProjectTextFileUseCase,
        _narrativePersistenceService = narrativePersistenceService,
@@ -41,6 +44,11 @@ class BookDeconstructionController extends ChangeNotifier
            const BookDeconstructionPreviewMarkdownService(),
        _viewDataService =
            viewDataService ?? const BookDeconstructionViewDataService(),
+       _sourceDocumentReaderService =
+           sourceDocumentReaderService ??
+           const ReferenceSourceDocumentFileReaderService(),
+       _targetPathService =
+           targetPathService ?? const BookDeconstructionTargetPathService(),
        _snapshot = BookDeconstructionSnapshot.initial(),
        _viewData = BookDeconstructionViewData.initial();
 
@@ -55,6 +63,8 @@ class BookDeconstructionController extends ChangeNotifier
   final BookDeconstructionDraftBuilderService _draftBuilderService;
   final BookDeconstructionPreviewMarkdownService _previewMarkdownService;
   final BookDeconstructionViewDataService _viewDataService;
+  final ReferenceSourceDocumentFileReaderService _sourceDocumentReaderService;
+  final BookDeconstructionTargetPathService _targetPathService;
 
   BookDeconstructionSnapshot _snapshot;
   BookDeconstructionViewData _viewData;
@@ -104,6 +114,12 @@ class BookDeconstructionController extends ChangeNotifier
 
   @override
   Future<void> onBookDeconstructionImportFileRequested() async {
+    final project = _readCurrentProject();
+    if (project == null) {
+      _statusMessage = '请先创建或打开拆书项目。';
+      _rebuildView();
+      return;
+    }
     final selectedPath = await _sourcePickerService.pickSourceFile();
     if (selectedPath == null || selectedPath.trim().isEmpty) {
       _statusMessage = '桌面端可选择文本文件；移动端请直接粘贴源文稿。';
@@ -114,25 +130,27 @@ class BookDeconstructionController extends ChangeNotifier
     _statusMessage = '正在读取拆书源文件...';
     _rebuildView();
     try {
-      final content = await _projectToolHostPort.readExternalTextFile(
-        selectedPath.trim(),
+      final sourceDocument = await _sourceDocumentReaderService.read(
+        sourceFilePath: selectedPath.trim(),
       );
-      if ((content ?? '').trim().isEmpty) {
-        _snapshot = _snapshot.copyWith(isLoading: false);
-        _statusMessage = '所选文件不可读取或内容为空。';
-        _rebuildView();
-        return;
-      }
+      final archivePath = _targetPathService.sourceArchivePath(
+        sourceDocument.sourceFilePath,
+      );
+      await _writeProjectTextFileUseCase.execute(
+        project: project,
+        relativePath: archivePath,
+        content: sourceDocument.sourceText.trim(),
+      );
       _snapshot = _invalidatePreview(
         _snapshot.copyWith(
           isLoading: false,
           activeStepId: BookDeconstructionStepId.importSource,
-          sourceAbsolutePath: selectedPath.trim(),
-          sourceTitle: _fileNameWithoutExtension(selectedPath.trim()),
-          sourceContent: content!.trim(),
+          sourceAbsolutePath: sourceDocument.sourceFilePath,
+          sourceTitle: sourceDocument.sourceTitle,
+          sourceContent: sourceDocument.sourceText.trim(),
         ),
       );
-      _statusMessage = '已导入源文件，可继续补充结构说明后生成预览。';
+      _statusMessage = '原文已归档到 $archivePath，可继续补充结构说明后生成预览。';
       _rebuildView();
     } catch (error) {
       _snapshot = _snapshot.copyWith(isLoading: false);
@@ -289,7 +307,7 @@ class BookDeconstructionController extends ChangeNotifier
     _snapshot = _snapshot.copyWith(isLoading: true);
     _statusMessage = '正在写入拆书预演纪要...';
     _rebuildView();
-    const previewPath = 'analysis/book_deconstruction_preview.md';
+    final previewPath = _targetPathService.previewPath();
     try {
       final markdown = _previewMarkdownService.render(
         buildResult: buildResult,
@@ -341,16 +359,6 @@ class BookDeconstructionController extends ChangeNotifier
       confirmedPreviewPath: '',
       activeStepId: BookDeconstructionStepId.importSource,
     );
-  }
-
-  String _fileNameWithoutExtension(String absolutePath) {
-    final normalized = absolutePath.replaceAll('\\', '/').trim();
-    final fileName = normalized.split('/').last;
-    final separatorIndex = fileName.lastIndexOf('.');
-    if (separatorIndex <= 0) {
-      return fileName;
-    }
-    return fileName.substring(0, separatorIndex);
   }
 
   void _rebuildView() {

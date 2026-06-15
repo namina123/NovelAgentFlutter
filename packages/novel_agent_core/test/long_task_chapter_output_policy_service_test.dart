@@ -7,14 +7,14 @@ void main() {
       modeService: LongTaskModeService(),
     );
 
-    test('keeps sample chapter in chapters for seed_to_full', () {
+    test('writes sample chapter to samples for seed_to_full', () {
       final path = service.defaultOutputPath(
         mode: TaskRuntimeConstants.modeSeedToFullNovel,
         stage: 'sample',
         fileStem: '第01章_seed_to_full',
       );
 
-      expect(path, 'chapters/第01章_seed_to_full.md');
+      expect(path, 'samples/第01章_seed_to_full.md');
     });
 
     test('writes normal seed_to_full chapter to chapters', () {

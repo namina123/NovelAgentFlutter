@@ -326,6 +326,7 @@ class _ConversationSidebarState extends State<ConversationSidebar> {
               : WorkflowGuideCard(
                   title: widget.viewData.workflowTitle,
                   description: widget.viewData.workflowDescription,
+                  actions: emptyStateActions,
                   openingState: widget.viewData.openingState,
                   actionHandler: widget.actionHandler,
                 ),

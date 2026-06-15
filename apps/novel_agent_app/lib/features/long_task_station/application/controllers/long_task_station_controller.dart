@@ -44,6 +44,7 @@ class LongTaskStationController extends ChangeNotifier
   Future<void> Function(RunInstance run)? _openProjectRequested;
   Future<void> Function(RunInstance run, String relativePath)?
   _openResourceRequested;
+  Future<void> Function()? _showTaskCenterRequested;
   String Function()? _readCurrentProjectPathRequested;
   Future<void> Function()? _refreshCompletedCallback;
 
@@ -69,11 +70,13 @@ class LongTaskStationController extends ChangeNotifier
     required Future<void> Function(RunInstance run) openProjectRequested,
     required Future<void> Function(RunInstance run, String relativePath)
     openResourceRequested,
+    required Future<void> Function() showTaskCenterRequested,
     required String Function() readCurrentProjectPathRequested,
   }) {
     // 中文注释: 总站跳转只保存壳层回调，不直接依赖工作台或页面控制器实现。
     _openProjectRequested = openProjectRequested;
     _openResourceRequested = openResourceRequested;
+    _showTaskCenterRequested = showTaskCenterRequested;
     _readCurrentProjectPathRequested = readCurrentProjectPathRequested;
   }
 
@@ -278,6 +281,15 @@ class LongTaskStationController extends ChangeNotifier
     if (selectionChanged && nextSelectedRunId.trim().isNotEmpty) {
       _loadSelectedRunDetail();
     }
+  }
+
+  @override
+  void onLongTaskStationTaskCenterRequested() {
+    final callback = _showTaskCenterRequested;
+    if (callback == null) {
+      return;
+    }
+    unawaited(callback());
   }
 
   @override

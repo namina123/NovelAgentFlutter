@@ -12,7 +12,6 @@ void main() {
     final renderer = SessionContextRendererService(
       normalizerService: normalizer,
       messageService: messageService,
-      modeService: modeService,
     );
     final decisionService = SessionCompactionDecisionService();
     final actionService = SessionContextActionService(
@@ -64,9 +63,7 @@ void main() {
 
         final result = actionService.inspectContext(
           session,
-          options: <String, Object?>{
-            'pressure_snapshot': pressureSnapshot,
-          },
+          options: <String, Object?>{'pressure_snapshot': pressureSnapshot},
         );
         final payload = ValueReaders.mapValue(result.payload);
 
@@ -78,9 +75,9 @@ void main() {
         expect(payload['context_markdown'], contains('【固定引用】'));
         expect(payload['context_markdown'], contains('【工作上下文】'));
         expect(
-          ValueReaders.mapValue(payload['session_record'])[
-            SessionRecordConstants.workingContextMessagesField
-          ],
+          ValueReaders.mapValue(
+            payload['session_record'],
+          )[SessionRecordConstants.workingContextMessagesField],
           hasLength(2),
         );
         expect(result.validateBasics(), isEmpty);
@@ -97,13 +94,14 @@ void main() {
         'id': 'compact-action-session',
         'mode': SessionRecordConstants.modeChapterDraft,
         'workflow_stage': 'draft',
-        SessionRecordConstants.workingContextMessagesField: List<Object?>.generate(
-          14,
-          (index) => <String, Object?>{
-            'role': 'user',
-            'content': '正文内容${'x' * 400}-$index',
-          },
-        ),
+        SessionRecordConstants.workingContextMessagesField:
+            List<Object?>.generate(
+              14,
+              (index) => <String, Object?>{
+                'role': 'user',
+                'content': '正文内容${'x' * 400}-$index',
+              },
+            ),
       };
       final settings = SessionTokenBudgetSettings(
         modelContextWindowTokens: 2000,
@@ -176,9 +174,18 @@ void main() {
           ValueReaders.mapValue(cleared.payload)['session_record'],
         );
 
-        expect(cleared.actionKind, SessionContextActionKind.clearWorkingContext);
-        expect(clearedRecord[SessionRecordConstants.workingContextMessagesField], isEmpty);
-        expect(clearedRecord[SessionRecordConstants.legacyContextMessagesField], isEmpty);
+        expect(
+          cleared.actionKind,
+          SessionContextActionKind.clearWorkingContext,
+        );
+        expect(
+          clearedRecord[SessionRecordConstants.workingContextMessagesField],
+          isEmpty,
+        );
+        expect(
+          clearedRecord[SessionRecordConstants.legacyContextMessagesField],
+          isEmpty,
+        );
         expect(
           clearedRecord[SessionRecordConstants.transcriptMessagesField],
           hasLength(2),
@@ -187,7 +194,10 @@ void main() {
           clearedRecord[SessionRecordConstants.compactionSegmentsField],
           hasLength(1),
         );
-        expect(clearedRecord[SessionRecordConstants.pinnedContextRefsField], hasLength(1));
+        expect(
+          clearedRecord[SessionRecordConstants.pinnedContextRefsField],
+          hasLength(1),
+        );
 
         final pin = actionService.pinContextSegment(
           clearedRecord,
@@ -268,7 +278,10 @@ void main() {
         ValueReaders.mapValue(payload['frame']),
       );
 
-      expect(result.actionKind, SessionContextActionKind.inspectCompactionGuidance);
+      expect(
+        result.actionKind,
+        SessionContextActionKind.inspectCompactionGuidance,
+      );
       expect(result.ok, isTrue);
       expect(payload['ordered_section_kinds'], <Object?>[
         'system_foundation',

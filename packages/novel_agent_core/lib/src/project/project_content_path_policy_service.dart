@@ -4,6 +4,7 @@ class ProjectContentPathPolicyService {
   static const String premiseRoot = 'premise';
   static const String outlinesRoot = 'outlines';
   static const String chaptersRoot = 'chapters';
+  static const String samplesRoot = 'samples';
   static const String scenesRoot = 'scenes';
   static const String assetsRoot = 'assets';
   static const String tasksRoot = 'tasks';
@@ -47,6 +48,10 @@ class ProjectContentPathPolicyService {
       case '正式正文':
       case 'final_chapter':
         return 'chapter';
+      case '样章':
+      case 'sample':
+      case 'sample_chapter':
+        return 'sample';
       case '设定':
       case 'world':
         return 'setting';
@@ -57,6 +62,9 @@ class ProjectContentPathPolicyService {
       case '摘要':
       case '概括':
         return 'summary';
+      case '分析':
+      case 'analysis':
+        return 'analysis';
       case '知识库':
         return 'knowledge';
       default:
@@ -75,6 +83,8 @@ class ProjectContentPathPolicyService {
         return 'outlines/chapters';
       case 'chapter':
         return chaptersRoot;
+      case 'sample':
+        return samplesRoot;
       case 'scene':
         return scenesRoot;
       case 'setting':
@@ -85,6 +95,8 @@ class ProjectContentPathPolicyService {
         return 'assets/styles';
       case 'summary':
         return 'summaries';
+      case 'analysis':
+        return 'analysis';
       case 'knowledge':
         return 'knowledge';
       default:
@@ -131,6 +143,8 @@ class ProjectContentPathPolicyService {
         return 'chapter_outline';
       case chaptersRoot:
         return 'chapter';
+      case samplesRoot:
+        return 'sample';
       case scenesRoot:
         return 'scene';
       case 'world':
@@ -141,6 +155,8 @@ class ProjectContentPathPolicyService {
         return 'style';
       case 'summaries':
         return 'summary';
+      case 'analysis':
+        return 'analysis';
       case 'knowledge':
         return 'knowledge';
       default:

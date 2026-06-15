@@ -5,6 +5,10 @@ class ProjectImportActionPolicy {
     required this.sourcePaths,
     required this.autoDeconstruct,
     required this.canAutoDeconstruct,
+    required this.smartAnalysis,
+    required this.canSmartAnalyze,
+    required this.analysisAgentId,
+    required this.analysisAgentGroupId,
     required this.fileSelectionHint,
     required this.outputHint,
   });
@@ -14,6 +18,10 @@ class ProjectImportActionPolicy {
   final List<String> sourcePaths;
   final bool autoDeconstruct;
   final bool canAutoDeconstruct;
+  final bool smartAnalysis;
+  final bool canSmartAnalyze;
+  final String analysisAgentId;
+  final String analysisAgentGroupId;
   final String fileSelectionHint;
   final String outputHint;
 }

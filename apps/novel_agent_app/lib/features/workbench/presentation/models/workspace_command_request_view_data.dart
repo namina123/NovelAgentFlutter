@@ -1,3 +1,5 @@
+import 'selector_option_view_data.dart';
+
 enum WorkspaceCommandMode {
   editProjectInfo,
   transitionProjectType,
@@ -17,6 +19,9 @@ class WorkspaceCommandViewData {
     required this.projectType,
     this.transitionTargetProjectTypeId = '',
     this.transitionRuntimeBaselineId = '',
+    this.transitionTargetProjectTypeOptions = const <SelectorOptionViewData>[],
+    this.transitionRuntimeBaselineOptions = const <SelectorOptionViewData>[],
+    this.transitionRequiresRuntimeBaselineSelection = false,
     required this.genre,
     required this.premise,
     required this.notes,
@@ -26,6 +31,10 @@ class WorkspaceCommandViewData {
     required this.sourcePathsText,
     required this.targetDirectory,
     this.autoDeconstruct = false,
+    this.smartAnalysis = false,
+    this.canSmartAnalyze = false,
+    this.analysisAgentId = '',
+    this.analysisAgentGroupId = '',
     this.canAutoDeconstruct = false,
     this.importFileSelectionHint = '',
     this.importOutputHint = '',
@@ -40,6 +49,9 @@ class WorkspaceCommandViewData {
   final String projectType;
   final String transitionTargetProjectTypeId;
   final String transitionRuntimeBaselineId;
+  final List<SelectorOptionViewData> transitionTargetProjectTypeOptions;
+  final List<SelectorOptionViewData> transitionRuntimeBaselineOptions;
+  final bool transitionRequiresRuntimeBaselineSelection;
   final String genre;
   final String premise;
   final String notes;
@@ -49,6 +61,10 @@ class WorkspaceCommandViewData {
   final String sourcePathsText;
   final String targetDirectory;
   final bool autoDeconstruct;
+  final bool smartAnalysis;
+  final bool canSmartAnalyze;
+  final String analysisAgentId;
+  final String analysisAgentGroupId;
   final bool canAutoDeconstruct;
   final String importFileSelectionHint;
   final String importOutputHint;
@@ -63,6 +79,9 @@ class WorkspaceCommandViewData {
     String? projectType,
     String? transitionTargetProjectTypeId,
     String? transitionRuntimeBaselineId,
+    List<SelectorOptionViewData>? transitionTargetProjectTypeOptions,
+    List<SelectorOptionViewData>? transitionRuntimeBaselineOptions,
+    bool? transitionRequiresRuntimeBaselineSelection,
     String? genre,
     String? premise,
     String? notes,
@@ -72,6 +91,10 @@ class WorkspaceCommandViewData {
     String? sourcePathsText,
     String? targetDirectory,
     bool? autoDeconstruct,
+    bool? smartAnalysis,
+    bool? canSmartAnalyze,
+    String? analysisAgentId,
+    String? analysisAgentGroupId,
     bool? canAutoDeconstruct,
     String? importFileSelectionHint,
     String? importOutputHint,
@@ -88,6 +111,15 @@ class WorkspaceCommandViewData {
           transitionTargetProjectTypeId ?? this.transitionTargetProjectTypeId,
       transitionRuntimeBaselineId:
           transitionRuntimeBaselineId ?? this.transitionRuntimeBaselineId,
+      transitionTargetProjectTypeOptions:
+          transitionTargetProjectTypeOptions ??
+          this.transitionTargetProjectTypeOptions,
+      transitionRuntimeBaselineOptions:
+          transitionRuntimeBaselineOptions ??
+          this.transitionRuntimeBaselineOptions,
+      transitionRequiresRuntimeBaselineSelection:
+          transitionRequiresRuntimeBaselineSelection ??
+          this.transitionRequiresRuntimeBaselineSelection,
       genre: genre ?? this.genre,
       premise: premise ?? this.premise,
       notes: notes ?? this.notes,
@@ -97,6 +129,10 @@ class WorkspaceCommandViewData {
       sourcePathsText: sourcePathsText ?? this.sourcePathsText,
       targetDirectory: targetDirectory ?? this.targetDirectory,
       autoDeconstruct: autoDeconstruct ?? this.autoDeconstruct,
+      smartAnalysis: smartAnalysis ?? this.smartAnalysis,
+      canSmartAnalyze: canSmartAnalyze ?? this.canSmartAnalyze,
+      analysisAgentId: analysisAgentId ?? this.analysisAgentId,
+      analysisAgentGroupId: analysisAgentGroupId ?? this.analysisAgentGroupId,
       canAutoDeconstruct: canAutoDeconstruct ?? this.canAutoDeconstruct,
       importFileSelectionHint:
           importFileSelectionHint ?? this.importFileSelectionHint,
@@ -121,6 +157,9 @@ class WorkspaceCommandRequestViewData {
     this.sourcePathsText = '',
     this.targetDirectory = '',
     this.autoDeconstruct = false,
+    this.smartAnalysis = false,
+    this.analysisAgentId = '',
+    this.analysisAgentGroupId = '',
   });
 
   final WorkspaceCommandMode mode;
@@ -137,6 +176,9 @@ class WorkspaceCommandRequestViewData {
   final String sourcePathsText;
   final String targetDirectory;
   final bool autoDeconstruct;
+  final bool smartAnalysis;
+  final String analysisAgentId;
+  final String analysisAgentGroupId;
 
   List<String> get sourcePaths => sourcePathsText
       .split('\n')
@@ -159,6 +201,9 @@ class WorkspaceCommandRequestViewData {
     String? sourcePathsText,
     String? targetDirectory,
     bool? autoDeconstruct,
+    bool? smartAnalysis,
+    String? analysisAgentId,
+    String? analysisAgentGroupId,
   }) {
     return WorkspaceCommandRequestViewData(
       mode: mode ?? this.mode,
@@ -177,6 +222,9 @@ class WorkspaceCommandRequestViewData {
       sourcePathsText: sourcePathsText ?? this.sourcePathsText,
       targetDirectory: targetDirectory ?? this.targetDirectory,
       autoDeconstruct: autoDeconstruct ?? this.autoDeconstruct,
+      smartAnalysis: smartAnalysis ?? this.smartAnalysis,
+      analysisAgentId: analysisAgentId ?? this.analysisAgentId,
+      analysisAgentGroupId: analysisAgentGroupId ?? this.analysisAgentGroupId,
     );
   }
 }

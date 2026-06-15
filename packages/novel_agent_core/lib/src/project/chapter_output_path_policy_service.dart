@@ -58,6 +58,43 @@ class ChapterOutputPathPolicyService {
     return '$directory/$stem.md';
   }
 
+  String suggestChapterPath({
+    String explicitTitle = '',
+    String submissionTitle = '',
+    required String chapterContent,
+    String fallbackTitle = 'chapter',
+  }) {
+    final effectiveNumber =
+        _chapterNumberFromTitle(explicitTitle) ??
+        _chapterNumberFromTitle(submissionTitle) ??
+        _chapterNumberFromTitle(_titleFromMarkdownHeading(chapterContent)) ??
+        0;
+    final effectiveTitle = effectiveChapterTitle(
+      explicitTitle: explicitTitle,
+      chapterContent: chapterContent,
+      submissionTitle: submissionTitle,
+      chapterNumber: effectiveNumber,
+    );
+    final directory = _contentPathPolicyService.directoryForContentType(
+      'chapter',
+    );
+    if (effectiveNumber > 0) {
+      final chapterPath = defaultChapterPath(
+        chapterNumber: effectiveNumber,
+        title: effectiveTitle,
+        fallbackTitle: fallbackTitle,
+      );
+      if (chapterPath.trim().isNotEmpty) {
+        return chapterPath;
+      }
+    }
+    final safeTitle = safeFilePart(effectiveTitle, fallbackTitle);
+    if (safeTitle.trim().isEmpty) {
+      return '';
+    }
+    return '$directory/$safeTitle.md';
+  }
+
   String chapterFileStem({
     required int chapterNumber,
     required String title,

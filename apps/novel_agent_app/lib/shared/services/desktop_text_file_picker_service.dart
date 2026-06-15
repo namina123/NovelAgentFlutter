@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:novel_agent_adapters/novel_agent_adapters.dart';
+
 class DesktopTextFilePickerService {
   const DesktopTextFilePickerService();
 
@@ -48,7 +50,7 @@ class DesktopTextFilePickerService {
 Add-Type -AssemblyName System.Windows.Forms
 \$dialog = New-Object System.Windows.Forms.OpenFileDialog
 \$dialog.Title = "${_escapePowerShell(dialogTitle)}"
-\$dialog.Filter = "文本与 Markdown|*.txt;*.md;*.markdown|所有文件|*.*"
+\$dialog.Filter = "${const SourceDocumentFormatCatalogService().buildOpenFileDialogFilter()}"
 \$dialog.Multiselect = \$${allowMultiple ? 'true' : 'false'}
 if (\$dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
   [Console]::Out.Write((\$dialog.FileNames -join "`n"))

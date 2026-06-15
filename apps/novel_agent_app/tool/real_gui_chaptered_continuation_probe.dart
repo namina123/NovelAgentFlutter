@@ -91,7 +91,10 @@ Future<JsonMap> runRealGuiChapteredContinuationProbe({
     await harness.writeProjectManifest();
     await capture('project_seeded');
 
-    await harness.sendPrompt(_continuationPrompt);
+    await _openContinuationSourceChapter(harness);
+    await capture('continuation_source_opened');
+
+    await harness.invokePrimaryAction('session.goal.continue_writing');
     await harness.waitForConversationActivity(
       timeout: const Duration(minutes: 2),
     );
@@ -100,6 +103,22 @@ Future<JsonMap> runRealGuiChapteredContinuationProbe({
       timeout: const Duration(minutes: 12),
     );
     await capture('turn_1_settled');
+
+    var projectEntries = await harness.listProjectEntries();
+    var chapter3Path = _findChapterPath(projectEntries, chapterNumber: 3);
+    if (chapter3Path.isEmpty) {
+      await harness.sendPrompt(_continuationPrompt);
+      await harness.waitForConversationActivity(
+        timeout: const Duration(minutes: 2),
+      );
+      await capture('turn_2_active');
+      await harness.waitForConversationToSettle(
+        timeout: const Duration(minutes: 12),
+      );
+      await capture('turn_2_settled');
+      projectEntries = await harness.listProjectEntries();
+      chapter3Path = _findChapterPath(projectEntries, chapterNumber: 3);
+    }
 
     for (var round = 2; round <= 3; round += 1) {
       final pendingOptions = harness.conversation.pendingOptions;
@@ -132,7 +151,7 @@ Future<JsonMap> runRealGuiChapteredContinuationProbe({
 
     final projectRoot = harness.workbench.projectPath.trim();
     final project = _currentProjectDescriptor(harness);
-    final projectEntries = await harness.listProjectEntries();
+    projectEntries = await harness.listProjectEntries();
     final activationReportPath = _findProjectFilePath(
       projectEntries,
       RegExp(r'^tracking/conversation_draft/.*\.activation_report\.json$'),
@@ -140,7 +159,6 @@ Future<JsonMap> runRealGuiChapteredContinuationProbe({
     final activationReport = activationReportPath == null
         ? const <String, Object?>{}
         : _decodeJson(await harness.readProjectFile(activationReportPath));
-final chapter3Path = _findChapterPath(projectEntries, chapterNumber: 3);
     final chapter3Content = chapter3Path.isEmpty
         ? ''
         : await harness.readProjectFile(chapter3Path);
@@ -166,9 +184,7 @@ final chapter3Path = _findChapterPath(projectEntries, chapterNumber: 3);
         selectedIds.any(
           (id) => id.contains('tracking/continuity/frames/mainline.json'),
         ) &&
-        selectedIds.any(
-          (id) => id.contains('tracking/continuity/bundle.json'),
-        );
+        selectedIds.any((id) => id.contains('tracking/continuity/bundle.json'));
     final firstParagraph = _chapterFirstParagraph(chapter3Content);
     final continuityOpeningOk =
         !firstParagraph.contains('只等门里的人给一句回音') &&
@@ -209,7 +225,7 @@ final chapter3Path = _findChapterPath(projectEntries, chapterNumber: 3);
     final resourceTreeHasChapter3 =
         chapter3Path.isNotEmpty &&
         harness.resources.resourceEntries.any(
-          (entry) => entry.relativePath == chapter3Path,
+          (entry) => _projectPathsMatch(entry.relativePath, chapter3Path),
         );
     final terminalGenerationStatus = harness.conversation.generationStatus;
     final externalBlocked = _looksLikeExternalBlockedStatus(
@@ -334,6 +350,7 @@ final chapter3Path = _findChapterPath(projectEntries, chapterNumber: 3);
 Future<void> _seedProjectFoundation(HfvvWave1AppShellHarness harness) async {
   final project = _currentProjectDescriptor(harness);
   final workspacePort = harness.bundle.projectWorkspacePort;
+  final narrativeSeedRoot = _resolveNarrativeSeedRoot(project.rootPath);
   final expressionBindingRepository =
       ProjectExpressionConstraintBindingRepository(
         workspacePort: workspacePort,
@@ -355,30 +372,37 @@ Future<void> _seedProjectFoundation(HfvvWave1AppShellHarness harness) async {
     'outline/总纲.md',
     '# 总纲\n\n主角周砚流落江南小镇，想先找个落脚点，再用简陋井车和晒盐改良换取站稳脚跟的机会。\n',
   );
-  await workspacePort.writeTextFile(
-    project.rootPath,
-    'assets/characters/周砚.md',
-    '# 周砚\n\n现代做工地机电维护的社畜，穿来后谨慎但嘴快，善于把复杂原理讲成乡里能懂的话。\n',
+  await _writeNarrativeSeedFile(
+    workspacePort: workspacePort,
+    rootPath: narrativeSeedRoot,
+    relativePath: 'assets/characters/周砚.md',
+    content: '# 周砚\n\n现代做工地机电维护的社畜，穿来后谨慎但嘴快，善于把复杂原理讲成乡里能懂的话。\n',
   );
-  await workspacePort.writeTextFile(
-    project.rootPath,
-    'summaries/第02章：摸底.summary.md',
-    '第02章摘要：周砚冒雨敲开王保正家门，说明自己懂井车和晒盐法，想求一夜借宿与一个试做机会。',
+  await _writeNarrativeSeedFile(
+    workspacePort: workspacePort,
+    rootPath: narrativeSeedRoot,
+    relativePath: 'summaries/第02章：摸底.summary.md',
+    content: '第02章摘要：周砚冒雨敲开王保正家门，说明自己懂井车和晒盐法，想求一夜借宿与一个试做机会。',
   );
-  await workspacePort.writeTextFile(
-    project.rootPath,
-    'assets/timeline/第02章_摸底.timeline.md',
-    '第02章时间线：夜雨中敲门 -> 王保正让出门缝 -> 周砚说明来意与井车想法 -> 门前气氛从戒备转向试探。',
+  await _writeNarrativeSeedFile(
+    workspacePort: workspacePort,
+    rootPath: narrativeSeedRoot,
+    relativePath: 'assets/timeline/第02章_摸底.timeline.md',
+    content: '第02章时间线：夜雨中敲门 -> 王保正让出门缝 -> 周砚说明来意与井车想法 -> 门前气氛从戒备转向试探。',
   );
-  await workspacePort.writeTextFile(
-    project.rootPath,
-    'chapters/第02章_摸底.md',
-    '# 第02章 摸底\n\n雨脚把青石板冲得发亮，周砚在门外站了半盏茶，才等来一声木闩轻响。\n\n门缝开得很窄，王保正先看了他一眼，又看了看他抱在怀里的旧木匣，声音里全是防备：“夜里来敲门，求什么？”\n\n周砚没敢往前挤，只把木匣托高半寸，压着气息道：“不求别的，求一晚屋檐，再求您明早给我半个时辰。我会做井车，也知道怎么让盐场少费一层柴火。要是我说得全是胡话，天亮前您把我赶出去都成。”\n\n王保正没立刻回话，只把门又让开一指，视线从他鞋上的泥一直扫到木匣边角，像是在量他话里到底有几分真。\n\n风从院里卷出来，带着潮木和冷灶灰的味道。周砚知道自己不能再把来历、雨路和苦相重复一遍，只能等一句真回音。\n',
+  await _writeNarrativeSeedFile(
+    workspacePort: workspacePort,
+    rootPath: narrativeSeedRoot,
+    relativePath: 'chapters/第02章_摸底.md',
+    content:
+        '# 第02章 摸底\n\n雨脚把青石板冲得发亮，周砚在门外站了半盏茶，才等来一声木闩轻响。\n\n门缝开得很窄，王保正先看了他一眼，又看了看他抱在怀里的旧木匣，声音里全是防备：“夜里来敲门，求什么？”\n\n周砚没敢往前挤，只把木匣托高半寸，压着气息道：“不求别的，求一晚屋檐，再求您明早给我半个时辰。我会做井车，也知道怎么让盐场少费一层柴火。要是我说得全是胡话，天亮前您把我赶出去都成。”\n\n王保正没立刻回话，只把门又让开一指，视线从他鞋上的泥一直扫到木匣边角，像是在量他话里到底有几分真。\n\n风从院里卷出来，带着潮木和冷灶灰的味道。周砚知道自己不能再把来历、雨路和苦相重复一遍，只能等一句真回音。\n',
   );
-  await workspacePort.writeTextFile(
-    project.rootPath,
-    '.novel_agent/continuity/deliveries/submission_chapters_第02章_摸底.md.json',
-    const JsonEncoder.withIndent('  ').convert(<String, Object?>{
+  await _writeNarrativeSeedFile(
+    workspacePort: workspacePort,
+    rootPath: narrativeSeedRoot,
+    relativePath:
+        '.novel_agent/continuity/deliveries/submission_chapters_第02章_摸底.md.json',
+    content: const JsonEncoder.withIndent('  ').convert(<String, Object?>{
       'submission': <String, Object?>{
         'title': '第02章 摸底',
         'summary': '第02章交付：周砚已在门前说明自己会做井车和晒盐改良，只等王保正给出试探性回应。',
@@ -432,6 +456,56 @@ Future<void> _seedProjectFoundation(HfvvWave1AppShellHarness harness) async {
         'preferred_max': 2600,
       },
     ),
+  );
+}
+
+Future<void> _writeNarrativeSeedFile({
+  required ProjectWorkspacePort workspacePort,
+  required String rootPath,
+  required String relativePath,
+  required String content,
+}) async {
+  // 中文注释: 叙事种子文件同时落到外层根与真实项目子根，避免 activation 因目录层级差异看不见前置材料。
+  final candidateRoots = <String>[rootPath];
+  final rootDirectory = Directory(rootPath);
+  if (rootDirectory.existsSync()) {
+    final nestedRoots = rootDirectory
+        .listSync(followLinks: false)
+        .whereType<Directory>()
+        .map((entry) => entry.path)
+        .where(
+          (path) => path
+              .replaceAll('\\', '/')
+              .split('/')
+              .last
+              .toLowerCase()
+              .startsWith('hfvv_'),
+        )
+        .toList(growable: false);
+    nestedRoots.sort();
+    for (final nestedRoot in nestedRoots) {
+      if (!candidateRoots.contains(nestedRoot)) {
+        candidateRoots.add(nestedRoot);
+      }
+    }
+  }
+  for (final candidateRoot in candidateRoots) {
+    await workspacePort.writeTextFile(candidateRoot, relativePath, content);
+  }
+}
+
+Future<void> _openContinuationSourceChapter(
+  HfvvWave1AppShellHarness harness,
+) async {
+  // 中文注释: 高保真探针要模拟用户先点开上一章，再触发继续创作入口，不能直接拿总纲冒充续写上下文。
+  const sourceChapterPath = 'chapters/第02章_摸底.md';
+  await harness.controller.openResource(sourceChapterPath);
+  await harness.waitUntil(
+    () =>
+        _probeRelativePath(harness.workbench.activeDocumentPath) ==
+        sourceChapterPath,
+    description: 'continuation source chapter becomes active',
+    timeout: const Duration(seconds: 20),
   );
 }
 
@@ -544,13 +618,13 @@ String _findChapterPath(List<JsonMap> entries, {required int chapterNumber}) {
     if (ValueReaders.boolValue(entry['is_dir'])) {
       continue;
     }
-    final path = _normalizedProjectRelativePath(
-      entry['relative_path'],
-    );
-    if (!path.startsWith('chapters/') || !path.endsWith('.md')) {
+    final path = _projectRelativePath(entry['relative_path']);
+    final canonicalPath = _canonicalProjectRelativePath(path);
+    if (!canonicalPath.startsWith('chapters/') ||
+        !canonicalPath.endsWith('.md')) {
       continue;
     }
-    final fileName = path.split('/').last;
+    final fileName = canonicalPath.split('/').last;
     if (fileName.startsWith(prefix) ||
         fileName.startsWith('$numericPrefix-') ||
         fileName.startsWith('$paddedNumericPrefix-') ||
@@ -564,33 +638,47 @@ String _findChapterPath(List<JsonMap> entries, {required int chapterNumber}) {
 }
 
 String _findProjectFilePath(List<JsonMap> entries, RegExp pattern) {
+  final matches = <String>[];
   for (final entry in entries) {
     if (ValueReaders.boolValue(entry['is_dir'])) {
       continue;
     }
-    final path = _normalizedProjectRelativePath(
-      entry['relative_path'],
-    );
-    if (pattern.hasMatch(path)) {
-      return path;
+    final path = _projectRelativePath(entry['relative_path']);
+    if (pattern.hasMatch(path) ||
+        pattern.hasMatch(_canonicalProjectRelativePath(path))) {
+      matches.add(path);
     }
   }
-  return '';
+  if (matches.isEmpty) {
+    return '';
+  }
+  matches.sort();
+  return matches.last;
 }
 
-String _normalizedProjectRelativePath(Object? raw) {
+String _projectRelativePath(Object? raw) {
   final path = ValueReaders.stringValue(raw).replaceAll('\\', '/');
-  final projectRootMarker = 'HFVV_普通分章续写承接验证/';
-  final rootIndex = path.indexOf(projectRootMarker);
-  if (rootIndex >= 0) {
-    return path.substring(rootIndex + projectRootMarker.length);
-  }
   return path;
+}
+
+String _canonicalProjectRelativePath(String path) {
+  final normalizedPath = path.replaceAll('\\', '/');
+  final projectRootMarker = 'HFVV_普通分章续写承接验证/';
+  final rootIndex = normalizedPath.indexOf(projectRootMarker);
+  if (rootIndex >= 0) {
+    return normalizedPath.substring(rootIndex + projectRootMarker.length);
+  }
+  return normalizedPath;
 }
 
 String _deliverySidecarPath(String chapterPath) {
   final fileName = chapterPath.split('/').last;
-  return '.novel_agent/continuity/deliveries/submission_chapters_$fileName.json';
+  final projectRootMarker = 'HFVV_普通分章续写承接验证/';
+  final rootIndex = chapterPath.indexOf(projectRootMarker);
+  final prefix = rootIndex >= 0
+      ? chapterPath.substring(0, rootIndex + projectRootMarker.length)
+      : '';
+  return '${prefix}.novel_agent/continuity/deliveries/submission_chapters_$fileName.json';
 }
 
 int _chapterBodyLength(String markdown) {
@@ -736,6 +824,19 @@ String _fixLog(JsonMap report) {
 - report_category: ${ValueReaders.stringValue(report['report_category'])}
 - note: ${ok ? '已形成普通分章续写的真实 GUI/ViewModel 证据。' : '已冻结普通分章续写失败现场，需继续定位生产链。'}
 ''';
+}
+
+String _resolveNarrativeSeedRoot(String rootPath) {
+  return rootPath.trim();
+}
+
+bool _projectPathsMatch(String left, String right) {
+  return _canonicalProjectRelativePath(left) ==
+      _canonicalProjectRelativePath(right);
+}
+
+String _probeRelativePath(String value) {
+  return value.replaceAll('\\', '/').trim();
 }
 
 String _clip(String text, int maxLength) {

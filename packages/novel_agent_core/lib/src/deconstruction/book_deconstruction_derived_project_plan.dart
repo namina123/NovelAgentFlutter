@@ -1,5 +1,6 @@
 import '../continuity/continuity_build_spec.dart';
 import 'book_deconstruction_continuation_direction.dart';
+import 'book_deconstruction_source_inheritance_mode.dart';
 
 class BookDeconstructionDerivedProjectPlan {
   const BookDeconstructionDerivedProjectPlan({
@@ -10,6 +11,8 @@ class BookDeconstructionDerivedProjectPlan {
     required this.targetProjectTypeId,
     required this.targetProjectStrategyId,
     this.targetModeId = '',
+    this.sourceInheritanceMode =
+        BookDeconstructionSourceInheritanceMode.continuation,
     this.preferredDirection =
         BookDeconstructionContinuationDirection.analysisFirst,
     this.recommendedBuildTier = ContinuityBuildTier.standardFoundation,
@@ -24,6 +27,7 @@ class BookDeconstructionDerivedProjectPlan {
   final String targetProjectTypeId;
   final String targetProjectStrategyId;
   final String targetModeId;
+  final BookDeconstructionSourceInheritanceMode sourceInheritanceMode;
   final BookDeconstructionContinuationDirection preferredDirection;
   final ContinuityBuildTier recommendedBuildTier;
   final String suggestedProjectTitle;

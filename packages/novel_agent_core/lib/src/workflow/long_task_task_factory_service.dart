@@ -9,6 +9,7 @@ import 'long_task_mode_context_path_service.dart';
 import 'long_task_mode_service.dart';
 import 'long_task_path_policy_service.dart';
 import 'long_task_planning_artifact_path_service.dart';
+import 'long_task_sample_readiness_service.dart';
 import 'task_runtime_constants.dart';
 
 class LongTaskTaskFactoryService {
@@ -23,6 +24,7 @@ class LongTaskTaskFactoryService {
     chapterGateReviewTaskFactoryService,
     LongTaskCheckpointCadencePolicyService? checkpointCadencePolicyService,
     LongTaskPlanningArtifactPathService? planningArtifactPathService,
+    LongTaskSampleReadinessService? sampleReadinessService,
   }) : _pathPolicyService = pathPolicyService,
        _chapterOutputPolicyService =
            chapterOutputPolicyService ??
@@ -47,7 +49,9 @@ class LongTaskTaskFactoryService {
            const LongTaskCheckpointCadencePolicyService(),
        _planningArtifactPathService =
            planningArtifactPathService ??
-           const LongTaskPlanningArtifactPathService();
+           const LongTaskPlanningArtifactPathService(),
+       _sampleReadinessService =
+           sampleReadinessService ?? const LongTaskSampleReadinessService();
 
   final LongTaskPathPolicyService _pathPolicyService;
   final LongTaskChapterOutputPolicyService _chapterOutputPolicyService;
@@ -60,6 +64,7 @@ class LongTaskTaskFactoryService {
   _chapterGateReviewTaskFactoryService;
   final LongTaskCheckpointCadencePolicyService _checkpointCadencePolicyService;
   final LongTaskPlanningArtifactPathService _planningArtifactPathService;
+  final LongTaskSampleReadinessService _sampleReadinessService;
 
   List<JsonMap> buildTasks(
     String mode,
@@ -222,6 +227,15 @@ class LongTaskTaskFactoryService {
     if (seedPrompt.isEmpty) {
       seedPrompt = '用户尚未填写详细种子，请先围绕项目规格、题材、世界观、主角目标和长篇结构提出可选规划。';
     }
+    final sampleReadinessRequiredPaths =
+        _sampleReadinessService.requiredPlanningArtifactPaths();
+    final sampleReadinessOptionalPaths =
+        _sampleReadinessService.optionalPlanningArtifactPaths();
+    final sampleReadinessSourcePaths = <Object?>[
+      ...sampleReadinessRequiredPaths,
+      ...sampleReadinessOptionalPaths,
+      ...persistentPaths,
+    ];
     final tasks = <JsonMap>[];
     var sortOrder = 1;
     final planningId = '${planId}_planning';
@@ -243,13 +257,9 @@ class LongTaskTaskFactoryService {
         TaskRuntimeConstants.modeSeedToFullNovel,
         planId,
         outlineCheckpointId,
-        '检查点：确认总纲与章节任务',
+        '检查点：确认资料、风格与大纲',
         planningId,
-        <Object?>[
-          LongTaskPlanningArtifactPathService.projectSpecPath,
-          _planningArtifactPathService.storyOutlinePath(),
-          ...persistentPaths,
-        ],
+        sampleReadinessSourcePaths,
         <Object?>[
           _planningArtifactPathService.storyOutlinePath(),
           _planningArtifactPathService.chapterPlanPath(),
@@ -258,80 +268,125 @@ class LongTaskTaskFactoryService {
         createdAt,
         persistentPaths,
         runtimeBaselineId: runtimeBaselineId,
+        goal:
+            '等待用户确认资料收集已经够用、风格方向已经明确、总纲/卷纲/章纲已达到可写样章的程度。确认后才允许进入样章验证。',
+        brief:
+            '这是样章前置确认点。这里不写正文，只检查信息是否收齐、风格是否定稳、总纲与章节任务是否足够支持样章验证。',
+        metadataExtras: <String, Object?>{
+          'checkpoint_kind': 'sample_readiness',
+          ..._sampleReadinessService.readinessMetadata(),
+        },
       ),
     );
     sortOrder += 1;
     var previousDependency = outlineCheckpointId;
-    for (
-      var chapterNumber = 1;
-      chapterNumber <= chapterCount;
-      chapterNumber += 1
-    ) {
+    final sampleId = '${planId}_sample';
+    final sampleOutputPath = _chapterOutputPolicyService.defaultOutputPath(
+      mode: TaskRuntimeConstants.modeSeedToFullNovel,
+      stage: 'sample',
+      fileStem: _chapterOutputPolicyService.sampleFileStem(
+        title: '样章_seed_to_full',
+      ),
+    );
+    tasks.add(
+      _chapterTask(<String, Object?>{
+        'id': sampleId,
+        'title': '样章：开篇验证',
+        'chapter': '样章',
+        'goal': '在资料、风格与大纲已经确认后，写一篇只用于验证叙事入口、文风和节奏的样章。样章不是正式正文。',
+        'brief':
+            '这是样章验证任务。只验证入口、口吻、节奏和世界观展示方式是否成立，不占用正式章节编号，也不直接作为正文入库。\n\n初始种子：$seedPrompt',
+        'mode': TaskRuntimeConstants.modeSeedToFullNovel,
+        'depends_on': <Object?>[previousDependency],
+        'source_paths': sampleReadinessSourcePaths,
+        'output_paths': <Object?>[sampleOutputPath],
+        'plan_id': planId,
+        'sort_order': sortOrder,
+        'stage': 'sample',
+        'runtime_baseline_id': runtimeBaselineId,
+        'tool_hint':
+            '先确认资料、风格、总纲和章纲已经齐备；样章只用于验证入口与文风，不冒充正式正文。样章达到可交付状态后，仍用 submit_chapter_delivery 收口，但 chapter_path 必须落在 samples/。',
+        'persistent_context_paths': persistentPaths,
+        'chapter_length_metadata': _chapterLengthMetadata(
+          options,
+          stage: 'sample',
+        ),
+      }, createdAt: createdAt),
+    );
+    previousDependency = sampleId;
+    sortOrder += 1;
+    tasks.add(
+      _checkpointTask(
+        TaskRuntimeConstants.modeSeedToFullNovel,
+        planId,
+        '${planId}_checkpoint_sample',
+        '检查点：确认样章',
+        previousDependency,
+        <Object?>['summaries', sampleOutputPath, ...persistentPaths],
+        <Object?>[sampleOutputPath],
+        sortOrder,
+        createdAt,
+        persistentPaths,
+        runtimeBaselineId: runtimeBaselineId,
+      ),
+    );
+    previousDependency = '${planId}_checkpoint_sample';
+    sortOrder += 1;
+    for (var chapterNumber = 1; chapterNumber <= chapterCount; chapterNumber += 1) {
       final chapterId =
           '${planId}_chapter_${chapterNumber.toString().padLeft(3, '0')}';
-      final stage = chapterNumber == 1 ? 'sample' : 'draft';
       final outputPath = _chapterOutputPolicyService.defaultOutputPath(
         mode: TaskRuntimeConstants.modeSeedToFullNovel,
-        stage: stage,
+        stage: 'draft',
         fileStem: _chapterOutputPolicyService.chapterFileStem(
           chapterNumber: chapterNumber,
           title: 'seed_to_full',
         ),
       );
-      var brief = '根据规划任务生成的作品规格、总纲和章纲写作。初始种子：$seedPrompt';
-      if (chapterNumber == 1) {
-        brief =
-            '这是样章任务。请根据已确认总纲写出第一章，让用户能判断叙事口吻、节奏和世界观入口是否成立。\n\n初始种子：$seedPrompt';
-      }
+      final brief = '根据规划任务生成的作品规格、总纲和章纲写作。初始种子：$seedPrompt';
       tasks.add(
         _chapterTask(<String, Object?>{
           'id': chapterId,
-          'title':
-              '${chapterNumber == 1 ? '样章：' : ''}第${chapterNumber.toString().padLeft(2, '0')}章',
+          'title': '第${chapterNumber.toString().padLeft(2, '0')}章',
           'chapter': '第${chapterNumber.toString().padLeft(2, '0')}章',
           'goal': '按已确认规格、总纲和章纲生成本章正式正文。',
           'brief': brief,
           'mode': TaskRuntimeConstants.modeSeedToFullNovel,
           'depends_on': <Object?>[previousDependency],
           'source_paths': <Object?>[
-            LongTaskPlanningArtifactPathService.projectSpecPath,
-            _planningArtifactPathService.storyOutlinePath(),
-            _planningArtifactPathService.chapterPlanPath(),
+            ...sampleReadinessRequiredPaths,
+            ...sampleReadinessOptionalPaths,
             ...persistentPaths,
           ],
           'output_paths': <Object?>[outputPath],
           'plan_id': planId,
           'sort_order': sortOrder,
-          'stage': stage,
+          'stage': 'draft',
           'runtime_baseline_id': runtimeBaselineId,
           'tool_hint':
               '先读取项目规格、总纲、章纲、摘要和必要设定；如果规划尚未充分，请先调用 present_user_options 或写入大纲，而不是硬写正文。正文达到正式交付条件后，用 submit_chapter_delivery 收口。',
           'persistent_context_paths': persistentPaths,
           'chapter_length_metadata': _chapterLengthMetadata(
             options,
-            stage: stage,
+            stage: 'draft',
           ),
         }, createdAt: createdAt),
       );
       previousDependency = chapterId;
       sortOrder += 1;
       final shouldCheckpoint =
-          chapterNumber == 1 ||
-          (checkpointInterval > 0 &&
-              chapterNumber % checkpointInterval == 0 &&
-              chapterNumber < chapterCount);
+          checkpointInterval > 0 &&
+          chapterNumber % checkpointInterval == 0 &&
+          chapterNumber < chapterCount;
       if (shouldCheckpoint) {
         final checkpointId =
             '${planId}_checkpoint_${chapterNumber.toString().padLeft(3, '0')}';
-        final checkpointTitle = chapterNumber == 1
-            ? '检查点：确认样章'
-            : '检查点：第 $chapterNumber 章后确认';
         tasks.add(
           _checkpointTask(
             TaskRuntimeConstants.modeSeedToFullNovel,
             planId,
             checkpointId,
-            checkpointTitle,
+            '检查点：第 $chapterNumber 章后确认',
             previousDependency,
             <Object?>['summaries', outputPath, ...persistentPaths],
             <Object?>[outputPath],
@@ -582,6 +637,9 @@ class LongTaskTaskFactoryService {
     String createdAt,
     List<String> persistentPaths, {
     String runtimeBaselineId = '',
+    String goal = '',
+    String brief = '',
+    JsonMap metadataExtras = const <String, Object?>{},
   }) {
     // 中文注释: 检查点任务本身不自动跑模型，只提供用户确认、调整和继续的安全停顿点。
     final dependsOn = <Object?>[];
@@ -594,8 +652,12 @@ class LongTaskTaskFactoryService {
       'task_type': 'checkpoint',
       'mode': mode,
       'status': TaskRuntimeConstants.statusQueued,
-      'goal': '等待用户检查前序输出、调整方向或确认继续。确认后把该任务标记完成，后续依赖任务才会继续执行。',
-      'brief': '这是长任务流安全检查点，不会自动调用模型。用户可以修改文件、补充要求、创建修复任务，确认后继续。',
+      'goal': goal.isEmpty
+          ? '等待用户检查前序输出、调整方向或确认继续。确认后把该任务标记完成，后续依赖任务才会继续执行。'
+          : goal,
+      'brief': brief.isEmpty
+          ? '这是长任务流安全检查点，不会自动调用模型。用户可以修改文件、补充要求、创建修复任务，确认后继续。'
+          : brief,
       'depends_on': dependsOn,
       'source_paths': _pathPolicyService.stringList(sourcePaths),
       'output_paths': _pathPolicyService.stringList(outputPaths),
@@ -609,6 +671,7 @@ class LongTaskTaskFactoryService {
         'persistent_context_paths': persistentPaths,
         if (runtimeBaselineId.trim().isNotEmpty)
           'runtime_baseline_id': runtimeBaselineId.trim(),
+        ...metadataExtras,
       },
       'tool_hint': '检查点任务只等待用户确认；通常不需要执行模型。',
     }, createdAt);

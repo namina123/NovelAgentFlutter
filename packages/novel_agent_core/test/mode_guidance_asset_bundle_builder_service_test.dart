@@ -57,7 +57,7 @@ void main() {
       );
       expect(
         bundle.markdownPathFor(bundle.styleProfiles.single.id),
-        'styles/seed_autopilot_style.md',
+        'assets/styles/seed_autopilot_style.md',
       );
     });
 

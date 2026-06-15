@@ -53,7 +53,7 @@ class ModeGuidanceProjectionDocumentService {
 2. 先确认长期约束，再扩张章节计划
 3. 不要把未确认脑洞当作既定事实
 ''',
-      'world/seed_autopilot_world_anchor.md':
+      'assets/world/seed_autopilot_world_anchor.md':
           '''
 # 世界锚点
 
@@ -75,7 +75,7 @@ $protagonistDrive
 这份文档只定义主角长期驱动力，不代表完整角色卡。  
 后续如需扩写角色履历、关系与阶段状态，应在此基础上继续补全。
 ''',
-      'styles/seed_autopilot_style.md':
+      'assets/styles/seed_autopilot_style.md':
           '''
 # 风格目标
 
@@ -101,7 +101,7 @@ $styleTarget
     final ending = values['ending_commitment'] ?? '';
     final style = values['style_and_boundaries'] ?? '';
     return <String, String>{
-      'outline/full_outline_consensus_overview.md':
+      'outlines/story/full_outline_consensus_overview.md':
           '''
 # 全书共识总览
 
@@ -131,7 +131,7 @@ $mainArc
 这里先记录核心角色与冲突焦点。  
 即使完整角色卡还未展开，后续总纲与卷纲也应围绕这些焦点推进。
 ''',
-      'volume_outlines/full_outline_consensus_volumes.md':
+      'outlines/volumes/full_outline_consensus_volumes.md':
           '''
 # 分卷共识
 
@@ -155,7 +155,7 @@ $volumeMap
 2. 主线和结局方向不得在未确认的情况下漂移
 3. 重大结构变更前需要回到用户确认
 ''',
-      'styles/full_outline_consensus_style.md':
+      'assets/styles/full_outline_consensus_style.md':
           '''
 # 全书共拟风格
 

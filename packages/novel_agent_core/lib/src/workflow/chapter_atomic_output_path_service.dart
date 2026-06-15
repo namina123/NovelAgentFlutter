@@ -72,7 +72,7 @@ class ChapterAtomicOutputPathService {
         };
       case 'world_update':
         return <String, Object?>{
-          'world': 'world/$title.md',
+          'world': 'assets/world/$title.md',
           'tracking': 'tracking/memory_updates/$title.md',
         };
       default:

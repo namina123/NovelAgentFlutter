@@ -27,6 +27,8 @@ import 'project_writing_execution_contract_service.dart';
 import 'project_workflow_runtime_bridge_service.dart';
 import 'project_workflow_review_runtime_service.dart';
 import 'project_workflow_reviewer_dispatch_service.dart';
+import 'project_workflow_task_selection_service.dart';
+import 'task_center_runtime_query_port.dart';
 import 'workflow_runtime_satisfied_output_path_service.dart';
 import 'workflow_runtime_task_semantics_service.dart';
 
@@ -50,7 +52,7 @@ typedef LoadWorkflowAvailableAgents =
 typedef LoadWorkflowAvailableAgentGroups =
     Future<List<JsonMap>> Function(ProjectDescriptor project);
 
-class ProjectWorkflowRuntimeService {
+class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
   ProjectWorkflowRuntimeService({
     required ProjectTaskRepository taskRepository,
     required ProjectPromptTemplateService promptTemplateService,
@@ -132,6 +134,16 @@ class ProjectWorkflowRuntimeService {
              taskDefinitionService:
                  taskDefinitionService ?? TaskDefinitionService(),
            ),
+       _workflowTaskSelectionService = ProjectWorkflowTaskSelectionService(
+         taskSelectionService:
+             taskSelectionService ??
+             TaskSelectionService(
+               taskDefinitionService:
+                   taskDefinitionService ?? TaskDefinitionService(),
+             ),
+         longTaskPathPolicyService:
+             longTaskPathPolicyService ?? LongTaskPathPolicyService(),
+       ),
        _taskQueueOptionService =
            taskQueueOptionService ?? TaskQueueOptionService(),
        _taskQueueStopPolicyService =
@@ -410,6 +422,7 @@ class ProjectWorkflowRuntimeService {
   final LoadWorkflowAvailableAgentGroups? _loadAvailableAgentGroups;
   final TaskDefinitionService _taskDefinitionService;
   final TaskSelectionService _taskSelectionService;
+  final ProjectWorkflowTaskSelectionService _workflowTaskSelectionService;
   final TaskQueueOptionService _taskQueueOptionService;
   final TaskQueueStopPolicyService _taskQueueStopPolicyService;
   final TaskQueuePreflightService _taskQueuePreflightService;
@@ -549,7 +562,7 @@ class ProjectWorkflowRuntimeService {
     ProjectDescriptor project, {
     JsonMap filters = const <String, Object?>{},
   }) async {
-    return _workflowScopedTasks(
+    return _workflowTaskSelectionService.workflowScopedTasks(
       await listWorkflowTasks(project, filters: filters),
     );
   }
@@ -559,11 +572,11 @@ class ProjectWorkflowRuntimeService {
     JsonMap filters = const <String, Object?>{},
   }) async {
     // 中文注释: 下一可运行任务完全复用共享调度规则。
-    var tasks = _workflowScopedTasks(
+    var tasks = _workflowTaskSelectionService.workflowScopedTasks(
       await listWorkflowTasks(project, filters: filters),
     );
-    var primaryTasks = _workflowPrimaryTasks(tasks);
-    var nextTask = _nextRunnablePrimaryTask(
+    var primaryTasks = _workflowTaskSelectionService.workflowPrimaryTasks(tasks);
+    var nextTask = _workflowTaskSelectionService.nextRunnablePrimaryTask(
       primaryTasks: primaryTasks,
       allTasks: tasks,
     );
@@ -576,11 +589,11 @@ class ProjectWorkflowRuntimeService {
       return <String, Object?>{};
     }
     if (ValueReaders.boolValue(materialized['materialized'])) {
-      tasks = _workflowScopedTasks(
+      tasks = _workflowTaskSelectionService.workflowScopedTasks(
         await listWorkflowTasks(project, filters: filters),
       );
-      primaryTasks = _workflowPrimaryTasks(tasks);
-      nextTask = _nextRunnablePrimaryTask(
+      primaryTasks = _workflowTaskSelectionService.workflowPrimaryTasks(tasks);
+      nextTask = _workflowTaskSelectionService.nextRunnablePrimaryTask(
         primaryTasks: primaryTasks,
         allTasks: tasks,
       );
@@ -607,11 +620,11 @@ class ProjectWorkflowRuntimeService {
     JsonMap filters = const <String, Object?>{},
   }) async {
     // 中文注释: 受控队列默认只推进主链 primary task，checkpoint follow-up 留给显式动作或人工检查点收口。
-    var tasks = _workflowScopedTasks(
+    var tasks = _workflowTaskSelectionService.workflowScopedTasks(
       await listWorkflowTasks(project, filters: filters),
     );
-    var primaryTasks = _workflowPrimaryTasks(tasks);
-    var nextTask = _nextRunnablePrimaryTask(
+    var primaryTasks = _workflowTaskSelectionService.workflowPrimaryTasks(tasks);
+    var nextTask = _workflowTaskSelectionService.nextRunnablePrimaryTask(
       primaryTasks: primaryTasks,
       allTasks: tasks,
     );
@@ -622,11 +635,11 @@ class ProjectWorkflowRuntimeService {
         .ensureMaterializedQueueForNextTask(project, tasks);
     if (ValueReaders.boolValue(materialized['ok']) &&
         ValueReaders.boolValue(materialized['materialized'])) {
-      tasks = _workflowScopedTasks(
+      tasks = _workflowTaskSelectionService.workflowScopedTasks(
         await listWorkflowTasks(project, filters: filters),
       );
-      primaryTasks = _workflowPrimaryTasks(tasks);
-      nextTask = _nextRunnablePrimaryTask(
+      primaryTasks = _workflowTaskSelectionService.workflowPrimaryTasks(tasks);
+      nextTask = _workflowTaskSelectionService.nextRunnablePrimaryTask(
         primaryTasks: primaryTasks,
         allTasks: tasks,
       );
@@ -634,10 +647,11 @@ class ProjectWorkflowRuntimeService {
         return nextTask;
       }
     }
-    final deferredFollowupTask = _nextBlockingDeferredCheckpointFollowupTask(
-      tasks,
-      primaryTasks: primaryTasks,
-    );
+    final deferredFollowupTask = _workflowTaskSelectionService
+        .nextBlockingDeferredCheckpointFollowupTask(
+          tasks,
+          primaryTasks: primaryTasks,
+        );
     if (deferredFollowupTask.isNotEmpty) {
       return deferredFollowupTask;
     }
@@ -649,7 +663,7 @@ class ProjectWorkflowRuntimeService {
     JsonMap filters = const <String, Object?>{},
   }) async {
     // 中文注释: 下一后处理任务与普通 runnable 分离选择，保持旧项目语义。
-    final tasks = _workflowScopedTasks(
+    final tasks = _workflowTaskSelectionService.workflowScopedTasks(
       await listWorkflowTasks(project, filters: filters),
     );
     return _taskSelectionService.nextPostprocessTaskFromTasks(tasks);
@@ -660,7 +674,7 @@ class ProjectWorkflowRuntimeService {
     JsonMap filters = const <String, Object?>{},
   }) async {
     // 中文注释: 链路视图按 plan 分组并保留依赖/检查点信息，供 GUI/CLI 共用同一份恢复快照。
-    final tasks = _workflowScopedTasks(
+    final tasks = _workflowTaskSelectionService.workflowScopedTasks(
       await listWorkflowTasks(project, filters: filters),
     );
     final view = _taskChainViewService.buildView(tasks);
@@ -2879,7 +2893,7 @@ class ProjectWorkflowRuntimeService {
         continue;
       }
       final existing = await _taskRepository.readTextFile(project, path);
-      if (existing != null) {
+      if ((existing ?? '').trim().isNotEmpty) {
         continue;
       }
       missingPaths.add(path);
@@ -5390,152 +5404,56 @@ class ProjectWorkflowRuntimeService {
   }
 
   List<JsonMap> _workflowScopedTasks(List<JsonMap> tasks) {
-    // 中文注释: workflow runtime 优先只调度正式 plan 链任务，避免项目内普通/遗留任务把长任务 next 选偏。
-    final plannedTasks = tasks
-        .where(_belongsToWorkflowPlan)
-        .toList(growable: false);
-    if (plannedTasks.isEmpty) {
-      return tasks;
-    }
-    final recognizedPlannedTasks = plannedTasks
-        .where(_isRecognizedWorkflowPlanTask)
-        .toList(growable: false);
-    return recognizedPlannedTasks.isNotEmpty
-        ? recognizedPlannedTasks
-        : plannedTasks;
+    // 中文注释: 兼容旧调用点的薄包装，正式 workflow 选路已迁出到 ProjectWorkflowTaskSelectionService。
+    return _workflowTaskSelectionService.workflowScopedTasks(tasks);
   }
 
   List<JsonMap> _workflowPrimaryTasks(List<JsonMap> tasks) {
-    // 中文注释: checkpoint follow-up review 仍是正式任务，但不应默认卡住主链章节推进与扩窗。
-    final primaryTasks = tasks
-        .where((task) => !_isDeferredCheckpointFollowupTask(task))
-        .toList(growable: false);
-    return primaryTasks.isEmpty ? tasks : primaryTasks;
+    // 中文注释: 兼容旧调用点的薄包装，正式主链筛选已迁出到 ProjectWorkflowTaskSelectionService。
+    return _workflowTaskSelectionService.workflowPrimaryTasks(tasks);
   }
 
   JsonMap _nextRunnablePrimaryTask({
     required List<JsonMap> primaryTasks,
     required List<JsonMap> allTasks,
   }) {
-    if (primaryTasks.isEmpty) {
-      return const <String, Object?>{};
-    }
-    // 中文注释: 主链筛选时仍需保留已成功的 deferred follow-up 作为依赖证据，
-    // 否则 revision/后续章节会因为依赖图被截断而被误判成不可运行。
-    final selectionPool = <JsonMap>[
-      ...primaryTasks,
-      ...allTasks.where(
-        (task) =>
-            !primaryTasks.contains(task) &&
-            ValueReaders.stringValue(task['status']) ==
-                TaskRuntimeConstants.statusSucceeded,
-      ),
-    ];
-    return _taskSelectionService.nextRunnableTaskFromTasks(selectionPool);
+    // 中文注释: 兼容旧调用点的薄包装，主链下一步选择已迁出到专用 service。
+    return _workflowTaskSelectionService.nextRunnablePrimaryTask(
+      primaryTasks: primaryTasks,
+      allTasks: allTasks,
+    );
   }
 
   bool _belongsToWorkflowPlan(JsonMap task) {
-    final metadata = ValueReaders.mapValue(task['metadata']);
-    if (ValueReaders.stringValue(metadata['plan_id']).trim().isNotEmpty) {
-      return true;
-    }
-    if (ValueReaders.stringValue(metadata['generated_by']).trim().isNotEmpty) {
-      return true;
-    }
-    if (ValueReaders.stringValue(metadata['origin']).trim().isNotEmpty) {
-      return true;
-    }
-    final id = ValueReaders.stringValue(task['id']).trim();
-    final relativePath = ValueReaders.stringValue(task['relative_path']).trim();
-    return id.startsWith('plan_') || relativePath.contains('plan_');
+    // 中文注释: 兼容旧调用点的薄包装，plan 边界判断已迁出到专用 service。
+    return _workflowTaskSelectionService.belongsToWorkflowPlan(task);
   }
 
   bool _isRecognizedWorkflowPlanTask(JsonMap task) {
-    final metadata = ValueReaders.mapValue(task['metadata']);
-    if (ValueReaders.stringValue(metadata['origin']).trim().isNotEmpty) {
-      return true;
-    }
-    final generatedBy = ValueReaders.stringValue(
-      metadata['generated_by'],
-    ).trim();
-    if (generatedBy == 'LongTaskPlanner' || generatedBy == 'LongTaskRevision') {
-      return true;
-    }
-    final planId = ValueReaders.stringValue(metadata['plan_id']).trim();
-    if (planId.isEmpty) {
-      return true;
-    }
-    return _hasCanonicalWorkflowTaskPath(task);
+    // 中文注释: 兼容旧调用点的薄包装，recognition 规则已迁出到专用 service。
+    return _workflowTaskSelectionService.isRecognizedWorkflowPlanTask(task);
   }
 
   bool _hasCanonicalWorkflowTaskPath(JsonMap task) {
-    final taskId = ValueReaders.stringValue(task['id']).trim();
-    if (taskId.isEmpty) {
-      return false;
-    }
-    final expectedPath =
-        'tasks/${_longTaskPathPolicyService.safeId(taskId, fallbackPrefix: 'task')}.json';
-    return ValueReaders.stringValue(
-          task['relative_path'],
-        ).trim().replaceAll('\\', '/') ==
-        expectedPath;
+    // 中文注释: 兼容旧调用点的薄包装，canonical 路径校验已迁出到专用 service。
+    return _workflowTaskSelectionService.hasCanonicalWorkflowTaskPath(task);
   }
 
   bool _isDeferredCheckpointFollowupTask(JsonMap task) {
-    return ValueReaders.stringValue(
-          ValueReaders.mapValue(task['metadata'])['origin'],
-        ).trim() ==
-        'checkpoint_review_suggestion';
+    // 中文注释: 兼容旧调用点的薄包装，follow-up 识别已迁出到专用 service。
+    return _workflowTaskSelectionService.isDeferredCheckpointFollowupTask(task);
   }
 
   JsonMap _nextBlockingDeferredCheckpointFollowupTask(
     List<JsonMap> tasks, {
     required List<JsonMap> primaryTasks,
   }) {
-    // 中文注释: 若主链任务被自动派生的 checkpoint follow-up 依赖卡住，队列需要先跑这些 follow-up 解锁主链。
-    final deferredById = <String, JsonMap>{};
-    for (final task in tasks) {
-      if (!_isDeferredCheckpointFollowupTask(task)) {
-        continue;
-      }
-      final taskId = ValueReaders.stringValue(task['id']).trim();
-      if (taskId.isEmpty) {
-        continue;
-      }
-      deferredById[taskId] = task;
-    }
-    if (deferredById.isEmpty) {
-      return const <String, Object?>{};
-    }
-    final blockingDeferredTasks = <JsonMap>[];
-    final addedIds = <String>{};
-    for (final task in primaryTasks) {
-      final status = ValueReaders.stringValue(task['status']).trim();
-      if (TaskRuntimeConstants.terminalStatuses.contains(status)) {
-        continue;
-      }
-      for (final dependency in ValueReaders.stringList(task['depends_on'])) {
-        final deferredTask = deferredById[dependency];
-        if (deferredTask == null) {
-          continue;
-        }
-        if (addedIds.add(dependency)) {
-          blockingDeferredTasks.add(deferredTask);
-        }
-      }
-    }
-    if (blockingDeferredTasks.isEmpty) {
-      return const <String, Object?>{};
-    }
-    final candidatePool = <JsonMap>[
-      ...blockingDeferredTasks,
-      ...tasks.where(
-        (task) =>
-            ValueReaders.stringValue(task['status']).trim() ==
-            TaskRuntimeConstants.statusSucceeded,
-      ),
-    ];
-    return _taskSelectionService.nextRunnableTaskFromTasks(candidatePool);
+    // 中文注释: 兼容旧调用点的薄包装，blocking follow-up 选择已迁出到专用 service。
+    return _workflowTaskSelectionService
+        .nextBlockingDeferredCheckpointFollowupTask(
+          tasks,
+          primaryTasks: primaryTasks,
+        );
   }
 
   static BuildLongTaskPlanUseCase _defaultBuildLongTaskPlanUseCase(

@@ -482,6 +482,9 @@ class _FakeLongTaskStationActionHandler
   void onLongTaskStationOpenProjectRequested(String runId) {}
 
   @override
+  void onLongTaskStationTaskCenterRequested() {}
+
+  @override
   void onLongTaskStationPauseRequested(String runId) {
     pauseRequestedRunIds.add(runId);
   }

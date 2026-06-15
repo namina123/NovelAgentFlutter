@@ -7,18 +7,39 @@ void main() {
 
     test('hides legacy compatibility roots from default resource tree', () {
       expect(service.shouldHideFromDefaultTree('drafts/ch01.md'), isTrue);
+      expect(service.shouldHideFromDefaultTree('outline/outline.md'), isTrue);
+      expect(
+        service.shouldHideFromDefaultTree('volume_outlines/index.md'),
+        isTrue,
+      );
+      expect(
+        service.shouldHideFromDefaultTree('chapter_outlines/index.md'),
+        isTrue,
+      );
       expect(
         service.shouldHideFromDefaultTree('specs/project_brief.md'),
         isTrue,
       );
       expect(service.shouldHideFromDefaultTree('characters/苏九.md'), isTrue);
+      expect(service.shouldHideFromDefaultTree('styles/连载风格.md'), isTrue);
+      expect(service.shouldHideFromDefaultTree('world/世界规则.md'), isTrue);
       expect(service.shouldHideFromDefaultTree('inspiration/seed.md'), isTrue);
+      expect(service.shouldHideFromDefaultTree('knowledge/神话资料.md'), isTrue);
+      expect(service.shouldHideFromDefaultTree('summaries/ch01.md'), isTrue);
+      expect(
+        service.shouldHideFromDefaultTree('constraints/opening.md'),
+        isTrue,
+      );
+      expect(service.shouldHideFromDefaultTree('continuity/state.md'), isTrue);
+      expect(service.shouldHideFromDefaultTree('reviews/review_01.md'), isTrue);
       expect(service.isLegacyCompatibilityPath('drafts/ch01.md'), isTrue);
+      expect(service.isLegacyCompatibilityPath('outline/outline.md'), isTrue);
       expect(
         service.isLegacyCompatibilityPath('specs/project_brief.md'),
         isTrue,
       );
       expect(service.isLegacyCompatibilityPath('characters/苏九.md'), isTrue);
+      expect(service.isLegacyCompatibilityPath('world/世界规则.md'), isTrue);
       expect(service.isLegacyCompatibilityPath('inspiration/seed.md'), isTrue);
     });
 

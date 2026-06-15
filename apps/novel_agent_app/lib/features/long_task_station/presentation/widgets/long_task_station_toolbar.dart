@@ -10,6 +10,7 @@ class LongTaskStationToolbar extends StatelessWidget {
     required this.description,
     required this.supervisorStatusLabel,
     required this.onBackRequested,
+    required this.onTaskCenterRequested,
     required this.onRefreshRequested,
   });
 
@@ -17,6 +18,7 @@ class LongTaskStationToolbar extends StatelessWidget {
   final String description;
   final String supervisorStatusLabel;
   final VoidCallback onBackRequested;
+  final VoidCallback onTaskCenterRequested;
   final VoidCallback onRefreshRequested;
 
   @override
@@ -30,6 +32,11 @@ class LongTaskStationToolbar extends StatelessWidget {
       ),
       onBackRequested: onBackRequested,
       actions: [
+        ToolbarIconButton(
+          icon: Icons.tune_rounded,
+          tooltip: '任务中心',
+          onPressed: onTaskCenterRequested,
+        ),
         ToolbarIconButton(
           icon: Icons.refresh_rounded,
           tooltip: '刷新',

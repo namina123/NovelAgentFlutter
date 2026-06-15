@@ -29,6 +29,11 @@ void main() {
           ProjectCreationExpressionConstraintDefaultsSettingsService
               .builtinFallbackProfileIds,
         );
+        expect(selection.profileIds, <String>[
+          'de_ai',
+          'strict_pov_boundary',
+          'low_jargon_narration',
+        ]);
       },
     );
 

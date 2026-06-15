@@ -5,6 +5,23 @@ import 'book_deconstruction_chapter_outline.dart';
 class BookDeconstructionTargetPathService {
   const BookDeconstructionTargetPathService();
 
+  String sourceArchivePath(String sourceAbsolutePath) {
+    // 中文注释: 原文归档路径统一收口在 sources/original/，避免拆书源文本继续散在内存或正文目录里。
+    final normalized = sourceAbsolutePath.replaceAll('\\', '/').trim();
+    final fileName = normalized.split('/').last;
+    final separatorIndex = fileName.lastIndexOf('.');
+    final stem = separatorIndex > 0
+        ? fileName.substring(0, separatorIndex)
+        : fileName;
+    final cleanStem = _safeId(stem);
+    return 'sources/original/book_deconstruction_source_$cleanStem.md';
+  }
+
+  String previewPath() {
+    // 中文注释: 预演纪要统一写入 analysis/，保持它与正文层和原文层隔离。
+    return 'analysis/book_deconstruction_preview.md';
+  }
+
   String premisePath(InspirationPremise premise, int index) {
     // 中文注释: 拆书前提默认回到现有 premise/ 目录，后续 UI/adapter 只需消费稳定路径提示即可。
     final suffix = index <= 0 ? 1 : index;
@@ -16,7 +33,10 @@ class BookDeconstructionTargetPathService {
     return 'outlines/story/book_deconstruction_story_outline.md';
   }
 
-  String chapterOutlinePath(BookDeconstructionChapterOutline outline, int index) {
+  String chapterOutlinePath(
+    BookDeconstructionChapterOutline outline,
+    int index,
+  ) {
     // 中文注释: 章级骨架沿用 outlines/chapters/，让后续一般小说与长任务都能直接复用。
     final sequence = outline.sequence > 0 ? outline.sequence : index;
     return 'outlines/chapters/book_deconstruction_chapter_$sequence.md';

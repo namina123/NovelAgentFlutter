@@ -2,10 +2,20 @@ import '../common/json_types.dart';
 import '../common/value_readers.dart';
 import '../project/project_storage_strategy.dart';
 import 'project_workspace_catalog.dart';
+import 'project_fact_acquisition_contract.dart';
+import 'project_fact_acquisition_contract_service.dart';
 import '../tools/project_storage_aware_tool_capability_matrix.dart';
 import '../tools/project_tool_exposure_context.dart';
 
 class ProjectPromptContract {
+  ProjectPromptContract({
+    ProjectFactAcquisitionContractService? factAcquisitionContractService,
+  }) : _factAcquisitionContractService =
+           factAcquisitionContractService ??
+           const ProjectFactAcquisitionContractService();
+
+  final ProjectFactAcquisitionContractService _factAcquisitionContractService;
+
   String workspaceConvention() {
     // 中文注释: 工作空间约定集中由 core 输出，避免工具策略、上下文包和宿主页面各说各话。
     final lines = <String>[
@@ -25,7 +35,7 @@ class ProjectPromptContract {
     lines.add('- $advanced。');
     lines.add('');
     lines.add(
-      '归档原则：题材、创作意图和项目承诺放 premise/；总纲、卷纲、章纲放 outlines/story/、outlines/volumes/、outlines/chapters/；章节正文、样章与连续正文放 chapters/；局部片段和场景稿放 scenes/；角色、组织、地点、物品、风格、世界、伏笔、关系、时间线放 assets/ 子目录；任务文档放 tasks/；分析结果放 analysis/；导出结果放 exports/。',
+      '归档原则：题材、创作意图和项目承诺放 premise/；总纲、卷纲、章纲放 outlines/story/、outlines/volumes/、outlines/chapters/；正式章节正文与连续正文放 chapters/；样章、开篇验证稿和非正式章节级试写放 samples/；局部片段和场景稿放 scenes/；角色、组织、地点、物品、风格、世界、伏笔、关系、时间线放 assets/ 子目录；任务文档放 tasks/；分析结果放 analysis/；导出结果放 exports/。',
     );
     return lines.join('\n');
   }
@@ -39,6 +49,30 @@ class ProjectPromptContract {
         )
         .join('，');
     return '英文目录名是工具协议唯一合法路径；中文仅用于界面显示。显示映射：$parts。';
+  }
+
+  ProjectFactAcquisitionContract factAcquisitionContract({
+    required String workflowId,
+    String projectTypeId = 'novel',
+    String intent = '',
+  }) {
+    return _factAcquisitionContractService.build(
+      workflowId: workflowId,
+      projectTypeId: projectTypeId,
+      intent: intent,
+    );
+  }
+
+  String factAcquisitionGuidance({
+    required String workflowId,
+    String projectTypeId = 'novel',
+    String intent = '',
+  }) {
+    return factAcquisitionContract(
+      workflowId: workflowId,
+      projectTypeId: projectTypeId,
+      intent: intent,
+    ).renderMarkdown();
   }
 
   String sessionInfo(
@@ -179,7 +213,7 @@ class ProjectPromptContract {
       '1. 先判断用户真正要的是闲聊、创意选项、读取上下文、修订已有文件、生成正式产物，还是长任务推进。',
       '2. 不要为了显得主动而滥用工具；但需要项目事实、已有设定或文件写入时，也不要假装已经知道或已经保存。',
       '3. 用户要求“给我几个方案/选项/开局/方向”时，优先用选项工具展示可点击选择；不要把这种头脑风暴写入 chapters/。',
-      '4. 写入前确认内容类型：章节正文、样章和连续正文默认进 chapters/；局部片段或实验场景进 scenes/；总纲/卷纲/章纲分别进 outlines/story/、outlines/volumes/、outlines/chapters/；设定进 assets/world/，角色进 assets/characters/；摘要进 summaries/。',
+      '4. 写入前确认内容类型：正式章节正文和连续正文默认进 chapters/；样章、开篇验证稿和非正式章节级试写进 samples/；局部片段或实验场景进 scenes/；总纲/卷纲/章纲分别进 outlines/story/、outlines/volumes/、outlines/chapters/；设定进 assets/world/，角色进 assets/characters/；摘要进 summaries/。',
       '5. 修改或覆盖已有文件前先读取原文；修正同一个已存在文件时，优先 edit_project_file 精确修改，或在 write_project_file 中显式传 overwrite=true，避免生成重复文件。删除、恢复、覆盖等危险动作必须有明确用户意图，并尽量先备份。',
       '6. 共享叙事资产优先走专用工具：角色用 update_character_state，伏笔用 update_foreshadow_state，时间线用 update_timeline_state，关系用 update_relationship_state；不要把这些长期记忆混成随手写的普通 Markdown。',
       '7. 工具参数只写项目相对路径；Android/iOS 上也不要请求终端命令或外部用户目录权限。',

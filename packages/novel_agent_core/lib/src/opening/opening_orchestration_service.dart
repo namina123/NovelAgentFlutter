@@ -1,5 +1,6 @@
 import '../modes/mode_guidance_state.dart';
 import '../project/project_descriptor.dart';
+import '../project/project_fact_acquisition_contract_service.dart';
 import '../project/project_type_catalog_service.dart';
 import 'opening_intent_snapshot.dart';
 import 'opening_next_action_resolver.dart';
@@ -16,17 +17,22 @@ class OpeningOrchestrationService {
     OpeningReadinessEvaluator? readinessEvaluator,
     OpeningNextActionResolver? nextActionResolver,
     OpeningStageRecordBuilderService? stageRecordBuilderService,
+    ProjectFactAcquisitionContractService? factAcquisitionContractService,
   }) : _projectTypeCatalogService =
            projectTypeCatalogService ?? const ProjectTypeCatalogService(),
        _readinessEvaluator = readinessEvaluator ?? OpeningReadinessEvaluator(),
        _nextActionResolver = nextActionResolver ?? OpeningNextActionResolver(),
        _stageRecordBuilderService =
-           stageRecordBuilderService ?? OpeningStageRecordBuilderService();
+           stageRecordBuilderService ?? OpeningStageRecordBuilderService(),
+       _factAcquisitionContractService =
+           factAcquisitionContractService ??
+           const ProjectFactAcquisitionContractService();
 
   final ProjectTypeCatalogService _projectTypeCatalogService;
   final OpeningReadinessEvaluator _readinessEvaluator;
   final OpeningNextActionResolver _nextActionResolver;
   final OpeningStageRecordBuilderService _stageRecordBuilderService;
+  final ProjectFactAcquisitionContractService _factAcquisitionContractService;
 
   OpeningOrchestrationResult orchestrate({
     required ProjectDescriptor project,
@@ -51,6 +57,17 @@ class OpeningOrchestrationService {
       createdAt: previousState?.createdAt ?? timestamp,
       updatedAt: timestamp,
       modeGuidanceState: modeGuidanceState,
+      metadata: <String, Object?>{
+        'fact_acquisition_contract': _factAcquisitionContractService
+            .build(
+              workflowId: normalizedProjectType == 'long_novel'
+                  ? 'long_task_opening'
+                  : 'interactive_opening',
+              projectTypeId: normalizedProjectType,
+              intent: normalizedIntent.sessionGoalModeId,
+            )
+            .toJsonMap(),
+      },
     );
     final readiness = _readinessEvaluator.evaluate(baseState);
     final stageRecords = _stageRecordBuilderService.build(

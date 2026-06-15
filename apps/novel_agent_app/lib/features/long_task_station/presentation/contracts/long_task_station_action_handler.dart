@@ -14,4 +14,6 @@ abstract class LongTaskStationActionHandler {
   void onLongTaskStationResourceRequested(String runId, String relativePath);
 
   void onLongTaskStationCurrentProjectFilterToggled(bool selected);
+
+  void onLongTaskStationTaskCenterRequested();
 }

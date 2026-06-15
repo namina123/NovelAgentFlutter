@@ -17,13 +17,23 @@ class ProjectImportWorkspaceCommandViewDataService {
     List<String> sourcePaths = const <String>[],
     String requestedTargetDirectory = '',
     bool requestedAutoDeconstruct = false,
+    bool? requestedSmartAnalysis,
+    String analysisAgentId = '',
+    String analysisAgentGroupId = '',
     String status = '',
   }) {
+    final defaultSmartAnalysis =
+        projectType.trim() != BookDeconstructionConstants.projectTypeId;
+    final resolvedSmartAnalysis =
+        requestedSmartAnalysis ?? defaultSmartAnalysis;
     final policy = _actionPolicyService.build(
       projectType: projectType,
       sourcePaths: sourcePaths,
       requestedTargetDirectory: requestedTargetDirectory,
       requestedAutoDeconstruct: requestedAutoDeconstruct,
+      requestedSmartAnalysis: resolvedSmartAnalysis,
+      analysisAgentId: analysisAgentId,
+      analysisAgentGroupId: analysisAgentGroupId,
     );
     return WorkspaceCommandViewData(
       mode: WorkspaceCommandMode.importFiles,
@@ -43,6 +53,10 @@ class ProjectImportWorkspaceCommandViewDataService {
       targetDirectory: policy.resolvedTargetDirectory,
       autoDeconstruct: policy.autoDeconstruct,
       canAutoDeconstruct: policy.canAutoDeconstruct,
+      smartAnalysis: policy.smartAnalysis,
+      canSmartAnalyze: policy.canSmartAnalyze,
+      analysisAgentId: policy.analysisAgentId,
+      analysisAgentGroupId: policy.analysisAgentGroupId,
       importFileSelectionHint: policy.fileSelectionHint,
       importOutputHint: policy.outputHint,
     );
@@ -57,6 +71,9 @@ class ProjectImportWorkspaceCommandViewDataService {
       sourcePaths: request.sourcePaths,
       requestedTargetDirectory: request.targetDirectory,
       requestedAutoDeconstruct: request.autoDeconstruct,
+      requestedSmartAnalysis: request.smartAnalysis,
+      analysisAgentId: request.analysisAgentId,
+      analysisAgentGroupId: request.analysisAgentGroupId,
       status: status,
     );
   }
@@ -69,6 +86,9 @@ class ProjectImportWorkspaceCommandViewDataService {
       sourcePaths: request.sourcePaths,
       requestedTargetDirectory: request.targetDirectory,
       requestedAutoDeconstruct: request.autoDeconstruct,
+      requestedSmartAnalysis: request.smartAnalysis,
+      analysisAgentId: request.analysisAgentId,
+      analysisAgentGroupId: request.analysisAgentGroupId,
     );
   }
 
@@ -76,6 +96,6 @@ class ProjectImportWorkspaceCommandViewDataService {
     if (projectType == BookDeconstructionConstants.projectTypeId) {
       return '选择源文稿导入当前拆书项目；支持自动拆书预演，并把纪要写回项目。';
     }
-    return '选择一个或多个本地文件导入当前项目；支持对单个文本或 Markdown 文件进行自动拆书预演。';
+    return '选择一个或多个本地文件导入当前项目；可默认开启智能分析，先判断资料更像正文、设定还是参考。';
   }
 }

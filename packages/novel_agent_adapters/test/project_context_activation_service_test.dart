@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
@@ -993,6 +994,50 @@ void main() {
     test(
       'buildReport recognizes Chinese chapter numerals for continuity handoff selection',
       () async {
+        final continuitySetupService = ProjectGeneralContinuitySetupService(
+          continuityRepository: ProjectContinuityRepository(
+            workspacePort: workspacePort,
+          ),
+          inputRepository: ProjectContinuityInputRepository(
+            workspacePort: workspacePort,
+          ),
+        );
+        const projectRootPrefix = 'HFVV_上下文桥接测试/';
+        await continuitySetupService.ensureInitialized(project);
+        await _writeFile(
+          tempDirectory.path,
+          '${projectRootPrefix}tracking/continuity/bundle.json',
+          jsonEncode(<String, Object?>{
+            'display_name': '普通分章续写连续性总包',
+            'default_frame_id': 'mainline',
+            'default_mechanic_profile_id': 'default_general_project',
+            'scope_ids': <String>['global'],
+          }),
+        );
+        await _writeFile(
+          tempDirectory.path,
+          '${projectRootPrefix}tracking/continuity/scopes/global.json',
+          jsonEncode(<String, Object?>{
+            'scope': <String, Object?>{
+              'id': 'global',
+              'display_name': '全局连续性作用域',
+              'kind': 'global',
+            },
+          }),
+        );
+        await _writeFile(
+          tempDirectory.path,
+          '${projectRootPrefix}tracking/continuity/frames/mainline.json',
+          jsonEncode(<String, Object?>{
+            'frame': <String, Object?>{
+              'id': 'mainline',
+              'display_name': '主线连续性框架',
+              'scope_id': 'global',
+              'mechanic_profile_id': 'default_general_project',
+              'relation': 'sameLine',
+            },
+          }),
+        );
         await _writeFile(
           tempDirectory.path,
           'summaries/第02章：摸底.summary.md',
@@ -1026,6 +1071,9 @@ void main() {
         expect(
           report.selectedItemIds,
           containsAll(<String>[
+            'file:HFVV_上下文桥接测试/tracking/continuity/bundle.json',
+            'file:HFVV_上下文桥接测试/tracking/continuity/scopes/global.json',
+            'file:HFVV_上下文桥接测试/tracking/continuity/frames/mainline.json',
             'file:summaries/第02章：摸底.summary.md',
             'file:assets/timeline/第02章_摸底.timeline.md',
             'file:.novel_agent/continuity/deliveries/submission_chapters_第02章_摸底.md.json',

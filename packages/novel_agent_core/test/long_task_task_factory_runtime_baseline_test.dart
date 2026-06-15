@@ -77,5 +77,58 @@ void main() {
         isTrue,
       );
     });
+
+    test('seed to full sample gate carries style and outline readiness contract', () {
+      final tasks = service.buildTasks(
+        TaskRuntimeConstants.modeSeedToFullNovel,
+        'plan_seed_ready',
+        options: const <String, Object?>{
+          'seed_prompt': '历史轻喜剧长篇',
+          'chapter_count': 2,
+        },
+        createdAt: '2026-05-25T00:00:00Z',
+      );
+      final checkpoint = tasks.firstWhere(
+        (task) =>
+            ValueReaders.stringValue(task['task_type']) == 'checkpoint' &&
+            ValueReaders.boolValue(
+              ValueReaders.mapValue(
+                task['metadata'],
+              )[LongTaskSampleReadinessService.readinessCheckpointFlag],
+            ),
+      );
+      final sampleTask = tasks.firstWhere(
+        (task) =>
+            ValueReaders.stringValue(task['task_type']) == 'chapter' &&
+            ValueReaders.stringValue(
+                  ValueReaders.mapValue(task['metadata'])['stage'],
+                ) ==
+                'sample',
+      );
+
+      expect(
+        ValueReaders.stringList(checkpoint['source_paths']),
+        containsAll(<String>[
+          'specs/project_spec.md',
+          'styles/全书风格指南.md',
+          'outlines/story/总纲.md',
+          'outlines/chapters/章节任务清单.md',
+          'outlines/volumes',
+        ]),
+      );
+      expect(
+        ValueReaders.stringList(sampleTask['source_paths']),
+        containsAll(<String>[
+          'specs/project_spec.md',
+          'styles/全书风格指南.md',
+          'outlines/story/总纲.md',
+          'outlines/chapters/章节任务清单.md',
+        ]),
+      );
+      expect(
+        ValueReaders.stringList(sampleTask['output_paths']),
+        contains('samples/样章_seed_to_full.md'),
+      );
+    });
   });
 }

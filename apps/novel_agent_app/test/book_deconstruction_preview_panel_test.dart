@@ -63,8 +63,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('后续用途与共享资料桥'), findsOneWidget);
-      expect(find.text('普通续写'), findsOneWidget);
-      expect(find.text('长任务续写'), findsOneWidget);
+      expect(find.text('continuation'), findsOneWidget);
+      expect(find.text('fanfic'), findsOneWidget);
       expect(find.text('共享资料沉淀'), findsOneWidget);
       expect(find.text('解说与分析'), findsOneWidget);
       expect(find.text('本次已生成的可复用资料'), findsOneWidget);

@@ -5,14 +5,17 @@ import '../../../../../shared/theme/novel_theme_context.dart';
 import '../../../../../shared/widgets/panel_surface.dart';
 import '../contracts/conversation_action_handler.dart';
 import '../models/conversation_opening_state_view_data.dart';
+import '../models/primary_action_view_data.dart';
 import 'conversation_opening_state_summary.dart';
 import 'conversation_supplement_section.dart';
+import 'primary_action_list.dart';
 
 class WorkflowGuideCard extends StatelessWidget {
   const WorkflowGuideCard({
     super.key,
     required this.title,
     required this.description,
+    this.actions = const <PrimaryActionViewData>[],
     this.openingState,
     this.actionHandler,
     this.supplement,
@@ -20,6 +23,7 @@ class WorkflowGuideCard extends StatelessWidget {
 
   final String title;
   final String description;
+  final List<PrimaryActionViewData> actions;
   final ConversationOpeningStateViewData? openingState;
   final ConversationActionHandler? actionHandler;
   final Widget? supplement;
@@ -48,11 +52,35 @@ class WorkflowGuideCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (openingState != null && actionHandler != null)
-              ConversationOpeningStateSummary(
-                state: openingState!,
-                actionHandler: actionHandler!,
-                eyebrow: title,
-                showActionButton: false,
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ConversationOpeningStateSummary(
+                    state: openingState!,
+                    actionHandler: actionHandler!,
+                    eyebrow: title,
+                    showActionButton: false,
+                  ),
+                  if (_shouldShowOpeningDescription()) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      description,
+                      style: TextStyle(
+                        color: colors.mutedTextColor,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w500,
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
+                  if (_shouldShowActionList()) ...[
+                    const SizedBox(height: 10),
+                    PrimaryActionList(
+                      actions: actions,
+                      actionHandler: actionHandler!,
+                    ),
+                  ],
+                ],
               )
             else ...[
               Text(
@@ -92,5 +120,25 @@ class WorkflowGuideCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  bool _shouldShowOpeningDescription() {
+    if (openingState == null) {
+      return false;
+    }
+    if (description.trim().isEmpty) {
+      return false;
+    }
+    return !openingState!.preferSingleAction || actions.length > 1;
+  }
+
+  bool _shouldShowActionList() {
+    if (openingState == null) {
+      return false;
+    }
+    if (actionHandler == null || actions.isEmpty) {
+      return false;
+    }
+    return !openingState!.preferSingleAction || actions.length > 1;
   }
 }

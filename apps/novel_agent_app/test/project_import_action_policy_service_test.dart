@@ -29,6 +29,8 @@ void main() {
           ),
           'chapters/book_deconstruction_reference_book.md',
         );
+        expect(policy.canSmartAnalyze, isFalse);
+        expect(policy.smartAnalysis, isFalse);
       },
     );
 
@@ -46,6 +48,8 @@ void main() {
         expect(policy.canAutoDeconstruct, isFalse);
         expect(policy.autoDeconstruct, isFalse);
         expect(policy.outputHint, contains('.txt / .md / .markdown'));
+        expect(policy.canSmartAnalyze, isTrue);
+        expect(policy.smartAnalysis, isFalse);
       },
     );
 

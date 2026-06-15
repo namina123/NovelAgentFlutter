@@ -1,5 +1,6 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import '../project/project_narrative_artifact_path_policy_service.dart';
 import 'task_runtime_constants.dart';
 
 class TaskDefinitionService {
@@ -135,8 +136,9 @@ class TaskDefinitionService {
   }
 
   bool _isChapterLikePath(String path) {
-    final clean = path.trim().toLowerCase();
-    return clean.startsWith('chapters/') || clean.startsWith('scenes/');
+    return const ProjectNarrativeArtifactPathPolicyService().isChapterLikePath(
+      path,
+    );
   }
 
   JsonMap taskSummary(JsonMap task) {

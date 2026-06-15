@@ -31,6 +31,20 @@ void main() {
       expect(task['id'], 't2');
     });
 
+    test('does not select sample task before readiness checkpoint succeeds', () {
+      final task = selectionService.nextRunnableTaskFromTasks(<Object?>[
+        <String, Object?>{
+          'id': 'sample_001',
+          'title': '样章：开篇验证',
+          'task_type': 'chapter',
+          'status': TaskRuntimeConstants.statusQueued,
+          'metadata': const <String, Object?>{'stage': 'sample'},
+        },
+      ]);
+
+      expect(task, isEmpty);
+    });
+
     test('prevents transition out of terminal status', () {
       // 中文注释: 这里验证终态任务不能被错误恢复，避免宿主误把已完成任务重新推进。
       expect(

@@ -9,7 +9,7 @@ class ConversationSessionSendPreflightResult {
     required this.sessionState,
     required this.pressureSnapshot,
     required this.compactionDecision,
-    required this.sessionContextMarkdown,
+    required this.sessionPromptContext,
     required this.tokenBudgetSettings,
     required this.compactionGuidance,
     required this.compactionOutputPolicy,
@@ -20,7 +20,7 @@ class ConversationSessionSendPreflightResult {
   final ConversationSessionState sessionState;
   final SessionContextPressureSnapshot pressureSnapshot;
   final SessionCompactionDecision compactionDecision;
-  final String sessionContextMarkdown;
+  final SessionPromptContext sessionPromptContext;
   final SessionTokenBudgetSettings tokenBudgetSettings;
   final CompactionGuidanceContract compactionGuidance;
   final CompactionOutputPolicy compactionOutputPolicy;
@@ -28,6 +28,7 @@ class ConversationSessionSendPreflightResult {
   final RuntimeContinuationInstructionContract? runtimeContinuationInstruction;
 
   bool get didCompact => compactionDecision.shouldCompact;
+  String get sessionContextMarkdown => sessionPromptContext.contextMarkdown;
 }
 
 class ConversationSessionPreflightService {
@@ -100,7 +101,7 @@ class ConversationSessionPreflightService {
       settings: settings,
       baseFramingTokens: _baseFramingTokens(runtimeProfile),
     );
-    final sessionContextMarkdown = _sessionStateService.sessionContextMarkdown(
+    final sessionPromptContext = _sessionStateService.promptContext(
       sessionState,
       excludeLatestUserContent: excludeLatestUserContent,
       pressureSnapshot: renderedPressureSnapshot,
@@ -113,7 +114,7 @@ class ConversationSessionPreflightService {
       sessionState: sessionState,
       pressureSnapshot: renderedPressureSnapshot,
       compactionDecision: compactionDecision,
-      sessionContextMarkdown: sessionContextMarkdown,
+      sessionPromptContext: sessionPromptContext,
       tokenBudgetSettings: settings,
       compactionGuidance: compactionGuidance,
       compactionOutputPolicy: compactionOutputPolicy,

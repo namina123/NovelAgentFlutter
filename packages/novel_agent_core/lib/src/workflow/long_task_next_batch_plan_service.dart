@@ -4,6 +4,7 @@ import 'long_task_checkpoint_cadence_policy_service.dart';
 import 'long_task_covered_source_task_service.dart';
 import 'long_task_controller_profile_service.dart';
 import 'long_task_mode_service.dart';
+import 'long_task_sample_readiness_service.dart';
 import 'long_task_task_summary_service.dart';
 import 'long_task_unattended_strategy_service.dart';
 import 'task_runtime_constants.dart';
@@ -18,6 +19,7 @@ class LongTaskNextBatchPlanService {
     required TaskSelectionService taskSelectionService,
     LongTaskCheckpointCadencePolicyService? checkpointCadencePolicyService,
     LongTaskCoveredSourceTaskService? coveredSourceTaskService,
+    LongTaskSampleReadinessService? sampleReadinessService,
   }) : _modeService = modeService,
        _profileService = profileService,
        _unattendedStrategyService = unattendedStrategyService,
@@ -25,6 +27,8 @@ class LongTaskNextBatchPlanService {
        _taskSelectionService = taskSelectionService,
        _coveredSourceTaskService =
            coveredSourceTaskService ?? const LongTaskCoveredSourceTaskService(),
+       _sampleReadinessService =
+           sampleReadinessService ?? const LongTaskSampleReadinessService(),
        _checkpointCadencePolicyService =
            checkpointCadencePolicyService ??
            const LongTaskCheckpointCadencePolicyService();
@@ -35,6 +39,7 @@ class LongTaskNextBatchPlanService {
   final LongTaskTaskSummaryService _taskSummaryService;
   final TaskSelectionService _taskSelectionService;
   final LongTaskCoveredSourceTaskService _coveredSourceTaskService;
+  final LongTaskSampleReadinessService _sampleReadinessService;
   final LongTaskCheckpointCadencePolicyService _checkpointCadencePolicyService;
 
   JsonMap nextBatchPlan(
@@ -142,6 +147,18 @@ class LongTaskNextBatchPlanService {
       if (!TaskRuntimeConstants.runnableStatuses.contains(status)) {
         continue;
       }
+      if (_sampleReadinessService.isSampleTask(task) &&
+          !_sampleReadinessService.hasSatisfiedReadinessCheckpoint(
+            task,
+            sortedTasks,
+          )) {
+        blockers.add(<String, Object?>{
+          'reason': 'sample_readiness_not_confirmed',
+          'note': '样章仍缺少资料收集/风格/大纲确认检查点，当前不能派发。',
+          'task': _taskSummaryService.taskSummary(task),
+        });
+        continue;
+      }
       final missing = _missingDependencies(task, optimisticSucceeded);
       if (missing.isNotEmpty) {
         blockers.add(<String, Object?>{
@@ -183,16 +200,23 @@ class LongTaskNextBatchPlanService {
           'note': '长任务队列已全部进入终态。',
         };
       }
+      final blockerReason = blockers.isEmpty
+          ? 'blocked_dependencies'
+          : ValueReaders.stringValue(
+              blockers.first['reason'],
+              'blocked_dependencies',
+            );
+      final blockerNote = blockers.isEmpty
+          ? '当前没有依赖满足的可运行任务。'
+          : ValueReaders.stringValue(
+              blockers.first['note'],
+              '当前没有依赖满足的可运行任务。',
+            );
       return <String, Object?>{
         ...base,
         'action': 'wait_user',
-        'reason': blockers.isEmpty
-            ? 'blocked_dependencies'
-            : ValueReaders.stringValue(
-                blockers.first['reason'],
-                'blocked_dependencies',
-              ),
-        'note': '当前没有依赖满足的可运行任务。',
+        'reason': blockerReason,
+        'note': blockerNote,
         'blockers': blockers,
       };
     }

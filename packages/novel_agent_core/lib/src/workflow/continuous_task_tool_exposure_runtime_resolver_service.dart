@@ -1,4 +1,5 @@
 import '../agents/agent_group_tool_capability_scope_service.dart';
+import '../agents/agent_group_delegation_capability_service.dart';
 import '../agents/agent_task_family.dart';
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
@@ -18,6 +19,8 @@ class ContinuousTaskToolExposureRuntimeResolverService {
     ToolCapabilityFamilyCatalogService? toolCapabilityFamilyCatalogService,
     ToolStrategyService? toolStrategyService,
     AgentGroupToolCapabilityScopeService? agentGroupToolCapabilityScopeService,
+    AgentGroupDelegationCapabilityService?
+    agentGroupDelegationCapabilityService,
   }) : _taskProfileResolverService =
            taskProfileResolverService ??
            const ContinuousTaskProfileResolverService(),
@@ -31,7 +34,10 @@ class ContinuousTaskToolExposureRuntimeResolverService {
            toolStrategyService ?? const ToolStrategyService(),
        _agentGroupToolCapabilityScopeService =
            agentGroupToolCapabilityScopeService ??
-           const AgentGroupToolCapabilityScopeService();
+           const AgentGroupToolCapabilityScopeService(),
+       _agentGroupDelegationCapabilityService =
+           agentGroupDelegationCapabilityService ??
+           const AgentGroupDelegationCapabilityService();
 
   final ContinuousTaskProfileResolverService _taskProfileResolverService;
   final ContinuousTaskToolExposureProfileResolverService
@@ -40,6 +46,8 @@ class ContinuousTaskToolExposureRuntimeResolverService {
   final ToolStrategyService _toolStrategyService;
   final AgentGroupToolCapabilityScopeService
   _agentGroupToolCapabilityScopeService;
+  final AgentGroupDelegationCapabilityService
+  _agentGroupDelegationCapabilityService;
 
   ContinuousTaskToolExposureRuntimeResolution resolve({
     required List<String> candidateToolIds,
@@ -90,6 +98,8 @@ class ContinuousTaskToolExposureRuntimeResolverService {
     final effectiveToolIds = candidateToolIds.isEmpty
         ? _filterCandidateToolIds(defaultCandidateToolIds, defaultOpenToolIds)
         : _filterCandidateToolIds(candidateToolIds, defaultOpenToolIds);
+    final delegationAllowed = _agentGroupDelegationCapabilityService
+        .supportsChildDelegation(selectedCollaborationGroup);
     return ContinuousTaskToolExposureRuntimeResolution(
       taskProfile: taskProfile,
       exposureProfile: exposureProfile,
@@ -97,13 +107,18 @@ class ContinuousTaskToolExposureRuntimeResolverService {
       defaultOpenCapabilityFamilyIds: defaultOpenFamilies,
       requiresConfirmationCapabilityFamilyIds: requiresConfirmationFamilies,
       hostOrSupervisorOnlyCapabilityFamilyIds: hostOnlyFamilies,
-      defaultAllowedToolIds: effectiveToolIds,
+      defaultAllowedToolIds: delegationAllowed
+          ? effectiveToolIds
+          : effectiveToolIds
+                .where((toolId) => toolId != 'call_sub_agent')
+                .toList(growable: false),
       requiresConfirmationToolIds: requiresConfirmationToolIds,
       metadata: <String, Object?>{
         'intent': intent.trim(),
         'selected_group_id': ValueReaders.stringValue(
           selectedCollaborationGroup['id'],
         ),
+        'delegation_allowed': delegationAllowed,
       },
     );
   }

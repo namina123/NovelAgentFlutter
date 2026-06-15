@@ -48,8 +48,25 @@ class LongTaskChapterOutputPolicyService {
     );
   }
 
+  String sampleFileStem({
+    required String title,
+    String fallbackTitle = '样章',
+  }) {
+    final safeTitle = _chapterOutputPathPolicyService.safeFilePart(
+      title.trim(),
+      fallbackTitle,
+    );
+    if (safeTitle.isEmpty || safeTitle == fallbackTitle) {
+      return fallbackTitle;
+    }
+    return safeTitle;
+  }
+
   String _directoryFor(String mode, String stage) {
-    // 中文注释: 项目已不再保留 chapters/；章节类内容统一进 chapters/，仅场景级任务才进入 scenes/。
+    // 中文注释: 正式章节、样章和场景在这里分流；上层工厂和运行时只消费统一结果。
+    if (stage == 'sample') {
+      return _contentPathPolicyService.directoryForContentType('sample');
+    }
     if (stage == 'scene' || stage == 'scenes') {
       return _contentPathPolicyService.directoryForContentType('scene');
     }

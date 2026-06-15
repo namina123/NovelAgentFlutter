@@ -39,10 +39,10 @@ class TaskExecutionPlanService {
         !<String>['planning', 'checkpoint'].contains(taskType)) {
       steps.insert(
         0,
-        _step(
+          _step(
           'read_human_outline',
           '读取用户确认的大纲',
-          '优先读取 outline/volume_outlines/chapter_outlines。',
+          '优先读取 outlines/story/、outlines/volumes/、outlines/chapters/。',
         ),
       );
     } else if (mode == TaskRuntimeConstants.modeSeedToFullNovel &&
@@ -114,7 +114,7 @@ class TaskExecutionPlanService {
           _step(
             'save_outline',
             '保存总纲/章纲',
-            '写入 outline/、volume_outlines/ 或 chapter_outlines/。',
+            '写入 outlines/story/、outlines/volumes/ 或 outlines/chapters/。',
           ),
           _step('create_followup_tasks', '创建后续任务', '必要时补充或修正章节任务。'),
           _step('wait_user_checkpoint', '等待用户确认', '规划完成后等待用户确认样章或继续队列。'),
@@ -131,7 +131,7 @@ class TaskExecutionPlanService {
           _step(
             'update_memory',
             '更新长期记忆',
-            '写入 world/、assets/characters/ 或 tracking/。',
+            '写入 assets/world/、assets/characters/ 或 tracking/。',
           ),
         ];
       default:
@@ -144,7 +144,7 @@ class TaskExecutionPlanService {
           _step(
             'update_memory',
             '更新世界书与角色',
-            '更新 world/、assets/characters/ 和 tracking/。',
+            '更新 assets/world/、assets/characters/ 和 tracking/。',
           ),
           _step('continuity_check', '连续性检查', '保存验证报告。'),
           _step('mark_done', '标记完成', '更新任务状态与输出路径。'),

@@ -123,7 +123,7 @@ final class BuiltinToolCatalog {
     BuiltinToolDefinition(
       id: 'update_world_state',
       name: '更新世界书',
-      description: '把世界规则、地点、势力、术语、伏笔等长期记忆写入 world/。',
+      description: '把世界规则、地点、势力、术语、伏笔等长期记忆写入 assets/world/。',
     ),
     BuiltinToolDefinition(
       id: 'update_character_state',

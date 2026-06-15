@@ -182,6 +182,38 @@ void main() {
       },
     );
 
+    test('blocks legacy sample dispatch before readiness checkpoint is confirmed', () {
+      final tasks = <Object?>[
+        <String, Object?>{
+          'id': 'sample_001',
+          'title': '样章：开篇验证',
+          'task_type': 'chapter',
+          'mode': TaskRuntimeConstants.modeSeedToFullNovel,
+          'status': TaskRuntimeConstants.statusQueued,
+          'depends_on': const <Object?>[],
+          'metadata': const <String, Object?>{
+            'sort_order': 1,
+            'stage': 'sample',
+          },
+          'relative_path': 'tasks/sample_001.json',
+          'output_paths': const <Object?>['samples/样章_seed_to_full.md'],
+        },
+      ];
+
+      final batch = nextBatchPlanService.nextBatchPlan(<String, Object?>{
+        'id': 'run_sample_guard',
+        'mode': TaskRuntimeConstants.modeSeedToFullNovel,
+        'status': TaskRuntimeConstants.statusRunning,
+      }, tasks);
+
+      expect(batch['action'], 'wait_user');
+      expect(batch['reason'], 'sample_readiness_not_confirmed');
+      expect(
+        ValueReaders.stringValue(batch['note']),
+        contains('资料收集/风格/大纲确认'),
+      );
+    });
+
     test(
       'tightens unattended batch cadence on consecutive structured risk',
       () {
@@ -556,6 +588,7 @@ void main() {
               'sort_order': 2,
               'stage': 'checkpoint',
               'manual_checkpoint': true,
+              LongTaskSampleReadinessService.readinessCheckpointFlag: true,
             },
           },
           <String, Object?>{

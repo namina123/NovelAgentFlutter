@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../../../../../app/theme/app_palette.dart';
 import '../../../../../shared/widgets/panel_surface.dart';
 import '../contracts/resource_manager_action_handler.dart';
+import '../models/selector_option_view_data.dart';
 import '../models/workspace_command_request_view_data.dart';
+import 'selector_field.dart';
 
 class WorkspaceCommandOverlay extends StatefulWidget {
   const WorkspaceCommandOverlay({
@@ -23,7 +25,6 @@ class WorkspaceCommandOverlay extends StatefulWidget {
 class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
   late final TextEditingController _projectTitleController;
   late final TextEditingController _projectTypeController;
-  late final TextEditingController _transitionRuntimeBaselineController;
   late final TextEditingController _genreController;
   late final TextEditingController _premiseController;
   late final TextEditingController _notesController;
@@ -32,7 +33,12 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
   late final TextEditingController _contentController;
   late final TextEditingController _sourcePathsController;
   late final TextEditingController _targetDirectoryController;
+  late final TextEditingController _analysisAgentController;
+  late final TextEditingController _analysisAgentGroupController;
+  late String _selectedTransitionTargetProjectTypeId;
+  late String _selectedTransitionRuntimeBaselineId;
   late bool _autoDeconstruct;
+  late bool _smartAnalysis;
 
   @override
   void initState() {
@@ -42,9 +48,6 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
     );
     _projectTypeController = TextEditingController(
       text: widget.viewData.projectType,
-    );
-    _transitionRuntimeBaselineController = TextEditingController(
-      text: widget.viewData.transitionRuntimeBaselineId,
     );
     _genreController = TextEditingController(text: widget.viewData.genre);
     _premiseController = TextEditingController(text: widget.viewData.premise);
@@ -62,7 +65,18 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
     _targetDirectoryController = TextEditingController(
       text: widget.viewData.targetDirectory,
     );
+    _analysisAgentController = TextEditingController(
+      text: widget.viewData.analysisAgentId,
+    );
+    _analysisAgentGroupController = TextEditingController(
+      text: widget.viewData.analysisAgentGroupId,
+    );
+    _selectedTransitionTargetProjectTypeId =
+        widget.viewData.transitionTargetProjectTypeId;
+    _selectedTransitionRuntimeBaselineId =
+        widget.viewData.transitionRuntimeBaselineId;
     _autoDeconstruct = widget.viewData.autoDeconstruct;
+    _smartAnalysis = widget.viewData.smartAnalysis;
   }
 
   @override
@@ -73,10 +87,6 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
     }
     _syncController(_projectTitleController, widget.viewData.projectTitle);
     _syncController(_projectTypeController, widget.viewData.projectType);
-    _syncController(
-      _transitionRuntimeBaselineController,
-      widget.viewData.transitionRuntimeBaselineId,
-    );
     _syncController(_genreController, widget.viewData.genre);
     _syncController(_premiseController, widget.viewData.premise);
     _syncController(_notesController, widget.viewData.notes);
@@ -88,9 +98,30 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
       _targetDirectoryController,
       widget.viewData.targetDirectory,
     );
+    _syncController(_analysisAgentController, widget.viewData.analysisAgentId);
+    _syncController(
+      _analysisAgentGroupController,
+      widget.viewData.analysisAgentGroupId,
+    );
+    if (_selectedTransitionTargetProjectTypeId !=
+            widget.viewData.transitionTargetProjectTypeId ||
+        _selectedTransitionRuntimeBaselineId !=
+            widget.viewData.transitionRuntimeBaselineId) {
+      setState(() {
+        _selectedTransitionTargetProjectTypeId =
+            widget.viewData.transitionTargetProjectTypeId;
+        _selectedTransitionRuntimeBaselineId =
+            widget.viewData.transitionRuntimeBaselineId;
+      });
+    }
     if (_autoDeconstruct != widget.viewData.autoDeconstruct) {
       setState(() {
         _autoDeconstruct = widget.viewData.autoDeconstruct;
+      });
+    }
+    if (_smartAnalysis != widget.viewData.smartAnalysis) {
+      setState(() {
+        _smartAnalysis = widget.viewData.smartAnalysis;
       });
     }
   }
@@ -99,7 +130,6 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
   void dispose() {
     _projectTitleController.dispose();
     _projectTypeController.dispose();
-    _transitionRuntimeBaselineController.dispose();
     _genreController.dispose();
     _premiseController.dispose();
     _notesController.dispose();
@@ -108,6 +138,8 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
     _contentController.dispose();
     _sourcePathsController.dispose();
     _targetDirectoryController.dispose();
+    _analysisAgentController.dispose();
+    _analysisAgentGroupController.dispose();
     super.dispose();
   }
 
@@ -217,12 +249,38 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
       case WorkspaceCommandMode.transitionProjectType:
         return Column(
           children: [
-            _field(_projectTypeController, '目标项目类型 ID', readOnly: true),
-            _field(
-              _transitionRuntimeBaselineController,
-              '运行基准 ID',
-              hint: '例如：continuous_autonomous',
+            _selectorField(
+              label: '目标项目类型',
+              value: _selectedTransitionTargetProjectTypeId,
+              options: widget.viewData.transitionTargetProjectTypeOptions,
+              onSelected: (value) {
+                setState(() {
+                  _selectedTransitionTargetProjectTypeId = value;
+                  final baselineStillValid = widget
+                      .viewData
+                      .transitionRuntimeBaselineOptions
+                      .any(
+                        (option) =>
+                            option.id == _selectedTransitionRuntimeBaselineId,
+                      );
+                  if (!baselineStillValid) {
+                    _selectedTransitionRuntimeBaselineId = '';
+                  }
+                });
+              },
             ),
+            if (widget.viewData.transitionRequiresRuntimeBaselineSelection)
+              _selectorField(
+                label: '运行基准',
+                value: _selectedTransitionRuntimeBaselineId,
+                options: widget.viewData.transitionRuntimeBaselineOptions,
+                emptyLabel: '请选择运行基准',
+                onSelected: (value) {
+                  setState(() {
+                    _selectedTransitionRuntimeBaselineId = value;
+                  });
+                },
+              ),
           ],
         );
       case WorkspaceCommandMode.createFile:
@@ -318,6 +376,60 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
                 ),
               ],
             ),
+            if (widget.viewData.canSmartAnalyze) ...[
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Checkbox(
+                    value: _smartAnalysis,
+                    onChanged: (value) {
+                      setState(() {
+                        _smartAnalysis = value ?? false;
+                      });
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            '智能分析',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: AppPalette.text,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            widget.viewData.importOutputHint,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: AppPalette.mutedText,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              _field(
+                _analysisAgentController,
+                '分析智能体',
+                hint: '可留空，或填写 agent id',
+              ),
+              _field(
+                _analysisAgentGroupController,
+                '分析智能体组',
+                hint: '可留空，或填写 group id',
+              ),
+            ],
           ],
         );
     }
@@ -361,6 +473,45 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
     );
   }
 
+  Widget _selectorField({
+    required String label,
+    required String value,
+    required List<SelectorOptionViewData> options,
+    required ValueChanged<String> onSelected,
+    String emptyLabel = '请选择',
+  }) {
+    final resolvedLabel = _selectorLabelOf(
+      value: value,
+      options: options,
+      emptyLabel: emptyLabel,
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: AppPalette.mutedText,
+            ),
+          ),
+          const SizedBox(height: 6),
+          SelectorField(
+            label: label,
+            value: resolvedLabel,
+            options: options,
+            onSelected: onSelected,
+            enabled: options.length > 1 || value.trim().isEmpty,
+            showLabel: false,
+          ),
+        ],
+      ),
+    );
+  }
+
   void _submit() {
     widget.actionHandler.onWorkspaceCommandSubmitted(_currentRequest());
   }
@@ -374,9 +525,8 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
       mode: widget.viewData.mode,
       projectTitle: _projectTitleController.text,
       projectType: _projectTypeController.text,
-      transitionTargetProjectTypeId:
-          widget.viewData.transitionTargetProjectTypeId,
-      transitionRuntimeBaselineId: _transitionRuntimeBaselineController.text,
+      transitionTargetProjectTypeId: _selectedTransitionTargetProjectTypeId,
+      transitionRuntimeBaselineId: _selectedTransitionRuntimeBaselineId,
       genre: _genreController.text,
       premise: _premiseController.text,
       notes: _notesController.text,
@@ -386,6 +536,9 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
       sourcePathsText: _sourcePathsController.text,
       targetDirectory: _targetDirectoryController.text,
       autoDeconstruct: _autoDeconstruct,
+      smartAnalysis: _smartAnalysis,
+      analysisAgentId: _analysisAgentController.text,
+      analysisAgentGroupId: _analysisAgentGroupController.text,
     );
   }
 
@@ -398,5 +551,22 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
       selection: TextSelection.collapsed(offset: value.length),
       composing: TextRange.empty,
     );
+  }
+
+  String _selectorLabelOf({
+    required String value,
+    required List<SelectorOptionViewData> options,
+    required String emptyLabel,
+  }) {
+    final cleanValue = value.trim();
+    if (cleanValue.isEmpty) {
+      return emptyLabel;
+    }
+    for (final option in options) {
+      if (option.id == cleanValue) {
+        return option.label;
+      }
+    }
+    return cleanValue;
   }
 }

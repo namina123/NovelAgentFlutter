@@ -26,6 +26,7 @@ class ToolStrategyPromptBuilder {
     final mode = normalized['mode']?.toString() ?? 'balanced';
     final enabledTools =
         toolIds ?? _toolStrategyService.enabledToolIds(normalized);
+    final delegationEnabled = enabledTools.contains('call_sub_agent');
     final toolLines = _toolPromptLines(enabledTools);
     final modeNote = _toolStrategyService.modePromptNote(mode);
     final fallbackNote = normalized['allow_inline_fallback'] == true
@@ -37,14 +38,14 @@ class ToolStrategyPromptBuilder {
     final taskRule = normalized['auto_task_plan'] == true
         ? '多步骤任务、长篇创作、续写或修订前，可以先用 set_agent_tasks 声明你自己的任务目标、阶段、顺序和需要的工具。'
         : '任务计划工具已弱化；除非用户明确要求，不要额外展示任务清单。';
-    final delegationRule = enabledTools.contains('call_sub_agent')
+    final delegationRule = delegationEnabled
         ? '当任务明显需要不同视角（资料、剧情结构、正文写作、润色、审核、读者反馈）时，可调用 call_sub_agent；优先从协作视角清单选择 agent_id，并只传任务摘录、约束和期望产物，不传完整主会话。若一时拿不准精确 agent_id，可把 agent_id 传空字符串，运行时会按 task 自动兜底选取最匹配的子智能体。'
         : '当前没有开放子智能体委派工具；如需多视角，请在主回复中自行综合。';
     final longTaskLaunchRule = enabledTools.contains('start_long_task_run')
         ? '如果当前项目是长任务项目，且用户明确表达“开始长任务/直接跑/按当前灵感开跑”，优先调用 start_long_task_run；不要自己假装已经建好长任务队列。'
         : '当前没有开放长任务启动工具；如需长任务，只能说明下一步建议。';
     final writeRule = normalized['auto_write_artifacts'] == true
-        ? '用户明确要求生成正式章节、样章、补写章节或长任务正文时，完成后应优先调用 submit_chapter_delivery 提交 chapter_path、chapter_content 和必要 submission；不要只靠 write_project_file 冒充正式章节交付。章节级内容默认落到 chapters/；局部片段或独立场景仍可用 write_project_file 写入 scenes/。如果不确定是完整章节还是局部场景，先用 present_user_options 询问。章节完成或重要设定确定后，可用 summarize_context、update_world_state、update_character_state、update_foreshadow_state、update_timeline_state、update_relationship_state 保存长期记忆；其中角色、伏笔、时间线、关系都应优先回填到 assets/ 对应子目录。'
+        ? '用户明确要求生成正式章节、样章、补写章节或长任务正文时，完成后应优先调用 submit_chapter_delivery 提交 chapter_path、chapter_content 和必要 submission；不要只靠 write_project_file 冒充正式章节交付。正式章节正文默认落到 chapters/；样章、开篇验证稿和非正式章节级试写默认落到 samples/；局部片段或独立场景仍可用 write_project_file 写入 scenes/。如果不确定是完整章节、样章还是局部场景，先用 present_user_options 询问。章节完成或重要设定确定后，可用 summarize_context、update_world_state、update_character_state、update_foreshadow_state、update_timeline_state、update_relationship_state 保存长期记忆；其中角色、伏笔、时间线、关系都应优先回填到 assets/ 对应子目录。'
         : '默认不要自动写入文件；除非用户明确要求保存、写入或更新项目文件。';
     final listRule = normalized['require_list_before_read'] == true
         ? '需要项目上下文时，先 list_project_files，再只读取本轮必要的风格、设定、大纲、摘要或正文；不要一次性读取无关文件。'
@@ -76,11 +77,11 @@ ${_projectPromptContract.informationToolGuidance(intent)}
 8. 长任务、连续创作或章节队列应使用 create_chapter_task/mark_task_status 记录任务状态；重要覆盖或恢复前先 create_backup，restore_backup 只在用户明确要求回滚时使用。
 9. $editRule
 ${_projectPromptContract.directoryMappingLine()}
-章节正文、样章和连续正文写入 chapters/；局部片段、独立场景和实验段落写入 scenes/；大纲写入 outline/，卷纲写入 volume_outlines/，章纲写入 chapter_outlines/，设定写入 world/ 或 assets/characters/，风格写入 styles/，总结写入 summaries/。
+正式章节正文和连续正文写入 chapters/；样章、开篇验证稿和非正式章节级试写写入 samples/；局部片段、独立场景和实验段落写入 scenes/；总纲写入 outlines/story/，卷纲写入 outlines/volumes/，章纲写入 outlines/chapters/，设定写入 assets/world/，角色写入 assets/characters/，风格写入 assets/styles/，总结写入 summaries/。
 knowledge/、research/、references/ 下的信息摘要是只读 projection 入口，不是正式事实写入目标；长期知识、设计元素、研究结论和引用边界必须分别通过 propose_knowledge_card、propose_design_element、submit_research_note、propose_reference_work 收口。
 所有读写改删都只能操作当前项目内的相对路径。桌面端和 Android/iOS 均按应用项目目录执行，不要请求终端命令或外部绝对路径权限。
-如果用户要求创作章节、样章或连续正文，content_type 使用 chapter；如果用户要求局部片段、场景补写或实验段落，content_type 使用 scene。如果用户要求风格规范或文风模仿，content_type 使用 style。
-子智能体由主智能体按需调用，不需要用户手动选择。调用 call_sub_agent 时必须传 agent_id 和 task；agent_id 优先来自下方协作视角素材。如果一时拿不准精确 agent_id，可传空字符串，由运行时按 task 自动兜底选取最匹配的子智能体。子智能体只接收你传递的任务、摘录和约束，不享有主会话完整上下文；工具返回后你要综合结果再回复用户。
+如果用户要求创作正式章节或连续正文，content_type 使用 chapter；如果用户要求样章、开篇验证稿或非正式章节级试写，content_type 使用 sample；如果用户要求局部片段、场景补写或实验段落，content_type 使用 scene。如果用户要求风格规范或文风模仿，content_type 使用 style。
+${delegationEnabled ? '子智能体由主智能体按需调用，不需要用户手动选择。调用 call_sub_agent 时必须传 agent_id 和 task；agent_id 优先来自下方协作视角素材。如果一时拿不准精确 agent_id，可传空字符串，由运行时按 task 自动兜底选取最匹配的子智能体。子智能体只接收你传递的任务、摘录和约束，不享有主会话完整上下文；工具返回后你要综合结果再回复用户。' : '当前按单主智能体运行。本轮不要假设还存在可委派的子智能体，也不要伪造内部协作回合。'}
 当前判断内容类型：$intent
 
 $projectNote

@@ -1,5 +1,6 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import '../project/project_narrative_artifact_path_policy_service.dart';
 import '../tools/domain/narrative_domain_tool_names.dart';
 
 class AgentToolPolicyService {
@@ -30,6 +31,9 @@ class AgentToolPolicyService {
         'tool_round_limit',
         formalDeliveryToolName,
       };
+  static const ProjectNarrativeArtifactPathPolicyService
+  _narrativeArtifactPathPolicyService =
+      ProjectNarrativeArtifactPathPolicyService();
 
   bool lastToolWasOnlyPlan(List<Object?> executedTools) {
     // 中文注释: 计划型工具不代表任务已完成，这里集中判断避免宿主误把“列待办”当最终产物。
@@ -300,8 +304,7 @@ class AgentToolPolicyService {
   }
 
   bool _isChapterPath(String path) {
-    final normalized = path.trim().replaceAll('\\', '/').toLowerCase();
-    return normalized.startsWith('chapters/');
+    return _narrativeArtifactPathPolicyService.isNarrativeDeliveryPath(path);
   }
 
   bool _writeProjectFileAlreadyDeliveredChapter(JsonMap tool) {

@@ -75,6 +75,8 @@ class ProjectConversationDraftRuntimeService {
     ChapterLengthMeasurementService? chapterLengthMeasurementService,
     ProjectChapterLabelHintService? chapterLabelHintService,
     ProjectChapteredWritingTaskService? chapteredWritingTaskService,
+    AgentGroupDelegationCapabilityService?
+    agentGroupDelegationCapabilityService,
   }) : _workspacePort = workspacePort,
        _taskRepository =
            taskRepository ??
@@ -116,7 +118,10 @@ class ProjectConversationDraftRuntimeService {
            chapterLabelHintService ?? const ProjectChapterLabelHintService(),
        _chapteredWritingTaskService =
            chapteredWritingTaskService ??
-           const ProjectChapteredWritingTaskService();
+           const ProjectChapteredWritingTaskService(),
+       _agentGroupDelegationCapabilityService =
+           agentGroupDelegationCapabilityService ??
+           const AgentGroupDelegationCapabilityService();
 
   final ProjectWorkspacePort _workspacePort;
   final ProjectTaskRepository _taskRepository;
@@ -134,6 +139,8 @@ class ProjectConversationDraftRuntimeService {
   final ChapterLengthMeasurementService _chapterLengthMeasurementService;
   final ProjectChapterLabelHintService _chapterLabelHintService;
   final ProjectChapteredWritingTaskService _chapteredWritingTaskService;
+  final AgentGroupDelegationCapabilityService
+  _agentGroupDelegationCapabilityService;
 
   Future<ProjectConversationDraftRuntimePreparation> prepareDraftRun(
     ProjectDescriptor project, {
@@ -148,6 +155,7 @@ class ProjectConversationDraftRuntimeService {
     String phase = '',
     String expressionConstraintPolicyMode = '',
     String expressionConstraintInjectionMode = '',
+    JsonMap selectedCollaborationGroup = const <String, Object?>{},
   }) async {
     final cleanTaskType = taskType.trim().isEmpty ? 'chapter' : taskType.trim();
     final runtimeTaskContext = _runtimeTaskContextForTaskType(
@@ -202,6 +210,7 @@ class ProjectConversationDraftRuntimeService {
       exposedToolIds: _conversationExposedToolIds(
         cleanTaskType,
         ValueReaders.stringList(bridge['workflow_tool_ids']),
+        selectedCollaborationGroup: selectedCollaborationGroup,
       ),
       executionConstraints: ValueReaders.deepCopyMap(executionConstraints),
     );
@@ -209,11 +218,19 @@ class ProjectConversationDraftRuntimeService {
 
   List<String> _conversationExposedToolIds(
     String taskType,
-    List<String> toolIds,
-  ) {
+    List<String> toolIds, {
+    JsonMap selectedCollaborationGroup = const <String, Object?>{},
+  }) {
+    final blockedToolIds = <String>{..._conversationBlockedToolIds};
+    if (selectedCollaborationGroup.isNotEmpty &&
+        !_agentGroupDelegationCapabilityService.supportsChildDelegation(
+          selectedCollaborationGroup,
+        )) {
+      blockedToolIds.add('call_sub_agent');
+    }
     return List<String>.unmodifiable(
       toolIds
-          .where((toolId) => !_conversationBlockedToolIds.contains(toolId))
+          .where((toolId) => !blockedToolIds.contains(toolId))
           .toList(growable: false),
     );
   }

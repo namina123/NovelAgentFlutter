@@ -25,6 +25,7 @@ class ConversationSessionStateService {
     SubAgentRunProjectionService? subAgentRunProjectionService,
     SessionMessageInclusionStrategy? messageInclusionStrategy,
     SessionCompressionStrategyService? compressionStrategyService,
+    SessionPromptContextService? promptContextService,
   }) : _normalizerService =
            normalizerService ??
            SessionRecordNormalizerService(
@@ -63,7 +64,6 @@ class ConversationSessionStateService {
                    messageService: messageService ?? SessionMessageService(),
                  ),
              messageService: messageService ?? SessionMessageService(),
-             modeService: modeService ?? SessionModeService(),
            ),
        _toolEntryProjectionService =
            toolEntryProjectionService ??
@@ -76,7 +76,30 @@ class ConversationSessionStateService {
        _messageInclusionStrategy =
            messageInclusionStrategy ?? DefaultSessionMessageInclusionStrategy(),
        _compressionStrategyService =
-           compressionStrategyService ?? SessionCompressionStrategyService();
+           compressionStrategyService ?? SessionCompressionStrategyService(),
+       _promptContextService =
+           promptContextService ??
+           SessionPromptContextService(
+             normalizerService:
+                 normalizerService ??
+                 SessionRecordNormalizerService(
+                   modeService: modeService ?? SessionModeService(),
+                   messageService: messageService ?? SessionMessageService(),
+                 ),
+             messageService: messageService ?? SessionMessageService(),
+             contextRendererService:
+                 contextRendererService ??
+                 SessionContextRendererService(
+                   normalizerService:
+                       normalizerService ??
+                       SessionRecordNormalizerService(
+                         modeService: modeService ?? SessionModeService(),
+                         messageService:
+                             messageService ?? SessionMessageService(),
+                       ),
+                   messageService: messageService ?? SessionMessageService(),
+                 ),
+           );
 
   final SessionRecordNormalizerService _normalizerService;
   final SessionRecordMutationService _mutationService;
@@ -87,6 +110,7 @@ class ConversationSessionStateService {
   final SubAgentRunProjectionService _subAgentRunProjectionService;
   final SessionMessageInclusionStrategy _messageInclusionStrategy;
   final SessionCompressionStrategyService _compressionStrategyService;
+  final SessionPromptContextService _promptContextService;
 
   ConversationSessionState createSession({
     required String sessionId,
@@ -353,6 +377,27 @@ class ConversationSessionStateService {
     return _contextRendererService.sessionContextMarkdown(
       state.sessionRecord,
       options: options,
+    );
+  }
+
+  SessionPromptContext promptContext(
+    ConversationSessionState state, {
+    String excludeLatestUserContent = '',
+    SessionContextPressureSnapshot? pressureSnapshot,
+    CompactionGuidanceContract? compactionGuidance,
+    CompactionOutputPolicy? compactionOutputPolicy,
+    CompactionSourceScope? compactionSourceScope,
+    RuntimeContinuationInstructionContract? runtimeContinuationInstruction,
+  }) {
+    // 中文注释: 真实历史消息和运行时摘要在这里统一拆分，避免控制器自己拼双轨合同。
+    return _promptContextService.buildFromSessionRecord(
+      state.sessionRecord,
+      excludeLatestUserContent: excludeLatestUserContent,
+      pressureSnapshot: pressureSnapshot,
+      compactionGuidance: compactionGuidance,
+      compactionOutputPolicy: compactionOutputPolicy,
+      compactionSourceScope: compactionSourceScope,
+      runtimeContinuationInstruction: runtimeContinuationInstruction,
     );
   }
 

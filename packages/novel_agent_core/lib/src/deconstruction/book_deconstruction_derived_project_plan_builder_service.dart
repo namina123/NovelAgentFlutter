@@ -36,12 +36,14 @@ class BookDeconstructionDerivedProjectPlanBuilderService {
       targetProjectTypeId: option.targetProjectTypeId,
       targetProjectStrategyId: option.targetProjectStrategyId,
       targetModeId: option.targetModeId,
+      sourceInheritanceMode: option.sourceInheritanceMode,
       preferredDirection: input.preferredContinuationDirection,
       recommendedBuildTier: option.recommendedBuildTier,
       suggestedProjectTitle: _suggestedProjectTitle(input.title, option),
       metadata: <String, Object?>{
         'source_project_type_id': input.targetProjectTypeId,
         'source_project_strategy_id': input.projectStrategyId,
+        'source_inheritance_mode': option.sourceInheritanceMode.name,
         'inherited_narrative_artifacts': inheritedEntries
             .map((entry) => entry.toJson())
             .toList(growable: false),

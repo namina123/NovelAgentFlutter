@@ -38,12 +38,12 @@ void main() {
     expect(viewData.continuity!.highlightedRouteTitle, '灵感托管式长篇');
     expect(
       viewData.continuity!.followupGroups.map((item) => item.id),
-      containsAll(<String>['general_writing', 'long_task_writing']),
+      containsAll(<String>['continuation', 'fanfic']),
     );
     expect(viewData.informationBridge, isNotNull);
     expect(
       viewData.informationBridge!.followupRoutes.map((item) => item.title),
-      containsAll(<String>['普通续写', '长任务续写', '共享资料沉淀', '解说与分析']),
+      containsAll(<String>['continuation', 'fanfic', '共享资料沉淀', '解说与分析']),
     );
     expect(
       viewData.informationBridge!.assetStatuses.map((item) => item.title),
@@ -58,6 +58,6 @@ void main() {
     );
     expect(designStatus.count, 2);
     expect(designStatus.statusLabel, '确认后出现在巧思与设计');
-    expect(viewData.informationBridge!.reuseSummary, contains('资料与设定'));
+    expect(viewData.informationBridge!.reuseSummary, contains('continuation'));
   });
 }

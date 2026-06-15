@@ -20,7 +20,7 @@ class SaveDraftUseCase {
   }) async {
     // 中文注释: 自动内容保存规则统一在这个用例里，避免宿主层各自决定正文落盘路径命名。
     final resolvedPath = relativePath.trim().isEmpty
-        ? _draftFilePathService.buildPath(title: title)
+        ? _draftFilePathService.buildPath(title: title, content: content)
         : relativePath.trim();
     await _projectWorkspacePort.writeTextFile(
       project.rootPath,

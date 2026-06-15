@@ -139,6 +139,9 @@ class BookDeconstructionDraftBuilderService {
     if (lower.endsWith('.md') || lower.endsWith('.markdown')) {
       return 'text/markdown';
     }
+    if (lower.endsWith('.epub')) {
+      return 'application/epub+zip';
+    }
     return 'text/plain';
   }
 

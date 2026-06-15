@@ -80,18 +80,18 @@ class BookDeconstructionViewDataService {
     final referenceCount = narrativeArtifacts.referenceWorks.length;
     final routes = <BookDeconstructionFollowupRouteViewData>[
       BookDeconstructionFollowupRouteViewData(
-        id: 'general_writing',
-        title: '普通续写',
-        summary: '确认后可沿普通小说工作台继续承接剧情与章节推进。',
+        id: 'continuation',
+        title: 'continuation',
+        summary: '把原作章节并入连续正文链，后续写作把它当作正式前情。',
         statusLabel: _routeStatusLabel(
           buildResult.input.preferredContinuationDirection ==
               BookDeconstructionContinuationDirection.generalNovelPreferred,
         ),
       ),
       BookDeconstructionFollowupRouteViewData(
-        id: 'long_task_writing',
-        title: '长任务续写',
-        summary: '确认后可沿长任务模式继续推进，适合分阶段写作与恢复。',
+        id: 'fanfic',
+        title: 'fanfic',
+        summary: '把原作停留在来源 / 参考层，派生出基于原作的新作品路线。',
         statusLabel: _routeStatusLabel(
           buildResult.input.preferredContinuationDirection ==
               BookDeconstructionContinuationDirection.longTaskPreferred,
@@ -176,11 +176,11 @@ class BookDeconstructionViewDataService {
       ),
     ];
     return BookDeconstructionInformationBridgeViewData(
-      summary: '这次拆书结果不只是一次性预览。确认后既能进入普通续写/长任务续写，也能沉淀到共享资料与分析路径。',
+      summary: '这次拆书结果不只是一次性预览。确认后既能走 continuation 进入叙事连续体，也能走 fanfic 保留来源 / 参考层，再沉淀到共享资料与分析路径。',
       followupRoutes: routes,
       assetStatuses: assetStatuses,
       reuseSummary:
-          '确认后，相关资料会进入共享 information GUI，可在“资料与设定”里继续回看知识、巧思、研究和引用边界。',
+          '确认后，相关资料会进入共享 information GUI；continuation 会继续承接正文，fanfic 会保留原作来源边界，可在“资料与设定”里继续回看知识、巧思、研究和引用边界。',
     );
   }
 
@@ -546,9 +546,11 @@ class BookDeconstructionViewDataService {
   String _followupGroupTitle(String groupId, String fallback) {
     switch (groupId) {
       case 'general_writing':
-        return '一般续写';
+      case 'continuation':
+        return 'continuation';
       case 'long_task_writing':
-        return '长任务续写';
+      case 'fanfic':
+        return 'fanfic';
       case 'future_extensions':
         return '未来其他路线';
       default:
@@ -571,8 +573,8 @@ class BookDeconstructionViewDataService {
     ];
     final base =
         direction == BookDeconstructionContinuationDirection.analysisFirst
-        ? '当前默认先补齐续写基座，再决定最终执行路线。'
-        : '当前预演确认后，可直接沿默认导向进入后续续写派生。';
+        ? '当前默认先补齐 continuation 与 fanfic 基座，再决定最终执行路线。'
+        : '当前预演确认后，可直接沿默认导向进入后续派生。';
     if (hintParts.isEmpty) {
       return '$base 目前仍以结构化资产与后续菜单为主。';
     }

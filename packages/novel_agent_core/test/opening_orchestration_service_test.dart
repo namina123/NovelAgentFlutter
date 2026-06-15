@@ -25,7 +25,9 @@ void main() {
       final result = service.orchestrate(
         project: project,
         intent: const OpeningIntentSnapshot(
-          availableAgentGroupIds: <String>['starter_long_novel_seed_generalist'],
+          availableAgentGroupIds: <String>[
+            'starter_long_novel_seed_generalist',
+          ],
           modeId: 'seed_autopilot_novel',
         ),
         modeGuidanceState: modeGuidanceState,
@@ -45,7 +47,7 @@ void main() {
         result.suggestedActions.single.commandId,
         'opening.continue_mode_guidance',
       );
-        expect(
+      expect(
         result.state.intent.resolvedAgentGroupId,
         'starter_long_novel_seed_generalist',
       );
@@ -158,6 +160,13 @@ void main() {
         result.suggestedActions.single.commandId,
         'opening.start_interactive_session',
       );
+      final contract = ValueReaders.mapValue(
+        result.state.metadata['fact_acquisition_contract'],
+      );
+      expect(
+        ValueReaders.stringValue(contract['workflow_id']),
+        'interactive_opening',
+      );
     });
 
     test(
@@ -188,7 +197,46 @@ void main() {
           result.suggestedActions.first.commandId,
           'opening.choose_session_goal',
         );
+        final contract = ValueReaders.mapValue(
+          result.state.metadata['fact_acquisition_contract'],
+        );
+        expect(
+          ValueReaders.stringValue(contract['workflow_id']),
+          'interactive_opening',
+        );
+        expect(ValueReaders.mapList(contract['lanes']), hasLength(3));
       },
     );
+
+    test('stores long task fact acquisition contract in opening metadata', () {
+      final result = service.orchestrate(
+        project: const ProjectDescriptor(
+          id: 'project_3',
+          name: '长篇项目',
+          rootPath: 'D:/demo',
+          projectType: 'long_novel',
+          runtimeBaselineId: 'continuous_autonomous',
+        ),
+        intent: const OpeningIntentSnapshot(
+          resolvedAgentGroupId: 'starter_long_novel_seed_generalist',
+          availableAgentGroupIds: <String>[
+            'starter_long_novel_seed_generalist',
+          ],
+          modeId: 'seed_autopilot_novel',
+        ),
+      );
+
+      final contract = ValueReaders.mapValue(
+        result.state.metadata['fact_acquisition_contract'],
+      );
+      expect(
+        ValueReaders.stringValue(contract['workflow_id']),
+        'long_task_opening',
+      );
+      expect(
+        ValueReaders.stringValue(contract['project_type_id']),
+        'long_novel',
+      );
+    });
   });
 }

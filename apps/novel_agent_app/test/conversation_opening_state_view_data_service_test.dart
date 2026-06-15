@@ -72,7 +72,8 @@ void main() {
 
       expect(state.hasProjectFoundation, isTrue);
       expect(state.missingRequirementTitles, ['灵感种子']);
-      expect(state.nextStepLabel, '补齐关键开局信息');
+      expect(state.firstPrompt, '先用少量选项把这部长篇的开局信息收束清楚。');
+      expect(state.nextStepLabel, '按步骤补齐关键信息');
     },
   );
 }

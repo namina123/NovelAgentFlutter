@@ -2,6 +2,7 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 
 import 'project_chapter_label_parser_service.dart';
 import 'project_chaptered_writing_task_service.dart';
+import 'project_relative_path_canonicalizer_service.dart';
 
 class ProjectChapterContinuityPriorityService {
   const ProjectChapterContinuityPriorityService({
@@ -11,10 +12,13 @@ class ProjectChapterContinuityPriorityService {
            chapteredWritingTaskService ??
            const ProjectChapteredWritingTaskService(),
        _parserService =
-           parserService ?? const ProjectChapterLabelParserService();
+           parserService ?? const ProjectChapterLabelParserService(),
+       _pathCanonicalizerService =
+           const ProjectRelativePathCanonicalizerService();
 
   final ProjectChapteredWritingTaskService _chapteredWritingTaskService;
   final ProjectChapterLabelParserService _parserService;
+  final ProjectRelativePathCanonicalizerService _pathCanonicalizerService;
 
   Map<String, int> buildPriorityWeights(
     List<JsonMap> entries, {
@@ -36,15 +40,19 @@ class ProjectChapterContinuityPriorityService {
       if (ValueReaders.boolValue(entry['is_dir'])) {
         continue;
       }
-      final path = ValueReaders.stringValue(
-        entry['relative_path'],
-      ).trim().replaceAll('\\', '/');
-      if (path.isEmpty) {
+      final rawPath = ValueReaders.stringValue(entry['relative_path'])
+          .trim()
+          .replaceAll('\\', '/');
+      if (rawPath.isEmpty) {
         continue;
       }
-      final weight = _weightForPath(path, focus);
+      final canonicalPath = _pathCanonicalizerService.canonicalize(rawPath);
+      if (canonicalPath.isEmpty) {
+        continue;
+      }
+      final weight = _weightForPath(canonicalPath, focus);
       if (weight > 0) {
-        result[path] = weight;
+        result[rawPath] = weight;
       }
     }
     return result;
@@ -74,6 +82,15 @@ class ProjectChapterContinuityPriorityService {
 
   int _weightForPath(String path, _ChapterFocus focus) {
     final normalized = path.toLowerCase();
+    if (_matchesContinuityBundlePath(normalized)) {
+      return 1790;
+    }
+    if (_matchesContinuityScopePath(normalized)) {
+      return 1780;
+    }
+    if (_matchesContinuityFramePath(normalized)) {
+      return 1770;
+    }
     final pathChapterNumber = _parserService.extractChapterNumber(path);
     if (pathChapterNumber == null) {
       return 0;
@@ -100,6 +117,23 @@ class ProjectChapterContinuityPriorityService {
       return 1090;
     }
     return 0;
+  }
+
+  bool _matchesContinuityBundlePath(String normalizedPath) {
+    // 中文注释: 章级连续写作必须先看见当前项目的连续性总包，避免只带着零散章节文件就开始续写。
+    return normalizedPath == 'tracking/continuity/bundle.json';
+  }
+
+  bool _matchesContinuityScopePath(String normalizedPath) {
+    // 中文注释: scope 文件承载当前连续性作用域与默认全局边界，必须在章级激活里稳定前置。
+    return normalizedPath.startsWith('tracking/continuity/scopes/') &&
+        normalizedPath.endsWith('.json');
+  }
+
+  bool _matchesContinuityFramePath(String normalizedPath) {
+    // 中文注释: frame 文件承载主线连续性框架，优先级要高于普通章节清单，才能让承接锚点更稳定。
+    return normalizedPath.startsWith('tracking/continuity/frames/') &&
+        normalizedPath.endsWith('.json');
   }
 
   bool _matchesSummaryPath(

@@ -5,13 +5,16 @@ class AppShellDestinationController {
   AppShellDestinationController({
     required void Function(AppDestination destination) changeDestination,
     required Future<void> Function() refreshProjectOpen,
+    required Future<void> Function() refreshTaskCenter,
     required LongTaskStationController longTaskStationController,
   }) : _changeDestination = changeDestination,
        _refreshProjectOpen = refreshProjectOpen,
+       _refreshTaskCenter = refreshTaskCenter,
        _longTaskStationController = longTaskStationController;
 
   final void Function(AppDestination destination) _changeDestination;
   final Future<void> Function() _refreshProjectOpen;
+  final Future<void> Function() _refreshTaskCenter;
   final LongTaskStationController _longTaskStationController;
 
   Future<void> showProjectOpen() async {
@@ -51,8 +54,9 @@ class AppShellDestinationController {
   }
 
   Future<void> showTaskCenter() async {
-    // 中文注释: 任务中心已从主导航退役，旧入口先统一折返到长任务总站。
-    await showLongTaskStation();
+    // 中文注释: 任务中心作为长任务参数与队列控制面保留可直达入口，但仍不占主导航常驻位。
+    _changeDestination(AppDestination.taskCenter);
+    await _refreshTaskCenter();
   }
 
   Future<void> showLongTaskStation() async {
@@ -97,6 +101,9 @@ class AppShellDestinationController {
         return;
       case AppDestination.longTaskStation:
         await showLongTaskStation();
+        return;
+      case AppDestination.taskCenter:
+        await showTaskCenter();
         return;
       case AppDestination.settings:
         showSettings();

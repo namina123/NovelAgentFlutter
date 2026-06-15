@@ -59,7 +59,7 @@ class HfvvAppShellHarness {
       '${artifactRoot.path}${Platform.pathSeparator}$hfvv02LaneId',
     );
     if (workspaceRoot.existsSync()) {
-      workspaceRoot.deleteSync(recursive: true);
+      await _deleteDirectoryWithRetries(workspaceRoot);
     }
     workspaceRoot.createSync(recursive: true);
     artifactRoot.createSync(recursive: true);
@@ -319,6 +319,26 @@ class HfvvAppShellHarness {
   static Directory _resolveRepoRoot() {
     final candidate = Directory.current.parent.parent;
     return candidate;
+  }
+
+  static Future<void> _deleteDirectoryWithRetries(
+    Directory directory, {
+    int attempts = 3,
+  }) async {
+    // 中文注释: HFVV 工作区在 Windows 上偶尔会遇到目录残留或短暂占用，这里做有限重试，避免测试支架把环境问题误判成业务失败。
+    var lastError;
+    for (var attempt = 0; attempt < attempts; attempt += 1) {
+      try {
+        directory.deleteSync(recursive: true);
+        return;
+      } catch (error) {
+        lastError = error;
+        if (attempt + 1 < attempts) {
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+        }
+      }
+    }
+    throw lastError;
   }
 
   static AppSettings _seedSettings() {
@@ -676,6 +696,7 @@ class ScriptedGenerateDraftUseCase extends GenerateDraftUseCase {
   String lastUserPrompt = '';
   String lastModelId = '';
   String lastSessionContext = '';
+  SessionPromptContext lastSessionPromptContext = const SessionPromptContext();
   JsonMap lastAgent = const <String, Object?>{};
   JsonMap lastSelectedCollaborationGroup = const <String, Object?>{};
 
@@ -695,6 +716,7 @@ class ScriptedGenerateDraftUseCase extends GenerateDraftUseCase {
     JsonMap agent = const <String, Object?>{},
     JsonMap selectedCollaborationGroup = const <String, Object?>{},
     String sessionContext = '',
+    SessionPromptContext sessionPromptContext = const SessionPromptContext(),
     JsonMap requestOptions = const <String, Object?>{},
     JsonMap contextSettings = const <String, Object?>{},
     JsonMap modelProfile = const <String, Object?>{},
@@ -718,6 +740,7 @@ class ScriptedGenerateDraftUseCase extends GenerateDraftUseCase {
     lastUserPrompt = userPrompt;
     lastModelId = modelId;
     lastSessionContext = sessionContext;
+    lastSessionPromptContext = sessionPromptContext;
     lastAgent = ValueReaders.deepCopyMap(agent);
     lastSelectedCollaborationGroup = ValueReaders.deepCopyMap(
       selectedCollaborationGroup,

@@ -1,9 +1,15 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import '../project/project_fact_acquisition_contract_service.dart';
 import 'session_record_constants.dart';
 
 class SessionGoalPromptBuilderService {
-  const SessionGoalPromptBuilderService();
+  const SessionGoalPromptBuilderService({
+    ProjectFactAcquisitionContractService factAcquisitionContractService =
+        const ProjectFactAcquisitionContractService(),
+  }) : _factAcquisitionContractService = factAcquisitionContractService;
+
+  final ProjectFactAcquisitionContractService _factAcquisitionContractService;
 
   String build({
     required String mode,
@@ -31,6 +37,26 @@ class SessionGoalPromptBuilderService {
     if (excerpt.isNotEmpty) {
       lines.add('- 当前文件片段：$excerpt');
     }
+    final continuationHint =
+        cleanMode == SessionRecordConstants.modeContinueWriting
+        ? _continuationTargetHint(activeDocumentPath, activeDocumentExcerpt)
+        : '';
+    if (continuationHint.isNotEmpty) {
+      lines.add('- $continuationHint');
+    }
+    lines.add('');
+    lines.add(
+      _factAcquisitionContractService
+          .build(
+            workflowId: 'interactive_opening',
+            projectTypeId: ValueReaders.stringValue(
+              project['project_type'],
+              'novel',
+            ),
+            intent: cleanMode,
+          )
+          .renderMarkdown(),
+    );
     lines.add('');
     lines.add('本次流程要求：');
     for (final item in _requirements(cleanMode)) {
@@ -39,7 +65,9 @@ class SessionGoalPromptBuilderService {
     lines.add('');
     lines.add('回复方式：');
     lines.add('- 先判断当前项目是适合直接推进、需要补资料，还是建议切换流程。');
-    lines.add('- 如果需要用户补充，不要甩长表单；给出 2-4 个清晰选项或一个最小输入请求。给出选项时使用 present_user_options。');
+    lines.add(
+      '- 如果需要用户补充，不要甩长表单；给出 2-4 个清晰选项或一个最小输入请求。给出选项时使用 present_user_options。',
+    );
     lines.add('- 如果已经可以推进，请直接产出当前阶段最有价值的内容，并说明建议保存到哪个中文目录。');
     return lines.join('\n');
   }
@@ -95,7 +123,7 @@ class SessionGoalPromptBuilderService {
     switch (mode) {
       case SessionRecordConstants.modeSummarizeBook:
         return const <String>[
-          '检查 chapters/、scenes/、summaries/、outline/ 等目录是否有可总结材料。',
+          '检查 chapters/、scenes/、summaries/、outlines/story/ 等目录是否有可总结材料。',
           '材料不足时，引导我先导入文章、写首章或建立大纲，不要编造全书内容。',
           '材料足够时，输出分层摘要：一句话定位、主线、角色状态、世界规则、伏笔和待续写问题。',
         ];
@@ -164,5 +192,153 @@ class SessionGoalPromptBuilderService {
       return cleanText;
     }
     return '${cleanText.substring(0, maxChars)}...';
+  }
+
+  String _continuationTargetHint(
+    String activeDocumentPath,
+    String activeDocumentExcerpt,
+  ) {
+    // 中文注释: 继续创作入口需要把“当前章 -> 下一章”这条承接关系显式写进提示词，避免模型只看到门前状态却不知道目标章节。
+    final chapterNumber =
+        _chapterNumberFromText(activeDocumentPath) ??
+        _chapterNumberFromText(activeDocumentExcerpt);
+    if (chapterNumber == null || chapterNumber <= 0) {
+      return '';
+    }
+    final currentLabel = _chapterLabelForNumber(chapterNumber);
+    final nextLabel = _chapterLabelForNumber(chapterNumber + 1);
+    if (currentLabel.isEmpty || nextLabel.isEmpty) {
+      return '';
+    }
+    return '当前打开文件指向$currentLabel，请直接把$nextLabel作为续写目标，不要重新从$currentLabel门前动作起笔。';
+  }
+
+  int? _chapterNumberFromText(String text) {
+    // 中文注释: 这里只做轻量章节号识别，供继续创作提示词生成下一章锚点，不承担完整章节标签解析职责。
+    final cleanText = text.trim();
+    if (cleanText.isEmpty) {
+      return null;
+    }
+    final matches = RegExp(r'第\s*([0-9０-９]+)\s*章').allMatches(cleanText);
+    if (matches.isNotEmpty) {
+      final rawDigits = _normalizeDigits(matches.first.group(1) ?? '');
+      final chapterNumber = int.tryParse(rawDigits);
+      if (chapterNumber != null && chapterNumber > 0) {
+        return chapterNumber;
+      }
+    }
+    final chineseMatches = RegExp(
+      r'第\s*([零〇一二三四五六七八九十百千万两]+)\s*章',
+    ).allMatches(cleanText);
+    if (chineseMatches.isEmpty) {
+      return null;
+    }
+    return _parseChineseChapterNumber(chineseMatches.first.group(1) ?? '');
+  }
+
+  int? _parseChineseChapterNumber(String rawDigits) {
+    // 中文注释: 中文章号只需要覆盖常见写法，保证提示词能从章节标题和正文片段里抓到稳定的章号。
+    final normalized = rawDigits.trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+    if (!normalized.contains(RegExp(r'[十百千万]'))) {
+      final digitString = normalized
+          .split('')
+          .map(_chineseDigitValue)
+          .whereType<int>()
+          .map((value) => value.toString())
+          .join();
+      return digitString.isEmpty ? null : int.tryParse(digitString);
+    }
+
+    final wanIndex = normalized.indexOf('万');
+    if (wanIndex >= 0) {
+      final high = normalized.substring(0, wanIndex);
+      final low = normalized.substring(wanIndex + 1);
+      final highValue = _parseChineseChapterSection(high);
+      final lowValue = low.isEmpty ? 0 : _parseChineseChapterSection(low);
+      if (highValue == null || lowValue == null) {
+        return null;
+      }
+      return (highValue * 10000) + lowValue;
+    }
+    return _parseChineseChapterSection(normalized);
+  }
+
+  int? _parseChineseChapterSection(String rawDigits) {
+    // 中文注释: 章节中文数字解析只服务章节号提取，不需要兼容更广的数词语义。
+    final normalized = rawDigits.trim();
+    if (normalized.isEmpty) {
+      return 0;
+    }
+    var result = 0;
+    var currentDigit = 0;
+    for (final char in normalized.split('')) {
+      final unitValue = _chineseUnitValue(char);
+      if (unitValue != null) {
+        final factor = currentDigit == 0 ? 1 : currentDigit;
+        result += factor * unitValue;
+        currentDigit = 0;
+        continue;
+      }
+      final digitValue = _chineseDigitValue(char);
+      if (digitValue == null) {
+        return null;
+      }
+      currentDigit = digitValue;
+    }
+    return result + currentDigit;
+  }
+
+  int? _chineseDigitValue(String char) {
+    // 中文注释: 中文数字字符的映射只保留章节号识别所需的最小集合。
+    return switch (char) {
+      '零' || '〇' => 0,
+      '一' => 1,
+      '二' || '两' => 2,
+      '三' => 3,
+      '四' => 4,
+      '五' => 5,
+      '六' => 6,
+      '七' => 7,
+      '八' => 8,
+      '九' => 9,
+      _ => null,
+    };
+  }
+
+  int? _chineseUnitValue(String char) {
+    // 中文注释: 中文章节号只识别到千位即可，足以覆盖当前写作场景。
+    return switch (char) {
+      '十' => 10,
+      '百' => 100,
+      '千' => 1000,
+      _ => null,
+    };
+  }
+
+  String _normalizeDigits(String rawDigits) {
+    // 中文注释: 全角数字先归一化为半角，避免章节号提示在中英文混排路径里漏判。
+    if (rawDigits.isEmpty) {
+      return '';
+    }
+    final buffer = StringBuffer();
+    for (final codeUnit in rawDigits.codeUnits) {
+      if (codeUnit >= 0xFF10 && codeUnit <= 0xFF19) {
+        buffer.writeCharCode(codeUnit - 0xFF10 + 0x30);
+      } else {
+        buffer.writeCharCode(codeUnit);
+      }
+    }
+    return buffer.toString();
+  }
+
+  String _chapterLabelForNumber(int chapterNumber) {
+    // 中文注释: 章节提示只需要稳定输出两位章号，便于与 production 章节路径合同对齐。
+    if (chapterNumber <= 0) {
+      return '';
+    }
+    return '第${chapterNumber.toString().padLeft(2, '0')}章';
   }
 }

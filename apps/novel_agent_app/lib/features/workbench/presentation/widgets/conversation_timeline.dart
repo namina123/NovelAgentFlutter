@@ -34,12 +34,14 @@ class _ConversationTimelineState extends State<ConversationTimeline> {
 
   late ConversationTimelineSnapshot _snapshot;
   bool _anchoredToLatest = true;
+  bool _initialRevealScheduled = false;
 
   @override
   void initState() {
     super.initState();
     _snapshot = _currentSnapshot();
     _scrollController.addListener(_handleScrollChanged);
+    _scheduleInitialReveal();
   }
 
   @override
@@ -222,6 +224,14 @@ class _ConversationTimelineState extends State<ConversationTimeline> {
 
   void _handleScrollChanged() {
     _anchoredToLatest = _isNearBottom();
+  }
+
+  void _scheduleInitialReveal() {
+    if (_initialRevealScheduled || _snapshot.blockCount <= 0) {
+      return;
+    }
+    _initialRevealScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _revealLatest());
   }
 
   bool _isNearBottom() {

@@ -80,13 +80,15 @@ class ConversationOpeningStateViewDataService {
       return '先确认一个适用于当前项目的智能体组。';
     }
     if (missingRequirementTitles.isNotEmpty) {
-      return projectType.trim() == 'long_novel' ? '先补齐长任务开局缺口。' : '先补齐当前开局缺口。';
+      return projectType.trim() == 'long_novel'
+          ? '先用少量选项把这部长篇的开局信息收束清楚。'
+          : '先用少量选项把当前开局缺口补齐。';
     }
     if (maturity.isContinueReady || hasProjectFoundation) {
       return '直接告诉智能体你现在要继续推进什么。';
     }
     return projectType.trim() == 'long_novel'
-        ? '先把这部长篇怎么开局说清楚。'
+        ? '先把这部长篇要怎么开局、往哪推进说清楚。'
         : '先用一句话说明你想让智能体怎么开始。';
   }
 
@@ -99,7 +101,7 @@ class ConversationOpeningStateViewDataService {
       return '确认项目智能体组';
     }
     if (missingRequirementTitles.isNotEmpty) {
-      return '补齐关键开局信息';
+      return '按步骤补齐关键信息';
     }
     if (nextAction != null) {
       return nextAction.title;

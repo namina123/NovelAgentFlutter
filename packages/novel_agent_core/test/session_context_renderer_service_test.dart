@@ -12,7 +12,6 @@ void main() {
     final renderer = SessionContextRendererService(
       normalizerService: normalizer,
       messageService: messageService,
-      modeService: modeService,
     );
 
     test(

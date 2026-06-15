@@ -21,7 +21,11 @@ class ProjectCreationExpressionConstraintDefaultsSettingsService {
 
   static const String settingsRootKey = 'project_creation_defaults';
   static const String profileIdsKey = 'expression_constraint_profile_ids';
-  static const List<String> builtinFallbackProfileIds = <String>['de_ai'];
+  static const List<String> builtinFallbackProfileIds = <String>[
+    'de_ai',
+    'strict_pov_boundary',
+    'low_jargon_narration',
+  ];
 
   ProjectCreationExpressionConstraintDefaultsSelection resolveSelection(
     AppSettings settings,

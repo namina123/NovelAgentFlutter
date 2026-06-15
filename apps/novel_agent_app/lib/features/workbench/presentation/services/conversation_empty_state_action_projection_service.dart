@@ -20,10 +20,14 @@ class ConversationEmptyStateActionProjectionService {
       return <PrimaryActionViewData>[openingState!.nextAction!];
     }
     if (openingState != null) {
-      if (openingState.nextAction != null) {
-        return <PrimaryActionViewData>[openingState.nextAction!];
+      if (openingState.nextAction == null) {
+        return const <PrimaryActionViewData>[];
       }
-      return const <PrimaryActionViewData>[];
+      final guidedActions = _prioritizeGuidedOpeningActions(actions);
+      if (guidedActions.isNotEmpty) {
+        return guidedActions;
+      }
+      return <PrimaryActionViewData>[openingState.nextAction!];
     }
     if (_isNaturalNovelWritingPath(viewData, actions)) {
       final prioritized = _prioritizeNovelWritingActions(actions);
@@ -92,6 +96,19 @@ class ConversationEmptyStateActionProjectionService {
     List<PrimaryActionViewData> actions,
   ) {
     return actions.map(_humanizeAction).toList(growable: false);
+  }
+
+  List<PrimaryActionViewData> _prioritizeGuidedOpeningActions(
+    List<PrimaryActionViewData> actions,
+  ) {
+    final sanitized = _sanitizeActions(actions);
+    if (sanitized.length <= 1) {
+      return sanitized;
+    }
+    final focused = sanitized
+        .where((action) => action.commandId.trim() != 'guide.back.default')
+        .toList(growable: false);
+    return focused.isEmpty ? sanitized : focused;
   }
 
   PrimaryActionViewData _humanizeAction(PrimaryActionViewData action) {

@@ -3,11 +3,9 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 class WorkspaceResourceVisibilityService {
   const WorkspaceResourceVisibilityService();
 
-  static const List<String> _legacyCompatibilityRoots = <String>[
+  static const List<String> _supplementalLegacyCompatibilityRoots = <String>[
     'drafts',
-    'specs',
     'characters',
-    'inspiration',
   ];
 
   bool shouldHideFromDefaultTree(String relativePath) {
@@ -48,12 +46,28 @@ class WorkspaceResourceVisibilityService {
     if (cleanPath.isEmpty) {
       return false;
     }
-    for (final root in _legacyCompatibilityRoots) {
+    for (final root in _legacyCompatibilityRoots()) {
       if (cleanPath == root || cleanPath.startsWith('$root/')) {
         return true;
       }
     }
     return false;
+  }
+
+  List<String> _legacyCompatibilityRoots() {
+    final roots = <String>[..._supplementalLegacyCompatibilityRoots];
+    for (final descriptor
+        in ProjectWorkspaceCatalog.legacyResourceCompatibilityDirs) {
+      final cleanPath = _normalizePath(descriptor.path).toLowerCase();
+      if (cleanPath.isEmpty) {
+        continue;
+      }
+      final root = cleanPath.split('/').first;
+      if (root.isNotEmpty && !roots.contains(root)) {
+        roots.add(root);
+      }
+    }
+    return roots;
   }
 
   String _normalizePath(String relativePath) {

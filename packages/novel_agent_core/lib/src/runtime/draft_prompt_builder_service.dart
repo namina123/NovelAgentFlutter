@@ -22,10 +22,25 @@ class DraftPromptBuilderService {
     final outputInstruction = resolvedTitle.isEmpty
         ? '请直接输出中文 Markdown 正文，不要解释流程，不要输出多余前言。'
         : '请围绕标题《$resolvedTitle》输出中文 Markdown 正文，不要解释流程，不要输出多余前言。';
+    final creativeRuleSummary = ValueReaders.stringValue(
+      contextPack['creative_rule_summary'],
+    ).trim();
+    final executionConstraintSummary = ValueReaders.stringValue(
+      contextPack['execution_constraint_summary'],
+    ).trim();
     return <String>[
       '# NOVEL Agent Draft Generation',
       '',
       _projectPromptContract.workspaceConvention(),
+      '',
+      _projectPromptContract.factAcquisitionGuidance(
+        workflowId: 'draft',
+        projectTypeId: ValueReaders.stringValue(
+          project['project_type'],
+          'novel',
+        ),
+        intent: intent,
+      ),
       '',
       _projectPromptContract.toolDecisionContract(),
       '',
@@ -36,6 +51,16 @@ class DraftPromptBuilderService {
       _projectPromptContract.informationToolGuidance(intent, agent: agent),
       '',
       _projectPromptContract.agentInstructions(agent),
+      if (creativeRuleSummary.isNotEmpty) ...[
+        '',
+        '## 高优先级创作约束',
+        creativeRuleSummary,
+      ],
+      if (executionConstraintSummary.isNotEmpty) ...[
+        '',
+        '## 执行硬约束',
+        executionConstraintSummary,
+      ],
       '',
       '## 输出要求',
       outputInstruction,

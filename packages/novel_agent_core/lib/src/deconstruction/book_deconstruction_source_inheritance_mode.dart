@@ -1,0 +1,4 @@
+enum BookDeconstructionSourceInheritanceMode {
+  continuation,
+  fanfic,
+}

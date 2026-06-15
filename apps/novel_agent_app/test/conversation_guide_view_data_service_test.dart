@@ -28,7 +28,10 @@ void main() {
     expect(guide.workflowDescription, contains('当前智能体组：默认长任务开局'));
     expect(guide.primaryActions.single.commandId, 'opening.launch_long_task');
     expect(guide.openingState, isNotNull);
-    expect(guide.openingState!.firstPrompt, contains('长任务'));
+    expect(
+      guide.openingState!.firstPrompt,
+      '让长篇主智能体先判断当前真正缺什么，再决定是补问、整理开局材料，还是直接继续推进。',
+    );
     expect(guide.openingState!.preferSingleAction, isTrue);
   });
 
@@ -57,7 +60,10 @@ void main() {
     expect(guide.workflowTitle, '长任务开局');
     expect(guide.openingState, isNotNull);
     expect(guide.openingState!.hasProjectFoundation, isTrue);
-    expect(guide.openingState!.firstPrompt, '先补齐长任务开局缺口。');
+    expect(
+      guide.openingState!.firstPrompt,
+      '让长篇主智能体先判断当前真正缺什么，再决定是补问、整理开局材料，还是直接继续推进。',
+    );
   });
 
   test('普通项目在已有 opening projection 时会保留原会话入口并补状态摘要', () {

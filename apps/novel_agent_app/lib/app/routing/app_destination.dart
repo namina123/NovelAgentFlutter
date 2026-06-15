@@ -4,5 +4,6 @@ enum AppDestination {
   agentEcosystem,
   projectAssets,
   longTaskStation,
+  taskCenter,
   settings,
 }

@@ -4,6 +4,7 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 
 import 'project_chapter_label_parser_service.dart';
 import 'project_chaptered_writing_task_service.dart';
+import 'project_relative_path_canonicalizer_service.dart';
 
 class ProjectChapterContinuityHandoffItemService {
   const ProjectChapterContinuityHandoffItemService({
@@ -14,11 +15,14 @@ class ProjectChapterContinuityHandoffItemService {
            chapteredWritingTaskService ??
            const ProjectChapteredWritingTaskService(),
        _parserService =
-           parserService ?? const ProjectChapterLabelParserService();
+           parserService ?? const ProjectChapterLabelParserService(),
+       _pathCanonicalizerService =
+           const ProjectRelativePathCanonicalizerService();
 
   final int continuationPointChars;
   final ProjectChapteredWritingTaskService _chapteredWritingTaskService;
   final ProjectChapterLabelParserService _parserService;
+  final ProjectRelativePathCanonicalizerService _pathCanonicalizerService;
 
   Future<List<ContextActivationItem>> buildItems({
     required ProjectWorkspacePort workspacePort,
@@ -397,7 +401,9 @@ class ProjectChapterContinuityHandoffItemService {
                   ValueReaders.stringValue(entry['relative_path']).trim(),
             )
             .where((path) {
-              final normalized = path.replaceAll('\\', '/').toLowerCase();
+              final normalized = _pathCanonicalizerService
+                  .canonicalize(path)
+                  .toLowerCase();
               return normalized.startsWith('chapters/') &&
                   normalized.endsWith('.md') &&
                   _parserService.extractChapterNumber(path) == chapterNumber;

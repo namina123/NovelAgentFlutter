@@ -498,6 +498,26 @@ void main() {
       expect(result['relative_path'], 'chapters/chapter_02.md');
       expect(result.containsKey('domain_outcome'), isFalse);
     });
+
+    test(
+      'write_project_file uses chapter title path when relative path is omitted',
+      () async {
+        final result = await dispatcher.execute(
+          project: project,
+          toolCall: const <String, Object?>{
+            'name': 'write_project_file',
+            'arguments': <String, Object?>{
+              'content_type': 'chapter',
+              'content': '# 第02章 雨夜入城\n\n正文',
+            },
+          },
+        );
+
+        expect(result['ok'], isTrue);
+        expect(result['tool_layer'], 'low_level');
+        expect(result['relative_path'], 'chapters/第02章_雨夜入城.md');
+      },
+    );
   });
 }
 

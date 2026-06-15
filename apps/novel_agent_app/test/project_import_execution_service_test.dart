@@ -1,8 +1,13 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_app/features/book_deconstruction/application/services/book_deconstruction_narrative_persistence_service.dart';
 import 'package:novel_agent_app/features/workbench/application/models/project_import_request.dart';
 import 'package:novel_agent_app/features/workbench/application/services/project_import_execution_service.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
+
+import '../tool/real_gui_book_deconstruction_import_probe.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -46,6 +51,8 @@ void main() {
       expect(result.ok, isTrue);
       expect(result.importedPaths, <String>['assets/reference.txt']);
       expect(result.autoDeconstructionApplied, isFalse);
+      expect(result.smartAnalysisApplied, isFalse);
+      expect(result.smartAnalysisReportPath, isEmpty);
       expect(hostPort.copiedFiles.single, (
         absolutePath: 'C:/imports/reference.txt',
         rootPath: 'D:/Projects/novel_project',
@@ -95,6 +102,8 @@ void main() {
 
       expect(result.ok, isTrue);
       expect(result.autoDeconstructionApplied, isTrue);
+      expect(result.smartAnalysisApplied, isFalse);
+      expect(result.smartAnalysisReportPath, isEmpty);
       expect(
         result.autoDeconstructionPreviewPath,
         'chapters/book_deconstruction_source_book.md',
@@ -111,6 +120,171 @@ void main() {
       );
       expect(claimsLog, contains('analysis.deconstruction.story_outline'));
       expect(result.summary, contains('自动拆书预演纪要已写入'));
+    },
+  );
+
+  test(
+    'project import execution service writes smart analysis report for general projects',
+    () async {
+      final hostPort = _FakeProjectToolHostPort(
+        externalFiles: <String, String>{
+          'C:/imports/outline.md': '第一章 港口风暴\n这是一个章节式小说来源草稿。',
+        },
+      );
+      final workspacePort = _InMemoryProjectWorkspacePort();
+      final importUseCase = ImportProjectFilesUseCase(
+        projectToolHostPort: hostPort,
+      );
+      final service = ProjectImportExecutionService(
+        importProjectFilesUseCase: importUseCase,
+        projectToolHostPort: hostPort,
+        writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
+          projectWorkspacePort: workspacePort,
+        ),
+        narrativePersistenceService:
+            BookDeconstructionNarrativePersistenceService(
+              workspacePort: workspacePort,
+            ),
+      );
+
+      final result = await service.execute(
+        project: const ProjectDescriptor(
+          id: 'project-3',
+          name: '一般项目',
+          rootPath: 'D:/Projects/general_project',
+          projectType: 'novel',
+        ),
+        request: const ProjectImportRequest(
+          sourcePaths: <String>['C:/imports/outline.md'],
+          targetDirectory: 'assets',
+          autoDeconstruct: false,
+          smartAnalysis: true,
+          analysisAgentId: 'analysis-agent',
+          analysisAgentGroupId: 'analysis-group',
+        ),
+      );
+
+      expect(result.ok, isTrue);
+      expect(result.autoDeconstructionApplied, isFalse);
+      expect(result.smartAnalysisApplied, isTrue);
+      expect(
+        result.smartAnalysisReportPath,
+        'analysis/project_import_analysis.md',
+      );
+      final reportContent = workspacePort.readStoredTextFile(
+        'D:/Projects/general_project',
+        'analysis/project_import_analysis.md',
+      );
+      expect(reportContent, isNotNull);
+      expect(reportContent, contains('# 导入智能分析'));
+      expect(reportContent, contains('analysis-agent'));
+      expect(reportContent, contains('analysis-group'));
+      expect(reportContent, contains('novel_source_text'));
+      expect(result.summary, contains('智能分析报告已写入'));
+    },
+  );
+
+  test(
+    'project import execution service can smart-analyze mixed directory imports with epub content',
+    () async {
+      final tempDirectory = await Directory.systemTemp.createTemp(
+        'project_import_execution_mixed_directory_test_',
+      );
+      addTearDown(() async {
+        if (await tempDirectory.exists()) {
+          await tempDirectory.delete(recursive: true);
+        }
+      });
+
+      final sourceRoot = Directory(
+        '${tempDirectory.path}${Platform.pathSeparator}sources',
+      )..createSync(recursive: true);
+      final textsRoot = Directory(
+        '${sourceRoot.path}${Platform.pathSeparator}texts',
+      )..createSync(recursive: true);
+      final seriesRoot = Directory(
+        '${sourceRoot.path}${Platform.pathSeparator}series',
+      )..createSync(recursive: true);
+      final ignoredRoot = Directory(
+        '${sourceRoot.path}${Platform.pathSeparator}ignored',
+      )..createSync(recursive: true);
+      await File(
+        '${textsRoot.path}${Platform.pathSeparator}chapter_01.txt',
+      ).writeAsString('第一章 港口风暴');
+      await File(
+        '${textsRoot.path}${Platform.pathSeparator}outline.md',
+      ).writeAsString('这是一个章节式小说来源草稿。');
+      await File(
+        '${seriesRoot.path}${Platform.pathSeparator}probe_story.epub',
+      ).writeAsBytes(buildProbeSampleEpubBytes());
+      await File(
+        '${ignoredRoot.path}${Platform.pathSeparator}cover.png',
+      ).writeAsBytes(<int>[0x89, 0x50, 0x4E, 0x47]);
+
+      final bundle = AdapterBundle.standard(
+        workingDirectoryPath: tempDirectory.path,
+        settingsRootPath:
+            '${tempDirectory.path}${Platform.pathSeparator}settings',
+        defaultProjectRootPath:
+            '${tempDirectory.path}${Platform.pathSeparator}projects',
+        allowConfiguredProjectPathOverride: false,
+      );
+      final importUseCase = ImportProjectFilesUseCase(
+        projectToolHostPort: bundle.projectToolHostPort,
+        sourceImportDiscoveryPort: const SourceImportDiscoveryService(),
+      );
+      final service = ProjectImportExecutionService(
+        importProjectFilesUseCase: importUseCase,
+        projectToolHostPort: bundle.projectToolHostPort,
+        writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
+          projectWorkspacePort: bundle.projectWorkspacePort,
+        ),
+        narrativePersistenceService:
+            BookDeconstructionNarrativePersistenceService(
+              workspacePort: bundle.projectWorkspacePort,
+            ),
+        sourceDocumentReaderService:
+            const ReferenceSourceDocumentFileReaderService(),
+      );
+
+      final projectRoot =
+          '${tempDirectory.path}${Platform.pathSeparator}projects${Platform.pathSeparator}general_directory_project';
+      final result = await service.execute(
+        project: ProjectDescriptor(
+          id: 'project-4',
+          name: '一般目录项目',
+          rootPath: projectRoot,
+          projectType: 'novel',
+        ),
+        request: ProjectImportRequest(
+          sourcePaths: <String>[sourceRoot.path],
+          targetDirectory: 'assets/bundle',
+          autoDeconstruct: false,
+          smartAnalysis: true,
+          analysisAgentId: 'analysis-agent',
+          analysisAgentGroupId: 'analysis-group',
+        ),
+      );
+
+      expect(result.ok, isTrue);
+      expect(
+        result.importedPaths,
+        contains('assets/bundle/texts/chapter_01.txt'),
+      );
+      expect(result.importedPaths, contains('assets/bundle/texts/outline.md'));
+      expect(
+        result.importedPaths,
+        contains('assets/bundle/series/probe_story.epub'),
+      );
+      expect(result.smartAnalysisApplied, isTrue);
+      final reportContent = await bundle.projectWorkspacePort.readTextFile(
+        projectRoot,
+        'analysis/project_import_analysis.md',
+      );
+      expect(reportContent, isNotNull);
+      expect(reportContent, contains('# 导入智能分析'));
+      expect(reportContent, contains('probe_story.epub'));
+      expect(result.summary, contains('智能分析报告已写入'));
     },
   );
 }

@@ -12,16 +12,21 @@ class ProjectFileWriteToolExecutor {
     ProjectToolPathPolicy? pathPolicy,
     ProjectToolResultFactory? resultFactory,
     ProjectStorageAwareWorkspacePolicy? workspacePolicy,
+    ChapterOutputPathPolicyService? chapterOutputPathPolicyService,
   }) : _hostPort = hostPort,
        _pathPolicy = pathPolicy ?? ProjectToolPathPolicy(),
        _resultFactory = resultFactory ?? ProjectToolResultFactory(),
        _workspacePolicy =
-           workspacePolicy ?? const ProjectStorageAwareWorkspacePolicy();
+           workspacePolicy ?? const ProjectStorageAwareWorkspacePolicy(),
+       _chapterOutputPathPolicyService =
+           chapterOutputPathPolicyService ??
+           const ChapterOutputPathPolicyService();
 
   final ProjectToolHostPort _hostPort;
   final ProjectToolPathPolicy _pathPolicy;
   final ProjectToolResultFactory _resultFactory;
   final ProjectStorageAwareWorkspacePolicy _workspacePolicy;
+  final ChapterOutputPathPolicyService _chapterOutputPathPolicyService;
 
   Future<JsonMap> writeProjectFile(
     ProjectDescriptor project,
@@ -40,9 +45,18 @@ class ProjectFileWriteToolExecutor {
       ValueReaders.stringValue(arguments['relative_path']),
     );
     if (relativePath.isEmpty) {
-      final fileName =
-          '${_pathPolicy.safeFileName(title, fallback: contentType)}.md';
-      relativePath = '${_pathPolicy.contentTypeDir(contentType)}/$fileName';
+      if (contentType == 'chapter') {
+        relativePath = _chapterOutputPathPolicyService.suggestChapterPath(
+          explicitTitle: title,
+          chapterContent: content,
+          fallbackTitle: contentType,
+        );
+      }
+      if (relativePath.trim().isEmpty) {
+        final fileName =
+            '${_pathPolicy.safeFileName(title, fallback: contentType)}.md';
+        relativePath = '${_pathPolicy.contentTypeDir(contentType)}/$fileName';
+      }
     }
     if (!relativePath.split('/').last.contains('.')) {
       relativePath = '$relativePath.md';

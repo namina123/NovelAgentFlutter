@@ -11,4 +11,18 @@ void main() {
       'outlines/chapters/章节任务清单.md',
     ]);
   });
+
+  test('exposes stricter sample readiness artifacts', () {
+    const service = LongTaskPlanningArtifactPathService();
+
+    expect(service.sampleReadinessRequiredPaths(), <String>[
+      'specs/project_spec.md',
+      'assets/styles/全书风格指南.md',
+      'outlines/story/总纲.md',
+      'outlines/chapters/章节任务清单.md',
+    ]);
+    expect(service.sampleReadinessOptionalPaths(), <String>[
+      'outlines/volumes',
+    ]);
+  });
 }

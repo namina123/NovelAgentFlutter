@@ -20,6 +20,7 @@ import 'package:novel_agent_app/features/workbench/application/services/project_
 import 'package:novel_agent_app/features/workbench/application/services/workbench_primary_action_service.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/conversation_agent_selector_view_data.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/selector_option_view_data.dart';
+import 'package:novel_agent_app/features/workbench/presentation/models/user_option_view_data.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/workbench_view_data.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
@@ -64,6 +65,37 @@ void main() {
       },
     );
 
+    test('launch long task sends an agent-led opening prompt', () async {
+      final harness = _ConversationControllerHarness(
+        project: const ProjectDescriptor(
+          id: 'long_project',
+          name: '长篇项目',
+          rootPath: 'D:/Projects/long_project',
+          projectType: 'long_novel',
+        ),
+        runtimeProfile: const ProjectRuntimeProfile(
+          projectType: 'long_novel',
+          runtimeBaselineId: '',
+          runtimeMode: '',
+          initialRunOptions: <String, Object?>{},
+        ),
+        openingProjection: _longTaskProjection(),
+      );
+
+      await harness.controller.onPrimaryActionRequested(
+        'opening.launch_long_task',
+      );
+
+      expect(
+        harness.generateDraftUseCase.lastUserPrompt,
+        contains('请接管这个长篇项目的开局推进'),
+      );
+      expect(
+        harness.generateDraftUseCase.lastUserPrompt,
+        contains('不要为了流程整齐而机械地逐项盘问'),
+      );
+    });
+
     test(
       'preflights and compacts session context before the model request is built',
       () async {
@@ -93,7 +125,17 @@ void main() {
         );
         expect(
           harness.generateDraftUseCase.lastSessionContext,
-          contains('【工作上下文】'),
+          isNot(contains('【工作上下文】')),
+        );
+        expect(
+          harness.generateDraftUseCase.lastSessionPromptContext.historyMessages,
+          isNotEmpty,
+        );
+        expect(
+          harness.generateDraftUseCase.lastSessionPromptContext.historyMessages
+              .map((message) => ValueReaders.stringValue(message['content']))
+              .any((content) => content.contains('第二轮：')),
+          isTrue,
         );
         expect(
           harness.generateDraftUseCase.lastSessionContext,
@@ -489,6 +531,79 @@ void main() {
     );
 
     test(
+      'routes premise-side concept planning prompts into planning runtime instead of chapter runtime',
+      () async {
+        final runtimeService = _FakeProjectConversationDraftRuntimeService(
+          preparation: const ProjectConversationDraftRuntimePreparation(
+            runId: 'conversation_run_planning',
+            taskType: 'planning',
+            activationReportPath:
+                'tracking/conversation_draft/conversation_run_planning.activation_report.json',
+            activationReport: <String, Object?>{
+              'summary':
+                  'selected profiles 0, claims 0, constraints 0, files 1.',
+            },
+            sessionContextMarkdown: '## Activation Report',
+            exposedToolIds: <String>['read_project_file', 'write_project_file'],
+          ),
+        );
+        final harness = _ConversationControllerHarness(
+          conversationDraftRuntimeService: runtimeService,
+        );
+        harness.workspaceController.openOrActivateDocument(
+          relativePath: 'premise/project_brief.md',
+          title: 'project_brief.md',
+          content: '# brief',
+        );
+
+        await harness.controller.onSendRequested('先定概念级能力体系，收束世界规则和角色边界。');
+
+        expect(runtimeService.lastTaskType, 'planning');
+      },
+    );
+
+    test(
+      'routes confirmed personality-and-style user option into planning runtime instead of chapter runtime',
+      () async {
+        final runtimeService = _FakeProjectConversationDraftRuntimeService(
+          preparation: const ProjectConversationDraftRuntimePreparation(
+            runId: 'conversation_run_option_planning',
+            taskType: 'planning',
+            activationReportPath:
+                'tracking/conversation_draft/conversation_run_option_planning.activation_report.json',
+            activationReport: <String, Object?>{
+              'summary':
+                  'selected profiles 0, claims 0, constraints 0, files 0.',
+            },
+            sessionContextMarkdown: '## Activation Report',
+            exposedToolIds: <String>['read_project_file', 'write_project_file'],
+          ),
+        );
+        final harness = _ConversationControllerHarness(
+          conversationDraftRuntimeService: runtimeService,
+        );
+
+        await harness.controller.onUserOptionSelected(
+          const UserOptionViewData(
+            label: '主角性格与处事风格',
+            description: '确认主角的性格底色、处事方式与语言质地。',
+            prompt: '',
+            sourceQuestion: '你想先定哪部分设定？',
+            allOptions: <Map<String, Object?>>[
+              <String, Object?>{
+                'label': '主角性格与处事风格',
+                'description': '确认主角的性格底色、处事方式与语言质地。',
+              },
+              <String, Object?>{'label': '第一章正式正文', 'description': '直接进入章节写作。'},
+            ],
+          ),
+        );
+
+        expect(runtimeService.lastTaskType, 'planning');
+      },
+    );
+
+    test(
       'passes host information permission context into ordinary conversation factory',
       () async {
         final harness = _ConversationControllerHarness(
@@ -626,23 +741,28 @@ class _ConversationControllerHarness {
     ProjectDraftExecutionConstraintRuntimeService?
     draftExecutionConstraintRuntimeService,
     _RecordingGenerateDraftUseCase? generateDraftUseCase,
+    ProjectDescriptor? project,
+    ProjectRuntimeProfile? runtimeProfile,
+    OpeningSessionProjection? openingProjection,
     int modelContextWindowTokens = 100000,
     int maxOutputTokens = 4096,
     int compressionContextLength = 80000,
   }) : _settings = initialSettings ?? _buildSettings(),
        _workbench = initialWorkbench ?? WorkbenchViewData.initial(),
        _projectState = WorkbenchProjectRuntimeState(
-         currentProject: _project(),
-         currentRuntimeProfile: const ProjectRuntimeProfile(
-           projectType: 'novel',
-           runtimeBaselineId: '',
-           runtimeMode: '',
-           initialRunOptions: <String, Object?>{},
-         ),
+         currentProject: project ?? _project(),
+         currentRuntimeProfile:
+             runtimeProfile ??
+             const ProjectRuntimeProfile(
+               projectType: 'novel',
+               runtimeBaselineId: '',
+               runtimeMode: '',
+               initialRunOptions: <String, Object?>{},
+             ),
          openDocuments: const <OpenDocumentState>[],
        ),
        _runtimeState = WorkbenchConversationRuntimeState(
-         openingProjection: _projection(),
+         openingProjection: openingProjection ?? _projection(),
        ),
        generateDraftUseCase =
            generateDraftUseCase ?? _RecordingGenerateDraftUseCase(),
@@ -715,7 +835,7 @@ class _ConversationControllerHarness {
     );
 
     final projectionService = _StaticOpeningSessionProjectionService(
-      projection: _projection(),
+      projection: openingProjection ?? _projection(),
     );
     final modeGuidanceStatePort = _MemoryModeGuidanceStatePort();
     final workflowRuntimeService = ProjectWorkflowRuntimeService(
@@ -876,7 +996,9 @@ class _RecordingGenerateDraftUseCase extends GenerateDraftUseCase {
   final DraftGenerationResult? _scriptedResult;
 
   String lastAgentId = '';
+  String lastUserPrompt = '';
   String lastSessionContext = '';
+  SessionPromptContext lastSessionPromptContext = const SessionPromptContext();
   List<String> lastExposedToolIds = const <String>[];
   List<Object?> lastExpressionConstraintProfiles = const <Object?>[];
   List<Object?> lastProjectExpressionConstraintBindings = const <Object?>[];
@@ -893,6 +1015,7 @@ class _RecordingGenerateDraftUseCase extends GenerateDraftUseCase {
     JsonMap agent = const <String, Object?>{},
     JsonMap selectedCollaborationGroup = const <String, Object?>{},
     String sessionContext = '',
+    SessionPromptContext sessionPromptContext = const SessionPromptContext(),
     JsonMap requestOptions = const <String, Object?>{},
     JsonMap contextSettings = const <String, Object?>{},
     JsonMap modelProfile = const <String, Object?>{},
@@ -914,10 +1037,12 @@ class _RecordingGenerateDraftUseCase extends GenerateDraftUseCase {
     void Function(DraftGenerationProgress progress)? onProgress,
   }) async {
     lastAgentId = ValueReaders.stringValue(agent['id']);
+    lastUserPrompt = userPrompt;
     lastSelectedCollaborationGroup = ValueReaders.deepCopyMap(
       selectedCollaborationGroup,
     );
     lastSessionContext = sessionContext;
+    lastSessionPromptContext = sessionPromptContext;
     lastExposedToolIds = List<String>.from(exposedToolIds, growable: false);
     lastExpressionConstraintProfiles = List<Object?>.from(
       expressionConstraintProfiles,
@@ -971,7 +1096,9 @@ class _FakeProjectConversationDraftRuntimeService
   final ProjectConversationDraftRuntimeArtifacts finalization;
   int prepareCallCount = 0;
   int finalizeCallCount = 0;
+  String lastTaskType = '';
   String lastChapterLabelHint = '';
+  String lastActiveDocumentPath = '';
 
   @override
   Future<ProjectConversationDraftRuntimePreparation> prepareDraftRun(
@@ -987,9 +1114,12 @@ class _FakeProjectConversationDraftRuntimeService
     String phase = '',
     String expressionConstraintPolicyMode = '',
     String expressionConstraintInjectionMode = '',
+    JsonMap selectedCollaborationGroup = const <String, Object?>{},
   }) async {
     prepareCallCount += 1;
+    lastTaskType = taskType;
     lastChapterLabelHint = chapterLabelHint;
+    lastActiveDocumentPath = activeDocumentPath;
     return preparation;
   }
 
@@ -1004,6 +1134,74 @@ class _FakeProjectConversationDraftRuntimeService
     finalizeCallCount += 1;
     return finalization;
   }
+}
+
+OpeningSessionProjection _longTaskProjection() {
+  return OpeningSessionProjection(
+    projectTypeId: 'long_novel',
+    currentGroupId: 'starter_long_form_room',
+    currentGroupDisplayName: '长篇主写组',
+    groupSummaries: const <OpeningAgentGroupSummary>[
+      OpeningAgentGroupSummary(
+        groupId: 'starter_long_form_room',
+        displayName: '长篇主写组',
+        description: '用于长篇开局与推进',
+        isSupported: true,
+        isDegraded: false,
+        isCurrent: true,
+        isStarterGroup: true,
+      ),
+    ],
+    orchestration: OpeningOrchestrationResult(
+      state: OpeningSessionState(
+        projectTypeId: 'long_novel',
+        status: OpeningSessionState.statusCollecting,
+        intent: const OpeningIntentSnapshot(
+          resolvedAgentGroupId: 'starter_long_form_room',
+          availableAgentGroupIds: <String>['starter_long_form_room'],
+        ),
+        stageRecords: const <OpeningStageRecord>[],
+        createdAt: '2026-06-15T00:00:00.000',
+        updatedAt: '2026-06-15T00:00:00.000',
+      ),
+      readiness: const OpeningReadinessAssessment(
+        canStartLongTask: false,
+        canStartInteractiveSession: false,
+        effectiveModeId: '',
+        missingRequirements: <OpeningMissingRequirement>[
+          OpeningMissingRequirement(
+            id: 'mode',
+            title: '长任务模式',
+            description: '还没有收束当前长篇要用哪种推进模式。',
+          ),
+        ],
+      ),
+      suggestedActions: const <OpeningSuggestedAction>[
+        OpeningSuggestedAction(
+          id: 'opening.choose_long_task_mode',
+          commandId: 'opening.choose_long_task_mode',
+          title: '选择长任务模式',
+          description: '先确认当前长任务模式，再继续启动正式任务链。',
+        ),
+      ],
+    ),
+    availableAgentSummaries: const <OpeningAgentMemberSummary>[
+      OpeningAgentMemberSummary(
+        agentId: 'writer',
+        displayName: '长篇主写智能体',
+        role: '负责长篇主线推进',
+        isPrimary: true,
+        thinkingSupported: true,
+        description: '负责长篇开局与正文推进。',
+      ),
+    ],
+    currentPrimaryAgentSummary: const OpeningPrimaryAgentSummary(
+      agentId: 'writer',
+      displayName: '长篇主写智能体',
+      role: '负责长篇主线推进',
+      thinkingSupported: true,
+    ),
+  );
 }
 
 class _StaticOpeningSessionProjectionService

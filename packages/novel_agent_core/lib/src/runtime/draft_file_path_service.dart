@@ -1,15 +1,46 @@
 import '../project/project_content_path_policy_service.dart';
+import '../project/chapter_output_path_policy_service.dart';
 
 class DraftFilePathService {
   DraftFilePathService({
     ProjectContentPathPolicyService? contentPathPolicyService,
+    ChapterOutputPathPolicyService? chapterOutputPathPolicyService,
   }) : _contentPathPolicyService =
-           contentPathPolicyService ?? const ProjectContentPathPolicyService();
+           contentPathPolicyService ?? const ProjectContentPathPolicyService(),
+       _chapterOutputPathPolicyService =
+           chapterOutputPathPolicyService ??
+           const ChapterOutputPathPolicyService();
 
   final ProjectContentPathPolicyService _contentPathPolicyService;
+  final ChapterOutputPathPolicyService _chapterOutputPathPolicyService;
 
-  String buildPath({required String title, DateTime? now}) {
+  String buildPath({
+    required String title,
+    String content = '',
+    String contentType = 'chapter',
+    DateTime? now,
+  }) {
     // 中文注释: 自动内容保存路径集中在 core，保证桌面 CLI 与 Flutter GUI 始终落到同一正文目录。
+    final normalizedContentType = _contentPathPolicyService.normalizeContentType(
+      contentType,
+    );
+    if (normalizedContentType == 'chapter') {
+      final preferredTitle = _chapterOutputPathPolicyService
+          .effectiveChapterTitle(
+            explicitTitle: '',
+            chapterContent: content,
+          )
+          .trim();
+      final chapterPath = _chapterOutputPathPolicyService.suggestChapterPath(
+        explicitTitle: preferredTitle.isNotEmpty ? preferredTitle : title,
+        chapterContent: content,
+      );
+      final normalizedChapterPath = chapterPath.trim();
+      if (normalizedChapterPath.isNotEmpty &&
+          normalizedChapterPath != 'chapters/chapter.md') {
+        return normalizedChapterPath;
+      }
+    }
     final resolvedNow = now ?? DateTime.now();
     final timestamp =
         '${resolvedNow.year.toString().padLeft(4, '0')}'
@@ -19,12 +50,12 @@ class DraftFilePathService {
         '${resolvedNow.minute.toString().padLeft(2, '0')}'
         '${resolvedNow.second.toString().padLeft(2, '0')}';
     final slug = _slugify(title);
-    final chapterRoot = _contentPathPolicyService.directoryForContentType(
-      'chapter',
+    final contentRoot = _contentPathPolicyService.directoryForContentType(
+      normalizedContentType,
     );
     return slug.isEmpty
-        ? '$chapterRoot/$timestamp.md'
-        : '$chapterRoot/${timestamp}_$slug.md';
+        ? '$contentRoot/$timestamp.md'
+        : '$contentRoot/${timestamp}_$slug.md';
   }
 
   String _slugify(String value) {

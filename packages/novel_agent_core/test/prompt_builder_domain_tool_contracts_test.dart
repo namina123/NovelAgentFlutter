@@ -43,12 +43,44 @@ void main() {
         expect(prompt, contains('submission.claims'));
         expect(prompt, contains('final_state_summary'));
         expect(prompt, contains('propose_design_element'));
+        expect(prompt, contains('项目事实获取合同'));
+        expect(prompt, contains('tentative_assumption'));
+        expect(prompt, contains('不要为了写得顺而自行写死'));
         expect(prompt, contains('不要为了显得积极而强行调用信息工具'));
         expect(prompt, contains('示例只用于说明调用形态'));
         expect(prompt, isNot(contains('快穿')));
         expect(prompt, isNot(contains('死亡回归')));
       },
     );
+
+    test('draft prompt surfaces creative rule and execution gate summaries near the top', () {
+      final prompt = draftPromptBuilder.build(
+        project: const <String, Object?>{
+          'title': '项目约束A',
+          'project_type': 'novel',
+        },
+        agent: const <String, Object?>{
+          'id': 'writer',
+          'name': '作者',
+          'role': '负责正文',
+        },
+        contextPack: const <String, Object?>{
+          'context_text': '上下文摘要',
+          'creative_rule_summary': '优先级：项目创作宪法 > 模式引导 > 表达限制 > 项目风格。',
+          'execution_constraint_summary':
+              '章节字数：目标约 2200 字；不少于 1800 字。\n- 表达限制 gate：当前按 brief_and_sections 注入。',
+        },
+        userPrompt: '继续写第三章',
+        title: '第03章',
+        intent: 'draft',
+      );
+
+      expect(prompt, contains('## 高优先级创作约束'));
+      expect(prompt, contains('项目创作宪法 > 模式引导 > 表达限制 > 项目风格'));
+      expect(prompt, contains('## 执行硬约束'));
+      expect(prompt, contains('章节字数：目标约 2200 字'));
+      expect(prompt, contains('表达限制 gate'));
+    });
 
     test(
       'draft prompt gives reviewer and recovery distinct domain tool contracts',

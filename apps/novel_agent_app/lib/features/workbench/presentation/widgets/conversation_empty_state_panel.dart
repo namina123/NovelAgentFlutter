@@ -116,12 +116,23 @@ class _ConversationEmptyStatePanelState
                           fontWeight: FontWeight.w500,
                         ),
                       ),
+                    if (_shouldShowOpeningDescription()) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        widget.description,
+                        style: TextStyle(
+                          color: colors.mutedTextColor,
+                          fontSize: 11.5,
+                          height: 1.5,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                     if (widget.supplement != null) ...[
                       const SizedBox(height: 12),
                       ConversationSupplementSection(child: widget.supplement!),
                     ],
-                    if (widget.openingState == null &&
-                        widget.actions.isNotEmpty) ...[
+                    if (_shouldShowActionList()) ...[
                       const SizedBox(height: 12),
                       PrimaryActionList(
                         actions: widget.actions,
@@ -136,5 +147,27 @@ class _ConversationEmptyStatePanelState
         ],
       ),
     );
+  }
+
+  bool _shouldShowOpeningDescription() {
+    if (widget.openingState == null) {
+      return false;
+    }
+    if (widget.description.trim().isEmpty) {
+      return false;
+    }
+    return !widget.openingState!.preferSingleAction ||
+        widget.actions.length > 1;
+  }
+
+  bool _shouldShowActionList() {
+    if (widget.actions.isEmpty) {
+      return false;
+    }
+    if (widget.openingState == null) {
+      return true;
+    }
+    return !widget.openingState!.preferSingleAction ||
+        widget.actions.length > 1;
   }
 }

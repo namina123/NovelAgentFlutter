@@ -22,15 +22,16 @@ class OrdinaryConversationTaskProfileService {
       ].join(' '),
     );
     final prompt = _normalized(userPrompt);
+    final semanticPrompt = _semanticPrompt(prompt);
     final activePath = _normalized(activeDocumentPath);
 
-    if (_looksLikeReview(prompt) || agentTokens.contains('review')) {
+    if (_looksLikeReview(semanticPrompt) || agentTokens.contains('review')) {
       return const OrdinaryConversationTaskProfile(
         taskType: 'review',
         intent: 'review',
       );
     }
-    if (_looksLikeRevision(prompt) ||
+    if (_looksLikeRevision(semanticPrompt) ||
         agentTokens.contains('recover') ||
         agentTokens.contains('repair') ||
         agentTokens.contains('修复') ||
@@ -50,9 +51,9 @@ class OrdinaryConversationTaskProfileService {
         agentTokens.contains('researcher') ||
         agentTokens.contains('资料检索') ||
         agentTokens.contains('考据');
-    final planningByPrompt = _looksLikePlanning(prompt);
-    final researchByPrompt = _looksLikeResearch(prompt);
-    final explicitChapterByPrompt = _looksLikeChapter(prompt);
+    final planningByPrompt = _looksLikePlanning(semanticPrompt);
+    final researchByPrompt = _looksLikeResearch(semanticPrompt);
+    final explicitChapterByPrompt = _looksLikeChapter(semanticPrompt);
     final planningByPath = _isPlanningPath(activePath);
     final chapterByPath =
         _isChapterPath(activePath) || _isScenePath(activePath);
@@ -114,6 +115,13 @@ class OrdinaryConversationTaskProfileService {
 
   bool _looksLikePlanning(String prompt) {
     return prompt.contains('背景') ||
+        prompt.contains('概念') ||
+        prompt.contains('体系') ||
+        prompt.contains('能力') ||
+        prompt.contains('性格') ||
+        prompt.contains('处事') ||
+        prompt.contains('风格') ||
+        prompt.contains('规则') ||
         prompt.contains('设定') ||
         prompt.contains('世界观') ||
         prompt.contains('题材') ||
@@ -124,8 +132,12 @@ class OrdinaryConversationTaskProfileService {
         prompt.contains('开篇') ||
         prompt.contains('人设') ||
         prompt.contains('角色设计') ||
+        prompt.contains('角色关系') ||
         prompt.contains('剧情方向') ||
         prompt.contains('整理思路') ||
+        prompt.contains('整理一下') ||
+        prompt.contains('先帮我整理') ||
+        prompt.contains('收束') ||
         prompt.contains('演化剧情');
   }
 
@@ -170,5 +182,20 @@ class OrdinaryConversationTaskProfileService {
 
   String _normalized(String value) {
     return value.trim().replaceAll('\\', '/').toLowerCase();
+  }
+
+  String _semanticPrompt(String normalizedPrompt) {
+    if (normalizedPrompt.isEmpty) {
+      return normalizedPrompt;
+    }
+    final lines = normalizedPrompt
+        .split('\n')
+        .map((line) => line.trim())
+        .where(
+          (line) =>
+              line.isNotEmpty && !line.startsWith('上一轮候选摘要：'),
+        )
+        .toList(growable: false);
+    return lines.join('\n');
   }
 }

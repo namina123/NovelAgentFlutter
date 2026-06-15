@@ -75,13 +75,67 @@ void main() {
           'role': 'writer',
         },
         openingMaturity: freshOpening,
-        userPrompt:
-            '请先联网核查明代制盐和水利资料，整理成知识库，只保留有来源线索的研究结论。',
+        userPrompt: '请先联网核查明代制盐和水利资料，整理成知识库，只保留有来源线索的研究结论。',
         activeDocumentPath: 'premise/project_brief.md',
       );
 
       expect(profile.taskType, 'research');
       expect(profile.intent, 'research');
     });
+
+    test(
+      'routes concept-system planning prompts to planning even when project is continue-ready',
+      () {
+        final profile = service.resolve(
+          agent: const <String, Object?>{
+            'id': 'default_generalist',
+            'role': 'writer',
+          },
+          openingMaturity: continueReady,
+          userPrompt: '先定概念级能力体系，收束一下世界规则和角色边界。',
+          activeDocumentPath: '',
+        );
+
+        expect(profile.taskType, 'planning');
+        expect(profile.intent, 'planning');
+      },
+    );
+
+    test(
+      'routes confirmed character personality and style option into planning instead of chapter drafting',
+      () {
+        final profile = service.resolve(
+          agent: const <String, Object?>{
+            'id': 'default_generalist',
+            'role': 'writer',
+          },
+          openingMaturity: continueReady,
+          userPrompt:
+              '我选择「主角性格与处事风格」。\n\n补充说明：我刚才点击并确认了上一轮选项「主角性格与处事风格」。请把这个选择视为已确认的用户决策，继续推进，不要重新让用户选择同一组选项。\n上一轮候选摘要：已选：主角性格与处事风格；候选：第一章正式正文（直接进入章节写作）。',
+          activeDocumentPath: '',
+        );
+
+        expect(profile.taskType, 'planning');
+        expect(profile.intent, 'planning');
+      },
+    );
+
+    test(
+      'routes style-boundary option selection to planning when active document is not pinned',
+      () {
+        final profile = service.resolve(
+          agent: const <String, Object?>{
+            'id': 'default_generalist',
+            'role': 'writer',
+          },
+          openingMaturity: continueReady,
+          userPrompt: '我选择了“全书风格与表达边界”。先确认文风、禁区和语言质地。',
+          activeDocumentPath: '',
+        );
+
+        expect(profile.taskType, 'planning');
+        expect(profile.intent, 'planning');
+      },
+    );
   });
 }

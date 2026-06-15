@@ -39,8 +39,8 @@ class ConversationOpeningGuideViewDataService {
       composerHint: isGenerating
           ? '生成中：可以继续补充长篇边界、节奏、角色和检查点约束。'
           : readiness.canStartLongTask
-          ? '点击“启动长任务”即可；也可以直接补充更多开局约束。'
-          : '先点“启动长任务”继续补齐缺口；也可以直接输入你希望这部长篇如何开局、推进和收束。',
+          ? '可以点击“启动长任务”让智能体直接接管开局，也可以直接补充更多长期约束。'
+          : '可以点击“启动长任务”让智能体判断缺口并继续收束，也可以直接输入你希望这部长篇如何开局、推进和收束。',
       primaryActions: <PrimaryActionViewData>[startAction],
     ).copyWith(
       openingState: _openingStateViewDataService.build(
@@ -50,8 +50,8 @@ class ConversationOpeningGuideViewDataService {
         projection: projection,
         preferredNextAction: startAction,
         firstPromptOverride: readiness.canStartLongTask
-            ? '可以直接启动长任务，也可以先补一句额外约束。'
-            : '先补齐长任务开局缺口。',
+            ? '让长篇主智能体直接接管当前开局；它会判断是继续补一句约束，还是直接启动正式长任务。'
+            : '让长篇主智能体先判断当前真正缺什么，再决定是补问、整理开局材料，还是直接继续推进。',
         nextStepLabelOverride: startAction.title,
         preferSingleAction: true,
       ),

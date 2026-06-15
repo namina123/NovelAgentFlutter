@@ -24,6 +24,7 @@ import '../services/project_import_execution_service.dart';
 import '../services/project_import_workspace_command_view_data_service.dart';
 import '../services/project_long_task_summary_view_data_service.dart';
 import '../services/project_subtitle_view_data_service.dart';
+import '../services/project_type_transition_workspace_command_view_data_service.dart';
 import '../services/workspace_command_default_target_service.dart';
 import '../services/workspace_information_projection_service.dart';
 import '../services/workspace_resource_display_service.dart';
@@ -228,6 +229,9 @@ class WorkbenchWorkspaceController
   final ProjectTypeTransitionPreparationService
   _projectTypeTransitionPreparationService =
       const ProjectTypeTransitionPreparationService();
+  final ProjectTypeTransitionWorkspaceCommandViewDataService
+  _projectTypeTransitionCommandViewDataService =
+      ProjectTypeTransitionWorkspaceCommandViewDataService();
   WorkbenchInformationViewData _latestInformationViewData =
       const WorkbenchInformationViewData();
 
@@ -839,7 +843,7 @@ class WorkbenchWorkspaceController
       hasActiveLongTaskRun: hasActiveLongTaskRun,
     );
     _showWorkspaceCommand(
-      _buildProjectTypeTransitionCommandViewData(
+      _projectTypeTransitionCommandViewDataService.build(
         project: project,
         plan: plan,
         runtimeBaselineId: runtimeBaselineId,
@@ -1323,11 +1327,11 @@ class WorkbenchWorkspaceController
     );
     if (!plan.canTransition) {
       _showWorkspaceCommand(
-        _buildProjectTypeTransitionCommandViewData(
+        _projectTypeTransitionCommandViewDataService.build(
           project: project,
           plan: plan,
           runtimeBaselineId: runtimeBaselineId,
-          status: _projectTypeTransitionStatusOf(plan),
+          status: _projectTypeTransitionCommandViewDataService.statusOf(plan),
           confirmLabel: '重新检查',
         ),
       );
@@ -1349,7 +1353,7 @@ class WorkbenchWorkspaceController
       _announce('已完成项目类型转换：${updatedProject.name}');
     } catch (error) {
       _showWorkspaceCommand(
-        _buildProjectTypeTransitionCommandViewData(
+        _projectTypeTransitionCommandViewDataService.build(
           project: project,
           plan: plan,
           runtimeBaselineId: runtimeBaselineId,
@@ -1482,9 +1486,15 @@ class WorkbenchWorkspaceController
           sourcePaths: policy.sourcePaths,
           targetDirectory: policy.resolvedTargetDirectory,
           autoDeconstruct: policy.autoDeconstruct,
+          smartAnalysis: policy.smartAnalysis,
+          analysisAgentId: policy.analysisAgentId,
+          analysisAgentGroupId: policy.analysisAgentGroupId,
         ),
       );
-      final selectedId = result.autoDeconstructionPreviewPath.trim();
+      final selectedId =
+          result.autoDeconstructionPreviewPath.trim().isNotEmpty
+          ? result.autoDeconstructionPreviewPath.trim()
+          : result.smartAnalysisReportPath.trim();
       if (selectedId.isNotEmpty) {
         _expandResourceAncestors(selectedId);
       }
@@ -1532,12 +1542,15 @@ class WorkbenchWorkspaceController
     if (sourcePaths.isEmpty) {
       return;
     }
-    _showWorkspaceCommand(
+      _showWorkspaceCommand(
       _projectImportWorkspaceCommandViewDataService.build(
         projectType: project.projectType,
         sourcePaths: sourcePaths,
         requestedTargetDirectory: request.targetDirectory,
         requestedAutoDeconstruct: request.autoDeconstruct,
+        requestedSmartAnalysis: request.smartAnalysis,
+        analysisAgentId: request.analysisAgentId,
+        analysisAgentGroupId: request.analysisAgentGroupId,
       ),
     );
   }
@@ -1596,57 +1609,6 @@ class WorkbenchWorkspaceController
         ),
       ),
     );
-  }
-
-  WorkspaceCommandViewData _buildProjectTypeTransitionCommandViewData({
-    required ProjectDescriptor project,
-    required ProjectTypeTransitionPlan plan,
-    required String runtimeBaselineId,
-    required String confirmLabel,
-    String status = '',
-  }) {
-    // 中文注释: 转换弹层只投影 core 计划，不在 GUI 里重新推断可转范围或阻断原因。
-    final sourceLabel =
-        plan.sourceProjectTypeDefinition?.name ?? project.projectType;
-    final targetLabel =
-        plan.targetProjectTypeDefinition?.name ??
-        _projectTypeTransitionTargetId(project.projectType);
-    final targetProjectTypeId =
-        plan.targetProjectTypeDefinition?.id ??
-        _projectTypeTransitionTargetId(project.projectType);
-    final plannedStatus = status.trim().isNotEmpty
-        ? status.trim()
-        : _projectTypeTransitionStatusOf(plan);
-    return WorkspaceCommandViewData(
-      mode: WorkspaceCommandMode.transitionProjectType,
-      title: '项目类型转换',
-      description: '将 $sourceLabel 切换为 $targetLabel，存储策略保持不变。',
-      confirmLabel: confirmLabel,
-      status: plannedStatus,
-      projectTitle: project.name,
-      projectType: targetProjectTypeId,
-      transitionTargetProjectTypeId: targetProjectTypeId,
-      transitionRuntimeBaselineId: runtimeBaselineId,
-      genre: '',
-      premise: '',
-      notes: '',
-      relativePath: '',
-      entryName: '',
-      content: '',
-      sourcePathsText: '',
-      targetDirectory: '',
-    );
-  }
-
-  String _projectTypeTransitionStatusOf(ProjectTypeTransitionPlan plan) {
-    // 中文注释: blocker 文案直接回投到命令层，让用户看到的就是 core 的拒绝理由。
-    if (plan.blockers.isEmpty) {
-      if (plan.targetProjectTypeDefinition?.id == 'long_novel') {
-        return '转换条件已满足，请确认运行基准后执行。';
-      }
-      return '转换条件已满足，提交后会保留原存储策略。';
-    }
-    return plan.blockers.map((blocker) => blocker.message).join('；');
   }
 
   String _projectTypeTransitionTargetId(String sourceProjectTypeId) {

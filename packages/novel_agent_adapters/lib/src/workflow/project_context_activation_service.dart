@@ -11,6 +11,7 @@ import 'project_chapter_continuity_handoff_item_service.dart';
 import 'project_chapter_continuity_priority_service.dart';
 import 'project_information_activation_bridge_service.dart';
 import 'project_narrative_claim_activation_contract_service.dart';
+import 'project_relative_path_canonicalizer_service.dart';
 
 class ProjectContextActivationService {
   ProjectContextActivationService({
@@ -62,7 +63,9 @@ class ProjectContextActivationService {
            const ProjectChapterContinuityHandoffItemService(),
        _chapterContinuityPriorityService =
            chapterContinuityPriorityService ??
-           const ProjectChapterContinuityPriorityService();
+           const ProjectChapterContinuityPriorityService(),
+       _pathCanonicalizerService =
+           const ProjectRelativePathCanonicalizerService();
 
   final ProjectWorkspacePort _workspacePort;
   final NarrativeProfileRepository _profileRepository;
@@ -80,6 +83,7 @@ class ProjectContextActivationService {
   _chapterContinuityHandoffItemService;
   final ProjectChapterContinuityPriorityService
   _chapterContinuityPriorityService;
+  final ProjectRelativePathCanonicalizerService _pathCanonicalizerService;
 
   Future<ContextActivationPlan> buildPlan({
     required ProjectDescriptor project,
@@ -228,7 +232,7 @@ class ProjectContextActivationService {
       }
       final priorityWeight = priorityWeights[path];
       final pinned = pinnedPaths.contains(path) || priorityWeight != null;
-      final activationText = '# File: $path\n\n$normalized';
+      final activationText = _activationTextForPath(path, normalized);
       final title = path.split('/').last;
       result.add(
         ContextActivationItem(
@@ -520,6 +524,107 @@ class ProjectContextActivationService {
 
   String _normalizeContent(String? content) {
     return (content ?? '').trim();
+  }
+
+  String _activationTextForPath(String path, String normalizedContent) {
+    final normalizedPath = _pathCanonicalizerService
+        .canonicalize(path)
+        .toLowerCase();
+    if (normalizedPath == 'tracking/continuity/bundle.json') {
+      // 中文注释: 连续性总包只需要把主线、作用域和机制摘要带进上下文，不必把整份 JSON 原样塞给模型。
+      final parsed = _tryParseJson(normalizedContent);
+      if (parsed.isNotEmpty) {
+        final displayName = ValueReaders.stringValue(
+          parsed['display_name'],
+          '连续性总包',
+        ).trim();
+        final defaultFrameId = ValueReaders.stringValue(
+          parsed['default_frame_id'],
+          'mainline',
+        ).trim();
+        final defaultMechanicProfileId = ValueReaders.stringValue(
+          parsed['default_mechanic_profile_id'],
+          'default_general_project',
+        ).trim();
+        final scopeIds = ValueReaders.stringList(parsed['scope_ids'])
+            .where((item) => item.trim().isNotEmpty)
+            .take(4)
+            .toList(growable: false);
+        return [
+          '# File: $path',
+          '',
+          '# Continuity Bundle: $displayName',
+          '- 默认主线帧：$defaultFrameId',
+          '- 默认机制档：$defaultMechanicProfileId',
+          if (scopeIds.isNotEmpty)
+            '- 作用域：${scopeIds.join('、')}',
+          '- 这里只保留连续性主线摘要，详细 JSON 另有正式文件可回看。',
+        ].join('\n');
+      }
+    }
+    if (normalizedPath.startsWith('tracking/continuity/scopes/') &&
+        normalizedPath.endsWith('.json')) {
+      // 中文注释: scope 文件只需要暴露当前作用域和父级边界，避免把完整 JSON 重复灌进激活上下文。
+      final parsed = _tryParseJson(normalizedContent);
+      final scope = ValueReaders.mapValue(parsed['scope']);
+      if (scope.isNotEmpty) {
+        final displayName = ValueReaders.stringValue(
+          scope['display_name'],
+          ValueReaders.stringValue(scope['id'], 'scope'),
+        ).trim();
+        final kind = ValueReaders.stringValue(scope['kind'], 'global').trim();
+        final parentScopeId = ValueReaders.stringValue(
+          scope['parent_scope_id'],
+        ).trim();
+        return [
+          '# File: $path',
+          '',
+          '# Continuity Scope: $displayName',
+          '- 作用域类型：$kind',
+          if (parentScopeId.isNotEmpty) '- 父作用域：$parentScopeId',
+          '- 这里只保留作用域摘要，不展开完整结构。',
+        ].join('\n');
+      }
+    }
+    if (normalizedPath.startsWith('tracking/continuity/frames/') &&
+        normalizedPath.endsWith('.json')) {
+      // 中文注释: frame 文件只保留主线、作用域和关系说明，避免完整 JSON 抢走章节上下文预算。
+      final parsed = _tryParseJson(normalizedContent);
+      final frame = ValueReaders.mapValue(parsed['frame']);
+      if (frame.isNotEmpty) {
+        final displayName = ValueReaders.stringValue(
+          frame['display_name'],
+          ValueReaders.stringValue(frame['id'], 'frame'),
+        ).trim();
+        final scopeId = ValueReaders.stringValue(frame['scope_id'], '').trim();
+        final mechanicProfileId = ValueReaders.stringValue(
+          frame['mechanic_profile_id'],
+          'default_general_project',
+        ).trim();
+        final relation = ValueReaders.stringValue(
+          frame['relation'],
+          'sameLine',
+        ).trim();
+        return [
+          '# File: $path',
+          '',
+          '# Continuity Frame: $displayName',
+          '- 所属作用域：$scopeId',
+          '- 默认机制档：$mechanicProfileId',
+          '- 关系：$relation',
+          '- 这里只保留连续性框架摘要，不展开完整结构。',
+        ].join('\n');
+      }
+    }
+    return '# File: $path\n\n$normalizedContent';
+  }
+
+  JsonMap _tryParseJson(String raw) {
+    try {
+      return ValueReaders.mapValue(jsonDecode(raw));
+    } catch (_) {
+      return const <String, Object?>{};
+    }
   }
 
   String _profileActivationText(NarrativeProfile profile) {

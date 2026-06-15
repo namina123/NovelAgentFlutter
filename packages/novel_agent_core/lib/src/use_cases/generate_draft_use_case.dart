@@ -35,6 +35,7 @@ import '../tools/tool_exposure_policy_service.dart';
 import '../tools/tool_schema_builder_service.dart';
 import '../tools/tool_strategy_prompt_builder.dart';
 import '../tools/tool_strategy_service.dart';
+import '../session/session_prompt_context.dart';
 import '../workflow/continuous_task_tool_exposure_runtime_resolver_service.dart';
 import '../agents/project_agent_binding.dart';
 
@@ -193,11 +194,16 @@ class GenerateDraftUseCase {
     List<String> constraints = const <String>[],
     String expectedOutput = '',
     String sessionContext = '',
+    SessionPromptContext sessionPromptContext = const SessionPromptContext(),
   }) async {
     final cleanPrompt = userPrompt.trim();
     if (cleanPrompt.isEmpty) {
       throw ArgumentError.value(userPrompt, 'userPrompt', '提示词不能为空。');
     }
+    final effectiveSessionPromptContext = _resolvedSessionPromptContext(
+      sessionContext: sessionContext,
+      sessionPromptContext: sessionPromptContext,
+    );
     final projectInfo = <String, Object?>{
       'id': project.id,
       'title': project.name,
@@ -252,7 +258,7 @@ class GenerateDraftUseCase {
       'project_files': entries,
       'project_file_contents': fileContents,
       'user_prompt': cleanPrompt,
-      'session_context': sessionContext,
+      'session_context': effectiveSessionPromptContext.contextMarkdown,
       'intent': intent,
       'agent': resolvedParentAgent,
       'optional_agents': optionalAgents,
@@ -369,6 +375,7 @@ class GenerateDraftUseCase {
     JsonMap agent = const <String, Object?>{},
     JsonMap selectedCollaborationGroup = const <String, Object?>{},
     String sessionContext = '',
+    SessionPromptContext sessionPromptContext = const SessionPromptContext(),
     JsonMap requestOptions = const <String, Object?>{},
     JsonMap contextSettings = const <String, Object?>{},
     JsonMap modelProfile = const <String, Object?>{},
@@ -394,6 +401,10 @@ class GenerateDraftUseCase {
     if (cleanPrompt.isEmpty) {
       throw ArgumentError.value(userPrompt, 'userPrompt', '提示词不能为空。');
     }
+    final effectiveSessionPromptContext = _resolvedSessionPromptContext(
+      sessionContext: sessionContext,
+      sessionPromptContext: sessionPromptContext,
+    );
     final projectInfo = <String, Object?>{
       'id': project.id,
       'title': project.name,
@@ -521,27 +532,30 @@ class GenerateDraftUseCase {
     final skillLoadMemory = SkillLoadMemory(
       scopeId: _skillRoutingScopeId(project, routingSignal),
     );
-    contextPack = _contextAssemblerService.assemble(<String, Object?>{
-      'project': projectInfo,
-      'project_files': entries,
-      'project_file_contents': fileContents,
-      'current_file_path': activeDocumentPath,
-      'current_file_body': activeDocumentBody,
-      'user_prompt': cleanPrompt,
-      'session_context': sessionContext,
-      'intent': intent,
-      'agent': resolvedAgent,
-      'optional_agents': optionalAgents,
-      'selected_collaboration_group': collaborationGroup,
-      'optional_agent_groups': optionalGroups,
-      'context_settings': contextSettings,
-      'model_profile': modelProfile,
-      'memory_sections': memorySections,
-      'expression_constraint_profiles': expressionConstraintProfiles,
-      'project_expression_constraint_bindings':
-          projectExpressionConstraintBindings,
-      'project_file_section_plan': projectFileSectionPlan,
-    });
+    contextPack = _withExecutionConstraintSummary(
+      _contextAssemblerService.assemble(<String, Object?>{
+        'project': projectInfo,
+        'project_files': entries,
+        'project_file_contents': fileContents,
+        'current_file_path': activeDocumentPath,
+        'current_file_body': activeDocumentBody,
+        'user_prompt': cleanPrompt,
+        'session_context': effectiveSessionPromptContext.contextMarkdown,
+        'intent': intent,
+        'agent': resolvedAgent,
+        'optional_agents': optionalAgents,
+        'selected_collaboration_group': collaborationGroup,
+        'optional_agent_groups': optionalGroups,
+        'context_settings': contextSettings,
+        'model_profile': modelProfile,
+        'memory_sections': memorySections,
+        'expression_constraint_profiles': expressionConstraintProfiles,
+        'project_expression_constraint_bindings':
+            projectExpressionConstraintBindings,
+        'project_file_section_plan': projectFileSectionPlan,
+      }),
+      writingExecutionConstraints: writingExecutionConstraints,
+    );
     prompt = _draftPromptBuilderService.build(
       project: projectInfo,
       agent: resolvedAgent,
@@ -696,12 +710,23 @@ class GenerateDraftUseCase {
       ].join('\n\n'),
       styleNote: <String>[
         '当前请求已经附带上下文包；如需更多文件，请调用项目工具按需读取。',
+        ValueReaders.stringValue(
+              contextPack['creative_rule_summary'],
+            ).trim().isEmpty
+            ? ''
+            : '高优先级创作约束摘要：${ValueReaders.stringValue(contextPack['creative_rule_summary']).trim()}',
+        ValueReaders.stringValue(
+              writingExecutionConstraints['chapter_length_summary'],
+            ).trim().isEmpty
+            ? ''
+            : '章节字数硬约束：${ValueReaders.stringValue(writingExecutionConstraints['chapter_length_summary']).trim()}。',
         skillRoutingNote,
       ].where((item) => item.trim().isNotEmpty).join('\n'),
       toolIds: filteredToolIds,
     );
     messages = <JsonMap>[
       <String, Object?>{'role': 'system', 'content': systemPrompt},
+      ...effectiveSessionPromptContext.historyMessages,
       ...preloadRound.transcriptMessages,
       <String, Object?>{'role': 'user', 'content': prompt},
     ];
@@ -1041,6 +1066,52 @@ class GenerateDraftUseCase {
         writtenPaths.isNotEmpty ||
         changedPaths.isNotEmpty ||
         waitingForUserChoice;
+  }
+
+  SessionPromptContext _resolvedSessionPromptContext({
+    required String sessionContext,
+    required SessionPromptContext sessionPromptContext,
+  }) {
+    final markdown = sessionPromptContext.hasContextMarkdown
+        ? sessionPromptContext.contextMarkdown
+        : sessionContext;
+    return SessionPromptContext(
+      contextMarkdown: markdown,
+      historyMessages: sessionPromptContext.historyMessages,
+    );
+  }
+
+  JsonMap _withExecutionConstraintSummary(
+    JsonMap contextPack, {
+    required JsonMap writingExecutionConstraints,
+  }) {
+    final lines = <String>[];
+    final chapterLengthSummary = ValueReaders.stringValue(
+      writingExecutionConstraints['chapter_length_summary'],
+    ).trim();
+    if (chapterLengthSummary.isNotEmpty) {
+      lines.add('章节字数：$chapterLengthSummary');
+    }
+    final sessionConstraintMarkdown = ValueReaders.stringValue(
+      writingExecutionConstraints['session_context_markdown'],
+    ).trim();
+    if (sessionConstraintMarkdown.isNotEmpty) {
+      lines.addAll(
+        sessionConstraintMarkdown
+            .replaceAll('\r\n', '\n')
+            .split('\n')
+            .where((line) => line.trim().startsWith('- '))
+            .map((line) => line.trim())
+            .take(4),
+      );
+    }
+    if (lines.isEmpty) {
+      return contextPack;
+    }
+    return <String, Object?>{
+      ...contextPack,
+      'execution_constraint_summary': lines.join('\n'),
+    };
   }
 
   JsonMap _llmRequestOptions(

@@ -96,8 +96,14 @@ void main() {
       expect(preflight.runtimeContinuationInstruction, isNotNull);
       expect(preflight.runtimeContinuationInstruction!.title, contains('续跑'));
       expect(preflight.sessionContextMarkdown, contains('【压缩指导】'));
-      expect(preflight.sessionContextMarkdown, contains('【工作上下文】'));
-      expect(preflight.sessionContextMarkdown, contains('前一轮的助手回复'));
+      expect(preflight.sessionContextMarkdown, isNot(contains('【工作上下文】')));
+      expect(preflight.sessionContextMarkdown, isNot(contains('前一轮的助手回复')));
+      expect(
+        preflight.sessionPromptContext.historyMessages
+            .map((message) => ValueReaders.stringValue(message['content']))
+            .join('\n'),
+        contains('前一轮的助手回复'),
+      );
       expect(preflight.sessionContextMarkdown, isNot(contains('继续写这一段')));
       expect(
         preflight.compactionSourceScope.allowRuntimeContinuationInstruction,

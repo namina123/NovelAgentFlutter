@@ -62,7 +62,7 @@ void main() {
       expect(ValueReaders.intValue(input.options['checkpoint_interval']), 0);
       expect(
         ValueReaders.stringList(input.options['persistent_context_paths']),
-        contains('outline/full_outline_consensus_overview.md'),
+        contains('outlines/story/full_outline_consensus_overview.md'),
       );
     });
   });

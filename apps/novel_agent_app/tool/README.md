@@ -16,6 +16,7 @@
    - `probe_support.dart`
    - `all_tools_probe.dart`
    - `mock_long_task_probe.dart`
+   - `real_gui_book_deconstruction_import_probe.dart`
 2. 真实计费探针：
    - `gateway_connect_probe.dart`
    - `real_anthropic_compat_probe.dart`

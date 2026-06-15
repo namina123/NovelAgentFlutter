@@ -237,6 +237,7 @@ class AppBootstrap {
       ),
       importProjectFilesUseCase: ImportProjectFilesUseCase(
         projectToolHostPort: bundle.projectToolHostPort,
+        sourceImportDiscoveryPort: const SourceImportDiscoveryService(),
       ),
       updateProjectManifestUseCase: updateProjectManifestUseCase,
       executeProjectTypeTransitionUseCase: executeProjectTypeTransitionUseCase,

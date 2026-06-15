@@ -82,9 +82,10 @@ class ModeGuidanceAssetBundleBuilderService {
   ) {
     for (var index = 0; index < styles.length; index++) {
       markdownPaths[styles[index].id] = switch (modeId) {
-        'seed_autopilot_novel' => 'styles/seed_autopilot_style.md',
-        'full_outline_consensus' => 'styles/full_outline_consensus_style.md',
-        _ => 'styles/${_safeModeId(modeId)}_style_${index + 1}.md',
+        'seed_autopilot_novel' => 'assets/styles/seed_autopilot_style.md',
+        'full_outline_consensus' =>
+          'assets/styles/full_outline_consensus_style.md',
+        _ => 'assets/styles/${_safeModeId(modeId)}_style_${index + 1}.md',
       };
     }
   }
@@ -96,10 +97,10 @@ class ModeGuidanceAssetBundleBuilderService {
   ) {
     for (var index = 0; index < worlds.length; index++) {
       markdownPaths[worlds[index].id] = switch (modeId) {
-        'seed_autopilot_novel' => 'world/seed_autopilot_world_anchor.md',
+        'seed_autopilot_novel' => 'assets/world/seed_autopilot_world_anchor.md',
         'full_outline_consensus' =>
-          'world/full_outline_consensus_world_anchor.md',
-        _ => 'world/${_safeModeId(modeId)}_world_${index + 1}.md',
+          'assets/world/full_outline_consensus_world_anchor.md',
+        _ => 'assets/world/${_safeModeId(modeId)}_world_${index + 1}.md',
       };
     }
   }

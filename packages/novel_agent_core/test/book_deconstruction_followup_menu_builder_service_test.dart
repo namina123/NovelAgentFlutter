@@ -15,48 +15,54 @@ void main() {
 
         expect(menu.groups, hasLength(3));
         expect(menu.groups.map((item) => item.id), <String>[
-          'general_writing',
-          'long_task_writing',
+          'continuation',
+          'fanfic',
           'future_extensions',
         ]);
-        expect(menu.highlightedGroupId, 'long_task_writing');
-        expect(menu.highlightedOptionId, 'seed_autopilot_novel');
+        expect(menu.highlightedGroupId, 'fanfic');
+        expect(menu.highlightedOptionId, 'fanfic_seed_autopilot_novel');
         expect(
           menu.highlightedBuildTier,
           ContinuityBuildTier.standardFoundation,
         );
         expect(menu.allowsMultipleDerivedProjects, isTrue);
 
-        final generalOptions = menu.groups.first.options;
-        expect(generalOptions, hasLength(1));
-        expect(generalOptions.first.id, 'general_novel');
+        final continuationOptions = menu.groups.first.options;
+        expect(continuationOptions, hasLength(1));
+        expect(continuationOptions.first.id, 'continuation_novel');
         expect(
-          generalOptions.first.recommendedBuildTier,
+          continuationOptions.first.recommendedBuildTier,
           ContinuityBuildTier.quickBridge,
         );
 
-        final longTaskOptions = menu.groups[1].options;
+        final fanficOptions = menu.groups[1].options;
         expect(
-          longTaskOptions.map((item) => item.id),
+          fanficOptions.map((item) => item.id),
           containsAll(<String>[
-            'seed_autopilot_novel',
-            'full_outline_consensus',
-            'volume_checkpoint_handoff',
-            'chapter_brief_supervised',
-            'salvage_restructure_existing',
+            'fanfic_seed_autopilot_novel',
+            'fanfic_full_outline_consensus',
+            'fanfic_volume_checkpoint_handoff',
+            'fanfic_chapter_brief_supervised',
+            'fanfic_salvage_restructure_existing',
           ]),
         );
         expect(
-          longTaskOptions
-              .firstWhere((item) => item.id == 'full_outline_consensus')
+          fanficOptions
+              .firstWhere((item) => item.id == 'fanfic_full_outline_consensus')
               .recommendedBuildTier,
           ContinuityBuildTier.deepReconstruction,
         );
         expect(
-          longTaskOptions
-              .firstWhere((item) => item.id == 'chapter_brief_supervised')
+          fanficOptions
+              .firstWhere((item) => item.id == 'fanfic_chapter_brief_supervised')
               .recommendedBuildTier,
           ContinuityBuildTier.standardFoundation,
+        );
+        expect(
+          fanficOptions
+              .firstWhere((item) => item.id == 'fanfic_seed_autopilot_novel')
+              .sourceInheritanceMode,
+          BookDeconstructionSourceInheritanceMode.fanfic,
         );
       },
     );
@@ -75,7 +81,7 @@ void main() {
           menu.highlightedBuildTier,
           ContinuityBuildTier.standardFoundation,
         );
-        expect(menu.notes, contains('不预选最终执行项目路线'));
+        expect(menu.notes, contains('continuation / fanfic 基座'));
       },
     );
   });
@@ -105,14 +111,18 @@ void main() {
       final plan = planBuilder.build(
         input: input,
         followupMenu: menu,
-        followupOptionId: 'general_novel',
+        followupOptionId: 'continuation_novel',
       );
 
-      expect(plan.planId, 'derive_extract_001_general_novel');
+      expect(plan.planId, 'derive_extract_001_continuation_novel');
       expect(plan.sourceExtractionId, 'extract_001');
       expect(plan.targetProjectTypeId, 'novel');
       expect(plan.targetProjectStrategyId, 'general_novel');
       expect(plan.targetModeId, isEmpty);
+      expect(
+        plan.sourceInheritanceMode,
+        BookDeconstructionSourceInheritanceMode.continuation,
+      );
       expect(plan.recommendedBuildTier, ContinuityBuildTier.quickBridge);
       expect(plan.suggestedProjectTitle, '海上城邦 - 一般小说');
     });

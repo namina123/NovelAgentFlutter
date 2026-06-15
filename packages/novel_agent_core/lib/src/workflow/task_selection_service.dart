@@ -1,13 +1,19 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import 'long_task_sample_readiness_service.dart';
 import 'task_definition_service.dart';
 import 'task_runtime_constants.dart';
 
 class TaskSelectionService {
-  TaskSelectionService({required TaskDefinitionService taskDefinitionService})
-    : _taskDefinitionService = taskDefinitionService;
+  TaskSelectionService({
+    required TaskDefinitionService taskDefinitionService,
+    LongTaskSampleReadinessService? sampleReadinessService,
+  }) : _taskDefinitionService = taskDefinitionService,
+       _sampleReadinessService =
+           sampleReadinessService ?? const LongTaskSampleReadinessService();
 
   final TaskDefinitionService _taskDefinitionService;
+  final LongTaskSampleReadinessService _sampleReadinessService;
 
   List<JsonMap> sortTasks(
     List<Object?> tasks, {
@@ -59,6 +65,13 @@ class TaskSelectionService {
         continue;
       }
       if (!dependenciesSatisfied(task, succeededById)) {
+        continue;
+      }
+      if (_sampleReadinessService.isSampleTask(task) &&
+          !_sampleReadinessService.hasSatisfiedReadinessCheckpoint(
+            task,
+            sortedTasks,
+          )) {
         continue;
       }
       return ValueReaders.deepCopyMap(task);

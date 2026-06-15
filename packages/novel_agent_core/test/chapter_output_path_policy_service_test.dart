@@ -82,5 +82,23 @@ void main() {
       expect(normalized, startsWith('# 第04章 雪夜入城'));
       expect(normalized, contains('正文。'));
     });
+
+    test('suggests chapter path from numbered markdown heading', () {
+      final path = service.suggestChapterPath(
+        explicitTitle: '',
+        chapterContent: '# 第03章 雪夜折返\n\n正文。',
+      );
+
+      expect(path, 'chapters/第03章_雪夜折返.md');
+    });
+
+    test('suggests chapter path from unnumbered title when number is absent', () {
+      final path = service.suggestChapterPath(
+        explicitTitle: '雨夜归人',
+        chapterContent: '正文。',
+      );
+
+      expect(path, 'chapters/雨夜归人.md');
+    });
   });
 }

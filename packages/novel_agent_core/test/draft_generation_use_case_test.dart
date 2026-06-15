@@ -174,6 +174,68 @@ void main() {
       },
     );
 
+    test(
+      'generate draft sends prior conversation as real history messages',
+      () async {
+        final workspacePort = _FakeProjectWorkspacePort(entries: [], files: {});
+        final gateway = _FakeLlmGateway();
+        final useCase = GenerateDraftUseCase(
+          projectWorkspacePort: workspacePort,
+          llmGateway: gateway,
+          toolExecutionPort: _FakeToolExecutionPort(),
+          contextAssemblerService: ContextAssemblerService(
+            budgetService: ContextBudgetService(),
+            staticSectionService: ContextStaticSectionService(
+              projectPromptContract: ProjectPromptContract(),
+            ),
+            projectFileSectionService: ContextProjectFileSectionService(),
+          ),
+          projectPromptContract: ProjectPromptContract(),
+        );
+
+        await useCase.execute(
+          project: const ProjectDescriptor(
+            id: 'demo',
+            name: '示例项目',
+            rootPath: 'D:/demo',
+          ),
+          userPrompt: '继续写这一章。',
+          modelId: 'test-model',
+          sessionPromptContext: const SessionPromptContext(
+            contextMarkdown: '【压缩归档】\n- 已确认主角说话克制。',
+            historyMessages: <JsonMap>[
+              <String, Object?>{'role': 'user', 'content': '主角这一章要继续保持沉默寡言。'},
+              <String, Object?>{
+                'role': 'assistant',
+                'content': '收到，我会沿用克制冷静的说话方式。',
+              },
+            ],
+          ),
+        );
+
+        expect(
+          gateway.lastMessages
+              .take(3)
+              .map((message) => ValueReaders.stringValue(message['role']))
+              .toList(growable: false),
+          <String>['system', 'user', 'assistant'],
+        );
+        expect(
+          ValueReaders.stringValue(gateway.lastMessages[1]['content']),
+          contains('主角这一章要继续保持沉默寡言'),
+        );
+        expect(
+          ValueReaders.stringValue(gateway.lastMessages[2]['content']),
+          contains('沿用克制冷静的说话方式'),
+        );
+        expect(
+          ValueReaders.stringValue(gateway.lastMessages.last['role']),
+          'user',
+        );
+        expect(gateway.lastPrompt, contains('【压缩归档】'));
+      },
+    );
+
     test('save draft writes into chapters directory by default', () async {
       // 中文注释: 这里验证草稿保存用例会复用 core 的正式章节目录规则，不会回落到旧 drafts 语义。
       final workspacePort = _FakeProjectWorkspacePort(entries: [], files: {});
@@ -1741,34 +1803,11 @@ void main() {
           scriptedResults: <JsonMap>[
             <String, Object?>{
               'ok': true,
-              'content': '',
-              'tool_calls': <Object?>[
-                <String, Object?>{
-                  'id': 'call_sub_1',
-                  'name': 'call_sub_agent',
-                  'arguments': <String, Object?>{
-                    'agent_id': 'writer',
-                    'task': '请先自查这一段。',
-                  },
-                },
-              ],
-              'message': const <String, Object?>{
-                'role': 'assistant',
-                'content': '',
-              },
-            },
-            <String, Object?>{
-              'ok': true,
-              'content': '建议先补一句承接。',
-              'tool_calls': const <Object?>[],
-            },
-            <String, Object?>{
-              'ok': true,
-              'content': '已完成自查。',
+              'content': '已按单主智能体直接完成本轮处理。',
               'tool_calls': const <Object?>[],
               'message': const <String, Object?>{
                 'role': 'assistant',
-                'content': '已完成自查。',
+                'content': '已按单主智能体直接完成本轮处理。',
               },
             },
           ],
@@ -1810,28 +1849,20 @@ void main() {
           },
         );
 
-        final subAgentTool = result.executedTools
-            .map(ValueReaders.mapValue)
-            .firstWhere(
-              (tool) =>
-                  ValueReaders.stringValue(tool['name']) == 'call_sub_agent',
-            );
-        final subAgentResult = ValueReaders.mapValue(subAgentTool['result']);
+        expect(gateway.lastToolNames, isNot(contains('call_sub_agent')));
+        expect(gateway.lastSystemPrompt, contains('当前按单主智能体运行'));
         expect(
-          ValueReaders.stringValue(subAgentResult['group_id']),
-          'single_agent_writer',
+          gateway.lastSystemPrompt,
+          isNot(contains('调用 call_sub_agent 时必须传 agent_id 和 task')),
         );
         expect(
-          ValueReaders.stringValue(
-            ValueReaders.mapValue(
-              subAgentResult['child_run_package'],
-            )['group_id'],
-          ),
-          'single_agent_writer',
-        );
-        expect(
-          ValueReaders.objectList(subAgentResult['available_children']),
-          hasLength(1),
+          result.executedTools
+              .map(ValueReaders.mapValue)
+              .where(
+                (tool) =>
+                    ValueReaders.stringValue(tool['name']) == 'call_sub_agent',
+              ),
+          isEmpty,
         );
       },
     );
@@ -1891,6 +1922,7 @@ class _FakeLlmGateway extends LlmGateway {
   String lastSystemPrompt = '';
   String lastModelId = '';
   JsonMap lastOptions = const <String, Object?>{};
+  List<JsonMap> lastMessages = const <JsonMap>[];
   List<String> lastToolNames = const <String>[];
   int requestCount = 0;
   final List<String> promptHistory = <String>[];
@@ -1936,6 +1968,9 @@ class _FakeLlmGateway extends LlmGateway {
     lastSystemPrompt = systemMessage['content']?.toString() ?? '';
     lastModelId = request.modelId;
     lastOptions = ValueReaders.deepCopyMap(request.options);
+    lastMessages = request.messages
+        .map(ValueReaders.deepCopyMap)
+        .toList(growable: false);
     optionsHistory.add(lastOptions);
     promptHistory.add(lastPrompt);
     lastToolNames = request.tools

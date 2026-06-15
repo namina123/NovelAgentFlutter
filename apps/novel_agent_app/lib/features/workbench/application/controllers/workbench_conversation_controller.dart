@@ -121,6 +121,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
     conversationRequestAgentResolverService,
     ConversationGroupSelectorViewDataService?
     conversationGroupSelectorViewDataService,
+    LongTaskOpeningPromptBuilderService? longTaskOpeningPromptBuilderService,
     required void Function(String message) announce,
   }) : _saveDraftUseCase = saveDraftUseCase,
        _generateDraftUseCaseFactory = generateDraftUseCaseFactory,
@@ -210,6 +211,9 @@ class WorkbenchConversationController implements ConversationActionHandler {
        _conversationGroupSelectorViewDataService =
            conversationGroupSelectorViewDataService ??
            const ConversationGroupSelectorViewDataService(),
+       _longTaskOpeningPromptBuilderService =
+           longTaskOpeningPromptBuilderService ??
+           const LongTaskOpeningPromptBuilderService(),
        _announce = announce;
 
   final SaveDraftUseCase _saveDraftUseCase;
@@ -282,6 +286,8 @@ class WorkbenchConversationController implements ConversationActionHandler {
   _conversationRequestAgentResolverService;
   final ConversationGroupSelectorViewDataService
   _conversationGroupSelectorViewDataService;
+  final LongTaskOpeningPromptBuilderService
+  _longTaskOpeningPromptBuilderService;
   final void Function(String message) _announce;
   final ThemePreferenceResolver _themePreferenceResolver =
       ThemePreferenceResolver();
@@ -1023,7 +1029,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
         ),
       ),
     );
-    final sessionContext = preflight.sessionContextMarkdown;
+    final sessionPromptContext = preflight.sessionPromptContext;
     final streamingContextSummary = _conversationSummary(
       preflight.sessionState,
       fallback: '正在接收模型输出',
@@ -1066,11 +1072,16 @@ class WorkbenchConversationController implements ConversationActionHandler {
           }
 
           cancellationToken.addListener(syncCancellation);
+          final selectedCollaborationGroup =
+              _selectedCollaborationGroupForRuntime(
+                _readRuntimeState().openingProjection,
+              );
           conversationDraftRuntime = await _prepareConversationDraftRuntime(
             project: project,
             agent: requestAgent.agent,
             taskProfile: taskProfile,
             chapterLabelHint: cleanText,
+            selectedCollaborationGroup: selectedCollaborationGroup,
           );
           final executionConstraints = conversationDraftRuntime != null
               ? conversationDraftRuntime!.executionConstraints
@@ -1089,11 +1100,13 @@ class WorkbenchConversationController implements ConversationActionHandler {
                     hostInformationPermissionContext,
               ) ??
               _generateDraftUseCaseFactory(provider, settings.networkSettings);
-          final selectedCollaborationGroup =
-              _selectedCollaborationGroupForRuntime(
-                _readRuntimeState().openingProjection,
-              );
           try {
+            final mergedSessionPromptContext = sessionPromptContext.copyWith(
+              contextMarkdown: _mergeSessionContext(
+                sessionPromptContext.contextMarkdown,
+                conversationDraftRuntime?.sessionContextMarkdown ?? '',
+              ),
+            );
             return useCase.execute(
               project: project,
               userPrompt: cleanText,
@@ -1102,10 +1115,8 @@ class WorkbenchConversationController implements ConversationActionHandler {
               intent: taskProfile.intent,
               agent: requestAgent.agent,
               selectedCollaborationGroup: selectedCollaborationGroup,
-              sessionContext: _mergeSessionContext(
-                sessionContext,
-                conversationDraftRuntime?.sessionContextMarkdown ?? '',
-              ),
+              sessionContext: mergedSessionPromptContext.contextMarkdown,
+              sessionPromptContext: mergedSessionPromptContext,
               requestOptions: _mapValue(executionProfile['request_options']),
               contextSettings: contextStrategySettings,
               modelProfile: runtimeProfile,
@@ -1204,6 +1215,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
     required JsonMap agent,
     required OrdinaryConversationTaskProfile taskProfile,
     required String chapterLabelHint,
+    required JsonMap selectedCollaborationGroup,
   }) async {
     if (_conversationDraftRuntimeService == null) {
       return null;
@@ -1214,6 +1226,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
       chapterLabelHint: chapterLabelHint,
       activeDocumentPath: _workspaceController.activeDocumentPath,
       agentId: ValueReaders.stringValue(agent['id']),
+      selectedCollaborationGroup: selectedCollaborationGroup,
       pinnedRelativePaths:
           _workspaceController.activeDocumentPath.trim().isEmpty
           ? const <String>[]
@@ -1578,19 +1591,25 @@ class WorkbenchConversationController implements ConversationActionHandler {
       _announce('只有长任务相关项目才会显示这个入口。');
       return;
     }
-    final targetAction = _resolveLongTaskLaunchTarget(projection);
-    if (targetAction != null) {
-      await _handleGuideNavigationAction(targetAction);
-      return;
-    }
-    await _handleGuideNavigationAction(
-      const PrimaryActionViewData(
-        id: 'opening.choose_long_task_mode',
-        title: '选择长任务模式',
-        description: '先确认当前长任务模式，再继续启动正式任务链。',
-        commandId: 'opening.choose_long_task_mode',
-      ),
+    final readiness = projection?.orchestration.readiness;
+    final suggestedAction = _resolveLongTaskLaunchTarget(projection);
+    final prompt = _longTaskOpeningPromptBuilderService.build(
+      project: _workspaceController.currentProjectInfo(),
+      currentGroupDisplayName: projection?.currentGroupDisplayName ?? '',
+      canStartLongTask: readiness?.canStartLongTask ?? false,
+      missingRequirementTitles: readiness == null
+          ? const <String>[]
+          : readiness.missingRequirements
+                .map((item) => item.title.trim())
+                .where((title) => title.isNotEmpty)
+                .toList(growable: false),
+      effectiveModeId: _effectiveLongTaskModeId(projection),
+      suggestedActionTitle: suggestedAction?.title ?? '',
+      suggestedActionDescription: suggestedAction?.description ?? '',
+      activeDocumentPath: _workspaceController.activeDocumentPath,
+      activeDocumentExcerpt: _workspaceController.activeDocumentBody,
     );
+    await _sendPrompt(prompt, visibleText: '启动长任务');
   }
 
   PrimaryActionViewData? _resolveLongTaskLaunchTarget(
@@ -1611,6 +1630,27 @@ class WorkbenchConversationController implements ConversationActionHandler {
       commandId: action.commandId,
       payload: action.payload,
     );
+  }
+
+  String _effectiveLongTaskModeId(OpeningSessionProjection? projection) {
+    if (projection == null) {
+      return '';
+    }
+    final activeModeId = projection
+        .orchestration
+        .state
+        .modeGuidanceState
+        ?.modeId
+        .trim();
+    if (activeModeId != null && activeModeId.isNotEmpty) {
+      return activeModeId;
+    }
+    final readinessModeId = projection.orchestration.readiness.effectiveModeId
+        .trim();
+    if (readinessModeId.isNotEmpty) {
+      return readinessModeId;
+    }
+    return projection.orchestration.state.intent.modeId.trim();
   }
 
   Future<void> _selectOpeningAgentGroup(String groupId) async {
