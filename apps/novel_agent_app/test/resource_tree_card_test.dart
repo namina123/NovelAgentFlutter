@@ -54,6 +54,9 @@ void main() {
     expect(find.text('大纲'), findsOneWidget);
     expect(find.text('3'), findsOneWidget);
     expect(find.text('第一章'), findsOneWidget);
+    expect(find.text('正文'), findsOneWidget);
+    expect(find.byIcon(Icons.menu_book_outlined), findsOneWidget);
+    expect(find.textContaining('正式正文'), findsOneWidget);
 
     await tester.tap(find.text('第一章'));
     await tester.pumpAndSettle();
@@ -93,7 +96,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('SQLite 语义树'), findsOneWidget);
-    expect(find.textContaining('SQLite 主事实源'), findsOneWidget);
-    expect(find.textContaining('只读投影'), findsOneWidget);
+    expect(find.text('投影'), findsOneWidget);
+    expect(find.byIcon(Icons.account_tree_outlined), findsOneWidget);
+    expect(find.textContaining('SQLite 投影'), findsOneWidget);
+    expect(find.textContaining('只读镜像'), findsOneWidget);
+    expect(find.textContaining('非事实源'), findsOneWidget);
   });
 }

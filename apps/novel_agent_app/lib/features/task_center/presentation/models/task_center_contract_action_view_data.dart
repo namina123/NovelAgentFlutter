@@ -15,6 +15,8 @@ class TaskCenterContractActionViewData {
     this.userOptionPrompt = '',
     this.userOptionDescription = '',
     this.userOptionQuestion = '',
+    this.permissionApprovalId = '',
+    this.permissionApprovalOptionId = '',
   });
 
   final String id;
@@ -32,4 +34,6 @@ class TaskCenterContractActionViewData {
   final String userOptionPrompt;
   final String userOptionDescription;
   final String userOptionQuestion;
+  final String permissionApprovalId;
+  final String permissionApprovalOptionId;
 }

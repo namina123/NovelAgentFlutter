@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../config/project_information_permission_settings_resolver_service.dart';
+import '../config/project_tool_permission_settings_resolver_service.dart';
 import '../runtime/long_task_supervisor.dart';
 import '../runtime/project_long_task_run_registry_sync_service.dart';
+import '../runtime/project_tool_permission_approval_record_service.dart';
 import '../storage/project_mode_guidance_repository.dart';
 import '../storage/project_prompt_template_service.dart';
 import '../storage/project_review_report_service.dart';
@@ -42,6 +44,7 @@ typedef WorkflowHostAwareGenerateDraftUseCaseFactory =
       ProviderEndpointSettings provider,
       JsonMap networkSettings, {
       HostInformationPermissionContext? hostInformationPermissionContext,
+      HostToolPermissionContext? hostToolPermissionContext,
     });
 typedef LoadWorkflowProjectAgentGroupSelections =
     Future<List<ProjectAgentGroupSelection>> Function(
@@ -116,6 +119,10 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
     workflowRuntimeSatisfiedOutputPathService,
     ProjectInformationPermissionSettingsResolverService?
     informationPermissionSettingsResolverService,
+    ProjectToolPermissionSettingsResolverService?
+    toolPermissionSettingsResolverService,
+    ProjectToolPermissionApprovalRecordService?
+    toolPermissionApprovalRecordService,
     LongTaskSupervisor? longTaskSupervisor,
     ProjectLongTaskRunRegistrySyncService? longTaskRunRegistrySyncService,
   }) : _taskRepository = taskRepository,
@@ -402,6 +409,14 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
        _informationPermissionSettingsResolverService =
            informationPermissionSettingsResolverService ??
            const ProjectInformationPermissionSettingsResolverService(),
+       _toolPermissionSettingsResolverService =
+           toolPermissionSettingsResolverService ??
+           const ProjectToolPermissionSettingsResolverService(),
+       _toolPermissionApprovalRecordService =
+           toolPermissionApprovalRecordService ??
+           ProjectToolPermissionApprovalRecordService(
+             taskRepository: taskRepository,
+           ),
        _longTaskRunRegistrySyncService =
            longTaskRunRegistrySyncService ??
            (longTaskSupervisor == null
@@ -480,6 +495,10 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
   final ProjectWritingExecutionContractService _writingExecutionContractService;
   final ProjectInformationPermissionSettingsResolverService
   _informationPermissionSettingsResolverService;
+  final ProjectToolPermissionSettingsResolverService
+  _toolPermissionSettingsResolverService;
+  final ProjectToolPermissionApprovalRecordService
+  _toolPermissionApprovalRecordService;
   final ProjectLongTaskRunRegistrySyncService? _longTaskRunRegistrySyncService;
 
   List<JsonMap> listTaskRuntimeModes() {
@@ -575,7 +594,9 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
     var tasks = _workflowTaskSelectionService.workflowScopedTasks(
       await listWorkflowTasks(project, filters: filters),
     );
-    var primaryTasks = _workflowTaskSelectionService.workflowPrimaryTasks(tasks);
+    var primaryTasks = _workflowTaskSelectionService.workflowPrimaryTasks(
+      tasks,
+    );
     var nextTask = _workflowTaskSelectionService.nextRunnablePrimaryTask(
       primaryTasks: primaryTasks,
       allTasks: tasks,
@@ -623,7 +644,9 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
     var tasks = _workflowTaskSelectionService.workflowScopedTasks(
       await listWorkflowTasks(project, filters: filters),
     );
-    var primaryTasks = _workflowTaskSelectionService.workflowPrimaryTasks(tasks);
+    var primaryTasks = _workflowTaskSelectionService.workflowPrimaryTasks(
+      tasks,
+    );
     var nextTask = _workflowTaskSelectionService.nextRunnablePrimaryTask(
       primaryTasks: primaryTasks,
       allTasks: tasks,
@@ -1326,9 +1349,15 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
       provider: provider,
       agent: agent,
     );
+    final taskHostToolPermissionContext =
+        await _consumeWorkflowTaskToolPermissionOverride(
+          project: project,
+          task: runtimeTask,
+        );
     final useCase = _workflowGenerateDraftUseCase(
       provider: provider,
       settings: settings,
+      hostToolPermissionContextOverride: taskHostToolPermissionContext,
     );
     final reviewerDispatch = await _resolveReviewerDispatchForTask(
       project: project,
@@ -1454,6 +1483,22 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
               ),
               cancellationToken: cancellationToken,
             );
+      final persistedApprovals = await _toolPermissionApprovalRecordService
+          .persistPendingApprovalsForExecutedTools(
+            project,
+            scopeType: ProjectToolPermissionApprovalScopes.workflowTask,
+            executedTools: result.executedTools,
+            taskPath: ValueReaders.stringValue(runtimeTask['relative_path']),
+            executionPath: ValueReaders.stringValue(
+              runtimeTask['atomic_execution_path'],
+            ),
+          );
+      result = _resultWithExecutedTools(
+        result,
+        executedTools: ValueReaders.objectList(
+          persistedApprovals['executed_tools'],
+        ),
+      );
     } catch (error) {
       if (!_isRetryableWorkflowTaskTransportFailure(error)) {
         rethrow;
@@ -3947,9 +3992,15 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
       provider: provider,
       agent: agent,
     );
+    final taskHostToolPermissionContext =
+        await _consumeWorkflowTaskToolPermissionOverride(
+          project: project,
+          task: task,
+        );
     final useCase = _workflowGenerateDraftUseCase(
       provider: provider,
       settings: settings,
+      hostToolPermissionContextOverride: taskHostToolPermissionContext,
     );
     final selectedCollaborationGroup =
         await _resolveSelectedCollaborationGroupForTask(
@@ -3957,7 +4008,7 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
           task: task,
           agent: agent,
         );
-    final result = await useCase.execute(
+    var result = await useCase.execute(
       project: project,
       userPrompt: prompt,
       modelId: ValueReaders.stringValue(
@@ -3978,6 +4029,22 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
       subAgentBindingStageId: ValueReaders.stringValue(
         ValueReaders.mapValue(task['metadata'])['stage'],
         'draft',
+      ),
+    );
+    final persistedApprovals = await _toolPermissionApprovalRecordService
+        .persistPendingApprovalsForExecutedTools(
+          project,
+          scopeType: ProjectToolPermissionApprovalScopes.workflowTask,
+          executedTools: result.executedTools,
+          taskPath: ValueReaders.stringValue(task['relative_path']),
+          executionPath: ValueReaders.stringValue(
+            task['atomic_execution_path'],
+          ),
+        );
+    result = _resultWithExecutedTools(
+      result,
+      executedTools: ValueReaders.objectList(
+        persistedApprovals['executed_tools'],
       ),
     );
     final mergedOutputs = _mergePaths(
@@ -4184,6 +4251,8 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
     String label = '',
     String description = '',
     String sourceQuestion = '',
+    String permissionApprovalId = '',
+    String permissionApprovalOptionId = '',
   }) async {
     final cleanPrompt = prompt.trim();
     if (cleanPrompt.isEmpty) {
@@ -4200,6 +4269,19 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
     final nextStatus = taskType == 'checkpoint'
         ? TaskRuntimeConstants.statusSucceeded
         : TaskRuntimeConstants.statusQueued;
+    JsonMap permissionApprovalResolution = const <String, Object?>{};
+    if (permissionApprovalId.trim().isNotEmpty &&
+        permissionApprovalOptionId.trim().isNotEmpty) {
+      permissionApprovalResolution = await _toolPermissionApprovalRecordService
+          .resolveSelection(
+            project,
+            approvalId: permissionApprovalId.trim(),
+            optionId: permissionApprovalOptionId.trim(),
+          );
+      if (!ValueReaders.boolValue(permissionApprovalResolution['ok'])) {
+        return permissionApprovalResolution;
+      }
+    }
     final transition = await _taskRepository.transitionTask(
       project,
       selector,
@@ -4218,6 +4300,13 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
         'selected_user_option_question': sourceQuestion.trim(),
         'waiting_for_user_choice': false,
         'auto_confirmed_from_user_option': taskType == 'checkpoint',
+        'selected_host_tool_permission_approval_id': permissionApprovalId
+            .trim(),
+        'selected_host_tool_permission_option_id': permissionApprovalOptionId
+            .trim(),
+        'selected_host_tool_permission_option_kind': ValueReaders.stringValue(
+          permissionApprovalResolution['selected_option_kind'],
+        ).trim(),
       },
     );
     final changedPaths = <String>[];
@@ -4242,6 +4331,11 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
             'prompt': cleanPrompt,
             'source_question': sourceQuestion.trim(),
             'selected_at': DateTime.now().toIso8601String(),
+            if (permissionApprovalId.trim().isNotEmpty)
+              'permission_approval_id': permissionApprovalId.trim(),
+            if (permissionApprovalOptionId.trim().isNotEmpty)
+              'permission_approval_option_id': permissionApprovalOptionId
+                  .trim(),
           };
         await _taskRepository.saveRecord(project, executionPath, nextExecution);
         execution = nextExecution;
@@ -4256,6 +4350,7 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
       'relative_path': ValueReaders.stringValue(task['relative_path']),
       'changed_paths': changedPaths,
       'auto_confirmed_checkpoint': taskType == 'checkpoint',
+      'permission_approval': permissionApprovalResolution,
     };
   }
 
@@ -5157,6 +5252,7 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
   GenerateDraftUseCase _workflowGenerateDraftUseCase({
     required ProviderEndpointSettings provider,
     required AppSettings settings,
+    HostToolPermissionContext? hostToolPermissionContextOverride,
   }) {
     final hostAwareFactory = _hostAwareGenerateDraftUseCaseFactory;
     if (hostAwareFactory == null) {
@@ -5170,6 +5266,64 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
             settings,
             source: 'workflow_runtime.app_settings.permission_settings',
           ),
+      hostToolPermissionContext:
+          hostToolPermissionContextOverride ??
+          _toolPermissionSettingsResolverService.resolveFromAppSettings(
+            settings,
+            source: 'workflow_runtime.app_settings.permission_settings',
+          ),
+    );
+  }
+
+  Future<HostToolPermissionContext?>
+  _consumeWorkflowTaskToolPermissionOverride({
+    required ProjectDescriptor project,
+    required JsonMap task,
+  }) async {
+    final approvalId = ValueReaders.stringValue(
+      task['selected_host_tool_permission_approval_id'],
+    ).trim();
+    if (approvalId.isEmpty) {
+      return null;
+    }
+    final consumed = await _toolPermissionApprovalRecordService
+        .consumeResolvedOverrideContext(project, approvalId: approvalId);
+    if (!ValueReaders.boolValue(consumed['ok'])) {
+      return null;
+    }
+    final contextJson = ValueReaders.mapValue(
+      consumed['host_tool_permission_context'],
+    );
+    if (contextJson.isEmpty) {
+      return null;
+    }
+    return HostToolPermissionContext.fromJson(contextJson);
+  }
+
+  DraftGenerationResult _resultWithExecutedTools(
+    DraftGenerationResult source, {
+    required List<Object?> executedTools,
+  }) {
+    return DraftGenerationResult(
+      project: source.project,
+      projectInfo: source.projectInfo,
+      userPrompt: source.userPrompt,
+      prompt: source.prompt,
+      modelId: source.modelId,
+      draftMarkdown: source.draftMarkdown,
+      contextPack: source.contextPack,
+      selectedPaths: source.selectedPaths,
+      executedTools: List<Object?>.unmodifiable(executedTools),
+      writtenPaths: source.writtenPaths,
+      changedPaths: source.changedPaths,
+      transcriptMessages: source.transcriptMessages,
+      waitingForUserChoice: source.waitingForUserChoice,
+      reasoningContent: source.reasoningContent,
+      stoppedByToolError: source.stoppedByToolError,
+      toolErrorSummary: source.toolErrorSummary,
+      cancelledByUser: source.cancelledByUser,
+      stopPhase: source.stopPhase,
+      partialContentAccepted: source.partialContentAccepted,
     );
   }
 
@@ -5250,12 +5404,20 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
   ) {
     for (final rawTool in executedTools.reversed) {
       final tool = ValueReaders.mapValue(rawTool);
-      if (ValueReaders.stringValue(tool['name']) != 'present_user_options') {
+      final result = ValueReaders.mapValue(tool['result']);
+      final options = ValueReaders.objectList(result['options']);
+      if (options.isEmpty) {
         continue;
       }
-      final result = ValueReaders.mapValue(tool['result']);
+      final toolName = ValueReaders.stringValue(tool['name']);
+      final supportsPendingSurface =
+          toolName == 'present_user_options' ||
+          ValueReaders.boolValue(result['waiting_for_user_choice']);
+      if (!supportsPendingSurface) {
+        continue;
+      }
       final question = ValueReaders.stringValue(result['question']);
-      return ValueReaders.objectList(result['options'])
+      return options
           .map(ValueReaders.mapValue)
           .where((entry) => entry.isNotEmpty)
           .map(
@@ -5285,6 +5447,12 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
                 ),
               ),
               'source_question': question,
+              'approval_record_id': ValueReaders.stringValue(
+                entry['approval_record_id'],
+              ),
+              'approval_option_id': ValueReaders.stringValue(
+                entry['approval_option_id'],
+              ),
             },
           )
           .toList(growable: false);

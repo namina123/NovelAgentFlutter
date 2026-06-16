@@ -17,6 +17,8 @@ class DocumentMarkdownResourceRenderer implements DocumentResourceRenderer {
       relativePath: request.relativePath,
       content: request.content,
       status: request.status,
+      displayMode: request.displayMode,
+      onChanged: request.onChanged,
     );
   }
 }

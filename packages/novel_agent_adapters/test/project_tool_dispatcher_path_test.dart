@@ -6,6 +6,44 @@ import 'package:test/test.dart';
 void main() {
   group('ProjectToolDispatcher path ingress', () {
     test(
+      'start_long_task_run returns generic unavailable result when executor is unwired',
+      () async {
+        // 中文注释: 长任务启动入口未接线时应只给出泛化不可用结果，并附带结构化可用性投影。
+        final hostPort = _FakeProjectToolHostPort(
+          files: const <String, String>{},
+        );
+        final dispatcher = ProjectToolDispatcher(hostPort: hostPort);
+        final result = await dispatcher.execute(
+          project: const ProjectDescriptor(
+            id: 'demo',
+            name: '示例项目',
+            rootPath: 'D:/demo',
+          ),
+          toolCall: const <String, Object?>{
+            'name': 'start_long_task_run',
+            'arguments': <String, Object?>{},
+          },
+        );
+
+        expect(result['ok'], isFalse);
+        expect(result['not_executed'], isTrue);
+        expect(ValueReaders.stringValue(result['display_text']), isNotEmpty);
+        expect(
+          ValueReaders.stringValue(result['display_text']),
+          isNot(contains('尚未接入')),
+        );
+        final availability = ValueReaders.mapValue(
+          result['entry_availability'],
+        );
+        expect(ValueReaders.stringValue(availability['state']), 'hidden');
+        expect(
+          ValueReaders.stringValue(availability['entry_id']),
+          'opening.start_long_task_run',
+        );
+      },
+    );
+
+    test(
       'resolves Chinese workspace label only at dispatcher boundary',
       () async {
         // 中文注释: 这里验证中文目录标签只在工具入口归一化一次，执行器收到的仍是英文相对路径。
@@ -258,6 +296,94 @@ void main() {
           'compatibility_rejected_projection',
         );
         expect(result['error'], contains('只读入口'));
+      },
+    );
+
+    test(
+      'request_gateway_tool enters waiting-user permission result when network is not yet allowed',
+      () async {
+        final hostPort = _FakeProjectToolHostPort(
+          files: const <String, String>{},
+        );
+        final dispatcher = ProjectToolDispatcher(
+          hostPort: hostPort,
+          hostToolPermissionContext: const HostToolPermissionContext(
+            allowNetwork: false,
+            permissionMode: HostToolPermissionModes.safe,
+            confirmationMode:
+                HostToolConfirmationModes.userConfirmationRequired,
+            source: 'dispatcher_test',
+          ),
+        );
+        final result = await dispatcher.execute(
+          project: const ProjectDescriptor(
+            id: 'demo',
+            name: '示例项目',
+            rootPath: 'D:/demo',
+          ),
+          toolCall: const <String, Object?>{
+            'name': 'request_gateway_tool',
+            'arguments': <String, Object?>{
+              'gateway_tool': 'search_internet',
+              'query': '明代 盐法',
+            },
+          },
+        );
+
+        expect(result['ok'], isFalse);
+        expect(result['not_executed'], isTrue);
+        expect(result['waiting_for_user_choice'], isTrue);
+        expect(ValueReaders.objectList(result['options']), isNotEmpty);
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(result['permission_decision'])['disposition'],
+          ),
+          HostToolPermissionDispositions.needsUserConfirmation,
+        );
+      },
+    );
+
+    test(
+      'submit_chapter_delivery respects host formal delivery permission',
+      () async {
+        final hostPort = _FakeProjectToolHostPort(
+          files: const <String, String>{},
+        );
+        final dispatcher = ProjectToolDispatcher(
+          hostPort: hostPort,
+          hostToolPermissionContext: const HostToolPermissionContext(
+            allowFormalDelivery: false,
+            permissionMode: HostToolPermissionModes.custom,
+            confirmationMode: HostToolConfirmationModes.never,
+            source: 'dispatcher_test',
+          ),
+        );
+        final result = await dispatcher.execute(
+          project: const ProjectDescriptor(
+            id: 'demo',
+            name: '示例项目',
+            rootPath: 'D:/demo',
+          ),
+          toolCall: const <String, Object?>{
+            'name': 'submit_chapter_delivery',
+            'arguments': <String, Object?>{
+              'chapter_path': 'chapters/第01章.md',
+              'chapter_content': '# 第01章\\n\\n正文',
+              'title': '第01章',
+            },
+          },
+        );
+
+        expect(result['ok'], isFalse);
+        expect(result['not_executed'], isTrue);
+        expect(result['tool_layer'], 'domain');
+        expect(result['waiting_for_user_choice'], isNot(true));
+        expect(
+          ValueReaders.stringValue(
+            ValueReaders.mapValue(result['permission_decision'])['disposition'],
+          ),
+          HostToolPermissionDispositions.blocked,
+        );
       },
     );
 

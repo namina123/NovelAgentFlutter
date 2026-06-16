@@ -61,6 +61,10 @@ void main() {
       );
       expect(ValueReaders.intValue(input.options['checkpoint_interval']), 0);
       expect(
+        ValueReaders.stringList(input.options['source_paths']),
+        isNot(contains('premise/project_brief.md')),
+      );
+      expect(
         ValueReaders.stringList(input.options['persistent_context_paths']),
         contains('outlines/story/full_outline_consensus_overview.md'),
       );

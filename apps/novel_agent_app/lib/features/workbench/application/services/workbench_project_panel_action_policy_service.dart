@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../../presentation/models/workbench_project_panel_action_view_data.dart';
 
@@ -8,6 +9,7 @@ class WorkbenchProjectPanelActionPolicyService {
   List<WorkbenchProjectPanelActionViewData> primaryActions({
     required bool hasActiveProject,
     String projectTypeId = '',
+    required EntryAvailabilityDecision projectTypeTransitionAvailability,
   }) {
     if (!hasActiveProject) {
       return const <WorkbenchProjectPanelActionViewData>[
@@ -32,7 +34,10 @@ class WorkbenchProjectPanelActionPolicyService {
         description: '查看或调整当前项目基础信息与关键元数据。',
         actionId: WorkbenchProjectPanelActionIds.editProjectInfo,
       ),
-      ..._projectTypeTransitionAction(projectTypeId),
+      ..._projectTypeTransitionAction(
+        projectTypeId,
+        projectTypeTransitionAvailability,
+      ),
       const WorkbenchProjectPanelActionViewData(
         icon: Icons.refresh_rounded,
         title: '刷新项目',
@@ -61,30 +66,30 @@ class WorkbenchProjectPanelActionPolicyService {
 
   List<WorkbenchProjectPanelActionViewData> _projectTypeTransitionAction(
     String projectTypeId,
+    EntryAvailabilityDecision projectTypeTransitionAvailability,
   ) {
     // 中文注释: 类型互转入口只对 first phase 的写作类型开放，知识库与其他项目类型不应露出错误入口。
-    switch (projectTypeId.trim()) {
-      case 'novel':
-        return const <WorkbenchProjectPanelActionViewData>[
-          WorkbenchProjectPanelActionViewData(
-            icon: Icons.compare_arrows_rounded,
-            title: '项目类型转换',
-            description: '将当前普通小说切换为长篇长任务，存储策略保持不变。',
-            actionId: WorkbenchProjectPanelActionIds.transitionProjectType,
-          ),
-        ];
-      case 'long_novel':
-        return const <WorkbenchProjectPanelActionViewData>[
-          WorkbenchProjectPanelActionViewData(
-            icon: Icons.compare_arrows_rounded,
-            title: '项目类型转换',
-            description: '将当前长篇长任务切回普通小说，存储策略保持不变。',
-            actionId: WorkbenchProjectPanelActionIds.transitionProjectType,
-          ),
-        ];
-      default:
-        return const <WorkbenchProjectPanelActionViewData>[];
+    final normalizedProjectTypeId = projectTypeId.trim();
+    if (normalizedProjectTypeId != 'novel' &&
+        normalizedProjectTypeId != 'long_novel') {
+      return const <WorkbenchProjectPanelActionViewData>[];
     }
+    if (projectTypeTransitionAvailability.isHidden) {
+      return const <WorkbenchProjectPanelActionViewData>[];
+    }
+    final description = normalizedProjectTypeId == 'novel'
+        ? '将当前普通小说切换为长篇长任务，存储策略保持不变。'
+        : '将当前长篇长任务切回普通小说，存储策略保持不变。';
+    return <WorkbenchProjectPanelActionViewData>[
+      WorkbenchProjectPanelActionViewData(
+        icon: Icons.compare_arrows_rounded,
+        title: '项目类型转换',
+        description: description,
+        actionId: WorkbenchProjectPanelActionIds.transitionProjectType,
+        isEnabled: projectTypeTransitionAvailability.isAvailable,
+        disabledReason: projectTypeTransitionAvailability.userReason,
+      ),
+    ];
   }
 }
 

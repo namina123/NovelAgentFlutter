@@ -17,6 +17,9 @@ class WorkspaceResourceVisibilityService {
     if (cleanPath == ProjectManifestCodecService.manifestRelativePath) {
       return true;
     }
+    if (ProjectSupportDocumentCatalog.isProjectOverviewPath(cleanPath)) {
+      return true;
+    }
     if (ProjectWorkspaceCatalog.isInternalWorkspacePath(cleanPath)) {
       return true;
     }

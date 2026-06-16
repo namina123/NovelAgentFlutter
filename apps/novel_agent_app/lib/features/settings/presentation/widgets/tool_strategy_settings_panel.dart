@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../../../../../shared/widgets/action_button.dart';
 import '../models/project_creation_expression_constraint_defaults_view_data.dart';
@@ -30,13 +31,14 @@ class ToolStrategySettingsPanel extends StatefulWidget {
 
 class _ToolStrategySettingsPanelState extends State<ToolStrategySettingsPanel> {
   late String _mode;
-  late bool _allowPlanning;
-  late bool _allowSubAgents;
-  late bool _allowFileMutation;
-  late bool _allowRead;
-  late bool _allowWrite;
-  late bool _allowEdit;
-  late bool _allowBackup;
+  late bool _enabled;
+  late bool _allowInlineFallback;
+  late bool _autoPresentOptions;
+  late bool _autoTaskPlan;
+  late bool _autoWriteArtifacts;
+  late bool _forceToolChoice;
+  late bool _requireListBeforeRead;
+  late bool _requireReadBeforeEdit;
   late String _toolPreviewMode;
 
   @override
@@ -60,7 +62,7 @@ class _ToolStrategySettingsPanelState extends State<ToolStrategySettingsPanel> {
       children: [
         SettingsFormSection(
           title: '工具策略',
-          description: '这里控制模型看见哪些工具，以及在内容生成链中默认偏向哪种执行方式。',
+          description: '这里控制 AI 在已经暴露的工具里如何行动。它不负责权限放行，只负责执行风格与偏好。',
           child: Column(
             children: [
               SettingsLabeledDropdownField<String>(
@@ -68,8 +70,8 @@ class _ToolStrategySettingsPanelState extends State<ToolStrategySettingsPanel> {
                 value: _mode,
                 options: const [
                   SettingsDropdownOption(value: 'balanced', label: '平衡'),
-                  SettingsDropdownOption(value: 'minimal', label: '最小工具集'),
-                  SettingsDropdownOption(value: 'aggressive', label: '积极使用工具'),
+                  SettingsDropdownOption(value: 'conservative', label: '保守'),
+                  SettingsDropdownOption(value: 'proactive', label: '主动'),
                 ],
                 onChanged: (value) {
                   if (value == null) {
@@ -82,65 +84,66 @@ class _ToolStrategySettingsPanelState extends State<ToolStrategySettingsPanel> {
               ),
               const SizedBox(height: 12),
               SettingsSwitchRow(
-                label: '允许规划工具',
-                value: _allowPlanning,
+                label: '启用工具调用',
+                value: _enabled,
                 onChanged: (value) => setState(() {
-                  _allowPlanning = value;
-                  _mode = 'custom';
+                  _enabled = value;
                 }),
               ),
               const SizedBox(height: 10),
               SettingsSwitchRow(
-                label: '允许子智能体委派',
-                value: _allowSubAgents,
+                label: '允许 fallback 工具 JSON',
+                value: _allowInlineFallback,
                 onChanged: (value) => setState(() {
-                  _allowSubAgents = value;
-                  _mode = 'custom';
+                  _allowInlineFallback = value;
                 }),
               ),
               const SizedBox(height: 10),
               SettingsSwitchRow(
-                label: '允许文件修改链',
-                value: _allowFileMutation,
+                label: '选项请求优先走工具',
+                value: _autoPresentOptions,
                 onChanged: (value) => setState(() {
-                  _allowFileMutation = value;
-                  _mode = 'custom';
+                  _autoPresentOptions = value;
                 }),
               ),
               const SizedBox(height: 10),
               SettingsSwitchRow(
-                label: '允许读取',
-                value: _allowRead,
+                label: '复杂任务允许任务计划',
+                value: _autoTaskPlan,
                 onChanged: (value) => setState(() {
-                  _allowRead = value;
-                  _mode = 'custom';
+                  _autoTaskPlan = value;
                 }),
               ),
               const SizedBox(height: 10),
               SettingsSwitchRow(
-                label: '允许写入',
-                value: _allowWrite,
+                label: '允许自动写入正式产物',
+                value: _autoWriteArtifacts,
                 onChanged: (value) => setState(() {
-                  _allowWrite = value;
-                  _mode = 'custom';
+                  _autoWriteArtifacts = value;
                 }),
               ),
               const SizedBox(height: 10),
               SettingsSwitchRow(
-                label: '允许编辑',
-                value: _allowEdit,
+                label: '高级：请求级强制工具选择',
+                value: _forceToolChoice,
                 onChanged: (value) => setState(() {
-                  _allowEdit = value;
-                  _mode = 'custom';
+                  _forceToolChoice = value;
                 }),
               ),
               const SizedBox(height: 10),
               SettingsSwitchRow(
-                label: '允许备份',
-                value: _allowBackup,
+                label: '读取前鼓励先看目录',
+                value: _requireListBeforeRead,
                 onChanged: (value) => setState(() {
-                  _allowBackup = value;
-                  _mode = 'custom';
+                  _requireListBeforeRead = value;
+                }),
+              ),
+              const SizedBox(height: 10),
+              SettingsSwitchRow(
+                label: '修改前要求先读取',
+                value: _requireReadBeforeEdit,
+                onChanged: (value) => setState(() {
+                  _requireReadBeforeEdit = value;
                 }),
               ),
             ],
@@ -181,13 +184,14 @@ class _ToolStrategySettingsPanelState extends State<ToolStrategySettingsPanel> {
           onPressed: () {
             widget.onSaved(<String, Object?>{
               'mode': _mode,
-              'allow_planning': _allowPlanning,
-              'allow_sub_agents': _allowSubAgents,
-              'allow_file_mutation': _allowFileMutation,
-              'allow_read': _allowRead,
-              'allow_write': _allowWrite,
-              'allow_edit': _allowEdit,
-              'allow_backup': _allowBackup,
+              'enabled': _enabled,
+              'allow_inline_fallback': _allowInlineFallback,
+              'auto_present_options': _autoPresentOptions,
+              'auto_task_plan': _autoTaskPlan,
+              'auto_write_artifacts': _autoWriteArtifacts,
+              'force_tool_choice': _forceToolChoice,
+              'require_list_before_read': _requireListBeforeRead,
+              'require_read_before_edit': _requireReadBeforeEdit,
               'tool_preview_mode': _toolPreviewMode,
             });
           },
@@ -205,55 +209,56 @@ class _ToolStrategySettingsPanelState extends State<ToolStrategySettingsPanel> {
   }
 
   void _sync() {
-    _mode = (widget.settings['mode'] ?? 'balanced').toString();
-    _allowPlanning = widget.settings['allow_planning'] != false;
-    _allowSubAgents = widget.settings['allow_sub_agents'] != false;
-    _allowFileMutation = widget.settings['allow_file_mutation'] != false;
-    _allowRead = widget.settings['allow_read'] != false;
-    _allowWrite = widget.settings['allow_write'] != false;
-    _allowEdit = widget.settings['allow_edit'] != false;
-    _allowBackup = widget.settings['allow_backup'] != false;
+    final normalized = const ToolStrategyService().normalize(widget.settings);
+    _mode = normalized['mode'].toString();
+    _enabled = normalized['enabled'] != false;
+    _allowInlineFallback = normalized['allow_inline_fallback'] != false;
+    _autoPresentOptions = normalized['auto_present_options'] != false;
+    _autoTaskPlan = normalized['auto_task_plan'] != false;
+    _autoWriteArtifacts = normalized['auto_write_artifacts'] != false;
+    _forceToolChoice = normalized['force_tool_choice'] == true;
+    _requireListBeforeRead = normalized['require_list_before_read'] != false;
+    _requireReadBeforeEdit = normalized['require_read_before_edit'] != false;
     _toolPreviewMode = ToolPreviewMode.normalize(
       widget.settings['tool_preview_mode'],
     );
-    if (_mode != 'custom') {
-      _applyMode(_mode);
-    }
+    _applyMode(_mode);
   }
 
   void _applyMode(String mode) {
     // 中文注释: 工具策略模式切换时同步映射到开关集合，避免模式下拉与具体策略值脱节。
     _mode = mode;
     switch (mode) {
-      case 'minimal':
-        _allowPlanning = false;
-        _allowSubAgents = false;
-        _allowFileMutation = false;
-        _allowRead = true;
-        _allowWrite = false;
-        _allowEdit = false;
-        _allowBackup = true;
+      case ToolStrategyMode.conservative:
+        _enabled = true;
+        _allowInlineFallback = true;
+        _autoPresentOptions = true;
+        _autoTaskPlan = true;
+        _autoWriteArtifacts = false;
+        _forceToolChoice = false;
+        _requireListBeforeRead = true;
+        _requireReadBeforeEdit = true;
         return;
-      case 'aggressive':
-        _allowPlanning = true;
-        _allowSubAgents = true;
-        _allowFileMutation = true;
-        _allowRead = true;
-        _allowWrite = true;
-        _allowEdit = true;
-        _allowBackup = true;
+      case ToolStrategyMode.proactive:
+        _enabled = true;
+        _allowInlineFallback = true;
+        _autoPresentOptions = true;
+        _autoTaskPlan = true;
+        _autoWriteArtifacts = true;
+        _forceToolChoice = false;
+        _requireListBeforeRead = true;
+        _requireReadBeforeEdit = true;
         return;
-      case 'balanced':
-        _allowPlanning = true;
-        _allowSubAgents = true;
-        _allowFileMutation = true;
-        _allowRead = true;
-        _allowWrite = true;
-        _allowEdit = true;
-        _allowBackup = true;
-        return;
-      case 'custom':
+      case ToolStrategyMode.balanced:
       default:
+        _enabled = true;
+        _allowInlineFallback = true;
+        _autoPresentOptions = true;
+        _autoTaskPlan = true;
+        _autoWriteArtifacts = true;
+        _forceToolChoice = false;
+        _requireListBeforeRead = true;
+        _requireReadBeforeEdit = true;
         return;
     }
   }

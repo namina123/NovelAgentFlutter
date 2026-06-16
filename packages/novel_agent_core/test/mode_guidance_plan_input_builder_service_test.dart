@@ -67,9 +67,90 @@ void main() {
       expect(ValueReaders.intValue(input.options['chapter_count']), 12);
       expect(ValueReaders.intValue(input.options['checkpoint_interval']), 4);
       expect(
+        ValueReaders.stringList(input.options['source_paths']),
+        isNot(contains('premise/project_brief.md')),
+      );
+      expect(
         ValueReaders.stringList(input.options['persistent_context_paths']),
         contains('assets/styles/seed_autopilot_style.md'),
       );
     });
+
+    test(
+      'falls back to support overview only when no formal projected docs exist',
+      () {
+        final builder = ModeGuidancePlanInputBuilderService(
+          projectionDocumentService:
+              _EmptyModeGuidanceProjectionDocumentService(),
+        );
+        final transitionService = ModeGuidanceTransitionService();
+        var state = transitionService.initialize('seed_autopilot_novel');
+        for (final item in const <Map<String, String>>[
+          <String, String>{
+            'stage': 'seed_scope',
+            'field': 'seed_scope',
+            'value': '一段种子。',
+          },
+          <String, String>{
+            'stage': 'core_promise',
+            'field': 'core_promise',
+            'value': '一条承诺。',
+          },
+          <String, String>{
+            'stage': 'world_anchor',
+            'field': 'world_anchor',
+            'value': '一条世界锚点。',
+          },
+          <String, String>{
+            'stage': 'protagonist_drive',
+            'field': 'protagonist_drive',
+            'value': '一条驱动力。',
+          },
+          <String, String>{
+            'stage': 'style_target',
+            'field': 'style_target',
+            'value': '一种风格。',
+          },
+          <String, String>{
+            'stage': 'autonomy_guardrails',
+            'field': 'autonomy_guardrails',
+            'value': '允许先补总纲。',
+          },
+          <String, String>{
+            'stage': 'review_ready',
+            'field': 'review_ready',
+            'value': '可以启动。',
+          },
+        ]) {
+          state = transitionService.answer(
+            state,
+            stageId: item['stage']!,
+            fieldKey: item['field']!,
+            value: item['value']!,
+          );
+        }
+
+        final input = builder.build(state);
+        expect(
+          ValueReaders.stringList(input.options['source_paths']),
+          contains('premise/project_overview.md'),
+        );
+        expect(
+          ValueReaders.stringList(input.options['persistent_context_paths']),
+          isNot(contains('premise/project_overview.md')),
+        );
+        expect(
+          ValueReaders.stringList(input.options['source_paths']),
+          isNot(contains('premise/project_brief.md')),
+        );
+      },
+    );
   });
+}
+
+class _EmptyModeGuidanceProjectionDocumentService
+    extends ModeGuidanceProjectionDocumentService {
+  @override
+  Map<String, String> buildDocuments(ModeGuidanceState state) =>
+      const <String, String>{};
 }

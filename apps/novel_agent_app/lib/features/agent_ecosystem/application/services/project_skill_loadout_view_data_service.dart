@@ -154,7 +154,7 @@ class ProjectSkillLoadoutViewDataService {
       summary:
           '技能组 ${draft.skillGroupIds.length} 个，额外技能 ${draft.extraSkillIds.length} 个，禁用技能 ${draft.disabledSkillIds.length} 个。',
       expressionConstraintSummary:
-          '表达规则：已应用 / 建议加强 / 已阻塞修订 / 已关闭。去 AI / 真实性 / 叙事边界这类内容不属于技能装载，请从“表达限制”进入项目级约束系统，并可继续按当前智能体定向绑定。',
+          '表达限制由项目级约束系统统一管理；这里仅展示当前技能装载。',
       hasPendingChanges: !_sameLoadout(draft, saved),
       skillGroups: skillGroups
           .map(

@@ -4,7 +4,6 @@ import '../../../../../app/layout/adaptive_page_frame.dart';
 import '../contracts/settings_action_handler.dart';
 import '../models/settings_view_data.dart';
 import '../widgets/context_settings_panel.dart';
-import '../widgets/development_settings_panel.dart';
 import '../widgets/model_settings_panel.dart';
 import '../widgets/network_settings_panel.dart';
 import '../widgets/permissions_settings_panel.dart';
@@ -95,6 +94,7 @@ class SettingsPage extends StatelessWidget {
       return ContextSettingsPanel(
         settings: viewData.contextSettings,
         defaultProjectPath: viewData.defaultProjectPath,
+        draftFallbackProtectionEnabled: viewData.draftFallbackProtectionEnabled,
         allowProjectPathEdit: !viewData.isMobileProjectRootLocked,
         onSaved: actionHandler.onContextSettingsSaved,
       );
@@ -105,10 +105,6 @@ class SettingsPage extends StatelessWidget {
         onSaved: actionHandler.onThemeSettingsSaved,
       );
     }
-    if (viewData.activeTabId == 'dev') {
-      return DevelopmentSettingsPanel(viewData: viewData);
-    }
-
     final sections = viewData.tabSections[viewData.activeTabId] ?? const [];
     return SettingsOverviewPanel(sections: sections);
   }

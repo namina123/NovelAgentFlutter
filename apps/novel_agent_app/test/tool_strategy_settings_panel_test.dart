@@ -32,6 +32,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      expect(
+        find.text('这里控制 AI 在已经暴露的工具里如何行动。它不负责权限放行，只负责执行风格与偏好。'),
+        findsOneWidget,
+      );
       final saveButton = find.text('保存工具策略');
       await tester.tap(saveButton);
       await tester.pumpAndSettle();

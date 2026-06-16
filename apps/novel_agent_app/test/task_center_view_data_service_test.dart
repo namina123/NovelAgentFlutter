@@ -330,6 +330,8 @@ void main() {
             'description': '让第一章先保持既有冲突入口。',
             'prompt': '保留旧入口',
             'source_question': '第一章先走哪个冲突入口？',
+            'approval_record_id': 'approval_001',
+            'approval_option_id': 'allow_once',
           },
         ],
       };
@@ -351,6 +353,8 @@ void main() {
       expect(group, isNotNull);
       expect(group!.actions.single.invocationKind, 'task_user_option');
       expect(group.actions.single.userOptionPrompt, '保留旧入口');
+      expect(group.actions.single.permissionApprovalId, 'approval_001');
+      expect(group.actions.single.permissionApprovalOptionId, 'allow_once');
       expect(body, contains('第一章先走哪个冲突入口'));
       expect(body, contains('保留旧入口'));
     },

@@ -5,6 +5,7 @@ class BookDeconstructionFollowupOptionViewData {
     required this.summary,
     required this.buildTierLabel,
     required this.isHighlighted,
+    required this.isSelected,
   });
 
   final String id;
@@ -12,4 +13,5 @@ class BookDeconstructionFollowupOptionViewData {
   final String summary;
   final String buildTierLabel;
   final bool isHighlighted;
+  final bool isSelected;
 }

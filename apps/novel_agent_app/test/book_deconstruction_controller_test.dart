@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_app/features/book_deconstruction/application/controllers/book_deconstruction_controller.dart';
+import 'package:novel_agent_app/features/book_deconstruction/application/services/book_deconstruction_derived_project_creation_service.dart';
 import 'package:novel_agent_app/features/book_deconstruction/application/services/book_deconstruction_narrative_persistence_service.dart';
 import 'package:novel_agent_app/features/book_deconstruction/application/services/desktop_book_deconstruction_source_picker_service.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
@@ -45,11 +46,15 @@ void main() {
 
     expect(controller.viewData.previewSections, isNotEmpty);
     expect(controller.viewData.planGroups, isNotEmpty);
+    expect(controller.viewData.selectedFollowupOptionId, 'continuation_novel');
 
     final firstItemId = controller.viewData.planGroups.first.items.first.id;
     controller.onBookDeconstructionPlanItemSelectionChanged(
       itemId: firstItemId,
       selected: false,
+    );
+    controller.onBookDeconstructionFollowupOptionSelected(
+      'fanfic_seed_autopilot_novel',
     );
 
     await controller.onBookDeconstructionConfirmRequested();
@@ -111,6 +116,20 @@ void main() {
     expect(
       controller.viewData.confirmedPreviewPath,
       'analysis/book_deconstruction_preview.md',
+    );
+    expect(
+      workspacePort.readStoredTextFile(
+        'D:/Projects/deconstruction_project',
+        'tasks/plans/book_deconstruction_followups/fanfic_seed_autopilot_novel.md',
+      ),
+      contains('同人'),
+    );
+    expect(
+      workspacePort.readStoredTextFile(
+        'D:/Projects/deconstruction_project',
+        'chapters/inherited/fanfic_seed_autopilot_novel/001_第一章_港口风暴.md',
+      ),
+      isNull,
     );
     expect(workspacePort.syncCount, 1);
 
@@ -184,6 +203,7 @@ void main() {
 
     controller.onBookDeconstructionOperatorNotesChanged('只归档原文，不混写到正文层。');
     await controller.onBookDeconstructionBuildPreviewRequested();
+    controller.onBookDeconstructionFollowupOptionSelected('continuation_novel');
     controller.onBookDeconstructionPlanItemSelectionChanged(
       itemId: controller.viewData.planGroups.first.items.first.id,
       selected: true,
@@ -204,60 +224,131 @@ void main() {
       ),
       isNull,
     );
+    expect(
+      workspacePort.readStoredTextFile(
+        currentProject.rootPath,
+        'chapters/inherited/continuation_novel/001_第一章_港口风暴.md',
+      ),
+      contains('主角在港口被迫卷入一场追捕'),
+    );
   });
-}
 
-class _FakeProjectToolHostPort implements ProjectToolHostPort {
-  @override
-  Future<void> copyExternalFile(
-    String absolutePath,
-    String rootPath,
-    String targetRelativePath,
-  ) async {}
+  test('拆书控制器可直接派生并打开后续项目', () async {
+    final workspacePort = _InMemoryProjectWorkspacePort();
+    const currentProject = ProjectDescriptor(
+      id: 'project-3',
+      name: '拆书测试项目三',
+      rootPath: 'D:/Projects/deconstruction_project_derived',
+      projectType: 'book_deconstruction',
+    );
+    ProjectDescriptor? openedProject;
+    String openedPath = '';
+    final controller = BookDeconstructionController(
+      writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
+        projectWorkspacePort: workspacePort,
+      ),
+      narrativePersistenceService:
+          BookDeconstructionNarrativePersistenceService(
+            workspacePort: workspacePort,
+          ),
+      readCurrentProject: () => currentProject,
+      syncWorkbenchResources: () async {
+        workspacePort.syncCount += 1;
+      },
+      onBackRequested: () {},
+      projectsRootPath: 'D:/Projects',
+      derivedProjectCreationService:
+          BookDeconstructionDerivedProjectCreationService(
+            createProjectWorkspaceUseCase: CreateProjectWorkspaceUseCase(
+              projectRepository: _FakeProjectRepository(
+                workspacePort: workspacePort,
+                manifestCodecService: ProjectManifestCodecService(),
+              ),
+              projectWorkspacePort: workspacePort,
+              projectContentRepository: _FakeProjectContentRepository(),
+              projectReadableProjectionService:
+                  _FakeProjectReadableProjectionService(),
+            ),
+            writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
+              projectWorkspacePort: workspacePort,
+            ),
+            narrativePersistenceService:
+                BookDeconstructionNarrativePersistenceService(
+                  workspacePort: workspacePort,
+                ),
+          ),
+      openDerivedProjectRequested: (project, preferredOpenPath) async {
+        openedProject = project;
+        openedPath = preferredOpenPath;
+      },
+    );
 
-  @override
-  Future<void> createDirectory(String rootPath, String relativePath) async {}
+    await controller.initialize();
+    controller.onBookDeconstructionSourceTitleChanged('海上城邦');
+    controller.onBookDeconstructionSourceContentChanged(
+      '第一章 港口风暴\n主角在港口被迫卷入一场追捕。\n\n第二章 议会阴影\n城邦议会开始浮出水面。',
+    );
+    controller.onBookDeconstructionOperatorNotesChanged('继续拆书并派生。');
+    controller.onBookDeconstructionStyleSummaryChanged('节奏明快。');
+    controller.onBookDeconstructionWorldRulesChanged('港口贸易绑定超常权力。');
+    controller.onBookDeconstructionCharacterLinesChanged('林砚：主角');
 
-  @override
-  Future<void> deleteEntry(String rootPath, String relativePath) async {}
+    await controller.onBookDeconstructionBuildPreviewRequested();
+    await controller.onBookDeconstructionCreateDerivedProjectRequested();
 
-  @override
-  Future<bool> entryExists(String rootPath, String relativePath) async => false;
+    expect(openedProject, isNotNull);
+    expect(openedProject!.projectType, 'novel');
+    expect(openedProject!.name, '海上城邦 - 一般小说');
+    expect(
+      openedPath,
+      'tasks/plans/book_deconstruction_followups/continuation_novel.md',
+    );
+    expect(
+      workspacePort.readStoredTextFile(
+        openedProject!.rootPath,
+        'tasks/plans/book_deconstruction_followups/continuation_novel.md',
+      ),
+      contains('续写'),
+    );
+    expect(
+      workspacePort.readStoredTextFile(
+        openedProject!.rootPath,
+        'premise/book_deconstruction_premise_1.md',
+      ),
+      isNotNull,
+    );
+  });
 
-  @override
-  Future<List<JsonMap>> listEntries(
-    String rootPath, {
-    bool recursive = true,
-  }) async {
-    return const <JsonMap>[];
-  }
+  test('拆书控制器在派生项目接线缺失时保持禁用而不回吐未接入文案', () async {
+    final workspacePort = _InMemoryProjectWorkspacePort();
+    const currentProject = ProjectDescriptor(
+      id: 'project-4',
+      name: '拆书测试项目四',
+      rootPath: 'D:/Projects/deconstruction_project_unwired',
+      projectType: 'book_deconstruction',
+    );
+    final controller = BookDeconstructionController(
+      writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
+        projectWorkspacePort: workspacePort,
+      ),
+      narrativePersistenceService:
+          BookDeconstructionNarrativePersistenceService(
+            workspacePort: workspacePort,
+          ),
+      readCurrentProject: () => currentProject,
+      syncWorkbenchResources: () async {
+        workspacePort.syncCount += 1;
+      },
+      onBackRequested: () {},
+    );
 
-  @override
-  Future<void> moveEntry(
-    String rootPath,
-    String sourceRelativePath,
-    String targetRelativePath,
-  ) async {}
+    await controller.initialize();
 
-  @override
-  Future<String?> readExternalTextFile(String absolutePath) async => null;
-
-  @override
-  Future<String?> readTextFile(String rootPath, String relativePath) async =>
-      null;
-
-  @override
-  Future<void> writeExternalTextFile(
-    String absolutePath,
-    String content,
-  ) async {}
-
-  @override
-  Future<void> writeTextFile(
-    String rootPath,
-    String relativePath,
-    String content,
-  ) async {}
+    expect(controller.viewData.canCreateDerivedProject, isFalse);
+    await controller.onBookDeconstructionCreateDerivedProjectRequested();
+    expect(controller.viewData.status, '当前派生项目创建暂不可用。');
+    expect(controller.viewData.status, isNot(contains('未接入')));
+  });
 }
 
 class _FakeDesktopBookDeconstructionSourcePickerService
@@ -309,4 +400,62 @@ class _InMemoryProjectWorkspacePort implements ProjectWorkspacePort {
   ) async {
     _files[_key(rootPath, relativePath)] = content;
   }
+}
+
+class _FakeProjectRepository implements ProjectRepository {
+  _FakeProjectRepository({
+    required _InMemoryProjectWorkspacePort workspacePort,
+    required ProjectManifestCodecService manifestCodecService,
+  }) : _workspacePort = workspacePort,
+       _manifestCodecService = manifestCodecService;
+
+  final _InMemoryProjectWorkspacePort _workspacePort;
+  final ProjectManifestCodecService _manifestCodecService;
+
+  @override
+  Future<ProjectDescriptor?> openByPath(String rootPath) async {
+    final manifestContent = _workspacePort.readStoredTextFile(
+      rootPath,
+      ProjectManifestCodecService.manifestRelativePath,
+    );
+    if (manifestContent == null) {
+      return null;
+    }
+    final projectName = rootPath
+        .replaceAll('\\', '/')
+        .split('/')
+        .where((part) => part.isNotEmpty)
+        .last;
+    final manifest = _manifestCodecService.parse(
+      manifestContent,
+      fallbackTitle: projectName,
+    );
+    return ProjectDescriptor(
+      id: projectName,
+      name: manifest.title,
+      rootPath: rootPath,
+      projectType: manifest.projectType,
+      storageStrategy: manifest.storageStrategy,
+      runtimeBaselineId: manifest.runtimeBaselineId,
+    );
+  }
+}
+
+class _FakeProjectContentRepository implements ProjectContentRepository {
+  @override
+  Future<void> initializeProjectContent({
+    required String rootPath,
+    required ProjectManifest manifest,
+    required ProjectDirectoryLayout layout,
+  }) async {}
+}
+
+class _FakeProjectReadableProjectionService
+    implements ProjectReadableProjectionService {
+  @override
+  Future<void> ensureReadableProjection({
+    required String rootPath,
+    required ProjectManifest manifest,
+    required ProjectDirectoryLayout layout,
+  }) async {}
 }

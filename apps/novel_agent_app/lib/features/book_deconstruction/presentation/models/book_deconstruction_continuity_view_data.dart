@@ -5,6 +5,8 @@ class BookDeconstructionContinuityViewData {
     required this.preferredDirectionLabel,
     required this.highlightedBuildTierLabel,
     required this.highlightedRouteTitle,
+    required this.selectedRouteOptionId,
+    required this.selectedRouteTitle,
     required this.scopeHintCount,
     required this.identityMappingCount,
     required this.mechanicHintCount,
@@ -15,6 +17,8 @@ class BookDeconstructionContinuityViewData {
   final String preferredDirectionLabel;
   final String highlightedBuildTierLabel;
   final String highlightedRouteTitle;
+  final String selectedRouteOptionId;
+  final String selectedRouteTitle;
   final int scopeHintCount;
   final int identityMappingCount;
   final int mechanicHintCount;

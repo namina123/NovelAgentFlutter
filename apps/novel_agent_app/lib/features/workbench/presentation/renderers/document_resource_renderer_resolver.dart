@@ -10,10 +10,9 @@ class DocumentResourceRendererResolver {
   static const String markdownRendererId = 'markdown';
   static const String structuredRendererId = 'structured';
   static const String previewRendererId = 'preview_like';
+  static const Set<String> _markdownExtensions = <String>{'md', 'markdown'};
 
   static const Set<String> _plainTextExtensions = <String>{
-    'md',
-    'markdown',
     'txt',
     'text',
     'yaml',
@@ -105,6 +104,12 @@ class DocumentResourceRendererResolver {
       return const DocumentResourceRendererResolution(
         rendererId: structuredRendererId,
         reason: 'sqlite-structured-source-resource',
+      );
+    }
+    if (_markdownExtensions.contains(request.fileExtension)) {
+      return const DocumentResourceRendererResolution(
+        rendererId: markdownRendererId,
+        reason: 'markdown-source-resource',
       );
     }
     if (_previewLikeExtensions.contains(request.fileExtension)) {

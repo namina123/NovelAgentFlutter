@@ -6,6 +6,7 @@ class OpenDocumentState {
     required this.content,
     this.isDirty = false,
     this.isRendered = false,
+    this.isBufferedDraft = false,
   });
 
   final String id;
@@ -14,6 +15,7 @@ class OpenDocumentState {
   final String content;
   final bool isDirty;
   final bool isRendered;
+  final bool isBufferedDraft;
 
   bool get canRender {
     final lowerPath = relativePath.toLowerCase();
@@ -27,6 +29,7 @@ class OpenDocumentState {
     String? content,
     bool? isDirty,
     bool? isRendered,
+    bool? isBufferedDraft,
   }) {
     // 中文注释: 打开文档状态需要频繁做局部变更，这里统一提供最小 copy 能力。
     return OpenDocumentState(
@@ -36,6 +39,7 @@ class OpenDocumentState {
       content: content ?? this.content,
       isDirty: isDirty ?? this.isDirty,
       isRendered: isRendered ?? this.isRendered,
+      isBufferedDraft: isBufferedDraft ?? this.isBufferedDraft,
     );
   }
 }

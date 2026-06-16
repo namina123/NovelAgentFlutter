@@ -15,6 +15,7 @@ class SettingsViewData {
     required this.modelSettings,
     required this.modelEditor,
     required this.defaultProjectPath,
+    this.draftFallbackProtectionEnabled = true,
     required this.permissionSettings,
     required this.toolStrategySettings,
     required this.projectCreationExpressionConstraintDefaults,
@@ -39,6 +40,7 @@ class SettingsViewData {
   final Map<String, Object?> modelSettings;
   final ModelEditorViewData modelEditor;
   final String defaultProjectPath;
+  final bool draftFallbackProtectionEnabled;
   final Map<String, Object?> permissionSettings;
   final Map<String, Object?> toolStrategySettings;
   final ProjectCreationExpressionConstraintDefaultsViewData
@@ -63,7 +65,6 @@ class SettingsViewData {
         SettingsTabViewData(id: 'network', label: '网络'),
         SettingsTabViewData(id: 'context', label: '上下文'),
         SettingsTabViewData(id: 'theme', label: '主题'),
-        SettingsTabViewData(id: 'dev', label: '开发'),
       ],
       providers: [],
       providerDirectoryOptions: [],
@@ -74,6 +75,7 @@ class SettingsViewData {
       modelSettings: <String, Object?>{},
       modelEditor: ModelEditorViewData.initial,
       defaultProjectPath: '',
+      draftFallbackProtectionEnabled: true,
       permissionSettings: <String, Object?>{},
       toolStrategySettings: <String, Object?>{},
       projectCreationExpressionConstraintDefaults:
@@ -105,6 +107,7 @@ class SettingsViewData {
     Map<String, Object?>? modelSettings,
     ModelEditorViewData? modelEditor,
     String? defaultProjectPath,
+    bool? draftFallbackProtectionEnabled,
     Map<String, Object?>? permissionSettings,
     Map<String, Object?>? toolStrategySettings,
     ProjectCreationExpressionConstraintDefaultsViewData?
@@ -132,6 +135,8 @@ class SettingsViewData {
       modelSettings: modelSettings ?? this.modelSettings,
       modelEditor: modelEditor ?? this.modelEditor,
       defaultProjectPath: defaultProjectPath ?? this.defaultProjectPath,
+      draftFallbackProtectionEnabled:
+          draftFallbackProtectionEnabled ?? this.draftFallbackProtectionEnabled,
       permissionSettings: permissionSettings ?? this.permissionSettings,
       toolStrategySettings: toolStrategySettings ?? this.toolStrategySettings,
       projectCreationExpressionConstraintDefaults:

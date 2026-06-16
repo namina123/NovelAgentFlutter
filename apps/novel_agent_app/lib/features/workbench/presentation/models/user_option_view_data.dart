@@ -5,6 +5,9 @@ class UserOptionViewData {
     required this.prompt,
     required this.sourceQuestion,
     required this.allOptions,
+    this.optionId = '',
+    this.permissionApprovalId = '',
+    this.permissionApprovalOptionId = '',
   });
 
   final String label;
@@ -12,4 +15,7 @@ class UserOptionViewData {
   final String prompt;
   final String sourceQuestion;
   final List<Map<String, Object?>> allOptions;
+  final String optionId;
+  final String permissionApprovalId;
+  final String permissionApprovalOptionId;
 }

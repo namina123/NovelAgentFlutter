@@ -1002,15 +1002,19 @@ class HfvvWave1AppShellHarness {
       taskRepository: projectTaskRepository,
       promptTemplateService: promptTemplateService,
       hostAwareGenerateDraftUseCaseFactory:
-          (provider, networkSettings, {hostInformationPermissionContext}) =>
-              _createGenerateDraftUseCase(
-                bundle: bundle,
-                provider: provider,
-                networkSettings: networkSettings,
-                contextAssemblerService: contextAssemblerService,
-                hostInformationPermissionContext:
-                    hostInformationPermissionContext,
-              ),
+          (
+            provider,
+            networkSettings, {
+            hostInformationPermissionContext,
+            hostToolPermissionContext,
+          }) => _createGenerateDraftUseCase(
+            bundle: bundle,
+            provider: provider,
+            networkSettings: networkSettings,
+            contextAssemblerService: contextAssemblerService,
+            hostInformationPermissionContext: hostInformationPermissionContext,
+            hostToolPermissionContext: hostToolPermissionContext,
+          ),
       generateDraftUseCaseFactory: (provider, networkSettings) {
         return _createGenerateDraftUseCase(
           bundle: bundle,
@@ -1142,15 +1146,19 @@ class HfvvWave1AppShellHarness {
         );
       },
       hostAwareGenerateDraftUseCaseFactory:
-          (provider, networkSettings, {hostInformationPermissionContext}) =>
-              _createGenerateDraftUseCase(
-                bundle: bundle,
-                provider: provider,
-                networkSettings: networkSettings,
-                contextAssemblerService: contextAssemblerService,
-                hostInformationPermissionContext:
-                    hostInformationPermissionContext,
-              ),
+          (
+            provider,
+            networkSettings, {
+            hostInformationPermissionContext,
+            hostToolPermissionContext,
+          }) => _createGenerateDraftUseCase(
+            bundle: bundle,
+            provider: provider,
+            networkSettings: networkSettings,
+            contextAssemblerService: contextAssemblerService,
+            hostInformationPermissionContext: hostInformationPermissionContext,
+            hostToolPermissionContext: hostToolPermissionContext,
+          ),
       llmGatewayFactory: (provider, networkSettings) =>
           bundle.createGateway(provider, networkSettings: networkSettings),
       workflowRuntimeService: workflowRuntimeService,
@@ -1214,13 +1222,16 @@ class HfvvWave1AppShellHarness {
     required JsonMap networkSettings,
     required ContextAssemblerService contextAssemblerService,
     HostInformationPermissionContext? hostInformationPermissionContext,
+    HostToolPermissionContext? hostToolPermissionContext,
   }) {
     final basePort = bundle.projectToolExecutionPort;
     final scopedToolPort =
         basePort is ProjectToolDispatcher &&
-            hostInformationPermissionContext != null
-        ? basePort.scopedWithHostInformationPermissionContext(
-            hostInformationPermissionContext,
+            (hostInformationPermissionContext != null ||
+                hostToolPermissionContext != null)
+        ? basePort.scopedWithHostPermissionContexts(
+            hostInformationPermissionContext: hostInformationPermissionContext,
+            hostToolPermissionContext: hostToolPermissionContext,
           )
         : basePort;
     return GenerateDraftUseCase(
@@ -1232,6 +1243,7 @@ class HfvvWave1AppShellHarness {
       toolExecutionPort: scopedToolPort,
       contextAssemblerService: contextAssemblerService,
       projectPromptContract: ProjectPromptContract(),
+      hostToolPermissionContext: hostToolPermissionContext,
       hostPlatform: _currentHostPlatform(),
       loadAvailableAgents: (project) =>
           bundle.agentPackageCatalog.loadAgentPackages(project),

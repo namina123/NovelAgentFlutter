@@ -1,9 +1,15 @@
+import '../../application/services/workbench_document_identity_service.dart';
 import '../models/workbench_canvas_view_data.dart';
 import '../renderers/document_resource_render_request.dart';
 import '../widgets/document_workspace_display_mode.dart';
 
 class DocumentResourceRenderRequestFactoryService {
-  const DocumentResourceRenderRequestFactoryService();
+  const DocumentResourceRenderRequestFactoryService({
+    WorkbenchDocumentIdentityService documentIdentityService =
+        const WorkbenchDocumentIdentityService(),
+  }) : _documentIdentityService = documentIdentityService;
+
+  final WorkbenchDocumentIdentityService _documentIdentityService;
 
   DocumentResourceRenderRequest build({
     required WorkbenchCanvasViewData viewData,
@@ -20,6 +26,7 @@ class DocumentResourceRenderRequestFactoryService {
       displayMode: selectedMode,
       canRender: viewData.activeDocumentCanRender,
       isDirty: viewData.activeDocumentDirty,
+      isBufferedDraft: viewData.activeDocumentBufferedDraft,
       hasDocument: viewData.documents.isNotEmpty,
       onChanged: onChanged,
     );
@@ -30,11 +37,22 @@ class DocumentResourceRenderRequestFactoryService {
     DocumentWorkspaceDisplayMode selectedMode,
   ) {
     if (selectedMode == DocumentWorkspaceDisplayMode.structure) {
-      return '结构视图';
+      return _documentIdentityService.statusLabel(
+        relativePath: viewData.activeDocumentPath,
+        isDirty: viewData.activeDocumentDirty,
+        isBufferedDraft: viewData.activeDocumentBufferedDraft,
+        fallbackStatus: '',
+        isRenderMode: false,
+        isStructureMode: true,
+      );
     }
-    if (selectedMode == DocumentWorkspaceDisplayMode.render) {
-      return viewData.activeDocumentDirty ? '渲染中，存在未保存修改' : '渲染视图';
-    }
-    return viewData.activeDocumentDirty ? '未保存修改' : viewData.generationStatus;
+    return _documentIdentityService.statusLabel(
+      relativePath: viewData.activeDocumentPath,
+      isDirty: viewData.activeDocumentDirty,
+      isBufferedDraft: viewData.activeDocumentBufferedDraft,
+      fallbackStatus: viewData.generationStatus,
+      isRenderMode: selectedMode == DocumentWorkspaceDisplayMode.render,
+      isStructureMode: false,
+    );
   }
 }

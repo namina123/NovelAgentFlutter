@@ -6,7 +6,8 @@ class SqliteProjectSemanticProjectionBuilderService {
   const SqliteProjectSemanticProjectionBuilderService({
     SqliteVisibilityPolicy? visibilityPolicy,
   }) : _visibilityPolicy = visibilityPolicy ?? const SqliteVisibilityPolicy(),
-       _sqliteDatabaseRelativePath = ProjectSqlitePathService.databaseRelativePath;
+       _sqliteDatabaseRelativePath =
+           ProjectSqlitePathService.databaseRelativePath;
 
   final SqliteVisibilityPolicy _visibilityPolicy;
   final String _sqliteDatabaseRelativePath;
@@ -57,9 +58,9 @@ class SqliteProjectSemanticProjectionBuilderService {
     // 中文注释: 默认树只消费主语义内容与已存在的可读入口，投影自身和内部数据库文件都要先折叠掉。
     final entries = <_SqliteProjectionEntry>[];
     for (final entry in workspaceEntries) {
-      final relativePath = ValueReaders.stringValue(entry['relative_path'])
-          .replaceAll('\\', '/')
-          .trim();
+      final relativePath = ValueReaders.stringValue(
+        entry['relative_path'],
+      ).replaceAll('\\', '/').trim();
       if (relativePath.isEmpty) {
         continue;
       }
@@ -92,7 +93,9 @@ class SqliteProjectSemanticProjectionBuilderService {
         ),
       );
     }
-    entries.sort((left, right) => left.relativePath.compareTo(right.relativePath));
+    entries.sort(
+      (left, right) => left.relativePath.compareTo(right.relativePath),
+    );
     return entries;
   }
 
@@ -112,21 +115,21 @@ class SqliteProjectSemanticProjectionBuilderService {
     var sortOrder = 0;
     for (final entry in visibleEntries) {
       final descriptor = descriptorsByPath[_normalizePath(entry.relativePath)];
-      final node = _visibilityPolicy.buildNode(
-        relativePath: entry.relativePath,
-        storageStrategy: manifest.storageStrategy,
-        title: entry.title.isNotEmpty
-            ? entry.title
-            : descriptor?.name ?? _fallbackTitleOf(entry.relativePath),
-        summary: descriptor?.purpose.trim().isNotEmpty == true
-            ? descriptor!.purpose.trim()
-            : entry.summary,
-        isDirectory: entry.isDirectory,
-        depth: _depthOf(entry.relativePath),
-        sortOrder: sortOrder++,
-      ).copyWith(
-        sourceIdentity: entry.sourceIdentity,
-      );
+      final node = _visibilityPolicy
+          .buildNode(
+            relativePath: entry.relativePath,
+            storageStrategy: manifest.storageStrategy,
+            title: entry.title.isNotEmpty
+                ? entry.title
+                : descriptor?.name ?? _fallbackTitleOf(entry.relativePath),
+            summary: descriptor?.purpose.trim().isNotEmpty == true
+                ? descriptor!.purpose.trim()
+                : entry.summary,
+            isDirectory: entry.isDirectory,
+            depth: _depthOf(entry.relativePath),
+            sortOrder: sortOrder++,
+          )
+          .copyWith(sourceIdentity: entry.sourceIdentity);
       nodes.add(node);
     }
     return nodes;
@@ -146,13 +149,15 @@ class SqliteProjectSemanticProjectionBuilderService {
     final groupNodes = _visibilityPolicy.defaultMainTreeGroupNodes(
       storageStrategy: manifest.storageStrategy,
     );
-    return groupNodes.map((groupNode) {
-      return groupNode.copyWith(
-        childNodeIds: nodesByGroup[groupNode.groupKind]
-            ?.toList(growable: false) ??
-            const <String>[],
-      );
-    }).toList(growable: false);
+    return groupNodes
+        .map((groupNode) {
+          return groupNode.copyWith(
+            childNodeIds:
+                nodesByGroup[groupNode.groupKind]?.toList(growable: false) ??
+                const <String>[],
+          );
+        })
+        .toList(growable: false);
   }
 
   SqliteProjectionNode _buildRootNode({
@@ -163,7 +168,9 @@ class SqliteProjectSemanticProjectionBuilderService {
     // 中文注释: 根节点只做语义树总入口，不承载任何可编辑事实，避免后续 app 把它当作普通文档。
     return SqliteProjectionNode(
       nodeId: 'sqlite_root',
-      title: manifest.title.trim().isEmpty ? 'SQLite 项目' : manifest.title.trim(),
+      title: manifest.title.trim().isEmpty
+          ? 'SQLite 项目'
+          : manifest.title.trim(),
       kind: SqliteProjectionNodeKind.root,
       groupKind: SqliteProjectionGroupKind.projectOverview,
       summary: 'SQLite 主事实源的可读语义树与投影入口。',
@@ -181,9 +188,9 @@ class SqliteProjectSemanticProjectionBuilderService {
       sortOrder: 0,
       isReadOnlyProjection: true,
       isDiagnosticLayer: false,
-      childNodeIds: groupNodes.map((node) => node.nodeId).toList(
-        growable: false,
-      ),
+      childNodeIds: groupNodes
+          .map((node) => node.nodeId)
+          .toList(growable: false),
     );
   }
 
@@ -209,28 +216,33 @@ class SqliteProjectSemanticProjectionBuilderService {
       ),
       nodeIds: groupNodes.map((node) => node.nodeId).toList(growable: false),
     );
-    final groupDocuments = groupNodes.map((groupNode) {
-      final groupEntryNodes = entryNodes
-          .where((entry) => entry.groupKind == groupNode.groupKind)
-          .toList(growable: false)
-        ..sort((left, right) => left.sortOrder.compareTo(right.sortOrder));
-      return SqliteProjectSemanticProjectionDocument(
-        relativePath:
-            'premise/sqlite_projection/${_snakeCase(groupNode.groupKind.name)}.md',
-        title: groupNode.groupKind.label,
-        markdown: _buildGroupMarkdown(
-          rootPath: rootPath,
-          manifest: manifest,
-          groupNode: groupNode,
-          entryNodes: groupEntryNodes,
-        ),
-        sourceIdentity: groupNode.sourceIdentity,
-        nodeIds: <String>[
-          groupNode.nodeId,
-          ...groupEntryNodes.map((node) => node.nodeId),
-        ],
-      );
-    }).toList(growable: false);
+    final groupDocuments = groupNodes
+        .map((groupNode) {
+          final groupEntryNodes =
+              entryNodes
+                  .where((entry) => entry.groupKind == groupNode.groupKind)
+                  .toList(growable: false)
+                ..sort(
+                  (left, right) => left.sortOrder.compareTo(right.sortOrder),
+                );
+          return SqliteProjectSemanticProjectionDocument(
+            relativePath:
+                'premise/sqlite_projection/${_snakeCase(groupNode.groupKind.name)}.md',
+            title: groupNode.groupKind.label,
+            markdown: _buildGroupMarkdown(
+              rootPath: rootPath,
+              manifest: manifest,
+              groupNode: groupNode,
+              entryNodes: groupEntryNodes,
+            ),
+            sourceIdentity: groupNode.sourceIdentity,
+            nodeIds: <String>[
+              groupNode.nodeId,
+              ...groupEntryNodes.map((node) => node.nodeId),
+            ],
+          );
+        })
+        .toList(growable: false);
     return <SqliteProjectSemanticProjectionDocument>[
       indexDocument,
       ...groupDocuments,
@@ -248,10 +260,10 @@ class SqliteProjectSemanticProjectionBuilderService {
       _frontmatter(
         projectionId: 'sqlite_project_semantic_tree_index',
         title: 'SQLite 项目语义树',
-      sourceOfTruthPaths: <String>[
-        ProjectManifestCodecService.manifestRelativePath,
-        _sqliteDatabaseRelativePath,
-      ],
+        sourceOfTruthPaths: <String>[
+          ProjectManifestCodecService.manifestRelativePath,
+          _sqliteDatabaseRelativePath,
+        ],
       ),
       '# SQLite 项目语义树',
       '',
@@ -260,29 +272,31 @@ class SqliteProjectSemanticProjectionBuilderService {
       '',
       '## 快速入口',
       '',
-      '- `premise/project_brief.md`：项目总览与快速说明。',
+      '- `${ProjectSupportDocumentCatalog.projectOverviewRelativePath}`：项目总览与快速说明。',
       '- `premise/sqlite_projection/`：SQLite 语义树投影目录。',
       '',
       '## 主语义分区',
       '',
-      ...groupNodes.map((groupNode) {
-        final groupEntryCount = entryNodes
-            .where((entry) => entry.groupKind == groupNode.groupKind)
-            .length;
-        return <String>[
-          '### ${groupNode.groupKind.label}',
-          '',
-          '- 摘要：${groupNode.groupKind.summary}',
-          '- 节点数：${groupEntryCount}',
-          '- 来源身份：${_formatSourceIdentity(groupNode.sourceIdentity)}',
-          '- 真相源：${groupNode.sourceIdentity.truthLabel}',
-          '- 只读投影：${groupNode.isReadOnlyProjection ? '是' : '否'}',
-          '',
-        ];
-      }).expand((segment) => segment),
+      ...groupNodes
+          .map((groupNode) {
+            final groupEntryCount = entryNodes
+                .where((entry) => entry.groupKind == groupNode.groupKind)
+                .length;
+            return <String>[
+              '### ${groupNode.groupKind.label}',
+              '',
+              '- 摘要：${groupNode.groupKind.summary}',
+              '- 节点数：${groupEntryCount}',
+              '- 来源身份：${_formatSourceIdentity(groupNode.sourceIdentity)}',
+              '- 真相源：${groupNode.sourceIdentity.truthLabel}',
+              '- 只读投影：${groupNode.isReadOnlyProjection ? '是' : '否'}',
+              '',
+            ];
+          })
+          .expand((segment) => segment),
       '## 说明',
       '',
-      '- `project_brief.md` 只是快速入口，不是唯一可读入口。',
+      '- `project_overview.md` 只是快速入口，不是正式故事前提，也不是唯一可读入口。',
       '- `premise/sqlite_projection/*.md` 是按语义分区生成的只读投影。',
       '- 高级只读诊断层保留在投影合同里，但不默认展开为主语义树文件。',
       '',
@@ -299,12 +313,13 @@ class SqliteProjectSemanticProjectionBuilderService {
     // 中文注释: 分组投影直接列出该分区下的真实条目，便于 app/CLI 以后按组消费而不是按原始目录树猜语义。
     final lines = <String>[
       _frontmatter(
-        projectionId: 'sqlite_project_semantic_tree_${groupNode.groupKind.name}',
+        projectionId:
+            'sqlite_project_semantic_tree_${groupNode.groupKind.name}',
         title: groupNode.groupKind.label,
-      sourceOfTruthPaths: <String>[
-        ProjectManifestCodecService.manifestRelativePath,
-        _sqliteDatabaseRelativePath,
-      ],
+        sourceOfTruthPaths: <String>[
+          ProjectManifestCodecService.manifestRelativePath,
+          _sqliteDatabaseRelativePath,
+        ],
       ),
       '# ${groupNode.groupKind.label}',
       '',
@@ -326,30 +341,26 @@ class SqliteProjectSemanticProjectionBuilderService {
       lines.add('- 暂无具体节点，仅保留语义骨架。');
     } else {
       for (final entry in entryNodes) {
-        lines.addAll(
-          <String>[
-            '### ${entry.title}',
-            '',
-            '- 相对路径：`${entry.relativePath}`',
-            '- 类型：`${entry.kind.label}`',
-            '- 摘要：${entry.summary.trim().isEmpty ? '无' : entry.summary}',
-            '- 来源身份：${_formatSourceIdentity(entry.sourceIdentity)}',
-            '- 真相源：${entry.sourceIdentity.truthLabel}',
-            '- 只读投影：${entry.isReadOnlyProjection ? '是' : '否'}',
-            '',
-          ],
-        );
+        lines.addAll(<String>[
+          '### ${entry.title}',
+          '',
+          '- 相对路径：`${entry.relativePath}`',
+          '- 类型：`${entry.kind.label}`',
+          '- 摘要：${entry.summary.trim().isEmpty ? '无' : entry.summary}',
+          '- 来源身份：${_formatSourceIdentity(entry.sourceIdentity)}',
+          '- 真相源：${entry.sourceIdentity.truthLabel}',
+          '- 只读投影：${entry.isReadOnlyProjection ? '是' : '否'}',
+          '',
+        ]);
       }
     }
-    lines.addAll(
-      <String>[
-        '## 备注',
-        '',
-        '- `premise/project_brief.md` 仍保留为快速说明入口，但不再是 SQLite 项目唯一可读面。',
-        '- 该分区与其它分区共享同一主事实源，只是投影语义不同。',
-        '',
-      ],
-    );
+    lines.addAll(<String>[
+      '## 备注',
+      '',
+      '- `${ProjectSupportDocumentCatalog.projectOverviewRelativePath}` 仍保留为快速说明入口，但不再是 SQLite 项目唯一可读面。',
+      '- 该分区与其它分区共享同一主事实源，只是投影语义不同。',
+      '',
+    ]);
     return lines.join('\n').trimRight() + '\n';
   }
 
@@ -379,8 +390,7 @@ class SqliteProjectSemanticProjectionBuilderService {
       return groupKind.summary;
     }
     return switch (groupKind) {
-      SqliteProjectionGroupKind.projectOverview =>
-        '项目说明、总览摘要或快速入口。',
+      SqliteProjectionGroupKind.projectOverview => '项目说明、总览摘要或快速入口。',
       SqliteProjectionGroupKind.bodyAndChapters => '正文、章节或场景内容。',
       SqliteProjectionGroupKind.outlineAndSetting => '大纲、设定或结构化创作资产。',
       SqliteProjectionGroupKind.projectMaterials => '项目资料、知识或研究素材。',
@@ -388,15 +398,14 @@ class SqliteProjectSemanticProjectionBuilderService {
       SqliteProjectionGroupKind.importSources => '导入源或待整理素材。',
       SqliteProjectionGroupKind.extractionAndReview => '提取、审核或校验记录。',
       SqliteProjectionGroupKind.exportAndProjection => '导出或投影产物。',
-      SqliteProjectionGroupKind.diagnosticReadOnly =>
-        '高级只读诊断或内部恢复信息。',
+      SqliteProjectionGroupKind.diagnosticReadOnly => '高级只读诊断或内部恢复信息。',
     };
   }
 
   bool _isProjectionSurfacePath(String relativePath) {
     // 中文注释: 投影自身写出来以后不应再次进入同一轮语义树输入，否则会把 projection 当成事实源继续膨胀。
     final cleanPath = _normalizePath(relativePath);
-    return cleanPath == 'premise/project_brief.md' ||
+    return ProjectSupportDocumentCatalog.isProjectOverviewPath(cleanPath) ||
         cleanPath.startsWith('premise/sqlite_projection/');
   }
 

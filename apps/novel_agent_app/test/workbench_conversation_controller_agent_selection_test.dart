@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_app/features/book_deconstruction/application/services/book_deconstruction_narrative_persistence_service.dart';
@@ -19,6 +21,7 @@ import 'package:novel_agent_app/features/workbench/application/services/project_
 import 'package:novel_agent_app/features/workbench/application/services/project_opening_session_projection_service.dart';
 import 'package:novel_agent_app/features/workbench/application/services/workbench_primary_action_service.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/conversation_agent_selector_view_data.dart';
+import 'package:novel_agent_app/features/workbench/presentation/models/primary_action_view_data.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/selector_option_view_data.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/user_option_view_data.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/workbench_view_data.dart';
@@ -67,6 +70,16 @@ void main() {
 
     test('launch long task sends an agent-led opening prompt', () async {
       final harness = _ConversationControllerHarness(
+        initialWorkbench: WorkbenchViewData.initial().copyWith(
+          primaryActions: const <PrimaryActionViewData>[
+            PrimaryActionViewData(
+              id: 'opening.launch_long_task',
+              title: '启动长任务',
+              description: '继续补齐或启动当前长任务。',
+              commandId: 'opening.launch_long_task',
+            ),
+          ],
+        ),
         project: const ProjectDescriptor(
           id: 'long_project',
           name: '长篇项目',
@@ -86,15 +99,55 @@ void main() {
         'opening.launch_long_task',
       );
 
-      expect(
-        harness.generateDraftUseCase.lastUserPrompt,
-        contains('请接管这个长篇项目的开局推进'),
-      );
-      expect(
-        harness.generateDraftUseCase.lastUserPrompt,
-        contains('不要为了流程整齐而机械地逐项盘问'),
-      );
+      expect(harness.runtimeState.guideScope, 'long_task_modes');
+      expect(harness.generateDraftUseCase.lastUserPrompt, isEmpty);
     });
+
+    test(
+      'launch long task directly starts the formal run when opening is already ready',
+      () async {
+        final workflowRuntimeService = _RecordingWorkflowRuntimeService();
+        final harness = _ConversationControllerHarness(
+          initialWorkbench: WorkbenchViewData.initial().copyWith(
+            primaryActions: const <PrimaryActionViewData>[
+              PrimaryActionViewData(
+                id: 'opening.launch_long_task',
+                title: '启动长任务',
+                description: '继续补齐或启动当前长任务。',
+                commandId: 'opening.launch_long_task',
+              ),
+            ],
+          ),
+          project: const ProjectDescriptor(
+            id: 'long_project',
+            name: '长篇项目',
+            rootPath: 'D:/Projects/long_project',
+            projectType: 'long_novel',
+          ),
+          runtimeProfile: const ProjectRuntimeProfile(
+            projectType: 'long_novel',
+            runtimeBaselineId: 'continuous_autonomous',
+            runtimeMode: 'seed_autopilot_novel',
+            initialRunOptions: <String, Object?>{},
+          ),
+          openingProjection: _readyLongTaskOpeningProjection(),
+          modeGuidanceState: _readyModeGuidanceState(
+            ModeGuidanceTransitionService(),
+            'seed_autopilot_novel',
+          ),
+          workflowRuntimeService: workflowRuntimeService,
+        );
+
+        await harness.controller.onPrimaryActionRequested(
+          'opening.launch_long_task',
+        );
+
+        expect(workflowRuntimeService.createLongTaskWorkflowCallCount, 1);
+        expect(workflowRuntimeService.runWorkflowTaskQueueCallCount, 1);
+        expect(workflowRuntimeService.lastMode, isNotEmpty);
+        expect(harness.generateDraftUseCase.lastUserPrompt, isEmpty);
+      },
+    );
 
     test(
       'preflights and compacts session context before the model request is built',
@@ -366,6 +419,20 @@ void main() {
     });
 
     test(
+      'optimize request announces the current user-facing guidance without roadmap language',
+      () async {
+        final harness = _ConversationControllerHarness();
+
+        harness.controller.onOptimizeRequested();
+
+        expect(
+          harness.lastAnnouncement,
+          '当前先直接发送自然语言需求；需要优化时可以先走现有会话流程。',
+        );
+      },
+    );
+
+    test(
       'injects bridged execution constraints into ordinary conversation generation',
       () async {
         final harness = _ConversationControllerHarness(
@@ -626,6 +693,132 @@ void main() {
           harness.lastHostInformationPermissionContext!.allowNetwork,
           isFalse,
         );
+        expect(harness.lastHostToolPermissionContext, isNotNull);
+        expect(
+          harness.lastHostToolPermissionContext!.permissionMode,
+          HostToolPermissionModes.safe,
+        );
+        expect(
+          harness.lastHostToolPermissionContext!.allowFormalDelivery,
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'restores persisted ordinary conversation permission approvals after project reload',
+      () async {
+        final tempDirectory = await Directory.systemTemp.createTemp(
+          'workbench_conversation_permission_restore_',
+        );
+        addTearDown(() async {
+          if (await tempDirectory.exists()) {
+            await tempDirectory.delete(recursive: true);
+          }
+        });
+        final workspacePort = LocalProjectWorkspacePort();
+        final toolHostPort = ProjectWorkspaceToolHostAdapter(
+          workspacePort: workspacePort,
+          fileMutationAdapter: LocalProjectFileMutationAdapter(),
+        );
+        final project = ProjectDescriptor(
+          id: 'permission_restore_project',
+          name: '权限恢复测试项目',
+          rootPath: tempDirectory.path,
+          projectType: 'novel',
+        );
+        final harness = _ConversationControllerHarness(
+          project: project,
+          workspacePort: workspacePort,
+          toolHostPort: toolHostPort,
+          generateDraftUseCase: _RecordingGenerateDraftUseCase(
+            scriptedResult: DraftGenerationResult(
+              project: project,
+              projectInfo: <String, Object?>{
+                'id': project.id,
+                'title': project.name,
+                'path': project.rootPath,
+                'project_type': project.projectType,
+              },
+              userPrompt: '请先申请联网权限。',
+              prompt: '请先申请联网权限。',
+              modelId: 'selected-model',
+              draftMarkdown: '',
+              contextPack: const <String, Object?>{},
+              selectedPaths: const <String>[],
+              executedTools: const <Object?>[
+                <String, Object?>{
+                  'call_id': 'tool_network_1',
+                  'name': 'request_gateway_tool',
+                  'result': <String, Object?>{
+                    'ok': true,
+                    'waiting_for_user_choice': true,
+                    'question': '需要临时联网读取资料，是否允许？',
+                    'options': <Object?>[
+                      <String, Object?>{
+                        'id': 'allow_once',
+                        'label': '允许一次',
+                        'prompt': '这次允许联网读取资料。',
+                      },
+                      <String, Object?>{
+                        'id': 'deny_and_continue',
+                        'label': '拒绝并继续',
+                        'prompt': '不要联网，继续当前任务。',
+                      },
+                    ],
+                    'permission_decision': <String, Object?>{
+                      'state': 'waiting_user_confirmation',
+                    },
+                    'permission_capability': 'network',
+                    'permission_context': <String, Object?>{
+                      'allow_network': false,
+                    },
+                  },
+                },
+              ],
+              writtenPaths: const <String>[],
+              changedPaths: const <String>[],
+              transcriptMessages: const <JsonMap>[],
+              waitingForUserChoice: true,
+              reasoningContent: '',
+              stoppedByToolError: false,
+              toolErrorSummary: '',
+            ),
+          ),
+        );
+
+        await harness.controller.onSendRequested('请先申请联网权限。');
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        final originalSessionId = harness.runtimeState.activeSessionId;
+        expect(originalSessionId, isNotEmpty);
+        expect(harness.runtimeState.sessions, hasLength(1));
+        expect(
+          harness.runtimeState.sessions.single.pendingOptions.map(
+            (option) => option.label,
+          ),
+          containsAll(<String>['允许一次', '拒绝并继续']),
+        );
+
+        harness.controller.resetRuntimeState();
+        await harness.controller.restoreProjectSessions(project);
+
+        expect(harness.runtimeState.activeSessionId, originalSessionId);
+        expect(harness.runtimeState.sessions, hasLength(1));
+        final restoredSession = harness.runtimeState.sessions.single;
+        expect(restoredSession.pendingOptions, hasLength(2));
+        expect(
+          restoredSession.pendingOptions.map((option) => option.label).toList(),
+          containsAll(<String>['允许一次', '拒绝并继续']),
+        );
+        expect(
+          restoredSession.pendingOptions.first.permissionApprovalId,
+          isNotEmpty,
+        );
+        expect(
+          restoredSession.pendingOptions.first.permissionApprovalOptionId,
+          isNotEmpty,
+        );
       },
     );
 
@@ -730,6 +923,70 @@ void main() {
         );
       },
     );
+
+    test(
+      'autosave fallback stages the active chapter document without creating a project file',
+      () async {
+        final workspacePort = _RecordingProjectWorkspacePort(
+          initialFiles: <String, String>{'chapters/chapter_01.md': '旧内容'},
+        );
+        final harness = _ConversationControllerHarness(
+          workspacePort: workspacePort,
+          initialSettings: _buildSettings().copyWith(autoSaveDrafts: true),
+          generateDraftUseCase: _RecordingGenerateDraftUseCase(
+            scriptedResult: DraftGenerationResult(
+              project: _project(),
+              projectInfo: <String, Object?>{
+                'id': _project().id,
+                'title': _project().name,
+                'path': _project().rootPath,
+                'project_type': _project().projectType,
+              },
+              userPrompt: '继续写第一章。',
+              prompt: '继续写第一章。',
+              modelId: 'selected-model',
+              draftMarkdown: '''
+雨下得很密，像有人把整座城的光都揉进了水里。
+
+林述站在桥边，没有立刻往前走。他听见远处列车的轰鸣，又听见脚下河水撞向护栏的碎响。
+
+这一夜像是某种漫长的前奏，而他知道，自己已经没有回头的余地。
+''',
+              contextPack: const <String, Object?>{},
+              selectedPaths: const <String>[],
+              executedTools: const <Object?>[],
+              writtenPaths: const <String>[],
+              changedPaths: const <String>[],
+              transcriptMessages: const <JsonMap>[],
+              waitingForUserChoice: false,
+              reasoningContent: '',
+              stoppedByToolError: false,
+              toolErrorSummary: '',
+            ),
+          ),
+        );
+        harness.workspaceController.openOrActivateDocument(
+          relativePath: 'chapters/chapter_01.md',
+          title: 'chapter_01.md',
+          content: '旧内容',
+        );
+        harness._workbench = harness.workspaceController.applyWorkbenchState(
+          harness._workbench,
+        );
+
+        await harness.controller.onSendRequested('继续写第一章。');
+
+        expect(workspacePort.lastWriteRelativePath, isEmpty);
+        expect(
+          workspacePort.files.keys,
+          isNot(contains('chapters/chapter_02.md')),
+        );
+        expect(workspacePort.files['chapters/chapter_01.md'], '旧内容');
+        expect(harness.workbench.activeDocumentBody, contains('雨下得很密'));
+        expect(harness.workbench.activeDocumentDirty, isTrue);
+        expect(harness.workbench.generationStatus, contains('已暂存到当前文档草稿'));
+      },
+    );
   });
 }
 
@@ -740,13 +997,17 @@ class _ConversationControllerHarness {
     ProjectConversationDraftRuntimeService? conversationDraftRuntimeService,
     ProjectDraftExecutionConstraintRuntimeService?
     draftExecutionConstraintRuntimeService,
+    ProjectWorkflowRuntimeService? workflowRuntimeService,
     _RecordingGenerateDraftUseCase? generateDraftUseCase,
     ProjectDescriptor? project,
     ProjectRuntimeProfile? runtimeProfile,
     OpeningSessionProjection? openingProjection,
+    ModeGuidanceState? modeGuidanceState,
     int modelContextWindowTokens = 100000,
     int maxOutputTokens = 4096,
     int compressionContextLength = 80000,
+    ProjectWorkspacePort? workspacePort,
+    ProjectToolHostPort? toolHostPort,
   }) : _settings = initialSettings ?? _buildSettings(),
        _workbench = initialWorkbench ?? WorkbenchViewData.initial(),
        _projectState = WorkbenchProjectRuntimeState(
@@ -771,33 +1032,42 @@ class _ConversationControllerHarness {
          maxOutputTokens: maxOutputTokens,
          compressionContextLength: compressionContextLength,
        ) {
-    final workspacePort = _NoopProjectWorkspacePort();
-    final toolHostPort = _NoopProjectToolHostPort();
+    final effectiveWorkspacePort = workspacePort ?? _NoopProjectWorkspacePort();
+    final effectiveToolHostPort =
+        toolHostPort ??
+        (effectiveWorkspacePort is LocalProjectWorkspacePort
+            ? ProjectWorkspaceToolHostAdapter(
+                workspacePort: effectiveWorkspacePort,
+                fileMutationAdapter: LocalProjectFileMutationAdapter(),
+              )
+            : _NoopProjectToolHostPort());
     workspaceController = WorkbenchWorkspaceController(
       loadProjectWorkspaceUseCase: LoadProjectWorkspaceUseCase(
         projectRepository: _NoopProjectRepository(),
-        projectWorkspacePort: workspacePort,
+        projectWorkspacePort: effectiveWorkspacePort,
       ),
-      readProjectFileUseCase: ReadProjectFileUseCase(workspacePort),
-      saveDraftUseCase: SaveDraftUseCase(projectWorkspacePort: workspacePort),
+      readProjectFileUseCase: ReadProjectFileUseCase(effectiveWorkspacePort),
+      saveDraftUseCase: SaveDraftUseCase(
+        projectWorkspacePort: effectiveWorkspacePort,
+      ),
       createProjectEntryUseCase: CreateProjectEntryUseCase(
-        projectToolHostPort: toolHostPort,
+        projectToolHostPort: effectiveToolHostPort,
       ),
       importProjectFilesUseCase: ImportProjectFilesUseCase(
-        projectToolHostPort: toolHostPort,
+        projectToolHostPort: effectiveToolHostPort,
       ),
       updateProjectManifestUseCase: UpdateProjectManifestUseCase(
         writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
-          projectWorkspacePort: workspacePort,
+          projectWorkspacePort: effectiveWorkspacePort,
         ),
       ),
-      projectToolHostPort: toolHostPort,
+      projectToolHostPort: effectiveToolHostPort,
       writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
-        projectWorkspacePort: workspacePort,
+        projectWorkspacePort: effectiveWorkspacePort,
       ),
       narrativePersistenceService:
           BookDeconstructionNarrativePersistenceService(
-            workspacePort: workspacePort,
+            workspacePort: effectiveWorkspacePort,
           ),
       longTaskSupervisor: _NoopLongTaskSupervisor(),
       reviewReportService: _NoopProjectReviewReportService(),
@@ -837,27 +1107,41 @@ class _ConversationControllerHarness {
     final projectionService = _StaticOpeningSessionProjectionService(
       projection: openingProjection ?? _projection(),
     );
-    final modeGuidanceStatePort = _MemoryModeGuidanceStatePort();
-    final workflowRuntimeService = ProjectWorkflowRuntimeService(
-      taskRepository: ProjectTaskRepository(workspacePort: workspacePort),
-      promptTemplateService: ProjectPromptTemplateService(
-        workspacePort: workspacePort,
+    final modeGuidanceStatePort = _MemoryModeGuidanceStatePort(
+      initialState: modeGuidanceState,
+    );
+    final effectiveWorkflowRuntimeService =
+        workflowRuntimeService ??
+        ProjectWorkflowRuntimeService(
+          taskRepository: ProjectTaskRepository(
+            workspacePort: effectiveWorkspacePort,
+          ),
+          promptTemplateService: ProjectPromptTemplateService(
+            workspacePort: effectiveWorkspacePort,
+          ),
+          generateDraftUseCaseFactory: (_, _) => this.generateDraftUseCase,
+        );
+    controller = WorkbenchConversationController(
+      saveDraftUseCase: SaveDraftUseCase(
+        projectWorkspacePort: effectiveWorkspacePort,
       ),
       generateDraftUseCaseFactory: (_, _) => this.generateDraftUseCase,
-    );
-    controller = WorkbenchConversationController(
-      saveDraftUseCase: SaveDraftUseCase(projectWorkspacePort: workspacePort),
-      generateDraftUseCaseFactory: (_, _) => this.generateDraftUseCase,
       hostAwareGenerateDraftUseCaseFactory:
-          (_, _, {hostInformationPermissionContext}) {
+          (
+            _,
+            _, {
+            hostInformationPermissionContext,
+            hostToolPermissionContext,
+          }) {
             lastHostInformationPermissionContext =
                 hostInformationPermissionContext;
+            lastHostToolPermissionContext = hostToolPermissionContext;
             return this.generateDraftUseCase;
           },
       modelExecutionProfileService: modelExecutionProfileService,
       conversationSessionStateService: ConversationSessionStateService(),
       projectSessionWorkspaceService: ProjectSessionWorkspaceService(
-        hostPort: toolHostPort,
+        hostPort: effectiveToolHostPort,
       ),
       conversationStreamingStateService: ConversationStreamingStateService(
         sessionStateService: ConversationSessionStateService(),
@@ -887,7 +1171,7 @@ class _ConversationControllerHarness {
         statePort: modeGuidanceStatePort,
       ),
       modeGuidanceTransitionService: ModeGuidanceTransitionService(),
-      workflowRuntimeService: workflowRuntimeService,
+      workflowRuntimeService: effectiveWorkflowRuntimeService,
       workspaceController: workspaceController,
       readRuntimeState: () => _runtimeState,
       writeRuntimeState: (next) {
@@ -915,7 +1199,15 @@ class _ConversationControllerHarness {
       showSettings: () async {},
       contextStrategySettingsOf: (_) => const <String, Object?>{},
       selectedModelProvider: (settings) => settings.providers.first,
-      announce: (_) {},
+      toolPermissionApprovalRecordService:
+          ProjectToolPermissionApprovalRecordService(
+            taskRepository: ProjectTaskRepository(
+              workspacePort: effectiveWorkspacePort,
+            ),
+          ),
+      announce: (message) {
+        lastAnnouncement = message;
+      },
     );
     _workbench = controller.applyConversationState(_workbench);
   }
@@ -925,6 +1217,7 @@ class _ConversationControllerHarness {
   WorkbenchProjectRuntimeState _projectState;
   WorkbenchConversationRuntimeState _runtimeState;
   HostInformationPermissionContext? lastHostInformationPermissionContext;
+  HostToolPermissionContext? lastHostToolPermissionContext;
 
   final _RecordingGenerateDraftUseCase generateDraftUseCase;
   final _RecordingModelExecutionProfileService modelExecutionProfileService;
@@ -935,6 +1228,9 @@ class _ConversationControllerHarness {
   WorkbenchViewData get workbench => _workbench;
 
   AppSettings get settings => _settings;
+
+  WorkbenchConversationRuntimeState get runtimeState => _runtimeState;
+  String lastAnnouncement = '';
 }
 
 class _RecordingModelExecutionProfileService
@@ -1082,6 +1378,49 @@ class _RecordingGenerateDraftUseCase extends GenerateDraftUseCase {
   }
 }
 
+class _RecordingWorkflowRuntimeService extends ProjectWorkflowRuntimeService {
+  _RecordingWorkflowRuntimeService()
+    : super(
+        taskRepository: ProjectTaskRepository(
+          workspacePort: _NoopProjectWorkspacePort(),
+        ),
+        promptTemplateService: ProjectPromptTemplateService(
+          workspacePort: _NoopProjectWorkspacePort(),
+        ),
+        generateDraftUseCaseFactory: (_, _) => _RecordingGenerateDraftUseCase(),
+      );
+
+  int createLongTaskWorkflowCallCount = 0;
+  int runWorkflowTaskQueueCallCount = 0;
+  String lastMode = '';
+  JsonMap lastOptions = const <String, Object?>{};
+  JsonMap lastRunWorkflowTaskQueueOptions = const <String, Object?>{};
+
+  @override
+  Future<JsonMap> createLongTaskWorkflow(
+    ProjectDescriptor project,
+    String mode, {
+    JsonMap options = const <String, Object?>{},
+  }) async {
+    createLongTaskWorkflowCallCount += 1;
+    lastMode = mode;
+    lastOptions = ValueReaders.deepCopyMap(options);
+    return const <String, Object?>{'ok': true, 'message': '已根据当前开局状态启动长任务。'};
+  }
+
+  @override
+  Future<JsonMap> runWorkflowTaskQueue(
+    ProjectDescriptor project,
+    AppSettings settings, {
+    JsonMap options = const <String, Object?>{},
+    JsonMap agent = const <String, Object?>{},
+  }) async {
+    runWorkflowTaskQueueCallCount += 1;
+    lastRunWorkflowTaskQueueOptions = ValueReaders.deepCopyMap(options);
+    return const <String, Object?>{'ok': true, 'message': '长任务已开始推进。'};
+  }
+}
+
 class _FakeProjectConversationDraftRuntimeService
     extends ProjectConversationDraftRuntimeService {
   _FakeProjectConversationDraftRuntimeService({
@@ -1204,6 +1543,95 @@ OpeningSessionProjection _longTaskProjection() {
   );
 }
 
+OpeningSessionProjection _readyLongTaskOpeningProjection() {
+  return OpeningSessionProjection(
+    projectTypeId: 'long_novel',
+    currentGroupId: 'starter_long_form_room',
+    currentGroupDisplayName: '长篇主写组',
+    groupSummaries: const <OpeningAgentGroupSummary>[
+      OpeningAgentGroupSummary(
+        groupId: 'starter_long_form_room',
+        displayName: '长篇主写组',
+        description: '用于长篇开局与推进',
+        isSupported: true,
+        isDegraded: false,
+        isCurrent: true,
+        isStarterGroup: true,
+      ),
+    ],
+    orchestration: OpeningOrchestrationResult(
+      state: OpeningSessionState(
+        projectTypeId: 'long_novel',
+        status: OpeningSessionState.statusReadyForLongTask,
+        intent: const OpeningIntentSnapshot(
+          resolvedAgentGroupId: 'starter_long_form_room',
+          availableAgentGroupIds: <String>['starter_long_form_room'],
+          runtimeBaselineId: 'continuous_autonomous',
+          modeId: 'seed_autopilot_novel',
+        ),
+        stageRecords: const <OpeningStageRecord>[],
+        createdAt: '2026-06-15T00:00:00.000',
+        updatedAt: '2026-06-15T00:00:00.000',
+      ),
+      readiness: const OpeningReadinessAssessment(
+        canStartLongTask: true,
+        canStartInteractiveSession: false,
+        effectiveRuntimeBaselineId: 'continuous_autonomous',
+        effectiveModeId: 'seed_autopilot_novel',
+        missingRequirements: <OpeningMissingRequirement>[],
+      ),
+      suggestedActions: const <OpeningSuggestedAction>[
+        OpeningSuggestedAction(
+          id: 'opening.start_long_task_run',
+          commandId: 'opening.start_long_task_run',
+          title: '启动长任务',
+          description: '当前开局信息已经收束完成，可以进入正式长任务运行链。',
+          payload: <String, Object?>{
+            'runtime_baseline_id': 'continuous_autonomous',
+            'mode_id': 'seed_autopilot_novel',
+            'agent_group_id': 'starter_long_form_room',
+          },
+        ),
+      ],
+    ),
+    availableAgentSummaries: const <OpeningAgentMemberSummary>[
+      OpeningAgentMemberSummary(
+        agentId: 'writer',
+        displayName: '长篇主写智能体',
+        role: '负责长篇主线推进',
+        isPrimary: true,
+        thinkingSupported: true,
+        description: '负责长篇开局与正文推进。',
+      ),
+    ],
+    currentPrimaryAgentSummary: const OpeningPrimaryAgentSummary(
+      agentId: 'writer',
+      displayName: '长篇主写智能体',
+      role: '负责长篇主线推进',
+      thinkingSupported: true,
+    ),
+  );
+}
+
+ModeGuidanceState _readyModeGuidanceState(
+  ModeGuidanceTransitionService transitionService,
+  String modeId,
+) {
+  var state = transitionService.initialize(modeId);
+  while (!state.isReady) {
+    final question = transitionService.buildQuestion(state);
+    state = transitionService.answer(
+      state,
+      stageId: question.stageId,
+      fieldKey: question.fieldKey,
+      value: '测试 ${question.stageId}',
+      label: '测试 ${question.stageId}',
+      source: 'test',
+    );
+  }
+  return state;
+}
+
 class _StaticOpeningSessionProjectionService
     extends ProjectOpeningSessionProjectionService {
   _StaticOpeningSessionProjectionService({required this.projection})
@@ -1230,14 +1658,23 @@ class _StaticOpeningSessionProjectionService
 }
 
 class _MemoryModeGuidanceStatePort implements ModeGuidanceStatePort {
+  _MemoryModeGuidanceStatePort({ModeGuidanceState? initialState})
+    : _states = initialState == null
+          ? <String, ModeGuidanceState>{}
+          : <String, ModeGuidanceState>{initialState.modeId: initialState};
+
+  final Map<String, ModeGuidanceState> _states;
+
   @override
   Future<ModeGuidanceState?> load(
     ProjectDescriptor project, {
     required String modeId,
-  }) async => null;
+  }) async => _states[modeId];
 
   @override
-  Future<void> save(ProjectDescriptor project, ModeGuidanceState state) async {}
+  Future<void> save(ProjectDescriptor project, ModeGuidanceState state) async {
+    _states[state.modeId] = state;
+  }
 }
 
 class _NoopProjectRepository implements ProjectRepository {
@@ -1265,6 +1702,48 @@ class _NoopProjectWorkspacePort implements ProjectWorkspacePort {
     String relativePath,
     String content,
   ) async {}
+}
+
+class _RecordingProjectWorkspacePort implements ProjectWorkspacePort {
+  _RecordingProjectWorkspacePort({
+    Map<String, String> initialFiles = const <String, String>{},
+  }) : files = Map<String, String>.from(initialFiles);
+
+  final Map<String, String> files;
+  String lastWriteRelativePath = '';
+
+  @override
+  Future<void> createDirectory(String rootPath, String relativePath) async {}
+
+  @override
+  Future<List<JsonMap>> listEntries(
+    String rootPath, {
+    bool recursive = true,
+  }) async {
+    return files.keys
+        .map(
+          (path) => <String, Object?>{
+            'relative_path': path,
+            'display_name': path.split('/').last,
+            'is_dir': false,
+          },
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<String?> readTextFile(String rootPath, String relativePath) async =>
+      files[relativePath];
+
+  @override
+  Future<void> writeTextFile(
+    String rootPath,
+    String relativePath,
+    String content,
+  ) async {
+    lastWriteRelativePath = relativePath;
+    files[relativePath] = content;
+  }
 }
 
 class _NoopProjectToolHostPort implements ProjectToolHostPort {

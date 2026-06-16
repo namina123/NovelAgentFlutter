@@ -23,9 +23,11 @@ class BookDeconstructionViewData {
     required this.planGroups,
     required this.selectedItemCount,
     required this.totalItemCount,
+    required this.selectedFollowupOptionId,
     required this.confirmedPreviewPath,
     required this.canBuildPreview,
     required this.canConfirmSelection,
+    required this.canCreateDerivedProject,
     required this.informationBridge,
     this.continuity,
   });
@@ -49,9 +51,11 @@ class BookDeconstructionViewData {
       planGroups: <BookDeconstructionPlanGroupViewData>[],
       selectedItemCount: 0,
       totalItemCount: 0,
+      selectedFollowupOptionId: '',
       confirmedPreviewPath: '',
       canBuildPreview: false,
       canConfirmSelection: false,
+      canCreateDerivedProject: false,
       informationBridge: null,
       continuity: null,
     );
@@ -74,9 +78,11 @@ class BookDeconstructionViewData {
   final List<BookDeconstructionPlanGroupViewData> planGroups;
   final int selectedItemCount;
   final int totalItemCount;
+  final String selectedFollowupOptionId;
   final String confirmedPreviewPath;
   final bool canBuildPreview;
   final bool canConfirmSelection;
+  final bool canCreateDerivedProject;
   final BookDeconstructionInformationBridgeViewData? informationBridge;
   final BookDeconstructionContinuityViewData? continuity;
 }

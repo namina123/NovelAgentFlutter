@@ -16,6 +16,7 @@ class BookDeconstructionSnapshot {
     required this.isLoading,
     required this.buildResult,
     required this.selectedItemIds,
+    required this.selectedFollowupOptionId,
     required this.confirmedPreviewPath,
   });
 
@@ -34,6 +35,7 @@ class BookDeconstructionSnapshot {
       isLoading: false,
       buildResult: null,
       selectedItemIds: <String>{},
+      selectedFollowupOptionId: '',
       confirmedPreviewPath: '',
     );
   }
@@ -51,6 +53,7 @@ class BookDeconstructionSnapshot {
   final bool isLoading;
   final BookDeconstructionDraftBuildResult? buildResult;
   final Set<String> selectedItemIds;
+  final String selectedFollowupOptionId;
   final String confirmedPreviewPath;
 
   BookDeconstructionSnapshot copyWith({
@@ -67,6 +70,7 @@ class BookDeconstructionSnapshot {
     bool? isLoading,
     Object? buildResult = _buildResultSentinel,
     Set<String>? selectedItemIds,
+    String? selectedFollowupOptionId,
     String? confirmedPreviewPath,
   }) {
     // 中文注释: 拆书向导快照集中保存表单与预览状态，避免页面层自己维护多份临时副本。
@@ -87,6 +91,8 @@ class BookDeconstructionSnapshot {
           ? this.buildResult
           : buildResult as BookDeconstructionDraftBuildResult?,
       selectedItemIds: selectedItemIds ?? this.selectedItemIds,
+      selectedFollowupOptionId:
+          selectedFollowupOptionId ?? this.selectedFollowupOptionId,
       confirmedPreviewPath: confirmedPreviewPath ?? this.confirmedPreviewPath,
     );
   }

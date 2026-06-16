@@ -1,6 +1,7 @@
 import '../workflow/task_runtime_constants.dart';
 import '../runtime/runtime_baseline_execution_mode_service.dart';
 import 'mode_guidance_plan_input.dart';
+import 'mode_guidance_context_path_service.dart';
 import 'mode_guidance_state.dart';
 import 'mode_guidance_workspace_path_service.dart';
 import 'mode_guidance_question.dart';
@@ -13,20 +14,24 @@ class ModeGuidancePlanInputBuilderService {
     ModeGuidanceWorkspacePathService? workspacePathService,
     ModeGuidanceProjectionDocumentService? projectionDocumentService,
     RuntimeBaselineExecutionModeService? runtimeBaselineExecutionModeService,
+    ModeGuidanceContextPathService? contextPathService,
   }) : _transitionService =
            transitionService ?? ModeGuidanceTransitionService(),
-       _workspacePathService =
-           workspacePathService ?? const ModeGuidanceWorkspacePathService(),
        _projectionDocumentService =
            projectionDocumentService ??
            const ModeGuidanceProjectionDocumentService(),
+       _contextPathService =
+           contextPathService ??
+           ModeGuidanceContextPathService(
+             workspacePathService: workspacePathService,
+           ),
        _runtimeBaselineExecutionModeService =
            runtimeBaselineExecutionModeService ??
            RuntimeBaselineExecutionModeService();
 
   final ModeGuidanceTransitionService _transitionService;
-  final ModeGuidanceWorkspacePathService _workspacePathService;
   final ModeGuidanceProjectionDocumentService _projectionDocumentService;
+  final ModeGuidanceContextPathService _contextPathService;
   final RuntimeBaselineExecutionModeService
   _runtimeBaselineExecutionModeService;
 
@@ -91,15 +96,14 @@ class ModeGuidancePlanInputBuilderService {
         'checkpoint_interval': _checkpointFromAutonomy(
           _value(values, 'autonomy_guardrails'),
         ),
-        'source_paths': <Object?>[
-          _workspacePathService.summaryMarkdownPath(state.modeId),
-          ...projected.keys,
-          'specs/project_brief.md',
-        ],
-        'persistent_context_paths': <Object?>[
-          _workspacePathService.summaryMarkdownPath(state.modeId),
-          ...projected.keys,
-        ],
+        'source_paths': _contextPathService.sourcePaths(
+          modeId: state.modeId,
+          projectedDocuments: projected,
+        ),
+        'persistent_context_paths': _contextPathService.persistentContextPaths(
+          modeId: state.modeId,
+          projectedDocuments: projected,
+        ),
       },
       missingFields: question.isReadyToLaunch
           ? const <String>[]
@@ -140,15 +144,14 @@ class ModeGuidancePlanInputBuilderService {
         'outline_text': outlineSeed,
         'chapter_count': 12,
         'checkpoint_interval': 0,
-        'source_paths': <Object?>[
-          _workspacePathService.summaryMarkdownPath(state.modeId),
-          ...projected.keys,
-          'specs/project_brief.md',
-        ],
-        'persistent_context_paths': <Object?>[
-          _workspacePathService.summaryMarkdownPath(state.modeId),
-          ...projected.keys,
-        ],
+        'source_paths': _contextPathService.sourcePaths(
+          modeId: state.modeId,
+          projectedDocuments: projected,
+        ),
+        'persistent_context_paths': _contextPathService.persistentContextPaths(
+          modeId: state.modeId,
+          projectedDocuments: projected,
+        ),
       },
       missingFields: question.isReadyToLaunch
           ? const <String>[]

@@ -3,23 +3,29 @@ import 'dart:convert';
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../shared/cli_arguments.dart';
+import '../shared/cli_exit_codes.dart';
+import '../shared/cli_help_contract.dart';
+import '../shared/cli_project_artifact_label_service.dart';
+import '../shared/cli_project_context_loader.dart';
 import '../../output/terminal_printer.dart';
 
 class ReviewCommand {
   const ReviewCommand({
-    required SettingsRepository settingsRepository,
-    required ProjectRepository projectRepository,
     required ProjectReviewReportService reviewReportService,
+    required CliProjectContextLoader projectContextLoader,
     required TerminalPrinter printer,
-  }) : _settingsRepository = settingsRepository,
-       _projectRepository = projectRepository,
-       _reviewReportService = reviewReportService,
-       _printer = printer;
+    CliProjectArtifactLabelService? projectArtifactLabelService,
+  }) : _reviewReportService = reviewReportService,
+       _projectContextLoader = projectContextLoader,
+       _printer = printer,
+       _projectArtifactLabelService =
+           projectArtifactLabelService ?? const CliProjectArtifactLabelService();
 
-  final SettingsRepository _settingsRepository;
-  final ProjectRepository _projectRepository;
   final ProjectReviewReportService _reviewReportService;
+  final CliProjectContextLoader _projectContextLoader;
   final TerminalPrinter _printer;
+  final CliProjectArtifactLabelService _projectArtifactLabelService;
 
   Future<int> run(List<String> args) async {
     // 中文注释: review 命令组只做参数解析和终端输出，审稿报告的读取与任务生成仍走共享服务。
@@ -46,7 +52,7 @@ class ReviewCommand {
       default:
         _printer.error('未知 review 子命令: $action');
         _printHelp();
-        return 2;
+        return CliExitCodes.invalidInput;
     }
   }
 
@@ -76,7 +82,7 @@ class ReviewCommand {
                 '${ValueReaders.stringValue(report['review_type_label'])}'
                 '｜${ValueReaders.intValue(report['issue_count'])} 条'
                 '｜${ValueReaders.stringValue(report['title'])}'
-                '｜${ValueReaders.stringValue(report['markdown_path'])}',
+                '｜${_formatArtifactPath(ValueReaders.stringValue(report['markdown_path']))}',
           )
           .join('\n'),
     );
@@ -95,17 +101,20 @@ class ReviewCommand {
     }
     final loaded = await _reviewReportService.loadReport(context.project, path);
     if (!ValueReaders.boolValue(loaded['ok'])) {
-      _printer.error(
-        ValueReaders.stringValue(loaded['error'], '审稿报告不存在。'),
-      );
-      return 1;
+      _printer.error(ValueReaders.stringValue(loaded['error'], '审稿报告不存在。'));
+      return CliExitCodes.executionFailure;
     }
-    final markdownBody = ValueReaders.stringValue(loaded['markdown_body']).trim();
+    final markdownBody = ValueReaders.stringValue(
+      loaded['markdown_body'],
+    ).trim();
     if (markdownBody.isNotEmpty) {
       _printer.block('审稿详情', markdownBody);
       return 0;
     }
-    _printer.block('审稿详情', _prettyJson(ValueReaders.mapValue(loaded['report'])));
+    _printer.block(
+      '审稿详情',
+      _prettyJson(ValueReaders.mapValue(loaded['report'])),
+    );
     return 0;
   }
 
@@ -133,16 +142,15 @@ class ReviewCommand {
       _printer.error('请通过 --source-path 指定需要审稿的项目内路径。');
       return 2;
     }
-    final result = await _reviewReportService.createReviewTask(
-      context.project,
-      <String, Object?>{
-        'source_path': sourcePath,
-        'review_type': _optionValue(args, '--type') ?? ReviewTypeConstants.general,
-        'scope': _optionValue(args, '--scope') ?? 'chapter',
-        'title': _optionValue(args, '--title') ?? '',
-        'goal': _optionValue(args, '--goal') ?? '',
-      },
-    );
+    final result = await _reviewReportService
+        .createReviewTask(context.project, <String, Object?>{
+          'source_path': sourcePath,
+          'review_type':
+              _optionValue(args, '--type') ?? ReviewTypeConstants.general,
+          'scope': _optionValue(args, '--scope') ?? 'chapter',
+          'title': _optionValue(args, '--title') ?? '',
+          'goal': _optionValue(args, '--goal') ?? '',
+        });
     return _printResult(result, success: '审稿任务已创建。');
   }
 
@@ -164,18 +172,12 @@ class ReviewCommand {
   }
 
   Future<_ProjectContext?> _projectContext(List<String> args) async {
-    final settings = await _settingsRepository.load();
-    final projectPath = _optionValue(args, '--project') ?? settings.defaultProjectPath;
-    if (projectPath.trim().isEmpty) {
-      _printer.error('请通过 --project 指定项目路径。');
+    // 中文注释: review 命令直接复用 shared 项目上下文加载，避免重复实现 settings/project 打开逻辑。
+    final context = await _projectContextLoader.load(args);
+    if (context == null) {
       return null;
     }
-    final project = await _projectRepository.openByPath(projectPath);
-    if (project == null) {
-      _printer.error('项目不存在: $projectPath');
-      return null;
-    }
-    return _ProjectContext(project);
+    return _ProjectContext(context.project);
   }
 
   int _printResult(JsonMap result, {required String success}) {
@@ -189,39 +191,35 @@ class ReviewCommand {
       ValueReaders.stringValue(result['review_report_path']),
     ).trim();
     if (path.isNotEmpty) {
-      _printer.info(path);
+      _printer.info(_formatArtifactPath(path));
     }
     return 0;
   }
 
   String? _optionValue(List<String> args, String name) {
-    for (var index = 0; index < args.length - 1; index += 1) {
-      if (args[index] == name) {
-        return args[index + 1];
-      }
-    }
-    return null;
+    return CliArguments(args).value(name);
   }
 
   int _intOption(List<String> args, String name, int fallback) {
-    return int.tryParse((_optionValue(args, name) ?? '').trim()) ?? fallback;
+    return CliArguments(args).intValue(name, fallback);
   }
 
   String _prettyJson(JsonMap value) {
     return const JsonEncoder.withIndent('  ').convert(value);
   }
 
+  String _formatArtifactPath(String relativePath) {
+    return _projectArtifactLabelService.formatPath(relativePath);
+  }
+
   void _printHelp() {
-    _printer.block(
-      'review help',
-      [
-        'review list [--type continuity] [--scope chapter] [--source chapters/01.md] [--project 路径]',
-        'review show --path reviews/continuity/chapter_01.md [--project 路径]',
-        'review types',
-        'review create-task --source-path chapters/01.md [--type continuity] [--project 路径]',
-        'review repair-task --path reviews/continuity/chapter_01.md [--project 路径]',
-      ].join('\n'),
-    );
+    CliHelpContract.printHelpBlock(_printer, 'review help', [
+      'review list [--type continuity] [--scope chapter] [--source chapters/01.md] [--project 路径]',
+      'review show --path reviews/continuity/chapter_01.md [--project 路径]',
+      'review types',
+      'review create-task --source-path chapters/01.md [--type continuity] [--project 路径]',
+      'review repair-task --path reviews/continuity/chapter_01.md [--project 路径]',
+    ]);
   }
 }
 

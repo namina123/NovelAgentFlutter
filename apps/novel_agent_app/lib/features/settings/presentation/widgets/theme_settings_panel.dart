@@ -95,26 +95,6 @@ class _ThemeSettingsPanelState extends State<ThemeSettingsPanel> {
           ),
         ),
         const SizedBox(height: 16),
-        SettingsFormSection(
-          title: '后续内置主题',
-          description: widget.viewData.futureSectionDescription,
-          child: _PlaceholderThemeCapabilityCard(
-            icon: Icons.layers_outlined,
-            title: '注册表扩展位',
-            description: '新的官方主题加入注册表后，会直接出现在上面的内置主题列表中。',
-          ),
-        ),
-        const SizedBox(height: 16),
-        SettingsFormSection(
-          title: '自定义主题',
-          description: widget.viewData.customSectionDescription,
-          child: _PlaceholderThemeCapabilityCard(
-            icon: Icons.palette_outlined,
-            title: '用户自定义预留',
-            description: '后续这里会承接用户自定义 token、导入主题和个人配色方案。',
-          ),
-        ),
-        const SizedBox(height: 16),
         ActionButton(
           label: '保存主题设置',
           expanded: true,
@@ -142,66 +122,6 @@ class _ThemeSettingsPanelState extends State<ThemeSettingsPanel> {
 
   void _sync() {
     _selectedThemeId = widget.viewData.selectedThemeId;
-  }
-}
-
-class _PlaceholderThemeCapabilityCard extends StatelessWidget {
-  const _PlaceholderThemeCapabilityCard({
-    required this.icon,
-    required this.title,
-    required this.description,
-  });
-
-  final IconData icon;
-  final String title;
-  final String description;
-
-  @override
-  Widget build(BuildContext context) {
-    final surface = context.novelThemeSurfaces.panel;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: surface.backgroundColor.withValues(alpha: 0.62),
-        border: Border.all(
-          color: surface.borderColor,
-          width: surface.borderWidth,
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, size: 18, color: surface.highlightBorderColor),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      color: surface.foregroundColor,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    description,
-                    style: TextStyle(
-                      fontSize: 12,
-                      height: 1.45,
-                      color: surface.mutedForegroundColor,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 

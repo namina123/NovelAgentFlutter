@@ -40,46 +40,69 @@ void main() {
       }
     });
 
+    test('list returns only actionable pending research requests', () async {
+      await _registerAwaitingRequest(
+        informationExecutor,
+        project,
+        callId: 'awaiting-1',
+        query: '北境钟楼象征',
+      );
+      await _registerOpenPendingRequest(
+        informationExecutor,
+        project,
+        callId: 'pending-1',
+        query: '港口潮汐资料',
+      );
+      await _registerAwaitingRequest(
+        informationExecutor,
+        project,
+        callId: 'rejected-1',
+        query: '废弃请求',
+      );
+      await actionService.reject(
+        project,
+        requestId: 'research_request_rejected-1',
+        actorId: 'user-1',
+        note: '当前卷暂不需要',
+      );
+
+      final result = await actionService.list(project);
+
+      expect(
+        result.map((entry) => ValueReaders.stringValue(entry['request_id'])),
+        containsAll(<String>[
+          'research_request_awaiting-1',
+          'research_request_pending-1',
+        ]),
+      );
+      expect(
+        result.map((entry) => ValueReaders.stringValue(entry['request_id'])),
+        isNot(contains('research_request_rejected-1')),
+      );
+    });
+
     test(
-      'list returns only actionable pending research requests',
+      'load returns the stored pending research record with relative path',
       () async {
         await _registerAwaitingRequest(
           informationExecutor,
           project,
-          callId: 'awaiting-1',
+          callId: 'load-1',
           query: '北境钟楼象征',
         );
-        await _registerOpenPendingRequest(
-          informationExecutor,
+
+        final record = await actionService.load(
           project,
-          callId: 'pending-1',
-          query: '港口潮汐资料',
-        );
-        await _registerAwaitingRequest(
-          informationExecutor,
-          project,
-          callId: 'rejected-1',
-          query: '废弃请求',
-        );
-        await actionService.reject(
-          project,
-          requestId: 'research_request_rejected-1',
-          actorId: 'user-1',
-          note: '当前卷暂不需要',
+          requestId: 'research_request_load-1',
         );
 
-        final result = await actionService.list(project);
-
         expect(
-          result.map((entry) => ValueReaders.stringValue(entry['request_id'])),
-          containsAll(<String>[
-            'research_request_awaiting-1',
-            'research_request_pending-1',
-          ]),
+          ValueReaders.stringValue(record['request_id']),
+          'research_request_load-1',
         );
         expect(
-          result.map((entry) => ValueReaders.stringValue(entry['request_id'])),
-          isNot(contains('research_request_rejected-1')),
+          ValueReaders.stringValue(record['relative_path']),
+          '.novel_agent/information/research_requests/research_request_load-1.json',
         );
       },
     );
@@ -102,7 +125,10 @@ void main() {
         );
 
         expect(ValueReaders.boolValue(result['ok']), isTrue);
-        expect(ValueReaders.stringValue(result['request_state']), 'pending_gateway_execution');
+        expect(
+          ValueReaders.stringValue(result['request_state']),
+          'pending_gateway_execution',
+        );
         expect(
           ValueReaders.stringList(result['changed_paths']),
           containsAll(<String>[
@@ -115,7 +141,10 @@ void main() {
           tempDirectory,
           'research_request_approve-1',
         );
-        expect(ValueReaders.stringValue(record['request_state']), 'pending_gateway_execution');
+        expect(
+          ValueReaders.stringValue(record['request_state']),
+          'pending_gateway_execution',
+        );
         expect(
           ValueReaders.stringValue(
             ValueReaders.mapValue(record['permission_decision'])['disposition'],
@@ -191,12 +220,18 @@ void main() {
         );
 
         expect(ValueReaders.boolValue(result['ok']), isTrue);
-        expect(ValueReaders.stringValue(result['request_state']), 'needs_user_info');
+        expect(
+          ValueReaders.stringValue(result['request_state']),
+          'needs_user_info',
+        );
         final record = await _readRequestRecord(
           tempDirectory,
           'research_request_needs-info-1',
         );
-        expect(ValueReaders.stringValue(record['request_state']), 'needs_user_info');
+        expect(
+          ValueReaders.stringValue(record['request_state']),
+          'needs_user_info',
+        );
         expect(
           ValueReaders.stringValue(
             ValueReaders.mapValue(record['permission_decision'])['disposition'],
@@ -211,43 +246,52 @@ void main() {
       },
     );
 
-    test('missing request returns structured error and no changed paths', () async {
-      final result = await actionService.approve(
-        project,
-        requestId: 'research_request_missing',
-      );
+    test(
+      'missing request returns structured error and no changed paths',
+      () async {
+        final result = await actionService.approve(
+          project,
+          requestId: 'research_request_missing',
+        );
 
-      expect(ValueReaders.boolValue(result['ok']), isFalse);
-      expect(
-        ValueReaders.stringValue(result['error']),
-        'Pending research request not found.',
-      );
-      expect(ValueReaders.stringList(result['changed_paths']), isEmpty);
-    });
+        expect(ValueReaders.boolValue(result['ok']), isFalse);
+        expect(
+          ValueReaders.stringValue(result['error']),
+          'Pending research request not found.',
+        );
+        expect(ValueReaders.stringList(result['changed_paths']), isEmpty);
+      },
+    );
 
-    test('repeating reject on already rejected request is idempotent', () async {
-      await _registerAwaitingRequest(
-        informationExecutor,
-        project,
-        callId: 'repeat-reject-1',
-        query: '海图纹样',
-      );
-      await actionService.reject(
-        project,
-        requestId: 'research_request_repeat-reject-1',
-        actorId: 'user-repeat',
-      );
+    test(
+      'repeating reject on already rejected request is idempotent',
+      () async {
+        await _registerAwaitingRequest(
+          informationExecutor,
+          project,
+          callId: 'repeat-reject-1',
+          query: '海图纹样',
+        );
+        await actionService.reject(
+          project,
+          requestId: 'research_request_repeat-reject-1',
+          actorId: 'user-repeat',
+        );
 
-      final result = await actionService.reject(
-        project,
-        requestId: 'research_request_repeat-reject-1',
-        actorId: 'user-repeat',
-      );
+        final result = await actionService.reject(
+          project,
+          requestId: 'research_request_repeat-reject-1',
+          actorId: 'user-repeat',
+        );
 
-      expect(ValueReaders.boolValue(result['ok']), isTrue);
-      expect(ValueReaders.stringValue(result['action_status']), 'already_applied');
-      expect(ValueReaders.stringList(result['changed_paths']), isEmpty);
-    });
+        expect(ValueReaders.boolValue(result['ok']), isTrue);
+        expect(
+          ValueReaders.stringValue(result['action_status']),
+          'already_applied',
+        );
+        expect(ValueReaders.stringList(result['changed_paths']), isEmpty);
+      },
+    );
   });
 }
 

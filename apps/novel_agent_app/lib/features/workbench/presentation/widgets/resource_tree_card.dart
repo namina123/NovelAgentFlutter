@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../application/services/workbench_resource_identity_service.dart';
+import '../models/resource_tree_entry_semantic_view_data.dart';
+import '../services/resource_tree_entry_semantic_service.dart';
 import '../../../../../shared/theme/novel_theme_context.dart';
 import '../models/workbench_view_data.dart';
 import 'resource_tree_empty_state.dart';
@@ -12,12 +15,16 @@ class ResourceTreeCard extends StatelessWidget {
     required this.onEntrySelected,
     this.projectTypeId = '',
     this.embeddedInScrollView = false,
+    this.resourceIdentityService = const WorkbenchResourceIdentityService(),
+    this.semanticService = const ResourceTreeEntrySemanticService(),
   });
 
   final List<ResourceEntryViewData> entries;
   final ValueChanged<String> onEntrySelected;
   final String projectTypeId;
   final bool embeddedInScrollView;
+  final WorkbenchResourceIdentityService resourceIdentityService;
+  final ResourceTreeEntrySemanticService semanticService;
 
   @override
   Widget build(BuildContext context) {
@@ -28,6 +35,7 @@ class ResourceTreeCard extends StatelessWidget {
             entries: entries,
             projectTypeId: projectTypeId,
             onEntrySelected: onEntrySelected,
+            semanticService: semanticService,
           );
   }
 
@@ -42,7 +50,7 @@ class ResourceTreeCard extends StatelessWidget {
       widgets.add(
         ResourceTreeEntryTile(
           entry: entry,
-          secondaryLabel: _secondaryLabelFor(entry),
+          semantic: _semanticFor(entry),
           onPressed: () => onEntrySelected(entry.id),
         ),
       );
@@ -53,10 +61,10 @@ class ResourceTreeCard extends StatelessWidget {
     return widgets;
   }
 
-  String _secondaryLabelFor(ResourceEntryViewData entry) {
-    // 中文注释: 资源树的辅助说明只在 SQLite 项目里显式提示主事实源与只读投影，避免把老文件树再伪装成主入口。
-    return _resourceTreeSecondaryLabelFor(
-      entry: entry,
+  ResourceTreeEntrySemanticViewData _semanticFor(ResourceEntryViewData entry) {
+    return semanticService.resolve(
+      relativePath: entry.relativePath,
+      isDirectory: entry.isDirectory,
       projectTypeId: projectTypeId,
     );
   }
@@ -67,11 +75,13 @@ class _ScrollableTreeBody extends StatelessWidget {
     required this.entries,
     required this.projectTypeId,
     required this.onEntrySelected,
+    required this.semanticService,
   });
 
   final List<ResourceEntryViewData> entries;
   final String projectTypeId;
   final ValueChanged<String> onEntrySelected;
+  final ResourceTreeEntrySemanticService semanticService;
 
   @override
   Widget build(BuildContext context) {
@@ -94,8 +104,9 @@ class _ScrollableTreeBody extends StatelessWidget {
                   ),
                   child: ResourceTreeEntryTile(
                     entry: entry,
-                    secondaryLabel: _resourceTreeSecondaryLabelFor(
-                      entry: entry,
+                    semantic: semanticService.resolve(
+                      relativePath: entry.relativePath,
+                      isDirectory: entry.isDirectory,
                       projectTypeId: projectTypeId,
                     ),
                     onPressed: () => onEntrySelected(entry.id),
@@ -130,23 +141,4 @@ class _EmbeddedTreeBody extends StatelessWidget {
       ),
     );
   }
-}
-
-String _resourceTreeSecondaryLabelFor({
-  required ResourceEntryViewData entry,
-  required String projectTypeId,
-}) {
-  // 中文注释: 二级标签只在 SQLite 项目中标出“摘要 / 来源身份 / 真相源 / 只读投影”，让资源树先把语义说清楚。
-  final normalizedPath = entry.relativePath.trim().replaceAll('\\', '/');
-  if (projectTypeId.trim() != 'sqlite_project_store' ||
-      normalizedPath.isEmpty) {
-    return '';
-  }
-  if (normalizedPath.startsWith('premise/sqlite_projection/')) {
-    return '摘要：SQLite 语义投影 · 来源身份：SQLite 主事实源 · 真相源：sqlite_project_store · 只读投影';
-  }
-  if (normalizedPath == 'premise/project_brief.md') {
-    return '摘要：SQLite 项目概览 · 来源身份：SQLite 主事实源 · 真相源：sqlite_project_store · 只读投影';
-  }
-  return '摘要：SQLite 主事实源内容 · 来源身份：SQLite 主事实源 · 真相源：sqlite_project_store · 只读投影';
 }

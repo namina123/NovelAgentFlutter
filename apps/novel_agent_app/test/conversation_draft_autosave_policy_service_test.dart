@@ -50,10 +50,61 @@ void main() {
         isTrue,
       );
     });
+
+    test(
+      'does not autosave chapter-like reply when no content document is open',
+      () {
+        final result = _result(
+          userPrompt: '直接写第一章正文。',
+          draftMarkdown: '''
+雨下得很密，像有人把整座城的光都揉进了水里。
+
+林述站在桥边，没有立刻往前走。他听见远处列车的轰鸣，又听见脚下河水撞向护栏的碎响。
+
+这一夜像是某种漫长的前奏，而他知道，自己已经没有回头的余地。
+''',
+        );
+
+        expect(
+          service.shouldAutoSave(
+            result: result,
+            activeDocumentPath: '',
+            wasModeGuidanceActive: false,
+          ),
+          isFalse,
+        );
+      },
+    );
+
+    test(
+      'does not autosave session-style planning reply into markdown file',
+      () {
+        final result = _result(
+          userPrompt: '我先补充一下背景设定，主角是个社畜，先别写正文。',
+          draftMarkdown: '''
+主角原本在城市里做最普通的外包工作，长期被时间表和绩效压着走，所以他对秩序、效率和生存压力都特别敏感。
+
+这会自然影响后面的世界观组织方式、他进入新环境后的第一反应，以及他看待权力、资源和安全感的角度。
+
+如果继续往下推进，下一步更合适的是先把世界规则、主线冲突和人物边界收束清楚，再决定第一章从哪一个切口进入。
+''',
+        );
+
+        expect(
+          service.shouldAutoSave(
+            result: result,
+            activeDocumentPath: '',
+            wasModeGuidanceActive: false,
+          ),
+          isFalse,
+        );
+      },
+    );
   });
 }
 
 DraftGenerationResult _result({
+  String userPrompt = '写点内容',
   required String draftMarkdown,
   bool waitingForUserChoice = false,
 }) {
@@ -64,7 +115,7 @@ DraftGenerationResult _result({
       rootPath: 'D:/demo',
     ),
     projectInfo: const <String, Object?>{},
-    userPrompt: '写点内容',
+    userPrompt: userPrompt,
     prompt: 'prompt',
     modelId: 'demo-model',
     draftMarkdown: draftMarkdown,

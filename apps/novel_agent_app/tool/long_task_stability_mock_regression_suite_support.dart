@@ -108,10 +108,7 @@ Future<JsonMap> _runOrdinaryProjectSelfReviewScenario(
             },
           },
         ],
-        'message': const <String, Object?>{
-          'role': 'assistant',
-          'content': '',
-        },
+        'message': const <String, Object?>{'role': 'assistant', 'content': ''},
       },
       <String, Object?>{
         'ok': true,
@@ -158,7 +155,9 @@ Future<JsonMap> _runOrdinaryProjectSelfReviewScenario(
     },
   );
   final execution = ValueReaders.mapValue(result['execution']);
-  final reviewerDispatch = ValueReaders.mapValue(execution['reviewer_dispatch']);
+  final reviewerDispatch = ValueReaders.mapValue(
+    execution['reviewer_dispatch'],
+  );
   final response = ValueReaders.mapValue(result['response']);
   final toolCalls = ValueReaders.objectList(
     response['tool_calls'],
@@ -184,7 +183,9 @@ Future<JsonMap> _runOrdinaryProjectSelfReviewScenario(
       'workflow review runtime',
     ],
     'observed_category': 'self_review',
-    'selection_mode': ValueReaders.stringValue(reviewerDispatch['selection_mode']),
+    'selection_mode': ValueReaders.stringValue(
+      reviewerDispatch['selection_mode'],
+    ),
     'review_execution_mode': ValueReaders.stringValue(
       reviewerDispatch['review_execution_mode'],
     ),
@@ -234,10 +235,7 @@ Future<JsonMap> _runReviewerDispatchScenario(Directory workspaceRoot) async {
             },
           },
         ],
-        'message': const <String, Object?>{
-          'role': 'assistant',
-          'content': '',
-        },
+        'message': const <String, Object?>{'role': 'assistant', 'content': ''},
       },
       <String, Object?>{
         'ok': true,
@@ -297,7 +295,9 @@ Future<JsonMap> _runReviewerDispatchScenario(Directory workspaceRoot) async {
     },
   );
   final execution = ValueReaders.mapValue(result['execution']);
-  final reviewerDispatch = ValueReaders.mapValue(execution['reviewer_dispatch']);
+  final reviewerDispatch = ValueReaders.mapValue(
+    execution['reviewer_dispatch'],
+  );
   final response = ValueReaders.mapValue(result['response']);
   final toolCalls = ValueReaders.objectList(
     response['tool_calls'],
@@ -307,7 +307,9 @@ Future<JsonMap> _runReviewerDispatchScenario(Directory workspaceRoot) async {
       ValueReaders.stringValue(reviewerDispatch['selection_mode']) ==
           ReviewerSelectionModes.delegatedReviewer &&
       ValueReaders.boolValue(reviewerDispatch['should_delegate']) &&
-      gateway.requests.every((request) => request.modelId == 'reviewer-child-model') &&
+      gateway.requests.every(
+        (request) => request.modelId == 'reviewer-child-model',
+      ) &&
       toolCalls.length == 1 &&
       ValueReaders.stringValue(toolCalls.single['name']) == 'call_sub_agent';
   return <String, Object?>{
@@ -321,8 +323,12 @@ Future<JsonMap> _runReviewerDispatchScenario(Directory workspaceRoot) async {
       'response.tool_calls',
     ],
     'observed_category': 'delegated_reviewer',
-    'selection_mode': ValueReaders.stringValue(reviewerDispatch['selection_mode']),
-    'delegated_agent_id': ValueReaders.stringValue(reviewerDispatch['agent_id']),
+    'selection_mode': ValueReaders.stringValue(
+      reviewerDispatch['selection_mode'],
+    ),
+    'delegated_agent_id': ValueReaders.stringValue(
+      reviewerDispatch['agent_id'],
+    ),
     'request_models': gateway.requests
         .map((request) => request.modelId)
         .toList(growable: false),
@@ -380,10 +386,7 @@ Future<JsonMap> _runLongTaskProactiveReviewScenario(
             },
           },
         ],
-        'message': const <String, Object?>{
-          'role': 'assistant',
-          'content': '',
-        },
+        'message': const <String, Object?>{'role': 'assistant', 'content': ''},
       },
       <String, Object?>{
         'ok': true,
@@ -402,7 +405,8 @@ Future<JsonMap> _runLongTaskProactiveReviewScenario(
       persistentTaskRepository: harness.taskRepository,
       response: <String, Object?>{
         'ok': true,
-        'relative_path': 'tracking/checkpoint_reviews/auto_followup_medium.json',
+        'relative_path':
+            'tracking/checkpoint_reviews/auto_followup_medium.json',
         'changed_paths': <Object?>[
           'tracking/checkpoint_reviews/auto_followup_medium.json',
         ],
@@ -469,19 +473,24 @@ Future<JsonMap> _runLongTaskProactiveReviewScenario(
       .where(
         (task) =>
             ValueReaders.stringValue(task['task_type']) == 'review' &&
-            ValueReaders.stringValue(ValueReaders.mapValue(task['metadata'])['origin']) ==
+            ValueReaders.stringValue(
+                  ValueReaders.mapValue(task['metadata'])['origin'],
+                ) ==
                 'checkpoint_review_suggestion',
       )
       .toList(growable: false);
   final reviewTaskIds = reviewTasks
       .map((task) => ValueReaders.stringValue(task['id']))
       .toList(growable: false);
-  final nextRunnable = TaskSelectionService(
-    taskDefinitionService: TaskDefinitionService(),
-  ).nextRunnableTaskFromTasks(
-    await harness.taskRepository.listTasks(harness.project),
+  final nextRunnable =
+      TaskSelectionService(
+        taskDefinitionService: TaskDefinitionService(),
+      ).nextRunnableTaskFromTasks(
+        await harness.taskRepository.listTasks(harness.project),
+      );
+  final checkpointFollowup = ValueReaders.mapValue(
+    result['checkpoint_followup'],
   );
-  final checkpointFollowup = ValueReaders.mapValue(result['checkpoint_followup']);
   final sourceFollowupTaskIds = ValueReaders.stringList(
     sourceTask['checkpoint_followup_task_ids'],
   );
@@ -511,12 +520,17 @@ Future<JsonMap> _runLongTaskProactiveReviewScenario(
       'review task dependency rewiring',
     ],
     'observed_category': 'auto_followup_review_gate',
-    'auto_scheduled': ValueReaders.boolValue(checkpointFollowup['auto_scheduled']),
+    'auto_scheduled': ValueReaders.boolValue(
+      checkpointFollowup['auto_scheduled'],
+    ),
     'review_task_ids': reviewTaskIds,
     'followup_task_ids': followupTaskIds,
     'source_followup_task_ids': sourceFollowupTaskIds,
-    'next_runnable_task_type': ValueReaders.stringValue(nextRunnable['task_type']),
-    'summary': '长任务 checkpoint 会主动插入 follow-up review gate，并把下游任务正式改挂到 review 门后。',
+    'next_runnable_task_type': ValueReaders.stringValue(
+      nextRunnable['task_type'],
+    ),
+    'summary':
+        '长任务 checkpoint 会主动插入 follow-up review gate，并把下游任务正式改挂到 review 门后。',
   };
 }
 
@@ -560,7 +574,9 @@ JsonMap _runDeliveryFailureScenario() {
     stopNote: result.summary,
     stopOutcome: stopOutcome,
   );
-  final stopDiagnosis = ValueReaders.mapValue(runCenterContract['stop_diagnosis']);
+  final stopDiagnosis = ValueReaders.mapValue(
+    runCenterContract['stop_diagnosis'],
+  );
   final reportCategory = classifyDraftProbeReportCategory(
     ok: false,
     validation: <String, Object?>{
@@ -602,7 +618,9 @@ JsonMap _runRepairRequiredScenario() {
     ),
     basis: const ReviewBasis(
       basisType: 'chapter_delivery',
-      sourcePaths: <String>['tracking/checkpoint_reviews/review_repair_001.json'],
+      sourcePaths: <String>[
+        'tracking/checkpoint_reviews/review_repair_001.json',
+      ],
       targetPaths: <String>['chapters/第01章.md'],
       summary: '当前章节需要返修。',
     ),
@@ -643,7 +661,9 @@ JsonMap _runRepairRequiredScenario() {
     stopNote: review.summary,
     recoveryState: recoveryState,
   );
-  final stopDiagnosis = ValueReaders.mapValue(runCenterContract['stop_diagnosis']);
+  final stopDiagnosis = ValueReaders.mapValue(
+    runCenterContract['stop_diagnosis'],
+  );
   final reportCategory = classifyDraftProbeReportCategory(
     ok: false,
     validation: <String, Object?>{
@@ -708,7 +728,9 @@ JsonMap _runWaitingUserScenario() {
     stopNote: result.summary,
     stopOutcome: stopOutcome,
   );
-  final stopDiagnosis = ValueReaders.mapValue(runCenterContract['stop_diagnosis']);
+  final stopDiagnosis = ValueReaders.mapValue(
+    runCenterContract['stop_diagnosis'],
+  );
   final reportCategory = classifyDraftProbeReportCategory(
     ok: false,
     validation: <String, Object?>{
@@ -756,7 +778,9 @@ JsonMap _runManualAttentionScenario() {
     stopNote: recoveryState.note,
     recoveryState: recoveryState,
   );
-  final stopDiagnosis = ValueReaders.mapValue(runCenterContract['stop_diagnosis']);
+  final stopDiagnosis = ValueReaders.mapValue(
+    runCenterContract['stop_diagnosis'],
+  );
   final reportCategory = classifyDraftProbeReportCategory(
     ok: false,
     validation: <String, Object?>{
@@ -814,7 +838,9 @@ JsonMap _runNaturalCompletionScenario() {
     stopNote: result.summary,
     stopOutcome: stopOutcome,
   );
-  final stopDiagnosis = ValueReaders.mapValue(runCenterContract['stop_diagnosis']);
+  final stopDiagnosis = ValueReaders.mapValue(
+    runCenterContract['stop_diagnosis'],
+  );
   final reportCategory = classifyDraftProbeReportCategory(
     ok: true,
     validation: <String, Object?>{
@@ -879,18 +905,15 @@ JsonMap _buildSuiteRunCenterContract({
   LongTaskStopOutcome stopOutcome = const LongTaskStopOutcome(),
   LongTaskRecoveryState recoveryState = const LongTaskRecoveryState(),
 }) {
-  return _suiteRunCenterContractService.runCenterContract(
-    <String, Object?>{
-      'id': 'ltsr20_suite_probe_run',
-      'mode': TaskRuntimeConstants.modeHumanOutlineAiDraft,
-      'status': status,
-      'stop_reason': stopReason,
-      'stop_note': stopNote,
-      'stop_outcome': stopOutcome.toJson(),
-      'last_recovery_state': recoveryState.toJson(),
-    },
-    const <Object?>[],
-  );
+  return _suiteRunCenterContractService.runCenterContract(<String, Object?>{
+    'id': 'ltsr20_suite_probe_run',
+    'mode': TaskRuntimeConstants.modeHumanOutlineAiDraft,
+    'status': status,
+    'stop_reason': stopReason,
+    'stop_note': stopNote,
+    'stop_outcome': stopOutcome.toJson(),
+    'last_recovery_state': recoveryState.toJson(),
+  }, const <Object?>[]);
 }
 
 JsonMap _buildSuiteSummary(List<JsonMap> scenarios) {
@@ -908,13 +931,16 @@ JsonMap _buildSuiteSummary(List<JsonMap> scenarios) {
       final existing = ValueReaders.mapValue(requirementCoverage[requirement]);
       final scenarioIds = <String>[
         ...ValueReaders.stringList(existing['scenario_ids']),
-        if (!ValueReaders.stringList(existing['scenario_ids']).contains(scenarioId))
+        if (!ValueReaders.stringList(
+          existing['scenario_ids'],
+        ).contains(scenarioId))
           scenarioId,
       ];
       requirementCoverage[requirement] = <String, Object?>{
         'requirement': requirement,
         'scenario_ids': scenarioIds,
-        'ok': ValueReaders.boolValue(existing['ok']) ||
+        'ok':
+            ValueReaders.boolValue(existing['ok']) ||
             ValueReaders.boolValue(scenario['ok']),
       };
     }
@@ -950,7 +976,9 @@ String _renderMarkdownReport(JsonMap report) {
     '',
     '## Required Coverage',
   ];
-  for (final rawCoverage in ValueReaders.mapList(summary['required_coverage'])) {
+  for (final rawCoverage in ValueReaders.mapList(
+    summary['required_coverage'],
+  )) {
     final coverage = ValueReaders.mapValue(rawCoverage);
     lines.add(
       '- ${ValueReaders.boolValue(coverage['ok']) ? 'PASS' : 'FAIL'} ${ValueReaders.stringValue(coverage['requirement'])}'
@@ -1115,7 +1143,9 @@ class _WorkflowRuntimeHarness {
     loadAvailableAgents,
     Future<List<JsonMap>> Function(ProjectDescriptor project)?
     loadAvailableAgentGroups,
-    Future<List<ProjectAgentGroupSelection>> Function(ProjectDescriptor project)?
+    Future<List<ProjectAgentGroupSelection>> Function(
+      ProjectDescriptor project,
+    )?
     loadProjectAgentGroupSelections,
     ProjectLongTaskCheckpointReviewService? checkpointReviewService,
   }) {
@@ -1127,7 +1157,12 @@ class _WorkflowRuntimeHarness {
       loadAvailableAgentGroups: loadAvailableAgentGroups,
       checkpointReviewService: checkpointReviewService,
       hostAwareGenerateDraftUseCaseFactory:
-          (_, _, {hostInformationPermissionContext}) => GenerateDraftUseCase(
+          (
+            _,
+            _, {
+            hostInformationPermissionContext,
+            hostToolPermissionContext,
+          }) => GenerateDraftUseCase(
             projectWorkspacePort: workspacePort,
             llmGateway: gateway,
             toolExecutionPort: _WorkflowToolExecutionPort(
@@ -1382,7 +1417,9 @@ class _FakeProjectLongTaskCheckpointReviewService
     final saved = ValueReaders.deepCopyMap(response);
     final repository = persistentTaskRepository;
     if (repository != null) {
-      final relativePath = ValueReaders.stringValue(saved['relative_path']).trim();
+      final relativePath = ValueReaders.stringValue(
+        saved['relative_path'],
+      ).trim();
       final review = ValueReaders.mapValue(saved['review']);
       if (relativePath.isNotEmpty && review.isNotEmpty) {
         await repository.saveRecord(project, relativePath, review);

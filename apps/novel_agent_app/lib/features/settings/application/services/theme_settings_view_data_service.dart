@@ -47,13 +47,13 @@ class ThemeSettingsViewDataService {
           );
         })
         .toList(growable: false);
-    return ThemeSettingsViewData(
+      return ThemeSettingsViewData(
       selectedThemeId: selectedThemeId,
       currentThemeLabel: _preferenceResolver.labelOf(selectedThemeId),
       builtInThemes: builtInThemes,
       builtInSectionDescription: '当前内置主题会直接从 ThemeRegistry 读取，切换后立即作用到工作台核心表面。',
-      futureSectionDescription: '后续新增的官方内置主题会继续沿同一注册表接入，不需要重写设置页结构。',
-      customSectionDescription: '自定义主题入口暂时保留为壳，后续开放时会复用当前的主题描述与 token 合同。',
+      futureSectionDescription: '更多官方内置主题会继续通过 ThemeRegistry 接入。',
+      customSectionDescription: '自定义主题开放后，会接入同一套主题描述与保存合同。',
     );
   }
 }

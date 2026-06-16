@@ -1,21 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../../application/services/context_settings_contract_service.dart';
 import '../../../../../shared/widgets/action_button.dart';
+import 'settings_labeled_dropdown_field.dart';
 import 'settings_form_section.dart';
 import 'settings_labeled_text_field.dart';
+import 'settings_switch_row.dart';
 
 class ContextSettingsPanel extends StatefulWidget {
   const ContextSettingsPanel({
     super.key,
     required this.settings,
     required this.defaultProjectPath,
+    required this.draftFallbackProtectionEnabled,
     required this.allowProjectPathEdit,
     required this.onSaved,
   });
 
   final Map<String, Object?> settings;
   final String defaultProjectPath;
+  final bool draftFallbackProtectionEnabled;
   final bool allowProjectPathEdit;
   final ValueChanged<Map<String, Object?>> onSaved;
 
@@ -40,6 +45,7 @@ class _ContextSettingsPanelState extends State<ContextSettingsPanel> {
   late final TextEditingController _maxFilesController;
   late final TextEditingController _reservedOutputCharsController;
   bool _preferExactCount = false;
+  bool _draftFallbackProtectionEnabled = true;
   bool _isCompatBridgeExpanded = false;
 
   @override
@@ -90,7 +96,9 @@ class _ContextSettingsPanelState extends State<ContextSettingsPanel> {
 
   @override
   Widget build(BuildContext context) {
-    // 中文注释: 上下文设置页先呈现 token 压力合同，再把旧字符字段收进折叠兼容桥，避免普通用户先看到一堆旧参数。
+    // 中文注释: 上下文设置页先呈现 token 压力合同，再把历史参数收进折叠区，避免普通用户先看到一堆旧字段。
+    final autoCompactPolicy = _autoCompactPolicyValue();
+    final compactionOutputPolicy = _compactionOutputPolicyValue();
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -130,15 +138,47 @@ class _ContextSettingsPanelState extends State<ContextSettingsPanel> {
               ),
               const SizedBox(height: 12),
               SettingsLabeledTextField(
-                label: '预留输出 token',
+                label: '预留输出额度（token）',
                 controller: _reservedOutputTokensController,
                 keyboardType: TextInputType.number,
               ),
               const SizedBox(height: 12),
-              SettingsLabeledTextField(
+              SettingsLabeledDropdownField<String>(
                 label: '自动压缩策略',
-                controller: _autoCompactPolicyController,
-                hintText: 'disabled / warning / warning_and_critical',
+                value: autoCompactPolicy,
+                options: const [
+                  SettingsDropdownOption(
+                    value: 'disabled',
+                    label: '关闭自动压缩',
+                  ),
+                  SettingsDropdownOption(
+                    value: 'warning',
+                    label: '仅在接近上限时压缩',
+                  ),
+                  SettingsDropdownOption(
+                    value: 'warning_and_critical',
+                    label: '在接近上限或到达临界时压缩',
+                  ),
+                ],
+                onChanged: (value) {
+                  if (value == null) {
+                    return;
+                  }
+                  setState(() {
+                    _autoCompactPolicyController.text = value;
+                  });
+                },
+              ),
+              const SizedBox(height: 12),
+              SettingsSwitchRow(
+                label: '普通会话草稿保护',
+                note: '当模型没有走正式交付工具时，只把结果暂存为当前文档草稿，不直接写入正式项目文件。',
+                value: _draftFallbackProtectionEnabled,
+                onChanged: (value) {
+                  setState(() {
+                    _draftFallbackProtectionEnabled = value;
+                  });
+                },
               ),
               const SizedBox(height: 12),
               Row(
@@ -148,11 +188,11 @@ class _ContextSettingsPanelState extends State<ContextSettingsPanel> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: const [
                         Text(
-                          '优先 exact count',
+                          '优先精确计数',
                           style: TextStyle(fontWeight: FontWeight.w700),
                         ),
                         SizedBox(height: 4),
-                        Text('当 provider 可返回精确 token 时优先采用。'),
+                        Text('当提供方可返回精确 token 时优先采用。'),
                       ],
                     ),
                   ),
@@ -167,11 +207,31 @@ class _ContextSettingsPanelState extends State<ContextSettingsPanel> {
                 ],
               ),
               const SizedBox(height: 12),
-              SettingsLabeledTextField(
-                label: '压缩输出策略',
-                controller: _compactionOutputPolicyController,
-                hintText:
-                    'structured_bullets / balanced_bullets / detailed_bullets',
+              SettingsLabeledDropdownField<String>(
+                label: '压缩输出样式',
+                value: compactionOutputPolicy,
+                options: const [
+                  SettingsDropdownOption(
+                    value: 'structured_bullets',
+                    label: '结构化条目',
+                  ),
+                  SettingsDropdownOption(
+                    value: 'balanced_bullets',
+                    label: '均衡概览',
+                  ),
+                  SettingsDropdownOption(
+                    value: 'detailed_bullets',
+                    label: '详细展开',
+                  ),
+                ],
+                onChanged: (value) {
+                  if (value == null) {
+                    return;
+                  }
+                  setState(() {
+                    _compactionOutputPolicyController.text = value;
+                  });
+                },
               ),
             ],
           ),
@@ -199,7 +259,7 @@ class _ContextSettingsPanelState extends State<ContextSettingsPanel> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          '高级兼容桥',
+                          '历史上下文参数',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
@@ -207,7 +267,7 @@ class _ContextSettingsPanelState extends State<ContextSettingsPanel> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '保留旧字符与文件包字段，供旧项目和迁移桥继续读取。',
+                          '保留旧字符字段，供旧项目迁移和高级调整继续读取。',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ],
@@ -226,19 +286,18 @@ class _ContextSettingsPanelState extends State<ContextSettingsPanel> {
         if (_isCompatBridgeExpanded) ...[
           const SizedBox(height: 12),
           SettingsFormSection(
-            title: '旧版上下文字段',
-            description:
-                '这些字段仍会被保存，但普通 token 压力逻辑已经不再以它们为主。',
+            title: '历史上下文字段',
+            description: '这些字段仍会被保存，但普通 token 压力逻辑已经不再以它们为主。',
             child: Column(
               children: [
                 SettingsLabeledTextField(
-                  label: '压缩阈值百分比（兼容桥）',
+                  label: '压缩阈值（%）',
                   controller: _compressionThresholdController,
                   keyboardType: TextInputType.number,
                 ),
                 const SizedBox(height: 12),
                 SettingsLabeledTextField(
-                  label: '上下文包预算百分比',
+                  label: '上下文预算（%）',
                   controller: _budgetController,
                   keyboardType: TextInputType.number,
                 ),
@@ -256,7 +315,7 @@ class _ContextSettingsPanelState extends State<ContextSettingsPanel> {
                 ),
                 const SizedBox(height: 12),
                 SettingsLabeledTextField(
-                  label: '预留输出字符',
+                  label: '预留输出额度（字符）',
                   controller: _reservedOutputCharsController,
                   keyboardType: TextInputType.number,
                 ),
@@ -289,6 +348,8 @@ class _ContextSettingsPanelState extends State<ContextSettingsPanel> {
                     _preferExactCount,
                 ContextSettingsContractService.compactionOutputPolicyKey:
                     _compactionOutputPolicyController.text.trim(),
+                AppSettings.draftFallbackProtectionConfigKey:
+                    _draftFallbackProtectionEnabled,
                 ContextSettingsContractService.compressionThresholdPercentKey:
                     _compressionThresholdController.text.trim(),
                 ContextSettingsContractService.contextPackBudgetPercentKey:
@@ -326,14 +387,18 @@ class _ContextSettingsPanelState extends State<ContextSettingsPanel> {
     _reservedOutputTokensController.text =
         normalized[ContextSettingsContractService.reservedOutputTokensKey]
             .toString();
-    _autoCompactPolicyController.text =
-        normalized[ContextSettingsContractService.autoCompactPolicyKey]
-            .toString();
     _preferExactCount =
         normalized[ContextSettingsContractService.preferExactCountKey] as bool;
+    _draftFallbackProtectionEnabled = widget.draftFallbackProtectionEnabled;
+    _autoCompactPolicyController.text = _stringValue(
+      normalized[ContextSettingsContractService.autoCompactPolicyKey],
+      'warning_and_critical',
+    );
     _compactionOutputPolicyController.text =
-        normalized[ContextSettingsContractService.compactionOutputPolicyKey]
-            .toString();
+        _stringValue(
+          normalized[ContextSettingsContractService.compactionOutputPolicyKey],
+          'structured_bullets',
+        );
     _compressionThresholdController.text =
         normalized[ContextSettingsContractService
                 .compressionThresholdPercentKey]
@@ -373,5 +438,43 @@ class _ContextSettingsPanelState extends State<ContextSettingsPanel> {
         ? ratioValue.toDouble()
         : double.tryParse(ratioValue?.toString().trim() ?? '') ?? 0.8;
     return (ratio * 100).round().toString();
+  }
+
+  String _stringValue(Object? value, String fallback) {
+    // 中文注释: 下拉控件只接受稳定枚举值，遇到空值或脏值时回退到默认选项。
+    final text = value?.toString().trim() ?? '';
+    return text.isEmpty ? fallback : text;
+  }
+
+  String _autoCompactPolicyValue() {
+    // 中文注释: 自动压缩策略面向用户显示为自然中文选项，但保存时仍保持原始策略键不变。
+    final value = _stringValue(
+      _autoCompactPolicyController.text,
+      'warning_and_critical',
+    );
+    switch (value) {
+      case 'disabled':
+      case 'warning':
+      case 'warning_and_critical':
+        return value;
+      default:
+        return 'warning_and_critical';
+    }
+  }
+
+  String _compactionOutputPolicyValue() {
+    // 中文注释: 压缩输出样式采用固定枚举映射，避免用户直接看到内部策略键。
+    final value = _stringValue(
+      _compactionOutputPolicyController.text,
+      'structured_bullets',
+    );
+    switch (value) {
+      case 'structured_bullets':
+      case 'balanced_bullets':
+      case 'detailed_bullets':
+        return value;
+      default:
+        return 'structured_bullets';
+    }
   }
 }

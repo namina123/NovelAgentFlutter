@@ -124,6 +124,26 @@ void main() {
       );
     });
 
+    test('keeps stopped sessions in a visible closed status', () {
+      // 中文注释: stopped 需要变成明确的公开状态，后续 CLI stop 命令才能把会话收束得可见可查。
+      final session = <String, Object?>{
+        'id': 'stopped-session',
+        'mode': SessionRecordConstants.modeContinueWriting,
+        'workflow_stage': 'stopped',
+        'working_context_messages': <Object?>[
+          <String, Object?>{'role': 'user', 'content': '最后一轮正文'},
+        ],
+      };
+
+      final normalized = normalizer.normalizeSessionRecord(
+        session,
+        defaultThresholdChars: 24000,
+      );
+
+      expect(normalized['workflow_stage'], 'stopped');
+      expect(normalized['public_status'], '已停止');
+    });
+
     test('keeps an explicitly empty working context empty', () {
       // 中文注释: 这条回归确保 clearWorkingContext 后的显式空工作窗口不会又回退成 transcript。
       final session = <String, Object?>{

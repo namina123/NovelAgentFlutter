@@ -142,7 +142,7 @@ void main() {
       expect(find.text('Base URL'), findsNothing);
       expect(find.text('参数支持'), findsNothing);
 
-      expect(find.text('兼容上下文长度'), findsNothing);
+      expect(find.text('上下文窗口长度'), findsNothing);
       expect(find.text('Top K'), findsNothing);
       expect(find.text('添加高级参数'), findsNothing);
       expect(find.text('other-provider-model'), findsNothing);
@@ -157,7 +157,7 @@ void main() {
       await tester.tap(find.text('展开高级项'));
       await tester.pumpAndSettle();
 
-      expect(find.text('兼容上下文长度'), findsOneWidget);
+      expect(find.text('上下文窗口长度'), findsOneWidget);
       expect(find.text('应用上下文长度'), findsOneWidget);
       expect(find.text('Top K'), findsOneWidget);
       expect(find.text('添加高级参数'), findsOneWidget);

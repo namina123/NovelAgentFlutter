@@ -11,4 +11,5 @@ typedef HostAwareGenerateDraftUseCaseFactory =
       ProviderEndpointSettings provider,
       JsonMap networkSettings, {
       HostInformationPermissionContext? hostInformationPermissionContext,
+      HostToolPermissionContext? hostToolPermissionContext,
     });

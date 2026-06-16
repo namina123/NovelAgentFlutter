@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
@@ -25,8 +26,11 @@ import '../services/project_import_workspace_command_view_data_service.dart';
 import '../services/project_long_task_summary_view_data_service.dart';
 import '../services/project_subtitle_view_data_service.dart';
 import '../services/project_type_transition_workspace_command_view_data_service.dart';
+import '../services/workbench_document_identity_service.dart';
+import '../services/workbench_draft_recovery_snapshot_service.dart';
 import '../services/workspace_command_default_target_service.dart';
 import '../services/workspace_information_projection_service.dart';
+import '../services/workspace_primary_document_selection_service.dart';
 import '../services/workspace_resource_display_service.dart';
 
 typedef WorkbenchProjectLongTaskDetailLoader =
@@ -100,6 +104,9 @@ class WorkbenchWorkspaceController
     ProjectImportExecutionService? projectImportExecutionService,
     WorkspaceInformationProjectionService?
     workspaceInformationProjectionService,
+    WorkbenchDocumentIdentityService? workbenchDocumentIdentityService,
+    WorkbenchDraftRecoverySnapshotService?
+    workbenchDraftRecoverySnapshotService,
     ProjectPendingResearchActionService? pendingResearchActionService,
     WorkbenchProjectLongTaskDetailLoader? projectLongTaskDetailLoader,
   }) : _loadProjectWorkspaceUseCase = loadProjectWorkspaceUseCase,
@@ -139,6 +146,7 @@ class WorkbenchWorkspaceController
        _showCurrentAgentExpressionConstraints =
            showCurrentAgentExpressionConstraints,
        _announce = announce,
+       _entryAvailabilityPolicyService = const EntryAvailabilityPolicyService(),
        _projectSubtitleViewDataService =
            projectSubtitleViewDataService ?? ProjectSubtitleViewDataService(),
        _projectLongTaskSummaryViewDataService =
@@ -165,6 +173,12 @@ class WorkbenchWorkspaceController
        _workspaceInformationProjectionService =
            workspaceInformationProjectionService ??
            const WorkspaceInformationProjectionService(),
+       _workbenchDocumentIdentityService =
+           workbenchDocumentIdentityService ??
+           const WorkbenchDocumentIdentityService(),
+       _workbenchDraftRecoverySnapshotService =
+           workbenchDraftRecoverySnapshotService ??
+           const WorkbenchDraftRecoverySnapshotService(),
        _pendingResearchActionService = pendingResearchActionService,
        _projectLongTaskDetailLoader = projectLongTaskDetailLoader;
 
@@ -209,6 +223,7 @@ class WorkbenchWorkspaceController
   final Future<void> Function(String agentId)
   _showCurrentAgentExpressionConstraints;
   final void Function(String message) _announce;
+  final EntryAvailabilityPolicyService _entryAvailabilityPolicyService;
   final ProjectSubtitleViewDataService _projectSubtitleViewDataService;
   final ProjectLongTaskSummaryViewDataService
   _projectLongTaskSummaryViewDataService;
@@ -222,10 +237,16 @@ class WorkbenchWorkspaceController
   final ProjectImportExecutionService _projectImportExecutionService;
   final WorkspaceInformationProjectionService
   _workspaceInformationProjectionService;
+  final WorkbenchDocumentIdentityService _workbenchDocumentIdentityService;
+  final WorkbenchDraftRecoverySnapshotService
+  _workbenchDraftRecoverySnapshotService;
   final ProjectPendingResearchActionService? _pendingResearchActionService;
   final WorkbenchProjectLongTaskDetailLoader? _projectLongTaskDetailLoader;
   final WorkspaceResourceDisplayService _workspaceResourceDisplayService =
       const WorkspaceResourceDisplayService();
+  final WorkspacePrimaryDocumentSelectionService
+  _workspacePrimaryDocumentSelectionService =
+      const WorkspacePrimaryDocumentSelectionService();
   final ProjectTypeTransitionPreparationService
   _projectTypeTransitionPreparationService =
       const ProjectTypeTransitionPreparationService();
@@ -280,6 +301,26 @@ class WorkbenchWorkspaceController
     await _saveCurrentDocument();
   }
 
+  bool stageGeneratedDraftOnActiveDocument(String content) {
+    // 中文注释: 普通会话 fallback 只允许把结果暂存成当前文档的未保存草稿，不直接冒充正式项目产物落盘。
+    final active = _activeOpenDocument();
+    final trimmedContent = content.trim();
+    if (active == null || trimmedContent.isEmpty) {
+      return false;
+    }
+    _replaceOpenDocument(
+      active.copyWith(
+        content: content,
+        isDirty: true,
+        isRendered: false,
+        isBufferedDraft: true,
+      ),
+    );
+    _mutateWorkbench((current) => applyWorkbenchState(current));
+    _persistWorkbenchSnapshot();
+    return true;
+  }
+
   WorkbenchViewData applyWorkbenchState(WorkbenchViewData base) {
     // 中文注释: 工作台文档与资源树投影统一由工作区控制器生成，避免其他 feature 直接读内部状态。
     final active = _activeOpenDocument();
@@ -297,6 +338,12 @@ class WorkbenchWorkspaceController
               id: document.id,
               title: document.title,
               relativePath: document.relativePath,
+              tooltip: _workbenchDocumentIdentityService.tooltipLabel(
+                relativePath: document.relativePath,
+                title: document.title,
+                isDirty: document.isDirty,
+                isBufferedDraft: document.isBufferedDraft,
+              ),
               isActive: document.id == state.activeOpenDocumentId,
               isDirty: document.isDirty,
             ),
@@ -306,6 +353,7 @@ class WorkbenchWorkspaceController
       activeDocumentPath: active?.relativePath ?? '',
       activeDocumentBody: active?.content ?? '',
       activeDocumentDirty: active?.isDirty ?? false,
+      activeDocumentBufferedDraft: active?.isBufferedDraft ?? false,
       activeDocumentCanRender: _canRender(active?.relativePath ?? ''),
       isActiveDocumentRendered: active?.isRendered ?? false,
     );
@@ -372,6 +420,9 @@ class WorkbenchWorkspaceController
       ),
       projectPath: snapshot.project.rootPath,
       projectTypeId: snapshot.project.projectType,
+      projectTypeTransitionAvailability: _projectTypeTransitionAvailabilityFor(
+        snapshot.project,
+      ),
       toolCoreStatus: '',
       modelOptions: _readSettings() == null
           ? _readWorkbench().modelOptions
@@ -390,6 +441,7 @@ class WorkbenchWorkspaceController
       activeDocumentPath: '',
       activeDocumentBody: '',
       activeDocumentDirty: false,
+      activeDocumentBufferedDraft: false,
       projectLauncher: null,
       projectAgentGroupWorkspace: null,
       workspaceCommand: null,
@@ -527,6 +579,7 @@ class WorkbenchWorkspaceController
           activeDocumentPath: '',
           activeDocumentBody: '',
           activeDocumentDirty: false,
+          activeDocumentBufferedDraft: false,
           generationStatus: status,
           contextSummary: '尚未打开项目',
           toolCoreStatus: '',
@@ -659,6 +712,9 @@ class WorkbenchWorkspaceController
         title: title,
         relativePath: relativePath,
         content: content,
+        isDirty: false,
+        isRendered: false,
+        isBufferedDraft: false,
       );
     } else {
       nextDocuments.add(
@@ -717,29 +773,54 @@ class WorkbenchWorkspaceController
       ),
     );
     final activeDocumentPath = _stringValue(snapshot['active_document_path']);
-    if (activeDocumentPath.trim().isEmpty) {
+    final parsedRecoveries = _workbenchDraftRecoverySnapshotService
+        .parseRecoveries(snapshot['draft_recoveries']);
+    for (final recovery in parsedRecoveries) {
+      final relativePath = ValueReaders.stringValue(recovery['relative_path']);
+      if (relativePath == activeDocumentPath) {
+        continue;
+      }
+      _restoreRecoveredDocument(recovery);
+    }
+    if (_shouldRestoreWorkbenchDocument(activeDocumentPath)) {
+      final activeRecovery = _workbenchDraftRecoverySnapshotService
+          .recoveryForPath(parsedRecoveries, activeDocumentPath);
+      if (activeRecovery != null) {
+        _restoreRecoveredDocument(activeRecovery);
+      } else {
+        final content = await _readProjectFileUseCase.execute(
+          project,
+          activeDocumentPath,
+        );
+        if (content == null) {
+          return;
+        }
+        openOrActivateDocument(
+          relativePath: activeDocumentPath,
+          title: _displayNameOf(activeDocumentPath),
+          content: content,
+        );
+      }
+    } else if (parsedRecoveries.isNotEmpty) {
+      _restoreRecoveredDocument(parsedRecoveries.last);
+    } else {
       return;
     }
-    final content = await _readProjectFileUseCase.execute(
-      project,
-      activeDocumentPath,
-    );
-    if (content == null) {
-      return;
-    }
-    openOrActivateDocument(
-      relativePath: activeDocumentPath,
-      title: _displayNameOf(activeDocumentPath),
-      content: content,
-    );
+    final restoredActivePath = _readWorkbench().activeDocumentPath.trim();
+    final recoveredCount = _readProjectState().openDocuments
+        .where((document) => document.isDirty)
+        .length;
     _mutateWorkbench(
       (current) => applyWorkbenchState(
         current.copyWith(
           resourceEntries: _markResourceSelection(
             _resourceEntriesFrom(_readProjectState().resourceSnapshotEntries),
-            selectedId: activeDocumentPath,
+            selectedId: restoredActivePath,
           ),
           informationViewData: _latestInformationViewData,
+          generationStatus: recoveredCount > 0
+              ? '已恢复 $recoveredCount 个未正式保存的草稿。'
+              : current.generationStatus,
         ),
       ),
     );
@@ -831,6 +912,10 @@ class WorkbenchWorkspaceController
     );
     if (targetProjectTypeId.trim().isEmpty) {
       _announce('当前项目类型不支持转换。');
+      return;
+    }
+    final availability = _projectTypeTransitionAvailabilityFor(project);
+    if (availability.isHidden) {
       return;
     }
     final runtimeBaselineId = project.runtimeBaselineId.trim();
@@ -931,7 +1016,7 @@ class WorkbenchWorkspaceController
   @override
   void onCreateChapterRequested() {
     // 中文注释: 当前章节创建仍走自然语言发送链，这里只给统一提示，不偷偷生成空稿。
-    _announce('直接在右侧输入章节需求并发送，当前版本会自动保存到 chapters/。');
+    _announce('直接在右侧输入章节需求并发送；正式章节需由工具链提交，普通回复只会暂存为当前文档草稿。');
   }
 
   @override
@@ -1253,6 +1338,7 @@ class WorkbenchWorkspaceController
             relativePath: savedPath,
             content: _readWorkbench().activeDocumentBody,
             isDirty: false,
+            isBufferedDraft: false,
           ),
         );
         _writeProjectState(
@@ -1339,7 +1425,6 @@ class WorkbenchWorkspaceController
     }
     final executor = _executeProjectTypeTransitionUseCase;
     if (executor == null) {
-      _announce('当前构建未接入项目类型转换执行链。');
       return;
     }
     try {
@@ -1491,8 +1576,7 @@ class WorkbenchWorkspaceController
           analysisAgentGroupId: policy.analysisAgentGroupId,
         ),
       );
-      final selectedId =
-          result.autoDeconstructionPreviewPath.trim().isNotEmpty
+      final selectedId = result.autoDeconstructionPreviewPath.trim().isNotEmpty
           ? result.autoDeconstructionPreviewPath.trim()
           : result.smartAnalysisReportPath.trim();
       if (selectedId.isNotEmpty) {
@@ -1542,7 +1626,7 @@ class WorkbenchWorkspaceController
     if (sourcePaths.isEmpty) {
       return;
     }
-      _showWorkspaceCommand(
+    _showWorkspaceCommand(
       _projectImportWorkspaceCommandViewDataService.build(
         projectType: project.projectType,
         sourcePaths: sourcePaths,
@@ -1623,6 +1707,22 @@ class WorkbenchWorkspaceController
     }
   }
 
+  EntryAvailabilityDecision _projectTypeTransitionAvailabilityFor(
+    ProjectDescriptor project,
+  ) {
+    // 中文注释: 项目类型转换入口只在宿主接线且项目类型确实可互转时保留为正式入口。
+    return _entryAvailabilityPolicyService.projectTypeTransition(
+      hostWired: _executeProjectTypeTransitionUseCase != null,
+      entryRelevant: _projectTypeTransitionTargetId(
+        project.projectType,
+      ).trim().isNotEmpty,
+      ready: true,
+      diagnosticReason: _executeProjectTypeTransitionUseCase == null
+          ? 'workspace.transition_project_type.host_unwired'
+          : 'workspace.transition_project_type.available',
+    );
+  }
+
   void _showWorkspaceCommand(WorkspaceCommandViewData command) {
     // 中文注释: 工作区命令弹层通过统一入口挂到工作台视图，避免每个按钮自己持有表单状态。
     _mutateWorkbench((current) => current.copyWith(workspaceCommand: command));
@@ -1688,14 +1788,19 @@ class WorkbenchWorkspaceController
     }
     _writeProjectState(state.copyWith(isSavingWorkbenchSnapshot: true));
     try {
+      final persistedActiveDocumentPath = _persistableWorkbenchDocumentPath(
+        _readWorkbench().activeDocumentPath,
+      );
       final payload = <String, Object?>{
         'project_root_path': project.rootPath,
-        'active_document_path': _readWorkbench().activeDocumentPath,
+        'active_document_path': persistedActiveDocumentPath,
         'expanded_directories': state.expandedResourceDirectories.toList(
           growable: false,
         ),
         'selected_conversation_agent_id':
             _readWorkbench().agentSelector.currentAgentId,
+        'draft_recoveries': _workbenchDraftRecoverySnapshotService
+            .captureRecoveries(state.openDocuments),
       };
       final currentSnapshot = _mapValue(
         settings.extraSettings['workbench_state'],
@@ -1709,9 +1814,13 @@ class WorkbenchWorkspaceController
               state.expandedResourceDirectories.toList(growable: false),
             ) &&
             _stringValue(currentSnapshot['active_document_path']) ==
-                _readWorkbench().activeDocumentPath &&
+                persistedActiveDocumentPath &&
             _stringValue(currentSnapshot['selected_conversation_agent_id']) ==
-                _readWorkbench().agentSelector.currentAgentId) {
+                _readWorkbench().agentSelector.currentAgentId &&
+            _jsonEquals(
+              currentSnapshot['draft_recoveries'],
+              payload['draft_recoveries'],
+            )) {
           return;
         }
       }
@@ -2001,7 +2110,7 @@ class WorkbenchWorkspaceController
   }
 
   String _normalizeRelativePath(String value) {
-    return value.trim().replaceAll('\\', '/');
+    return ProjectSupportDocumentCatalog.canonicalizePath(value);
   }
 
   void _expandResourceAncestors(String relativePath) {
@@ -2067,27 +2176,8 @@ class WorkbenchWorkspaceController
   }
 
   String _firstOpenablePath(List<JsonMap> entries) {
-    // 中文注释: 首次加载项目时只找最合适的可读文本文件，不在这里做重型策略判断。
-    for (final candidate
-        in _workspaceResourceDisplayService.likelyOutlineDocumentCandidates()) {
-      for (final entry in entries) {
-        if (_stringValue(entry['relative_path']) == candidate &&
-            entry['is_dir'] != true) {
-          return candidate;
-        }
-      }
-    }
-    for (final entry in entries) {
-      final relativePath = _stringValue(entry['relative_path']);
-      if (entry['is_dir'] == true ||
-          _workspaceResourceDisplayService.shouldHidePath(relativePath)) {
-        continue;
-      }
-      if (_canReadAsText(relativePath)) {
-        return relativePath;
-      }
-    }
-    return '';
+    // 中文注释: 首次加载优先打开正式前提和总纲，再退回其他文本，避免 support overview 或随机文件抢占主入口。
+    return _workspacePrimaryDocumentSelectionService.select(entries);
   }
 
   OpenDocumentState? _activeOpenDocument() {
@@ -2114,6 +2204,39 @@ class WorkbenchWorkspaceController
     _writeProjectState(state.copyWith(openDocuments: nextDocuments));
   }
 
+  void _restoreRecoveredDocument(JsonMap recovery) {
+    final relativePath = _normalizeRelativePath(
+      ValueReaders.stringValue(recovery['relative_path']),
+    );
+    final recoveryContent = ValueReaders.stringValue(recovery['content']);
+    if (relativePath.isEmpty || recoveryContent.trim().isEmpty) {
+      return;
+    }
+    final title = ValueReaders.stringValue(
+      recovery['title'],
+      _displayNameOf(relativePath),
+    );
+    openOrActivateDocument(
+      relativePath: relativePath,
+      title: title.isEmpty ? _displayNameOf(relativePath) : title,
+      content: recoveryContent,
+    );
+    final active = _activeOpenDocument();
+    if (active == null ||
+        _normalizePathForCompare(active.relativePath) !=
+            _normalizePathForCompare(relativePath)) {
+      return;
+    }
+    _replaceOpenDocument(
+      active.copyWith(
+        content: recoveryContent,
+        isDirty: true,
+        isRendered: false,
+        isBufferedDraft: true,
+      ),
+    );
+  }
+
   bool _canReadAsText(String relativePath) {
     final lower = relativePath.toLowerCase();
     return lower.endsWith('.md') ||
@@ -2125,6 +2248,22 @@ class WorkbenchWorkspaceController
 
   bool _canRender(String relativePath) {
     return relativePath.toLowerCase().endsWith('.md');
+  }
+
+  bool _shouldRestoreWorkbenchDocument(String relativePath) {
+    final normalized = _normalizeRelativePath(relativePath);
+    if (normalized.isEmpty) {
+      return false;
+    }
+    if (_workspaceResourceDisplayService.shouldHidePath(normalized)) {
+      return false;
+    }
+    return _canReadAsText(normalized);
+  }
+
+  String _persistableWorkbenchDocumentPath(String relativePath) {
+    final normalized = _normalizeRelativePath(relativePath);
+    return _shouldRestoreWorkbenchDocument(normalized) ? normalized : '';
   }
 
   String _joinedProjectPath(
@@ -2167,6 +2306,10 @@ class WorkbenchWorkspaceController
 
   String _normalizePathForCompare(String value) {
     return value.trim().replaceAll('\\', '/').toLowerCase();
+  }
+
+  bool _jsonEquals(Object? left, Object? right) {
+    return jsonEncode(left) == jsonEncode(right);
   }
 
   String _stringValue(Object? value, [String fallback = '']) {

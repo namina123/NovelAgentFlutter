@@ -26,10 +26,12 @@ class ProjectToolDispatcher implements ToolExecutionPort {
   ProjectToolDispatcher({
     required ProjectToolHostPort hostPort,
     HostInformationPermissionContext? hostInformationPermissionContext,
+    HostToolPermissionContext? hostToolPermissionContext,
     ProjectInformationDomainToolExecutor? informationDomainToolExecutor,
     LocalSkillPackageCatalog? skillPackageCatalog,
     LocalSkillGroupCatalog? skillGroupCatalog,
     ToolCallNormalizerService? toolCallNormalizerService,
+    HostToolPermissionPolicyService? hostToolPermissionPolicyService,
     ProjectToolPathPolicy? pathPolicy,
     ProjectToolResultFactory? resultFactory,
     ProjectTreeOrderService? treeOrderService,
@@ -115,7 +117,12 @@ class ProjectToolDispatcher implements ToolExecutionPort {
          resultFactory: resultFactory,
          runtimeLoadoutService: agentSkillRuntimeLoadoutService,
        ),
+       _entryAvailabilityPolicyService = const EntryAvailabilityPolicyService(),
        _hostInformationPermissionContext = hostInformationPermissionContext,
+       _hostToolPermissionContext = hostToolPermissionContext,
+       _hostToolPermissionPolicyService =
+           hostToolPermissionPolicyService ??
+           const HostToolPermissionPolicyService(),
        _narrativeDomainToolCatalog = NarrativeDomainToolCatalog(),
        _narrativeDomainDispatcher = _buildNarrativeDomainDispatcher(),
        _informationDomainDispatcher = _buildInformationDomainDispatcher(),
@@ -152,7 +159,10 @@ class ProjectToolDispatcher implements ToolExecutionPort {
   final ProjectManagementToolExecutor _managementToolExecutor;
   final ProjectLongTaskToolExecutor? _longTaskToolExecutor;
   final ProjectAgentSkillToolExecutor _agentSkillToolExecutor;
+  final EntryAvailabilityPolicyService _entryAvailabilityPolicyService;
   final HostInformationPermissionContext? _hostInformationPermissionContext;
+  final HostToolPermissionContext? _hostToolPermissionContext;
+  final HostToolPermissionPolicyService _hostToolPermissionPolicyService;
   final NarrativeDomainToolCatalog _narrativeDomainToolCatalog;
   final NarrativeDomainToolDispatcher _narrativeDomainDispatcher;
   final NarrativeDomainToolDispatcher _informationDomainDispatcher;
@@ -162,13 +172,25 @@ class ProjectToolDispatcher implements ToolExecutionPort {
   ProjectToolDispatcher scopedWithHostInformationPermissionContext(
     HostInformationPermissionContext? hostInformationPermissionContext,
   ) {
+    return scopedWithHostPermissionContexts(
+      hostInformationPermissionContext: hostInformationPermissionContext,
+      hostToolPermissionContext: _hostToolPermissionContext,
+    );
+  }
+
+  ProjectToolDispatcher scopedWithHostPermissionContexts({
+    HostInformationPermissionContext? hostInformationPermissionContext,
+    HostToolPermissionContext? hostToolPermissionContext,
+  }) {
     return ProjectToolDispatcher(
       hostPort: _hostPort,
       hostInformationPermissionContext: hostInformationPermissionContext,
+      hostToolPermissionContext: hostToolPermissionContext,
       informationDomainToolExecutor: _informationDomainToolExecutor,
       skillPackageCatalog: _skillPackageCatalog,
       skillGroupCatalog: _skillGroupCatalog,
       toolCallNormalizerService: _toolCallNormalizerService,
+      hostToolPermissionPolicyService: _hostToolPermissionPolicyService,
       pathPolicy: _pathPolicy,
       resultFactory: _resultFactory,
       treeOrderService: _treeOrderService,
@@ -251,6 +273,13 @@ class ProjectToolDispatcher implements ToolExecutionPort {
       toolName: toolName,
       arguments: ValueReaders.mapValue(normalized['arguments']),
     );
+    final permissionRejection = _hostToolPermissionRejection(
+      toolName: toolName,
+      arguments: arguments,
+    );
+    if (permissionRejection != null) {
+      return _annotateToolResult(project, toolName, permissionRejection);
+    }
     if (_domainToolNames.contains(toolName)) {
       return _executeNarrativeDomainTool(
         project: project,
@@ -353,7 +382,18 @@ class ProjectToolDispatcher implements ToolExecutionPort {
         return _presentUserOptions(arguments);
       case 'start_long_task_run':
         if (_longTaskToolExecutor == null) {
-          return _resultFactory.notExecuted('当前宿主尚未接入长任务启动执行器。');
+          final availability = _entryAvailabilityPolicyService.longTaskStart(
+            hostWired: false,
+            entryRelevant: true,
+            ready: false,
+            diagnosticReason: 'long_task_start.executor_unwired',
+          );
+          return _resultFactory.notExecuted(
+            '当前长任务启动入口暂不可用。',
+            data: <String, Object?>{
+              'entry_availability': availability.toJson(),
+            },
+          );
         }
         return _longTaskToolExecutor.startLongTaskRun(project, arguments);
       case 'set_agent_tasks':
@@ -372,6 +412,43 @@ class ProjectToolDispatcher implements ToolExecutionPort {
         return _managementToolExecutor.requestGatewayTool(project, arguments);
       default:
         return _resultFactory.error('Unknown project tool: $toolName');
+    }
+  }
+
+  JsonMap? _hostToolPermissionRejection({
+    required String toolName,
+    required JsonMap arguments,
+  }) {
+    final decision = _hostToolPermissionPolicyService.decide(
+      toolName: toolName,
+      arguments: arguments,
+      hostPermissionContext: _hostToolPermissionContext,
+    );
+    switch (decision.disposition) {
+      case HostToolPermissionDispositions.accepted:
+        return null;
+      case HostToolPermissionDispositions.needsUserConfirmation:
+        return _resultFactory.notExecuted(
+          decision.reason.isEmpty ? '当前操作需要用户确认。' : decision.reason,
+          data: <String, Object?>{
+            'waiting_for_user_choice': true,
+            'question': _permissionQuestion(toolName, decision),
+            'options': _permissionOptions(toolName, decision),
+            'permission_decision': decision.toJson(),
+            'permission_capability': decision.requiredCapability,
+            'permission_context': _hostToolPermissionContext?.toJson(),
+          },
+        );
+      case HostToolPermissionDispositions.blocked:
+      default:
+        return _resultFactory.notExecuted(
+          decision.reason.isEmpty ? '当前操作被宿主权限策略阻止。' : decision.reason,
+          data: <String, Object?>{
+            'permission_decision': decision.toJson(),
+            'permission_capability': decision.requiredCapability,
+            'permission_context': _hostToolPermissionContext?.toJson(),
+          },
+        );
     }
   }
 
@@ -862,6 +939,42 @@ class ProjectToolDispatcher implements ToolExecutionPort {
         'waiting_for_user_choice': true,
       },
     );
+  }
+
+  String _permissionQuestion(
+    String toolName,
+    HostToolPermissionDecision decision,
+  ) {
+    final capability = decision.requiredCapability.trim();
+    if (capability.isEmpty) {
+      return '当前操作需要你的确认，是否继续？';
+    }
+    return '当前操作请求使用宿主权限 [$capability]：$toolName。是否允许本轮继续？';
+  }
+
+  List<JsonMap> _permissionOptions(
+    String toolName,
+    HostToolPermissionDecision decision,
+  ) {
+    final capability = decision.requiredCapability.trim();
+    final capabilityNote = capability.isEmpty ? '该权限操作' : '$capability 权限';
+    return <JsonMap>[
+      <String, Object?>{
+        'id': 'allow_once',
+        'label': '允许这次',
+        'title': '允许这次',
+        'description': '允许本轮继续，并让智能体重试刚才的受限操作。',
+        'prompt':
+            '允许本轮继续使用 $capabilityNote 执行工具 $toolName，请在保留当前目标的前提下继续刚才的步骤。',
+      },
+      <String, Object?>{
+        'id': 'deny_and_continue',
+        'label': '保持禁止',
+        'title': '保持禁止',
+        'description': '不要放行该权限，要求智能体换一种不依赖此能力的方式继续。',
+        'prompt': '不要放行这次 $capabilityNote 请求，请换一种不依赖工具 $toolName 的方式继续当前任务。',
+      },
+    ];
   }
 
   List<JsonMap> _normalizedUserOptions(JsonMap arguments) {

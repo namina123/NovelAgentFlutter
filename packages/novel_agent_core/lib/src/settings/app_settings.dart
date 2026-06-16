@@ -2,12 +2,17 @@ import '../common/json_types.dart';
 import 'provider_endpoint_settings.dart';
 
 class AppSettings {
+  static const String draftFallbackProtectionConfigKey =
+      'draft_fallback_protection';
+  static const String legacyAutoSaveDraftsConfigKey = 'auto_save_drafts';
+
   const AppSettings({
     required this.defaultProviderId,
     required this.defaultAgentId,
     required this.defaultModelId,
     required this.defaultProjectPath,
-    required this.autoSaveDrafts,
+    bool draftFallbackProtectionEnabled = true,
+    bool? autoSaveDrafts,
     required this.providers,
     this.permissionSettings = const <String, Object?>{},
     this.toolStrategySettings = const <String, Object?>{},
@@ -15,13 +20,14 @@ class AppSettings {
     this.contextSettings = const <String, Object?>{},
     this.themeSettings = const <String, Object?>{},
     this.extraSettings = const <String, Object?>{},
-  });
+  }) : draftFallbackProtectionEnabled =
+           autoSaveDrafts ?? draftFallbackProtectionEnabled;
 
   final String defaultProviderId;
   final String defaultAgentId;
   final String defaultModelId;
   final String defaultProjectPath;
-  final bool autoSaveDrafts;
+  final bool draftFallbackProtectionEnabled;
   final List<ProviderEndpointSettings> providers;
   final JsonMap permissionSettings;
   final JsonMap toolStrategySettings;
@@ -29,6 +35,8 @@ class AppSettings {
   final JsonMap contextSettings;
   final JsonMap themeSettings;
   final JsonMap extraSettings;
+
+  bool get autoSaveDrafts => draftFallbackProtectionEnabled;
 
   ProviderEndpointSettings? defaultProvider() {
     // 中文注释: 默认 provider 解析集中放在设置模型里，避免 GUI 和 CLI 各自重复挑选逻辑。
@@ -53,6 +61,7 @@ class AppSettings {
     String? defaultAgentId,
     String? defaultModelId,
     String? defaultProjectPath,
+    bool? draftFallbackProtectionEnabled,
     bool? autoSaveDrafts,
     List<ProviderEndpointSettings>? providers,
     JsonMap? permissionSettings,
@@ -68,7 +77,10 @@ class AppSettings {
       defaultAgentId: defaultAgentId ?? this.defaultAgentId,
       defaultModelId: defaultModelId ?? this.defaultModelId,
       defaultProjectPath: defaultProjectPath ?? this.defaultProjectPath,
-      autoSaveDrafts: autoSaveDrafts ?? this.autoSaveDrafts,
+      draftFallbackProtectionEnabled:
+          autoSaveDrafts ??
+          draftFallbackProtectionEnabled ??
+          this.draftFallbackProtectionEnabled,
       providers: providers ?? this.providers,
       permissionSettings: permissionSettings ?? this.permissionSettings,
       toolStrategySettings: toolStrategySettings ?? this.toolStrategySettings,

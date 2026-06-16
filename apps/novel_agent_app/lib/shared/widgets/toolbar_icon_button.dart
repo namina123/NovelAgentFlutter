@@ -35,7 +35,7 @@ class ToolbarIconButton extends StatelessWidget {
               : _foregroundColor(colors).withValues(alpha: 0.38),
           backgroundColor: isEnabled
               ? _backgroundColor(colors)
-              : _backgroundColor(colors).withValues(alpha: 0.6),
+              : _backgroundColor(colors).withValues(alpha: 0.55),
           minimumSize: Size.square(chrome.buttonSize),
           padding: chrome.padding,
           visualDensity: dense ? VisualDensity.compact : null,
@@ -56,14 +56,14 @@ class ToolbarIconButton extends StatelessWidget {
   }
 
   Color _backgroundColor(ThemeColorTokens themeColors) {
-    // 中文注释: 工具按钮底色保持克制，但为主题、危险等动作留出语义色空间。
+    // 中文注释: 编辑器工具按钮保持近乎透明，只在 hover/selected 时靠边界和语义色区分。
     switch (tone) {
       case ToolbarIconTone.neutral:
-        return themeColors.panelBackground.withValues(alpha: 0.42);
+        return themeColors.panelBackground.withValues(alpha: 0.04);
       case ToolbarIconTone.accent:
-        return themeColors.accentSoftColor.withValues(alpha: 0.6);
+        return themeColors.accentSoftColor.withValues(alpha: 0.1);
       case ToolbarIconTone.warm:
-        return themeColors.warmColor.withValues(alpha: 0.62);
+        return themeColors.warmColor.withValues(alpha: 0.12);
     }
   }
 
@@ -80,14 +80,14 @@ class ToolbarIconButton extends StatelessWidget {
   }
 
   Color _borderColor(ThemeColorTokens themeColors) {
-    // 中文注释: 边框颜色和工具按钮语义配套，避免大面积浅色背景下按钮边界模糊。
+    // 中文注释: 边框只做轻提示，避免工具条继续像一排按钮卡片。
     switch (tone) {
       case ToolbarIconTone.neutral:
-        return themeColors.lineColor.withValues(alpha: 0.76);
+        return themeColors.lineColor.withValues(alpha: 0.18);
       case ToolbarIconTone.accent:
-        return themeColors.lineColor.withValues(alpha: 0.72);
+        return themeColors.lineColor.withValues(alpha: 0.22);
       case ToolbarIconTone.warm:
-        return themeColors.warmStrongColor.withValues(alpha: 0.58);
+        return themeColors.warmStrongColor.withValues(alpha: 0.24);
     }
   }
 }

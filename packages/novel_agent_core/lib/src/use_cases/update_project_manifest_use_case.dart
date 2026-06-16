@@ -1,6 +1,7 @@
 import '../project/project_descriptor.dart';
 import '../project/project_manifest_codec_service.dart';
 import '../project/project_storage_strategy.dart';
+import '../project/project_support_document_catalog.dart';
 import 'write_project_text_file_use_case.dart';
 
 class UpdateProjectManifestUseCase {
@@ -39,9 +40,16 @@ class UpdateProjectManifestUseCase {
     final typeLabel = _projectTypeLabel(manifest.projectType);
     await _writeProjectTextFileUseCase.execute(
       project: project,
-      relativePath: 'premise/project_brief.md',
+      relativePath: ProjectSupportDocumentCatalog.projectOverviewRelativePath,
       content:
-          '# ${manifest.title}\n\n- 项目类型：$typeLabel\n- 题材：${genre.trim()}\n- 核心设定：${premise.trim()}\n- 备注：${notes.trim()}\n',
+          '# 项目概览\n\n'
+          '> 这是系统维护的快速概览，不是正式故事前提或长期创作宪章。\n'
+          '> 题材、正式前提、风格边界和世界规则应继续沉淀到 premise/、outlines/、assets/ 下的正式文档中。\n\n'
+          '- 项目标题：${manifest.title}\n'
+          '- 项目类型：$typeLabel\n'
+          '- 题材：${genre.trim()}\n'
+          '- 当前已知核心设定：${premise.trim()}\n'
+          '- 备注：${notes.trim()}\n',
     );
   }
 

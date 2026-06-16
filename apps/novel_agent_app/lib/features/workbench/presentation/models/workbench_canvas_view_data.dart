@@ -9,6 +9,7 @@ class WorkbenchCanvasViewData {
     required this.activeDocumentPath,
     required this.activeDocumentBody,
     required this.activeDocumentDirty,
+    required this.activeDocumentBufferedDraft,
     required this.activeDocumentCanRender,
     required this.isActiveDocumentRendered,
     required this.isDocumentsWorkspaceVisible,
@@ -20,6 +21,7 @@ class WorkbenchCanvasViewData {
   final String activeDocumentPath;
   final String activeDocumentBody;
   final bool activeDocumentDirty;
+  final bool activeDocumentBufferedDraft;
   final bool activeDocumentCanRender;
   final bool isActiveDocumentRendered;
   final bool isDocumentsWorkspaceVisible;
@@ -34,6 +36,7 @@ class WorkbenchCanvasViewData {
             other.activeDocumentPath == activeDocumentPath &&
             other.activeDocumentBody == activeDocumentBody &&
             other.activeDocumentDirty == activeDocumentDirty &&
+            other.activeDocumentBufferedDraft == activeDocumentBufferedDraft &&
             other.activeDocumentCanRender == activeDocumentCanRender &&
             other.isActiveDocumentRendered == isActiveDocumentRendered &&
             other.isDocumentsWorkspaceVisible == isDocumentsWorkspaceVisible &&
@@ -47,6 +50,7 @@ class WorkbenchCanvasViewData {
     activeDocumentPath,
     activeDocumentBody,
     activeDocumentDirty,
+    activeDocumentBufferedDraft,
     activeDocumentCanRender,
     isActiveDocumentRendered,
     isDocumentsWorkspaceVisible,

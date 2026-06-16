@@ -52,12 +52,12 @@ Future<void> main(List<String> arguments) async {
         ? const <String, Object?>{'proxy_mode': 'system'}
         : localSettings.networkSettings,
     extraSettings: <String, Object?>{
-        'model_settings': <String, Object?>{
-          'provider_id': provider.id,
-          'model_id': _probeModelId,
-          'stream_mode': 'non_stream',
-          'api_mode': 'chat',
-        },
+      'model_settings': <String, Object?>{
+        'provider_id': provider.id,
+        'model_id': _probeModelId,
+        'stream_mode': 'non_stream',
+        'api_mode': 'chat',
+      },
     },
   );
 
@@ -716,11 +716,18 @@ ProjectWorkflowRuntimeService _createWorkflowRuntimeService({
       workspacePort: bundle.projectWorkspacePort,
     ),
     hostAwareGenerateDraftUseCaseFactory:
-        (provider, networkSettings, {hostInformationPermissionContext}) {
+        (
+          provider,
+          networkSettings, {
+          hostInformationPermissionContext,
+          hostToolPermissionContext,
+        }) {
           final basePort = bundle.projectToolExecutionPort;
           final scopedToolExecutionPort = basePort is ProjectToolDispatcher
-              ? basePort.scopedWithHostInformationPermissionContext(
-                  hostInformationPermissionContext,
+              ? basePort.scopedWithHostPermissionContexts(
+                  hostInformationPermissionContext:
+                      hostInformationPermissionContext,
+                  hostToolPermissionContext: hostToolPermissionContext,
                 )
               : basePort;
           return GenerateDraftUseCase(
@@ -738,6 +745,7 @@ ProjectWorkflowRuntimeService _createWorkflowRuntimeService({
               projectFileSectionService: ContextProjectFileSectionService(),
             ),
             projectPromptContract: ProjectPromptContract(),
+            hostToolPermissionContext: hostToolPermissionContext,
             hostPlatform: _currentHostPlatform(),
             loadAvailableAgents: (project) =>
                 bundle.agentPackageCatalog.loadAgentPackages(project),
@@ -782,9 +790,17 @@ GenerateDraftUseCase _createGenerateDraftUseCase({
             settings,
             source: 'gui_viewmodel_probe.ordinary_workbench_step',
           );
+  final hostToolContext = const ProjectToolPermissionSettingsResolverService()
+      .resolveFromAppSettings(
+        settings,
+        source: 'gui_viewmodel_probe.ordinary_workbench_step',
+      );
   final basePort = bundle.projectToolExecutionPort;
   final scopedToolPort = basePort is ProjectToolDispatcher
-      ? basePort.scopedWithHostInformationPermissionContext(hostContext)
+      ? basePort.scopedWithHostPermissionContexts(
+          hostInformationPermissionContext: hostContext,
+          hostToolPermissionContext: hostToolContext,
+        )
       : basePort;
   return GenerateDraftUseCase(
     projectWorkspacePort: bundle.projectWorkspacePort,
@@ -801,6 +817,7 @@ GenerateDraftUseCase _createGenerateDraftUseCase({
       projectFileSectionService: ContextProjectFileSectionService(),
     ),
     projectPromptContract: ProjectPromptContract(),
+    hostToolPermissionContext: hostToolContext,
     hostPlatform: _currentHostPlatform(),
     loadAvailableAgents: (project) =>
         bundle.agentPackageCatalog.loadAgentPackages(project),

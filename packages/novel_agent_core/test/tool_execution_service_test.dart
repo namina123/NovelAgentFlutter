@@ -312,6 +312,59 @@ void main() {
         isTrue,
       );
     });
+
+    test(
+      'blocks call_sub_agent behind host tool permission confirmation flow',
+      () async {
+        final port = _FakeToolExecutionPort(
+          resultByToolName: const <String, JsonMap>{},
+        );
+        final service = ToolExecutionService(
+          toolExecutionPort: port,
+          hostToolPermissionContext: const HostToolPermissionContext(
+            allowSubAgents: false,
+            permissionMode: HostToolPermissionModes.safe,
+            confirmationMode:
+                HostToolConfirmationModes.userConfirmationRequired,
+            source: 'tool_execution_service_test',
+          ),
+        );
+
+        final result = await service.executeRound(
+          project: const ProjectDescriptor(
+            id: 'demo',
+            name: '示例项目',
+            rootPath: 'D:/demo',
+          ),
+          assistantMessage: const <String, Object?>{
+            'role': 'assistant',
+            'content': '',
+          },
+          toolCalls: const <Object?>[
+            <String, Object?>{
+              'id': 'call_sub_1',
+              'name': 'call_sub_agent',
+              'arguments': <String, Object?>{
+                'agent_id': 'reviewer',
+                'task': '检查上一段。',
+              },
+            },
+          ],
+        );
+
+        expect(port.executedToolNames, isEmpty);
+        expect(result.waitingForUserChoice, isTrue);
+        final toolResult = ValueReaders.mapValue(
+          ValueReaders.mapValue(result.executedTools.single)['result'],
+        );
+        expect(ValueReaders.boolValue(toolResult['not_executed']), isTrue);
+        expect(
+          ValueReaders.boolValue(toolResult['waiting_for_user_choice']),
+          isTrue,
+        );
+        expect(ValueReaders.objectList(toolResult['options']), isNotEmpty);
+      },
+    );
   });
 }
 

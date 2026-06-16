@@ -169,6 +169,10 @@ class ConversationSessionStateService {
     );
   }
 
+  List<UserOptionViewData> pendingOptionsFromRecords(List<JsonMap> records) {
+    return _pendingOptionsFromRecords(records);
+  }
+
   ConversationSessionState stateWithGoalSelection(
     ConversationSessionState state,
     String mode, {
@@ -580,43 +584,28 @@ class ConversationSessionStateService {
   }
 
   List<UserOptionViewData> _pendingOptionsFrom(List<Object?> executedTools) {
-    // 中文注释: 待选项只从 present_user_options 工具结果提取，避免普通列表误显示成点击决策。
+    // 中文注释: 待选项默认来自 present_user_options；权限确认等受控等待结果只要显式带 options 也允许进入同一 UI 通道。
     for (final rawTool in executedTools.reversed) {
       final tool = ValueReaders.mapValue(rawTool);
-      if (ValueReaders.stringValue(tool['name']) != 'present_user_options') {
+      final result = ValueReaders.mapValue(tool['result']);
+      final options = ValueReaders.objectList(result['options']);
+      if (options.isEmpty) {
         continue;
       }
-      final result = ValueReaders.mapValue(tool['result']);
+      final toolName = ValueReaders.stringValue(tool['name']);
+      final supportsPendingSurface =
+          toolName == 'present_user_options' ||
+          ValueReaders.boolValue(result['waiting_for_user_choice']);
+      if (!supportsPendingSurface) {
+        continue;
+      }
       final question = ValueReaders.stringValue(result['question']);
-      return ValueReaders.objectList(result['options'])
+      return options
           .map(ValueReaders.mapValue)
           .where((entry) => entry.isNotEmpty)
           .map(
-            (entry) => UserOptionViewData(
-              label: ValueReaders.stringValue(
-                entry['label'],
-                ValueReaders.stringValue(
-                  entry['title'],
-                  ValueReaders.stringValue(entry['name'], '选项'),
-                ),
-              ),
-              description: ValueReaders.stringValue(
-                entry['description'],
-                ValueReaders.stringValue(
-                  entry['detail'],
-                  ValueReaders.stringValue(entry['summary']),
-                ),
-              ),
-              prompt: ValueReaders.stringValue(
-                entry['prompt'],
-                ValueReaders.stringValue(
-                  entry['value'],
-                  ValueReaders.stringValue(
-                    entry['title'],
-                    ValueReaders.stringValue(entry['label']),
-                  ),
-                ),
-              ),
+            (entry) => _userOptionFromEntry(
+              entry,
               sourceQuestion: question,
               allOptions: ValueReaders.objectList(
                 result['options'],
@@ -626,6 +615,60 @@ class ConversationSessionStateService {
           .toList(growable: false);
     }
     return const <UserOptionViewData>[];
+  }
+
+  List<UserOptionViewData> _pendingOptionsFromRecords(List<JsonMap> records) {
+    return records
+        .map(
+          (entry) => _userOptionFromEntry(
+            entry,
+            sourceQuestion: ValueReaders.stringValue(entry['source_question']),
+            allOptions: records,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  UserOptionViewData _userOptionFromEntry(
+    JsonMap entry, {
+    required String sourceQuestion,
+    required List<JsonMap> allOptions,
+  }) {
+    return UserOptionViewData(
+      label: ValueReaders.stringValue(
+        entry['label'],
+        ValueReaders.stringValue(
+          entry['title'],
+          ValueReaders.stringValue(entry['name'], '选项'),
+        ),
+      ),
+      description: ValueReaders.stringValue(
+        entry['description'],
+        ValueReaders.stringValue(
+          entry['detail'],
+          ValueReaders.stringValue(entry['summary']),
+        ),
+      ),
+      prompt: ValueReaders.stringValue(
+        entry['prompt'],
+        ValueReaders.stringValue(
+          entry['value'],
+          ValueReaders.stringValue(
+            entry['title'],
+            ValueReaders.stringValue(entry['label']),
+          ),
+        ),
+      ),
+      sourceQuestion: sourceQuestion,
+      allOptions: allOptions,
+      optionId: ValueReaders.stringValue(entry['id']).trim(),
+      permissionApprovalId: ValueReaders.stringValue(
+        entry['approval_record_id'],
+      ).trim(),
+      permissionApprovalOptionId: ValueReaders.stringValue(
+        entry['approval_option_id'],
+      ).trim(),
+    );
   }
 
   List<SubAgentRunViewData> _mergeSubAgentRuns(

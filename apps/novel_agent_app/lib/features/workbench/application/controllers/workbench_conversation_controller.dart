@@ -115,6 +115,10 @@ class WorkbenchConversationController implements ConversationActionHandler {
     selectedModelProvider,
     ProjectInformationPermissionSettingsResolverService?
     informationPermissionSettingsResolverService,
+    ProjectToolPermissionSettingsResolverService?
+    toolPermissionSettingsResolverService,
+    required ProjectToolPermissionApprovalRecordService
+    toolPermissionApprovalRecordService,
     ConversationAgentSelectorViewDataService?
     conversationAgentSelectorViewDataService,
     ConversationRequestAgentResolverService?
@@ -123,8 +127,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
     conversationGroupSelectorViewDataService,
     LongTaskOpeningPromptBuilderService? longTaskOpeningPromptBuilderService,
     required void Function(String message) announce,
-  }) : _saveDraftUseCase = saveDraftUseCase,
-       _generateDraftUseCaseFactory = generateDraftUseCaseFactory,
+  }) : _generateDraftUseCaseFactory = generateDraftUseCaseFactory,
        _hostAwareGenerateDraftUseCaseFactory =
            hostAwareGenerateDraftUseCaseFactory,
        _modelExecutionProfileService = modelExecutionProfileService,
@@ -202,6 +205,11 @@ class WorkbenchConversationController implements ConversationActionHandler {
        _informationPermissionSettingsResolverService =
            informationPermissionSettingsResolverService ??
            const ProjectInformationPermissionSettingsResolverService(),
+       _toolPermissionSettingsResolverService =
+           toolPermissionSettingsResolverService ??
+           const ProjectToolPermissionSettingsResolverService(),
+       _toolPermissionApprovalRecordService =
+           toolPermissionApprovalRecordService,
        _conversationAgentSelectorViewDataService =
            conversationAgentSelectorViewDataService ??
            const ConversationAgentSelectorViewDataService(),
@@ -216,7 +224,6 @@ class WorkbenchConversationController implements ConversationActionHandler {
            const LongTaskOpeningPromptBuilderService(),
        _announce = announce;
 
-  final SaveDraftUseCase _saveDraftUseCase;
   final GenerateDraftUseCaseFactory _generateDraftUseCaseFactory;
   final HostAwareGenerateDraftUseCaseFactory?
   _hostAwareGenerateDraftUseCaseFactory;
@@ -280,6 +287,10 @@ class WorkbenchConversationController implements ConversationActionHandler {
   _selectedModelProvider;
   final ProjectInformationPermissionSettingsResolverService
   _informationPermissionSettingsResolverService;
+  final ProjectToolPermissionSettingsResolverService
+  _toolPermissionSettingsResolverService;
+  final ProjectToolPermissionApprovalRecordService
+  _toolPermissionApprovalRecordService;
   final ConversationAgentSelectorViewDataService
   _conversationAgentSelectorViewDataService;
   final ConversationRequestAgentResolverService
@@ -306,8 +317,39 @@ class WorkbenchConversationController implements ConversationActionHandler {
     final snapshot = await _projectSessionWorkspaceService.loadSessions(
       project,
     );
+    final pendingApprovalRecords = await _toolPermissionApprovalRecordService
+        .listPending(
+          project,
+          scopeType: ProjectToolPermissionApprovalScopes.ordinaryConversation,
+        );
+    final pendingOptionsBySessionId = <String, List<UserOptionViewData>>{};
+    for (final record in pendingApprovalRecords) {
+      final sessionId = _stringValue(record['session_id']);
+      if (sessionId.isEmpty) {
+        continue;
+      }
+      final recordOptions = _conversationSessionStateService
+          .pendingOptionsFromRecords(
+            _toolPermissionApprovalRecordService.pendingOptionsForRecords(
+              <JsonMap>[record],
+            ),
+          );
+      pendingOptionsBySessionId
+          .putIfAbsent(sessionId, () => <UserOptionViewData>[])
+          .addAll(recordOptions);
+    }
     final restoredSessions = snapshot.sessionRecords
-        .map(_conversationSessionStateService.restoreSession)
+        .map((record) {
+          final restored = _conversationSessionStateService.restoreSession(
+            record,
+          );
+          final pendingOptions =
+              pendingOptionsBySessionId[_sessionIdOf(restored)];
+          if (pendingOptions == null || pendingOptions.isEmpty) {
+            return restored;
+          }
+          return restored.copyWith(pendingOptions: pendingOptions);
+        })
         .toList(growable: false);
     _writeRuntimeState(
       _readRuntimeState().copyWith(
@@ -749,6 +791,35 @@ class WorkbenchConversationController implements ConversationActionHandler {
   @override
   Future<void> onUserOptionSelected(UserOptionViewData option) async {
     // 中文注释: 选项点击统一转成补充提示，再复用同一条发送链继续推进。
+    HostToolPermissionContext? hostToolPermissionContextOverride;
+    final project = _workspaceController.currentProject;
+    if (project != null &&
+        option.permissionApprovalId.trim().isNotEmpty &&
+        option.permissionApprovalOptionId.trim().isNotEmpty) {
+      final resolved = await _toolPermissionApprovalRecordService
+          .resolveSelection(
+            project,
+            approvalId: option.permissionApprovalId,
+            optionId: option.permissionApprovalOptionId,
+          );
+      if (!ValueReaders.boolValue(resolved['ok'])) {
+        _announce(_stringValue(resolved['error'], '当前权限确认无法继续处理。'));
+        return;
+      }
+      final consumed = await _toolPermissionApprovalRecordService
+          .consumeResolvedOverrideContext(
+            project,
+            approvalId: option.permissionApprovalId,
+          );
+      final contextJson = ValueReaders.mapValue(
+        consumed['host_tool_permission_context'],
+      );
+      if (contextJson.isNotEmpty) {
+        hostToolPermissionContextOverride = HostToolPermissionContext.fromJson(
+          contextJson,
+        );
+      }
+    }
     final prompt = _userOptionPromptBuilderService.build(<String, Object?>{
       'label': option.label,
       'description': option.description,
@@ -761,6 +832,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
       visibleText: _conversationUserVisibleTextService.textForUserOption(
         option,
       ),
+      hostToolPermissionContextOverride: hostToolPermissionContextOverride,
     );
   }
 
@@ -787,6 +859,9 @@ class WorkbenchConversationController implements ConversationActionHandler {
     if (await _handleGuideNavigationAction(action)) {
       return;
     }
+    if (await _handleDeterministicLongTaskPrimaryAction(action)) {
+      return;
+    }
     final plan = _workbenchPrimaryActionService.build(
       action: action,
       project: _workspaceController.currentProjectInfo(),
@@ -810,6 +885,37 @@ class WorkbenchConversationController implements ConversationActionHandler {
     }
   }
 
+  Future<bool> _handleDeterministicLongTaskPrimaryAction(
+    PrimaryActionViewData action,
+  ) async {
+    switch (action.commandId.trim()) {
+      case 'long_task.run_next':
+        await _runLongTaskQueueFromPrimaryAction(
+          pendingMessage: '正在推进下一条长任务步骤...',
+          successMessage: '已推进下一条长任务步骤。',
+          options: const <String, Object?>{
+            'max_steps': 1,
+            'entry_reason': 'workbench_run_next',
+          },
+        );
+        return true;
+      case 'long_task.run_controlled':
+        await _runLongTaskQueueFromPrimaryAction(
+          pendingMessage: '正在受控推进长任务...',
+          successMessage: '长任务已开始受控推进。',
+          options: const <String, Object?>{
+            'entry_reason': 'workbench_run_controlled',
+          },
+        );
+        return true;
+      case 'long_task.open_detail':
+        _workspaceController.onLongTaskStationRequested();
+        return true;
+      default:
+        return false;
+    }
+  }
+
   @override
   Future<void> onRetryLastFailedRequested() async {
     // 中文注释: 重试只复用上一轮失败请求，不额外插入新的用户消息。
@@ -828,7 +934,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
   @override
   void onOptimizeRequested() {
     // 中文注释: 提示词优化链路尚未独立落地前，这里只给出明确引导，不制造空按钮。
-    _announce('当前先直接发送自然语言需求；提示词优化链路后续会接独立用例。');
+    _announce('当前先直接发送自然语言需求；需要优化时可以先走现有会话流程。');
   }
 
   @override
@@ -898,7 +1004,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
       ),
     );
     if (!capabilities.supportsAttachmentEntry) {
-      _announce('当前模型或宿主环境暂不支持会话附件。');
+      _announce('当前模型或本机环境暂不支持会话附件。');
       return;
     }
     if (_readWorkbench().isGenerating) {
@@ -935,6 +1041,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
     String text, {
     String visibleText = '',
     bool retryLastFailure = false,
+    HostToolPermissionContext? hostToolPermissionContextOverride,
   }) async {
     // 中文注释: 真实发送链在这里收口，统一处理会话状态、上下文渲染、生成和结果回放。
     final cleanText = text.trim();
@@ -1092,12 +1199,16 @@ class WorkbenchConversationController implements ConversationActionHandler {
                 );
           final hostInformationPermissionContext =
               _hostInformationPermissionContext(settings);
+          final hostToolPermissionContext =
+              hostToolPermissionContextOverride ??
+              _hostToolPermissionContext(settings);
           final useCase =
               _hostAwareGenerateDraftUseCaseFactory?.call(
                 provider,
                 settings.networkSettings,
                 hostInformationPermissionContext:
                     hostInformationPermissionContext,
+                hostToolPermissionContext: hostToolPermissionContext,
               ) ??
               _generateDraftUseCaseFactory(provider, settings.networkSettings);
           try {
@@ -1271,6 +1382,13 @@ class WorkbenchConversationController implements ConversationActionHandler {
     AppSettings settings,
   ) {
     return _informationPermissionSettingsResolverService.resolveFromAppSettings(
+      settings,
+      source: 'workbench_conversation_controller',
+    );
+  }
+
+  HostToolPermissionContext _hostToolPermissionContext(AppSettings settings) {
+    return _toolPermissionSettingsResolverService.resolveFromAppSettings(
       settings,
       source: 'workbench_conversation_controller',
     );
@@ -1543,7 +1661,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
   Future<void> _startLongTaskRunFromOpening(
     PrimaryActionViewData action,
   ) async {
-    // 中文注释: opening 阶段的正式启动动作复用现有 start_long_task_run 工具链，不再在 app 层另写一套判定。
+    // 中文注释: opening 阶段的正式启动动作必须真正落到“建链 + 跑首批队列”，不能停在只建队列或只发提示词。
     final project = _workspaceController.currentProject;
     if (project == null) {
       _announce('请先创建或打开长篇项目。');
@@ -1558,13 +1676,28 @@ class WorkbenchConversationController implements ConversationActionHandler {
       ),
     );
     try {
-      final result = await _projectLongTaskToolExecutor.startLongTaskRun(
+      final result = await _ensureLongTaskWorkflowPrepared(
         project,
-        action.payload,
+        arguments: action.payload,
+      );
+      if (!ValueReaders.boolValue(result['ok'], true)) {
+        _announce(_resultMessage(result, success: '启动长任务失败。'));
+        return;
+      }
+      final queueResult = await _runLongTaskQueue(
+        project,
+        options: <String, Object?>{
+          'entry_reason': 'opening_start_long_task_run',
+          'mode_id': _stringValue(
+            action.payload['mode_id'] ?? action.payload['mode'],
+          ),
+        },
       );
       _workspaceController.onRefreshFilesRequested();
       await _workspaceController.refreshProjectLongTaskSummary();
-      _announce(_resultMessage(result, success: '已根据当前开局状态启动长任务。'));
+      final workflowMessage = _resultMessage(result, success: '已生成长任务链。');
+      final queueMessage = _resultMessage(queueResult, success: '已开始推进长任务。');
+      _announce('$workflowMessage\n$queueMessage');
     } catch (error) {
       _announce('启动长任务失败：$error');
     } finally {
@@ -1574,6 +1707,69 @@ class WorkbenchConversationController implements ConversationActionHandler {
       );
       _mutateWorkbench((current) => applyConversationState(current));
     }
+  }
+
+  Future<void> _runLongTaskQueueFromPrimaryAction({
+    required String pendingMessage,
+    required String successMessage,
+    JsonMap options = const <String, Object?>{},
+  }) async {
+    final project = _workspaceController.currentProject;
+    if (project == null) {
+      _announce('请先创建或打开长篇项目。');
+      return;
+    }
+    _mutateWorkbench(
+      (current) => applyConversationState(
+        current.copyWith(generationStatus: pendingMessage, toolCoreStatus: ''),
+      ),
+    );
+    try {
+      final result = await _runLongTaskQueue(project, options: options);
+      _workspaceController.onRefreshFilesRequested();
+      await _workspaceController.refreshProjectLongTaskSummary();
+      _announce(_resultMessage(result, success: successMessage));
+    } catch (error) {
+      _announce('推进长任务失败：$error');
+    } finally {
+      _mutateWorkbench((current) => applyConversationState(current));
+    }
+  }
+
+  Future<JsonMap> _ensureLongTaskWorkflowPrepared(
+    ProjectDescriptor project, {
+    JsonMap arguments = const <String, Object?>{},
+  }) async {
+    final existingTasks = await _workflowRuntimeService.listWorkflowTasks(
+      project,
+    );
+    if (existingTasks.isNotEmpty) {
+      return <String, Object?>{
+        'ok': true,
+        'message': '当前项目已存在长任务队列，将直接继续正式运行。',
+        'reused_existing_workflow': true,
+        'existing_task_count': existingTasks.length,
+      };
+    }
+    return _projectLongTaskToolExecutor.startLongTaskRun(project, arguments);
+  }
+
+  Future<JsonMap> _runLongTaskQueue(
+    ProjectDescriptor project, {
+    JsonMap options = const <String, Object?>{},
+  }) async {
+    final settings = _readSettings();
+    if (settings == null) {
+      return const <String, Object?>{
+        'ok': false,
+        'error': '设置尚未加载完成，暂时不能启动长任务运行。',
+      };
+    }
+    return _workflowRuntimeService.runWorkflowTaskQueue(
+      project,
+      settings,
+      options: options,
+    );
   }
 
   Future<void> _launchLongTaskEntry() async {
@@ -1593,6 +1789,13 @@ class WorkbenchConversationController implements ConversationActionHandler {
     }
     final readiness = projection?.orchestration.readiness;
     final suggestedAction = _resolveLongTaskLaunchTarget(projection);
+    if (suggestedAction != null &&
+        suggestedAction.commandId.trim() != 'opening.launch_long_task') {
+      final handled = await _handleGuideNavigationAction(suggestedAction);
+      if (handled) {
+        return;
+      }
+    }
     final prompt = _longTaskOpeningPromptBuilderService.build(
       project: _workspaceController.currentProjectInfo(),
       currentGroupDisplayName: projection?.currentGroupDisplayName ?? '',
@@ -1976,42 +2179,55 @@ class WorkbenchConversationController implements ConversationActionHandler {
     ProjectConversationDraftRuntimePreparation? conversationDraftRuntime,
   }) async {
     // 中文注释: 成功后的文档落盘、资源刷新和右栏回写统一收口，避免再次散回发送主流程。
+    final activeSessionId = _sessionIdOf(streamingBaseState);
+    final persistedApprovals = await _toolPermissionApprovalRecordService
+        .persistPendingApprovalsForExecutedTools(
+          project,
+          scopeType: ProjectToolPermissionApprovalScopes.ordinaryConversation,
+          executedTools: result.executedTools,
+          sessionId: activeSessionId,
+        );
+    final effectiveResult = _resultWithExecutedTools(
+      result,
+      executedTools: ValueReaders.objectList(
+        persistedApprovals['executed_tools'],
+      ),
+    );
     final assistantState = _conversationSessionStateService
         .stateWithAssistantResult(
           streamingBaseState,
-          result,
+          effectiveResult,
           strategySettings: contextStrategySettings,
           modelProfile: runtimeProfile,
         );
     _replaceConversationSession(assistantState, activate: true);
-    var savedPath = result.writtenPaths.isEmpty
+    var savedPath = effectiveResult.writtenPaths.isEmpty
         ? ''
-        : result.writtenPaths.first;
+        : effectiveResult.writtenPaths.first;
+    final activeDocumentPath = _workspaceController.activeDocumentPath;
+    var stagedAutosaveFallback = false;
     final shouldAutoSaveFallback =
         savedPath.isEmpty &&
-        !result.cancelledByUser &&
-        settings.autoSaveDrafts &&
+        !effectiveResult.cancelledByUser &&
+        settings.draftFallbackProtectionEnabled &&
         _draftAutosavePolicyService.shouldAutoSave(
-          result: result,
-          activeDocumentPath: _workspaceController.activeDocumentPath,
+          result: effectiveResult,
+          activeDocumentPath: activeDocumentPath,
           wasModeGuidanceActive: wasModeGuidanceActive,
         );
     if (shouldAutoSaveFallback) {
-      savedPath = await _saveDraftUseCase.execute(
-        project: project,
-        content: result.draftMarkdown,
-        title: title,
-      );
+      stagedAutosaveFallback = _workspaceController
+          .stageGeneratedDraftOnActiveDocument(effectiveResult.draftMarkdown);
     }
     final runtimeArtifacts = await _finalizeConversationDraftRuntime(
       project: project,
-      result: result,
+      result: effectiveResult,
       title: title,
       savedPath: savedPath,
       preparation: conversationDraftRuntime,
     );
     savedPath = _resolvedPersistedOutputPath(
-      result: result,
+      result: effectiveResult,
       savedPath: savedPath,
       runtimeArtifacts: runtimeArtifacts,
     );
@@ -2023,8 +2239,8 @@ class WorkbenchConversationController implements ConversationActionHandler {
         : savedPath;
     final shouldReloadResources =
         savedPath.isNotEmpty ||
-        result.writtenPaths.isNotEmpty ||
-        result.changedPaths.isNotEmpty ||
+        effectiveResult.writtenPaths.isNotEmpty ||
+        effectiveResult.changedPaths.isNotEmpty ||
         runtimeArtifacts.changedPaths.isNotEmpty;
     final resourceEntries = shouldReloadResources
         ? await _workspaceController.reloadResourceEntries(
@@ -2038,12 +2254,12 @@ class WorkbenchConversationController implements ConversationActionHandler {
     }
     final shouldOpenDocument =
         savedPath.isNotEmpty ||
-        result.writtenPaths.isNotEmpty ||
+        effectiveResult.writtenPaths.isNotEmpty ||
         runtimeArtifacts.outputPath.trim().isNotEmpty;
     final resolvedBody = shouldOpenDocument
         ? await _workspaceController.resolvedDocumentBody(
             project: project,
-            generatedMarkdown: result.draftMarkdown,
+            generatedMarkdown: effectiveResult.draftMarkdown,
             relativePath: savedPath,
           )
         : '';
@@ -2059,7 +2275,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
     }
     _mutateWorkbench((current) {
       final contextSummary = _resultContextSummary(
-        result,
+        effectiveResult,
         assistantState,
         runtimeArtifacts,
       );
@@ -2067,14 +2283,18 @@ class WorkbenchConversationController implements ConversationActionHandler {
         _workspaceController.applyWorkbenchState(
           current.copyWith(
             resourceEntries: resourceEntries,
-            modelLabel: '$providerTitle · ${result.modelId}',
+            modelLabel: '$providerTitle · ${effectiveResult.modelId}',
             contextSummary: contextSummary,
             generationStatus: _generationStatusFor(
-              result,
+              effectiveResult,
               savedPath,
               runtimeArtifacts,
+              stagedAutosaveFallback: stagedAutosaveFallback,
             ),
-            toolCoreStatus: _toolCoreStatusFor(result, runtimeArtifacts),
+            toolCoreStatus: _toolCoreStatusFor(
+              effectiveResult,
+              runtimeArtifacts,
+            ),
             isGenerating: false,
           ),
         ),
@@ -2175,8 +2395,9 @@ class WorkbenchConversationController implements ConversationActionHandler {
   String _generationStatusFor(
     DraftGenerationResult result,
     String savedPath,
-    ProjectConversationDraftRuntimeArtifacts runtimeArtifacts,
-  ) {
+    ProjectConversationDraftRuntimeArtifacts runtimeArtifacts, {
+    bool stagedAutosaveFallback = false,
+  }) {
     final infoSummary = runtimeArtifacts.informationSummary.trim();
     String withInformation(String base) {
       if (infoSummary.isEmpty) {
@@ -2208,6 +2429,9 @@ class WorkbenchConversationController implements ConversationActionHandler {
     if (savedPath.isNotEmpty) {
       return withInformation('内容生成完成，并已保存到 $savedPath');
     }
+    if (stagedAutosaveFallback) {
+      return withInformation('内容生成完成，已暂存到当前文档草稿，尚未正式保存。');
+    }
     if (result.draftMarkdown.trim().isNotEmpty) {
       return withInformation('内容生成完成，尚未保存到项目目录。');
     }
@@ -2215,6 +2439,33 @@ class WorkbenchConversationController implements ConversationActionHandler {
       return withInformation('处理完成，项目文件已更新。');
     }
     return withInformation('本轮处理完成。');
+  }
+
+  DraftGenerationResult _resultWithExecutedTools(
+    DraftGenerationResult source, {
+    required List<Object?> executedTools,
+  }) {
+    return DraftGenerationResult(
+      project: source.project,
+      projectInfo: source.projectInfo,
+      userPrompt: source.userPrompt,
+      prompt: source.prompt,
+      modelId: source.modelId,
+      draftMarkdown: source.draftMarkdown,
+      contextPack: source.contextPack,
+      selectedPaths: source.selectedPaths,
+      executedTools: List<Object?>.unmodifiable(executedTools),
+      writtenPaths: source.writtenPaths,
+      changedPaths: source.changedPaths,
+      transcriptMessages: source.transcriptMessages,
+      waitingForUserChoice: source.waitingForUserChoice,
+      reasoningContent: source.reasoningContent,
+      stoppedByToolError: source.stoppedByToolError,
+      toolErrorSummary: source.toolErrorSummary,
+      cancelledByUser: source.cancelledByUser,
+      stopPhase: source.stopPhase,
+      partialContentAccepted: source.partialContentAccepted,
+    );
   }
 
   String _resolvedPersistedOutputPath({

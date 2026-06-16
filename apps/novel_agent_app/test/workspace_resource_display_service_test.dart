@@ -20,6 +20,12 @@ void main() {
         visibilityService.shouldHideFromDefaultTree('drafts/ch01.md'),
       );
       expect(
+        service.shouldHidePath('premise/project_overview.md'),
+        visibilityService.shouldHideFromDefaultTree(
+          'premise/project_overview.md',
+        ),
+      );
+      expect(
         service.shouldHidePath('premise/project_brief.md'),
         visibilityService.shouldHideFromDefaultTree('premise/project_brief.md'),
       );

@@ -112,6 +112,9 @@ class ProjectOpeningMaturityAssessmentService {
     if (isDirectory) {
       return false;
     }
+    if (ProjectSupportDocumentCatalog.isProjectOverviewPath(path)) {
+      return false;
+    }
     return _foundationPrefixes.any(path.startsWith);
   }
 

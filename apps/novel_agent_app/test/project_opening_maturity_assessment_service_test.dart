@@ -106,6 +106,30 @@ void main() {
       expect(assessment.shouldShowOpeningEntry, isFalse);
     },
   );
+
+  test(
+    'project overview support file alone does not count as authored foundation',
+    () {
+      const service = ProjectOpeningMaturityAssessmentService();
+
+      final assessment = service.build(
+        projectType: 'novel',
+        resourceEntries: const <ResourceEntryViewData>[
+          ResourceEntryViewData(
+            id: 'premise/project_brief.md',
+            title: 'project_brief.md',
+            relativePath: 'premise/project_brief.md',
+            depth: 1,
+            isDirectory: false,
+          ),
+        ],
+        openingProjection: _projection(canStartInteractiveSession: false),
+      );
+
+      expect(assessment.stage, ProjectOpeningMaturityStage.openingInProgress);
+      expect(assessment.authoredFoundationFileCount, 0);
+    },
+  );
 }
 
 OpeningSessionProjection _projection({

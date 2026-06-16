@@ -33,7 +33,7 @@ extension SqliteProjectionGroupKindX on SqliteProjectionGroupKind {
   String get summary {
     // 中文注释: 分组摘要只描述“这个分区为什么存在”，避免 UI 再单独拼一套解释性文案。
     return switch (this) {
-      SqliteProjectionGroupKind.projectOverview => '项目宪法、总览摘要和开局级说明。',
+      SqliteProjectionGroupKind.projectOverview => '项目总览、快速入口说明和开局级导览。',
       SqliteProjectionGroupKind.bodyAndChapters => '正文、章节与场景的主可见内容。',
       SqliteProjectionGroupKind.outlineAndSetting => '大纲、设定和结构化创作资产。',
       SqliteProjectionGroupKind.projectMaterials => '项目资料、知识、研究和辅助材料。',

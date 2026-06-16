@@ -32,6 +32,8 @@ import '../runtime/tool_execution_service.dart';
 import '../settings/app_settings.dart';
 import '../tools/tool_call_parser_service.dart';
 import '../tools/tool_exposure_policy_service.dart';
+import '../tools/host_tool_permission_context.dart';
+import '../tools/host_tool_permission_policy_service.dart';
 import '../tools/tool_schema_builder_service.dart';
 import '../tools/tool_strategy_prompt_builder.dart';
 import '../tools/tool_strategy_service.dart';
@@ -67,6 +69,8 @@ class GenerateDraftUseCase {
     ToolExposurePolicyService? toolExposurePolicyService,
     ContinuousTaskToolExposureRuntimeResolverService?
     continuousTaskToolExposureRuntimeResolverService,
+    HostToolPermissionContext? hostToolPermissionContext,
+    HostToolPermissionPolicyService? hostToolPermissionPolicyService,
     HostPlatform hostPlatform = HostPlatform.unknown,
   }) : _projectWorkspacePort = projectWorkspacePort,
        _llmGateway = llmGateway,
@@ -133,6 +137,8 @@ class GenerateDraftUseCase {
                        toolExposurePolicyService ??
                        const ToolExposurePolicyService(),
                  ),
+             hostToolPermissionContext: hostToolPermissionContext,
+             hostToolPermissionPolicyService: hostToolPermissionPolicyService,
            ),
        _toolStrategyPromptBuilder = ToolStrategyPromptBuilder(
          toolStrategyService: toolStrategyService ?? ToolStrategyService(),

@@ -73,6 +73,34 @@ class ProjectSessionWorkspaceService {
     );
   }
 
+  Future<void> saveSession(
+    ProjectDescriptor project,
+    JsonMap sessionRecord, {
+    String activeSessionId = '',
+  }) async {
+    // 中文注释: 单会话保存只是对批量保存的薄封装，确保 CLI 和 GUI 不会各自拼 session 文件写法。
+    final snapshot = await loadSessions(project);
+    final recordId = ValueReaders.stringValue(sessionRecord['id']).trim();
+    final records = snapshot.sessionRecords
+        .map(ValueReaders.deepCopyMap)
+        .toList(growable: true);
+    final existingIndex = records.indexWhere(
+      (record) => ValueReaders.stringValue(record['id']).trim() == recordId,
+    );
+    if (existingIndex >= 0) {
+      records[existingIndex] = ValueReaders.deepCopyMap(sessionRecord);
+    } else {
+      records.add(ValueReaders.deepCopyMap(sessionRecord));
+    }
+    await saveSessions(
+      project,
+      sessionRecords: records,
+      activeSessionId: activeSessionId.trim().isEmpty
+          ? recordId
+          : activeSessionId,
+    );
+  }
+
   Future<ProjectSessionWorkspaceSnapshot> loadSessions(
     ProjectDescriptor project,
   ) async {
@@ -145,6 +173,24 @@ class ProjectSessionWorkspaceService {
       sessionRecords: List<JsonMap>.unmodifiable(records),
       activeSessionId: resolvedActiveSessionId,
     );
+  }
+
+  Future<JsonMap> loadSession(
+    ProjectDescriptor project,
+    String sessionId,
+  ) async {
+    // 中文注释: 单会话读取优先走 session_index.json 里的正式索引，再回退到扫描结果，保证列表和详情同源。
+    final cleanSessionId = sessionId.trim();
+    if (cleanSessionId.isEmpty) {
+      return const <String, Object?>{};
+    }
+    final snapshot = await loadSessions(project);
+    for (final record in snapshot.sessionRecords) {
+      if (ValueReaders.stringValue(record['id']).trim() == cleanSessionId) {
+        return ValueReaders.deepCopyMap(record);
+      }
+    }
+    return const <String, Object?>{};
   }
 
   Future<JsonMap> _readSessionRecord(

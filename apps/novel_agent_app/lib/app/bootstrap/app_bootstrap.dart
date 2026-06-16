@@ -149,11 +149,18 @@ class AppBootstrap {
       loadProjectAgentGroupSelections: (project) =>
           bundle.projectAgentGroupBindingRepository.loadSelections(project),
       hostAwareGenerateDraftUseCaseFactory:
-          (provider, networkSettings, {hostInformationPermissionContext}) {
+          (
+            provider,
+            networkSettings, {
+            hostInformationPermissionContext,
+            hostToolPermissionContext,
+          }) {
             final basePort = bundle.projectToolExecutionPort;
             final scopedToolExecutionPort = basePort is ProjectToolDispatcher
-                ? basePort.scopedWithHostInformationPermissionContext(
-                    hostInformationPermissionContext,
+                ? basePort.scopedWithHostPermissionContexts(
+                    hostInformationPermissionContext:
+                        hostInformationPermissionContext,
+                    hostToolPermissionContext: hostToolPermissionContext,
                   )
                 : basePort;
             return GenerateDraftUseCase(
@@ -165,6 +172,7 @@ class AppBootstrap {
               toolExecutionPort: scopedToolExecutionPort,
               contextAssemblerService: contextAssemblerService,
               projectPromptContract: ProjectPromptContract(),
+              hostToolPermissionContext: hostToolPermissionContext,
               hostPlatform: hostPlatform,
               loadAvailableAgents: (project) =>
                   bundle.agentPackageCatalog.loadAgentPackages(project),
@@ -199,6 +207,10 @@ class AppBootstrap {
     final pendingResearchActionService = ProjectPendingResearchActionService(
       workspacePort: bundle.projectWorkspacePort,
     );
+    final toolPermissionApprovalRecordService =
+        ProjectToolPermissionApprovalRecordService(
+          taskRepository: projectTaskRepository,
+        );
     final longTaskStationController = LongTaskStationController(
       longTaskSupervisor: bundle.longTaskSupervisor,
       detailService: longTaskStationDetailService,
@@ -315,14 +327,22 @@ class AppBootstrap {
       projectGeneralContinuitySetupService:
           projectGeneralContinuitySetupService,
       pendingResearchActionService: pendingResearchActionService,
+      toolPermissionApprovalRecordService: toolPermissionApprovalRecordService,
       longTaskSupervisor: bundle.longTaskSupervisor,
       longTaskStationController: longTaskStationController,
       hostAwareGenerateDraftUseCaseFactory:
-          (provider, networkSettings, {hostInformationPermissionContext}) {
+          (
+            provider,
+            networkSettings, {
+            hostInformationPermissionContext,
+            hostToolPermissionContext,
+          }) {
             final basePort = bundle.projectToolExecutionPort;
             final scopedToolExecutionPort = basePort is ProjectToolDispatcher
-                ? basePort.scopedWithHostInformationPermissionContext(
-                    hostInformationPermissionContext,
+                ? basePort.scopedWithHostPermissionContexts(
+                    hostInformationPermissionContext:
+                        hostInformationPermissionContext,
+                    hostToolPermissionContext: hostToolPermissionContext,
                   )
                 : basePort;
             return GenerateDraftUseCase(
@@ -334,6 +354,7 @@ class AppBootstrap {
               toolExecutionPort: scopedToolExecutionPort,
               contextAssemblerService: contextAssemblerService,
               projectPromptContract: ProjectPromptContract(),
+              hostToolPermissionContext: hostToolPermissionContext,
               hostPlatform: hostPlatform,
               loadAvailableAgents: (project) =>
                   bundle.agentPackageCatalog.loadAgentPackages(project),

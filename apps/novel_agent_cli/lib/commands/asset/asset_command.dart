@@ -3,33 +3,38 @@ import 'dart:convert';
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../shared/cli_arguments.dart';
+import '../shared/cli_exit_codes.dart';
+import '../shared/cli_help_contract.dart';
+import '../shared/cli_project_artifact_label_service.dart';
+import '../shared/cli_project_context_loader.dart';
 import '../../output/terminal_printer.dart';
 
 class AssetCommand {
   const AssetCommand({
-    required SettingsRepository settingsRepository,
-    required ProjectRepository projectRepository,
     required ProjectAssetLibraryService assetLibraryService,
     required ProjectStyleBundleLibraryService styleBundleLibraryService,
-    required ProjectCharacterBundleLibraryService
-    characterBundleLibraryService,
+    required ProjectCharacterBundleLibraryService characterBundleLibraryService,
     required ProjectAssetBundleLibraryService assetBundleLibraryService,
+    required CliProjectContextLoader projectContextLoader,
     required TerminalPrinter printer,
-  }) : _settingsRepository = settingsRepository,
-       _projectRepository = projectRepository,
-       _assetLibraryService = assetLibraryService,
+    CliProjectArtifactLabelService? projectArtifactLabelService,
+  }) : _assetLibraryService = assetLibraryService,
        _styleBundleLibraryService = styleBundleLibraryService,
        _characterBundleLibraryService = characterBundleLibraryService,
        _assetBundleLibraryService = assetBundleLibraryService,
-       _printer = printer;
+       _projectContextLoader = projectContextLoader,
+       _printer = printer,
+       _projectArtifactLabelService =
+           projectArtifactLabelService ?? const CliProjectArtifactLabelService();
 
-  final SettingsRepository _settingsRepository;
-  final ProjectRepository _projectRepository;
   final ProjectAssetLibraryService _assetLibraryService;
   final ProjectStyleBundleLibraryService _styleBundleLibraryService;
   final ProjectCharacterBundleLibraryService _characterBundleLibraryService;
   final ProjectAssetBundleLibraryService _assetBundleLibraryService;
+  final CliProjectContextLoader _projectContextLoader;
   final TerminalPrinter _printer;
+  final CliProjectArtifactLabelService _projectArtifactLabelService;
 
   Future<int> run(List<String> args) async {
     // 中文注释: asset 命令组只暴露项目资产入口，具体 frontmatter 与 bundle 规则全部复用共享服务。
@@ -80,7 +85,7 @@ class AssetCommand {
       default:
         _printer.error('未知 asset 子命令: $action');
         _printHelp();
-        return 2;
+        return CliExitCodes.invalidInput;
     }
   }
 
@@ -105,7 +110,7 @@ class AssetCommand {
                 ? ValueReaders.stringValue(item['title'])
                 : ValueReaders.stringValue(item['display_name']);
             final path = ValueReaders.stringValue(item['relative_path']);
-            return '${ValueReaders.stringValue(item['id'])}｜$title｜$path';
+            return '${ValueReaders.stringValue(item['id'])}｜$title｜${_formatArtifactPath(path)}';
           })
           .join('\n'),
     );
@@ -141,22 +146,20 @@ class AssetCommand {
     if (context == null) {
       return 2;
     }
-    final result = await _assetLibraryService.saveStyle(
-      context.project,
-      <String, Object?>{
-        'id': _optionValue(args, '--id') ?? '',
-        'display_name': _optionValue(args, '--name') ?? '',
-        'summary': _optionValue(args, '--summary') ?? '',
-        'genre': _optionValue(args, '--genre') ?? '',
-        'tone': _optionValue(args, '--tone') ?? '',
-        'audience': _optionValue(args, '--audience') ?? '',
-        'tags': _commaList(_optionValue(args, '--tags')),
-        'guardrails': _commaList(_optionValue(args, '--guardrails')),
-        'example_paths': _commaList(_optionValue(args, '--examples')),
-        'inherited_from_ids': _commaList(_optionValue(args, '--inherits')),
-        'default_for_project': _boolOption(args, '--default', false),
-      },
-    );
+    final result = await _assetLibraryService
+        .saveStyle(context.project, <String, Object?>{
+          'id': _optionValue(args, '--id') ?? '',
+          'display_name': _optionValue(args, '--name') ?? '',
+          'summary': _optionValue(args, '--summary') ?? '',
+          'genre': _optionValue(args, '--genre') ?? '',
+          'tone': _optionValue(args, '--tone') ?? '',
+          'audience': _optionValue(args, '--audience') ?? '',
+          'tags': _commaList(_optionValue(args, '--tags')),
+          'guardrails': _commaList(_optionValue(args, '--guardrails')),
+          'example_paths': _commaList(_optionValue(args, '--examples')),
+          'inherited_from_ids': _commaList(_optionValue(args, '--inherits')),
+          'default_for_project': _boolOption(args, '--default', false),
+        });
     return _printResult(result, success: '风格资产已保存。');
   }
 
@@ -473,25 +476,18 @@ class AssetCommand {
   }
 
   Future<_ProjectContext?> _projectContext(List<String> args) async {
-    final settings = await _settingsRepository.load();
-    final projectPath =
-        _optionValue(args, '--project') ?? settings.defaultProjectPath;
-    if (projectPath.trim().isEmpty) {
-      _printer.error('请通过 --project 指定项目路径。');
+    // 中文注释: asset 命令不再自行读取 settings 和 project，统一复用 shared 项目上下文加载器。
+    final context = await _projectContextLoader.load(args);
+    if (context == null) {
       return null;
     }
-    final project = await _projectRepository.openByPath(projectPath);
-    if (project == null) {
-      _printer.error('项目不存在: $projectPath');
-      return null;
-    }
-    return _ProjectContext(project);
+    return _ProjectContext(context.project);
   }
 
   int _printResult(JsonMap result, {required String success}) {
     if (!ValueReaders.boolValue(result['ok'])) {
       _printer.error(ValueReaders.stringValue(result['error'], '执行失败。'));
-      return 1;
+      return CliExitCodes.executionFailure;
     }
     _printer.success(success);
     final path = ValueReaders.stringValue(
@@ -499,7 +495,7 @@ class AssetCommand {
       ValueReaders.stringList(result['changed_paths']).join('、'),
     ).trim();
     if (path.isNotEmpty) {
-      _printer.info(path);
+      _printer.info(_formatArtifactPath(path));
     }
     return 0;
   }
@@ -520,7 +516,10 @@ class AssetCommand {
       _printer.error(ValueReaders.stringValue(plan['error'], '写入计划生成失败。'));
       return 1;
     }
-    _printer.block(planTitle, _prettyJson(ValueReaders.mapValue(plan['write_plan'])));
+    _printer.block(
+      planTitle,
+      _prettyJson(ValueReaders.mapValue(plan['write_plan'])),
+    );
     return _printResult(result, success: success);
   }
 
@@ -529,7 +528,10 @@ class AssetCommand {
       _printer.error(ValueReaders.stringValue(response['error'], '导入预检失败。'));
       return 1;
     }
-    _printer.block(title, _prettyJson(ValueReaders.mapValue(response['preview'])));
+    _printer.block(
+      title,
+      _prettyJson(ValueReaders.mapValue(response['preview'])),
+    );
     return 0;
   }
 
@@ -540,9 +542,11 @@ class AssetCommand {
     }
     _printer.success(success);
     _printer.info(
-      ValueReaders.stringValue(
-        result['export_directory_path'],
-        ValueReaders.stringValue(result['bundle_file_path']),
+      _formatArtifactPath(
+        ValueReaders.stringValue(
+          result['export_directory_path'],
+          ValueReaders.stringValue(result['bundle_file_path']),
+        ),
       ),
     );
     return 0;
@@ -580,53 +584,41 @@ class AssetCommand {
   }
 
   bool _boolOption(List<String> args, String name, bool fallback) {
-    final value = _optionValue(args, name);
-    if (value == null || value.trim().isEmpty) {
-      return fallback;
-    }
-    final normalized = value.trim().toLowerCase();
-    return normalized == 'true' ||
-        normalized == '1' ||
-        normalized == 'yes' ||
-        normalized == 'on';
+    return CliArguments(args).boolValue(name, fallback);
   }
 
   String? _optionValue(List<String> args, String name) {
-    for (var index = 0; index < args.length - 1; index += 1) {
-      if (args[index] == name) {
-        return args[index + 1];
-      }
-    }
-    return null;
+    return CliArguments(args).value(name);
   }
 
   String _prettyJson(JsonMap value) {
     return const JsonEncoder.withIndent('  ').convert(value);
   }
 
+  String _formatArtifactPath(String relativePath) {
+    return _projectArtifactLabelService.formatPath(relativePath);
+  }
+
   void _printHelp() {
-    _printer.block(
-      'asset help',
-      [
-        'asset list [--kind style|foreshadow] [--project 路径]',
-        'asset show --kind style --id serial_style [--project 路径]',
-        'asset save-style --id serial_style --name 连载风格 --summary "保持克制" [--genre 都市] [--tone 冷静] [--tags 悬疑,克制] [--project 路径]',
-        'asset save-foreshadow --id tower_secret --title 高塔秘密 --summary "第一卷埋下" [--status planted] [--planted chapters/ch01.md] [--payoff chapters/ch21.md] [--project 路径]',
-        'asset delete-style --id serial_style [--project 路径]',
-        'asset delete-foreshadow --id tower_secret [--project 路径]',
-        'asset import-bundle --source C:\\bundle.asset_bundle.json [--overwrite true|false] [--project 路径]',
-        'asset export-bundle [--title 资产包标题] [--description 描述] [--project 路径]',
-        'asset preview-style-bundle --source C:\\bundle_dir [--overwrite true|false] [--project 路径]',
-        'asset import-style-bundle --source C:\\bundle_dir [--overwrite true|false] [--project 路径]',
-        'asset export-style-bundle --target C:\\exports [--title 标题] [--description 描述] [--project 路径]',
-        'asset preview-character-bundle --source C:\\bundle_dir [--overwrite true|false] [--project 路径]',
-        'asset import-character-bundle --source C:\\bundle_dir [--overwrite true|false] [--project 路径]',
-        'asset export-character-bundle --target C:\\exports [--title 标题] [--description 描述] [--project 路径]',
-        'asset preview-project-asset-bundle --source C:\\bundle_dir [--overwrite true|false] [--project 路径]',
-        'asset import-project-asset-bundle --source C:\\bundle_dir [--overwrite true|false] [--project 路径]',
-        'asset export-project-asset-bundle --target C:\\exports [--title 标题] [--description 描述] [--project 路径]',
-      ].join('\n'),
-    );
+    CliHelpContract.printHelpBlock(_printer, 'asset help', [
+      'asset list [--kind style|foreshadow] [--project 路径]',
+      'asset show --kind style --id serial_style [--project 路径]',
+      'asset save-style --id serial_style --name 连载风格 --summary "保持克制" [--genre 都市] [--tone 冷静] [--tags 悬疑,克制] [--project 路径]',
+      'asset save-foreshadow --id tower_secret --title 高塔秘密 --summary "第一卷埋下" [--status planted] [--planted chapters/ch01.md] [--payoff chapters/ch21.md] [--project 路径]',
+      'asset delete-style --id serial_style [--project 路径]',
+      'asset delete-foreshadow --id tower_secret [--project 路径]',
+      'asset import-bundle --source C:\\bundle.asset_bundle.json [--overwrite true|false] [--project 路径]',
+      'asset export-bundle [--title 资产包标题] [--description 描述] [--project 路径]',
+      'asset preview-style-bundle --source C:\\bundle_dir [--overwrite true|false] [--project 路径]',
+      'asset import-style-bundle --source C:\\bundle_dir [--overwrite true|false] [--project 路径]',
+      'asset export-style-bundle --target C:\\exports [--title 标题] [--description 描述] [--project 路径]',
+      'asset preview-character-bundle --source C:\\bundle_dir [--overwrite true|false] [--project 路径]',
+      'asset import-character-bundle --source C:\\bundle_dir [--overwrite true|false] [--project 路径]',
+      'asset export-character-bundle --target C:\\exports [--title 标题] [--description 描述] [--project 路径]',
+      'asset preview-project-asset-bundle --source C:\\bundle_dir [--overwrite true|false] [--project 路径]',
+      'asset import-project-asset-bundle --source C:\\bundle_dir [--overwrite true|false] [--project 路径]',
+      'asset export-project-asset-bundle --target C:\\exports [--title 标题] [--description 描述] [--project 路径]',
+    ]);
   }
 }
 

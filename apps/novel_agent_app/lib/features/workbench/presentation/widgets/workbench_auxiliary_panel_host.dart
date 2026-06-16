@@ -244,6 +244,21 @@ class _RewritePreviewPanel extends StatelessWidget {
                     color: surface.mutedForegroundColor,
                   ),
                 ),
+                if (viewData.activeDocumentIdentityLabel.trim().isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      _StatusChip(label: viewData.activeDocumentIdentityLabel),
+                      _StatusChip(
+                        label: viewData.activeDocumentStateLabel.trim().isEmpty
+                            ? '已保存'
+                            : viewData.activeDocumentStateLabel,
+                      ),
+                    ],
+                  ),
+                ],
               ],
               const SizedBox(height: 8),
               Text(
@@ -308,7 +323,9 @@ class _ReviewAnalysisPanel extends StatelessWidget {
                 children: [
                   _StatusChip(label: viewData.generationStatus),
                   _StatusChip(
-                    label: viewData.activeDocumentDirty ? '存在未保存修改' : '已保存',
+                    label: viewData.activeDocumentStateLabel.trim().isEmpty
+                        ? (viewData.activeDocumentDirty ? '存在未保存修改' : '已保存')
+                        : viewData.activeDocumentStateLabel,
                   ),
                   _StatusChip(label: '候选选项 ${viewData.pendingOptionCount}'),
                 ],

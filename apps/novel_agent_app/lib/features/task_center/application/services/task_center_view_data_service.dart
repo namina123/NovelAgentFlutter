@@ -546,6 +546,12 @@ class TaskCenterViewDataService {
             option['description'],
           ),
           userOptionQuestion: question,
+          permissionApprovalId: ValueReaders.stringValue(
+            option['approval_record_id'],
+          ),
+          permissionApprovalOptionId: ValueReaders.stringValue(
+            option['approval_option_id'],
+          ),
         ),
       );
     }
@@ -1049,9 +1055,12 @@ class TaskCenterViewDataService {
     final selectedPath = ValueReaders.stringValue(
       selectedRun['relative_path'],
     ).trim();
-    final newestPath = ValueReaders.stringValue(newestRun['relative_path'])
-        .trim();
-    if (selectedPath.isEmpty || newestPath.isEmpty || selectedPath == newestPath) {
+    final newestPath = ValueReaders.stringValue(
+      newestRun['relative_path'],
+    ).trim();
+    if (selectedPath.isEmpty ||
+        newestPath.isEmpty ||
+        selectedPath == newestPath) {
       return false;
     }
     final selectedUpdatedAt = _runUpdatedAt(selectedRun);
@@ -1059,7 +1068,9 @@ class TaskCenterViewDataService {
     if (!newestUpdatedAt.isAfter(selectedUpdatedAt)) {
       return false;
     }
-    final selectedStatus = ValueReaders.stringValue(selectedRun['status']).trim();
+    final selectedStatus = ValueReaders.stringValue(
+      selectedRun['status'],
+    ).trim();
     if (_isTaskQueueRunActive(selectedStatus)) {
       return false;
     }
@@ -1193,12 +1204,20 @@ class TaskCenterViewDataService {
       execution['executed_tools'],
     ).reversed) {
       final tool = ValueReaders.mapValue(rawTool);
-      if (ValueReaders.stringValue(tool['name']) != 'present_user_options') {
+      final result = ValueReaders.mapValue(tool['result']);
+      final options = ValueReaders.objectList(result['options']);
+      if (options.isEmpty) {
         continue;
       }
-      final result = ValueReaders.mapValue(tool['result']);
+      final toolName = ValueReaders.stringValue(tool['name']);
+      final supportsPendingSurface =
+          toolName == 'present_user_options' ||
+          ValueReaders.boolValue(result['waiting_for_user_choice']);
+      if (!supportsPendingSurface) {
+        continue;
+      }
       final question = ValueReaders.stringValue(result['question']);
-      return ValueReaders.objectList(result['options'])
+      return options
           .map(ValueReaders.mapValue)
           .where((entry) => entry.isNotEmpty)
           .map(
@@ -1228,6 +1247,12 @@ class TaskCenterViewDataService {
                 ),
               ),
               'source_question': question,
+              'approval_record_id': ValueReaders.stringValue(
+                entry['approval_record_id'],
+              ),
+              'approval_option_id': ValueReaders.stringValue(
+                entry['approval_option_id'],
+              ),
             },
           )
           .toList(growable: false);

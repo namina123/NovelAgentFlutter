@@ -5,6 +5,15 @@ import 'package:novel_agent_app/features/book_deconstruction/application/models/
 import 'package:novel_agent_app/features/book_deconstruction/application/services/book_deconstruction_draft_builder_service.dart';
 import 'package:novel_agent_app/features/book_deconstruction/application/services/book_deconstruction_view_data_service.dart';
 import 'package:novel_agent_app/features/book_deconstruction/presentation/contracts/book_deconstruction_action_handler.dart';
+import 'package:novel_agent_app/features/book_deconstruction/presentation/models/book_deconstruction_continuity_view_data.dart';
+import 'package:novel_agent_app/features/book_deconstruction/presentation/models/book_deconstruction_followup_group_view_data.dart';
+import 'package:novel_agent_app/features/book_deconstruction/presentation/models/book_deconstruction_followup_option_view_data.dart';
+import 'package:novel_agent_app/features/book_deconstruction/presentation/models/book_deconstruction_information_bridge_view_data.dart';
+import 'package:novel_agent_app/features/book_deconstruction/presentation/models/book_deconstruction_plan_group_view_data.dart';
+import 'package:novel_agent_app/features/book_deconstruction/presentation/models/book_deconstruction_plan_item_view_data.dart';
+import 'package:novel_agent_app/features/book_deconstruction/presentation/models/book_deconstruction_preview_section_view_data.dart';
+import 'package:novel_agent_app/features/book_deconstruction/presentation/models/book_deconstruction_step_view_data.dart';
+import 'package:novel_agent_app/features/book_deconstruction/presentation/models/book_deconstruction_view_data.dart';
 import 'package:novel_agent_app/features/book_deconstruction/presentation/widgets/book_deconstruction_preview_panel.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
@@ -37,6 +46,7 @@ void main() {
         ),
         status: '已生成结构化预览。',
       );
+      final actionHandler = _FakeBookDeconstructionActionHandler();
 
       await tester.pumpWidget(
         MaterialApp(
@@ -47,7 +57,7 @@ void main() {
               height: 840,
               child: BookDeconstructionPreviewPanel(
                 viewData: viewData,
-                actionHandler: _FakeBookDeconstructionActionHandler(),
+                actionHandler: actionHandler,
               ),
             ),
           ),
@@ -55,28 +65,126 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      final fanficOptionFinder = find.byKey(
+        const ValueKey(
+          'book_deconstruction_followup_option_fanfic_seed_autopilot_novel',
+        ),
+      );
+      expect(fanficOptionFinder, findsOneWidget);
+
+      await tester.tap(fanficOptionFinder);
+      await tester.pumpAndSettle();
+
+      expect(actionHandler.lastFollowupOptionId, 'fanfic_seed_autopilot_novel');
+
       await tester.scrollUntilVisible(
-        find.text('后续用途与共享资料桥'),
+        find.text('后续用途与共享资料'),
         200,
         scrollable: find.byType(Scrollable),
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('后续用途与共享资料桥'), findsOneWidget);
-      expect(find.text('continuation'), findsOneWidget);
-      expect(find.text('fanfic'), findsOneWidget);
+      expect(find.text('后续用途与共享资料'), findsOneWidget);
       expect(find.text('共享资料沉淀'), findsOneWidget);
       expect(find.text('解说与分析'), findsOneWidget);
       expect(find.text('本次已生成的可复用资料'), findsOneWidget);
       expect(find.textContaining('information 资料 · 5'), findsOneWidget);
       expect(find.textContaining('design 巧思 · 2'), findsOneWidget);
       expect(find.textContaining('资料与设定'), findsAtLeastNWidgets(1));
+      await tester.scrollUntilVisible(
+        find.widgetWithText(OutlinedButton, '派生并打开项目'),
+        200,
+        scrollable: find.byType(Scrollable),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('派生并打开项目'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'preview panel uses a natural note for empty follow-up groups',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light(),
+          home: Scaffold(
+            body: SizedBox(
+              width: 480,
+              height: 840,
+              child: BookDeconstructionPreviewPanel(
+                viewData: BookDeconstructionViewData(
+                  projectTitle: '空分组测试',
+                  status: '已生成结构化预览。',
+                  isLoading: false,
+                  activeStepId: '',
+                  steps: const <BookDeconstructionStepViewData>[],
+                  sourceAbsolutePath: '',
+                  sourceTitle: '',
+                  sourceContent: '',
+                  operatorNotes: '',
+                  styleSummary: '',
+                  worldRulesText: '',
+                  characterLinesText: '',
+                  organizationLinesText: '',
+                  previewSections: const <BookDeconstructionPreviewSectionViewData>[],
+                  planGroups: const <BookDeconstructionPlanGroupViewData>[
+                    BookDeconstructionPlanGroupViewData(
+                      id: 'plan_group',
+                      title: '结构预览',
+                      description: '仅用于打开连续预览区。',
+                      items: <BookDeconstructionPlanItemViewData>[],
+                    ),
+                  ],
+                  selectedItemCount: 0,
+                  totalItemCount: 0,
+                  selectedFollowupOptionId: '',
+                  confirmedPreviewPath: '',
+                  canBuildPreview: false,
+                  canConfirmSelection: false,
+                  canCreateDerivedProject: false,
+                  informationBridge: null,
+                  continuity: const BookDeconstructionContinuityViewData(
+                    preferredDirectionLabel: '偏向长任务',
+                    highlightedBuildTierLabel: '默认高亮',
+                    highlightedRouteTitle: '默认路线',
+                    selectedRouteOptionId: '',
+                    selectedRouteTitle: '默认路线',
+                    scopeHintCount: 0,
+                    identityMappingCount: 0,
+                    mechanicHintCount: 0,
+                    summary: '空分组测试',
+                    followupGroups: <BookDeconstructionFollowupGroupViewData>[
+                      BookDeconstructionFollowupGroupViewData(
+                        id: 'empty_group',
+                        title: '空分组',
+                        description: '无可用路线',
+                        options: <BookDeconstructionFollowupOptionViewData>[],
+                      ),
+                    ],
+                  ),
+                ),
+                actionHandler: _FakeBookDeconstructionActionHandler(),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('当前暂无可用路线。'), findsOneWidget);
+      expect(
+        find.text('当前保留为空分组，后续新增路线会继续挂到这里。'),
+        findsNothing,
+      );
     },
   );
 }
 
 class _FakeBookDeconstructionActionHandler
     implements BookDeconstructionActionHandler {
+  String lastFollowupOptionId = '';
+
   @override
   void onBookDeconstructionBackRequested() {}
 
@@ -90,7 +198,15 @@ class _FakeBookDeconstructionActionHandler
   void onBookDeconstructionClearSelectionRequested() {}
 
   @override
+  void onBookDeconstructionFollowupOptionSelected(String optionId) {
+    lastFollowupOptionId = optionId;
+  }
+
+  @override
   Future<void> onBookDeconstructionConfirmRequested() async {}
+
+  @override
+  Future<void> onBookDeconstructionCreateDerivedProjectRequested() async {}
 
   @override
   Future<void> onBookDeconstructionImportFileRequested() async {}

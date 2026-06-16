@@ -23,10 +23,11 @@ class ConversationDraftAutosavePolicyService {
         _looksLikeGuidance(content)) {
       return false;
     }
-    if (_isContentDocumentPath(activeDocumentPath)) {
-      return true;
+    if (!_isContentDocumentPath(activeDocumentPath)) {
+      return false;
     }
-    return _looksLikeNarrativeDraft(content);
+    return _looksLikeNarrativeDraft(content) ||
+        _looksLikeShortEditableDraft(content);
   }
 
   bool _containsChoiceTool(List<Object?> executedTools) {
@@ -43,6 +44,7 @@ class ConversationDraftAutosavePolicyService {
   bool _isContentDocumentPath(String relativePath) {
     final normalized = relativePath.replaceAll('\\', '/').trim().toLowerCase();
     return normalized.startsWith('chapters/') ||
+        normalized.startsWith('samples/') ||
         normalized.startsWith('scenes/');
   }
 
@@ -121,6 +123,37 @@ class ConversationDraftAutosavePolicyService {
     final averageProseLength = proseLength / proseLines.length;
     final bulletRatio = bulletCount / lines.length;
     return averageProseLength >= 22 && bulletRatio < 0.35;
+  }
+
+  bool _looksLikeShortEditableDraft(String content) {
+    final normalized = content.replaceAll('\r\n', '\n').trim();
+    if (normalized.length < 60) {
+      return false;
+    }
+    if (normalized.length >= 420) {
+      return _looksLikeNarrativeDraft(normalized);
+    }
+    final lines = normalized
+        .split('\n')
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList(growable: false);
+    if (lines.length < 2) {
+      return false;
+    }
+    final bulletCount = lines.where(_isBulletLine).length;
+    if (bulletCount > 0) {
+      return false;
+    }
+    final proseLength = lines.fold<int>(
+      0,
+      (sum, line) => sum + line.runes.length,
+    );
+    final averageLineLength = proseLength / lines.length;
+    final sentenceEndingCount = RegExp(
+      r'[。！？!?]',
+    ).allMatches(normalized).length;
+    return averageLineLength >= 16 && sentenceEndingCount >= 2;
   }
 
   bool _isBulletLine(String line) {

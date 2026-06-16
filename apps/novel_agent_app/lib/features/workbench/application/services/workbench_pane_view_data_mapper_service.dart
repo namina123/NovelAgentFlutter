@@ -30,6 +30,8 @@ class WorkbenchPaneViewDataMapperService {
       projectName: source.projectName,
       projectSubtitle: source.projectSubtitle,
       projectTypeId: source.projectTypeId,
+      projectTypeTransitionAvailability:
+          source.projectTypeTransitionAvailability,
       resourceEntries: source.resourceEntries,
       informationViewData: source.informationViewData,
       projectLongTaskSummary: source.projectLongTaskSummary,
@@ -44,6 +46,7 @@ class WorkbenchPaneViewDataMapperService {
       activeDocumentPath: source.activeDocumentPath,
       activeDocumentBody: source.activeDocumentBody,
       activeDocumentDirty: source.activeDocumentDirty,
+      activeDocumentBufferedDraft: source.activeDocumentBufferedDraft,
       activeDocumentCanRender: source.activeDocumentCanRender,
       isActiveDocumentRendered: source.isActiveDocumentRendered,
       isDocumentsWorkspaceVisible: source.isDocumentsWorkspaceVisible,

@@ -58,7 +58,10 @@ class BookDeconstructionPreviewPanel extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             children: [
               if (viewData.continuity != null) ...[
-                _ContinuitySummarySection(continuity: viewData.continuity!),
+                _ContinuitySummarySection(
+                  continuity: viewData.continuity!,
+                  actionHandler: actionHandler,
+                ),
                 const SizedBox(height: 16),
               ],
               if (viewData.informationBridge != null) ...[
@@ -138,6 +141,14 @@ class BookDeconstructionPreviewPanel extends StatelessWidget {
                 icon: const Icon(Icons.assignment_turned_in_outlined),
                 label: const Text('确认当前应用前选择'),
               ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: viewData.canCreateDerivedProject
+                    ? actionHandler.onBookDeconstructionCreateDerivedProjectRequested
+                    : null,
+                icon: const Icon(Icons.fork_right_outlined),
+                label: const Text('派生并打开项目'),
+              ),
             ],
           ),
         ),
@@ -157,7 +168,7 @@ class _InformationBridgeSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('后续用途与共享资料桥', style: textTheme.titleSmall),
+        Text('后续用途与共享资料', style: textTheme.titleSmall),
         const SizedBox(height: 4),
         Text(bridge.summary, style: textTheme.bodySmall),
         const SizedBox(height: 10),
@@ -214,9 +225,13 @@ class _InformationBridgeSection extends StatelessWidget {
 }
 
 class _ContinuitySummarySection extends StatelessWidget {
-  const _ContinuitySummarySection({required this.continuity});
+  const _ContinuitySummarySection({
+    required this.continuity,
+    required this.actionHandler,
+  });
 
   final BookDeconstructionContinuityViewData continuity;
+  final BookDeconstructionActionHandler actionHandler;
 
   @override
   Widget build(BuildContext context) {
@@ -224,7 +239,7 @@ class _ContinuitySummarySection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('续写基座与后续工程菜单', style: textTheme.titleSmall),
+        Text('续写基座与后续方案', style: textTheme.titleSmall),
         const SizedBox(height: 4),
         Text(continuity.summary, style: textTheme.bodySmall),
         const SizedBox(height: 8),
@@ -242,6 +257,8 @@ class _ContinuitySummarySection extends StatelessWidget {
               Text('推荐基座：${continuity.highlightedBuildTierLabel}'),
               const SizedBox(height: 4),
               Text('默认高亮：${continuity.highlightedRouteTitle}'),
+              const SizedBox(height: 4),
+              Text('当前选择：${continuity.selectedRouteTitle}'),
               const SizedBox(height: 8),
               Text(
                 '作用域提示 ${continuity.scopeHintCount} · 身份映射 ${continuity.identityMappingCount} · 机制提示 ${continuity.mechanicHintCount}',
@@ -270,9 +287,11 @@ class _ContinuitySummarySection extends StatelessWidget {
               Text(group.description, style: textTheme.bodySmall),
               const SizedBox(height: 8),
               if (group.options.isEmpty)
-                Text('当前保留为空分组，后续新增路线会继续挂到这里。', style: textTheme.bodySmall)
+                Text('当前暂无可用路线。', style: textTheme.bodySmall)
               else
-                ...group.options.map(_buildOption),
+                ...group.options.map(
+                  (option) => _buildOption(option, group.title),
+                ),
             ],
           ),
         );
@@ -280,39 +299,76 @@ class _ContinuitySummarySection extends StatelessWidget {
     );
   }
 
-  Widget _buildOption(BookDeconstructionFollowupOptionViewData option) {
+  Widget _buildOption(
+    BookDeconstructionFollowupOptionViewData option,
+    String groupTitle,
+  ) {
     return Builder(
       builder: (context) {
         final textTheme = Theme.of(context).textTheme;
         return Padding(
           padding: const EdgeInsets.only(bottom: 8),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: option.isHighlighted
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).dividerColor,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              key: ValueKey('book_deconstruction_followup_option_${option.id}'),
+              onTap: () {
+                actionHandler.onBookDeconstructionFollowupOptionSelected(
+                  option.id,
+                );
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: option.isSelected || option.isHighlighted
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(context).dividerColor,
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2, right: 12),
+                      child: Icon(
+                        option.isSelected
+                            ? Icons.radio_button_checked
+                            : Icons.radio_button_unchecked,
+                        size: 20,
+                        color: option.isSelected || option.isHighlighted
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).disabledColor,
+                      ),
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            option.isSelected
+                                ? '${option.title} · 已选择'
+                                : option.isHighlighted
+                                ? '${option.title} · 当前默认'
+                                : option.title,
+                            style: textTheme.bodyLarge,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(option.summary, style: textTheme.bodySmall),
+                          const SizedBox(height: 4),
+                          Text(
+                            '推荐基座：${option.buildTierLabel}',
+                            style: textTheme.bodySmall,
+                          ),
+                          const SizedBox(height: 4),
+                          Text('分组：$groupTitle', style: textTheme.bodySmall),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  option.isHighlighted
-                      ? '${option.title} · 当前默认'
-                      : option.title,
-                  style: textTheme.bodyLarge,
-                ),
-                const SizedBox(height: 4),
-                Text(option.summary, style: textTheme.bodySmall),
-                const SizedBox(height: 4),
-                Text(
-                  '推荐基座：${option.buildTierLabel}',
-                  style: textTheme.bodySmall,
-                ),
-              ],
             ),
           ),
         );

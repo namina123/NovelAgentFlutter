@@ -30,6 +30,7 @@ source_of_truth_paths:
       displayMode: DocumentWorkspaceDisplayMode.source,
       canRender: false,
       isDirty: false,
+      isBufferedDraft: false,
       hasDocument: true,
       onChanged: null,
     );

@@ -9,6 +9,7 @@ class DocumentResourceRenderRequest {
     required this.displayMode,
     required this.canRender,
     required this.isDirty,
+    required this.isBufferedDraft,
     required this.hasDocument,
     required this.onChanged,
   });
@@ -20,6 +21,7 @@ class DocumentResourceRenderRequest {
   final DocumentWorkspaceDisplayMode displayMode;
   final bool canRender;
   final bool isDirty;
+  final bool isBufferedDraft;
   final bool hasDocument;
   final void Function(String value)? onChanged;
 

@@ -45,8 +45,12 @@ void main() {
 
     test('keeps new user-facing directories visible by default', () {
       expect(
+        service.shouldHideFromDefaultTree('premise/project_overview.md'),
+        isTrue,
+      );
+      expect(
         service.shouldHideFromDefaultTree('premise/project_brief.md'),
-        isFalse,
+        isTrue,
       );
       expect(
         service.shouldHideFromDefaultTree('outlines/story/story_outline.md'),

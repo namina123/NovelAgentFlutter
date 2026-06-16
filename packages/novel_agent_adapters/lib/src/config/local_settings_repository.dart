@@ -47,7 +47,7 @@ class LocalSettingsRepository implements SettingsRepository {
       defaultAgentId: defaultAgentId,
       defaultModelId: defaultModelId,
       defaultProjectPath: defaultProjectPath,
-      autoSaveDrafts: _boolValue(document['auto_save_drafts'], true),
+      draftFallbackProtectionEnabled: _draftFallbackProtectionValue(document),
       providers: providers,
       permissionSettings: _mapValue(document['permissions']),
       toolStrategySettings: _mapValue(document['tool_strategy']),
@@ -70,7 +70,7 @@ class LocalSettingsRepository implements SettingsRepository {
     final filePath = _resolvedSettingsFilePath(discoveredBasePath);
     final fileBasePath = File(filePath).absolute.parent.path;
     final document = <String, Object?>{
-      ..._lastLoadedDocument,
+      ..._documentBaseForSave(),
       ..._sanitizedExtraSettingsForSave(
         settings.extraSettings,
         basePath: fileBasePath,
@@ -82,7 +82,8 @@ class LocalSettingsRepository implements SettingsRepository {
         settings.defaultProjectPath,
         basePath: fileBasePath,
       ),
-      'auto_save_drafts': settings.autoSaveDrafts,
+      AppSettings.draftFallbackProtectionConfigKey:
+          settings.draftFallbackProtectionEnabled,
       'providers': settings.providers
           .map(_providerToDocument)
           .toList(growable: false),
@@ -113,6 +114,7 @@ class LocalSettingsRepository implements SettingsRepository {
       'default_agent_id',
       'default_model_id',
       'default_project_path',
+      AppSettings.draftFallbackProtectionConfigKey,
       'auto_save_drafts',
       'providers',
       'permissions',
@@ -124,6 +126,20 @@ class LocalSettingsRepository implements SettingsRepository {
       next.remove(key);
     }
     return _resolvedExtraSettingsForLoad(next, basePath: basePath);
+  }
+
+  Map<String, Object?> _documentBaseForSave() {
+    final next = Map<String, Object?>.from(_lastLoadedDocument);
+    next.remove(AppSettings.legacyAutoSaveDraftsConfigKey);
+    next.remove(AppSettings.draftFallbackProtectionConfigKey);
+    return next;
+  }
+
+  bool _draftFallbackProtectionValue(Map<String, Object?> document) {
+    return _boolValue(
+      document[AppSettings.draftFallbackProtectionConfigKey],
+      _boolValue(document[AppSettings.legacyAutoSaveDraftsConfigKey], true),
+    );
   }
 
   Map<String, Object?> _providerToDocument(ProviderEndpointSettings provider) {
@@ -155,7 +171,7 @@ class LocalSettingsRepository implements SettingsRepository {
     }
     final projectRootPath = _stringValue(workbenchState['project_root_path']);
     next['workbench_state'] = <String, Object?>{
-      ...workbenchState,
+      ..._normalizedWorkbenchState(workbenchState),
       'project_root_path': projectRootPath.trim().isEmpty
           ? ''
           : _storedProjectPath(projectRootPath, basePath: basePath),
@@ -174,11 +190,39 @@ class LocalSettingsRepository implements SettingsRepository {
     }
     final projectRootPath = _stringValue(workbenchState['project_root_path']);
     next['workbench_state'] = <String, Object?>{
-      ...workbenchState,
+      ..._normalizedWorkbenchState(workbenchState),
       'project_root_path': projectRootPath.trim().isEmpty
           ? ''
           : _resolveProjectPath(projectRootPath, basePath: basePath),
     };
+    return next;
+  }
+
+  JsonMap _normalizedWorkbenchState(JsonMap workbenchState) {
+    final next = Map<String, Object?>.from(workbenchState);
+    next['active_document_path'] =
+        ProjectSupportDocumentCatalog.canonicalizePath(
+          _stringValue(workbenchState['active_document_path']),
+        );
+    final normalizedRecoveries = <Object?>[];
+    for (final rawRecovery in ValueReaders.objectList(
+      workbenchState['draft_recoveries'],
+    )) {
+      final recovery = _mapValue(rawRecovery);
+      if (recovery.isEmpty) {
+        normalizedRecoveries.add(rawRecovery);
+        continue;
+      }
+      normalizedRecoveries.add(<String, Object?>{
+        ...recovery,
+        'relative_path': ProjectSupportDocumentCatalog.canonicalizePath(
+          _stringValue(recovery['relative_path']),
+        ),
+      });
+    }
+    if (normalizedRecoveries.isNotEmpty) {
+      next['draft_recoveries'] = normalizedRecoveries;
+    }
     return next;
   }
 

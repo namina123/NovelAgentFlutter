@@ -1,3 +1,5 @@
+import 'package:novel_agent_core/novel_agent_core.dart';
+
 import 'conversation_entry_view_data.dart';
 import 'conversation_agent_selector_view_data.dart';
 import 'conversation_group_selector_view_data.dart';
@@ -31,6 +33,10 @@ class WorkbenchViewData {
     required this.projectSubtitle,
     required this.projectPath,
     this.projectTypeId = '',
+    this.projectTypeTransitionAvailability =
+        const EntryAvailabilityDecision.hiddenContract(
+          entryId: 'workspace.transition_project_type',
+        ),
     required this.toolCoreStatus,
     this.toolPreviewMode = ToolPreviewMode.compact,
     required this.projectLongTaskSummary,
@@ -54,6 +60,7 @@ class WorkbenchViewData {
     required this.activeDocumentPath,
     required this.activeDocumentBody,
     required this.activeDocumentDirty,
+    required this.activeDocumentBufferedDraft,
     required this.activeDocumentCanRender,
     required this.isActiveDocumentRendered,
     required this.conversationEntries,
@@ -75,6 +82,7 @@ class WorkbenchViewData {
   final String projectSubtitle;
   final String projectPath;
   final String projectTypeId;
+  final EntryAvailabilityDecision projectTypeTransitionAvailability;
   final String toolCoreStatus;
   final String toolPreviewMode;
   final ProjectLongTaskSummaryViewData? projectLongTaskSummary;
@@ -98,6 +106,7 @@ class WorkbenchViewData {
   final String activeDocumentPath;
   final String activeDocumentBody;
   final bool activeDocumentDirty;
+  final bool activeDocumentBufferedDraft;
   final bool activeDocumentCanRender;
   final bool isActiveDocumentRendered;
   final List<ConversationEntryViewData> conversationEntries;
@@ -120,6 +129,10 @@ class WorkbenchViewData {
       projectSubtitle: '',
       projectPath: '',
       projectTypeId: '',
+      projectTypeTransitionAvailability:
+          EntryAvailabilityDecision.hiddenContract(
+            entryId: 'workspace.transition_project_type',
+          ),
       toolCoreStatus: '',
       toolPreviewMode: ToolPreviewMode.compact,
       projectLongTaskSummary: null,
@@ -155,6 +168,7 @@ class WorkbenchViewData {
       activeDocumentPath: '',
       activeDocumentBody: '',
       activeDocumentDirty: false,
+      activeDocumentBufferedDraft: false,
       activeDocumentCanRender: false,
       isActiveDocumentRendered: false,
       conversationEntries: [],
@@ -182,6 +196,8 @@ class WorkbenchViewData {
     String? projectSubtitle,
     String? projectPath,
     String? projectTypeId,
+    Object? projectTypeTransitionAvailability =
+        _projectTypeTransitionAvailabilitySentinel,
     String? toolCoreStatus,
     String? toolPreviewMode,
     Object? projectLongTaskSummary = _projectLongTaskSummarySentinel,
@@ -206,6 +222,7 @@ class WorkbenchViewData {
     String? activeDocumentPath,
     String? activeDocumentBody,
     bool? activeDocumentDirty,
+    bool? activeDocumentBufferedDraft,
     bool? activeDocumentCanRender,
     bool? isActiveDocumentRendered,
     List<ConversationEntryViewData>? conversationEntries,
@@ -228,6 +245,13 @@ class WorkbenchViewData {
       projectSubtitle: projectSubtitle ?? this.projectSubtitle,
       projectPath: projectPath ?? this.projectPath,
       projectTypeId: projectTypeId ?? this.projectTypeId,
+      projectTypeTransitionAvailability:
+          identical(
+            projectTypeTransitionAvailability,
+            _projectTypeTransitionAvailabilitySentinel,
+          )
+          ? this.projectTypeTransitionAvailability
+          : projectTypeTransitionAvailability as EntryAvailabilityDecision,
       toolCoreStatus: toolCoreStatus ?? this.toolCoreStatus,
       toolPreviewMode: ToolPreviewMode.normalize(
         toolPreviewMode ?? this.toolPreviewMode,
@@ -268,6 +292,8 @@ class WorkbenchViewData {
       activeDocumentPath: activeDocumentPath ?? this.activeDocumentPath,
       activeDocumentBody: activeDocumentBody ?? this.activeDocumentBody,
       activeDocumentDirty: activeDocumentDirty ?? this.activeDocumentDirty,
+      activeDocumentBufferedDraft:
+          activeDocumentBufferedDraft ?? this.activeDocumentBufferedDraft,
       activeDocumentCanRender:
           activeDocumentCanRender ?? this.activeDocumentCanRender,
       isActiveDocumentRendered:
@@ -308,6 +334,7 @@ const Object _projectAgentGroupWorkspaceSentinel = Object();
 const Object _workspaceCommandSentinel = Object();
 const Object _retryRequestViewSentinel = Object();
 const Object _projectLongTaskSummarySentinel = Object();
+const Object _projectTypeTransitionAvailabilitySentinel = Object();
 const Object _conversationContextProjectionSentinel = Object();
 const Object _openingPanelSentinel = Object();
 const Object _conversationOpeningStateSentinel = Object();

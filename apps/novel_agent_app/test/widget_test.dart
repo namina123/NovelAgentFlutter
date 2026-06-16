@@ -267,6 +267,12 @@ void main() {
           projectExpressionConstraintWorkspaceService,
       projectGeneralContinuitySetupService:
           projectGeneralContinuitySetupService,
+      toolPermissionApprovalRecordService:
+          ProjectToolPermissionApprovalRecordService(
+            taskRepository: ProjectTaskRepository(
+              workspacePort: bundle.projectWorkspacePort,
+            ),
+          ),
       longTaskSupervisor: bundle.longTaskSupervisor,
       longTaskStationController: longTaskStationController,
       generateDraftUseCaseFactory: (provider, networkSettings) {

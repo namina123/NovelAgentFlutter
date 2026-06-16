@@ -76,7 +76,7 @@ void main() {
         settings: _baseSettings(),
         workbench: WorkbenchViewData.initial().copyWith(
           projectPath: 'D:/Projects/novel_project',
-          activeDocumentPath: 'drafts/chapter_01.md',
+          activeDocumentPath: 'chapters/chapter_01.md',
           agentSelector: const ConversationAgentSelectorViewData(
             currentAgentLabel: '审阅智能体',
             currentAgentId: 'reviewer',
@@ -91,18 +91,18 @@ void main() {
             OpenDocumentState(
               id: 'doc-1',
               title: 'Chapter 1',
-              relativePath: 'drafts/chapter_01.md',
+              relativePath: 'chapters/chapter_01.md',
               content: 'body',
             ),
             OpenDocumentState(
               id: 'doc-2',
               title: 'Chapter 2',
-              relativePath: 'drafts/chapter_02.md',
+              relativePath: 'chapters/chapter_02.md',
               content: 'body 2',
             ),
           ],
           activeOpenDocumentId: 'doc-1',
-          expandedResourceDirectories: const <String>{'drafts'},
+          expandedResourceDirectories: const <String>{'chapters'},
         ),
       );
 
@@ -113,13 +113,255 @@ void main() {
         harness.savedSettings.last.extraSettings['workbench_state'],
       );
       expect(snapshot['project_root_path'], 'D:/Projects/novel_project');
-      expect(snapshot['active_document_path'], 'drafts/chapter_02.md');
+      expect(snapshot['active_document_path'], 'chapters/chapter_02.md');
       expect(snapshot['selected_conversation_agent_id'], 'reviewer');
       expect(
         ValueReaders.stringList(snapshot['expanded_directories']),
-        <String>['drafts'],
+        <String>['chapters'],
       );
+      expect(ValueReaders.mapList(snapshot['draft_recoveries']), isEmpty);
     });
+
+    test(
+      'persisted snapshot keeps dirty content documents as draft recovery',
+      () {
+        final harness = _ControllerHarness(
+          settings: _baseSettings(),
+          workbench: WorkbenchViewData.initial().copyWith(
+            projectPath: 'D:/Projects/novel_project',
+            activeDocumentPath: 'chapters/chapter_01.md',
+            agentSelector: const ConversationAgentSelectorViewData(
+              currentAgentLabel: '审阅智能体',
+              currentAgentId: 'reviewer',
+              currentAgentDescription: '质量审阅',
+              agentOptions: <SelectorOptionViewData>[],
+              canSwitchAgent: false,
+            ),
+          ),
+          projectState: WorkbenchProjectRuntimeState(
+            currentProject: _project('D:/Projects/novel_project'),
+            openDocuments: const <OpenDocumentState>[
+              OpenDocumentState(
+                id: 'doc-1',
+                title: 'Chapter 1',
+                relativePath: 'chapters/chapter_01.md',
+                content: '旧内容',
+                isDirty: true,
+              ),
+              OpenDocumentState(
+                id: 'doc-2',
+                title: 'Chapter 2',
+                relativePath: 'chapters/chapter_02.md',
+                content: 'body 2',
+              ),
+            ],
+            activeOpenDocumentId: 'doc-1',
+            expandedResourceDirectories: const <String>{'chapters'},
+          ),
+        );
+
+        harness.controller.onDocumentBodyChanged('新的未保存正文');
+        harness.controller.onDocumentSelected('doc-2');
+
+        final snapshot = _mapValue(
+          harness.savedSettings.last.extraSettings['workbench_state'],
+        );
+        final recoveries = ValueReaders.mapList(snapshot['draft_recoveries']);
+        expect(recoveries, hasLength(1));
+        expect(
+          ValueReaders.stringValue(recoveries.single['relative_path']),
+          'chapters/chapter_01.md',
+        );
+        expect(
+          ValueReaders.stringValue(recoveries.single['content']),
+          '新的未保存正文',
+        );
+      },
+    );
+
+    test('persisted snapshot drops hidden internal active document path', () {
+      final harness = _ControllerHarness(
+        settings: _baseSettings(),
+        workbench: WorkbenchViewData.initial().copyWith(
+          projectPath: 'D:/Projects/novel_project',
+          activeDocumentPath: '.novel_agent/state/characters/lin/history.md',
+          agentSelector: const ConversationAgentSelectorViewData(
+            currentAgentLabel: '审阅智能体',
+            currentAgentId: 'reviewer',
+            currentAgentDescription: '质量审阅',
+            agentOptions: <SelectorOptionViewData>[],
+            canSwitchAgent: false,
+          ),
+        ),
+        projectState: WorkbenchProjectRuntimeState(
+          currentProject: _project('D:/Projects/novel_project'),
+          openDocuments: const <OpenDocumentState>[
+            OpenDocumentState(
+              id: 'doc-hidden',
+              title: 'history',
+              relativePath: '.novel_agent/state/characters/lin/history.md',
+              content: 'body',
+            ),
+          ],
+          activeOpenDocumentId: '',
+          expandedResourceDirectories: const <String>{'drafts'},
+        ),
+      );
+
+      harness.controller.onDocumentSelected('doc-hidden');
+
+      final snapshot = _mapValue(
+        harness.savedSettings.last.extraSettings['workbench_state'],
+      );
+      expect(snapshot['active_document_path'], '');
+    });
+
+    test(
+      'restoreWorkbenchSnapshot ignores hidden internal markdown path',
+      () async {
+        final harness = _ControllerHarness(
+          settings: _settingsWithSnapshot(
+            projectRootPath: 'D:/Projects/novel_project',
+            selectedConversationAgentId: 'reviewer',
+            activeDocumentPath: '.novel_agent/state/characters/lin/history.md',
+            expandedDirectories: const <String>['docs'],
+          ),
+          workbench: WorkbenchViewData.initial(),
+          projectState: WorkbenchProjectRuntimeState(
+            resourceSnapshotEntries: const <JsonMap>[
+              <String, Object?>{'relative_path': 'docs', 'is_dir': true},
+            ],
+          ),
+        );
+
+        await harness.controller.restoreWorkbenchSnapshot(
+          _project('D:/Projects/novel_project'),
+        );
+
+        expect(harness.workbench.activeDocumentPath, isEmpty);
+      },
+    );
+
+    test(
+      'restoreWorkbenchSnapshot restores dirty draft recovery without formal write',
+      () async {
+        final workspacePort = LocalProjectWorkspacePort();
+        final tempDirectory = await Directory.systemTemp.createTemp(
+          'workbench_draft_recovery_',
+        );
+        addTearDown(() async {
+          if (await tempDirectory.exists()) {
+            await tempDirectory.delete(recursive: true);
+          }
+        });
+        await _writeProjectFile(
+          tempDirectory.path,
+          'chapters/chapter_01.md',
+          '磁盘上的正式内容',
+        );
+        final harness = _ControllerHarness(
+          settings: _settingsWithSnapshot(
+            projectRootPath: tempDirectory.path,
+            selectedConversationAgentId: 'reviewer',
+            activeDocumentPath: 'chapters/chapter_01.md',
+            draftRecoveries: const <Map<String, Object?>>[
+              <String, Object?>{
+                'relative_path': 'chapters/chapter_01.md',
+                'title': '第一章',
+                'content': '恢复出来的未保存草稿',
+              },
+            ],
+          ),
+          workbench: WorkbenchViewData.initial(),
+          projectState: WorkbenchProjectRuntimeState(
+            currentProject: _project(tempDirectory.path),
+            resourceSnapshotEntries: const <JsonMap>[
+              <String, Object?>{
+                'relative_path': 'chapters/chapter_01.md',
+                'is_dir': false,
+              },
+            ],
+          ),
+          projectRepository: _FixedProjectRepository(
+            _project(tempDirectory.path),
+          ),
+          workspacePort: workspacePort,
+          toolHostPort: ProjectWorkspaceToolHostAdapter(
+            workspacePort: workspacePort,
+            fileMutationAdapter: LocalProjectFileMutationAdapter(),
+          ),
+        );
+
+        await harness.controller.restoreWorkbenchSnapshot(
+          _project(tempDirectory.path),
+        );
+
+        expect(harness.workbench.activeDocumentPath, 'chapters/chapter_01.md');
+        expect(harness.workbench.activeDocumentBody, '恢复出来的未保存草稿');
+        expect(harness.workbench.activeDocumentDirty, isTrue);
+        expect(harness.workbench.generationStatus, contains('已恢复 1 个未正式保存的草稿'));
+        expect(
+          await File(
+            '${tempDirectory.path}${Platform.pathSeparator}chapters${Platform.pathSeparator}chapter_01.md',
+          ).readAsString(),
+          '磁盘上的正式内容',
+        );
+      },
+    );
+
+    test(
+      'loadProject keeps formal premise primary even when persisted snapshot points to legacy project brief',
+      () async {
+        final workspacePort = LocalProjectWorkspacePort();
+        final tempDirectory = await Directory.systemTemp.createTemp(
+          'workbench_support_overview_restore_',
+        );
+        addTearDown(() async {
+          if (await tempDirectory.exists()) {
+            await tempDirectory.delete(recursive: true);
+          }
+        });
+        await _writeProjectFile(
+          tempDirectory.path,
+          'premise/project_constitution.md',
+          '# 正式前提\n\nformal premise',
+        );
+        await _writeProjectFile(
+          tempDirectory.path,
+          'premise/project_overview.md',
+          '# 项目概览\n\ncanonical overview',
+        );
+        final harness = _ControllerHarness(
+          settings: _settingsWithSnapshot(
+            projectRootPath: tempDirectory.path,
+            selectedConversationAgentId: 'reviewer',
+            activeDocumentPath: 'premise/project_brief.md',
+          ),
+          workbench: WorkbenchViewData.initial(),
+          projectState: const WorkbenchProjectRuntimeState(),
+          projectRepository: _FixedProjectRepository(
+            _project(tempDirectory.path),
+          ),
+          workspacePort: workspacePort,
+          toolHostPort: ProjectWorkspaceToolHostAdapter(
+            workspacePort: workspacePort,
+            fileMutationAdapter: LocalProjectFileMutationAdapter(),
+          ),
+        );
+
+        final loaded = await harness.controller.loadProject(tempDirectory.path);
+
+        expect(loaded, isTrue);
+        expect(
+          harness.workbench.activeDocumentPath,
+          'premise/project_constitution.md',
+        );
+        expect(
+          harness.workbench.activeDocumentBody,
+          contains('formal premise'),
+        );
+      },
+    );
 
     test(
       'refreshProjectLongTaskSummary loads station detail truth for workbench summary',
@@ -394,6 +636,58 @@ void main() {
       expect(loaded, isTrue);
       expect(harness.restoredProjects, <String>[tempDirectory.path]);
     });
+
+    test(
+      'loadProject opens formal premise before random readable files',
+      () async {
+        final workspacePort = LocalProjectWorkspacePort();
+        final tempDirectory = await Directory.systemTemp.createTemp(
+          'workbench_primary_open_',
+        );
+        addTearDown(() async {
+          if (await tempDirectory.exists()) {
+            await tempDirectory.delete(recursive: true);
+          }
+        });
+        await _writeProjectFile(
+          tempDirectory.path,
+          'analysis/notes.md',
+          '# 随机说明\n\n这里只是普通分析文档。',
+        );
+        await _writeProjectFile(
+          tempDirectory.path,
+          'premise/project_constitution.md',
+          '# 项目创作宪法\n\n这是正式前提。',
+        );
+        await _writeProjectFile(
+          tempDirectory.path,
+          'premise/project_brief.md',
+          '# 项目概览\n\n这是 support overview。',
+        );
+        final harness = _ControllerHarness(
+          settings: _baseSettings(),
+          workbench: WorkbenchViewData.initial(),
+          projectState: const WorkbenchProjectRuntimeState(),
+          projectRepository: _FixedProjectRepository(
+            _project(tempDirectory.path),
+          ),
+          workspacePort: workspacePort,
+          toolHostPort: ProjectWorkspaceToolHostAdapter(
+            workspacePort: workspacePort,
+            fileMutationAdapter: LocalProjectFileMutationAdapter(),
+          ),
+        );
+
+        final loaded = await harness.controller.loadProject(tempDirectory.path);
+
+        expect(loaded, isTrue);
+        expect(
+          harness.workbench.activeDocumentPath,
+          'premise/project_constitution.md',
+        );
+        expect(harness.workbench.activeDocumentBody, contains('这是正式前提'));
+      },
+    );
   });
 }
 
@@ -558,15 +852,18 @@ AppSettings _baseSettings() {
 AppSettings _settingsWithSnapshot({
   required String projectRootPath,
   required String selectedConversationAgentId,
+  String activeDocumentPath = '',
   List<String> expandedDirectories = const <String>[],
+  List<Map<String, Object?>> draftRecoveries = const <Map<String, Object?>>[],
 }) {
   return _baseSettings().copyWith(
     extraSettings: <String, Object?>{
       'workbench_state': <String, Object?>{
         'project_root_path': projectRootPath,
-        'active_document_path': '',
+        'active_document_path': activeDocumentPath,
         'expanded_directories': expandedDirectories,
         'selected_conversation_agent_id': selectedConversationAgentId,
+        'draft_recoveries': draftRecoveries,
       },
     },
   );

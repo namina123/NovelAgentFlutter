@@ -22,6 +22,28 @@ class BookDeconstructionTargetPathService {
     return 'analysis/book_deconstruction_preview.md';
   }
 
+  String followupPlanPath(String followupOptionId) {
+    final cleanId = _safeId(followupOptionId);
+    return '.novel_agent/state/book_deconstruction/followups/$cleanId.plan.json';
+  }
+
+  String followupGuidePath(String followupOptionId) {
+    final cleanId = _safeId(followupOptionId);
+    return 'tasks/plans/book_deconstruction_followups/$cleanId.md';
+  }
+
+  String inheritedChapterPath({
+    required String followupOptionId,
+    required int sequence,
+    required String title,
+  }) {
+    final safeRoute = _safeId(followupOptionId);
+    final safeTitle = _safeId(title);
+    final normalizedTitle = safeTitle.isEmpty ? '原作片段' : safeTitle;
+    final chapterNumber = sequence <= 0 ? 1 : sequence;
+    return 'chapters/inherited/$safeRoute/${chapterNumber.toString().padLeft(3, '0')}_$normalizedTitle.md';
+  }
+
   String premisePath(InspirationPremise premise, int index) {
     // 中文注释: 拆书前提默认回到现有 premise/ 目录，后续 UI/adapter 只需消费稳定路径提示即可。
     final suffix = index <= 0 ? 1 : index;

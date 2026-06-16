@@ -101,10 +101,10 @@ class ModelSettingsAdvancedPanel extends StatelessWidget {
               '展开高级项',
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
             ),
-            subtitle: const Text('按需调整兼容细节与高级参数。'),
+            subtitle: const Text('按需调整上下文细节与高级参数。'),
             children: [
               SettingsLabeledTextField(
-                label: '兼容上下文长度',
+                label: '上下文窗口长度',
                 controller: compatibleContextWindowController,
                 hintText: '例如 65536',
               ),

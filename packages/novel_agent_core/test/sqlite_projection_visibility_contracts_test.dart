@@ -26,6 +26,10 @@ void main() {
         ),
         hasLength(8),
       );
+      expect(
+        SqliteProjectionGroupKind.projectOverview.summary,
+        '项目总览、快速入口说明和开局级导览。',
+      );
     });
 
     test(

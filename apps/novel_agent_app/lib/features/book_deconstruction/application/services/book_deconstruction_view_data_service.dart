@@ -22,6 +22,7 @@ class BookDeconstructionViewDataService {
     required String projectTitle,
     required BookDeconstructionSnapshot snapshot,
     required String status,
+    bool canCreateDerivedProject = true,
   }) {
     final buildResult = snapshot.buildResult;
     final previewSections = buildResult == null
@@ -32,9 +33,10 @@ class BookDeconstructionViewDataService {
         : _planGroupsOf(buildResult.applicationPlan, snapshot.selectedItemIds);
     final continuity = buildResult == null
         ? null
-      : _continuityOf(
+        : _continuityOf(
             buildResult.extractionResult,
             buildResult.followupMenu,
+            snapshot.selectedFollowupOptionId,
           );
     final informationBridge = buildResult == null
         ? null
@@ -58,10 +60,18 @@ class BookDeconstructionViewDataService {
       planGroups: planGroups,
       selectedItemCount: snapshot.selectedItemIds.length,
       totalItemCount: totalItemCount,
+      selectedFollowupOptionId: snapshot.selectedFollowupOptionId,
       confirmedPreviewPath: snapshot.confirmedPreviewPath,
       canBuildPreview: snapshot.sourceContent.trim().isNotEmpty,
       canConfirmSelection:
-          buildResult != null && snapshot.selectedItemIds.isNotEmpty,
+          buildResult != null &&
+          snapshot.selectedItemIds.isNotEmpty &&
+          snapshot.selectedFollowupOptionId.trim().isNotEmpty,
+      canCreateDerivedProject:
+          buildResult != null &&
+          snapshot.selectedItemIds.isNotEmpty &&
+          snapshot.selectedFollowupOptionId.trim().isNotEmpty &&
+          canCreateDerivedProject,
       informationBridge: informationBridge,
       continuity: continuity,
     );
@@ -93,7 +103,7 @@ class BookDeconstructionViewDataService {
       BookDeconstructionFollowupRouteViewData(
         id: 'shared_information',
         title: '共享资料沉淀',
-        summary: '知识、巧思、研究和引用边界会进入共享 information GUI，不留在私有拆书层。',
+        summary: '知识、巧思、研究和引用边界会进入共享资料与设定视图，不留在私有拆书层。',
         statusLabel:
             (knowledgeCount + designCount + researchCount + referenceCount) > 0
             ? '确认后可进入资料与设定'
@@ -108,10 +118,7 @@ class BookDeconstructionViewDataService {
             : '需先生成结构摘要',
       ),
     ];
-    final routeTitles = routes
-        .take(2)
-        .map((route) => route.title)
-        .join(' / ');
+    final routeTitles = routes.take(2).map((route) => route.title).join(' / ');
     final assetStatuses = <BookDeconstructionAssetStatusViewData>[
       BookDeconstructionAssetStatusViewData(
         id: 'setting_assets',
@@ -169,17 +176,17 @@ class BookDeconstructionViewDataService {
         title: 'design 巧思',
         count: designCount,
         statusLabel: designCount > 0 ? '确认后出现在巧思与设计' : '当前还没形成巧思资产',
-        summary: '会并入共享 information GUI 的巧思与设计视图。',
+        summary: '会并入共享资料与设定里的巧思与设计视图。',
       ),
     ];
     return BookDeconstructionInformationBridgeViewData(
       summary: routeTitles.isEmpty
           ? '这次拆书结果不只是一次性预览。确认后可以继续派生，并沉淀到共享资料与分析路径。'
-          : '这次拆书结果不只是一次性预览。确认后既能走 $routeTitles 等后续路线，也能沉淀到共享资料与分析路径。',
+          : '这次拆书结果不只是一次性预览。确认后既能走 $routeTitles 等后续方案，也能沉淀到共享资料与分析路径。',
       followupRoutes: routes,
       assetStatuses: assetStatuses,
       reuseSummary:
-          '确认后，相关资料会进入共享 information GUI；${routeTitles.isEmpty ? '后续路线' : routeTitles} 会继续承接正式派生，可在“资料与设定”里继续回看知识、巧思、研究和引用边界。',
+          '确认后，相关资料会进入共享资料与设定；${routeTitles.isEmpty ? '后续方案' : routeTitles} 会继续承接正式派生，可在“资料与设定”里继续回看知识、巧思、研究和引用边界。',
     );
   }
 
@@ -456,6 +463,7 @@ class BookDeconstructionViewDataService {
   BookDeconstructionContinuityViewData _continuityOf(
     BookDeconstructionExtractionResult extraction,
     BookDeconstructionFollowupMenu followupMenu,
+    String selectedOptionId,
   ) {
     final continuityHints = extraction.continuityHints;
     return BookDeconstructionContinuityViewData(
@@ -466,14 +474,16 @@ class BookDeconstructionViewDataService {
         followupMenu.highlightedBuildTier,
       ),
       highlightedRouteTitle: _highlightedRouteTitle(followupMenu),
+      selectedRouteOptionId: selectedOptionId,
+      selectedRouteTitle: _selectedRouteTitle(followupMenu, selectedOptionId),
       scopeHintCount: continuityHints.scopeMap.scopes.length,
       identityMappingCount: continuityHints.identityMappings.length,
       mechanicHintCount: continuityHints.mechanicHints.length,
       followupGroups: followupMenu.groups
           .map(
-              (group) => BookDeconstructionFollowupGroupViewData(
+            (group) => BookDeconstructionFollowupGroupViewData(
               id: group.id,
-              title: group.title,
+              title: _followupGroupTitle(group.id, group.title),
               description: group.description,
               isFutureExtensionGroup: ValueReaders.boolValue(
                 group.metadata['reserved'],
@@ -489,6 +499,7 @@ class BookDeconstructionViewDataService {
                       ),
                       isHighlighted:
                           option.id == followupMenu.highlightedOptionId,
+                      isSelected: option.id == selectedOptionId,
                     ),
                   )
                   .toList(growable: false),
@@ -541,6 +552,24 @@ class BookDeconstructionViewDataService {
     return '暂不预选，确认后仍可多路派生';
   }
 
+  String _selectedRouteTitle(
+    BookDeconstructionFollowupMenu menu,
+    String selectedOptionId,
+  ) {
+    final cleanId = selectedOptionId.trim();
+    if (cleanId.isEmpty) {
+      return '尚未选择';
+    }
+    for (final group in menu.groups) {
+      for (final option in group.options) {
+        if (option.id == cleanId) {
+          return option.title;
+        }
+      }
+    }
+    return '尚未选择';
+  }
+
   String _continuitySummary(
     BookDeconstructionContinuationDirection direction,
     BookDeconstructionFollowupMenu menu,
@@ -556,10 +585,10 @@ class BookDeconstructionViewDataService {
     ];
     final base =
         direction == BookDeconstructionContinuationDirection.analysisFirst
-        ? '当前默认先补齐 continuation 与 fanfic 基座，再决定最终执行路线。'
-        : '当前预演确认后，可直接沿默认导向进入后续派生。';
+        ? '当前默认先补齐 continuation 与 fanfic 基座，再决定最终执行方案。'
+        : '当前预演确认后，可直接沿默认导向进入后续方案。';
     if (hintParts.isEmpty) {
-      return '$base 目前仍以结构化资产与后续菜单为主。';
+      return '$base 目前仍以结构化资产与后续方案为主。';
     }
     return '$base 已识别：${hintParts.join('，')}。';
   }
@@ -570,5 +599,18 @@ class BookDeconstructionViewDataService {
 
   String _assetStatusLabel(int count) {
     return count > 0 ? '已生成，可复用' : '当前未生成';
+  }
+
+  String _followupGroupTitle(String groupId, String fallbackTitle) {
+    switch (groupId) {
+      case 'continuation':
+        return '续写';
+      case 'fanfic':
+        return '同人';
+      case 'future_extensions':
+        return '未来其他路线';
+      default:
+        return fallbackTitle;
+    }
   }
 }

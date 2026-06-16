@@ -119,7 +119,10 @@ void main() {
         final raw = await settingsFile.readAsString();
         final reloaded = await repository.load();
 
-        expect(raw, contains('"default_project_path": "../projects/demo_project"'));
+        expect(
+          raw,
+          contains('"default_project_path": "../projects/demo_project"'),
+        );
         expect(reloaded.defaultProjectPath, projectRoot);
       },
     );
@@ -299,12 +302,80 @@ void main() {
           loaded.extraSettings['workbench_state'] as Map,
         );
 
-        expect(raw, contains('"project_root_path": "../projects/demo_project"'));
+        expect(
+          raw,
+          contains('"project_root_path": "../projects/demo_project"'),
+        );
         expect(workbenchState['project_root_path'], projectRoot);
         expect(
           workbenchState['active_document_path'],
-          'premise/project_brief.md',
+          'premise/project_overview.md',
         );
+      },
+    );
+
+    test(
+      'legacy auto_save_drafts key still loads as draft fallback protection',
+      () async {
+        final sandboxRoot = await Directory.systemTemp.createTemp(
+          'novel_agent_settings_legacy_draft_fallback_',
+        );
+        addTearDown(() async {
+          if (await sandboxRoot.exists()) {
+            await sandboxRoot.delete(recursive: true);
+          }
+        });
+        final settingsFile = File(
+          '${sandboxRoot.path}${Platform.pathSeparator}novel_agent_settings.json',
+        );
+        await settingsFile.writeAsString('''
+{
+  "auto_save_drafts": false
+}
+''');
+        final repository = LocalSettingsRepository(
+          settingsSearchRoots: <String>[sandboxRoot.path],
+          defaultProjectRootPath:
+              '${sandboxRoot.path}${Platform.pathSeparator}default_project',
+        );
+
+        final settings = await repository.load();
+
+        expect(settings.draftFallbackProtectionEnabled, isFalse);
+      },
+    );
+
+    test(
+      'save writes canonical draft fallback protection key and drops legacy key',
+      () async {
+        final sandboxRoot = await Directory.systemTemp.createTemp(
+          'novel_agent_settings_canonical_draft_fallback_',
+        );
+        addTearDown(() async {
+          if (await sandboxRoot.exists()) {
+            await sandboxRoot.delete(recursive: true);
+          }
+        });
+        final settingsFile = File(
+          '${sandboxRoot.path}${Platform.pathSeparator}novel_agent_settings.json',
+        );
+        await settingsFile.writeAsString('''
+{
+  "auto_save_drafts": false
+}
+''');
+        final repository = LocalSettingsRepository(
+          settingsSearchRoots: <String>[sandboxRoot.path],
+          defaultProjectRootPath:
+              '${sandboxRoot.path}${Platform.pathSeparator}default_project',
+        );
+
+        final loaded = await repository.load();
+        await repository.save(loaded.copyWith(autoSaveDrafts: true));
+        final raw = await settingsFile.readAsString();
+
+        expect(raw, contains('"draft_fallback_protection": true'));
+        expect(raw, isNot(contains('"auto_save_drafts"')));
       },
     );
   });

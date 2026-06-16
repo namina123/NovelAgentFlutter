@@ -266,7 +266,7 @@ void main() {
 
         expect(
           ValueReaders.stringValue(nextTask['id']),
-          contains('chapter_002'),
+          contains('chapter_001'),
         );
         final tasks = await workflowRuntimeService.listWorkflowTasks(
           queueProject,
@@ -274,14 +274,14 @@ void main() {
         expect(
           tasks.any(
             (task) =>
-                ValueReaders.stringValue(task['id']).contains('chapter_002'),
+                ValueReaders.stringValue(task['id']).contains('chapter_001'),
           ),
           isTrue,
         );
         expect(
           tasks.any(
             (task) =>
-                ValueReaders.stringValue(task['id']).contains('chapter_003'),
+                ValueReaders.stringValue(task['id']).contains('chapter_002'),
           ),
           isTrue,
         );
@@ -367,7 +367,7 @@ void main() {
 
         expect(
           ValueReaders.stringValue(nextTask['id']),
-          contains('chapter_002'),
+          contains('chapter_001'),
         );
         final tasks = await workflowRuntimeService.listWorkflowTasks(
           queueProject,
@@ -375,7 +375,7 @@ void main() {
         expect(
           tasks.any(
             (task) =>
-                ValueReaders.stringValue(task['id']).contains('chapter_002'),
+                ValueReaders.stringValue(task['id']).contains('chapter_001'),
           ),
           isTrue,
         );
@@ -453,7 +453,7 @@ void main() {
 
         expect(
           ValueReaders.stringValue(nextTask['id']),
-          contains('chapter_002'),
+          contains('chapter_001'),
         );
         final tasks = await workflowRuntimeService.listWorkflowTasks(
           queueProject,
@@ -461,7 +461,7 @@ void main() {
         expect(
           tasks.any(
             (task) =>
-                ValueReaders.stringValue(task['id']).contains('chapter_002'),
+                ValueReaders.stringValue(task['id']).contains('chapter_001'),
           ),
           isTrue,
         );
@@ -663,7 +663,9 @@ void main() {
         final sampleCheckpoint = initialTasks.firstWhere(
           (task) =>
               ValueReaders.stringValue(task['task_type']) == 'checkpoint' &&
-              ValueReaders.stringValue(task['id']).contains('checkpoint_001'),
+              ValueReaders.stringValue(
+                task['id'],
+              ).contains('checkpoint_sample'),
         );
 
         await taskRepository.transitionTask(
@@ -713,7 +715,7 @@ void main() {
 
         expect(
           ValueReaders.stringValue(nextTask['id']),
-          contains('chapter_002'),
+          contains('chapter_001'),
         );
         final tasks = await workflowRuntimeService.listWorkflowTasks(
           queueProject,
@@ -721,7 +723,7 @@ void main() {
         expect(
           tasks.any(
             (task) =>
-                ValueReaders.stringValue(task['id']).contains('chapter_002'),
+                ValueReaders.stringValue(task['id']).contains('chapter_001'),
           ),
           isTrue,
         );
@@ -774,7 +776,9 @@ void main() {
         final sampleCheckpoint = initialTasks.firstWhere(
           (task) =>
               ValueReaders.stringValue(task['task_type']) == 'checkpoint' &&
-              ValueReaders.stringValue(task['id']).contains('checkpoint_001'),
+              ValueReaders.stringValue(
+                task['id'],
+              ).contains('checkpoint_sample'),
         );
 
         await taskRepository.transitionTask(
@@ -906,7 +910,7 @@ void main() {
         );
         expect(
           ValueReaders.stringValue(chapterTwo['id']),
-          contains('chapter_002'),
+          contains('chapter_001'),
         );
         await taskRepository.transitionTask(
           queueProject,
@@ -924,7 +928,7 @@ void main() {
         );
         expect(
           ValueReaders.stringValue(chapterThree['id']),
-          contains('chapter_003'),
+          contains('chapter_002'),
         );
         final tasks = await workflowRuntimeService.listWorkflowTasks(
           queueProject,
@@ -2060,6 +2064,7 @@ void main() {
               'stage': 'checkpoint',
               'runtime_baseline_id': 'continuous_autonomous',
               'manual_checkpoint': true,
+              LongTaskSampleReadinessService.readinessCheckpointFlag: true,
             },
             'last_writing_execution_result': const <String, Object?>{
               'overall_status': WritingExecutionOutcomeStatuses.success,
@@ -2123,7 +2128,7 @@ void main() {
             'result_ok': true,
             'severity': 'low',
             'severity_label': '低风险',
-            'output_paths': <Object?>[],
+            'output_paths': <Object?>['outlines/story/总纲.md'],
             'confirmation_focus': <Object?>['当前检查点可确认后继续主链。'],
             'drift_watch_items': <Object?>[],
             'persistent_context_paths': <Object?>[],
@@ -2408,6 +2413,17 @@ void main() {
     test(
       'runWorkflowTaskQueue records activation report and delivery outcome in long task run steps',
       () async {
+        final baseTask = await taskRepository.loadTask(
+          project,
+          const <String, Object?>{'id': 'task_001'},
+        );
+        await taskRepository.saveTask(project, <String, Object?>{
+          ...baseTask,
+          'metadata': <String, Object?>{
+            ...ValueReaders.mapValue(baseTask['metadata']),
+            'stage': 'draft',
+          },
+        });
         final gateway = _RecordingWorkflowGateway(
           scriptedResults: <JsonMap>[
             <String, Object?>{
@@ -3796,6 +3812,138 @@ void main() {
     );
 
     test(
+      'applyWorkflowTaskUserChoice consumes persisted permission approval and passes allow-once host tool context into next run',
+      () async {
+        HostToolPermissionContext? capturedHostToolContext;
+        final approvalService = ProjectToolPermissionApprovalRecordService(
+          taskRepository: taskRepository,
+        );
+        final seededApproval = await approvalService
+            .persistPendingApprovalsForExecutedTools(
+              project,
+              scopeType: ProjectToolPermissionApprovalScopes.workflowTask,
+              taskPath: 'tasks/task_001.json',
+              executedTools: <Object?>[
+                <String, Object?>{
+                  'name': 'request_gateway_tool',
+                  'call_id': 'call_permission_1',
+                  'result': <String, Object?>{
+                    'waiting_for_user_choice': true,
+                    'question': '是否允许联网搜索？',
+                    'options': <Object?>[
+                      <String, Object?>{
+                        'id': 'allow_once',
+                        'label': '允许这次',
+                        'prompt': '允许这次网络研究',
+                      },
+                      <String, Object?>{
+                        'id': 'deny_and_continue',
+                        'label': '保持禁止',
+                        'prompt': '保持禁止并换路继续',
+                      },
+                    ],
+                    'permission_decision': <String, Object?>{
+                      'disposition':
+                          HostToolPermissionDispositions.needsUserConfirmation,
+                      'required_capability':
+                          HostToolPermissionPolicyService.capabilityNetwork,
+                    },
+                    'permission_capability':
+                        HostToolPermissionPolicyService.capabilityNetwork,
+                    'permission_context': const HostToolPermissionContext(
+                      allowRead: true,
+                      allowWrite: true,
+                      allowNetwork: false,
+                      permissionMode: HostToolPermissionModes.safe,
+                      confirmationMode:
+                          HostToolConfirmationModes.userConfirmationRequired,
+                      source: 'test.permission',
+                    ).toJson(),
+                  },
+                },
+              ],
+            );
+        final seededTool = ValueReaders.mapValue(
+          ValueReaders.objectList(seededApproval['executed_tools']).single,
+        );
+        final seededResult = ValueReaders.mapValue(seededTool['result']);
+        final pendingOption = ValueReaders.mapList(
+          seededResult['options'],
+        ).first;
+        final gateway = _RecordingWorkflowGateway(
+          scriptedResults: <JsonMap>[
+            <String, Object?>{
+              'ok': true,
+              'content': '',
+              'tool_calls': <Object?>[
+                <String, Object?>{
+                  'id': 'call_delivery_2',
+                  'name': 'submit_chapter_delivery',
+                  'arguments': <String, Object?>{
+                    'chapter_path': 'chapters/第01章.md',
+                    'chapter_content': '正文内容',
+                    'summary': '章节摘要',
+                  },
+                },
+              ],
+              'message': const <String, Object?>{
+                'role': 'assistant',
+                'content': '',
+              },
+            },
+          ],
+        );
+        final workflowService = _buildRuntimeService(
+          taskRepository: taskRepository,
+          promptTemplateService: promptTemplateService,
+          workspacePort: workspacePort,
+          gateway: gateway,
+          toolExecutionPort: _WorkflowToolExecutionPort(
+            workspacePort: workspacePort,
+          ),
+          taskQueueOptionService: _ShortTimeoutTaskQueueOptionService(),
+          onHostToolPermissionContext: (context) {
+            capturedHostToolContext = context;
+          },
+        );
+        expect(
+          ValueReaders.stringValue(pendingOption['approval_record_id']).trim(),
+          isNotEmpty,
+        );
+
+        final choiceResult = await workflowService.applyWorkflowTaskUserChoice(
+          project,
+          const <String, Object?>{'id': 'task_001'},
+          prompt: ValueReaders.stringValue(pendingOption['prompt']),
+          label: ValueReaders.stringValue(pendingOption['label']),
+          sourceQuestion: ValueReaders.stringValue(
+            pendingOption['source_question'],
+          ),
+          permissionApprovalId: ValueReaders.stringValue(
+            pendingOption['approval_record_id'],
+          ),
+          permissionApprovalOptionId: ValueReaders.stringValue(
+            pendingOption['approval_option_id'],
+          ),
+        );
+        expect(ValueReaders.boolValue(choiceResult['ok']), isTrue);
+
+        await workflowService.runWorkflowTaskOnce(
+          project,
+          _testSettings(),
+          const <String, Object?>{'id': 'task_001'},
+        );
+
+        expect(capturedHostToolContext, isNotNull);
+        expect(capturedHostToolContext!.allowNetwork, isTrue);
+        expect(
+          capturedHostToolContext!.source,
+          'tool_permission_approval:network',
+        );
+      },
+    );
+
+    test(
       'runWorkflowTaskOnce does not expose formal chapter delivery tool for planning task',
       () async {
         await taskRepository.saveTask(project, <String, Object?>{
@@ -4820,6 +4968,7 @@ void main() {
           'metadata': <String, Object?>{
             ...ValueReaders.mapValue(baseTask['metadata']),
             'runtime_baseline_id': 'continuous_autonomous',
+            'stage': 'draft',
           },
         });
         final workflowService = _buildRuntimeService(
@@ -5078,6 +5227,18 @@ void main() {
     test(
       'runWorkflowTaskOnce schedules one direct retry for retryable formal workflow chapter non-delivery',
       () async {
+        final baseTask = await taskRepository.loadTask(
+          project,
+          const <String, Object?>{'id': 'task_001'},
+        );
+        await taskRepository.saveTask(project, <String, Object?>{
+          ...baseTask,
+          'metadata': <String, Object?>{
+            ...ValueReaders.mapValue(baseTask['metadata']),
+            'runtime_baseline_id': 'continuous_autonomous',
+            'stage': 'draft',
+          },
+        });
         final gateway = _RecordingWorkflowGateway(
           scriptedResults: <JsonMap>[
             <String, Object?>{
@@ -5949,6 +6110,27 @@ void main() {
     test(
       'runWorkflowTaskOnce persists shared semantic review contracts while keeping review trigger on agent-group path',
       () async {
+        await taskRepository.saveTask(project, <String, Object?>{
+          'id': 'review_task_contract_001',
+          'title': '语义审稿：第01章',
+          'task_type': 'review',
+          'mode': TaskRuntimeConstants.modeSingleChapterAtomic,
+          'status': TaskRuntimeConstants.statusQueued,
+          'chapter': '第01章',
+          'source_paths': <Object?>[
+            'chapters/第01章_seed_to_full.md',
+            'outline/总纲.md',
+          ],
+          'output_paths': <Object?>[
+            'reviews/general/ch01_contract.md',
+            'reviews/general/ch01_contract.json',
+          ],
+          'metadata': <String, Object?>{
+            'review_type': 'general',
+            'stage': 'review',
+          },
+          'relative_path': 'tasks/review_task_contract_001.json',
+        });
         final gateway = _RecordingWorkflowGateway(
           scriptedResults: <JsonMap>[
             <String, Object?>{
@@ -5956,25 +6138,7 @@ void main() {
               'content': '',
               'tool_calls': <Object?>[
                 <String, Object?>{
-                  'id': 'call_sub_1',
-                  'name': 'call_sub_agent',
-                  'arguments': <String, Object?>{
-                    'agent_id': 'reviewer',
-                    'task': '请先审稿，再返回结构化建议。',
-                  },
-                },
-              ],
-              'message': const <String, Object?>{
-                'role': 'assistant',
-                'content': '',
-              },
-            },
-            <String, Object?>{
-              'ok': true,
-              'content': '',
-              'tool_calls': <Object?>[
-                <String, Object?>{
-                  'id': 'call_review_1',
+                  'id': 'review_submit_1',
                   'name': 'submit_semantic_review',
                   'arguments': <String, Object?>{
                     'review_id': 'workflow-semantic-review-1',
@@ -6000,38 +6164,6 @@ void main() {
               'message': const <String, Object?>{
                 'role': 'assistant',
                 'content': '建议补强开场冲突。',
-              },
-            },
-            <String, Object?>{
-              'ok': true,
-              'content': '已完成语义审稿，建议下一轮补强开场冲突。',
-              'tool_calls': const <Object?>[],
-              'message': const <String, Object?>{
-                'role': 'assistant',
-                'content': '已完成语义审稿，建议下一轮补强开场冲突。',
-              },
-            },
-            <String, Object?>{
-              'ok': true,
-              'content': '',
-              'tool_calls': <Object?>[
-                <String, Object?>{
-                  'id': 'call_delivery_1',
-                  'name': 'submit_chapter_delivery',
-                  'arguments': <String, Object?>{
-                    'chapter_path': 'chapters/第01章_seed_to_full.md',
-                    'chapter_content': '# 第01章\n\n已整合建议后的正式正文。',
-                    'submission': <String, Object?>{
-                      'submission_id': 'delivery-test-1',
-                      'title': '第01章',
-                      'summary': '完成章节交付',
-                    },
-                  },
-                },
-              ],
-              'message': const <String, Object?>{
-                'role': 'assistant',
-                'content': '',
               },
             },
             <String, Object?>{
@@ -6074,18 +6206,31 @@ void main() {
               'agents': <String>['reviewer'],
             },
           ],
+          loadProjectAgentGroupSelections: (_) async =>
+              const <ProjectAgentGroupSelection>[
+                ProjectAgentGroupSelection(
+                  groupId: 'optional_review_room',
+                  displayName: '审稿组',
+                  selectedByDefault: true,
+                ),
+              ],
         );
 
         final result = await workflowService.runWorkflowTaskOnce(
           project,
           _testSettings(),
-          const <String, Object?>{'id': 'task_001'},
+          const <String, Object?>{'id': 'review_task_contract_001'},
+          agent: const <String, Object?>{
+            'id': 'writer',
+            'name': '正文智能体',
+            'role': '负责主写',
+          },
         );
 
         expect(ValueReaders.boolValue(result['ok']), isTrue);
         expect(
           gateway.requests.map((request) => request.modelId),
-          contains('reviewer-child-model'),
+          everyElement('reviewer-child-model'),
         );
         final execution = ValueReaders.mapValue(result['execution']);
         expect(
@@ -6119,6 +6264,17 @@ void main() {
             )['action'],
           ),
           RepairHandoffActions.noteOnly,
+        );
+        final response = ValueReaders.mapValue(result['response']);
+        final toolCalls = ValueReaders.objectList(
+          response['tool_calls'],
+        ).map(ValueReaders.mapValue).toList(growable: false);
+        expect(
+          toolCalls.any(
+            (tool) =>
+                ValueReaders.stringValue(tool['name']) == 'call_sub_agent',
+          ),
+          isTrue,
         );
       },
     );
@@ -6908,6 +7064,27 @@ void main() {
     test(
       'runWorkflowTaskOnce applies child-specific model and tool policy in workflow runtime',
       () async {
+        await taskRepository.saveTask(project, <String, Object?>{
+          'id': 'review_task_child_policy_001',
+          'title': '语义审稿：第01章',
+          'task_type': 'review',
+          'mode': TaskRuntimeConstants.modeSingleChapterAtomic,
+          'status': TaskRuntimeConstants.statusQueued,
+          'chapter': '第01章',
+          'source_paths': <Object?>[
+            'chapters/第01章_seed_to_full.md',
+            'outline/总纲.md',
+          ],
+          'output_paths': <Object?>[
+            'reviews/general/ch01_child_policy.md',
+            'reviews/general/ch01_child_policy.json',
+          ],
+          'metadata': <String, Object?>{
+            'review_type': 'general',
+            'stage': 'review',
+          },
+          'relative_path': 'tasks/review_task_child_policy_001.json',
+        });
         final gateway = _RecordingWorkflowGateway(
           scriptedResults: <JsonMap>[
             <String, Object?>{
@@ -6915,43 +7092,24 @@ void main() {
               'content': '',
               'tool_calls': <Object?>[
                 <String, Object?>{
-                  'id': 'call_sub_1',
-                  'name': 'call_sub_agent',
+                  'id': 'review_submit_1',
+                  'name': 'submit_semantic_review',
                   'arguments': <String, Object?>{
-                    'agent_id': 'reviewer',
-                    'task': '请先审稿，再返回结构化建议。',
-                  },
-                },
-              ],
-              'message': const <String, Object?>{
-                'role': 'assistant',
-                'content': '',
-              },
-            },
-            <String, Object?>{
-              'ok': true,
-              'content': '建议先强化第一段冲突，再补一处动机承接。',
-              'tool_calls': const <Object?>[],
-              'message': const <String, Object?>{
-                'role': 'assistant',
-                'content': '建议先强化第一段冲突，再补一处动机承接。',
-              },
-            },
-            <String, Object?>{
-              'ok': true,
-              'content': '',
-              'tool_calls': <Object?>[
-                <String, Object?>{
-                  'id': 'call_delivery_1',
-                  'name': 'submit_chapter_delivery',
-                  'arguments': <String, Object?>{
-                    'chapter_path': 'chapters/第01章_seed_to_full.md',
-                    'chapter_content': '# 第01章\n\n已整合审稿建议后的正式正文。',
-                    'submission': <String, Object?>{
-                      'submission_id': 'delivery-test-1',
-                      'title': '第01章',
-                      'summary': '完成章节交付',
+                    'review_id': 'delegated-review-policy-1',
+                    'source': <String, Object?>{
+                      'source_type': NarrativeSourceTypes.reviewer,
+                      'source_id': 'reviewer',
                     },
+                    'recommended_disposition': 'accept_with_note',
+                    'summary': '建议先强化第一段冲突，再补一处动机承接。',
+                    'findings': <Object?>[
+                      <String, Object?>{
+                        'finding_id': 'delegated-policy-finding-1',
+                        'severity': 'low',
+                        'summary': '第一段冲突可以更早进入。',
+                        'suggested_action': '开头一页内补出更早的压力来源。',
+                      },
+                    ],
                   },
                 },
               ],
@@ -7000,31 +7158,47 @@ void main() {
               'agents': <String>['reviewer'],
             },
           ],
+          loadProjectAgentGroupSelections: (_) async =>
+              const <ProjectAgentGroupSelection>[
+                ProjectAgentGroupSelection(
+                  groupId: 'optional_review_room',
+                  displayName: '审稿组',
+                  selectedByDefault: true,
+                ),
+              ],
         );
 
         final result = await workflowService.runWorkflowTaskOnce(
           project,
           _testSettings(),
-          const <String, Object?>{'id': 'task_001'},
+          const <String, Object?>{'id': 'review_task_child_policy_001'},
+          agent: const <String, Object?>{
+            'id': 'writer',
+            'name': '正文智能体',
+            'role': '负责主写',
+          },
         );
 
         expect(ValueReaders.boolValue(result['ok']), isTrue);
         expect(
           gateway.requests.map((request) => request.modelId),
-          containsAllInOrder(<String>[
-            'test-model',
-            'reviewer-child-model',
-            'test-model',
-            'test-model',
-          ]),
+          everyElement('reviewer-child-model'),
         );
         expect(
-          gateway.requests[1].toolNames,
+          gateway.requests.first.toolNames,
           containsAll(<String>['submit_semantic_review', 'read_project_file']),
         );
         expect(
-          gateway.requests[1].toolNames,
+          gateway.requests.first.toolNames,
           isNot(contains('write_project_file')),
+        );
+        expect(
+          gateway.requests.first.toolNames,
+          isNot(contains('call_sub_agent')),
+        );
+        expect(
+          gateway.requests.first.toolNames,
+          isNot(contains('submit_chapter_delivery')),
         );
       },
     );
@@ -7183,6 +7357,8 @@ ProjectWorkflowRuntimeService _buildRuntimeService({
   required ToolExecutionPort toolExecutionPort,
   void Function(HostInformationPermissionContext? context)?
   onHostInformationPermissionContext,
+  void Function(HostToolPermissionContext? context)?
+  onHostToolPermissionContext,
   Future<List<JsonMap>> Function(ProjectDescriptor project)?
   loadAvailableAgents,
   Future<List<JsonMap>> Function(ProjectDescriptor project)?
@@ -7205,10 +7381,11 @@ ProjectWorkflowRuntimeService _buildRuntimeService({
     checkpointReviewService: checkpointReviewService,
     taskQueueOptionService: taskQueueOptionService,
     hostAwareGenerateDraftUseCaseFactory:
-        (_, _, {hostInformationPermissionContext}) {
+        (_, _, {hostInformationPermissionContext, hostToolPermissionContext}) {
           onHostInformationPermissionContext?.call(
             hostInformationPermissionContext,
           );
+          onHostToolPermissionContext?.call(hostToolPermissionContext);
           return GenerateDraftUseCase(
             projectWorkspacePort: workspacePort,
             llmGateway: gateway,
@@ -7514,10 +7691,13 @@ class _RecordedExecutionConstraintResolveCall {
 }
 
 class _WorkflowToolExecutionPort implements ToolExecutionPort {
-  _WorkflowToolExecutionPort({required LocalProjectWorkspacePort workspacePort})
-    : _workspacePort = workspacePort;
+  _WorkflowToolExecutionPort({
+    required LocalProjectWorkspacePort workspacePort,
+    this.requestGatewayToolResult,
+  }) : _workspacePort = workspacePort;
 
   final LocalProjectWorkspacePort _workspacePort;
+  final JsonMap? requestGatewayToolResult;
 
   @override
   Future<JsonMap> execute({
@@ -7649,6 +7829,9 @@ class _WorkflowToolExecutionPort implements ToolExecutionPort {
         'options': ValueReaders.objectList(arguments['options']),
         'changed_paths': const <Object?>[],
       };
+    }
+    if (name == 'request_gateway_tool' && requestGatewayToolResult != null) {
+      return ValueReaders.deepCopyMap(requestGatewayToolResult!);
     }
     if (name == 'propose_narrative_profile_update') {
       return const <String, Object?>{

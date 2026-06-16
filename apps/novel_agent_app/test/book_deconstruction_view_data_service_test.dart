@@ -46,6 +46,10 @@ void main() {
       containsAll(<String>['continuation', 'fanfic', '共享资料沉淀', '解说与分析']),
     );
     expect(
+      viewData.informationBridge!.summary,
+      isNot(contains('information GUI')),
+    );
+    expect(
       viewData.informationBridge!.assetStatuses.map((item) => item.title),
       containsAll(<String>['设定与章纲', '角色与组织', 'information 资料', 'design 巧思']),
     );
@@ -58,6 +62,7 @@ void main() {
     );
     expect(designStatus.count, 2);
     expect(designStatus.statusLabel, '确认后出现在巧思与设计');
+    expect(designStatus.summary, isNot(contains('information GUI')));
     expect(viewData.informationBridge!.reuseSummary, contains('continuation'));
   });
 }

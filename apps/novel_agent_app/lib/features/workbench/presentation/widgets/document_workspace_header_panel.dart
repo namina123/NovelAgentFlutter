@@ -7,7 +7,6 @@ import 'document_tab_strip.dart';
 import 'document_toolbar_bar.dart';
 import 'document_workspace_display_mode.dart';
 import 'workbench_desktop_style.dart';
-import 'workbench_visual_style.dart';
 
 class DocumentWorkspaceHeaderPanel extends StatelessWidget {
   const DocumentWorkspaceHeaderPanel({
@@ -33,40 +32,34 @@ class DocumentWorkspaceHeaderPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final visual = WorkbenchVisualStyle.of(context);
     final style = WorkbenchDesktopStyle.of(context);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: style.canvasSectionColor.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(visual.surfaceRadius),
-        border: Border.all(
-          color: style.canvasSectionBorderColor.withValues(alpha: 0.12),
-          width: AppChrome.borderWidth,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            color: style.canvasSectionColor.withValues(alpha: 0.025),
+            border: Border(
+              bottom: BorderSide(
+                color: style.canvasSectionBorderColor.withValues(alpha: 0.1),
+                width: AppChrome.borderWidth,
+              ),
+            ),
+          ),
+          child: DocumentTabStrip(
+            documents: documents,
+            onSelected: onSelected,
+            onClosed: onClosed,
+          ),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(visual.surfaceRadius),
-              topRight: Radius.circular(visual.surfaceRadius),
-            ),
-            child: DocumentTabStrip(
-              documents: documents,
-              onSelected: onSelected,
-              onClosed: onClosed,
-            ),
-          ),
-          DocumentToolbarBar(
-            onActionRequested: onActionRequested,
-            onDisplayModeSelected: onDisplayModeSelected,
-            selectedMode: selectedMode,
-            canRender: canRender,
-            hasDocument: hasDocument,
-          ),
-        ],
-      ),
+        DocumentToolbarBar(
+          onActionRequested: onActionRequested,
+          onDisplayModeSelected: onDisplayModeSelected,
+          selectedMode: selectedMode,
+          canRender: canRender,
+          hasDocument: hasDocument,
+        ),
+      ],
     );
   }
 }

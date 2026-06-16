@@ -21,6 +21,7 @@ void main() {
       activeDocumentPath: 'chapters/chapter_01.md',
       activeDocumentBody: '# 标题',
       activeDocumentDirty: false,
+      activeDocumentBufferedDraft: false,
       activeDocumentCanRender: true,
       isActiveDocumentRendered: false,
       isDocumentsWorkspaceVisible: false,

@@ -1,0 +1,1 @@
+enum CliOutputMode { text, json }

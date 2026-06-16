@@ -68,7 +68,7 @@ void main() {
         );
         expect(
           File(
-            '${projectRoot.path}${Platform.pathSeparator}premise${Platform.pathSeparator}project_brief.md',
+            '${projectRoot.path}${Platform.pathSeparator}premise${Platform.pathSeparator}project_overview.md',
           ).existsSync(),
           isTrue,
         );

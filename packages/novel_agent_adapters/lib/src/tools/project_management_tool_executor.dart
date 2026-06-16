@@ -74,8 +74,14 @@ class ProjectManagementToolExecutor {
     final typeLabel = _projectTypeLabel(nextManifest.projectType);
     await _hostPort.writeTextFile(
       project.rootPath,
-      'specs/project_brief.md',
-      '# ${nextManifest.title}\n\n- 项目类型：$typeLabel\n- 题材：\n- 核心设定：\n- 备注：\n',
+      ProjectSupportDocumentCatalog.projectOverviewRelativePath,
+      '# 项目概览\n\n'
+      '> 这是系统维护的快速概览，不是正式故事前提或长期创作宪章。\n\n'
+      '- 项目标题：${nextManifest.title}\n'
+      '- 项目类型：$typeLabel\n'
+      '- 题材：\n'
+      '- 当前已知核心设定：\n'
+      '- 备注：\n',
     );
     return _resultFactory.success(
       '项目已重命名：${nextManifest.title}',
@@ -83,7 +89,7 @@ class ProjectManagementToolExecutor {
         'project_title': nextManifest.title,
         'changed_paths': <Object?>[
           ProjectManifestCodecService.manifestRelativePath,
-          'specs/project_brief.md',
+          ProjectSupportDocumentCatalog.projectOverviewRelativePath,
         ],
       },
     );

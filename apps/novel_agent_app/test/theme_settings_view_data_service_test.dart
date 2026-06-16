@@ -15,8 +15,10 @@ void main() {
       );
 
       expect(viewData.selectedThemeId, ThemePreferenceResolver.darkThemeId);
-      expect(viewData.currentThemeLabel, '偏暗');
+      expect(viewData.currentThemeLabel, '深空');
       expect(viewData.builtInThemes, hasLength(2));
+      expect(viewData.futureSectionDescription, isNot(contains('后续')));
+      expect(viewData.customSectionDescription, isNot(contains('壳')));
       expect(
         viewData.builtInThemes.where((option) => option.isSelected),
         hasLength(1),

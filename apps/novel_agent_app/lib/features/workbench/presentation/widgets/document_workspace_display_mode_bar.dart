@@ -21,18 +21,17 @@ class DocumentWorkspaceDisplayModeBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final optionSurface = context.novelThemeSurfaces.optionTile;
-    return Wrap(
-      spacing: 5,
-      runSpacing: 4,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         _DisplayModeChip(
-          label: '正文',
+          label: '编辑',
           selected: selectedMode == DocumentWorkspaceDisplayMode.source,
           onSelected: () => onModeSelected(DocumentWorkspaceDisplayMode.source),
           foregroundColor: optionSurface.foregroundColor,
         ),
         _DisplayModeChip(
-          label: '预览',
+          label: '渲染',
           selected: selectedMode == DocumentWorkspaceDisplayMode.render,
           enabled: hasDocument && canRender,
           onSelected: () => onModeSelected(DocumentWorkspaceDisplayMode.render),
@@ -68,38 +67,34 @@ class _DisplayModeChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final optionSurface = context.novelThemeSurfaces.optionTile;
     final visual = WorkbenchVisualStyle.of(context);
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: enabled ? onSelected : null,
-        borderRadius: BorderRadius.circular(visual.sectionRadius),
+        borderRadius: BorderRadius.zero,
         child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          padding: const EdgeInsets.fromLTRB(10, 7, 10, 7),
           decoration: BoxDecoration(
-            color: selected
-                ? optionSurface.highlightBackgroundColor.withValues(alpha: 0.24)
-                : optionSurface.backgroundColor.withValues(alpha: 0.02),
-            borderRadius: BorderRadius.circular(visual.sectionRadius),
-            border: selected
-                ? Border.all(
-                    color: optionSurface.highlightBorderColor.withValues(
-                      alpha: 0.22,
-                    ),
-                  )
-                : Border.all(
-                    color: optionSurface.borderColor.withValues(alpha: 0.08),
-                  ),
+            border: Border(
+              bottom: BorderSide(
+                color: selected
+                    ? foregroundColor.withValues(alpha: 0.82)
+                    : Colors.transparent,
+                width: 2,
+              ),
+            ),
           ),
           child: Text(
             label,
             style: TextStyle(
-              fontSize: visual.compactLabelFontSize,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+              fontSize: visual.compactLabelFontSize - 0.1,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
               color: enabled
                   ? foregroundColor
-                  : visual.disabledForeground(foregroundColor),
+                  : visual.disabledForeground(foregroundColor).withValues(
+                      alpha: 0.7,
+                    ),
             ),
           ),
         ),

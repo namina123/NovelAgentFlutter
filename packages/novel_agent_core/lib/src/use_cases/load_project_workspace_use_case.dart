@@ -2,6 +2,7 @@ import '../common/json_types.dart';
 import '../ports/project_repository.dart';
 import '../ports/project_workspace_port.dart';
 import '../project/project_descriptor.dart';
+import '../project/project_support_document_catalog.dart';
 import '../runtime/project_workspace_snapshot.dart';
 
 class LoadProjectWorkspaceUseCase {
@@ -20,12 +21,74 @@ class LoadProjectWorkspaceUseCase {
     if (project == null) {
       return null;
     }
-    final entries = await _projectWorkspacePort.listEntries(project.rootPath);
+    var entries = await _projectWorkspacePort.listEntries(project.rootPath);
+    entries = await _migrateProjectOverviewIfNeeded(project, entries);
     return ProjectWorkspaceSnapshot(
       project: project,
       projectInfo: _projectInfo(project),
       entries: entries,
     );
+  }
+
+  Future<List<JsonMap>> _migrateProjectOverviewIfNeeded(
+    ProjectDescriptor project,
+    List<JsonMap> entries,
+  ) async {
+    final canonicalPath =
+        ProjectSupportDocumentCatalog.projectOverviewRelativePath;
+    final normalizedCanonical =
+        ProjectSupportDocumentCatalog.normalizeProjectOverviewPath(
+          canonicalPath,
+        );
+    if (normalizedCanonical.isEmpty) {
+      return entries;
+    }
+    if (_containsPath(entries, canonicalPath)) {
+      return entries;
+    }
+    for (final legacyPath
+        in ProjectSupportDocumentCatalog.legacyProjectOverviewRelativePaths) {
+      if (!_containsPath(entries, legacyPath)) {
+        continue;
+      }
+      final legacyContent = await _projectWorkspacePort.readTextFile(
+        project.rootPath,
+        legacyPath,
+      );
+      if (legacyContent == null || legacyContent.trim().isEmpty) {
+        continue;
+      }
+      await _projectWorkspacePort.writeTextFile(
+        project.rootPath,
+        canonicalPath,
+        legacyContent,
+      );
+      return _projectWorkspacePort.listEntries(project.rootPath);
+    }
+    return entries;
+  }
+
+  bool _containsPath(List<JsonMap> entries, String relativePath) {
+    final normalizedTarget = _normalizePath(relativePath);
+    if (normalizedTarget.isEmpty) {
+      return false;
+    }
+    for (final entry in entries) {
+      final path = _normalizePath(entry['relative_path']?.toString() ?? '');
+      if (path == normalizedTarget) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  String _normalizePath(String relativePath) {
+    return relativePath
+        .trim()
+        .replaceAll('\\', '/')
+        .replaceAll(RegExp(r'/+'), '/')
+        .replaceAll(RegExp(r'^/+|/+$'), '')
+        .toLowerCase();
   }
 
   JsonMap _projectInfo(ProjectDescriptor project) {

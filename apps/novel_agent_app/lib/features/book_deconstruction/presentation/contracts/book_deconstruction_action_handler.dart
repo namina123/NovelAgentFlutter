@@ -32,5 +32,9 @@ abstract class BookDeconstructionActionHandler {
 
   void onBookDeconstructionClearSelectionRequested();
 
+  void onBookDeconstructionFollowupOptionSelected(String optionId);
+
   Future<void> onBookDeconstructionConfirmRequested();
+
+  Future<void> onBookDeconstructionCreateDerivedProjectRequested();
 }

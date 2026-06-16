@@ -17,18 +17,18 @@ class MarkdownProjectReadableProjectionService
     // 中文注释: Markdown 项目主内容已经直接是可读目录，这里只补最小入口文档，避免创建期就写入过多默认内容。
     await _projectWorkspacePort.writeTextFile(
       rootPath,
-      'premise/project_brief.md',
+      ProjectSupportDocumentCatalog.projectOverviewRelativePath,
       _projectBrief(manifest),
     );
   }
 
   String _projectBrief(ProjectManifest manifest) {
-    return '# ${manifest.title}\n\n'
+    return '# 项目概览\n\n'
+        '> 这是系统维护的快速概览，不是正式故事前提、长期设定承诺或项目宪章。\n'
+        '> 正式前提、总纲、角色和世界规则应分别沉淀到 premise/、outlines/、assets/ 下的正式文档中。\n\n'
+        '- 项目标题：${manifest.title}\n'
         '- 项目类型：${manifest.projectType}\n'
         '- 主存储策略：${manifest.storageStrategy.id}\n'
-        '- 题材：\n'
-        '- 核心卖点：\n'
-        '- 创作边界：\n'
-        '- 当前阶段：起步\n';
+        '- 当前状态：项目已创建，等待正式前提与结构资产沉淀。\n';
   }
 }

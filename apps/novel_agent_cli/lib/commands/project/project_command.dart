@@ -4,6 +4,11 @@ import 'dart:io';
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../shared/cli_arguments.dart';
+import '../shared/cli_exit_codes.dart';
+import '../shared/cli_help_contract.dart';
+import '../shared/cli_project_artifact_label_service.dart';
+import '../shared/cli_project_context_loader.dart';
 import '../../output/terminal_printer.dart';
 
 typedef LoadAgentPackages =
@@ -34,9 +39,10 @@ class ProjectCommand {
     required LoadAgentGroups loadAgentGroups,
     required LoadSkillPackages loadSkillPackages,
     required LoadSkillGroups loadSkillGroups,
-    required ProjectRepository projectRepository,
     required ProjectPackageLibraryService projectPackageLibraryService,
+    required CliProjectContextLoader projectContextLoader,
     required TerminalPrinter printer,
+    CliProjectArtifactLabelService? projectArtifactLabelService,
   }) : _loadProjectWorkspaceUseCase = loadProjectWorkspaceUseCase,
        _createProjectEntryUseCase = createProjectEntryUseCase,
        _importProjectFilesUseCase = importProjectFilesUseCase,
@@ -54,9 +60,11 @@ class ProjectCommand {
        _loadAgentGroups = loadAgentGroups,
        _loadSkillPackages = loadSkillPackages,
        _loadSkillGroups = loadSkillGroups,
-       _projectRepository = projectRepository,
        _projectPackageLibraryService = projectPackageLibraryService,
-       _printer = printer;
+       _projectContextLoader = projectContextLoader,
+       _printer = printer,
+       _projectArtifactLabelService =
+           projectArtifactLabelService ?? const CliProjectArtifactLabelService();
 
   final LoadProjectWorkspaceUseCase _loadProjectWorkspaceUseCase;
   final CreateProjectEntryUseCase _createProjectEntryUseCase;
@@ -75,9 +83,10 @@ class ProjectCommand {
   final LoadAgentGroups _loadAgentGroups;
   final LoadSkillPackages _loadSkillPackages;
   final LoadSkillGroups _loadSkillGroups;
-  final ProjectRepository _projectRepository;
   final ProjectPackageLibraryService _projectPackageLibraryService;
+  final CliProjectContextLoader _projectContextLoader;
   final TerminalPrinter _printer;
+  final CliProjectArtifactLabelService _projectArtifactLabelService;
 
   Future<int> run(
     List<String> args, {
@@ -119,7 +128,7 @@ class ProjectCommand {
       default:
         _printer.error('未知 project 子命令: $action');
         _printHelp();
-        return 2;
+        return CliExitCodes.invalidInput;
     }
   }
 
@@ -414,7 +423,7 @@ class ProjectCommand {
     ];
     _printer.success('已生成生态索引。');
     for (final path in changedPaths) {
-      _printer.info('已更新: $path');
+      _printer.info('已更新: ${_formatProjectArtifactPath(path)}');
     }
     return 0;
   }
@@ -457,19 +466,28 @@ class ProjectCommand {
     );
     if (!ValueReaders.boolValue(result['ok'])) {
       _printer.error(ValueReaders.stringValue(result['error'], '生态包导出失败。'));
-      return 1;
+      return CliExitCodes.executionFailure;
     }
     _printer.success('生态包已导出。');
-    _printer.info('项目路径: ${ValueReaders.stringValue(result["relative_path"])}');
+    _printer.info(
+      '项目路径: ${_formatProjectArtifactPath(ValueReaders.stringValue(result["relative_path"]))}',
+    );
     return 0;
   }
 
   Future<ProjectDescriptor?> _openProject(
     List<String> args, {
     required String defaultProjectPath,
-  }) {
-    final projectPath = _optionValue(args, '--project') ?? defaultProjectPath;
-    return _projectRepository.openByPath(projectPath);
+  }) async {
+    // 中文注释: 项目打开统一转交给 shared loader，命令层不再直接依赖 settings 和 project repository。
+    final context = await _projectContextLoader.load(
+      args,
+      defaultProjectPath: defaultProjectPath,
+    );
+    if (context == null) {
+      return null;
+    }
+    return context.project;
   }
 
   int _printResult(JsonMap result) {
@@ -478,10 +496,10 @@ class ProjectCommand {
       _printer.success(ValueReaders.stringValue(result['summary'], '操作完成。'));
       final relativePath = ValueReaders.stringValue(result['relative_path']);
       if (relativePath.trim().isNotEmpty) {
-        _printer.info('项目路径: $relativePath');
+        _printer.info('项目路径: ${_formatProjectArtifactPath(relativePath)}');
       }
       for (final path in ValueReaders.stringList(result['imported_paths'])) {
-        _printer.info('已导入: $path');
+        _printer.info('已导入: ${_formatProjectArtifactPath(path)}');
       }
       return 0;
     }
@@ -505,7 +523,10 @@ class ProjectCommand {
       _printer.error(ValueReaders.stringValue(plan['error'], '写入计划生成失败。'));
       return 1;
     }
-    _printer.block(planTitle, _prettyJson(ValueReaders.mapValue(plan['write_plan'])));
+    _printer.block(
+      planTitle,
+      _prettyJson(ValueReaders.mapValue(plan['write_plan'])),
+    );
     return _printResult(<String, Object?>{...result, 'summary': success});
   }
 
@@ -514,7 +535,10 @@ class ProjectCommand {
       _printer.error(ValueReaders.stringValue(response['error'], '导入预检失败。'));
       return 1;
     }
-    _printer.block(title, _prettyJson(ValueReaders.mapValue(response['preview'])));
+    _printer.block(
+      title,
+      _prettyJson(ValueReaders.mapValue(response['preview'])),
+    );
     return 0;
   }
 
@@ -535,31 +559,24 @@ class ProjectCommand {
 
   void _printHelp() {
     // 中文注释: 项目命令帮助只覆盖已经接通的共享用例入口。
-    _printer.block(
-      'project help',
-      [
-        'project summary [--project 路径]',
-        'project create-file --path chapters/ch01.md [--content 文本] [--project 路径]',
-        'project create-folder --path world/sects [--project 路径]',
-        'project import --source C:\\a.txt --source C:\\b.txt [--target assets] [--project 路径]',
-        'project import-bundle --source C:\\bundle.customization.json [--overwrite true|false] [--allow-builtin-shadow true|false] [--project 路径]',
-        'project preview-package --source C:\\bundle_dir [--overwrite true|false] [--project 路径]',
-        'project import-package --source C:\\bundle_dir [--overwrite true|false] [--project 路径]',
-        'project export-package --target C:\\exports [--title 标题] [--description 描述] [--project 路径]',
-        'project generate-index [--project 路径]',
-        'project save-bundle [--title 标题] [--description 描述] [--project 路径]',
-        'project update-info --title 标题 [--type novel] [--genre 题材] [--premise 设定] [--notes 备注] [--project 路径]',
-      ].join('\n'),
-    );
+    CliHelpContract.printHelpBlock(_printer, 'project help', [
+      'project summary [--project 路径]',
+      'project create-file --path chapters/ch01.md [--content 文本] [--project 路径]',
+      'project create-folder --path world/sects [--project 路径]',
+      'project import --source C:\\a.txt --source C:\\b.txt [--target assets] [--project 路径]',
+      'project import-bundle --source C:\\bundle.customization.json [--overwrite true|false] [--allow-builtin-shadow true|false] [--project 路径]',
+      'project preview-package --source C:\\bundle_dir [--overwrite true|false] [--project 路径]',
+      'project import-package --source C:\\bundle_dir [--overwrite true|false] [--project 路径]',
+      'project export-package --target C:\\exports [--title 标题] [--description 描述] [--project 路径]',
+      'project generate-index [--project 路径]',
+      'project save-bundle [--title 标题] [--description 描述] [--project 路径]',
+      'project update-info --title 标题 [--type novel] [--genre 题材] [--premise 设定] [--notes 备注] [--project 路径]',
+    ]);
   }
 
   String? _optionValue(List<String> args, String name) {
-    // 中文注释: 轻量参数解析集中在命令类内部，当前阶段不为了少量选项提前引入命令框架。
-    final index = args.indexOf(name);
-    if (index < 0 || index + 1 >= args.length) {
-      return null;
-    }
-    return args[index + 1].trim();
+    // 中文注释: project 命令现在只转发到共享 parser，不再自己扫描 token。
+    return CliArguments(args).value(name);
   }
 
   String? _requiredSourcePath(List<String> args) {
@@ -587,34 +604,12 @@ class ProjectCommand {
   }
 
   List<String> _multiOptionValues(List<String> args, String name) {
-    // 中文注释: 重复选项值集中解析，避免 import 等命令手写多套参数扫描逻辑。
-    final result = <String>[];
-    for (var index = 0; index < args.length; index += 1) {
-      if (args[index] != name) {
-        continue;
-      }
-      if (index + 1 >= args.length) {
-        continue;
-      }
-      final value = args[index + 1].trim();
-      if (value.isNotEmpty) {
-        result.add(value);
-      }
-      index += 1;
-    }
-    return result;
+    // 中文注释: 多值参数统一交给共享 parser 处理，避免 import 场景重复散落 token 扫描。
+    return CliArguments(args).values(name);
   }
 
   bool _boolOption(List<String> args, String name, bool fallback) {
-    final value = _optionValue(args, name);
-    if (value == null || value.trim().isEmpty) {
-      return fallback;
-    }
-    final normalized = value.trim().toLowerCase();
-    return normalized == 'true' ||
-        normalized == '1' ||
-        normalized == 'yes' ||
-        normalized == 'on';
+    return CliArguments(args).boolValue(name, fallback);
   }
 
   List<JsonMap> _projectScopedEntries(
@@ -695,5 +690,10 @@ class ProjectCommand {
       lines.add('- 其余 ${items.length - visibleCount} 项已省略。');
     }
     return lines.join('\n');
+  }
+
+  String _formatProjectArtifactPath(String relativePath) {
+    // 中文注释: project CLI 统一在终端补充正式资产身份，避免不同子命令又各自打印裸路径。
+    return _projectArtifactLabelService.formatPath(relativePath);
   }
 }

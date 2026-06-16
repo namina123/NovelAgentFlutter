@@ -13,8 +13,7 @@ class SqliteProjectReadableProjectionService
            const SqliteProjectSemanticProjectionBuilderService();
 
   final ProjectWorkspacePort _projectWorkspacePort;
-  final SqliteProjectSemanticProjectionBuilderService
-  _projectionBuilderService;
+  final SqliteProjectSemanticProjectionBuilderService _projectionBuilderService;
 
   @override
   Future<void> ensureReadableProjection({
@@ -22,7 +21,7 @@ class SqliteProjectReadableProjectionService
     required ProjectManifest manifest,
     required ProjectDirectoryLayout layout,
   }) async {
-    // 中文注释: SQLite 项目先把可读目录、语义树索引和快速说明一并物化，避免只剩一个 project_brief.md 作为伪入口。
+    // 中文注释: SQLite 项目先把可读目录、语义树索引和快速说明一并物化，避免只剩一个 overview 说明页作为伪入口。
     for (final descriptor in layout.readableProjectionDirectories) {
       await _projectWorkspacePort.createDirectory(rootPath, descriptor.path);
     }
@@ -42,17 +41,19 @@ class SqliteProjectReadableProjectionService
     }
     await _projectWorkspacePort.writeTextFile(
       rootPath,
-      'premise/project_brief.md',
+      ProjectSupportDocumentCatalog.projectOverviewRelativePath,
       _projectBrief(manifest),
     );
   }
 
   String _projectBrief(ProjectManifest manifest) {
-    return '# ${manifest.title}\n\n'
+    return '# 项目概览\n\n'
+        '> 这是系统维护的 SQLite 项目快速概览，不是正式故事前提或项目宪章。\n'
+        '> 当前项目的正式主事实源是 SQLite；Markdown 仅承担只读投影、导出和入口说明作用。\n\n'
+        '- 项目标题：${manifest.title}\n'
         '- 项目类型：${manifest.projectType}\n'
         '- 主存储策略：${manifest.storageStrategy.id}\n'
-        '- 当前内容来源：SQLite 主库存储，Markdown 仅作为投影/导出层。\n'
         '- 语义树入口：premise/sqlite_projection/index.md\n'
-        '- 当前阶段：起步\n';
+        '- 当前状态：项目已创建，等待正式前提与结构资产沉淀。\n';
   }
 }

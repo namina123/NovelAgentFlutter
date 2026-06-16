@@ -26,6 +26,8 @@ class WorkbenchProjectPanelViewDataService {
       primaryActions: _actionPolicyService.primaryActions(
         hasActiveProject: hasActiveProject,
         projectTypeId: source.projectTypeId,
+        projectTypeTransitionAvailability:
+            source.projectTypeTransitionAvailability,
       ),
       assetActions: _actionPolicyService.assetActions(
         hasActiveProject: hasActiveProject,

@@ -217,15 +217,15 @@ class ConversationGuideViewDataService {
       ),
       if (question.isReadyToLaunch)
         PrimaryActionViewData(
-          id: 'guide.launch.${state.modeId}',
-          title: '生成长任务队列',
-          description: '当前阶段信息已经收束完成，开始生成可恢复长任务链。',
-          commandId: 'guide.create_workflow_from_mode_guidance',
-          payload: <String, Object?>{'mode': state.modeId},
+          id: 'guide.start_long_task.${state.modeId}',
+          title: '启动长任务',
+          description: '当前阶段信息已经收束完成，立即创建并启动正式长任务链。',
+          commandId: 'opening.start_long_task_run',
+          payload: <String, Object?>{'mode_id': state.modeId},
         ),
     ];
     final composerHint = question.isReadyToLaunch
-        ? '可以直接开始生成长任务队列，也可以先补充更多约束。'
+        ? '可以直接启动长任务，也可以先补充更多约束。'
         : question.allowFreeText
         ? '也可以直接输入这一阶段的补充内容，不一定非要点按钮。'
         : '这一阶段请先从下面的选项里选一个。';

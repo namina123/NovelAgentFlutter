@@ -53,7 +53,7 @@ class DocumentToolbarBar extends StatelessWidget {
         final trailing = Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _ToolbarStatusPill(label: statusLabel, emphasized: hasDocument),
+            _ToolbarStatusText(label: statusLabel, emphasized: hasDocument),
             SizedBox(width: visual.compactGap + 1),
             ...actions,
           ],
@@ -61,14 +61,18 @@ class DocumentToolbarBar extends StatelessWidget {
         return Container(
           padding: EdgeInsets.fromLTRB(
             visual.compactGap + 1,
-            visual.microGap + 2,
+            visual.microGap + 1,
             visual.compactGap + 1,
-            visual.microGap + 2,
+            visual.microGap + 1,
           ),
           decoration: BoxDecoration(
-            color: surface.backgroundColor.withValues(alpha: 0.025),
+            color: surface.backgroundColor.withValues(alpha: 0.01),
             border: Border(
               top: BorderSide(
+                color: surface.borderColor.withValues(alpha: 0.06),
+                width: surface.borderWidth,
+              ),
+              bottom: BorderSide(
                 color: surface.borderColor.withValues(alpha: 0.08),
                 width: surface.borderWidth,
               ),
@@ -108,37 +112,22 @@ class DocumentToolbarBar extends StatelessWidget {
   }
 }
 
-class _ToolbarStatusPill extends StatelessWidget {
-  const _ToolbarStatusPill({required this.label, required this.emphasized});
+class _ToolbarStatusText extends StatelessWidget {
+  const _ToolbarStatusText({required this.label, required this.emphasized});
 
   final String label;
   final bool emphasized;
 
   @override
   Widget build(BuildContext context) {
-    final surface = context.novelThemeSurfaces.optionTile;
     final colors = context.novelThemeColors;
     final visual = WorkbenchVisualStyle.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        color: emphasized
-            ? surface.highlightBackgroundColor.withValues(alpha: 0.18)
-            : surface.backgroundColor.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(visual.sectionRadius),
-        border: Border.all(
-          color: emphasized
-              ? surface.highlightBorderColor.withValues(alpha: 0.18)
-              : surface.borderColor.withValues(alpha: 0.08),
-        ),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: visual.compactLabelFontSize - 0.4,
-          fontWeight: FontWeight.w700,
-          color: emphasized ? colors.textColor : colors.mutedTextColor,
-        ),
+    return Text(
+      label,
+      style: TextStyle(
+        fontSize: visual.compactLabelFontSize - 0.35,
+        fontWeight: FontWeight.w600,
+        color: emphasized ? colors.textColor : colors.mutedTextColor,
       ),
     );
   }

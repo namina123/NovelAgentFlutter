@@ -49,6 +49,7 @@ void main() {
           activeDocumentPath: '',
           activeDocumentBody: '',
           activeDocumentDirty: false,
+          activeDocumentBufferedDraft: false,
           activeDocumentCanRender: false,
           isActiveDocumentRendered: false,
           isDocumentsWorkspaceVisible: false,
@@ -114,4 +115,73 @@ void main() {
       );
     },
   );
+
+  test('projects active document identity and state into shell view data', () {
+    final viewData = service.build(
+      resource: const WorkbenchResourceViewData(
+        projectName: '星港档案',
+        projectSubtitle: '长篇科幻项目',
+        resourceEntries: [],
+      ),
+      canvas: const WorkbenchCanvasViewData(
+        documents: [],
+        activeDocumentTitle: 'project_overview.md',
+        activeDocumentPath: 'premise/project_overview.md',
+        activeDocumentBody: '项目概览',
+        activeDocumentDirty: false,
+        activeDocumentBufferedDraft: true,
+        activeDocumentCanRender: true,
+        isActiveDocumentRendered: false,
+        isDocumentsWorkspaceVisible: false,
+        generationStatus: '',
+      ),
+      conversation: const WorkbenchConversationViewData(
+        hasActiveProject: true,
+        toolCoreStatus: '',
+        modelLabel: 'GPT-4.1',
+        modelOptions: <SelectorOptionViewData>[],
+        groupSelector: ConversationGroupSelectorViewData(
+          currentGroupLabel: '长篇总控组',
+          groupOptions: <SelectorOptionViewData>[],
+          primaryAgentLabel: '综合创作智能体',
+          primaryAgentDescription: '负责统筹当前长篇协作。',
+          canSwitchGroup: true,
+        ),
+        agentSelector: ConversationAgentSelectorViewData(
+          currentAgentLabel: '审阅智能体',
+          currentAgentId: 'reviewer',
+          currentAgentDescription: '负责当前会话的审阅与修订建议',
+          agentOptions: <SelectorOptionViewData>[],
+          canSwitchAgent: true,
+        ),
+        inputCapabilityContext: ConversationInputCapabilityContext.initial(),
+        contextSummary: '当前会话摘要',
+        workflowTitle: '继续创作',
+        workflowDescription: '围绕当前会话推进正文。',
+        primaryActions: [],
+        openingPanel: null,
+        composerHint: '输入需求',
+        conversationEntries: [],
+        transcriptBlocks: [],
+        transcriptLanes: ConversationTranscriptLaneViewData(
+          stableHistoryBlocks: [],
+          currentRoundToolBlocks: [],
+          streamingAppendixBlocks: [],
+          footerBlocks: [],
+        ),
+        pendingOptions: [],
+        subAgentRuns: [],
+        retryRequest: null,
+        sessionHistoryEntries: [],
+        activeSessionId: 'session-1',
+        showSessionHistory: false,
+        generationStatus: '',
+        isGenerating: false,
+      ),
+    );
+
+    expect(viewData.activeDocumentIdentityLabel, '草稿缓存');
+    expect(viewData.activeDocumentStateLabel, '未正式保存');
+    expect(viewData.activeDocumentStatusLabel, '草稿缓存 · 未正式保存');
+  });
 }

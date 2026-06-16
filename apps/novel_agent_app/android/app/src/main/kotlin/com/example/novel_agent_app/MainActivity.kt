@@ -1,4 +1,4 @@
-package com.example.novel_agent_app
+package com.novelagent.app
 
 import io.flutter.embedding.android.FlutterActivity
 

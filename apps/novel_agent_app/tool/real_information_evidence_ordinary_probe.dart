@@ -120,7 +120,9 @@ Future<void> main() async {
       );
       openChapterReports.add(caseReport);
     }
-    final openProjectFiles = await workspacePort.listEntries(openProject.rootPath);
+    final openProjectFiles = await workspacePort.listEntries(
+      openProject.rootPath,
+    );
     final openCaseSummary = _summarizeOpenProjectCase(
       chapters: openChapterReports,
       projectFiles: openProjectFiles,
@@ -215,8 +217,7 @@ Future<void> _seedProject(
       '- 主线：1930年代上海电台主播调查一串真实历史线索中的异常回声。',
       '- 写作纪律：凡涉及 1930 年代上海真实地标、报刊、交通、时间制度或机构资料，必须先形成 research request / research note，再落正文；不能直接编造成长期设定。',
       '- 本轮探针目标：验证信息证据纪律闭环，不追求长篇完整性。',
-      if (requiresHistoricalResearch)
-        '- 强制资料点：章节内至少有一处需要核查真实历史背景的细节。',
+      if (requiresHistoricalResearch) '- 强制资料点：章节内至少有一处需要核查真实历史背景的细节。',
       '',
     ].join('\n'),
   );
@@ -392,12 +393,11 @@ JsonMap _summarizeOpenProjectCase({
     'all_project_files': projectFiles
         .map((entry) => ValueReaders.stringValue(entry['relative_path']))
         .toList(growable: false),
-    'summary':
-        openChapterUsedResearch
-            ? '开放权限普通项目已观察到自动资料研究。'
-            : explicitNoInfoNeeded
-            ? '开放权限普通项目未触发研究，但模型给出了明确的无需外部资料说明。'
-            : '开放权限普通项目没有观察到自动资料研究，也没有明确的无需外部资料说明。',
+    'summary': openChapterUsedResearch
+        ? '开放权限普通项目已观察到自动资料研究。'
+        : explicitNoInfoNeeded
+        ? '开放权限普通项目未触发研究，但模型给出了明确的无需外部资料说明。'
+        : '开放权限普通项目没有观察到自动资料研究，也没有明确的无需外部资料说明。',
   };
 }
 
@@ -439,9 +439,16 @@ GenerateDraftUseCase _createGenerateDraftUseCase({
   required JsonMap networkSettings,
   required HostInformationPermissionContext hostContext,
 }) {
+  final hostToolContext = const ProjectToolPermissionSettingsResolverService()
+      .resolve(const <String, Object?>{
+        'mode': 'safe',
+      }, source: 'real_information_evidence_ordinary_probe');
   final basePort = bundle.projectToolExecutionPort;
   final scopedToolPort = basePort is ProjectToolDispatcher
-      ? basePort.scopedWithHostInformationPermissionContext(hostContext)
+      ? basePort.scopedWithHostPermissionContexts(
+          hostInformationPermissionContext: hostContext,
+          hostToolPermissionContext: hostToolContext,
+        )
       : basePort;
   return GenerateDraftUseCase(
     projectWorkspacePort: bundle.projectWorkspacePort,
@@ -458,6 +465,7 @@ GenerateDraftUseCase _createGenerateDraftUseCase({
       projectFileSectionService: ContextProjectFileSectionService(),
     ),
     projectPromptContract: ProjectPromptContract(),
+    hostToolPermissionContext: hostToolContext,
     hostPlatform: _currentHostPlatform(),
     loadAvailableAgents: (project) =>
         bundle.agentPackageCatalog.loadAgentPackages(project),
@@ -482,10 +490,7 @@ bool _chapterHasExecutedResearch(JsonMap chapter) {
 bool _chapterHasExplicitNoInfoNeeded(JsonMap chapter) {
   final summary = ValueReaders.stringValue(chapter['information_summary']);
   final markdown = ValueReaders.stringValue(chapter['draft_markdown']);
-  for (final candidate in <String>[
-    summary,
-    markdown,
-  ]) {
+  for (final candidate in <String>[summary, markdown]) {
     final text = candidate.trim();
     if (text.contains('无需外部资料') ||
         text.contains('不需要外部资料') ||

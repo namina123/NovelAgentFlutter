@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../shared/theme/novel_theme_context.dart';
+import '../models/resource_tree_entry_semantic_view_data.dart';
 import '../models/workbench_view_data.dart';
 
 class ResourceTreeEntryTile extends StatelessWidget {
@@ -8,11 +9,14 @@ class ResourceTreeEntryTile extends StatelessWidget {
     super.key,
     required this.entry,
     required this.onPressed,
-    this.secondaryLabel = '',
+    this.semantic = const ResourceTreeEntrySemanticViewData(
+      detailLabel: '',
+      leadingIcon: Icons.description_outlined,
+    ),
   });
 
   final ResourceEntryViewData entry;
-  final String secondaryLabel;
+  final ResourceTreeEntrySemanticViewData semantic;
   final VoidCallback onPressed;
 
   @override
@@ -20,7 +24,7 @@ class ResourceTreeEntryTile extends StatelessWidget {
     final optionSurface = context.novelThemeSurfaces.optionTile;
     final panelSurface = context.novelThemeSurfaces.panel;
     final colors = context.novelThemeColors;
-    final hasSecondaryLabel = secondaryLabel.trim().isNotEmpty;
+    final hasSecondaryLabel = semantic.detailLabel.trim().isNotEmpty;
     final foreground = entry.isSelected
         ? optionSurface.highlightForegroundColor
         : panelSurface.foregroundColor;
@@ -33,6 +37,7 @@ class ResourceTreeEntryTile extends StatelessWidget {
     final borderColor = entry.isSelected
         ? optionSurface.highlightBorderColor.withValues(alpha: 0.14)
         : Colors.transparent;
+    final toneColor = _toneColor(colors.accentColor);
     final chevron = entry.isDirectory
         ? (entry.hasChildren
               ? (entry.isExpanded
@@ -78,17 +83,13 @@ class ResourceTreeEntryTile extends StatelessWidget {
                   ),
                   const SizedBox(width: 4),
                   Icon(
-                    entry.isDirectory
-                        ? (entry.isExpanded
-                              ? Icons.folder_open_outlined
-                              : Icons.folder_outlined)
-                        : Icons.description_outlined,
+                    semantic.leadingIcon,
                     size: 15,
-                    color: entry.isDirectory
-                        ? colors.accentColor.withValues(
-                            alpha: entry.isSelected ? 0.9 : 0.62,
-                          )
-                        : mutedForeground,
+                    color: entry.isSelected
+                        ? foreground
+                        : toneColor.withValues(
+                            alpha: entry.isDirectory ? 0.92 : 0.84,
+                          ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -98,16 +99,32 @@ class ResourceTreeEntryTile extends StatelessWidget {
                         Row(
                           children: [
                             Expanded(
-                              child: Text(
-                                entry.title,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 12.2,
-                                  fontWeight: entry.isSelected
-                                      ? FontWeight.w700
-                                      : FontWeight.w500,
-                                  color: foreground,
-                                ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      entry.title,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 12.2,
+                                        fontWeight: entry.isSelected
+                                            ? FontWeight.w700
+                                            : FontWeight.w500,
+                                        color: foreground,
+                                      ),
+                                    ),
+                                  ),
+                                  if (semantic.hasBadge) ...[
+                                    const SizedBox(width: 6),
+                                    _SemanticBadge(
+                                      label: semantic.badgeLabel,
+                                      toneColor: toneColor,
+                                      selected: entry.isSelected,
+                                      foreground: foreground,
+                                      mutedForeground: mutedForeground,
+                                    ),
+                                  ],
+                                ],
                               ),
                             ),
                             if (entry.isDirectory && entry.childCount > 0) ...[
@@ -136,10 +153,10 @@ class ResourceTreeEntryTile extends StatelessWidget {
                             ],
                           ],
                         ),
-                        if (secondaryLabel.trim().isNotEmpty) ...[
+                        if (semantic.detailLabel.trim().isNotEmpty) ...[
                           const SizedBox(height: 2),
                           Text(
-                            secondaryLabel,
+                            semantic.detailLabel,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
@@ -170,6 +187,68 @@ class ResourceTreeEntryTile extends StatelessWidget {
                 ),
               ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Color _toneColor(Color accentColor) {
+    switch (semantic.tone) {
+      case ResourceTreeSemanticTone.blue:
+        return const Color(0xFF4C7DFF);
+      case ResourceTreeSemanticTone.teal:
+        return const Color(0xFF0E8E7A);
+      case ResourceTreeSemanticTone.amber:
+        return const Color(0xFFB7791F);
+      case ResourceTreeSemanticTone.green:
+        return const Color(0xFF2F855A);
+      case ResourceTreeSemanticTone.purple:
+        return const Color(0xFF6B46C1);
+      case ResourceTreeSemanticTone.rose:
+        return const Color(0xFFB83280);
+      case ResourceTreeSemanticTone.neutral:
+        return accentColor;
+    }
+  }
+}
+
+class _SemanticBadge extends StatelessWidget {
+  const _SemanticBadge({
+    required this.label,
+    required this.toneColor,
+    required this.selected,
+    required this.foreground,
+    required this.mutedForeground,
+  });
+
+  final String label;
+  final Color toneColor;
+  final bool selected;
+  final Color foreground;
+  final Color mutedForeground;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+      decoration: BoxDecoration(
+        color: selected
+            ? foreground.withValues(alpha: 0.1)
+            : toneColor.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: selected
+              ? foreground.withValues(alpha: 0.12)
+              : toneColor.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 9.2,
+          fontWeight: FontWeight.w700,
+          color: selected ? foreground : mutedForeground,
+          height: 1.1,
         ),
       ),
     );

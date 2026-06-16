@@ -20,8 +20,10 @@ class WorkbenchIdeShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.novelThemeColors;
+    final activeDocumentStatus = viewData.activeDocumentStatusLabel.trim();
     final showStatusBar =
         viewData.resourceCount > 0 ||
+        activeDocumentStatus.isNotEmpty ||
         viewData.activeDocumentDirty ||
         viewData.isGenerating ||
         viewData.generationStatus.trim().isNotEmpty;
@@ -256,12 +258,17 @@ class _WorkbenchStatusBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.novelThemeColors;
+    final documentStatus = viewData.activeDocumentStatusLabel.trim().isEmpty
+        ? (viewData.activeDocumentDirty ? '未保存修改' : '已保存')
+        : viewData.activeDocumentStatusLabel;
     final leftItems = <_StatusItem>[
       _StatusItem(
-        icon: viewData.activeDocumentDirty
+        icon: viewData.activeDocumentBufferedDraft
+            ? Icons.inventory_2_outlined
+            : viewData.activeDocumentDirty
             ? Icons.edit_note_rounded
             : Icons.check_circle_outline_rounded,
-        label: viewData.activeDocumentDirty ? '未保存修改' : '已保存',
+        label: documentStatus,
       ),
       if (viewData.resourceCount > 0)
         _StatusItem(

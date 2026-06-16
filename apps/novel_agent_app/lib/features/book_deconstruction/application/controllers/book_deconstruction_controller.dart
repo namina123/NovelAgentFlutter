@@ -7,7 +7,9 @@ import '../../presentation/models/book_deconstruction_view_data.dart';
 import '../models/book_deconstruction_snapshot.dart';
 import '../models/book_deconstruction_step_id.dart';
 import '../services/book_deconstruction_confirm_workflow_service.dart';
+import '../services/book_deconstruction_derived_project_creation_service.dart';
 import '../services/book_deconstruction_draft_builder_service.dart';
+import '../services/book_deconstruction_followup_option_selection_service.dart';
 import '../services/book_deconstruction_narrative_persistence_service.dart';
 import '../services/book_deconstruction_preview_markdown_service.dart';
 import '../services/book_deconstruction_view_data_service.dart';
@@ -27,8 +29,16 @@ class BookDeconstructionController extends ChangeNotifier
     BookDeconstructionPreviewMarkdownService? previewMarkdownService,
     BookDeconstructionViewDataService? viewDataService,
     BookDeconstructionTargetPathService? targetPathService,
-    BookDeconstructionImportArchiveWorkflowService? importArchiveWorkflowService,
+    BookDeconstructionImportArchiveWorkflowService?
+    importArchiveWorkflowService,
     BookDeconstructionConfirmWorkflowService? confirmWorkflowService,
+    BookDeconstructionFollowupOptionSelectionService?
+    followupOptionSelectionService,
+    BookDeconstructionDerivedProjectCreationService?
+    derivedProjectCreationService,
+    Future<void> Function(ProjectDescriptor project, String preferredOpenPath)?
+    openDerivedProjectRequested,
+    String projectsRootPath = '',
   }) : _readCurrentProject = readCurrentProject,
        _syncWorkbenchResources = syncWorkbenchResources,
        _onBackRequested = onBackRequested,
@@ -39,6 +49,12 @@ class BookDeconstructionController extends ChangeNotifier
            draftBuilderService ?? BookDeconstructionDraftBuilderService(),
        _viewDataService =
            viewDataService ?? const BookDeconstructionViewDataService(),
+       _followupOptionSelectionService =
+           followupOptionSelectionService ??
+           const BookDeconstructionFollowupOptionSelectionService(),
+       _derivedProjectCreationService = derivedProjectCreationService,
+       _openDerivedProjectRequested = openDerivedProjectRequested,
+       _projectsRootPath = projectsRootPath,
        _importArchiveWorkflowService =
            importArchiveWorkflowService ??
            BookDeconstructionImportArchiveWorkflowService(
@@ -61,9 +77,16 @@ class BookDeconstructionController extends ChangeNotifier
   final DesktopBookDeconstructionSourcePickerService _sourcePickerService;
   final BookDeconstructionDraftBuilderService _draftBuilderService;
   final BookDeconstructionViewDataService _viewDataService;
+  final BookDeconstructionFollowupOptionSelectionService
+  _followupOptionSelectionService;
   final BookDeconstructionImportArchiveWorkflowService
   _importArchiveWorkflowService;
   final BookDeconstructionConfirmWorkflowService _confirmWorkflowService;
+  final BookDeconstructionDerivedProjectCreationService?
+  _derivedProjectCreationService;
+  final Future<void> Function(ProjectDescriptor project, String preferredOpenPath)?
+  _openDerivedProjectRequested;
+  final String _projectsRootPath;
 
   BookDeconstructionSnapshot _snapshot;
   BookDeconstructionViewData _viewData;
@@ -142,8 +165,7 @@ class BookDeconstructionController extends ChangeNotifier
           sourceContent: archiveResult.sourceText,
         ),
       );
-      _statusMessage =
-          '原文已归档到 ${archiveResult.archivePath}，可继续补充结构说明后生成预览。';
+      _statusMessage = '原文已归档到 ${archiveResult.archivePath}，可继续补充结构说明后生成预览。';
       _rebuildView();
     } catch (error) {
       _snapshot = _snapshot.copyWith(isLoading: false);
@@ -232,6 +254,11 @@ class BookDeconstructionController extends ChangeNotifier
         activeStepId: BookDeconstructionStepId.previewStructure,
         buildResult: buildResult,
         selectedItemIds: selectedIds,
+        selectedFollowupOptionId: _followupOptionSelectionService
+            .resolveSelectedOptionId(
+              followupMenu: buildResult.followupMenu,
+              preferredOptionId: _snapshot.selectedFollowupOptionId,
+            ),
         confirmedPreviewPath: '',
       );
       _statusMessage =
@@ -280,44 +307,92 @@ class BookDeconstructionController extends ChangeNotifier
   }
 
   @override
-  Future<void> onBookDeconstructionConfirmRequested() async {
-    final project = _readCurrentProject();
+  void onBookDeconstructionFollowupOptionSelected(String optionId) {
     final buildResult = _snapshot.buildResult;
-    if (project == null) {
-      await refresh(status: '请先创建或打开拆书项目。');
-      return;
-    }
     if (buildResult == null) {
-      _statusMessage = '请先生成结构化预览。';
-      _rebuildView();
       return;
     }
-    if (_snapshot.selectedItemIds.isEmpty) {
-      _statusMessage = '请至少勾选一个拟应用条目。';
-      _rebuildView();
+    final resolvedId = _followupOptionSelectionService.resolveSelectedOptionId(
+      followupMenu: buildResult.followupMenu,
+      preferredOptionId: optionId,
+    );
+    if (resolvedId.isEmpty) {
+      return;
+    }
+    _snapshot = _snapshot.copyWith(selectedFollowupOptionId: resolvedId);
+    _rebuildView();
+  }
+
+  @override
+  Future<void> onBookDeconstructionConfirmRequested() async {
+    final validation = _validateConfirmationRequest();
+    if (!validation.isValid) {
       return;
     }
     _snapshot = _snapshot.copyWith(isLoading: true);
     _statusMessage = '正在写入拆书预演纪要...';
     _rebuildView();
     try {
-      final result = await _confirmWorkflowService.execute(
-        project: project,
-        buildResult: buildResult,
-        selectedItemIds: _snapshot.selectedItemIds,
+      final result = await _persistConfirmation(
+        project: validation.project!,
+        buildResult: validation.buildResult!,
       );
-      await _syncWorkbenchResources();
-      _snapshot = _snapshot.copyWith(
-        isLoading: false,
-        activeStepId: BookDeconstructionStepId.confirmSelection,
-        confirmedPreviewPath: result.previewPath,
-      );
-      _statusMessage =
-          '已确认 ${_snapshot.selectedItemIds.length} 项，预演纪要已写入 ${result.previewPath}。';
+      _statusMessage = _confirmationSuccessMessage(result);
       _rebuildView();
     } catch (error) {
       _snapshot = _snapshot.copyWith(isLoading: false);
       _statusMessage = '写入拆书预演纪要失败：$error';
+      _rebuildView();
+    }
+  }
+
+  @override
+  Future<void> onBookDeconstructionCreateDerivedProjectRequested() async {
+    if (!_isDerivedProjectCreationAvailable()) {
+      _statusMessage = '当前派生项目创建暂不可用。';
+      _rebuildView();
+      return;
+    }
+    final validation = _validateConfirmationRequest();
+    if (!validation.isValid) {
+      return;
+    }
+    final creationService = _derivedProjectCreationService!;
+    final openDerivedProjectRequested = _openDerivedProjectRequested!;
+    if (_projectsRootPath.trim().isEmpty) {
+      _statusMessage = '未配置派生项目根目录，当前无法自动创建项目。';
+      _rebuildView();
+      return;
+    }
+    _snapshot = _snapshot.copyWith(isLoading: true);
+    _statusMessage = '正在派生并创建后续项目...';
+    _rebuildView();
+    try {
+      if (_snapshot.confirmedPreviewPath.trim().isEmpty) {
+        final confirmation = await _persistConfirmation(
+          project: validation.project!,
+          buildResult: validation.buildResult!,
+        );
+        _statusMessage = _confirmationSuccessMessage(confirmation);
+        _rebuildView();
+      }
+      final result = await creationService.execute(
+        projectsRootPath: _projectsRootPath,
+        sourceProject: validation.project!,
+        buildResult: validation.buildResult!,
+        selectedItemIds: _snapshot.selectedItemIds,
+        selectedFollowupOptionId: _snapshot.selectedFollowupOptionId,
+      );
+      _snapshot = _snapshot.copyWith(isLoading: false);
+      _statusMessage = '已派生项目：${result.project.name}';
+      _rebuildView();
+      await openDerivedProjectRequested(
+        result.project,
+        result.preferredOpenPath,
+      );
+    } catch (error) {
+      _snapshot = _snapshot.copyWith(isLoading: false);
+      _statusMessage = '派生项目失败：$error';
       _rebuildView();
     }
   }
@@ -340,9 +415,66 @@ class BookDeconstructionController extends ChangeNotifier
     return snapshot.copyWith(
       buildResult: null,
       selectedItemIds: <String>{},
+      selectedFollowupOptionId: '',
       confirmedPreviewPath: '',
       activeStepId: BookDeconstructionStepId.importSource,
     );
+  }
+
+  _BookDeconstructionConfirmationValidation _validateConfirmationRequest() {
+    final project = _readCurrentProject();
+    if (project == null) {
+      refresh(status: '请先创建或打开拆书项目。');
+      return const _BookDeconstructionConfirmationValidation.invalid();
+    }
+    final buildResult = _snapshot.buildResult;
+    if (buildResult == null) {
+      _statusMessage = '请先生成结构化预览。';
+      _rebuildView();
+      return const _BookDeconstructionConfirmationValidation.invalid();
+    }
+    if (_snapshot.selectedItemIds.isEmpty) {
+      _statusMessage = '请至少勾选一个拟应用条目。';
+      _rebuildView();
+      return const _BookDeconstructionConfirmationValidation.invalid();
+    }
+    if (_snapshot.selectedFollowupOptionId.trim().isEmpty) {
+      _statusMessage = '请先选择拆书后的续写或同人路线。';
+      _rebuildView();
+      return const _BookDeconstructionConfirmationValidation.invalid();
+    }
+    return _BookDeconstructionConfirmationValidation.valid(
+      project: project,
+      buildResult: buildResult,
+    );
+  }
+
+  Future<BookDeconstructionConfirmWorkflowResult> _persistConfirmation({
+    required ProjectDescriptor project,
+    required BookDeconstructionDraftBuildResult buildResult,
+  }) async {
+    final result = await _confirmWorkflowService.execute(
+      project: project,
+      buildResult: buildResult,
+      selectedItemIds: _snapshot.selectedItemIds,
+      selectedFollowupOptionId: _snapshot.selectedFollowupOptionId,
+    );
+    await _syncWorkbenchResources();
+    _snapshot = _snapshot.copyWith(
+      isLoading: false,
+      activeStepId: BookDeconstructionStepId.confirmSelection,
+      confirmedPreviewPath: result.previewPath,
+    );
+    return result;
+  }
+
+  String _confirmationSuccessMessage(
+    BookDeconstructionConfirmWorkflowResult result,
+  ) {
+    final inheritedHint = result.inheritedChapterPaths.isEmpty
+        ? ''
+        : '，并已接入 ${result.inheritedChapterPaths.length} 份原作正文';
+    return '已确认 ${_snapshot.selectedItemIds.length} 项，${result.selectedFollowupOptionTitle} 路线说明已写入 ${result.guidePath}$inheritedHint。';
   }
 
   void _rebuildView() {
@@ -350,9 +482,32 @@ class BookDeconstructionController extends ChangeNotifier
       projectTitle: _readCurrentProject()?.name ?? '',
       snapshot: _snapshot,
       status: _statusMessage,
+      canCreateDerivedProject: _isDerivedProjectCreationAvailable(),
     );
     if (!_disposed) {
       notifyListeners();
     }
   }
+
+  bool _isDerivedProjectCreationAvailable() {
+    return _derivedProjectCreationService != null &&
+        _openDerivedProjectRequested != null &&
+        _projectsRootPath.trim().isNotEmpty;
+  }
+}
+
+class _BookDeconstructionConfirmationValidation {
+  const _BookDeconstructionConfirmationValidation.invalid()
+    : isValid = false,
+      project = null,
+      buildResult = null;
+
+  const _BookDeconstructionConfirmationValidation.valid({
+    required this.project,
+    required this.buildResult,
+  }) : isValid = true;
+
+  final bool isValid;
+  final ProjectDescriptor? project;
+  final BookDeconstructionDraftBuildResult? buildResult;
 }

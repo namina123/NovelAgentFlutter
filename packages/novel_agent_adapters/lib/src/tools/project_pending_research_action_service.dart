@@ -49,7 +49,9 @@ class ProjectPendingResearchActionService {
            ),
        _recordDocumentService =
            recordDocumentService ??
-           OpenNarrativeStateRecordDocumentService(workspacePort: workspacePort),
+           OpenNarrativeStateRecordDocumentService(
+             workspacePort: workspacePort,
+           ),
        _informationEventRepository =
            informationEventRepository ??
            LocalInformationEventRepository(workspacePort: workspacePort);
@@ -59,6 +61,17 @@ class ProjectPendingResearchActionService {
   final OpenNarrativeStateIndexDocumentService _indexDocumentService;
   final OpenNarrativeStateRecordDocumentService _recordDocumentService;
   final InformationEventRepository _informationEventRepository;
+
+  Future<JsonMap> load(ProjectDescriptor project, {required String requestId}) {
+    // 中文注释: 读取单条 pending research 记录是 CLI/GUI 展示同一审批真相的基础，不应只靠 list 反推。
+    return _readRecord(project, requestId).then((record) {
+      if (record.isEmpty) {
+        return record;
+      }
+      return ValueReaders.deepCopyMap(record)
+        ..['relative_path'] = _pathService.researchRequestPath(requestId);
+    });
+  }
 
   Future<List<JsonMap>> list(ProjectDescriptor project) async {
     // 中文注释: 统一列出仍可处理的 pending research request，供 GUI/CLI 后续复用，不让外层自己扫隐藏 JSON。
@@ -150,7 +163,9 @@ class ProjectPendingResearchActionService {
         'changed_paths': const <Object?>[],
       };
     }
-    final currentState = ValueReaders.stringValue(record['request_state']).trim();
+    final currentState = ValueReaders.stringValue(
+      record['request_state'],
+    ).trim();
     final currentAction = _currentAction(record);
     final transition = _resolveTransition(
       command: command,
@@ -301,11 +316,15 @@ class ProjectPendingResearchActionService {
     required String actorId,
     required String note,
   }) {
-    final metadata = ValueReaders.deepCopyMap(ValueReaders.mapValue(record['metadata']));
+    final metadata = ValueReaders.deepCopyMap(
+      ValueReaders.mapValue(record['metadata']),
+    );
     final permissionDecision = ValueReaders.deepCopyMap(
       ValueReaders.mapValue(record['permission_decision']),
     );
-    final actionLog = ValueReaders.mapList(metadata['pending_research_actions']);
+    final actionLog = ValueReaders.mapList(
+      metadata['pending_research_actions'],
+    );
     final now = DateTime.now().toIso8601String();
     metadata['pending_research_actions'] = <Object?>[
       ...actionLog,
@@ -345,14 +364,17 @@ class ProjectPendingResearchActionService {
       if (command == ProjectPendingResearchActionCommands.markNeedsUserInfo)
         'needs_user_info_at': now,
       if (note.trim().isNotEmpty) 'resolution_note': note.trim(),
-      if (permissionDecision.isNotEmpty) 'permission_decision': permissionDecision,
+      if (permissionDecision.isNotEmpty)
+        'permission_decision': permissionDecision,
       'metadata': metadata,
     };
   }
 
   String _currentAction(JsonMap record) {
     final latest = ValueReaders.mapValue(
-      ValueReaders.mapValue(record['metadata'])['latest_pending_research_action'],
+      ValueReaders.mapValue(
+        record['metadata'],
+      )['latest_pending_research_action'],
     );
     return ValueReaders.stringValue(latest['command']).trim();
   }
@@ -377,10 +399,7 @@ class ProjectPendingResearchActionService {
         refId: requestId,
       ),
       lifecycleStatus: _lifecycleStatusFor(nextState),
-      actorRef: NarrativeRef(
-        refType: NarrativeRefTypes.asset,
-        refId: actorId,
-      ),
+      actorRef: NarrativeRef(refType: NarrativeRefTypes.asset, refId: actorId),
       summary: _eventSummaryFor(command, query, note),
       occurredAt: occurredAt,
       metadata: <String, Object?>{

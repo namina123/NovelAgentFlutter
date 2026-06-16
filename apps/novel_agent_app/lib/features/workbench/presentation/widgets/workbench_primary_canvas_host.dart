@@ -64,7 +64,7 @@ class _WorkbenchPrimaryCanvasHostState
     final request = _requestFactory.build(
       viewData: widget.viewData,
       selectedMode: selectedMode,
-      onChanged: selectedMode == DocumentWorkspaceDisplayMode.source
+      onChanged: selectedMode != DocumentWorkspaceDisplayMode.structure
           ? widget.actionHandler.onDocumentBodyChanged
           : null,
     );

@@ -20,6 +20,7 @@ void main() {
       displayMode: displayMode,
       canRender: canRender,
       isDirty: false,
+      isBufferedDraft: false,
       hasDocument: hasDocument,
       onChanged: null,
     );
@@ -85,6 +86,25 @@ void main() {
       expect(
         resolution.rendererId,
         DocumentResourceRendererResolver.plainTextRendererId,
+      );
+    },
+  );
+
+  test(
+    'resolver returns markdown renderer for source mode markdown resources',
+    () {
+      final resolution = resolver.resolve(
+        buildRequest(
+          hasDocument: true,
+          relativePath: 'chapters/chapter_01.md',
+          displayMode: DocumentWorkspaceDisplayMode.source,
+          canRender: true,
+        ),
+      );
+
+      expect(
+        resolution.rendererId,
+        DocumentResourceRendererResolver.markdownRendererId,
       );
     },
   );

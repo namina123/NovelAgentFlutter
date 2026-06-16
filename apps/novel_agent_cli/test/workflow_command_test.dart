@@ -1,6 +1,11 @@
 import 'dart:io';
 
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
+import 'package:novel_agent_cli/commands/approval/approval_command.dart';
+import 'package:novel_agent_cli/commands/shared/cli_automation_input_service.dart';
+import 'package:novel_agent_cli/commands/shared/cli_mode_detection_service.dart';
+import 'package:novel_agent_cli/commands/shared/cli_command_context.dart';
+import 'package:novel_agent_cli/commands/shared/cli_project_context_loader.dart';
 import 'package:novel_agent_cli/commands/workflow/workflow_command.dart';
 import 'package:novel_agent_cli/output/terminal_printer.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
@@ -40,10 +45,15 @@ void main() {
       referenceExtractionRuntimeService =
           _RecordingReferenceExtractionRuntimeService();
       printer = _RecordingTerminalPrinter();
+      final approvalCommand = _buildApprovalCommand(
+        settingsRepository,
+        projectRepository,
+        printer,
+        _FakePendingResearchActionService(),
+      );
       command = WorkflowCommand(
         settingsRepository: settingsRepository,
         projectRepository: projectRepository,
-        saveDraftUseCase: _UnsupportedSaveDraftUseCase(),
         buildModeGuidancePlanInputUseCase:
             _UnsupportedBuildModeGuidancePlanInputUseCase(),
         loadModeGuidanceStateUseCase:
@@ -52,7 +62,7 @@ void main() {
         llmGatewayFactory: (_, __) => _FakeLlmGateway(),
         workflowRuntimeService: _UnsupportedWorkflowRuntimeService(),
         referenceExtractionRuntimeService: referenceExtractionRuntimeService,
-        pendingResearchActionService: _FakePendingResearchActionService(),
+        approvalCommand: approvalCommand,
         printer: printer,
       );
     });
@@ -178,6 +188,205 @@ void main() {
         ),
       );
     });
+
+    test('help prints shared root help block', () async {
+      final exitCode = await command.run(<String>['help']);
+
+      expect(exitCode, 0);
+      expect(
+        printer.blocks,
+        contains(
+          predicate<_PrintedBlock>(
+            (block) =>
+                block.title == 'workflow help' &&
+                block.content.contains('workflow start') &&
+                block.content.contains('workflow debug ...'),
+          ),
+        ),
+      );
+    });
+
+    test('unknown subcommand prints help and invalid input', () async {
+      final exitCode = await command.run(<String>['bogus']);
+
+      expect(exitCode, 2);
+      expect(printer.errors, contains('未知 workflow 子命令: bogus'));
+      expect(
+        printer.blocks,
+        contains(
+          predicate<_PrintedBlock>(
+            (block) =>
+                block.title == 'workflow help' &&
+                block.content.contains('workflow start') &&
+                block.content.contains('workflow debug ...'),
+          ),
+        ),
+      );
+    });
+
+    test('draft without prompt fails with shared parameter message', () async {
+      final exitCode = await command.run(<String>['draft']);
+
+      expect(exitCode, 2);
+      expect(printer.errors, contains('请通过 --prompt、命令末尾文本或管道输入提供创作需求。'));
+    });
+
+    test('draft reads piped input when prompt is omitted', () async {
+      settingsRepository.appSettings = const AppSettings(
+        defaultProviderId: 'provider_1',
+        defaultAgentId: '',
+        defaultModelId: 'deepseek-v4-flash',
+        defaultProjectPath: 'D:/test-project',
+        autoSaveDrafts: false,
+        providers: <ProviderEndpointSettings>[
+          ProviderEndpointSettings(
+            id: 'provider_1',
+            title: 'Test Provider',
+            protocol: 'openai_compat',
+            baseUrl: 'https://example.invalid/v1',
+            apiKey: 'test-key',
+            modelId: 'deepseek-v4-flash',
+            description: 'for tests',
+            isDefault: true,
+          ),
+        ],
+      );
+      final draftUseCase = _RecordingGenerateDraftUseCase();
+      command = WorkflowCommand(
+        settingsRepository: settingsRepository,
+        projectRepository: projectRepository,
+        buildModeGuidancePlanInputUseCase:
+            _UnsupportedBuildModeGuidancePlanInputUseCase(),
+        loadModeGuidanceStateUseCase:
+            _UnsupportedLoadModeGuidanceStateUseCase(),
+        generateDraftUseCaseFactory: (_, __) => draftUseCase,
+        llmGatewayFactory: (_, __) => _FakeLlmGateway(),
+        workflowRuntimeService: _UnsupportedWorkflowRuntimeService(),
+        referenceExtractionRuntimeService:
+            _unsupportedReferenceExtractionRuntimeService(),
+        approvalCommand: _buildApprovalCommand(
+          settingsRepository,
+          projectRepository,
+          printer,
+          _FakePendingResearchActionService(),
+        ),
+        automationInputService: CliAutomationInputService(
+          modeDetectionService: const CliModeDetectionService(
+            stdinHasTerminal: _alwaysFalse,
+            stdoutHasTerminal: _alwaysTrue,
+          ),
+          stdinHasTerminal: _alwaysFalse,
+          stdinReader: () async => '  pipe draft prompt  \n',
+        ),
+        printer: printer,
+      );
+
+      final exitCode = await command.run(<String>['draft']);
+
+      expect(exitCode, 0);
+      expect(draftUseCase.lastUserPrompt, 'pipe draft prompt');
+      expect(
+        printer.blocks,
+        contains(
+          predicate<_PrintedBlock>(
+            (block) =>
+                block.title == '正文内容' &&
+                block.content.contains('pipe draft prompt'),
+          ),
+        ),
+      );
+      expect(printer.infos, contains('本轮结果未正式保存；如需落盘，请通过正式交付工具或显式文件命令完成。'));
+    });
+
+    test(
+      'draft does not fallback-save project files even when auto save setting is enabled',
+      () async {
+        settingsRepository.appSettings = const AppSettings(
+          defaultProviderId: 'provider_1',
+          defaultAgentId: '',
+          defaultModelId: 'deepseek-v4-flash',
+          defaultProjectPath: 'D:/test-project',
+          autoSaveDrafts: true,
+          providers: <ProviderEndpointSettings>[
+            ProviderEndpointSettings(
+              id: 'provider_1',
+              title: 'Test Provider',
+              protocol: 'openai_compat',
+              baseUrl: 'https://example.invalid/v1',
+              apiKey: 'test-key',
+              modelId: 'deepseek-v4-flash',
+              description: 'for tests',
+              isDefault: true,
+            ),
+          ],
+        );
+        final draftUseCase = _RecordingGenerateDraftUseCase();
+        command = WorkflowCommand(
+          settingsRepository: settingsRepository,
+          projectRepository: projectRepository,
+          buildModeGuidancePlanInputUseCase:
+              _UnsupportedBuildModeGuidancePlanInputUseCase(),
+          loadModeGuidanceStateUseCase:
+              _UnsupportedLoadModeGuidanceStateUseCase(),
+          generateDraftUseCaseFactory: (_, __) => draftUseCase,
+          llmGatewayFactory: (_, __) => _FakeLlmGateway(),
+          workflowRuntimeService: _UnsupportedWorkflowRuntimeService(),
+          referenceExtractionRuntimeService:
+              _unsupportedReferenceExtractionRuntimeService(),
+          approvalCommand: _buildApprovalCommand(
+            settingsRepository,
+            projectRepository,
+            printer,
+            _FakePendingResearchActionService(),
+          ),
+          printer: printer,
+        );
+
+        final exitCode = await command.run(<String>[
+          'draft',
+          '--prompt',
+          '写一段没有正式交付工具的片段',
+        ]);
+
+        expect(exitCode, 0);
+        expect(printer.infos, contains('本轮结果未正式保存；如需落盘，请通过正式交付工具或显式文件命令完成。'));
+        expect(printer.infos.where((line) => line.startsWith('已保存:')), isEmpty);
+      },
+    );
+
+    test('draft annotates formally saved chapter paths with artifact labels', () async {
+      final draftUseCase = _RecordingGenerateDraftUseCase()
+        ..writtenPaths = <String>['chapters/chapter_01.md'];
+      command = WorkflowCommand(
+        settingsRepository: settingsRepository,
+        projectRepository: projectRepository,
+        buildModeGuidancePlanInputUseCase:
+            _UnsupportedBuildModeGuidancePlanInputUseCase(),
+        loadModeGuidanceStateUseCase:
+            _UnsupportedLoadModeGuidanceStateUseCase(),
+        generateDraftUseCaseFactory: (_, __) => draftUseCase,
+        llmGatewayFactory: (_, __) => _FakeLlmGateway(),
+        workflowRuntimeService: _UnsupportedWorkflowRuntimeService(),
+        referenceExtractionRuntimeService:
+            _unsupportedReferenceExtractionRuntimeService(),
+        approvalCommand: _buildApprovalCommand(
+          settingsRepository,
+          projectRepository,
+          printer,
+          _FakePendingResearchActionService(),
+        ),
+        printer: printer,
+      );
+
+      final exitCode = await command.run(<String>[
+        'draft',
+        '--prompt',
+        '写一个正式章节',
+      ]);
+
+      expect(exitCode, 0);
+      expect(printer.infos, contains('已保存: chapters/chapter_01.md（正式正文）'));
+    });
   });
 
   group('WorkflowCommand long-task minimal controls', () {
@@ -195,7 +404,6 @@ void main() {
       command = WorkflowCommand(
         settingsRepository: settingsRepository,
         projectRepository: projectRepository,
-        saveDraftUseCase: _UnsupportedSaveDraftUseCase(),
         buildModeGuidancePlanInputUseCase:
             _UnsupportedBuildModeGuidancePlanInputUseCase(),
         loadModeGuidanceStateUseCase:
@@ -205,7 +413,12 @@ void main() {
         workflowRuntimeService: workflowRuntimeService,
         referenceExtractionRuntimeService:
             _unsupportedReferenceExtractionRuntimeService(),
-        pendingResearchActionService: _FakePendingResearchActionService(),
+        approvalCommand: _buildApprovalCommand(
+          settingsRepository,
+          projectRepository,
+          printer,
+          _FakePendingResearchActionService(),
+        ),
         printer: printer,
       );
     });
@@ -353,7 +566,6 @@ void main() {
       command = WorkflowCommand(
         settingsRepository: settingsRepository,
         projectRepository: projectRepository,
-        saveDraftUseCase: _UnsupportedSaveDraftUseCase(),
         buildModeGuidancePlanInputUseCase:
             _UnsupportedBuildModeGuidancePlanInputUseCase(),
         loadModeGuidanceStateUseCase:
@@ -363,7 +575,12 @@ void main() {
         workflowRuntimeService: _UnsupportedWorkflowRuntimeService(),
         referenceExtractionRuntimeService:
             _unsupportedReferenceExtractionRuntimeService(),
-        pendingResearchActionService: pendingResearchActionService,
+        approvalCommand: _buildApprovalCommand(
+          settingsRepository,
+          projectRepository,
+          printer,
+          pendingResearchActionService,
+        ),
         printer: printer,
       );
     });
@@ -391,7 +608,7 @@ void main() {
         printer.blocks,
         contains(
           _PrintedBlock(
-            '待处理资料研究',
+            '待处理审批',
             'research_request_1｜等待确认｜北境钟楼来历｜需要联网确认\n'
                 'research_request_2｜待处理｜港口潮汐资料',
           ),
@@ -426,7 +643,7 @@ void main() {
         'actor_id': 'novel_agent_cli',
         'note': '允许继续研究',
       });
-      expect(printer.successes, contains('资料研究请求已确认。'));
+      expect(printer.successes, contains('审批请求已确认。'));
       expect(printer.infos, contains('请求: research_request_approve_1'));
       expect(printer.infos, contains('状态: 待处理'));
     });
@@ -439,7 +656,7 @@ void main() {
 
       expect(exitCode, 2);
       expect(pendingResearchActionService.rejectCalls, isEmpty);
-      expect(printer.errors, contains('请通过 --request 或 --id 指定资料请求。'));
+      expect(printer.errors, contains('请通过 --request 或 --id 指定审批请求。'));
     });
   });
 }
@@ -527,6 +744,27 @@ class _FakePendingResearchActionService
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+ApprovalCommand _buildApprovalCommand(
+  _FakeSettingsRepository settingsRepository,
+  _FakeProjectRepository projectRepository,
+  _RecordingTerminalPrinter printer,
+  ProjectPendingResearchActionService pendingResearchActionService,
+) {
+  // 中文注释: workflow 测试只需要一个可记录的 approval shell，审批行为本身由 approval 专门测试。
+  return ApprovalCommand(
+    pendingResearchActionService: pendingResearchActionService,
+    projectContextLoader: CliProjectContextLoader(
+      commandContext: CliCommandContext(
+        settings: settingsRepository.appSettings,
+        defaultProjectPath: settingsRepository.appSettings.defaultProjectPath,
+      ),
+      projectRepository: projectRepository,
+      printer: printer,
+    ),
+    printer: printer,
+  );
 }
 
 class _RecordingReferenceExtractionRuntimeService
@@ -631,6 +869,96 @@ _unsupportedReferenceExtractionRuntimeService() {
   );
 }
 
+class _RecordingGenerateDraftUseCase extends GenerateDraftUseCase {
+  _RecordingGenerateDraftUseCase()
+    : super(
+        projectWorkspacePort: LocalProjectWorkspacePort(),
+        llmGateway: _FakeLlmGateway(),
+        toolExecutionPort: _FakeToolExecutionPort(),
+        contextAssemblerService: ContextAssemblerService(
+          budgetService: ContextBudgetService(),
+          staticSectionService: ContextStaticSectionService(
+            projectPromptContract: ProjectPromptContract(),
+          ),
+          projectFileSectionService: ContextProjectFileSectionService(),
+        ),
+        projectPromptContract: ProjectPromptContract(),
+      );
+
+  String lastUserPrompt = '';
+  List<String> writtenPaths = const <String>[];
+
+  @override
+  Future<DraftGenerationResult> execute({
+    required ProjectDescriptor project,
+    required String userPrompt,
+    required String modelId,
+    String title = '',
+    String intent = 'draft',
+    JsonMap agent = const <String, Object?>{},
+    JsonMap selectedCollaborationGroup = const <String, Object?>{},
+    String sessionContext = '',
+    SessionPromptContext sessionPromptContext = const SessionPromptContext(),
+    JsonMap requestOptions = const <String, Object?>{},
+    JsonMap contextSettings = const <String, Object?>{},
+    JsonMap modelProfile = const <String, Object?>{},
+    JsonMap skillRoutingContext = const <String, Object?>{},
+    List<Object?> memorySections = const <Object?>[],
+    List<Object?> expressionConstraintProfiles = const <Object?>[],
+    List<Object?> projectExpressionConstraintBindings = const <Object?>[],
+    JsonMap writingExecutionConstraints = const <String, Object?>{},
+    List<Object?> projectFileSectionPlan = const <Object?>[],
+    JsonMap projectFileContents = const <String, Object?>{},
+    AppSettings? subAgentRuntimeSettings,
+    List<ProjectAgentBinding> subAgentBindings = const <ProjectAgentBinding>[],
+    String subAgentBindingModeId = '',
+    String subAgentBindingStageId = '',
+    List<String> exposedToolIds = const <String>[],
+    String activeDocumentPath = '',
+    String activeDocumentBody = '',
+    DraftGenerationCancellationToken? cancellationToken,
+    void Function(DraftGenerationProgress progress)? onProgress,
+  }) async {
+    // 中文注释: 测试用生成用例只记录用户输入并返回最小可验证结果，避免把 stdin 回归变成另一个业务假链。
+    lastUserPrompt = userPrompt.trim();
+    return DraftGenerationResult(
+      project: project,
+      projectInfo: <String, Object?>{
+        'id': project.id,
+        'title': project.name,
+        'path': project.rootPath,
+        'project_type': project.projectType,
+        'stage': 'draft',
+      },
+      userPrompt: lastUserPrompt,
+      prompt: lastUserPrompt,
+      modelId: modelId,
+      draftMarkdown: 'pipe draft result: $lastUserPrompt',
+      contextPack: const <String, Object?>{},
+      selectedPaths: const <String>[],
+      executedTools: const <Object?>[],
+      writtenPaths: writtenPaths,
+      changedPaths: const <String>[],
+      transcriptMessages: const <JsonMap>[],
+      waitingForUserChoice: false,
+      reasoningContent: '',
+      stoppedByToolError: false,
+      toolErrorSummary: '',
+    );
+  }
+}
+
+class _FakeToolExecutionPort implements ToolExecutionPort {
+  @override
+  Future<JsonMap> execute({
+    required ProjectDescriptor project,
+    required JsonMap toolCall,
+  }) async {
+    // 中文注释: 测试里的工具端口只需要满足构造契约，真正的草稿生成不依赖它执行。
+    return const <String, Object?>{'ok': true};
+  }
+}
+
 class _FakeLlmGateway implements LlmGateway {
   @override
   Future<JsonMap> requestChat({
@@ -663,6 +991,10 @@ class _FakeLlmGateway implements LlmGateway {
   }
 }
 
+bool _alwaysTrue() => true;
+
+bool _alwaysFalse() => false;
+
 class _PrintedBlock {
   const _PrintedBlock(this.title, this.content);
 
@@ -678,11 +1010,6 @@ class _PrintedBlock {
 
   @override
   int get hashCode => Object.hash(title, content);
-}
-
-class _UnsupportedSaveDraftUseCase implements SaveDraftUseCase {
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _UnsupportedBuildModeGuidancePlanInputUseCase

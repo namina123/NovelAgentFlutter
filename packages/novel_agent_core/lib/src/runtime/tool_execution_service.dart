@@ -7,6 +7,10 @@ import '../common/json_types.dart';
 import '../common/value_readers.dart';
 import '../ports/tool_execution_port.dart';
 import '../project/project_descriptor.dart';
+import '../tools/host_tool_permission_context.dart';
+import '../tools/host_tool_permission_decision.dart';
+import '../tools/host_tool_permission_dispositions.dart';
+import '../tools/host_tool_permission_policy_service.dart';
 import '../tools/domain/narrative_domain_tool_names.dart';
 import 'tool_execution_round_result.dart';
 
@@ -17,6 +21,8 @@ class ToolExecutionService {
     AgentToolRoundStateService? agentToolRoundStateService,
     SkillLoadMemoryService? skillLoadMemoryService,
     SubAgentExecutionService? subAgentExecutionService,
+    HostToolPermissionContext? hostToolPermissionContext,
+    HostToolPermissionPolicyService? hostToolPermissionPolicyService,
   }) : _toolExecutionPort = toolExecutionPort,
        _agentToolMessageService =
            agentToolMessageService ?? AgentToolMessageService(),
@@ -24,13 +30,19 @@ class ToolExecutionService {
            agentToolRoundStateService ?? AgentToolRoundStateService(),
        _skillLoadMemoryService =
            skillLoadMemoryService ?? const SkillLoadMemoryService(),
-       _subAgentExecutionService = subAgentExecutionService;
+       _subAgentExecutionService = subAgentExecutionService,
+       _hostToolPermissionContext = hostToolPermissionContext,
+       _hostToolPermissionPolicyService =
+           hostToolPermissionPolicyService ??
+           const HostToolPermissionPolicyService();
 
   final ToolExecutionPort _toolExecutionPort;
   final AgentToolMessageService _agentToolMessageService;
   final AgentToolRoundStateService _agentToolRoundStateService;
   final SkillLoadMemoryService _skillLoadMemoryService;
   final SubAgentExecutionService? _subAgentExecutionService;
+  final HostToolPermissionContext? _hostToolPermissionContext;
+  final HostToolPermissionPolicyService _hostToolPermissionPolicyService;
 
   Future<ToolExecutionRoundResult> executeRound({
     required ProjectDescriptor project,
@@ -275,6 +287,13 @@ class ToolExecutionService {
   }) {
     // 中文注释: 特殊工具在这里走专门运行服务，其余工具继续委托给宿主端口。
     final toolName = ValueReaders.stringValue(call['name']);
+    final permissionRejection = _permissionRejectionFor(
+      toolName,
+      ValueReaders.mapValue(call['arguments']),
+    );
+    if (permissionRejection != null) {
+      return Future<JsonMap>.value(permissionRejection);
+    }
     if (toolName == 'call_sub_agent' && _subAgentExecutionService != null) {
       return _subAgentExecutionService.execute(
         project: project,
@@ -296,5 +315,75 @@ class ToolExecutionService {
       );
     }
     return _toolExecutionPort.execute(project: project, toolCall: call);
+  }
+
+  JsonMap? _permissionRejectionFor(String toolName, JsonMap arguments) {
+    final decision = _hostToolPermissionPolicyService.decide(
+      toolName: toolName,
+      arguments: arguments,
+      hostPermissionContext: _hostToolPermissionContext,
+    );
+    switch (decision.disposition) {
+      case HostToolPermissionDispositions.accepted:
+        return null;
+      case HostToolPermissionDispositions.needsUserConfirmation:
+        return _waitingPermissionResult(toolName, decision);
+      case HostToolPermissionDispositions.blocked:
+      default:
+        return <String, Object?>{
+          'ok': false,
+          'not_executed': true,
+          'error': decision.reason.isEmpty ? '当前操作被宿主权限策略阻止。' : decision.reason,
+          'display_text': decision.reason.isEmpty
+              ? '当前操作被宿主权限策略阻止。'
+              : decision.reason,
+          'changed_paths': const <String>[],
+          'permission_decision': decision.toJson(),
+          'permission_capability': decision.requiredCapability,
+          if (_hostToolPermissionContext != null)
+            'permission_context': _hostToolPermissionContext!.toJson(),
+        };
+    }
+  }
+
+  JsonMap _waitingPermissionResult(
+    String toolName,
+    HostToolPermissionDecision decision,
+  ) {
+    final capability = decision.requiredCapability.trim();
+    final question = capability.isEmpty
+        ? '当前操作需要你的确认，是否继续？'
+        : '当前操作请求使用宿主权限 [$capability]：$toolName。是否允许本轮继续？';
+    return <String, Object?>{
+      'ok': false,
+      'not_executed': true,
+      'waiting_for_user_choice': true,
+      'error': decision.reason.isEmpty ? '当前操作需要用户确认。' : decision.reason,
+      'display_text': decision.reason.isEmpty ? '当前操作需要用户确认。' : decision.reason,
+      'changed_paths': const <String>[],
+      'question': question,
+      'options': <Object?>[
+        <String, Object?>{
+          'id': 'allow_once',
+          'label': '允许这次',
+          'title': '允许这次',
+          'description': '允许本轮继续，并让智能体重试刚才的受限操作。',
+          'prompt':
+              '允许本轮继续使用 ${capability.isEmpty ? '该权限' : '$capability 权限'} 执行工具 $toolName，请在保留当前目标的前提下继续刚才的步骤。',
+        },
+        <String, Object?>{
+          'id': 'deny_and_continue',
+          'label': '保持禁止',
+          'title': '保持禁止',
+          'description': '不要放行该权限，要求智能体换一种不依赖此能力的方式继续。',
+          'prompt':
+              '不要放行这次 ${capability.isEmpty ? '权限' : '$capability 权限'} 请求，请换一种不依赖工具 $toolName 的方式继续当前任务。',
+        },
+      ],
+      'permission_decision': decision.toJson(),
+      'permission_capability': decision.requiredCapability,
+      if (_hostToolPermissionContext != null)
+        'permission_context': _hostToolPermissionContext!.toJson(),
+    };
   }
 }

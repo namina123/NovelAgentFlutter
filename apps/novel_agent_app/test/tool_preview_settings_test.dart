@@ -31,6 +31,10 @@ void main() {
     expect(find.text('工具展示'), findsOneWidget);
     expect(find.text('会话区工具预览'), findsOneWidget);
     expect(find.text('细节'), findsOneWidget);
+    expect(
+      find.text('这里控制工作台会话区对工具调用的默认展示方式，不再在主界面临时切换。'),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('保存工具策略'));
     await tester.pumpAndSettle();

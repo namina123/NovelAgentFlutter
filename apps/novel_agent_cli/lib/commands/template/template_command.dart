@@ -3,23 +3,29 @@ import 'dart:convert';
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../shared/cli_arguments.dart';
+import '../shared/cli_exit_codes.dart';
+import '../shared/cli_help_contract.dart';
+import '../shared/cli_project_artifact_label_service.dart';
+import '../shared/cli_project_context_loader.dart';
 import '../../output/terminal_printer.dart';
 
 class TemplateCommand {
   const TemplateCommand({
-    required SettingsRepository settingsRepository,
-    required ProjectRepository projectRepository,
     required ProjectPromptTemplateService promptTemplateService,
+    required CliProjectContextLoader projectContextLoader,
     required TerminalPrinter printer,
-  }) : _settingsRepository = settingsRepository,
-       _projectRepository = projectRepository,
-       _promptTemplateService = promptTemplateService,
-       _printer = printer;
+    CliProjectArtifactLabelService? projectArtifactLabelService,
+  }) : _promptTemplateService = promptTemplateService,
+       _projectContextLoader = projectContextLoader,
+       _printer = printer,
+       _projectArtifactLabelService =
+           projectArtifactLabelService ?? const CliProjectArtifactLabelService();
 
-  final SettingsRepository _settingsRepository;
-  final ProjectRepository _projectRepository;
   final ProjectPromptTemplateService _promptTemplateService;
+  final CliProjectContextLoader _projectContextLoader;
   final TerminalPrinter _printer;
+  final CliProjectArtifactLabelService _projectArtifactLabelService;
 
   Future<int> run(List<String> args) async {
     // 中文注释: template 命令组只暴露模板浏览、预览和保存壳层，模板规则仍全部复用共享服务。
@@ -48,7 +54,7 @@ class TemplateCommand {
       default:
         _printer.error('未知 template 子命令: $action');
         _printHelp();
-        return 2;
+        return CliExitCodes.invalidInput;
     }
   }
 
@@ -89,7 +95,7 @@ class TemplateCommand {
     );
     if (template == null) {
       _printer.error('模板不存在。');
-      return 1;
+      return CliExitCodes.executionFailure;
     }
     _printer.block('模板详情', _prettyJson(template));
     return 0;
@@ -120,7 +126,7 @@ class TemplateCommand {
     );
     if (!ValueReaders.boolValue(preview['ok'])) {
       _printer.error(ValueReaders.stringValue(preview['error'], '模板预览失败。'));
-      return 1;
+      return CliExitCodes.executionFailure;
     }
     _printer.block('模板预览', ValueReaders.stringValue(preview['content']));
     return 0;
@@ -137,16 +143,14 @@ class TemplateCommand {
       _printer.error('请至少通过 --id 和 --content 提供模板信息。');
       return 2;
     }
-    final result = await _promptTemplateService.saveTemplate(
-      context.project,
-      <String, Object?>{
-        'id': templateId,
-        'name': _optionValue(args, '--name') ?? templateId,
-        'scope': _optionValue(args, '--scope') ?? 'project',
-        'description': _optionValue(args, '--description') ?? '',
-        'content': content,
-      },
-    );
+    final result = await _promptTemplateService
+        .saveTemplate(context.project, <String, Object?>{
+          'id': templateId,
+          'name': _optionValue(args, '--name') ?? templateId,
+          'scope': _optionValue(args, '--scope') ?? 'project',
+          'description': _optionValue(args, '--description') ?? '',
+          'content': content,
+        });
     return _printResult(result, success: '模板已保存。');
   }
 
@@ -185,21 +189,18 @@ class TemplateCommand {
   }
 
   Future<_ProjectContext?> _projectContext(List<String> args) async {
-    final settings = await _settingsRepository.load();
-    final projectPath = _optionValue(args, '--project') ?? settings.defaultProjectPath;
-    if (projectPath.trim().isEmpty) {
-      _printer.error('请通过 --project 指定项目路径。');
+    // 中文注释: template 命令与其他项目相关命令共用同一个项目加载入口，避免默认路径与项目打开逻辑重复散落。
+    final context = await _projectContextLoader.load(args);
+    if (context == null) {
       return null;
     }
-    final project = await _projectRepository.openByPath(projectPath);
-    if (project == null) {
-      _printer.error('项目不存在: $projectPath');
-      return null;
-    }
-    return _ProjectContext(project);
+    return _ProjectContext(context.project);
   }
 
-  Future<JsonMap?> _findTemplate(ProjectDescriptor project, String templateId) async {
+  Future<JsonMap?> _findTemplate(
+    ProjectDescriptor project,
+    String templateId,
+  ) async {
     if (templateId.trim().isEmpty) {
       return null;
     }
@@ -220,36 +221,32 @@ class TemplateCommand {
     _printer.success(success);
     final path = ValueReaders.stringValue(result['relative_path']).trim();
     if (path.isNotEmpty) {
-      _printer.info(path);
+      _printer.info(_formatArtifactPath(path));
     }
     return 0;
   }
 
   String? _optionValue(List<String> args, String name) {
-    for (var index = 0; index < args.length - 1; index += 1) {
-      if (args[index] == name) {
-        return args[index + 1];
-      }
-    }
-    return null;
+    return CliArguments(args).value(name);
   }
 
   String _prettyJson(JsonMap value) {
     return const JsonEncoder.withIndent('  ').convert(value);
   }
 
+  String _formatArtifactPath(String relativePath) {
+    return _projectArtifactLabelService.formatPath(relativePath);
+  }
+
   void _printHelp() {
-    _printer.block(
-      'template help',
-      [
-        'template list [--project 路径]',
-        'template show --id review_report [--project 路径]',
-        "template preview --id review_report --vars '{\"review_goal\":\"检查连续性\"}' [--project 路径]",
-        'template save --id my_template --name 我的模板 --content "正文" [--description 说明] [--scope project] [--project 路径]',
-        'template delete --id my_template [--project 路径]',
-        'template restore --id review_report [--project 路径]',
-      ].join('\n'),
-    );
+    CliHelpContract.printHelpBlock(_printer, 'template help', [
+      'template list [--project 路径]',
+      'template show --id review_report [--project 路径]',
+      "template preview --id review_report --vars '{\"review_goal\":\"检查连续性\"}' [--project 路径]",
+      'template save --id my_template --name 我的模板 --content "正文" [--description 说明] [--scope project] [--project 路径]',
+      'template delete --id my_template [--project 路径]',
+      'template restore --id review_report [--project 路径]',
+    ]);
   }
 }
 

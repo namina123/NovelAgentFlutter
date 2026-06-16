@@ -343,6 +343,8 @@ class _ProjectPanelActionList extends StatelessWidget {
                 title: action.title,
                 description: action.description,
                 onPressed: () => onAction(action),
+                isEnabled: action.isEnabled,
+                disabledReason: action.disabledReason,
               ),
             );
           })

@@ -7,6 +7,7 @@ import '../creative/expression_constraint_injection_policy_service.dart';
 import '../creative/creative_rule_stack_resolver_service.dart';
 import '../assets/shared_narrative_asset_context_projection_service.dart';
 import '../modes/mode_guidance_state.dart';
+import '../project/project_support_document_catalog.dart';
 import 'context_budget_service.dart';
 import 'context_project_file_section_service.dart';
 import 'context_static_section_service.dart';
@@ -243,7 +244,7 @@ class ContextAssemblerService {
     // 中文注释: 焦点路径只收口当前正在看的文档与显式计划路径，避免共享资产片段无脑扩散。
     final paths = <String>[];
     void addPath(String value) {
-      final clean = value.trim();
+      final clean = ProjectSupportDocumentCatalog.canonicalizePath(value);
       if (clean.isNotEmpty && !paths.contains(clean)) {
         paths.add(clean);
       }

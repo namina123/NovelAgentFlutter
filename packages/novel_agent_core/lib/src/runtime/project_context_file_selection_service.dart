@@ -1,6 +1,7 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
 import '../information/information_projection_document.dart';
+import '../project/project_support_document_catalog.dart';
 
 class ProjectContextFileSelectionService {
   List<String> select(List<JsonMap> entries, {int maxFiles = 12}) {
@@ -39,6 +40,9 @@ class ProjectContextFileSelectionService {
     }
     final path = ValueReaders.stringValue(entry['relative_path']).toLowerCase();
     if (_isInformationProjectionPath(path)) {
+      return false;
+    }
+    if (ProjectSupportDocumentCatalog.isProjectOverviewPath(path)) {
       return false;
     }
     return path.endsWith('.md') ||

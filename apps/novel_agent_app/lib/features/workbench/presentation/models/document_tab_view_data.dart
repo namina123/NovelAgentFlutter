@@ -3,6 +3,7 @@ class DocumentTabViewData {
     required this.id,
     required this.title,
     this.relativePath = '',
+    this.tooltip = '',
     this.isActive = false,
     this.isDirty = false,
   });
@@ -10,6 +11,7 @@ class DocumentTabViewData {
   final String id;
   final String title;
   final String relativePath;
+  final String tooltip;
   final bool isActive;
   final bool isDirty;
 }

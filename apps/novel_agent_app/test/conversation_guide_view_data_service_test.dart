@@ -128,6 +128,42 @@ void main() {
     expect(guide.openingState!.preferSingleAction, isTrue);
   });
 
+  test('模式引导 ready 后会直接暴露正式启动长任务动作', () {
+    final service = ConversationGuideViewDataService();
+    final transitionService = ModeGuidanceTransitionService();
+    var state = transitionService.initialize('seed_autopilot_novel');
+    while (!state.isReady) {
+      final question = transitionService.buildQuestion(state);
+      state = transitionService.answer(
+        state,
+        stageId: question.stageId,
+        fieldKey: question.fieldKey,
+        value: '测试 ${question.stageId}',
+        label: '测试 ${question.stageId}',
+        source: 'test',
+      );
+    }
+
+    final guide = service.build(
+      projectType: 'long_novel',
+      needsGoalSelection: true,
+      isGenerating: false,
+      openingMaturity: _openingMaturity(),
+      guideScope: 'mode_guidance',
+      modeGuidanceState: state,
+      openingProjection: _readyLongTaskProjection(),
+    );
+
+    final startAction = guide.primaryActions.firstWhere(
+      (action) => action.commandId == 'opening.start_long_task_run',
+    );
+    expect(startAction.title, '启动长任务');
+    expect(
+      ValueReaders.stringValue(startAction.payload['mode_id']),
+      'seed_autopilot_novel',
+    );
+  });
+
   test('已有基础但 projection 未收束的长任务项目不会再提示缺少旧开局项', () {
     final service = ConversationGuideViewDataService();
     final guide = service.build(

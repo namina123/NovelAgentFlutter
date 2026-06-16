@@ -23,6 +23,8 @@ import '../../features/agent_ecosystem/presentation/models/ecosystem_import_comm
 import '../../features/agent_ecosystem/presentation/models/agent_ecosystem_view_data.dart';
 import '../../features/agent_ecosystem/presentation/models/project_skill_loadout_view_data.dart';
 import '../../features/book_deconstruction/application/controllers/book_deconstruction_controller.dart';
+import '../../features/book_deconstruction/application/services/book_deconstruction_application_plan_materialization_service.dart';
+import '../../features/book_deconstruction/application/services/book_deconstruction_derived_project_creation_service.dart';
 import '../../features/book_deconstruction/application/services/book_deconstruction_narrative_persistence_service.dart';
 import '../../features/book_deconstruction/application/services/desktop_book_deconstruction_source_picker_service.dart';
 import '../../features/inspiration_workbench/application/controllers/inspiration_workbench_controller.dart';
@@ -60,9 +62,7 @@ import '../../features/settings/presentation/models/settings_view_data.dart';
 import '../../features/task_center/application/services/task_center_command_orchestration_service.dart';
 import '../../features/task_center/application/services/task_center_refresh_service.dart';
 import '../../features/task_center/application/services/task_center_workflow_create_option_mapper_service.dart';
-import '../../features/task_center/application/services/task_center_action_execution_outcome_service.dart';
 import '../../features/task_center/presentation/contracts/task_center_action_handler.dart';
-import '../../features/task_center/presentation/models/task_center_action_group_view_data.dart';
 import '../../features/task_center/presentation/models/task_center_contract_action_view_data.dart';
 import '../../features/task_center/presentation/models/task_center_view_data.dart';
 import '../../features/workbench/application/controllers/generate_draft_use_case_factory.dart';
@@ -219,6 +219,8 @@ class AppShellController extends ChangeNotifier
     required ProjectGeneralContinuitySetupService
     projectGeneralContinuitySetupService,
     ProjectPendingResearchActionService? pendingResearchActionService,
+    required ProjectToolPermissionApprovalRecordService
+    toolPermissionApprovalRecordService,
     required LongTaskSupervisor longTaskSupervisor,
     required LongTaskStationController longTaskStationController,
     DesktopBookDeconstructionSourcePickerService?
@@ -514,6 +516,7 @@ class AppShellController extends ChangeNotifier
       buildModeGuidancePlanInputUseCase: _buildModeGuidancePlanInputUseCase,
       modeGuidanceTransitionService: _modeGuidanceTransitionService,
       workflowRuntimeService: _workflowRuntimeService,
+      toolPermissionApprovalRecordService: toolPermissionApprovalRecordService,
       workspaceController: _workbenchWorkspaceController,
       readRuntimeState: () => _workbenchConversationRuntimeState,
       writeRuntimeState: (state) {
@@ -603,6 +606,34 @@ class AppShellController extends ChangeNotifier
         syncWorkbenchResources: _syncWorkbenchResources,
         onBackRequested: showWorkbench,
         sourcePickerService: _desktopBookDeconstructionSourcePickerService,
+        projectsRootPath: _defaultProjectsRootPath,
+        derivedProjectCreationService:
+            BookDeconstructionDerivedProjectCreationService(
+              createProjectWorkspaceUseCase: _createProjectWorkspaceUseCase,
+              writeProjectTextFileUseCase: _writeProjectTextFileUseCase,
+              narrativePersistenceService:
+                  _bookDeconstructionNarrativePersistenceService,
+              applicationPlanMaterializationService:
+                  BookDeconstructionApplicationPlanMaterializationService(
+                    writeProjectTextFileUseCase: _writeProjectTextFileUseCase,
+                  ),
+            ),
+        openDerivedProjectRequested:
+            (ProjectDescriptor project, String preferredOpenPath) async {
+              final loaded = await _workbenchWorkspaceController.loadProject(
+                project.rootPath,
+              );
+              if (!loaded) {
+                _announce('派生项目已创建，但自动打开失败：${project.rootPath}');
+                return;
+              }
+              showWorkbench();
+              if (preferredOpenPath.trim().isNotEmpty) {
+                await _workbenchWorkspaceController.openResource(
+                  preferredOpenPath,
+                );
+              }
+            },
       ),
       createInspirationWorkbenchController: () =>
           InspirationWorkbenchController(
@@ -1613,12 +1644,19 @@ class AppShellController extends ChangeNotifier
         settings.defaultProjectPath,
       );
     }
+    final draftFallbackProtectionEnabled = ValueReaders.boolValue(
+      payload[AppSettings.draftFallbackProtectionConfigKey],
+      settings.draftFallbackProtectionEnabled,
+    );
     final contextSettings = _contextSettingsContractService.normalizeForStorage(
-      Map<String, Object?>.from(payload)..remove('default_project_path'),
+      Map<String, Object?>.from(payload)
+        ..remove('default_project_path')
+        ..remove(AppSettings.draftFallbackProtectionConfigKey),
     );
     _persistSettings(
       settings.copyWith(
         defaultProjectPath: nextProjectPath,
+        draftFallbackProtectionEnabled: draftFallbackProtectionEnabled,
         contextSettings: contextSettings,
       ),
       successMessage: '上下文设置已保存。',
@@ -3100,6 +3138,8 @@ class AppShellController extends ChangeNotifier
               label: action.label,
               description: action.userOptionDescription,
               sourceQuestion: action.userOptionQuestion,
+              permissionApprovalId: action.permissionApprovalId,
+              permissionApprovalOptionId: action.permissionApprovalOptionId,
             );
           },
         );
@@ -4225,7 +4265,8 @@ class AppShellController extends ChangeNotifier
     String? selectedProviderId,
   }) {
     // 中文注释: 设置页数据投影由控制器统一完成，避免展示层直接理解核心设置模型。
-    final resolvedActiveTabId = activeTabId ?? _viewModel.settings.activeTabId;
+    final requestedActiveTabId =
+        activeTabId ?? _viewModel.settings.activeTabId;
     final effectiveProviderId =
         selectedProviderId ?? _selectedProviderId(settings);
     final modelSettings = _modelSettingsOf(settings);
@@ -4272,7 +4313,17 @@ class AppShellController extends ChangeNotifier
           ]
         : providers;
     return SettingsViewData(
-      activeTabId: resolvedActiveTabId,
+      activeTabId: const [
+            'interfaces',
+            'models',
+            'permissions',
+            'tooling',
+            'network',
+            'context',
+            'theme',
+          ].contains(requestedActiveTabId)
+          ? requestedActiveTabId
+          : 'interfaces',
       tabs: const [
         SettingsTabViewData(id: 'interfaces', label: '接口'),
         SettingsTabViewData(id: 'models', label: '模型'),
@@ -4281,7 +4332,6 @@ class AppShellController extends ChangeNotifier
         SettingsTabViewData(id: 'network', label: '网络'),
         SettingsTabViewData(id: 'context', label: '上下文'),
         SettingsTabViewData(id: 'theme', label: '主题'),
-        SettingsTabViewData(id: 'dev', label: '开发'),
       ],
       providers: effectiveProviders,
       providerDirectoryOptions: providerDirectoryOptions,
@@ -4292,6 +4342,7 @@ class AppShellController extends ChangeNotifier
       modelSettings: modelSettings,
       modelEditor: _modelSettingsViewDataService.build(settings, modelSettings),
       defaultProjectPath: settings.defaultProjectPath,
+      draftFallbackProtectionEnabled: settings.draftFallbackProtectionEnabled,
       permissionSettings: settings.permissionSettings,
       toolStrategySettings: _toolStrategySettingsView(settings),
       projectCreationExpressionConstraintDefaults:
@@ -4364,9 +4415,6 @@ class AppShellController extends ChangeNotifier
         _currentProject?.rootPath.trim().isNotEmpty == true
         ? _currentProject!.rootPath
         : settings.defaultProjectPath;
-    final searchRoots = _settingsSearchRoots.isEmpty
-        ? '未配置搜索根'
-        : _settingsSearchRoots.join('\n');
     return <String, List<SettingsSectionViewData>>{
       'models': [
         SettingsSectionViewData(
@@ -4376,7 +4424,7 @@ class AppShellController extends ChangeNotifier
             SettingsItemViewData(label: '默认接口', value: providerLabel),
             SettingsItemViewData(label: '默认模型', value: modelLabel),
             SettingsItemViewData(
-              label: '兼容上下文长度',
+              label: '上下文窗口长度',
               value: _stringValue(
                 modelSettings['compatible_context_window'],
                 '未设置',
@@ -4392,7 +4440,7 @@ class AppShellController extends ChangeNotifier
       'permissions': [
         SettingsSectionViewData(
           title: '工作区权限边界',
-          description: '当前版本只在项目工作区与设置根目录内读写，不向移动端额外申请外部存储权限。',
+          description: '只在项目工作区内读写，不向移动端额外申请外部存储权限。',
           items: [
             SettingsItemViewData(label: '项目根策略', value: currentProjectPath),
             SettingsItemViewData(
@@ -4406,12 +4454,12 @@ class AppShellController extends ChangeNotifier
       'tooling': [
         SettingsSectionViewData(
           title: '共享运行链路',
-          description: 'GUI 与 CLI 共用同一套 core 调度与工具执行入口，宿主层只负责界面与平台适配。',
+          description: 'GUI 与 CLI 共用同一套核心调度与工具执行入口，界面只展示当前可感知的工作方式。',
           items: const [
-            SettingsItemViewData(label: '文件访问', value: 'ProjectWorkspacePort'),
+            SettingsItemViewData(label: '文件访问', value: '工作区文件由应用统一读写'),
             SettingsItemViewData(
               label: '工具调度',
-              value: 'ToolExecutionService / ProjectToolDispatcher',
+              value: '工具调用由应用统一协调后再进入工作区',
             ),
             SettingsItemViewData(
               label: '交互回流',
@@ -4440,21 +4488,23 @@ class AppShellController extends ChangeNotifier
       'context': [
         SettingsSectionViewData(
           title: '上下文与保存',
-          description: '上下文装配、会话历史和自动保存都走共享 core；这里展示当前启用的关键行为。',
+          description: '上下文装配、会话历史与草稿保护都走共享 core；这里展示当前启用的关键行为。',
           items: [
             SettingsItemViewData(
               label: '默认项目',
               value: settings.defaultProjectPath,
             ),
             SettingsItemViewData(
+              label: '普通会话草稿保护',
+              value: settings.draftFallbackProtectionEnabled
+                  ? '已开启：仅暂存草稿，不直接写正式文件'
+                  : '已关闭：不再自动暂存普通会话结果',
+            ),
+            SettingsItemViewData(
               label: '当前项目',
               value: currentProjectPath.trim().isEmpty
                   ? '未加载项目'
                   : currentProjectPath,
-            ),
-            SettingsItemViewData(
-              label: '项目根目录',
-              value: _defaultProjectsRootPath,
             ),
           ],
         ),
@@ -4471,20 +4521,6 @@ class AppShellController extends ChangeNotifier
             SettingsItemViewData(label: '主题来源', value: 'ThemeRegistry 内置主题'),
             SettingsItemViewData(label: '分栏风格', value: '直角面板 + 线性分割'),
             SettingsItemViewData(label: '窄屏入口', value: '会话栏额外暴露文档与设置入口'),
-          ],
-        ),
-      ],
-      'dev': [
-        SettingsSectionViewData(
-          title: '本地路径',
-          description: '下面这些路径来自应用启动装配，便于排查桌面端与移动端各自的宿主行为。',
-          items: [
-            SettingsItemViewData(label: '设置根目录', value: _settingsRootPath),
-            SettingsItemViewData(label: '搜索根目录', value: searchRoots),
-            SettingsItemViewData(
-              label: '默认项目根',
-              value: _defaultProjectsRootPath,
-            ),
           ],
         ),
       ],

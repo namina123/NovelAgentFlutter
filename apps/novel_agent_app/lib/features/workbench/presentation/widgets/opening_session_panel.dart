@@ -73,7 +73,7 @@ class OpeningSessionPanel extends StatelessWidget {
     final supportedCount = viewData.supportedGroups.length;
     final unsupportedCount = viewData.unsupportedGroups.length;
     if (supportedCount == 0 && unsupportedCount == 0) {
-      return '暂未返回额外适配信息';
+      return '暂无更多说明';
     }
     if (unsupportedCount == 0) {
       return '当前项目有 $supportedCount 个可用智能体组';

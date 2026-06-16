@@ -60,6 +60,10 @@ void main() {
       ),
     );
 
+    expect(find.text('后续内置主题'), findsNothing);
+    expect(find.text('自定义主题'), findsNothing);
+    expect(find.text('注册表扩展位'), findsNothing);
+    expect(find.text('用户自定义预留'), findsNothing);
     await tester.tap(find.byType(ThemeOptionTile).last);
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(

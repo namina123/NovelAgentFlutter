@@ -59,6 +59,9 @@ class SessionModeService {
 
   String publicStatus(String mode, String stage, bool isCreative) {
     // 中文注释: 公开状态文本只反映用户可理解的进度，不把底层工作流细节直接暴露出去。
+    if (stage == 'stopped') {
+      return '已停止';
+    }
     if (mode == SessionRecordConstants.modeUnselected ||
         stage == 'pending_goal') {
       return '选择会话目标';

@@ -3,17 +3,22 @@ import '../../presentation/models/workbench_conversation_view_data.dart';
 import '../../presentation/models/workbench_resource_view_data.dart';
 import '../../presentation/models/workbench_workspace_shell_view_data.dart';
 import 'project_agent_group_panel_view_data_service.dart';
+import 'workbench_document_identity_service.dart';
 
 class WorkbenchWorkspaceShellViewDataService {
   const WorkbenchWorkspaceShellViewDataService({
     ProjectAgentGroupPanelViewDataService?
     projectAgentGroupPanelViewDataService,
+    WorkbenchDocumentIdentityService documentIdentityService =
+        const WorkbenchDocumentIdentityService(),
   }) : _projectAgentGroupPanelViewDataService =
            projectAgentGroupPanelViewDataService ??
-           const ProjectAgentGroupPanelViewDataService();
+           const ProjectAgentGroupPanelViewDataService(),
+       _documentIdentityService = documentIdentityService;
 
   final ProjectAgentGroupPanelViewDataService
   _projectAgentGroupPanelViewDataService;
+  final WorkbenchDocumentIdentityService _documentIdentityService;
 
   WorkbenchWorkspaceShellViewData build({
     required WorkbenchResourceViewData resource,
@@ -24,12 +29,34 @@ class WorkbenchWorkspaceShellViewDataService {
       projectName: resource.projectName,
       projectSubtitle: resource.projectSubtitle,
       projectTypeId: resource.projectTypeId,
+      projectTypeTransitionAvailability:
+          resource.projectTypeTransitionAvailability,
       resourceCount: resource.resourceEntries.length,
       activeDocumentTitle: canvas.activeDocumentTitle,
       activeDocumentPath: canvas.activeDocumentPath,
       activeDocumentBody: canvas.activeDocumentBody,
       activeDocumentDirty: canvas.activeDocumentDirty,
+      activeDocumentBufferedDraft: canvas.activeDocumentBufferedDraft,
       activeDocumentCanRender: canvas.activeDocumentCanRender,
+      activeDocumentIdentityLabel: _documentIdentityService.identityLabel(
+        relativePath: canvas.activeDocumentPath,
+        isBufferedDraft: canvas.activeDocumentBufferedDraft,
+      ),
+      activeDocumentStateLabel: _documentIdentityService.stateLabel(
+        isDirty: canvas.activeDocumentDirty,
+        isBufferedDraft: canvas.activeDocumentBufferedDraft,
+        fallbackStatus: canvas.generationStatus,
+        isRenderMode: false,
+        isStructureMode: false,
+      ),
+      activeDocumentStatusLabel: _documentIdentityService.statusLabel(
+        relativePath: canvas.activeDocumentPath,
+        isDirty: canvas.activeDocumentDirty,
+        isBufferedDraft: canvas.activeDocumentBufferedDraft,
+        fallbackStatus: canvas.generationStatus,
+        isRenderMode: false,
+        isStructureMode: false,
+      ),
       generationStatus: canvas.generationStatus,
       contextSummary: conversation.contextSummary,
       workflowTitle: conversation.workflowTitle,
