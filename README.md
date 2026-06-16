@@ -1,200 +1,328 @@
 # NovelAgentFlutter
 
-NovelAgentFlutter 是一个仍在开发中的 AI 小说创作工作台，目标是把小说项目、智能体、技能、约束、资料、拆书结果和长任务写作流程放进同一个本地优先的创作环境里。
+NovelAgentFlutter is a local-first AI novel workspace built with Flutter and Dart. It is trying to turn long-form writing into a real project workflow instead of a single prompt box: projects, agents, skills, constraints, references, deconstruction assets, sessions, and long-running generation all live in one workspace.
 
-> **当前状态：未开发完成，不是正式可用产品。**
+> **Status: active unfinished project**
 >
-> 本仓库目前只能视为实验性项目或受限 beta。部分普通 GUI 写作流程已经可以测试，但长任务自主连续写作仍然不稳定，CLI 也没有完全跟进完成。请不要把当前版本当作成熟软件使用或分发给正式用户。
+> This repository is not a finished product yet.
+> The GUI is partially usable for testing and internal iteration.
+> The CLI is present but still incomplete.
+> Autonomous long-task generation is under active stabilization and should not be treated as fully reliable production behavior.
 
-## 项目目标
+## What This Project Is Trying To Build
 
-这个项目想做的不是一个简单的“输入提示词然后生成一章”的工具，而是一个面向长篇小说创作的工程化工作台：
+This project is aimed at people who want more than "generate one chapter from one prompt".
 
-- 管理小说项目、章节、资料、拆书结果和创作上下文；
-- 支持不同 AI Provider、模型、智能体、智能体组、技能和技能组；
-- 让智能体通过工具调用读写项目文件、更新资料、交付章节；
-- 让普通写作、拆书续写、长任务写作尽量复用同一套核心合同；
-- 将角色、设定、伏笔、元素、资料、研究笔记等信息沉淀为项目资产；
-- 为未来的 CLI、TUI、Docker 部署和更复杂的多智能体协作留下空间。
+The long-term goal is a writing system where we can:
 
-长期方向是：让小说项目像一个持续生长的创作工程，而不是一串一次性提示词。
+- create and manage novel projects as durable workspaces;
+- run different agent groups for writing, review, extraction, and follow-up work;
+- let agents use structured tools instead of only raw text prompting;
+- preserve project knowledge instead of repeatedly rebuilding context from scratch;
+- support ordinary writing, long-task writing, book deconstruction, and future information-driven workflows on top of shared core contracts.
 
-## 已实现或部分实现的内容
+In short: a novel project should behave more like a living engineering workspace than a disposable chat.
 
-### Flutter GUI
+## Current State
 
-- 项目创建与打开流程。
-- 主工作台、项目资源区、会话区、设置区等基础界面。
-- Provider、模型、主题等设置入口。
-- 智能体生态相关的配置入口。
-- Windows 和 Android 打包链路。
+The current tagged application line is around `v0.1.3`.
 
-GUI 仍在打磨中，部分界面、引导文案和窄屏体验仍可能不够自然。
+What is true today:
 
-### 普通小说写作流程
+- Windows and Android builds can be produced.
+- The GUI shell, project workflow surface, settings surface, and editor surface exist.
+- Shared core and adapter layers are real and already support both GUI and CLI directions.
+- Ordinary project workflows are much closer to usable than they were in earlier iterations.
+- Long-task architecture exists, but real long autonomous runs still need more stabilization.
 
-- 会话式写作入口。
-- 章节草稿生成与章节文件交付。
-- 基础的章节交付检查。
-- 字数目标、表达限制等约束的初步接入。
-- 项目资源和上下文在写作流程中的基础消费。
+What is not true today:
 
-普通写作路径相对更接近可测试状态，但仍不能视为最终产品质量。
+- This is not a polished end-user release.
+- Long unattended generation is not trustworthy enough yet.
+- CLI is not feature-complete.
+- Information extraction and reusable knowledge workflows are not fully closed.
+- Some advanced writing modes are still design-stage or partially landed only.
 
-### 智能体、技能与项目生态
+## What Is Implemented
 
-- 已有智能体、智能体组、技能、技能组等基础概念。
-- 支持内置与非内置资源的设计方向。
-- 项目级配置、项目级记忆和技能装载正在形成。
-- 多智能体协作的合同和部分基础设施已经存在。
+### GUI Application
 
-这部分仍在演进，尤其是“用户如何在 GUI 中舒服地配置智能体/技能/组”还没有完全收口。
+The Flutter app already includes:
 
-### 长任务写作架构
+- project creation and project opening;
+- a workbench-style app shell;
+- session/chat style interaction for writing workflows;
+- project assets and constraint surfaces;
+- agent ecosystem configuration surfaces;
+- long-task station and related runtime views;
+- Markdown-oriented editing and reading surfaces;
+- packaging for Windows and Android.
 
-- 已有长任务运行合同、调度、检查点、恢复、监督/控制层等基础设计。
-- 已有运行现场、任务中心和长任务状态展示相关的数据结构。
-- 已有针对章节交付、失败恢复、暂停/继续等方向的实现。
+This area has improved a lot, but it still needs continued polish in naturalness, consistency, and edge-case handling.
 
-但真实 Provider 下的长任务连续推进仍然是当前最大阻断项：缺章、早停、失败后继续推进等问题仍需要继续修复。因此当前版本不能承诺“稳定自动写几十章或几百章”。
+### Shared Architecture
 
-### 拆书与续写基础
+The repository already has a real shared architecture instead of separate one-off apps:
 
-- 已有拆书相关项目流和拆书结果回看基础。
-- 已有把拆书结果接入后续写作连续性的设计和部分实现。
-- 已经开始考虑长篇小说中世界观、人物、剧情走向、人物性格等信息如何延续。
+- `packages/novel_agent_core`: domain contracts, workflow logic, agents, tools, sessions, project models;
+- `packages/novel_agent_adapters`: storage, provider integration, runtime bridging, host-side adapters;
+- `apps/novel_agent_app`: Flutter GUI shell;
+- `apps/novel_agent_cli`: CLI shell in progress.
 
-这部分仍需要更多真实文本验证，不应视为完整可用的拆书续写产品。
+That shared-core direction is one of the most important things already achieved in this repository.
 
-### 项目信息层
+### Ordinary Writing Workflow
 
-项目已经开始建立一套通用信息层，用来承载：
+There is already a usable base for ordinary project writing:
 
-- 知识卡片；
-- 参考作品；
-- 研究笔记；
-- 设计元素；
-- 信息链接；
-- 写作上下文激活。
+- session-driven writing flow;
+- project-level context consumption;
+- chapter artifact delivery;
+- draft and chapter persistence;
+- basic constraint hookup such as expression constraints and chapter-length related controls;
+- tool-mediated file and project interaction instead of pure freeform chat only.
 
-这套信息层是未来知识库、元素提取、联网搜索、同人/衍生信息体系管理的重要基础，但目前仍属于基础设施阶段。
+This path is the closest thing to "usable for real testing", though still not finished.
 
-## 尚未完成、尚未开始或仍处于设计阶段的内容
+### Agent / Skill / Group Model
 
-以下能力目前不能当成已完成特性。
+The project already has the backbone for:
 
-### CLI、TUI 与 Docker
+- agents;
+- agent groups;
+- skills;
+- skill groups / loadouts;
+- project-level bindings and defaults;
+- different runtime roles between agents.
 
-- **CLI 未完全跟进完成。** 当前 CLI 更像共享 core/adapters 的辅助壳层，还不是完整产品入口。
-- **TUI 尚未开始。** 预计会在 CLI 更成熟之后再考虑。
-- **Docker 应用在计划中。** 可能会较快进入下一阶段，但目前还没有完成。
+This is important because writing, review, extraction, and information tasks should not all collapse into one generic agent forever.
 
-### 小说功能与信息体系
+### Long-Task Runtime Foundation
 
-- **知识库提取**
-  - 从小说、拆书文本、研究资料、项目文档中提取可复用知识的能力还没有完成。
+The long-task side already includes significant groundwork:
 
-- **SQLite**
-  - 项目中已经存在相关依赖或方向，但 SQLite 化的完整存储架构不能视为已完成。
+- run records and runtime identity;
+- queue / pause / resume / checkpoint related contracts;
+- supervisor and control-plane style design;
+- review / repair / diagnosis directions;
+- GUI and CLI consumption paths for parts of runtime state;
+- probe and regression infrastructure around long-task behavior.
 
-- **配角视角小说支线**
-  - 例如为配角、组织、反派、旁观者生成独立支线或插叙章节，目前仍在规划中。
+This is one of the repo's strongest architectural areas conceptually, but also one of the biggest remaining stability risks in real use.
 
-- **IF / 假设线**
-  - 例如替代时间线、非正史路线、草稿分支、假设剧情推演等，目前仍在规划中。
+### Book Deconstruction Foundation
 
-- **元素嵌入与提取**
-  - 例如北欧神话、星象、八卦、古代神话、命名体系、仪式结构、地域文化等元素。
-  - 目标是把这些内容作为可提取、可保存、可复用的项目设计元素，而不是写死成某个类型小说的规则。
+The repo already contains a real deconstruction direction instead of treating follow-up writing as a manual side process:
 
-- **小说解说、总结、评书等**
-  - 面向已有文本生成解说、总结、讲书稿、评书式改写等功能还没有完整实现。
+- book deconstruction project flow;
+- follow-up route planning;
+- derived-project creation groundwork;
+- deconstruction output persistence;
+- continuity-oriented follow-up documents and assets.
 
-- **同人/衍生写作**
-  - 这里指基于已知信息体系的衍生创作，例如书籍类、传说类、游戏类等。
-  - 重点不是硬编码某个作品类型，而是管理“已知信息体系、项目解释、角色设定、世界规则、衍生边界”。
-  - 这部分尚未完整设计和实现。
+This is not complete yet, but it is no longer just an idea.
 
-- **元素搜索与联网研究**
-  - 未来希望支持联网搜索元素、资料和背景知识。
-  - 搜索结果应当能保存为项目资料或研究笔记，避免智能体只凭一次性上下文记忆写作。
+### Project Information Layer
 
-### 特殊叙事机制
+The project has started building a shared information substrate for:
 
-多世界、快穿、死亡回归、存档/读档、聊天群、主神空间等机制，目前更适合作为“通用叙事状态变化”的测试样例，而不是核心代码里的写死类型。
+- project assets;
+- style and expression constraints;
+- reference extraction outputs;
+- research-oriented notes and reusable knowledge directions;
+- future knowledge-card and structured reference workflows.
 
-项目未来应支持智能体通过通用工具和信息层描述这些变化：
+This matters because the system should remember and reuse information instead of repeatedly improvising from partial context.
 
-- 谁发生了变化；
-- 哪些角色保留记忆；
-- 哪些环境、世界、组织、规则发生改变；
-- 哪些约束只在局部区域生效；
-- 哪些信息需要写入项目资料以便后续章节继续使用。
+## What Is Only Partial, Experimental, Or Still Missing
 
-## 当前不应误解的地方
+These areas should **not** be mistaken for finished capabilities.
 
-- 这不是一个已经发布完成的商业级小说软件。
-- 长任务连续写作还不能稳定承诺。
-- 拆书续写还不能保证对超长篇小说完全接住世界观、人物和剧情。
-- 智能体组、多技能协作、约束层、信息层仍在演化。
-- 某些探针和测试脚本只用于开发验证，不是用户功能。
+### Long Autonomous Writing Stability
 
-## 项目结构
+This is still the biggest unresolved product issue.
+
+Architecture exists, but we still need more confidence in:
+
+- stable multi-chapter continuation;
+- reliable retry / pause / recovery behavior;
+- stronger unattended scheduling behavior;
+- better review and constraint enforcement during long runs;
+- fewer cases where a workflow looks started but does not advance correctly.
+
+### CLI
+
+The CLI is no longer just a placeholder, but it is still incomplete.
+
+What remains:
+
+- fuller command coverage;
+- better operator ergonomics;
+- a more complete parity story with shared runtime capabilities;
+- clearer workflows for automation and diagnostics.
+
+### TUI
+
+Not started yet.
+
+The likely order remains:
+
+1. continue stabilizing GUI and shared core,
+2. finish the CLI baseline,
+3. only then evaluate whether a TUI is worth building.
+
+### Docker
+
+Docker support is planned, especially for long-running and extraction-oriented workflows, but it is not finished.
+
+### Information Extraction / Reusable Knowledge
+
+This is a major active direction, not a finished subsystem.
+
+Still incomplete:
+
+- robust reference extraction from imported works;
+- reusable structured knowledge outputs for future projects;
+- stronger source retention and traceability;
+- better balance between project-local knowledge and reusable shared knowledge;
+- broader information workflows for research-heavy writing.
+
+### Advanced Novel-Specific Modes
+
+Some directions have been analyzed heavily but are not fully implemented:
+
+- alternate lines / IF branches;
+- side-route or supporting-character viewpoint branches;
+- stronger style extraction and reusable style knowledge;
+- deeper fanfiction / derivative-work information workflows;
+- richer element embedding and extraction, such as mythology, astrology, symbolic systems, naming systems, and cultural structures;
+- explanation / summary / commentary style workflows for existing text.
+
+## Project Innovations And Design Bets
+
+These are the most important ideas this repository is already exploring.
+
+### 1. Project-As-Workspace Instead Of Prompt-As-Unit
+
+The core unit is not "one prompt", but a project with files, assets, constraints, references, runtime state, and reusable knowledge.
+
+### 2. Shared Core Across GUI And CLI
+
+The GUI and CLI are not meant to become two separate logic stacks. The project is explicitly organized so that both shells consume shared core contracts.
+
+### 3. Constraint Layer As First-Class Infrastructure
+
+Constraints are not treated as random prompt fragments only. The project is trying to make project constitution, mode guidance, style guidance, and expression constraints into stable reusable layers.
+
+### 4. Long-Task Runtime As A Real Runtime Problem
+
+Long generation is not being treated as "just call the model many times". The design already moves toward explicit runtime identity, supervision, checkpoints, pause/resume, diagnosis, and recovery.
+
+### 5. Deconstruction And Follow-Up As Part Of The Same System
+
+Book deconstruction, follow-up continuation, and derivative writing are being shaped as first-class workflows connected to the same project and information model.
+
+### 6. Information Reuse Over Context Repetition
+
+The direction is to persist useful information into project assets and future structured stores, rather than asking the model to remember everything from raw chat history every time.
+
+## Roadmap
+
+The most important next steps are roughly:
+
+### Near-Term
+
+- continue stabilizing long-task behavior;
+- continue fixing real user-flow issues in the GUI;
+- improve approval / permission continuity;
+- strengthen session continuity and context handling;
+- keep reducing leftover development artifacts that leak into user experience.
+
+### Mid-Term
+
+- finish the CLI baseline;
+- complete more of the reference extraction and reusable knowledge pipeline;
+- improve multi-agent role separation in real workflows;
+- harden deconstruction -> derived project -> continuation flow;
+- make information collection and research invocation more reliable.
+
+### Later
+
+- Docker-oriented long-running runtime shape;
+- broader structured knowledge workflows;
+- better import / ingestion coverage;
+- optional TUI exploration;
+- more specialized project types and transformation paths.
+
+## Repository Layout
 
 ```text
 apps/
-  novel_agent_app/       Flutter GUI 应用
-  novel_agent_cli/       CLI，尚未完整完成
+  novel_agent_app/       Flutter GUI application
+  novel_agent_cli/       CLI application in progress
 
 packages/
-  novel_agent_core/      核心合同、工作流、智能体、技能、约束、长任务等领域逻辑
-  novel_agent_adapters/  本地存储、项目文件、运行时适配、工具分发等
+  novel_agent_core/      shared domain contracts and workflow logic
+  novel_agent_adapters/  storage, provider, runtime, and host adapters
 
-tools/                   开发、验证、探针和打包辅助脚本
-docs/                    分析文档、任务顺序文档、验收记录
-local/                   本地私有文件，默认不应提交
-dist/                    本地打包产物，默认不应提交
+docs/                    architecture, analysis, task-order, audit, and handoff docs
+tools/                   repo utilities, probes, scanners, and helper scripts
+local/                   local private files, ignored from git
+dist/                    local packaging outputs, ignored from git
 ```
 
-## 构建方式
+## Build And Run
 
-需要先安装 Flutter，并准备对应平台工具链。
+Install Flutter first, then:
 
 ```powershell
 cd apps/novel_agent_app
 flutter pub get
 flutter analyze
+flutter run
+```
+
+Release builds:
+
+```powershell
 flutter build windows --release
 flutter build apk --release
 ```
 
-构建产物位于：
+Current release-signing behavior is explicit. Android release packaging depends on local signing configuration being provided by the environment.
 
-- Windows: `apps/novel_agent_app/build/windows/x64/runner/Release`
-- Android: `apps/novel_agent_app/build/app/outputs/flutter-apk`
+## Security And Local Secrets
 
-`dist/` 可用于放置本地打包后的 zip/apk，但默认不提交到 git。
+Do not commit:
 
-## 本地密钥与安全
+- API keys;
+- provider credentials;
+- `.env`-style local secret files;
+- local probe configs with real credentials;
+- ad-hoc experimental files that contain private data.
 
-请不要提交任何 API Key、Provider 凭据、`.env`、本地 probe 配置或真实测试密钥。
+Sensitive local material should stay under ignored local paths such as `local/`.
 
-本地私有文件应放在 `local/` 等被忽略的位置。仓库可以保留示例配置文件，但不能保留真实密钥。
+## About The Docs
 
-## 开源协议
+This repository currently contains a large amount of design, audit, task-order, and handoff documentation because the project has been evolving quickly and many subsystems were stabilized through structured multi-session work.
 
-本项目使用 Apache License 2.0，详见 [LICENSE](LICENSE)。
+That documentation is useful for development, but it also means the repo is still more "active workshop" than "minimal polished OSS package".
 
-## 贡献方向
+## License
 
-当前阶段更欢迎以下类型的贡献：
+Apache License 2.0. See [LICENSE](LICENSE).
 
-- 修复真实 Provider 下的长任务稳定性；
-- 改善 GUI 易用性和窄屏体验；
-- 完善 CLI 边界，但不要提前承诺完整 CLI 产品；
-- 强化核心合同、适配层和 GUI 层之间的职责分离；
-- 为普通写作、拆书、长任务复用同一套信息层和约束层；
-- 避免把具体小说类型、具体叙事机制写死进核心代码；
-- 增加可靠测试，减少一次性探针脚本对主线的污染；
-- 清理生成物、旧探针、临时文件和本地密钥风险。
+## Contribution Notes
 
+Useful contributions right now are the boring but valuable kind:
+
+- stability fixes;
+- better runtime verification;
+- cleaner responsibility boundaries;
+- GUI usability improvements;
+- better information persistence and reuse;
+- stronger tests around real workflow behavior;
+- cleanup of leftover development rough edges.
+
+The best contributions for this stage are the ones that make the system more truthful, more stable, and less magical.

@@ -40,6 +40,24 @@ local/*
 references/MuMuAINovel-main/
 references/assets/
 references/files/
+tools/generated/
+tools/run_*_mock_regression_suite.ps1
+tools/run_*_probe.ps1
+apps/novel_agent_app/archive/
+docs/*session-order*.md
+docs/**/*session-order*.md
+docs/*handoff*.md
+docs/**/*handoff*.md
+docs/*goal-prompt*.md
+docs/**/*goal-prompt*.md
+docs/*mock-regression-suite*.md
+docs/**/*mock-regression-suite*.md
+docs/*real-probe*.md
+docs/**/*real-probe*.md
+docs/*ledger*.md
+docs/**/*ledger*.md
+docs/*closeout*.md
+docs/**/*closeout*.md
 
 # Python / node misc from references or helper scripts
 **/__pycache__/
