@@ -7,7 +7,7 @@ void main() {
 
   group('ProjectImportActionPolicyService', () {
     test(
-      'book deconstruction project defaults to chapters and auto enables for a single markdown file',
+      'book deconstruction project defaults to source archive root and auto enables for a single markdown file',
       () {
         final service = ProjectImportActionPolicyService();
 
@@ -18,7 +18,9 @@ void main() {
 
         expect(
           policy.resolvedTargetDirectory,
-          ProjectContentPathPolicyService.chaptersRoot,
+          const ProjectContentPathPolicyService().directoryForContentType(
+            'source_original',
+          ),
         );
         expect(policy.canAutoDeconstruct, isTrue);
         expect(policy.autoDeconstruct, isTrue);
@@ -31,6 +33,22 @@ void main() {
         );
         expect(policy.canSmartAnalyze, isFalse);
         expect(policy.smartAnalysis, isFalse);
+      },
+    );
+
+    test(
+      'epub source also enables auto deconstruction for deconstruction project',
+      () {
+        final service = ProjectImportActionPolicyService();
+
+        final policy = service.build(
+          projectType: BookDeconstructionConstants.projectTypeId,
+          sourcePaths: const <String>['C:/imports/reference_book.epub'],
+        );
+
+        expect(policy.canAutoDeconstruct, isTrue);
+        expect(policy.autoDeconstruct, isTrue);
+        expect(policy.outputHint, contains('.epub'));
       },
     );
 

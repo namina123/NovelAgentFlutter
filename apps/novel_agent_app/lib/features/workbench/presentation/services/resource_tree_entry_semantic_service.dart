@@ -34,14 +34,20 @@ class ResourceTreeEntrySemanticService {
         return ResourceTreeEntrySemanticViewData(
           detailLabel: identity.detailLabel,
           badgeLabel: '概览',
-          leadingIcon: Icons.info_outline_rounded,
+          leadingIcon: _leadingIconFor(
+            isDirectory: isDirectory,
+            fileIcon: Icons.info_outline_rounded,
+          ),
           tone: ResourceTreeSemanticTone.blue,
         );
       case 'sqlite_projection':
         return ResourceTreeEntrySemanticViewData(
           detailLabel: identity.detailLabel,
           badgeLabel: '投影',
-          leadingIcon: Icons.account_tree_outlined,
+          leadingIcon: _leadingIconFor(
+            isDirectory: isDirectory,
+            fileIcon: Icons.account_tree_outlined,
+          ),
           tone: ResourceTreeSemanticTone.purple,
         );
       case 'premise_directory':
@@ -49,7 +55,10 @@ class ResourceTreeEntrySemanticService {
         return ResourceTreeEntrySemanticViewData(
           detailLabel: identity.detailLabel,
           badgeLabel: '前提',
-          leadingIcon: Icons.auto_stories_outlined,
+          leadingIcon: _leadingIconFor(
+            isDirectory: isDirectory,
+            fileIcon: Icons.auto_stories_outlined,
+          ),
           tone: ResourceTreeSemanticTone.amber,
         );
       case 'outline_directory':
@@ -57,7 +66,10 @@ class ResourceTreeEntrySemanticService {
         return ResourceTreeEntrySemanticViewData(
           detailLabel: identity.detailLabel,
           badgeLabel: '规划',
-          leadingIcon: Icons.route_outlined,
+          leadingIcon: _leadingIconFor(
+            isDirectory: isDirectory,
+            fileIcon: Icons.route_outlined,
+          ),
           tone: ResourceTreeSemanticTone.teal,
         );
       case 'chapter_directory':
@@ -65,7 +77,10 @@ class ResourceTreeEntrySemanticService {
         return ResourceTreeEntrySemanticViewData(
           detailLabel: identity.detailLabel,
           badgeLabel: '正文',
-          leadingIcon: Icons.menu_book_outlined,
+          leadingIcon: _leadingIconFor(
+            isDirectory: isDirectory,
+            fileIcon: Icons.menu_book_outlined,
+          ),
           tone: ResourceTreeSemanticTone.green,
         );
       case 'sample_directory':
@@ -73,7 +88,10 @@ class ResourceTreeEntrySemanticService {
         return ResourceTreeEntrySemanticViewData(
           detailLabel: identity.detailLabel,
           badgeLabel: '样章',
-          leadingIcon: Icons.history_edu_outlined,
+          leadingIcon: _leadingIconFor(
+            isDirectory: isDirectory,
+            fileIcon: Icons.history_edu_outlined,
+          ),
           tone: ResourceTreeSemanticTone.blue,
         );
       case 'scene_directory':
@@ -81,7 +99,10 @@ class ResourceTreeEntrySemanticService {
         return ResourceTreeEntrySemanticViewData(
           detailLabel: identity.detailLabel,
           badgeLabel: '场景',
-          leadingIcon: Icons.movie_creation_outlined,
+          leadingIcon: _leadingIconFor(
+            isDirectory: isDirectory,
+            fileIcon: Icons.movie_creation_outlined,
+          ),
           tone: ResourceTreeSemanticTone.rose,
         );
       case 'asset_directory':
@@ -89,7 +110,10 @@ class ResourceTreeEntrySemanticService {
         return ResourceTreeEntrySemanticViewData(
           detailLabel: identity.detailLabel,
           badgeLabel: '资产',
-          leadingIcon: Icons.inventory_2_outlined,
+          leadingIcon: _leadingIconFor(
+            isDirectory: isDirectory,
+            fileIcon: Icons.inventory_2_outlined,
+          ),
           tone: ResourceTreeSemanticTone.purple,
         );
       case 'analysis_directory':
@@ -97,7 +121,10 @@ class ResourceTreeEntrySemanticService {
         return ResourceTreeEntrySemanticViewData(
           detailLabel: identity.detailLabel,
           badgeLabel: '分析',
-          leadingIcon: Icons.analytics_outlined,
+          leadingIcon: _leadingIconFor(
+            isDirectory: isDirectory,
+            fileIcon: Icons.analytics_outlined,
+          ),
           tone: ResourceTreeSemanticTone.teal,
         );
       default:
@@ -108,5 +135,13 @@ class ResourceTreeEntrySemanticService {
               : Icons.description_outlined,
         );
     }
+  }
+
+  IconData _leadingIconFor({
+    required bool isDirectory,
+    required IconData fileIcon,
+  }) {
+    // 中文注释: 目录统一回退为朴素文件夹图标，文件再保留语义化图标，避免资源树视觉过杂。
+    return isDirectory ? Icons.folder_outlined : fileIcon;
   }
 }

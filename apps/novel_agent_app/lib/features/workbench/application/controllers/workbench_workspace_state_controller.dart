@@ -5,7 +5,8 @@ class WorkbenchWorkspaceStateController {
 
   final WorkbenchWorkspaceController _controller;
 
-  ProjectDescriptor? get currentProject => _controller._readProjectState().currentProject;
+  ProjectDescriptor? get currentProject =>
+      _controller._readProjectState().currentProject;
 
   ProjectRuntimeProfile? get currentProjectRuntimeProfile =>
       _controller._readProjectState().currentRuntimeProfile;
@@ -27,9 +28,11 @@ class WorkbenchWorkspaceStateController {
     };
   }
 
-  String get activeDocumentPath => _controller._readWorkbench().activeDocumentPath;
+  String get activeDocumentPath =>
+      _controller._readWorkbench().activeDocumentPath;
 
-  String get activeDocumentBody => _controller._activeOpenDocument()?.content ?? '';
+  String get activeDocumentBody =>
+      _controller._activeOpenDocument()?.content ?? '';
 
   OpenDocumentState? activeOpenDocument() => _controller._activeOpenDocument();
 
@@ -58,14 +61,16 @@ class WorkbenchWorkspaceStateController {
         isBufferedDraft: true,
       ),
     );
-    _controller._mutateWorkbench((current) => _controller.applyWorkbenchState(current));
+    _controller._mutateWorkbench(
+      (current) => _controller.applyWorkbenchState(current),
+    );
     _controller._persistWorkbenchSnapshot();
     return true;
   }
 
   WorkbenchViewData applyWorkbenchState(WorkbenchViewData base) {
     // 中文注释: 工作台投影仍然由工作区状态层统一生成。
-    return _controller.applyWorkbenchState(base);
+    return _controller._projectedWorkbenchState(base);
   }
 
   Future<bool> loadProject(String rootPath) async {

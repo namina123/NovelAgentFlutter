@@ -11,6 +11,7 @@ import '../../features/task_center/presentation/models/task_center_view_data.dar
 import '../../features/workbench/application/services/workbench_pane_view_data_mapper_service.dart';
 import '../../features/workbench/presentation/models/workbench_canvas_view_data.dart';
 import '../../features/workbench/presentation/models/workbench_conversation_view_data.dart';
+import '../../features/workbench/presentation/models/conversation_transcript_lane_view_data.dart';
 import '../../features/workbench/presentation/models/workbench_overlay_view_data.dart';
 import '../../features/workbench/presentation/models/workbench_resource_view_data.dart';
 import '../../features/workbench/presentation/models/workbench_view_data.dart';
@@ -20,28 +21,34 @@ class AppShellListenableState {
   AppShellListenableState({
     required AppShellViewModel viewModel,
     required String activeThemeId,
+    WorkbenchPaneViewDataMapperService? paneViewDataMapperService,
   }) : _destination = ValueNotifier<AppDestination>(viewModel.destination),
        _activeThemeId = ValueNotifier<String>(activeThemeId),
+       _paneViewDataMapperService =
+           paneViewDataMapperService ??
+           const WorkbenchPaneViewDataMapperService(),
        _workbench = ValueNotifier<WorkbenchViewData>(viewModel.workbench),
        _workbenchResource = ValueNotifier<WorkbenchResourceViewData>(
-         const WorkbenchPaneViewDataMapperService().toResourceViewData(
-           viewModel.workbench,
-         ),
+         (paneViewDataMapperService ??
+                 const WorkbenchPaneViewDataMapperService())
+             .toResourceViewData(viewModel.workbench),
        ),
        _workbenchCanvas = ValueNotifier<WorkbenchCanvasViewData>(
-         const WorkbenchPaneViewDataMapperService().toCanvasViewData(
-           viewModel.workbench,
-         ),
+         (paneViewDataMapperService ??
+                 const WorkbenchPaneViewDataMapperService())
+             .toCanvasViewData(viewModel.workbench),
        ),
        _workbenchConversation = ValueNotifier<WorkbenchConversationViewData>(
-         const WorkbenchPaneViewDataMapperService().toConversationViewData(
+         _safeConversationViewData(
+           paneViewDataMapperService ??
+               const WorkbenchPaneViewDataMapperService(),
            viewModel.workbench,
          ),
        ),
        _workbenchOverlay = ValueNotifier<WorkbenchOverlayViewData>(
-         const WorkbenchPaneViewDataMapperService().toOverlayViewData(
-           viewModel.workbench,
-         ),
+         (paneViewDataMapperService ??
+                 const WorkbenchPaneViewDataMapperService())
+             .toOverlayViewData(viewModel.workbench),
        ),
        _settings = ValueNotifier<SettingsViewData>(viewModel.settings),
        _agentEcosystem = ValueNotifier<AgentEcosystemViewData>(
@@ -61,6 +68,7 @@ class AppShellListenableState {
 
   final ValueNotifier<AppDestination> _destination;
   final ValueNotifier<String> _activeThemeId;
+  final WorkbenchPaneViewDataMapperService _paneViewDataMapperService;
   final ValueNotifier<WorkbenchViewData> _workbench;
   final ValueNotifier<WorkbenchResourceViewData> _workbenchResource;
   final ValueNotifier<WorkbenchCanvasViewData> _workbenchCanvas;
@@ -103,16 +111,22 @@ class AppShellListenableState {
     required String activeThemeId,
   }) {
     // 中文注释: 壳层细粒度监听值统一在这里同步，避免 AppShellController 到处散落 ValueNotifier 赋值逻辑。
-    const mapper = WorkbenchPaneViewDataMapperService();
     _destination.value = viewModel.destination;
     _activeThemeId.value = activeThemeId;
     _workbench.value = viewModel.workbench;
-    _workbenchResource.value = mapper.toResourceViewData(viewModel.workbench);
-    _workbenchCanvas.value = mapper.toCanvasViewData(viewModel.workbench);
-    _workbenchConversation.value = mapper.toConversationViewData(
+    _workbenchResource.value = _paneViewDataMapperService.toResourceViewData(
       viewModel.workbench,
     );
-    _workbenchOverlay.value = mapper.toOverlayViewData(viewModel.workbench);
+    _workbenchCanvas.value = _paneViewDataMapperService.toCanvasViewData(
+      viewModel.workbench,
+    );
+    _workbenchConversation.value = _safeConversationViewData(
+      _paneViewDataMapperService,
+      viewModel.workbench,
+    );
+    _workbenchOverlay.value = _paneViewDataMapperService.toOverlayViewData(
+      viewModel.workbench,
+    );
     _settings.value = viewModel.settings;
     _agentEcosystem.value = viewModel.agentEcosystem;
     _projectOpen.value = viewModel.projectOpen;
@@ -138,5 +152,65 @@ class AppShellListenableState {
     _taskCenter.dispose();
     _reviewCenter.dispose();
     _promptTemplates.dispose();
+  }
+
+  static WorkbenchConversationViewData _safeConversationViewData(
+    WorkbenchPaneViewDataMapperService mapper,
+    WorkbenchViewData workbench,
+  ) {
+    try {
+      return mapper.toConversationViewData(workbench);
+    } catch (error) {
+      return WorkbenchConversationViewData(
+        hasActiveProject: workbench.projectPath.trim().isNotEmpty,
+        toolCoreStatus: workbench.toolCoreStatus,
+        toolPreviewMode: workbench.toolPreviewMode,
+        modelLabel: workbench.modelLabel,
+        modelOptions: workbench.modelOptions,
+        groupSelector: workbench.groupSelector,
+        agentSelector: workbench.agentSelector,
+        inputCapabilityContext: workbench.inputCapabilityContext.copyWith(
+          isGenerating: workbench.isGenerating,
+          hasActiveProject: workbench.projectPath.trim().isNotEmpty,
+        ),
+        contextSummary: '会话面板初始化失败，已切换为安全视图。',
+        conversationContextProjection: null,
+        workflowTitle: workbench.workflowTitle,
+        workflowDescription: '会话投影恢复失败，请重新开始新会话或稍后再试。',
+        primaryActions: workbench.primaryActions,
+        openingPanel: null,
+        openingState: null,
+        composerHint: workbench.composerHint,
+        conversationEntries: const [],
+        transcriptBlocks: const [],
+        transcriptLanes: const ConversationTranscriptLaneViewData(
+          stableHistoryBlocks: [],
+          currentRoundToolBlocks: [],
+          streamingAppendixBlocks: [],
+          footerBlocks: [],
+        ),
+        pendingOptions: const [],
+        subAgentRuns: const [],
+        retryRequest: null,
+        sessionHistoryEntries: const [],
+        activeSessionId: '',
+        showSessionHistory: false,
+        sessionRestoreResult: null,
+        generationStatus: _fallbackConversationStatus(
+          workbench.generationStatus,
+          error,
+        ),
+        isGenerating: false,
+      );
+    }
+  }
+
+  static String _fallbackConversationStatus(String original, Object error) {
+    final prefix = original.trim();
+    final warning = '会话面板初始化失败，已降级显示：$error';
+    if (prefix.isEmpty) {
+      return warning;
+    }
+    return '$prefix\n$warning';
   }
 }

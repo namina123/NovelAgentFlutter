@@ -11,10 +11,14 @@ import '../../presentation/contracts/document_workspace_action_handler.dart';
 import '../../presentation/contracts/pending_research_action_handler.dart';
 import '../../presentation/contracts/resource_manager_action_handler.dart';
 import '../../presentation/models/conversation_agent_selector_view_data.dart';
+import '../../presentation/models/conversation_entry_view_data.dart';
 import '../../presentation/models/project_create_request_view_data.dart';
 import '../../presentation/models/conversation_group_selector_view_data.dart';
 import '../../presentation/models/project_agent_group_workspace_view_data.dart';
 import '../../presentation/models/selector_option_view_data.dart';
+import '../../presentation/models/session_history_entry_view_data.dart';
+import '../../presentation/models/sub_agent_run_view_data.dart';
+import '../../presentation/models/user_option_view_data.dart';
 import '../../presentation/models/workbench_information_view_data.dart';
 import '../../presentation/models/workbench_view_data.dart';
 import '../models/open_document_state.dart';
@@ -292,7 +296,8 @@ class WorkbenchWorkspaceController
 
   String get activeDocumentBody => _workspaceStateController.activeDocumentBody;
 
-  OpenDocumentState? activeOpenDocument() => _workspaceStateController.activeOpenDocument();
+  OpenDocumentState? activeOpenDocument() =>
+      _workspaceStateController.activeOpenDocument();
 
   Future<void> openResource(String relativePath) async {
     // 中文注释: 资源打开入口继续交给状态层，只保留受控的公开方法。
@@ -306,12 +311,14 @@ class WorkbenchWorkspaceController
 
   bool stageGeneratedDraftOnActiveDocument(String content) {
     // 中文注释: 普通会话 fallback 仍然只能暂存到当前文档。
-    return _workspaceStateController.stageGeneratedDraftOnActiveDocument(content);
+    return _workspaceStateController.stageGeneratedDraftOnActiveDocument(
+      content,
+    );
   }
 
   WorkbenchViewData applyWorkbenchState(WorkbenchViewData base) {
     // 中文注释: 工作台文档与资源树投影统一由状态层生成。
-    return _workspaceStateController.applyWorkbenchState(base);
+    return _projectedWorkbenchState(base);
   }
 
   Future<bool> loadProject(String rootPath) async {
@@ -341,8 +348,12 @@ class WorkbenchWorkspaceController
       return false;
     }
 
-    final runtimeProfile = await _projectRuntimeProfileRepository.load(
-      snapshot.project,
+    final loadWarnings = <String>[];
+    final runtimeProfile = await _runNonFatalProjectLoadStage(
+      warnings: loadWarnings,
+      stageLabel: '运行时配置恢复',
+      action: () => _projectRuntimeProfileRepository.load(snapshot.project),
+      fallback: () => null,
     );
 
     _writeProjectState(
@@ -362,10 +373,18 @@ class WorkbenchWorkspaceController
       ),
     );
     _resetConversationRuntimeState();
-    await _restoreConversationRuntimeState(snapshot.project);
-    _latestInformationViewData = await _buildInformationViewData(
-      snapshot.project,
-      snapshot.entries,
+    await _runNonFatalProjectLoadStage(
+      warnings: loadWarnings,
+      stageLabel: '会话恢复',
+      action: () => _restoreConversationRuntimeState(snapshot.project),
+      fallback: () {},
+    );
+    _latestInformationViewData = await _runNonFatalProjectLoadStage(
+      warnings: loadWarnings,
+      stageLabel: '资料面板恢复',
+      action: () =>
+          _buildInformationViewData(snapshot.project, snapshot.entries),
+      fallback: () => const WorkbenchInformationViewData(),
     );
     var workbench = _readWorkbench().copyWith(
       projectName: snapshot.project.name,
@@ -428,13 +447,161 @@ class WorkbenchWorkspaceController
       }
     }
     _refreshSettingsViewData();
-    _mutateWorkbench((current) => _applyConversationState(workbench));
+    workbench = _applyConversationStateSafely(
+      workbench,
+      warnings: loadWarnings,
+    );
+    _mutateWorkbench((_) => workbench);
     await _persistLastProjectPath(snapshot.project.rootPath);
-    await _refreshAgentEcosystem();
-    await restoreWorkbenchSnapshot(snapshot.project);
-    await refreshProjectLongTaskSummary();
-    await _refreshActiveDestinationAfterProjectLoad();
+    await _runNonFatalProjectLoadStage(
+      warnings: loadWarnings,
+      stageLabel: '智能体生态刷新',
+      action: _refreshAgentEcosystem,
+      fallback: () {},
+    );
+    await _runNonFatalProjectLoadStage(
+      warnings: loadWarnings,
+      stageLabel: '工作台快照恢复',
+      action: () => restoreWorkbenchSnapshot(snapshot.project),
+      fallback: () {},
+    );
+    await _runNonFatalProjectLoadStage(
+      warnings: loadWarnings,
+      stageLabel: '长任务摘要刷新',
+      action: refreshProjectLongTaskSummary,
+      fallback: () {},
+    );
+    await _runNonFatalProjectLoadStage(
+      warnings: loadWarnings,
+      stageLabel: '目标页刷新',
+      action: _refreshActiveDestinationAfterProjectLoad,
+      fallback: () {},
+    );
+    if (loadWarnings.isNotEmpty) {
+      final summary = _summarizeProjectLoadWarnings(loadWarnings);
+      _mutateWorkbench(
+        (current) => current.copyWith(generationStatus: summary),
+      );
+      _announce(summary);
+    }
     return true;
+  }
+
+  WorkbenchViewData _projectedWorkbenchState(WorkbenchViewData base) {
+    final state = _readProjectState();
+    final activeDocument = _activeOpenDocument();
+    final selectedResourceId = _selectedResourceIdForProjection(
+      base: base,
+      activeDocument: activeDocument,
+    );
+    return base.copyWith(
+      projectLongTaskSummary: _projectLongTaskSummaryViewDataService.build(
+        project: state.currentProject,
+        runs: state.currentProjectLongTaskRuns,
+        runDetails: state.currentProjectLongTaskRunDetails,
+        isLoading: state.isProjectLongTaskSummaryLoading,
+      ),
+      documents: _documentTabsFromState(state),
+      resourceEntries: _markResourceSelection(
+        _resourceEntriesFrom(state.resourceSnapshotEntries),
+        selectedId: selectedResourceId,
+      ),
+      informationViewData: _latestInformationViewData,
+      activeDocumentTitle: activeDocument?.title ?? '',
+      activeDocumentPath: activeDocument?.relativePath ?? '',
+      activeDocumentBody: activeDocument?.content ?? '',
+      activeDocumentDirty: activeDocument?.isDirty ?? false,
+      activeDocumentBufferedDraft: activeDocument?.isBufferedDraft ?? false,
+      activeDocumentCanRender: activeDocument?.canRender ?? false,
+      isActiveDocumentRendered: activeDocument?.isRendered ?? false,
+      isDocumentsWorkspaceVisible:
+          activeDocument != null || state.openDocuments.isNotEmpty,
+    );
+  }
+
+  List<DocumentTabViewData> _documentTabsFromState(
+    WorkbenchProjectRuntimeState state,
+  ) {
+    return state.openDocuments
+        .map(
+          (document) => DocumentTabViewData(
+            id: document.id,
+            title: document.title,
+            relativePath: document.relativePath,
+            tooltip: document.relativePath,
+            isActive: document.id == state.activeOpenDocumentId,
+            isDirty: document.isDirty,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  String _selectedResourceIdForProjection({
+    required WorkbenchViewData base,
+    required OpenDocumentState? activeDocument,
+  }) {
+    final activeDocumentPath = activeDocument?.relativePath.trim() ?? '';
+    if (activeDocumentPath.isNotEmpty) {
+      return activeDocumentPath;
+    }
+    for (final entry in base.resourceEntries) {
+      if (entry.isSelected) {
+        return entry.id;
+      }
+    }
+    return '';
+  }
+
+  Future<T> _runNonFatalProjectLoadStage<T>({
+    required List<String> warnings,
+    required String stageLabel,
+    required Future<T> Function() action,
+    required T Function() fallback,
+  }) async {
+    try {
+      return await action();
+    } catch (error) {
+      warnings.add('$stageLabel失败：$error');
+      return fallback();
+    }
+  }
+
+  WorkbenchViewData _applyConversationStateSafely(
+    WorkbenchViewData base, {
+    required List<String> warnings,
+  }) {
+    try {
+      return _applyConversationState(base);
+    } catch (error) {
+      warnings.add('会话面板初始化失败：$error');
+      return _buildConversationFallbackWorkbench(base);
+    }
+  }
+
+  WorkbenchViewData _buildConversationFallbackWorkbench(
+    WorkbenchViewData base,
+  ) {
+    return base.copyWith(
+      openingPanel: null,
+      openingState: null,
+      conversationEntries: const <ConversationEntryViewData>[],
+      pendingOptions: const <UserOptionViewData>[],
+      subAgentRuns: const <SubAgentRunViewData>[],
+      retryRequest: null,
+      sessionHistoryEntries: const <SessionHistoryEntryViewData>[],
+      activeSessionId: '',
+      showSessionHistory: false,
+      sessionRestoreResult: null,
+      conversationContextProjection: null,
+      contextSummary: '项目已打开，会话面板已降级为安全视图。',
+      workflowDescription: '会话运行时恢复失败，请重新开始一个新会话或稍后再试。',
+    );
+  }
+
+  String _summarizeProjectLoadWarnings(List<String> warnings) {
+    final details = warnings.take(2).join('；');
+    final suffix = warnings.length > 2 ? ' 等 ${warnings.length} 项问题' : '';
+    return '项目已打开，但部分界面状态未完全恢复：$details$suffix';
   }
 
   Future<void> refreshProjectLongTaskSummary() async {
@@ -2171,4 +2338,3 @@ const int _maxInformationSupportScanAttempts = 3;
 const Set<String> _informationSupportIgnoredRoots = <String>{
   '.novel_agent/reference_extraction',
 };
-

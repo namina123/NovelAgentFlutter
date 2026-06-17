@@ -12,6 +12,7 @@ class ProjectImportActionPolicyService {
     '.txt',
     '.md',
     '.markdown',
+    '.epub',
   ];
 
   final ProjectContentPathPolicyService _contentPathPolicyService;
@@ -31,15 +32,16 @@ class ProjectImportActionPolicyService {
         .where((path) => path.isNotEmpty)
         .toList(growable: false);
     final canAutoDeconstruct = _supportsAutoDeconstruction(cleanSourcePaths);
-    final canSmartAnalyze = normalizedProjectType !=
-        BookDeconstructionConstants.projectTypeId;
+    final canSmartAnalyze =
+        normalizedProjectType != BookDeconstructionConstants.projectTypeId;
     final resolvedTargetDirectory = _resolvedTargetDirectory(
       projectType: normalizedProjectType,
       requestedTargetDirectory: requestedTargetDirectory,
     );
     final autoDeconstruct = canAutoDeconstruct
         ? requestedAutoDeconstruct ||
-              (normalizedProjectType == BookDeconstructionConstants.projectTypeId &&
+              (normalizedProjectType ==
+                      BookDeconstructionConstants.projectTypeId &&
                   cleanSourcePaths.isNotEmpty)
         : false;
     final smartAnalysis = canSmartAnalyze ? requestedSmartAnalysis : false;
@@ -100,7 +102,9 @@ class ProjectImportActionPolicyService {
       return cleanRequestedTarget;
     }
     if (projectType == BookDeconstructionConstants.projectTypeId) {
-      return ProjectContentPathPolicyService.chaptersRoot;
+      return const ProjectContentPathPolicyService().directoryForContentType(
+        'source_original',
+      );
     }
     return _contentPathPolicyService.defaultImportTargetDirectory();
   }
@@ -112,7 +116,7 @@ class ProjectImportActionPolicyService {
     if (sourcePaths.length == 1) {
       return '已选择 1 个文件。';
     }
-    return '已选择 ${sourcePaths.length} 个文件。自动拆书仅支持单个文本或 Markdown 文件。';
+    return '已选择 ${sourcePaths.length} 个文件。自动拆书仅支持单个 .txt / .md / .markdown / .epub 文件。';
   }
 
   String _outputHint({
@@ -127,10 +131,10 @@ class ProjectImportActionPolicyService {
   }) {
     if (cleanSourcePaths.isEmpty) {
       if (projectType == BookDeconstructionConstants.projectTypeId) {
-        return '拆书项目默认允许自动拆书；选择单个 .txt / .md / .markdown 文件后会自动启用。';
+        return '拆书项目默认允许自动拆书；选择单个 .txt / .md / .markdown / .epub 文件后会自动启用。';
       }
       return canSmartAnalyze
-          ? '导入后可启用智能分析，先判断资料更像正文、设定、大纲还是参考；请选择一个或多个本地 .txt / .md / .markdown 文件。'
+          ? '导入后可启用智能分析，先判断资料更像正文、设定、大纲还是参考；请选择一个或多个本地 .txt / .md / .markdown / .epub 文件。'
           : '当前导入不支持智能分析。';
     }
     if (!canAutoDeconstruct) {
@@ -144,7 +148,7 @@ class ProjectImportActionPolicyService {
             ? '当前选择不支持自动拆书；如需智能分析，请继续确认分析智能体或智能体组。'
             : analysisHint;
       }
-      return '当前选择不支持自动拆书；请改为单个 .txt / .md / .markdown 文件。';
+      return '当前选择不支持自动拆书；请改为单个 .txt / .md / .markdown / .epub 文件。';
     }
     final previewPath = autoDeconstructionPreviewPath(
       projectType: projectType,
@@ -156,10 +160,9 @@ class ProjectImportActionPolicyService {
       analysisAgentGroupId: analysisAgentGroupId,
     );
     if (projectType == BookDeconstructionConstants.projectTypeId) {
-      return '导入原文会归档到 chapters/，自动拆书预演纪要会写入 $previewPath。';
+      return '导入原文会归档到 sources/original/，自动拆书预演纪要会写入 $previewPath。';
     }
-    final base =
-        '自动拆书预演纪要会写入 $previewPath，原始导入文件仍保留在所选目标目录。';
+    final base = '自动拆书预演纪要会写入 $previewPath，原始导入文件仍保留在所选目标目录。';
     return smartAnalysisHint.isEmpty ? base : '$base $smartAnalysisHint';
   }
 

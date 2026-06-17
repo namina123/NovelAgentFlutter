@@ -638,6 +638,100 @@ void main() {
     });
 
     test(
+      'loadProject keeps project open when conversation restore overflows',
+      () async {
+        final workspacePort = LocalProjectWorkspacePort();
+        final tempDirectory = await Directory.systemTemp.createTemp(
+          'workbench_restore_overflow_',
+        );
+        addTearDown(() async {
+          if (await tempDirectory.exists()) {
+            await tempDirectory.delete(recursive: true);
+          }
+        });
+        await _writeProjectFile(
+          tempDirectory.path,
+          'premise/project_constitution.md',
+          '# 正式前提\n\nopen even if restore fails',
+        );
+        final harness = _ControllerHarness(
+          settings: _baseSettings(),
+          workbench: WorkbenchViewData.initial(),
+          projectState: const WorkbenchProjectRuntimeState(),
+          projectRepository: _FixedProjectRepository(
+            _project(tempDirectory.path),
+          ),
+          workspacePort: workspacePort,
+          toolHostPort: ProjectWorkspaceToolHostAdapter(
+            workspacePort: workspacePort,
+            fileMutationAdapter: LocalProjectFileMutationAdapter(),
+          ),
+          restoreConversationRuntimeState: (_) async {
+            throw StackOverflowError();
+          },
+        );
+
+        final loaded = await harness.controller.loadProject(tempDirectory.path);
+
+        expect(loaded, isTrue);
+        expect(
+          harness.projectState.currentProject?.rootPath,
+          tempDirectory.path,
+        );
+        expect(harness.workbench.projectPath, tempDirectory.path);
+        expect(
+          harness.workbench.generationStatus,
+          contains('项目已打开，但部分界面状态未完全恢复'),
+        );
+        expect(harness.workbench.generationStatus, contains('会话恢复失败'));
+      },
+    );
+
+    test(
+      'loadProject falls back to safe conversation workbench when projection fails',
+      () async {
+        final workspacePort = LocalProjectWorkspacePort();
+        final tempDirectory = await Directory.systemTemp.createTemp(
+          'workbench_projection_overflow_',
+        );
+        addTearDown(() async {
+          if (await tempDirectory.exists()) {
+            await tempDirectory.delete(recursive: true);
+          }
+        });
+        await _writeProjectFile(
+          tempDirectory.path,
+          'premise/project_constitution.md',
+          '# 正式前提\n\nprojection fallback',
+        );
+        final harness = _ControllerHarness(
+          settings: _baseSettings(),
+          workbench: WorkbenchViewData.initial(),
+          projectState: const WorkbenchProjectRuntimeState(),
+          projectRepository: _FixedProjectRepository(
+            _project(tempDirectory.path),
+          ),
+          workspacePort: workspacePort,
+          toolHostPort: ProjectWorkspaceToolHostAdapter(
+            workspacePort: workspacePort,
+            fileMutationAdapter: LocalProjectFileMutationAdapter(),
+          ),
+          applyConversationState: (_) => throw StackOverflowError(),
+        );
+
+        final loaded = await harness.controller.loadProject(tempDirectory.path);
+
+        expect(loaded, isTrue);
+        expect(harness.workbench.contextSummary, '项目已打开，会话面板已降级为安全视图。');
+        expect(
+          harness.workbench.workflowDescription,
+          '会话运行时恢复失败，请重新开始一个新会话或稍后再试。',
+        );
+        expect(harness.workbench.projectLauncher, isNull);
+      },
+    );
+
+    test(
       'loadProject opens formal premise before random readable files',
       () async {
         final workspacePort = LocalProjectWorkspacePort();
@@ -701,6 +795,11 @@ class _ControllerHarness {
     ProjectRepository? projectRepository,
     ProjectWorkspacePort? workspacePort,
     ProjectToolHostPort? toolHostPort,
+    Future<void> Function(ProjectDescriptor project)?
+    restoreConversationRuntimeState,
+    WorkbenchViewData Function(WorkbenchViewData base)? applyConversationState,
+    Future<void> Function()? refreshActiveDestinationAfterProjectLoad,
+    void Function(String message)? announce,
   }) : _settings = settings,
        _workbench = workbench,
        _projectState = projectState {
@@ -723,9 +822,19 @@ class _ControllerHarness {
       writeProjectState: (next) {
         _projectState = next;
       },
-      restoreConversationRuntimeState: (project) async {
-        _restoredProjects.add(project.rootPath);
-      },
+      restoreConversationRuntimeState:
+          restoreConversationRuntimeState ??
+          (project) async {
+            _restoredProjects.add(project.rootPath);
+          },
+      applyConversationState: applyConversationState,
+      refreshActiveDestinationAfterProjectLoad:
+          refreshActiveDestinationAfterProjectLoad,
+      announce:
+          announce ??
+          (message) {
+            _announcements.add(message);
+          },
     );
   }
 
@@ -734,6 +843,7 @@ class _ControllerHarness {
   WorkbenchProjectRuntimeState _projectState;
   final List<AppSettings> _savedSettings = <AppSettings>[];
   final List<String> _restoredProjects = <String>[];
+  final List<String> _announcements = <String>[];
 
   late final WorkbenchWorkspaceController controller;
 
@@ -741,6 +851,7 @@ class _ControllerHarness {
   WorkbenchProjectRuntimeState get projectState => _projectState;
   List<String> get restoredProjects =>
       List<String>.unmodifiable(_restoredProjects);
+  List<String> get announcements => List<String>.unmodifiable(_announcements);
   List<AppSettings> get savedSettings =>
       List<AppSettings>.unmodifiable(_savedSettings);
 }
@@ -760,6 +871,9 @@ WorkbenchWorkspaceController _createController({
   required void Function(WorkbenchProjectRuntimeState state) writeProjectState,
   required Future<void> Function(ProjectDescriptor project)
   restoreConversationRuntimeState,
+  WorkbenchViewData Function(WorkbenchViewData base)? applyConversationState,
+  Future<void> Function()? refreshActiveDestinationAfterProjectLoad,
+  void Function(String message)? announce,
 }) {
   final effectiveProjectRepository =
       projectRepository ?? _NoopProjectRepository();
@@ -803,12 +917,13 @@ WorkbenchWorkspaceController _createController({
     restoreConversationRuntimeState: restoreConversationRuntimeState,
     readWorkbench: readWorkbench,
     mutateWorkbench: mutateWorkbench,
-    applyConversationState: (base) => base,
+    applyConversationState: applyConversationState ?? (base) => base,
     readSettings: readSettings,
     saveSettingsSilently: saveSettingsSilently,
     refreshSettingsViewData: () {},
     refreshAgentEcosystem: () async {},
-    refreshActiveDestinationAfterProjectLoad: () async {},
+    refreshActiveDestinationAfterProjectLoad:
+        refreshActiveDestinationAfterProjectLoad ?? () async {},
     modelOptionsBuilder: (_) => const <SelectorOptionViewData>[],
     readProjectAgentGroupWorkspaceViewData: () => null,
     selectProjectAgentGroup: (_) async => null,
@@ -820,7 +935,7 @@ WorkbenchWorkspaceController _createController({
     showProjectAssets: () async {},
     showCurrentAgentSkillLoadout: (_) async {},
     showCurrentAgentExpressionConstraints: (_) async {},
-    announce: (_) {},
+    announce: announce ?? (_) {},
     projectLongTaskDetailLoader: projectLongTaskDetailLoader,
   );
 }

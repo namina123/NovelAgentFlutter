@@ -310,11 +310,13 @@ class ProjectCreationController {
         ),
       ),
     );
+    ProjectDescriptor? createdProject;
     try {
       final project = await _createProjectWorkspaceUseCase.executePrepared(
         projectsRootPath: _defaultProjectsRootPath,
         plan: creationPlan,
       );
+      createdProject = project;
       await _applyBookDeconstructionSetupIfNeeded(
         project,
         request.bookDeconstructionFollowupRouteId,
@@ -326,9 +328,59 @@ class ProjectCreationController {
             ?.applyDefaults(project, settings);
       }
       _mutateWorkbench((current) => current.copyWith(projectLauncher: null));
-      await _loadProject(project.rootPath);
-      _announce('已创建并打开新项目：${project.name}');
+      final loaded = await _loadProject(project.rootPath);
+      if (!loaded) {
+        await showLauncher(
+          ProjectLauncherMode.create,
+          status: '项目已创建，但自动打开失败：${project.rootPath}',
+          draftTitle: creationPlan.request.title,
+          selectedProjectTypeId: creationPlan.request.projectTypeId,
+          selectedStorageStrategy: creationPlan.request.storageStrategy,
+          selectedBookDeconstructionFollowupRouteId:
+              request.bookDeconstructionFollowupRouteId,
+          continuityInput: request.continuityInput,
+          creationPhase: _failurePhaseFor(
+            currentPhase: currentPhase,
+            creationPlan: creationPlan,
+          ),
+          runtimeBaselineOptions: creationPlan.runtimeBaselineOptions,
+          selectedRuntimeBaselineId: creationPlan.request.runtimeBaselineId,
+          canDismiss: _readCurrentProject() != null,
+        );
+        _announce('项目已创建，但自动打开失败：${project.rootPath}');
+        return;
+      }
+      _mutateWorkbench(
+        (current) => current.copyWith(
+          projectLauncher: null,
+          projectAgentGroupWorkspace: null,
+          workspaceCommand: null,
+        ),
+      );
+      try {
+        _announce('已创建并打开新项目：${project.name}');
+      } catch (_) {
+        _mutateWorkbench(
+          (current) =>
+              current.copyWith(generationStatus: '已创建并打开新项目：${project.name}'),
+        );
+      }
     } catch (error) {
+      final currentProject = _readCurrentProject();
+      if (createdProject != null &&
+          currentProject != null &&
+          currentProject.rootPath.trim() == createdProject.rootPath.trim()) {
+        _mutateWorkbench(
+          (current) => current.copyWith(
+            projectLauncher: null,
+            projectAgentGroupWorkspace: null,
+            workspaceCommand: null,
+            generationStatus: '项目已创建并打开，但后续界面刷新失败：$error',
+          ),
+        );
+        _announce('项目已创建并打开，但后续界面刷新失败：$error');
+        return;
+      }
       await showLauncher(
         ProjectLauncherMode.create,
         status: '创建项目失败：$error',

@@ -295,13 +295,92 @@ void main() {
     expect(harness.workbench.workspaceCommand, isNull);
     expect(harness.workbench.projectAgentGroupWorkspace, isNull);
   });
+
+  test('创建并打开成功后会再次清理 overlay，避免旧启动器残留', () async {
+    final harness = _ProjectCreationHarness(keepLauncherOnLoad: true);
+
+    await harness.controller.onCreateProjectRequested();
+    await harness.controller.onProjectCreationSubmitted(
+      const ProjectCreateRequestViewData(
+        title: '残留清理测试',
+        projectTypeId: 'novel',
+        storageStrategyId: 'markdown_project_store',
+      ),
+    );
+    await harness.controller.onProjectCreationSubmitted(
+      const ProjectCreateRequestViewData(
+        title: '残留清理测试',
+        projectTypeId: 'novel',
+        storageStrategyId: 'markdown_project_store',
+      ),
+    );
+
+    expect(harness.loadedProjectPaths.single, 'D:/Projects/残留清理测试');
+    expect(harness.workbench.projectLauncher, isNull);
+    expect(harness.workbench.projectAgentGroupWorkspace, isNull);
+    expect(harness.workbench.workspaceCommand, isNull);
+  });
+
+  test('项目已创建但自动打开失败时会回到创建向导并提示失败', () async {
+    final harness = _ProjectCreationHarness(loadProjectResult: false);
+
+    await harness.controller.onCreateProjectRequested();
+    await harness.controller.onProjectCreationSubmitted(
+      const ProjectCreateRequestViewData(
+        title: '自动打开失败',
+        projectTypeId: 'novel',
+        storageStrategyId: 'markdown_project_store',
+      ),
+    );
+    await harness.controller.onProjectCreationSubmitted(
+      const ProjectCreateRequestViewData(
+        title: '自动打开失败',
+        projectTypeId: 'novel',
+        storageStrategyId: 'markdown_project_store',
+      ),
+    );
+
+    final launcher = harness.workbench.projectLauncher;
+    expect(launcher, isNotNull);
+    expect(launcher!.status, contains('项目已创建，但自动打开失败'));
+    expect(harness.announcements.last, contains('项目已创建，但自动打开失败'));
+  });
+
+  test('项目已打开后即使提示链失败也不会重新弹回创建向导', () async {
+    final harness = _ProjectCreationHarness(announceThrows: true);
+
+    await harness.controller.onCreateProjectRequested();
+    await harness.controller.onProjectCreationSubmitted(
+      const ProjectCreateRequestViewData(
+        title: '提示失败兜底',
+        projectTypeId: 'novel',
+        storageStrategyId: 'markdown_project_store',
+      ),
+    );
+    await harness.controller.onProjectCreationSubmitted(
+      const ProjectCreateRequestViewData(
+        title: '提示失败兜底',
+        projectTypeId: 'novel',
+        storageStrategyId: 'markdown_project_store',
+      ),
+    );
+
+    expect(harness.loadedProjectPaths.single, 'D:/Projects/提示失败兜底');
+    expect(harness.workbench.projectLauncher, isNull);
+    expect(harness.workbench.generationStatus, contains('已创建并打开新项目'));
+  });
 }
 
 class _ProjectCreationHarness {
-  _ProjectCreationHarness({this.settings, WorkbenchViewData? initialWorkbench})
-    : _workspacePort = _InMemoryProjectWorkspacePort(),
-      _manifestCodecService = ProjectManifestCodecService(),
-      workbench = initialWorkbench ?? WorkbenchViewData.initial() {
+  _ProjectCreationHarness({
+    this.settings,
+    WorkbenchViewData? initialWorkbench,
+    this.keepLauncherOnLoad = false,
+    this.loadProjectResult = true,
+    this.announceThrows = false,
+  }) : _workspacePort = _InMemoryProjectWorkspacePort(),
+       _manifestCodecService = ProjectManifestCodecService(),
+       workbench = initialWorkbench ?? WorkbenchViewData.initial() {
     projectContinuityInputRepository = ProjectContinuityInputRepository(
       workspacePort: _workspacePort,
     );
@@ -341,14 +420,24 @@ class _ProjectCreationHarness {
       loadProject: (rootPath) async {
         loadedProjectPaths.add(rootPath);
         currentProject = await projectRepository.openByPath(rootPath);
-        workbench = workbench.copyWith(projectLauncher: null);
+        if (!loadProjectResult) {
+          return false;
+        }
+        if (!keepLauncherOnLoad) {
+          workbench = workbench.copyWith(projectLauncher: null);
+        }
         return true;
       },
       resetToProjectlessWorkbench: ({required String status}) {
         lastProjectlessStatus = status;
         currentProject = null;
       },
-      announce: announcements.add,
+      announce: (message) {
+        if (announceThrows) {
+          throw StateError('announce failed');
+        }
+        announcements.add(message);
+      },
       readSettings: () => settings,
       projectGeneralContinuitySetupService:
           projectGeneralContinuitySetupService,
@@ -362,6 +451,9 @@ class _ProjectCreationHarness {
   final _InMemoryProjectWorkspacePort _workspacePort;
   final ProjectManifestCodecService _manifestCodecService;
   final AppSettings? settings;
+  final bool keepLauncherOnLoad;
+  final bool loadProjectResult;
+  final bool announceThrows;
   final List<String> announcements = <String>[];
   final List<String> loadedProjectPaths = <String>[];
   late final ProjectContinuityInputRepository projectContinuityInputRepository;

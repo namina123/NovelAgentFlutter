@@ -570,8 +570,7 @@ class AppShellController extends ChangeNotifier
       _projectCreationController,
     );
     _projectOpenController = AppShellProjectOpenController(
-      startProjectCreationFromProjectOpen:
-          _startProjectCreationFromProjectOpen,
+      startProjectCreationFromProjectOpen: _startProjectCreationFromProjectOpen,
       refreshProjectOpenView: _refreshProjectOpenView,
       selectProjectOpenEntry: _selectProjectOpenEntry,
       openProjectFromProjectOpen: _openProjectFromProjectOpen,
@@ -1270,13 +1269,17 @@ class AppShellController extends ChangeNotifier
         .where((provider) => provider.id != providerId)
         .toList(growable: false);
     final modelSettings = _modelSettingsOf(settings);
-    final nextModelProviderId = _stringValue(
-      modelSettings['provider_id'],
-      settings.defaultProviderId,
-    ) ==
+    final nextModelProviderId =
+        _stringValue(
+              modelSettings['provider_id'],
+              settings.defaultProviderId,
+            ) ==
             providerId
         ? ''
-        : _stringValue(modelSettings['provider_id'], settings.defaultProviderId);
+        : _stringValue(
+            modelSettings['provider_id'],
+            settings.defaultProviderId,
+          );
     final updated = settings.copyWith(
       providers: providers,
       defaultProviderId: settings.defaultProviderId == providerId
@@ -1309,9 +1312,11 @@ class AppShellController extends ChangeNotifier
       modelId: _stringValue(payload['model_id']),
       apiMode: _stringValue(payload['api_mode'], 'chat'),
     );
-    _providerConnectionValidationResults[
-      providerId.isNotEmpty ? providerId : '__new__'
-    ] = _toValidationViewData(validation);
+    _providerConnectionValidationResults[providerId.isNotEmpty
+        ? providerId
+        : '__new__'] = _toValidationViewData(
+      validation,
+    );
     _refreshSettingsViewData(
       selectedProviderId: providerId.isNotEmpty ? providerId : '__new__',
     );
@@ -1731,8 +1736,6 @@ class AppShellController extends ChangeNotifier
 
   void onSendRequested(String text) =>
       _workbenchConversationController.onSendRequested(text);
-
-  
 
   @override
   void onAgentEcosystemBackRequested() {
@@ -4317,8 +4320,7 @@ class AppShellController extends ChangeNotifier
     String? selectedProviderId,
   }) {
     // 中文注释: 设置页数据投影由控制器统一完成，避免展示层直接理解核心设置模型。
-    final requestedActiveTabId =
-        activeTabId ?? _viewModel.settings.activeTabId;
+    final requestedActiveTabId = activeTabId ?? _viewModel.settings.activeTabId;
     final effectiveProviderId =
         selectedProviderId ?? _selectedProviderId(settings);
     final modelSettings = _modelSettingsOf(settings);
@@ -4355,8 +4357,7 @@ class AppShellController extends ChangeNotifier
                 rawApiKey: provider.rawApiKey,
                 apiKeyState: provider.apiKeyState,
                 description: provider.description,
-                connectionValidationResult:
-                    provider.connectionValidationResult,
+                connectionValidationResult: provider.connectionValidationResult,
                 isSelected: false,
               ),
             const ProviderEndpointViewData(
@@ -4370,20 +4371,21 @@ class AppShellController extends ChangeNotifier
               connectionValidationResult:
                   ProviderConnectionValidationResultViewData.initial,
               isSelected: true,
-              ),
+            ),
           ]
         : providers;
     final providerConnectionValidationResult = effectiveProviderId == '__new__'
         ? _providerConnectionValidationResults[effectiveProviderId] ??
-            ProviderConnectionValidationResultViewData.initial
+              ProviderConnectionValidationResultViewData.initial
         : _providerConnectionValidationResults[effectiveProviderId] ??
-            providers
-                .where((entry) => entry.id == effectiveProviderId)
-                .map((entry) => entry.connectionValidationResult)
-                .firstOrNull ??
-            ProviderConnectionValidationResultViewData.initial;
+              providers
+                  .where((entry) => entry.id == effectiveProviderId)
+                  .map((entry) => entry.connectionValidationResult)
+                  .firstOrNull ??
+              ProviderConnectionValidationResultViewData.initial;
     return SettingsViewData(
-      activeTabId: const [
+      activeTabId:
+          const [
             'interfaces',
             'models',
             'permissions',
@@ -4570,10 +4572,7 @@ class AppShellController extends ChangeNotifier
           description: 'GUI 与 CLI 共用同一套核心调度与工具执行入口，界面只展示当前可感知的工作方式。',
           items: const [
             SettingsItemViewData(label: '文件访问', value: '工作区文件由应用统一读写'),
-            SettingsItemViewData(
-              label: '工具调度',
-              value: '工具调用由应用统一协调后再进入工作区',
-            ),
+            SettingsItemViewData(label: '工具调度', value: '工具调用由应用统一协调后再进入工作区'),
             SettingsItemViewData(
               label: '交互回流',
               value: '会话、选项、子智能体运行都会回写同一条会话状态链',
@@ -4922,12 +4921,8 @@ class AppShellController extends ChangeNotifier
   }
 
   void _announce(String message) {
-    // 中文注释: 轻量提示仍由壳层汇总，但会话投影交给专用会话控制器统一处理。
-    _updateWorkbench(
-      _workbenchConversationController.applyConversationState(
-        _viewModel.workbench.copyWith(generationStatus: message),
-      ),
-    );
+    // 中文注释: 轻量提示只更新状态文案，不重新整套重算 opening / 会话投影，避免提示链路反向触发递归刷新。
+    _updateWorkbench(_viewModel.workbench.copyWith(generationStatus: message));
   }
 
   JsonMap _contextStrategySettingsOf(AppSettings settings) {

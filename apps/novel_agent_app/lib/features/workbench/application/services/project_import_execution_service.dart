@@ -19,6 +19,7 @@ class ProjectImportExecutionService {
     ProjectImportActionPolicyService? actionPolicyService,
     BookDeconstructionDraftBuilderService? draftBuilderService,
     BookDeconstructionPreviewMarkdownService? previewMarkdownService,
+    BookDeconstructionTargetPathService? targetPathService,
   }) : _importProjectFilesUseCase = importProjectFilesUseCase,
        _projectToolHostPort = projectToolHostPort,
        _writeProjectTextFileUseCase = writeProjectTextFileUseCase,
@@ -32,7 +33,9 @@ class ProjectImportExecutionService {
            draftBuilderService ?? BookDeconstructionDraftBuilderService(),
        _previewMarkdownService =
            previewMarkdownService ??
-           const BookDeconstructionPreviewMarkdownService();
+           const BookDeconstructionPreviewMarkdownService(),
+       _targetPathService =
+           targetPathService ?? const BookDeconstructionTargetPathService();
 
   final ImportProjectFilesUseCase _importProjectFilesUseCase;
   final ProjectToolHostPort _projectToolHostPort;
@@ -43,6 +46,7 @@ class ProjectImportExecutionService {
   final ProjectImportActionPolicyService _actionPolicyService;
   final BookDeconstructionDraftBuilderService _draftBuilderService;
   final BookDeconstructionPreviewMarkdownService _previewMarkdownService;
+  final BookDeconstructionTargetPathService _targetPathService;
 
   Future<ProjectImportExecutionResult> execute({
     required ProjectDescriptor project,
@@ -138,9 +142,11 @@ class ProjectImportExecutionService {
     required ProjectDescriptor project,
     required String sourcePath,
   }) async {
-    // 中文注释: 自动拆书只处理单个可读源文件，把预演写回分析层，避免与智能分析报告混写。
-    final sourceContent =
-        await _projectToolHostPort.readExternalTextFile(sourcePath) ?? '';
+    // 中文注释: 自动拆书统一走 source document reader，这样 txt / markdown / epub 都会先被解成标准文本。
+    final sourceDocument = await _sourceDocumentReaderService.read(
+      sourceFilePath: sourcePath,
+    );
+    final sourceContent = sourceDocument.sourceText;
     if (sourceContent.trim().isEmpty) {
       return const _AutoDeconstructionOutcome(
         previewPath: '',
@@ -161,6 +167,17 @@ class ProjectImportExecutionService {
       projectType: project.projectType,
       sourcePath: sourcePath,
     );
+    var note = '';
+    if (project.projectType.trim() ==
+        BookDeconstructionConstants.projectTypeId) {
+      final archivePath = _targetPathService.sourceArchivePath(sourcePath);
+      await _writeProjectTextFileUseCase.execute(
+        project: project,
+        relativePath: archivePath,
+        content: sourceDocument.sourceText.trim(),
+      );
+      note = '原文文本归档已写入 $archivePath。';
+    }
     final selectedItemIds = buildResult.applicationPlan.items
         .map((item) => item.id)
         .toSet();
@@ -177,7 +194,7 @@ class ProjectImportExecutionService {
       project: project,
       narrativeArtifacts: buildResult.narrativeArtifacts,
     );
-    return _AutoDeconstructionOutcome(previewPath: previewPath);
+    return _AutoDeconstructionOutcome(previewPath: previewPath, note: note);
   }
 
   Future<_SmartAnalysisOutcome> _writeSmartAnalysisReport({

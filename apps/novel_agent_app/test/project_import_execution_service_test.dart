@@ -108,18 +108,97 @@ void main() {
         result.autoDeconstructionPreviewPath,
         'chapters/book_deconstruction_source_book.md',
       );
+      expect(result.importedPaths, <String>['sources/original/source_book.md']);
       final previewContent = workspacePort.readStoredTextFile(
         'D:/Projects/deconstruction_project',
         'chapters/book_deconstruction_source_book.md',
       );
       expect(previewContent, isNotNull);
       expect(previewContent, contains('# 拆书结构化预演'));
+      final archiveContent = workspacePort.readStoredTextFile(
+        'D:/Projects/deconstruction_project',
+        'sources/original/book_deconstruction_source_source_book.md',
+      );
+      expect(archiveContent, contains('第一章 港口风暴'));
       final claimsLog = workspacePort.readStoredTextFile(
         'D:/Projects/deconstruction_project',
         '.novel_agent/continuity/claims/claims.jsonl',
       );
       expect(claimsLog, contains('analysis.deconstruction.story_outline'));
       expect(result.summary, contains('自动拆书预演纪要已写入'));
+      expect(result.summary, contains('原文文本归档已写入'));
+    },
+  );
+
+  test(
+    'project import execution service can auto deconstruct epub sources for book projects',
+    () async {
+      final tempDirectory = await Directory.systemTemp.createTemp(
+        'project_import_execution_epub_test_',
+      );
+      addTearDown(() async {
+        if (await tempDirectory.exists()) {
+          await tempDirectory.delete(recursive: true);
+        }
+      });
+
+      final epubPath =
+          '${tempDirectory.path}${Platform.pathSeparator}source_book.epub';
+      await File(epubPath).writeAsBytes(buildProbeSampleEpubBytes());
+
+      final bundle = AdapterBundle.standard(
+        workingDirectoryPath: tempDirectory.path,
+        settingsRootPath:
+            '${tempDirectory.path}${Platform.pathSeparator}settings',
+        defaultProjectRootPath:
+            '${tempDirectory.path}${Platform.pathSeparator}projects',
+        allowConfiguredProjectPathOverride: false,
+      );
+      final importUseCase = ImportProjectFilesUseCase(
+        projectToolHostPort: bundle.projectToolHostPort,
+      );
+      final service = ProjectImportExecutionService(
+        importProjectFilesUseCase: importUseCase,
+        projectToolHostPort: bundle.projectToolHostPort,
+        writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
+          projectWorkspacePort: bundle.projectWorkspacePort,
+        ),
+        narrativePersistenceService:
+            BookDeconstructionNarrativePersistenceService(
+              workspacePort: bundle.projectWorkspacePort,
+            ),
+      );
+
+      final result = await service.execute(
+        project: const ProjectDescriptor(
+          id: 'project-epub',
+          name: '拆书项目',
+          rootPath: 'D:/Projects/deconstruction_epub_project',
+          projectType: 'book_deconstruction',
+        ),
+        request: ProjectImportRequest(
+          sourcePaths: <String>[epubPath],
+          targetDirectory: 'sources/original',
+          autoDeconstruct: true,
+        ),
+      );
+
+      expect(result.ok, isTrue);
+      expect(result.autoDeconstructionApplied, isTrue);
+      expect(
+        result.autoDeconstructionPreviewPath,
+        'chapters/book_deconstruction_source_book.md',
+      );
+      final previewContent = await bundle.projectWorkspacePort.readTextFile(
+        'D:/Projects/deconstruction_epub_project',
+        'chapters/book_deconstruction_source_book.md',
+      );
+      expect(previewContent, contains('# 拆书结构化预演'));
+      final archiveContent = await bundle.projectWorkspacePort.readTextFile(
+        'D:/Projects/deconstruction_epub_project',
+        'sources/original/book_deconstruction_source_source_book.md',
+      );
+      expect(archiveContent, contains('Chapter 1: The Boy Who Lived'));
     },
   );
 
