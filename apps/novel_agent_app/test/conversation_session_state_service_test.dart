@@ -3,6 +3,7 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 
 import 'package:novel_agent_app/features/workbench/application/models/conversation_attachment_draft.dart';
 import 'package:novel_agent_app/features/workbench/application/models/conversation_retry_request.dart';
+import 'package:novel_agent_app/features/workbench/application/models/conversation_session_state.dart';
 import 'package:novel_agent_app/features/workbench/application/services/conversation_session_state_service.dart';
 import 'package:novel_agent_app/features/workbench/application/services/conversation_streaming_state_service.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/conversation_entry_view_data.dart';
@@ -605,6 +606,34 @@ void main() {
           restored.sessionRecord['working_context_messages'],
           hasLength(2),
         );
+      },
+    );
+
+    test(
+      'restoreResult projects history visibility and default scroll target',
+      () {
+        final service = ConversationSessionStateService();
+        final active = service.createSession(
+          sessionId: 'session_1',
+          title: '当前会话',
+        );
+        final history = service.createSession(
+          sessionId: 'session_2',
+          title: '历史会话',
+        );
+
+        final result = service.restoreResult(
+          sessions: <ConversationSessionState>[active, history],
+          activeSessionId: 'session_2',
+          showSessionHistory: true,
+          defaultScrollTarget: SessionRestoreScrollTarget.latest,
+        );
+
+        expect(result.restoredSessionIds, <String>['session_1', 'session_2']);
+        expect(result.activeSessionId, 'session_2');
+        expect(result.showSessionHistory, isTrue);
+        expect(result.defaultScrollTarget, SessionRestoreScrollTarget.latest);
+        expect(result.hasHistoricalSessions, isTrue);
       },
     );
   });

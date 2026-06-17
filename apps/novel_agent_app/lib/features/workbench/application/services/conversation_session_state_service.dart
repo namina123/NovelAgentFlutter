@@ -169,6 +169,26 @@ class ConversationSessionStateService {
     );
   }
 
+  SessionRestoreResult restoreResult({
+    required List<ConversationSessionState> sessions,
+    required String activeSessionId,
+    bool showSessionHistory = false,
+    SessionRestoreScrollTarget defaultScrollTarget =
+        SessionRestoreScrollTarget.latest,
+  }) {
+    // 中文注释: 恢复结果统一在这里形成，避免 controller 和 sidebar 各自猜测恢复是否完成。
+    final restoredSessionIds = sessions
+        .map((state) => _sessionIdOfState(state))
+        .where((sessionId) => sessionId.isNotEmpty)
+        .toList(growable: false);
+    return SessionRestoreResult(
+      restoredSessionIds: restoredSessionIds,
+      activeSessionId: activeSessionId.trim(),
+      showSessionHistory: showSessionHistory,
+      defaultScrollTarget: defaultScrollTarget,
+    );
+  }
+
   List<UserOptionViewData> pendingOptionsFromRecords(List<JsonMap> records) {
     return _pendingOptionsFromRecords(records);
   }
@@ -369,15 +389,23 @@ class ConversationSessionStateService {
     // 中文注释: 多轮交互给模型的会话上下文统一由这里渲染，避免不同入口重复拼接历史。
     final options = <String, Object?>{
       'exclude_latest_user_content': excludeLatestUserContent,
-      if (pressureSnapshot != null) 'pressure_snapshot': pressureSnapshot,
-      if (compactionGuidance != null) 'compaction_guidance': compactionGuidance,
-      if (compactionOutputPolicy != null)
-        'compaction_output_policy': compactionOutputPolicy,
-      if (compactionSourceScope != null)
-        'compaction_source_scope': compactionSourceScope,
-      if (runtimeContinuationInstruction != null)
-        'runtime_continuation_instruction': runtimeContinuationInstruction,
     };
+    if (pressureSnapshot != null) {
+      options['pressure_snapshot'] = pressureSnapshot;
+    }
+    if (compactionGuidance != null) {
+      options['compaction_guidance'] = compactionGuidance;
+    }
+    if (compactionOutputPolicy != null) {
+      options['compaction_output_policy'] = compactionOutputPolicy;
+    }
+    if (compactionSourceScope != null) {
+      options['compaction_source_scope'] = compactionSourceScope;
+    }
+    if (runtimeContinuationInstruction != null) {
+      options['runtime_continuation_instruction'] =
+          runtimeContinuationInstruction;
+    }
     return _contextRendererService.sessionContextMarkdown(
       state.sessionRecord,
       options: options,
@@ -432,6 +460,13 @@ class ConversationSessionStateService {
           ),
         )
         .toList(growable: false);
+  }
+
+  String _sessionIdOfState(ConversationSessionState state) {
+    final id = ValueReaders.stringValue(state.sessionRecord['session_id']).trim();
+    return id.isNotEmpty
+        ? id
+        : ValueReaders.stringValue(state.sessionRecord['id']).trim();
   }
 
   List<ConversationEntryViewData> _toolEntriesFrom(

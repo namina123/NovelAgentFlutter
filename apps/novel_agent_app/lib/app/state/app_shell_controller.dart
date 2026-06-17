@@ -55,7 +55,8 @@ import '../../features/review_center/presentation/models/review_center_view_data
 import '../../features/settings/application/services/model_settings_view_data_service.dart';
 import '../../features/settings/application/services/context_settings_contract_service.dart';
 import '../../features/settings/application/services/project_creation_expression_constraint_defaults_view_data_service.dart';
-import '../../features/settings/application/services/provider_connection_validation_service.dart';
+import '../../features/settings/application/services/provider_connection_validation_service.dart'
+    as app_settings;
 import '../../features/settings/application/services/provider_settings_directory_service.dart';
 import '../../features/settings/application/services/theme_settings_view_data_service.dart';
 import '../../features/settings/presentation/contracts/settings_action_handler.dart';
@@ -78,6 +79,7 @@ import '../../features/workbench/application/services/conversation_guide_view_da
 import '../../features/workbench/application/services/conversation_opening_panel_view_data_service.dart';
 import '../../features/workbench/application/services/conversation_input_capability_context_builder_service.dart';
 import '../../features/workbench/application/services/conversation_group_selector_view_data_service.dart';
+import '../../features/workbench/application/services/workbench_opening_launch_bridge_service.dart';
 import '../../features/workbench/application/services/project_agent_group_workspace_view_data_service.dart';
 import '../../features/workbench/application/services/project_opening_session_projection_service.dart';
 import '../../features/workbench/application/services/project_opening_agent_group_binding_service.dart';
@@ -108,6 +110,7 @@ import '../routing/app_destination.dart';
 import 'app_shell_auxiliary_controllers.dart';
 import 'app_shell_destination_controller.dart';
 import 'app_shell_listenable_state.dart';
+import 'app_shell_project_open_controller.dart';
 
 typedef LoadAgentPackages =
     Future<List<JsonMap>> Function(ProjectDescriptor project);
@@ -478,6 +481,10 @@ class AppShellController extends ChangeNotifier
       projectLongTaskDetailLoader: longTaskStationController.loadDetailForRun,
     );
     _workbenchConversationController = WorkbenchConversationController(
+      openingLaunchBridgeService: WorkbenchOpeningLaunchBridgeService(
+        buildModeGuidancePlanInputUseCase: _buildModeGuidancePlanInputUseCase,
+        workflowRuntimeService: _workflowRuntimeService,
+      ),
       openingSessionProjectionService: ProjectOpeningSessionProjectionService(
         loadAgentPackages: _loadAgentPackages,
         loadAgentGroups: _loadAgentGroups,
@@ -515,9 +522,7 @@ class AppShellController extends ChangeNotifier
       userOptionPromptBuilderService: _userOptionPromptBuilderService,
       loadModeGuidanceStateUseCase: _loadModeGuidanceStateUseCase,
       answerModeGuidanceStageUseCase: _answerModeGuidanceStageUseCase,
-      buildModeGuidancePlanInputUseCase: _buildModeGuidancePlanInputUseCase,
       modeGuidanceTransitionService: _modeGuidanceTransitionService,
-      workflowRuntimeService: _workflowRuntimeService,
       toolPermissionApprovalRecordService: toolPermissionApprovalRecordService,
       workspaceController: _workbenchWorkspaceController,
       readRuntimeState: () => _workbenchConversationRuntimeState,
@@ -562,6 +567,13 @@ class AppShellController extends ChangeNotifier
     );
     _workbenchWorkspaceController.attachProjectCreationController(
       _projectCreationController,
+    );
+    _projectOpenController = AppShellProjectOpenController(
+      showWorkbench: showWorkbench,
+      refreshProjectOpenView: _refreshProjectOpenView,
+      selectProjectOpenEntry: _selectProjectOpenEntry,
+      openProjectFromProjectOpen: _openProjectFromProjectOpen,
+      importLocalProjectFromProjectOpen: _importLocalProjectFromProjectOpen,
     );
     _auxiliaryControllers = AppShellAuxiliaryControllers(
       createProjectAssetsController: () => ProjectAssetsController(
@@ -641,9 +653,11 @@ class AppShellController extends ChangeNotifier
           InspirationWorkbenchController(
             loadModeGuidanceStateUseCase: _loadModeGuidanceStateUseCase,
             answerModeGuidanceStageUseCase: _answerModeGuidanceStageUseCase,
-            buildModeGuidancePlanInputUseCase:
-                _buildModeGuidancePlanInputUseCase,
-            workflowRuntimeService: _workflowRuntimeService,
+            openingLaunchBridgeService: WorkbenchOpeningLaunchBridgeService(
+              buildModeGuidancePlanInputUseCase:
+                  _buildModeGuidancePlanInputUseCase,
+              workflowRuntimeService: _workflowRuntimeService,
+            ),
             readCurrentProject: () => _currentProject,
             readCurrentProjectTitle: () => _viewModel.workbench.projectName,
             syncWorkbenchResources: _syncWorkbenchResources,
@@ -767,9 +781,9 @@ class AppShellController extends ChangeNotifier
   final ProjectCreationExpressionConstraintDefaultsSettingsService
   _projectCreationExpressionConstraintDefaultsSettingsService;
   final ModelExecutionProfileService _modelExecutionProfileService;
-  final ProviderConnectionValidationService
+  final app_settings.ProviderConnectionValidationService
   _providerConnectionValidationService =
-      ProviderConnectionValidationService();
+      app_settings.ProviderConnectionValidationService();
   final ModeGuidanceTransitionService _modeGuidanceTransitionService;
   final DesktopBookDeconstructionSourcePickerService
   _desktopBookDeconstructionSourcePickerService;
@@ -779,6 +793,7 @@ class AppShellController extends ChangeNotifier
   late final WorkbenchConversationController _workbenchConversationController;
   late final ProjectCreationController _projectCreationController;
   late final AppShellAuxiliaryControllers _auxiliaryControllers;
+  late final AppShellProjectOpenController _projectOpenController;
   final ReviewReportChapterAnalysisProjectionService
   _reviewReportChapterAnalysisProjectionService =
       ReviewReportChapterAnalysisProjectionService();
@@ -1042,83 +1057,6 @@ class AppShellController extends ChangeNotifier
     _destinationController.showProjectAssets();
   }
 
-  Future<void> _showCurrentAgentSkillLoadout(String agentId) async {
-    // 中文注释: 工作台当前智能体跳转到技能装载时，预选逻辑统一收口在壳层，不让资源面板自己碰生态快照。
-    final cleanAgentId = agentId.trim();
-    if (cleanAgentId.isEmpty) {
-      return;
-    }
-    await _refreshAgentEcosystem(
-      selectedTabId: 'skill-loadouts',
-      selectedEntryId: cleanAgentId,
-    );
-    await _destinationController.showAgentEcosystem();
-  }
-
-  Future<void> _showCurrentAgentExpressionConstraints(String agentId) async {
-    // 中文注释: 表达限制仍是项目级子域，但从当前智能体入口进入时会记住一个轻量上下文。
-    final cleanAgentId = agentId.trim();
-    if (cleanAgentId.isEmpty) {
-      return;
-    }
-    await projectAssetsController.refresh();
-    projectAssetsController.openExpressionConstraintsForAgent(cleanAgentId);
-    await _destinationController.showProjectAssets();
-  }
-
-  @override
-  Future<void> onAppShellDestinationRequested(
-    AppDestination destination,
-  ) async {
-    await _destinationController.showDestination(destination);
-  }
-
-  @override
-  void onProjectOpenRefreshRequested() {
-    // 中文注释: 项目入口页刷新只重建项目发现结果，不切换当前全局目的地。
-    unawaited(_refreshProjectOpenView());
-  }
-
-  @override
-  void onProjectOpenCreateRequested() {
-    // 中文注释: 新建项目仍复用现有启动器，但入口语义已经收束到“打开项目”页。
-    showWorkbench();
-    unawaited(_projectCreationController.onCreateProjectRequested());
-  }
-
-  @override
-  void onProjectOpenImportRequested() {
-    // 中文注释: 本地导入属于宿主动作，统一在壳层完成目录选择与有效性检查。
-    unawaited(_importLocalProjectFromProjectOpen());
-  }
-
-  @override
-  void onProjectOpenEntrySelected(String entryId) {
-    // 中文注释: 条目选中只更新项目入口页的局部视图态，不触发项目加载。
-    _viewModel = _viewModel.copyWith(
-      projectOpen: _projectOpenViewDataService.selectEntry(
-        _viewModel.projectOpen,
-        entryId,
-      ),
-    );
-    _safeNotifyListeners();
-  }
-
-  @override
-  void onProjectOpenOpenRequested(String projectPath) {
-    // 中文注释: 打开动作由壳层负责跳工作台，避免顶层入口页停留在“已打开但仍是列表页”的过渡状态。
-    unawaited(_openProjectFromProjectOpen(projectPath));
-  }
-
-  Future<void> _openLongTaskStationProject(RunInstance run) async {
-    // 中文注释: 总站跳回工作台时，先保证对应项目已载入，再切回工作台主视图。
-    final loaded = await _ensureLongTaskStationProjectLoaded(run);
-    if (!loaded) {
-      return;
-    }
-    showWorkbench();
-  }
-
   Future<void> _refreshProjectOpenView({String status = ''}) async {
     final settings = _settings;
     final viewData = await _projectOpenViewDataService.build(
@@ -1131,6 +1069,17 @@ class AppShellController extends ChangeNotifier
       status: status,
     );
     _viewModel = _viewModel.copyWith(projectOpen: viewData);
+    _safeNotifyListeners();
+  }
+
+  void _selectProjectOpenEntry(String entryId) {
+    // 中文注释: 条目选中只更新项目入口页的局部视图态，不触发项目加载。
+    _viewModel = _viewModel.copyWith(
+      projectOpen: _projectOpenViewDataService.selectEntry(
+        _viewModel.projectOpen,
+        entryId,
+      ),
+    );
     _safeNotifyListeners();
   }
 
@@ -1169,212 +1118,45 @@ class AppShellController extends ChangeNotifier
     await _openProjectFromProjectOpen(snapshot.project.rootPath);
   }
 
-  Future<void> _openLongTaskStationRunResource(
-    RunInstance run,
-    String relativePath,
+  Future<void> _showCurrentAgentSkillLoadout(String agentId) async {
+    // 中文注释: 工作台当前智能体跳转到技能装载时，预选逻辑统一收口在壳层，不让资源面板自己碰生态快照。
+    final cleanAgentId = agentId.trim();
+    if (cleanAgentId.isEmpty) {
+      return;
+    }
+    await _refreshAgentEcosystem(
+      selectedTabId: 'skill-loadouts',
+      selectedEntryId: cleanAgentId,
+    );
+    await _destinationController.showAgentEcosystem();
+  }
+
+  Future<void> _showCurrentAgentExpressionConstraints(String agentId) async {
+    // 中文注释: 表达限制仍是项目级子域，但从当前智能体入口进入时会记住一个轻量上下文。
+    final cleanAgentId = agentId.trim();
+    if (cleanAgentId.isEmpty) {
+      return;
+    }
+    await projectAssetsController.refresh();
+    projectAssetsController.openExpressionConstraintsForAgent(cleanAgentId);
+    await _destinationController.showProjectAssets();
+  }
+
+  @override
+  Future<void> onAppShellDestinationRequested(
+    AppDestination destination,
   ) async {
-    // 中文注释: 总站里的任务节点、检查点、审稿结果统一回到工作台文件查看，不再切去独立中心页。
+    await _destinationController.showDestination(destination);
+  }
+
+  Future<void> _openLongTaskStationProject(RunInstance run) async {
+    // 中文注释: 总站跳回工作台时，先保证对应项目已载入，再切回工作台主视图。
     final loaded = await _ensureLongTaskStationProjectLoaded(run);
     if (!loaded) {
       return;
     }
-    final cleanRelativePath = relativePath.trim();
-    if (cleanRelativePath.isNotEmpty) {
-      await _workbenchWorkspaceController.openResource(cleanRelativePath);
-    }
-    _destinationController.showWorkbench();
+    showWorkbench();
   }
-
-  Future<bool> _ensureLongTaskStationProjectLoaded(RunInstance run) async {
-    // 中文注释: 总站联动始终以运行实例引用的项目为准，不假设当前工作台还停留在同一个项目。
-    final currentProject = _currentProject;
-    if (currentProject != null &&
-        _normalizePathForCompare(currentProject.rootPath) ==
-            _normalizePathForCompare(run.project.rootPath)) {
-      return true;
-    }
-    final loaded = await _workbenchWorkspaceController.loadProject(
-      run.project.rootPath,
-    );
-    if (!loaded) {
-      _announce('无法打开长任务对应项目：${run.project.rootPath}');
-      return false;
-    }
-    return true;
-  }
-
-  void onModelSettingsRequested() =>
-      _workbenchWorkspaceController.onModelSettingsRequested();
-
-  void onCreateProjectRequested() =>
-      _projectCreationController.onCreateProjectRequested();
-
-  void onOpenProjectRequested() =>
-      _projectCreationController.onOpenProjectRequested();
-
-  void onProjectLauncherDismissed() =>
-      _projectCreationController.onProjectLauncherDismissed();
-
-  void onProjectLauncherRefreshRequested() =>
-      _projectCreationController.onProjectLauncherRefreshRequested();
-
-  void onProjectEntryOpened(String projectPath) =>
-      _projectCreationController.onProjectEntryOpened(projectPath);
-
-  Future<void> openResource(String relativePath) async {
-    // 中文注释: 壳层需要一个可等待的资源打开入口时，只能透出工作区现有能力，不在这里重写读盘逻辑。
-    await _openResource(relativePath);
-  }
-
-  void onProjectCreationBackRequested() =>
-      _projectCreationController.onProjectCreationBackRequested();
-
-  void onProjectCreationSubmitted(ProjectCreateRequestViewData request) =>
-      _projectCreationController.onProjectCreationSubmitted(request);
-
-  void onEditProjectInfoRequested() =>
-      _workbenchWorkspaceController.onEditProjectInfoRequested();
-
-  void onProjectTypeTransitionRequested() =>
-      _workbenchWorkspaceController.onProjectTypeTransitionRequested();
-
-  void onRefreshFilesRequested() =>
-      _workbenchWorkspaceController.onRefreshFilesRequested();
-
-  void onCreateFileRequested() =>
-      _workbenchWorkspaceController.onCreateFileRequested();
-
-  void onCreateFolderRequested() =>
-      _workbenchWorkspaceController.onCreateFolderRequested();
-
-  void onImportRequested() => _workbenchWorkspaceController.onImportRequested();
-
-  void onCreateChapterRequested() =>
-      _workbenchWorkspaceController.onCreateChapterRequested();
-
-  void onSaveCurrentRequested() =>
-      _workbenchWorkspaceController.onSaveCurrentRequested();
-
-  void onAgentEcosystemRequested() =>
-      _workbenchWorkspaceController.onAgentEcosystemRequested();
-
-  void onCurrentAgentSkillLoadoutRequested() =>
-      _workbenchWorkspaceController.onCurrentAgentSkillLoadoutRequested();
-
-  void onTasksRequested() => _workbenchWorkspaceController.onTasksRequested();
-
-  void onLongTaskStationRequested() =>
-      _workbenchWorkspaceController.onLongTaskStationRequested();
-
-  void onReviewsRequested() =>
-      _workbenchWorkspaceController.onReviewsRequested();
-
-  void onTemplatesRequested() =>
-      _workbenchWorkspaceController.onTemplatesRequested();
-
-  void onProjectAssetsRequested() =>
-      _workbenchWorkspaceController.onProjectAssetsRequested();
-
-  void onCurrentAgentExpressionConstraintsRequested() =>
-      _workbenchWorkspaceController
-          .onCurrentAgentExpressionConstraintsRequested();
-
-  @override
-  void onProjectExpressionConstraintsRequested() {
-    final currentAgentId = _viewModel.workbench.agentSelector.currentAgentId
-        .trim();
-    if (currentAgentId.isNotEmpty) {
-      unawaited(_showCurrentAgentExpressionConstraints(currentAgentId));
-      return;
-    }
-    projectAssetsController.openExpressionConstraintsForAgent('');
-    showProjectAssets();
-  }
-
-  void onResourceEntrySelected(String entryId) =>
-      _workbenchWorkspaceController.onResourceEntrySelected(entryId);
-
-  void onWorkspaceCommandDismissed() =>
-      _workbenchWorkspaceController.onWorkspaceCommandDismissed();
-
-  void onWorkspaceImportFilesPickRequested(
-    WorkspaceCommandRequestViewData request,
-  ) => _workbenchWorkspaceController.onWorkspaceImportFilesPickRequested(
-    request,
-  );
-
-  void onWorkspaceCommandSubmitted(WorkspaceCommandRequestViewData request) =>
-      _workbenchWorkspaceController.onWorkspaceCommandSubmitted(request);
-
-  void onDocumentActionRequested(DocumentToolbarAction action) =>
-      _workbenchWorkspaceController.onDocumentActionRequested(action);
-
-  void onDocumentSelected(String documentId) =>
-      _workbenchWorkspaceController.onDocumentSelected(documentId);
-
-  void onDocumentClosed(String documentId) =>
-      _workbenchWorkspaceController.onDocumentClosed(documentId);
-
-  void onDocumentBodyChanged(String value) =>
-      _workbenchWorkspaceController.onDocumentBodyChanged(value);
-
-  void onModelSelected(String modelId) =>
-      _workbenchConversationController.onModelSelected(modelId);
-
-  void onAgentGroupSelected(String groupId) {
-    // 中文注释: 会话栏与 opening 面板的组切换统一转发给会话控制器，避免壳层直接碰项目默认组绑定。
-    _workbenchConversationController.onAgentGroupSelected(groupId);
-  }
-
-  void onQuickThemeRequested() =>
-      _workbenchConversationController.onQuickThemeRequested();
-
-  void onScreenModeRequested() =>
-      _workbenchConversationController.onScreenModeRequested();
-
-  void onDocumentsWorkspaceRequested() =>
-      _workbenchConversationController.onDocumentsWorkspaceRequested();
-
-  void onDocumentsWorkspaceDismissRequested() =>
-      _workbenchConversationController.onDocumentsWorkspaceDismissRequested();
-
-  void onHistoryRequested() =>
-      _workbenchConversationController.onHistoryRequested();
-
-  void onNewSessionRequested() =>
-      _workbenchConversationController.onNewSessionRequested();
-
-  void onSessionHistorySelected(String sessionId) =>
-      _workbenchConversationController.onSessionHistorySelected(sessionId);
-
-  void onUserOptionSelected(UserOptionViewData option) =>
-      _workbenchConversationController.onUserOptionSelected(option);
-
-  void onConversationSettingsRequested() =>
-      _workbenchConversationController.onConversationSettingsRequested();
-
-  void onPrimaryActionRequested(String actionId) =>
-      _workbenchConversationController.onPrimaryActionRequested(actionId);
-
-  void onRetryLastFailedRequested() =>
-      _workbenchConversationController.onRetryLastFailedRequested();
-
-  void onOptimizeRequested() =>
-      _workbenchConversationController.onOptimizeRequested();
-
-  void onToolOptionsRequested() =>
-      _workbenchConversationController.onToolOptionsRequested();
-
-  void onReasoningToggleChanged(bool enabled) =>
-      _workbenchConversationController.onReasoningToggleChanged(enabled);
-
-  void onStopRequested() => _workbenchConversationController.onStopRequested();
-
-  void onAttachmentRequested() =>
-      _workbenchConversationController.onAttachmentRequested();
-
-  void onSendRequested(String text) =>
-      _workbenchConversationController.onSendRequested(text);
 
   @override
   void onSettingsBackRequested() {
@@ -1479,13 +1261,13 @@ class AppShellController extends ChangeNotifier
         .where((provider) => provider.id != providerId)
         .toList(growable: false);
     final modelSettings = _modelSettingsOf(settings);
-    final currentModelProviderId = _stringValue(
+    final nextModelProviderId = _stringValue(
       modelSettings['provider_id'],
       settings.defaultProviderId,
-    );
-    final nextModelProviderId = currentModelProviderId == providerId
+    ) ==
+            providerId
         ? ''
-        : currentModelProviderId;
+        : _stringValue(modelSettings['provider_id'], settings.defaultProviderId);
     final updated = settings.copyWith(
       providers: providers,
       defaultProviderId: settings.defaultProviderId == providerId
@@ -1713,6 +1495,235 @@ class AppShellController extends ChangeNotifier
     );
     _persistSettings(updated, successMessage: '主题设置已保存。');
   }
+
+  Future<void> _openLongTaskStationRunResource(
+    RunInstance run,
+    String relativePath,
+  ) async {
+    // 中文注释: 总站里的任务节点、检查点、审稿结果统一回到工作台文件查看，不再切去独立中心页。
+    final loaded = await _ensureLongTaskStationProjectLoaded(run);
+    if (!loaded) {
+      return;
+    }
+    final cleanRelativePath = relativePath.trim();
+    if (cleanRelativePath.isNotEmpty) {
+      await _workbenchWorkspaceController.openResource(cleanRelativePath);
+    }
+    _destinationController.showWorkbench();
+  }
+
+  Future<bool> _ensureLongTaskStationProjectLoaded(RunInstance run) async {
+    // 中文注释: 总站联动始终以运行实例引用的项目为准，不假设当前工作台还停留在同一个项目。
+    final currentProject = _currentProject;
+    if (currentProject != null &&
+        _normalizePathForCompare(currentProject.rootPath) ==
+            _normalizePathForCompare(run.project.rootPath)) {
+      return true;
+    }
+    final loaded = await _workbenchWorkspaceController.loadProject(
+      run.project.rootPath,
+    );
+    if (!loaded) {
+      _announce('无法打开长任务对应项目：${run.project.rootPath}');
+      return false;
+    }
+    return true;
+  }
+
+  void onModelSettingsRequested() =>
+      _workbenchWorkspaceController.onModelSettingsRequested();
+
+  void onCreateProjectRequested() =>
+      _projectCreationController.onCreateProjectRequested();
+
+  void onOpenProjectRequested() =>
+      _projectCreationController.onOpenProjectRequested();
+
+  void onProjectLauncherDismissed() =>
+      _projectCreationController.onProjectLauncherDismissed();
+
+  void onProjectLauncherRefreshRequested() =>
+      _projectCreationController.onProjectLauncherRefreshRequested();
+
+  void onProjectEntryOpened(String projectPath) =>
+      _projectCreationController.onProjectEntryOpened(projectPath);
+
+  @override
+  void onProjectOpenRefreshRequested() =>
+      _projectOpenController.onProjectOpenRefreshRequested();
+
+  @override
+  void onProjectOpenCreateRequested() =>
+      _projectOpenController.onProjectOpenCreateRequested();
+
+  @override
+  void onProjectOpenImportRequested() =>
+      _projectOpenController.onProjectOpenImportRequested();
+
+  @override
+  void onProjectOpenEntrySelected(String entryId) =>
+      _projectOpenController.onProjectOpenEntrySelected(entryId);
+
+  @override
+  void onProjectOpenOpenRequested(String projectPath) =>
+      _projectOpenController.onProjectOpenOpenRequested(projectPath);
+
+  Future<void> openResource(String relativePath) async {
+    // 中文注释: 壳层需要一个可等待的资源打开入口时，只能透出工作区现有能力，不在这里重写读盘逻辑。
+    await _openResource(relativePath);
+  }
+
+  void onProjectCreationBackRequested() =>
+      _projectCreationController.onProjectCreationBackRequested();
+
+  void onProjectCreationSubmitted(ProjectCreateRequestViewData request) =>
+      _projectCreationController.onProjectCreationSubmitted(request);
+
+  void onEditProjectInfoRequested() =>
+      _workbenchWorkspaceController.onEditProjectInfoRequested();
+
+  void onProjectTypeTransitionRequested() =>
+      _workbenchWorkspaceController.onProjectTypeTransitionRequested();
+
+  void onRefreshFilesRequested() =>
+      _workbenchWorkspaceController.onRefreshFilesRequested();
+
+  void onCreateFileRequested() =>
+      _workbenchWorkspaceController.onCreateFileRequested();
+
+  void onCreateFolderRequested() =>
+      _workbenchWorkspaceController.onCreateFolderRequested();
+
+  void onImportRequested() => _workbenchWorkspaceController.onImportRequested();
+
+  void onCreateChapterRequested() =>
+      _workbenchWorkspaceController.onCreateChapterRequested();
+
+  void onSaveCurrentRequested() =>
+      _workbenchWorkspaceController.onSaveCurrentRequested();
+
+  void onAgentEcosystemRequested() =>
+      _workbenchWorkspaceController.onAgentEcosystemRequested();
+
+  void onCurrentAgentSkillLoadoutRequested() =>
+      _workbenchWorkspaceController.onCurrentAgentSkillLoadoutRequested();
+
+  void onTasksRequested() => _workbenchWorkspaceController.onTasksRequested();
+
+  void onLongTaskStationRequested() =>
+      _workbenchWorkspaceController.onLongTaskStationRequested();
+
+  void onReviewsRequested() =>
+      _workbenchWorkspaceController.onReviewsRequested();
+
+  void onTemplatesRequested() =>
+      _workbenchWorkspaceController.onTemplatesRequested();
+
+  void onProjectAssetsRequested() =>
+      _workbenchWorkspaceController.onProjectAssetsRequested();
+
+  void onCurrentAgentExpressionConstraintsRequested() =>
+      _workbenchWorkspaceController
+          .onCurrentAgentExpressionConstraintsRequested();
+
+  @override
+  void onProjectExpressionConstraintsRequested() {
+    final currentAgentId = _viewModel.workbench.agentSelector.currentAgentId
+        .trim();
+    if (currentAgentId.isNotEmpty) {
+      unawaited(_showCurrentAgentExpressionConstraints(currentAgentId));
+      return;
+    }
+    projectAssetsController.openExpressionConstraintsForAgent('');
+    showProjectAssets();
+  }
+
+  void onResourceEntrySelected(String entryId) =>
+      _workbenchWorkspaceController.onResourceEntrySelected(entryId);
+
+  void onWorkspaceCommandDismissed() =>
+      _workbenchWorkspaceController.onWorkspaceCommandDismissed();
+
+  void onWorkspaceImportFilesPickRequested(
+    WorkspaceCommandRequestViewData request,
+  ) => _workbenchWorkspaceController.onWorkspaceImportFilesPickRequested(
+    request,
+  );
+
+  void onWorkspaceCommandSubmitted(WorkspaceCommandRequestViewData request) =>
+      _workbenchWorkspaceController.onWorkspaceCommandSubmitted(request);
+
+  void onDocumentActionRequested(DocumentToolbarAction action) =>
+      _workbenchWorkspaceController.onDocumentActionRequested(action);
+
+  void onDocumentSelected(String documentId) =>
+      _workbenchWorkspaceController.onDocumentSelected(documentId);
+
+  void onDocumentClosed(String documentId) =>
+      _workbenchWorkspaceController.onDocumentClosed(documentId);
+
+  void onDocumentBodyChanged(String value) =>
+      _workbenchWorkspaceController.onDocumentBodyChanged(value);
+
+  void onModelSelected(String modelId) =>
+      _workbenchConversationController.onModelSelected(modelId);
+
+  void onAgentGroupSelected(String groupId) {
+    // 中文注释: 会话栏与 opening 面板的组切换统一转发给会话控制器，避免壳层直接碰项目默认组绑定。
+    _workbenchConversationController.onAgentGroupSelected(groupId);
+  }
+
+  void onQuickThemeRequested() =>
+      _workbenchConversationController.onQuickThemeRequested();
+
+  void onScreenModeRequested() =>
+      _workbenchConversationController.onScreenModeRequested();
+
+  void onDocumentsWorkspaceRequested() =>
+      _workbenchConversationController.onDocumentsWorkspaceRequested();
+
+  void onDocumentsWorkspaceDismissRequested() =>
+      _workbenchConversationController.onDocumentsWorkspaceDismissRequested();
+
+  void onHistoryRequested() =>
+      _workbenchConversationController.onHistoryRequested();
+
+  void onNewSessionRequested() =>
+      _workbenchConversationController.onNewSessionRequested();
+
+  void onSessionHistorySelected(String sessionId) =>
+      _workbenchConversationController.onSessionHistorySelected(sessionId);
+
+  void onUserOptionSelected(UserOptionViewData option) =>
+      _workbenchConversationController.onUserOptionSelected(option);
+
+  void onConversationSettingsRequested() =>
+      _workbenchConversationController.onConversationSettingsRequested();
+
+  void onPrimaryActionRequested(String actionId) =>
+      _workbenchConversationController.onPrimaryActionRequested(actionId);
+
+  void onRetryLastFailedRequested() =>
+      _workbenchConversationController.onRetryLastFailedRequested();
+
+  void onOptimizeRequested() =>
+      _workbenchConversationController.onOptimizeRequested();
+
+  void onToolOptionsRequested() =>
+      _workbenchConversationController.onToolOptionsRequested();
+
+  void onReasoningToggleChanged(bool enabled) =>
+      _workbenchConversationController.onReasoningToggleChanged(enabled);
+
+  void onStopRequested() => _workbenchConversationController.onStopRequested();
+
+  void onAttachmentRequested() =>
+      _workbenchConversationController.onAttachmentRequested();
+
+  void onSendRequested(String text) =>
+      _workbenchConversationController.onSendRequested(text);
+
+  
 
   @override
   void onAgentEcosystemBackRequested() {

@@ -110,7 +110,13 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
             value: option.value,
             label: option.label,
             note: option.note,
+            providerId: option.providerId,
           ),
+        )
+        .where(
+          (option) =>
+              option.providerId.trim().isEmpty ||
+              option.providerId.trim() == _selectedDirectoryProviderId?.trim(),
         )
         .toList(growable: false);
     return ListView(

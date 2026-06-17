@@ -1,5 +1,6 @@
 import '../common/json_types.dart';
 import '../project/project_prompt_contract.dart';
+import '../agents/agent_collaboration_contract.dart';
 import 'tool_strategy_service.dart';
 
 class ToolStrategyPromptBuilder {
@@ -19,6 +20,7 @@ class ToolStrategyPromptBuilder {
     required String projectTreeNote,
     required String agentNote,
     required String styleNote,
+    AgentCollaborationContract? collaborationContract,
     List<String>? toolIds,
   }) {
     // 中文注释: Prompt 构建从策略服务拆出来，避免一个类同时负责配置规则和长文本拼装。
@@ -32,15 +34,24 @@ class ToolStrategyPromptBuilder {
     final fallbackNote = normalized['allow_inline_fallback'] == true
         ? '如果当前模型或中转不支持原生工具调用，可以在回复中输出机器可读 fallback 工具调用；支持 JSON、<tool_call> XML 和 <|tool|工具名>...</|tool|工具名> 管道标签。优先使用当前请求真实提供的原生工具 schema，不要同时混用两套格式。'
         : '当前禁用 fallback 工具文本；只能使用提供商原生 tool/function calling。';
-    final optionRule = normalized['auto_present_options'] == true
-        ? '用户要求“给我几个选项/方案/方向/开局供我选择”时，必须调用 present_user_options；这类头脑风暴不是正式产物，不要调用 write_project_file。'
-        : '选项工具是可选能力；如果不调用，请用清晰列表说明方案。';
+    final collaboration = collaborationContract;
+    final optionRule = collaboration == null
+        ? (normalized['auto_present_options'] == true
+            ? '用户要求“给我几个选项/方案/方向/开局供我选择”时，必须调用 present_user_options；这类头脑风暴不是正式产物，不要调用 write_project_file。'
+            : '选项工具是可选能力；如果不调用，请用清晰列表说明方案。')
+        : (collaboration.toolVisibility.promptsUserChoice
+            ? '用户要求“给我几个选项/方案/方向/开局供我选择”时，优先调用 present_user_options；这类头脑风暴不是正式产物，不要调用 write_project_file。'
+            : '当前协作合同未要求用户选择时优先用选项工具；如果不调用，请用清晰列表说明方案。');
     final taskRule = normalized['auto_task_plan'] == true
         ? '多步骤任务、长篇创作、续写或修订前，可以先用 set_agent_tasks 声明你自己的任务目标、阶段、顺序和需要的工具。'
         : '任务计划工具已弱化；除非用户明确要求，不要额外展示任务清单。';
-    final delegationRule = delegationEnabled
-        ? '当任务明显需要不同视角（资料、剧情结构、正文写作、润色、审核、读者反馈）时，可调用 call_sub_agent；优先从协作视角清单选择 agent_id，并只传任务摘录、约束和期望产物，不传完整主会话。若一时拿不准精确 agent_id，可把 agent_id 传空字符串，运行时会按 task 自动兜底选取最匹配的子智能体。'
-        : '当前没有开放子智能体委派工具；如需多视角，请在主回复中自行综合。';
+    final delegationRule = collaboration == null
+        ? (delegationEnabled
+            ? '当任务明显需要不同视角（资料、剧情结构、正文写作、润色、审核、读者反馈）时，可调用 call_sub_agent；优先从协作视角清单选择 agent_id，并只传任务摘录、约束和期望产物，不传完整主会话。若一时拿不准精确 agent_id，可把 agent_id 传空字符串，运行时会按 task 自动兜底选取最匹配的子智能体。'
+            : '当前没有开放子智能体委派工具；如需多视角，请在主回复中自行综合。')
+        : (collaboration.delegation.allowed
+            ? '当任务明显需要不同视角（资料、剧情结构、正文写作、润色、审核、读者反馈）时，可调用 call_sub_agent；优先从协作视角清单选择 agent_id，并只传任务摘录、约束和期望产物，不传完整主会话。'
+            : '当前协作合同表明本轮不开放子智能体委派；如需多视角，请在主回复中自行综合。');
     final longTaskLaunchRule = enabledTools.contains('start_long_task_run')
         ? '如果当前项目是长任务项目，且用户明确表达“开始长任务/直接跑/按当前灵感开跑”，优先调用 start_long_task_run；不要自己假装已经建好长任务队列。'
         : '当前没有开放长任务启动工具；如需长任务，只能说明下一步建议。';
@@ -81,7 +92,13 @@ ${_projectPromptContract.directoryMappingLine()}
 knowledge/、research/、references/ 下的信息摘要是只读 projection 入口，不是正式事实写入目标；长期知识、设计元素、研究结论和引用边界必须分别通过 propose_knowledge_card、propose_design_element、submit_research_note、propose_reference_work 收口。
 所有读写改删都只能操作当前项目内的相对路径。桌面端和 Android/iOS 均按应用项目目录执行，不要请求终端命令或外部绝对路径权限。
 如果用户要求创作正式章节或连续正文，content_type 使用 chapter；如果用户要求样章、开篇验证稿或非正式章节级试写，content_type 使用 sample；如果用户要求局部片段、场景补写或实验段落，content_type 使用 scene。如果用户要求风格规范或文风模仿，content_type 使用 style。
-${delegationEnabled ? '子智能体由主智能体按需调用，不需要用户手动选择。调用 call_sub_agent 时必须传 agent_id 和 task；agent_id 优先来自下方协作视角素材。如果一时拿不准精确 agent_id，可传空字符串，由运行时按 task 自动兜底选取最匹配的子智能体。子智能体只接收你传递的任务、摘录和约束，不享有主会话完整上下文；工具返回后你要综合结果再回复用户。' : '当前按单主智能体运行。本轮不要假设还存在可委派的子智能体，也不要伪造内部协作回合。'}
+${collaboration == null
+            ? (delegationEnabled
+                ? '子智能体由主智能体按需调用，不需要用户手动选择。调用 call_sub_agent 时必须传 agent_id 和 task；agent_id 优先来自下方协作视角素材。如果一时拿不准精确 agent_id，可传空字符串，由运行时按 task 自动兜底选取最匹配的子智能体。子智能体只接收你传递的任务、摘录和约束，不享有主会话完整上下文；工具返回后你要综合结果再回复用户。'
+                : '当前按单主智能体运行。本轮不要假设还存在可委派的子智能体，也不要伪造内部协作回合。')
+            : (collaboration.delegation.allowed
+                ? '当前协作合同允许按需调用子智能体，但仍需只传任务摘录、约束和期望产物，不传完整主会话。调用 call_sub_agent 时以合同内 child_agent_ids 与 review/选项结果为准。'
+                : '当前协作合同表明本轮按单主智能体运行，不要假设还存在可委派的子智能体，也不要伪造内部协作回合。')}
 当前判断内容类型：$intent
 
 $projectNote

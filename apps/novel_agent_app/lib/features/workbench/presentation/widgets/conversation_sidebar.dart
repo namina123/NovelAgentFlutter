@@ -312,6 +312,7 @@ class _ConversationSidebarState extends State<ConversationSidebar> {
           child: hasConversation
               ? ConversationTimeline(
                   lanes: widget.viewData.transcriptLanes,
+                  restoreResult: widget.viewData.sessionRestoreResult,
                   renderContext: TranscriptBlockRenderContext(
                     showToolDetails: _statusSummaryService.showToolDetails(
                       widget.viewData,

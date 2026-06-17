@@ -5,14 +5,14 @@ import '../../presentation/models/settings_view_data.dart';
 class ProviderSettingsDirectoryService {
   ProviderSettingsDirectoryService({
     ProviderInterfaceTemplateService? templateService,
-    WritingModelOfferingCatalogService? offeringCatalogService,
+    ProviderModelSelectionContractService? modelSelectionContractService,
   }) : _templateService =
            templateService ?? ProviderInterfaceTemplateService.seeded(),
-       _offeringCatalogService =
-           offeringCatalogService ?? WritingModelOfferingCatalogService();
+       _modelSelectionContractService =
+           modelSelectionContractService ?? ProviderModelSelectionContractService();
 
   final ProviderInterfaceTemplateService _templateService;
-  final WritingModelOfferingCatalogService _offeringCatalogService;
+  final ProviderModelSelectionContractService _modelSelectionContractService;
 
   List<ProviderDirectoryOptionViewData> providerOptions() {
     return _templateService
@@ -35,27 +35,23 @@ class ProviderSettingsDirectoryService {
   }
 
   List<SettingsSearchOptionViewData> allModelOptions() {
-    final suggestions = _offeringCatalogService.offeringOptions(limit: 1000);
+    final suggestions = _modelSelectionContractService.providerModelOptions(
+      providerId: '',
+      limit: 1000,
+    );
     final seen = <String>{};
     final result = <SettingsSearchOptionViewData>[];
     for (final entry in suggestions) {
-      final modelId = ValueReaders.stringValue(entry['model_id']).trim();
-      if (modelId.isEmpty || !seen.add(modelId)) {
+      final modelId = entry.modelId.trim();
+      if (modelId.isEmpty || !seen.add('${entry.providerId}::$modelId')) {
         continue;
       }
-      final providerLabel = ValueReaders.stringValue(entry['provider_label']);
-      final displayLabel = ValueReaders.stringValue(
-        entry['display_label'],
-        modelId,
-      );
-      final note = providerLabel.trim().isEmpty
-          ? displayLabel
-          : '$providerLabel · $displayLabel';
       result.add(
         SettingsSearchOptionViewData(
           value: modelId,
-          label: modelId,
-          note: note,
+          label: entry.modelLabel.isEmpty ? modelId : entry.modelLabel,
+          note: entry.providerLabel,
+          providerId: entry.providerId,
         ),
       );
     }

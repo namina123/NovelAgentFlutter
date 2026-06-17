@@ -238,11 +238,13 @@ class SettingsSearchOptionViewData {
     required this.value,
     required this.label,
     this.note = '',
+    this.providerId = '',
   });
 
   final String value;
   final String label;
   final String note;
+  final String providerId;
 }
 
 class SettingsSectionViewData {

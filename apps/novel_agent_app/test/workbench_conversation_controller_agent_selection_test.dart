@@ -5,6 +5,7 @@ import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_app/features/book_deconstruction/application/services/book_deconstruction_narrative_persistence_service.dart';
 import 'package:novel_agent_app/features/workbench/application/controllers/workbench_conversation_controller.dart';
 import 'package:novel_agent_app/features/workbench/application/controllers/workbench_workspace_controller.dart';
+import 'package:novel_agent_app/features/workbench/application/services/workbench_opening_launch_bridge_service.dart';
 import 'package:novel_agent_app/features/workbench/application/models/open_document_state.dart';
 import 'package:novel_agent_app/features/workbench/application/models/opening_agent_group_summary.dart';
 import 'package:novel_agent_app/features/workbench/application/models/opening_agent_member_summary.dart';
@@ -21,7 +22,6 @@ import 'package:novel_agent_app/features/workbench/application/services/project_
 import 'package:novel_agent_app/features/workbench/application/services/project_opening_session_projection_service.dart';
 import 'package:novel_agent_app/features/workbench/application/services/workbench_primary_action_service.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/conversation_agent_selector_view_data.dart';
-import 'package:novel_agent_app/features/workbench/presentation/models/primary_action_view_data.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/selector_option_view_data.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/user_option_view_data.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/workbench_view_data.dart';
@@ -1167,11 +1167,13 @@ class _ConversationControllerHarness {
       answerModeGuidanceStageUseCase: AnswerModeGuidanceStageUseCase(
         statePort: modeGuidanceStatePort,
       ),
-      buildModeGuidancePlanInputUseCase: BuildModeGuidancePlanInputUseCase(
-        statePort: modeGuidanceStatePort,
-      ),
       modeGuidanceTransitionService: ModeGuidanceTransitionService(),
-      workflowRuntimeService: effectiveWorkflowRuntimeService,
+      openingLaunchBridgeService: WorkbenchOpeningLaunchBridgeService(
+        buildModeGuidancePlanInputUseCase: BuildModeGuidancePlanInputUseCase(
+          statePort: modeGuidanceStatePort,
+        ),
+        workflowRuntimeService: effectiveWorkflowRuntimeService,
+      ),
       workspaceController: workspaceController,
       readRuntimeState: () => _runtimeState,
       writeRuntimeState: (next) {

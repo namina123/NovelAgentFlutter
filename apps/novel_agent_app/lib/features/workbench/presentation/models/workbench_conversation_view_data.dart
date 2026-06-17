@@ -13,6 +13,7 @@ import 'primary_action_view_data.dart';
 import 'retry_request_view_data.dart';
 import 'selector_option_view_data.dart';
 import 'session_history_entry_view_data.dart';
+import 'package:novel_agent_core/novel_agent_core.dart';
 import 'sub_agent_run_view_data.dart';
 import 'transcript_block_view_data.dart';
 import 'user_option_view_data.dart';
@@ -44,6 +45,7 @@ class WorkbenchConversationViewData {
     required this.sessionHistoryEntries,
     required this.activeSessionId,
     required this.showSessionHistory,
+    this.sessionRestoreResult,
     required this.generationStatus,
     required this.isGenerating,
   });
@@ -73,6 +75,7 @@ class WorkbenchConversationViewData {
   final List<SessionHistoryEntryViewData> sessionHistoryEntries;
   final String activeSessionId;
   final bool showSessionHistory;
+  final SessionRestoreResult? sessionRestoreResult;
   final String generationStatus;
   final bool isGenerating;
 
@@ -106,6 +109,7 @@ class WorkbenchConversationViewData {
             listEquals(other.sessionHistoryEntries, sessionHistoryEntries) &&
             other.activeSessionId == activeSessionId &&
             other.showSessionHistory == showSessionHistory &&
+            other.sessionRestoreResult == sessionRestoreResult &&
             other.generationStatus == generationStatus &&
             other.isGenerating == isGenerating;
   }
@@ -137,6 +141,7 @@ class WorkbenchConversationViewData {
     Object.hashAll(sessionHistoryEntries),
     activeSessionId,
     showSessionHistory,
+    sessionRestoreResult,
     generationStatus,
     isGenerating,
   ]);

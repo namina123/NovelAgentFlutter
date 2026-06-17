@@ -4,11 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../../../../../shared/widgets/action_button.dart';
+import '../models/settings_view_data.dart';
 import '../models/custom_model_reasoning_effort_entry_view_data.dart';
 import '../models/model_editor_view_data.dart';
 import '../models/model_parameter_entry_view_data.dart';
 import '../models/settings_search_option.dart';
-import '../models/settings_view_data.dart';
 import 'model_settings_advanced_panel.dart';
 import 'model_settings_primary_panel.dart';
 
@@ -105,16 +105,22 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
           ),
         )
         .toList(growable: false);
+    final editor = widget.viewData.modelEditor;
     final modelOptions = widget.viewData.allModelOptions
         .map(
           (option) => SettingsSearchOption<String>(
             value: option.value,
             label: option.label,
             note: option.note,
+            providerId: option.providerId,
           ),
         )
+        .where(
+          (option) =>
+              option.providerId.trim().isEmpty ||
+              option.providerId.trim() == editor.providerId.trim(),
+        )
         .toList(growable: false);
-    final editor = widget.viewData.modelEditor;
     final suggestedModelOptions = editor.modelSuggestions;
     final useSuggestedModelOptions =
         suggestedModelOptions.isNotEmpty && _providerId == editor.providerId;

@@ -7,27 +7,31 @@ class ProjectContentPathPolicyService {
   static const String samplesRoot = 'samples';
   static const String scenesRoot = 'scenes';
   static const String assetsRoot = 'assets';
-  static const String tasksRoot = 'tasks';
+  static const String knowledgeRoot = 'knowledge';
+  static const String researchRoot = 'research';
   static const String analysisRoot = 'analysis';
+  static const String sourcesRoot = 'sources';
+  static const String inheritedChapterRoot = 'chapters/inherited';
+  static const String tasksRoot = 'tasks';
   static const String exportsRoot = 'exports';
 
   String defaultWorkspaceFileDirectory() {
-    // 中文注释: 通用“新建文件”默认落到章节正文目录，避免 GUI/CLI 再退回已经废弃的 drafts 语义。
+    // 中文注释: 通用新建文件继续落到章节正文目录，确保 GUI/CLI 的默认出口一致。
     return chaptersRoot;
   }
 
   String defaultWorkspaceFolderDirectory() {
-    // 中文注释: 通用“新建文件夹”优先落到资产根目录，让用户从当前正式可见目录继续扩展，而不是写回旧兼容根。
+    // 中文注释: 通用新建文件夹优先进入资产根目录，避免把用户的正式内容又引回旧兼容根。
     return assetsRoot;
   }
 
   String defaultImportTargetDirectory() {
-    // 中文注释: 外部文件导入默认进入 assets 根目录，便于后续再按资源类型整理，不把未知文件直接混入章节目录。
+    // 中文注释: 外部导入默认进入资产根目录，后续可再按资源类型分流，不把未知文件直接混入正文。
     return assetsRoot;
   }
 
   String normalizeContentType(String value) {
-    // 中文注释: 内容类型归一化集中在 core，确保保存草稿、工具写入和宿主默认目录始终使用同一套语义。
+    // 中文注释: 内容类型归一化集中在 core，保证路径策略、标签投影和工具写入使用同一套语义。
     final clean = value.trim().toLowerCase();
     switch (clean) {
       case '大纲':
@@ -37,21 +41,23 @@ class ProjectContentPathPolicyService {
         return 'volume_outline';
       case '章纲':
         return 'chapter_outline';
-      case '草稿':
-      case '正文草稿':
-      case 'working_draft':
-        return 'scene';
-      case '场景':
-      case 'scene':
-        return 'scene';
       case '正文':
       case '正式正文':
-      case 'final_chapter':
+      case '正文章节':
+      case 'narrative_chapter':
+      case 'formal_chapter':
         return 'chapter';
       case '样章':
-      case 'sample':
+      case '样章正文':
       case 'sample_chapter':
+      case 'sample':
         return 'sample';
+      case '场景':
+      case 'scene':
+      case 'working_draft':
+      case '正文草稿':
+      case '草稿':
+        return 'scene';
       case '设定':
       case 'world':
         return 'setting';
@@ -64,16 +70,37 @@ class ProjectContentPathPolicyService {
         return 'summary';
       case '分析':
       case 'analysis':
+      case '提取':
+      case 'extraction':
+      case 'extraction_output':
         return 'analysis';
       case '知识库':
+      case '知识':
+      case '研究':
+      case 'information':
+      case 'research':
+      case 'research_note':
+      case 'research_notes':
+      case 'knowledge_card':
+      case 'design_element':
+      case 'reference_work':
         return 'knowledge';
+      case '原文归档':
+      case 'source_original':
+        return 'source_original';
+      case '派生续写':
+      case 'derived_continuation_narrative':
+        return 'derived_continuation_narrative';
+      case '派生同人':
+      case 'derived_fanfic_narrative':
+        return 'derived_fanfic_narrative';
       default:
         return clean.isEmpty ? 'chapter' : clean;
     }
   }
 
   String directoryForContentType(String contentType) {
-    // 中文注释: 内容类型到主目录的映射在这里维持一份，避免 adapters 和 app 各自发明默认归档位置。
+    // 中文注释: 内容类型到主目录的映射只在这里定一次，避免 adapters/app 各自拼默认归档位置。
     switch (normalizeContentType(contentType)) {
       case 'outline':
         return 'outlines/story';
@@ -96,16 +123,22 @@ class ProjectContentPathPolicyService {
       case 'summary':
         return 'summaries';
       case 'analysis':
-        return 'analysis';
+        return analysisRoot;
       case 'knowledge':
-        return 'knowledge';
+        return knowledgeRoot;
+      case 'source_original':
+        return '$sourcesRoot/original';
+      case 'derived_continuation_narrative':
+        return '$inheritedChapterRoot/continuation';
+      case 'derived_fanfic_narrative':
+        return '$inheritedChapterRoot/fanfic';
       default:
         return chaptersRoot;
     }
   }
 
   String inferContentTypeFromPath(String relativePath) {
-    // 中文注释: 从路径反推内容类型时也走同一套正式目录口径，避免兼容层和默认层判断分裂。
+    // 中文注释: 从路径反推内容类型时同样走正式目录口径，避免兼容层和默认层判断分裂。
     final clean = relativePath.trim().replaceAll('\\', '/');
     if (clean.isEmpty) {
       return 'chapter';
@@ -113,6 +146,22 @@ class ProjectContentPathPolicyService {
     final parts = clean.split('/');
     final root = parts.first;
     switch (root) {
+      case sourcesRoot:
+        if (parts.length > 1 && parts[1] == 'original') {
+          return 'source_original';
+        }
+        return 'source_original';
+      case 'chapters':
+        if (parts.length > 2 && parts[1] == 'inherited') {
+          final route = parts[2].toLowerCase();
+          if (route.startsWith('fanfic')) {
+            return 'derived_fanfic_narrative';
+          }
+          if (route.startsWith('continuation')) {
+            return 'derived_continuation_narrative';
+          }
+        }
+        return 'chapter';
       case 'assets':
         final second = parts.length > 1 ? parts[1] : '';
         switch (second) {
@@ -124,6 +173,9 @@ class ProjectContentPathPolicyService {
             return 'style';
         }
         return 'chapter';
+      case knowledgeRoot:
+      case researchRoot:
+        return 'knowledge';
       case 'outlines':
         final second = parts.length > 1 ? parts[1] : '';
         switch (second) {
@@ -141,12 +193,10 @@ class ProjectContentPathPolicyService {
         return 'volume_outline';
       case 'chapter_outlines':
         return 'chapter_outline';
-      case chaptersRoot:
-        return 'chapter';
-      case samplesRoot:
-        return 'sample';
       case scenesRoot:
         return 'scene';
+      case samplesRoot:
+        return 'sample';
       case 'world':
         return 'setting';
       case 'characters':
@@ -155,10 +205,20 @@ class ProjectContentPathPolicyService {
         return 'style';
       case 'summaries':
         return 'summary';
-      case 'analysis':
+      case analysisRoot:
         return 'analysis';
-      case 'knowledge':
-        return 'knowledge';
+      case '.novel_agent':
+        if (parts.length > 2 && parts[1] == 'information') {
+          final second = parts[2];
+          switch (second) {
+            case 'knowledge_cards':
+            case 'design_elements':
+            case 'research_notes':
+            case 'reference_works':
+              return 'knowledge';
+          }
+        }
+        return 'analysis';
       default:
         return 'chapter';
     }

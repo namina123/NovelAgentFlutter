@@ -1,18 +1,39 @@
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
 
-void main() {
-  test('ordinary gui viewmodel probe stays on generic opening follow-up', () {
-    final source = File(
-      'tool/real_gui_viewmodel_information_long_task_probe.dart',
-    ).readAsStringSync();
+import '../tool/probe_support.dart';
 
-    expect(
-      source,
-      contains("const String _ordinaryWorkbenchTitle = '普通会话：开篇筹备与资料核查';"),
-    );
-    expect(source, contains('不要把普通开篇输入直接短路成“产出第一章正文交付”'));
-    expect(source, isNot(contains("title: '第01章《醒在败家子床上》'")));
-  });
+void main() {
+  test(
+    'real GUI viewmodel information long task probe reports contract conflict when file evidence and viewmodel projection disagree',
+    () {
+      final validation = <String, Object?>{
+        'ordinary_workbench_step': <String, Object?>{
+          'ok': true,
+          'expression_constraint_report': <String, Object?>{},
+        },
+        'long_task_batches': <String, Object?>{
+          'ok': true,
+          'batches': const <Object?>[],
+        },
+        'gui_viewmodel': <String, Object?>{
+          'workbench_information_viewmodel': <String, Object?>{
+            'has_content': false,
+          },
+          'long_task_station_viewmodel': <String, Object?>{'total_count': 1},
+          'project_file_counts': <String, Object?>{
+            'chapter_files': 1,
+            'research_notes': 0,
+            'research_requests': 1,
+          },
+        },
+      };
+
+      final reportCategory = classifyDraftProbeReportCategory(
+        ok: false,
+        validation: validation,
+      );
+
+      expect(reportCategory, ProbeReportCategories.contractConflict);
+    },
+  );
 }

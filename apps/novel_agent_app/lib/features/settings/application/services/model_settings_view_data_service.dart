@@ -6,7 +6,6 @@ import '../../presentation/models/custom_model_reasoning_override_view_data.dart
 import '../../presentation/models/model_editor_view_data.dart';
 import '../../presentation/models/model_parameter_entry_view_data.dart';
 import '../../presentation/models/settings_search_option.dart';
-import 'provider_connection_validation_service.dart';
 
 class ModelSettingsViewDataService {
   ModelSettingsViewDataService({
@@ -15,7 +14,6 @@ class ModelSettingsViewDataService {
     ProviderConnectionValidationService? providerConnectionValidationService,
   }) : _modelExecutionProfileService =
            modelExecutionProfileService ?? ModelExecutionProfileService(),
-       _legacyCatalogBridgeService = LegacyProviderCatalogBridgeService(),
        _offeringCatalogService = WritingModelOfferingCatalogService(),
        _profileService =
            profileService ??
@@ -28,7 +26,6 @@ class ModelSettingsViewDataService {
            ProviderConnectionValidationService();
 
   final ModelExecutionProfileService _modelExecutionProfileService;
-  final LegacyProviderCatalogBridgeService _legacyCatalogBridgeService;
   final WritingModelOfferingCatalogService _offeringCatalogService;
   final ProviderProfileService _profileService;
   final ProviderConnectionValidationService
@@ -228,40 +225,16 @@ class ModelSettingsViewDataService {
     if (cleanProviderId.isEmpty) {
       return const <SettingsSearchOption<String>>[];
     }
-    final suggestions = _offeringCatalogService.offeringOptions(
-      providerId: cleanProviderId,
-      limit: 48,
+    final selectionContractService = ProviderModelSelectionContractService(
+      offeringCatalogService: _offeringCatalogService,
     );
-    if (suggestions.isEmpty) {
-      final legacySuggestions = _legacyCatalogBridgeService
-          .legacyModelSuggestions(
-            providerId: cleanProviderId,
-            includeImage: false,
-            limit: 48,
-          );
-      final filtered = legacySuggestions.where(
-        (entry) =>
-            ValueReaders.stringValue(entry['provider_id']) == cleanProviderId,
-      );
-      return filtered
-          .map(
-            (entry) => SettingsSearchOption<String>(
-              value: ValueReaders.stringValue(entry['id']),
-              label: ValueReaders.stringValue(entry['id']),
-              note: ValueReaders.stringValue(entry['provider_label']),
-            ),
-          )
-          .toList(growable: false);
-    }
-    return suggestions
+    return selectionContractService
+        .providerModelOptions(providerId: cleanProviderId, limit: 48)
         .map(
           (entry) => SettingsSearchOption<String>(
-            value: ValueReaders.stringValue(entry['model_id']),
-            label: ValueReaders.stringValue(entry['model_id']),
-            note: ValueReaders.stringValue(
-              entry['display_label'],
-              ValueReaders.stringValue(entry['provider_label']),
-            ),
+            value: entry.modelId,
+            label: entry.modelLabel,
+            note: entry.providerLabel,
           ),
         )
         .toList(growable: false);

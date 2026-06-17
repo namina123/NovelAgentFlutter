@@ -1,4 +1,5 @@
 import '../agents/agent_collaboration_brief_service.dart';
+import '../agents/agent_collaboration_contract_service.dart';
 import '../agents/builtin_collaborator_catalog_service.dart';
 import '../agents/agent_profile_catalog_service.dart';
 import '../agents/agent_loop_contract_service.dart';
@@ -38,7 +39,6 @@ import '../tools/tool_schema_builder_service.dart';
 import '../tools/tool_strategy_prompt_builder.dart';
 import '../tools/tool_strategy_service.dart';
 import '../session/session_prompt_context.dart';
-import '../workflow/continuous_task_tool_exposure_runtime_resolver_service.dart';
 import '../agents/project_agent_binding.dart';
 
 class GenerateDraftUseCase {
@@ -66,9 +66,8 @@ class GenerateDraftUseCase {
     SubAgentExecutionService? subAgentExecutionService,
     BuiltinCollaboratorCatalogService? collaboratorCatalogService,
     AgentCollaborationBriefService? collaborationBriefService,
+    AgentCollaborationContractService? collaborationContractService,
     ToolExposurePolicyService? toolExposurePolicyService,
-    ContinuousTaskToolExposureRuntimeResolverService?
-    continuousTaskToolExposureRuntimeResolverService,
     HostToolPermissionContext? hostToolPermissionContext,
     HostToolPermissionPolicyService? hostToolPermissionPolicyService,
     HostPlatform hostPlatform = HostPlatform.unknown,
@@ -91,12 +90,12 @@ class GenerateDraftUseCase {
            collaboratorCatalogService ?? BuiltinCollaboratorCatalogService(),
        _collaborationBriefService =
            collaborationBriefService ?? AgentCollaborationBriefService(),
+       _collaborationContractService =
+           collaborationContractService ??
+           AgentCollaborationContractService(),
        _toolStrategyService = toolStrategyService ?? ToolStrategyService(),
        _toolExposurePolicyService =
            toolExposurePolicyService ?? const ToolExposurePolicyService(),
-       _continuousTaskToolExposureRuntimeResolverService =
-           continuousTaskToolExposureRuntimeResolverService ??
-           const ContinuousTaskToolExposureRuntimeResolverService(),
        _hostPlatform = hostPlatform,
        _toolCallParserService =
            toolCallParserService ?? ToolCallParserService(),
@@ -158,10 +157,9 @@ class GenerateDraftUseCase {
   final AgentProfileCatalogService _agentProfileCatalogService;
   final BuiltinCollaboratorCatalogService _collaboratorCatalogService;
   final AgentCollaborationBriefService _collaborationBriefService;
+  final AgentCollaborationContractService _collaborationContractService;
   final ToolStrategyService _toolStrategyService;
   final ToolExposurePolicyService _toolExposurePolicyService;
-  final ContinuousTaskToolExposureRuntimeResolverService
-  _continuousTaskToolExposureRuntimeResolverService;
   final HostPlatform _hostPlatform;
   final ToolCallParserService _toolCallParserService;
   final ToolSchemaBuilderService _toolSchemaBuilderService;
@@ -577,21 +575,25 @@ class GenerateDraftUseCase {
     final requestedToolIds = exposedToolIds.isEmpty
         ? _toolStrategyService.enabledToolIds(toolSettings)
         : exposedToolIds;
-    final toolExposureResolution =
-        _continuousTaskToolExposureRuntimeResolverService.resolve(
-          candidateToolIds: requestedToolIds,
-          selectedCollaborationGroup: collaborationGroup,
-          runtimeContext: <String, Object?>{
-            'mode': ValueReaders.stringValue(skillRoutingContext['mode']),
-            'task_type': ValueReaders.stringValue(
-              skillRoutingContext['task_type'],
-            ),
-            'task_family_id': ValueReaders.stringValue(
-              skillRoutingContext['task_family_id'],
-            ),
-          },
-          intent: intent,
-        );
+    final collaborationContract = _collaborationContractService.resolve(
+      candidateToolIds: requestedToolIds,
+      selectedCollaborationGroup: collaborationGroup,
+      runtimeContext: <String, Object?>{
+        'mode': ValueReaders.stringValue(skillRoutingContext['mode']),
+        'task_type': ValueReaders.stringValue(
+          skillRoutingContext['task_type'],
+        ),
+        'task_family_id': ValueReaders.stringValue(
+          skillRoutingContext['task_family_id'],
+        ),
+      },
+      intent: intent,
+      mainAgent: resolvedAgent,
+      availableAgents: optionalAgents,
+      availableGroups: optionalGroups,
+      toolSettings: toolSettings,
+    );
+    final toolExposureResolution = collaborationContract.exposureResolution;
     final filteredToolIds = _toolExposurePolicyService.filterExposedToolIds(
       toolExposureResolution.visibleToolIds,
       hostPlatform: _hostPlatform,
@@ -722,12 +724,13 @@ class GenerateDraftUseCase {
             ? ''
             : '高优先级创作约束摘要：${ValueReaders.stringValue(contextPack['creative_rule_summary']).trim()}',
         ValueReaders.stringValue(
-              writingExecutionConstraints['chapter_length_summary'],
+            writingExecutionConstraints['chapter_length_summary'],
             ).trim().isEmpty
             ? ''
             : '章节字数硬约束：${ValueReaders.stringValue(writingExecutionConstraints['chapter_length_summary']).trim()}。',
         skillRoutingNote,
       ].where((item) => item.trim().isNotEmpty).join('\n'),
+      collaborationContract: collaborationContract,
       toolIds: filteredToolIds,
     );
     messages = <JsonMap>[

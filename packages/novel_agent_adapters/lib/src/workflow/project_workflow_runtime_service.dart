@@ -25,6 +25,7 @@ import 'project_long_task_revision_resolution_service.dart';
 import 'project_long_task_review_repair_task_service.dart';
 import 'project_mode_guidance_memory_section_service.dart';
 import 'project_task_queue_runtime_option_resolver.dart';
+import 'project_workflow_queue_runtime_service.dart';
 import 'project_writing_execution_contract_service.dart';
 import 'project_workflow_runtime_bridge_service.dart';
 import 'project_workflow_review_runtime_service.dart';
@@ -106,6 +107,7 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
     executionConstraintRepairTaskService,
     ProjectLongTaskRevisionResolutionService? revisionResolutionService,
     ProjectLongTaskChapterGateService? chapterGateService,
+    ProjectWorkflowQueueRuntimeService? workflowQueueRuntimeService,
     ProjectTaskQueueRuntimeOptionResolver? taskQueueRuntimeOptionResolver,
     ProjectDraftExecutionConstraintRuntimeService?
     draftExecutionConstraintRuntimeService,
@@ -424,7 +426,109 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
                : ProjectLongTaskRunRegistrySyncService(
                    supervisor: longTaskSupervisor,
                    taskRepository: taskRepository,
-                 ));
+                 )) {
+    _workflowQueueRuntimeService =
+        workflowQueueRuntimeService ??
+        ProjectWorkflowQueueRuntimeService(
+          taskRepository: taskRepository,
+          taskDefinitionService:
+              taskDefinitionService ?? TaskDefinitionService(),
+          taskSelectionService:
+              taskSelectionService ??
+              TaskSelectionService(
+                taskDefinitionService:
+                    taskDefinitionService ?? TaskDefinitionService(),
+              ),
+          workflowTaskSelectionService: ProjectWorkflowTaskSelectionService(
+            taskSelectionService:
+                taskSelectionService ??
+                TaskSelectionService(
+                  taskDefinitionService:
+                      taskDefinitionService ?? TaskDefinitionService(),
+                ),
+            longTaskPathPolicyService:
+                longTaskPathPolicyService ?? LongTaskPathPolicyService(),
+          ),
+          chapterQueueRuntimeService:
+              chapterQueueRuntimeService ??
+              ProjectLongTaskChapterQueueRuntimeService(
+                taskRepository: taskRepository,
+              ),
+          longTaskModeService: longTaskModeService ?? LongTaskModeService(),
+          longTaskPathPolicyService:
+              longTaskPathPolicyService ?? LongTaskPathPolicyService(),
+          buildLongTaskPlanUseCase:
+              buildLongTaskPlanUseCase ??
+              _defaultBuildLongTaskPlanUseCase(
+                longTaskModeService ?? LongTaskModeService(),
+                longTaskPathPolicyService ?? LongTaskPathPolicyService(),
+              ),
+          longTaskRunPathService:
+              longTaskRunPathService ??
+              LongTaskRunPathService(
+                pathPolicyService:
+                    longTaskPathPolicyService ?? LongTaskPathPolicyService(),
+              ),
+          buildLongTaskSchedulerSnapshotUseCase:
+              buildLongTaskSchedulerSnapshotUseCase ??
+              _defaultBuildLongTaskSchedulerSnapshotUseCase(
+                longTaskModeService ?? LongTaskModeService(),
+                longTaskPathPolicyService ?? LongTaskPathPolicyService(),
+                taskDefinitionService ?? TaskDefinitionService(),
+              ),
+          lifecycleService: lifecycleService ?? LongTaskRunLifecycleService(),
+          startLongTaskRunUseCase:
+              startLongTaskRunUseCase ??
+              _defaultStartLongTaskRunUseCase(
+                longTaskModeService ?? LongTaskModeService(),
+                longTaskPathPolicyService ?? LongTaskPathPolicyService(),
+              ),
+          taskQueueOptionService:
+              taskQueueOptionService ?? TaskQueueOptionService(),
+          taskQueueStopPolicyService:
+              taskQueueStopPolicyService ??
+              TaskQueueStopPolicyService(
+                optionService:
+                    taskQueueOptionService ?? TaskQueueOptionService(),
+              ),
+          taskQueueRuntimeOptionResolver:
+              taskQueueRuntimeOptionResolver ??
+              ProjectTaskQueueRuntimeOptionResolver(
+                runtimeProfileRepository: ProjectRuntimeProfileRepository(
+                  workspacePort: taskRepository.workspacePort,
+                ),
+              ),
+          finishDispositionService:
+              finishDispositionService ??
+              _defaultFinishDispositionService(
+                longTaskModeService ?? LongTaskModeService(),
+              ),
+          longTaskRunStepRecorderService:
+              longTaskRunStepRecorderService ??
+              LongTaskRunStepRecorderService(
+                taskSummaryService: LongTaskTaskSummaryService(),
+              ),
+          checkpointActionService:
+              checkpointActionService ??
+              ProjectLongTaskCheckpointActionService(
+                taskRepository: taskRepository,
+                longTaskSupervisor: longTaskSupervisor,
+                checkpointReviewTaskService:
+                    checkpointReviewTaskService ??
+                    ProjectLongTaskCheckpointReviewTaskService(
+                      taskRepository: taskRepository,
+                      reviewReportService: ProjectReviewReportService(
+                        workspacePort: taskRepository.workspacePort,
+                        taskRepository: taskRepository,
+                      ),
+                    ),
+              ),
+          longTaskRunRegistrySyncService: _longTaskRunRegistrySyncService,
+        );
+    _workflowQueueRuntimeService.bindWorkflowTaskOnceRunner(
+      runWorkflowTaskOnce,
+    );
+  }
 
   final ProjectTaskRepository _taskRepository;
   final ProjectPromptTemplateService _promptTemplateService;
@@ -473,6 +577,7 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
   final ProjectLongTaskCheckpointReviewTaskService _checkpointReviewTaskService;
   final ProjectLongTaskCheckpointActionService _checkpointActionService;
   final ProjectLongTaskChapterQueueRuntimeService _chapterQueueRuntimeService;
+  late final ProjectWorkflowQueueRuntimeService _workflowQueueRuntimeService;
   final ProjectLongTaskReviewRepairTaskService _reviewRepairTaskService;
   final ProjectLongTaskExecutionConstraintRepairTaskService
   _executionConstraintRepairTaskService;
@@ -511,70 +616,21 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
     String mode, {
     JsonMap options = const <String, Object?>{},
   }) async {
-    // 中文注释: 长任务开局同时落计划与任务文件，形成可恢复的项目级队列。
-    final createdAt = DateTime.now().toIso8601String();
-    final planId =
-        'plan_${_longTaskPathPolicyService.safeId(mode)}_${DateTime.now().microsecondsSinceEpoch}';
-    final planPath = 'tracking/long_task/$planId.plan.json';
-    final planMarkdownPath = 'tracking/long_task/$planId.plan.md';
-    final built = _buildLongTaskPlanUseCase.execute(
+    return _workflowQueueRuntimeService.createLongTaskWorkflow(
+      project,
       mode,
-      planId,
       options: options,
-      createdAt: createdAt,
-      planPath: planPath,
-      planMarkdownPath: planMarkdownPath,
     );
-    final fullTasks = ValueReaders.mapList(built['tasks'])
-        .map(
-          (task) => ValueReaders.deepCopyMap(task)
-            ..['relative_path'] = _longTaskRunPathService.taskPathForNewTask(
-              task,
-            ),
-        )
-        .toList(growable: false);
-    final materialized = _chapterQueueRuntimeService
-        .materializeInitialPlanWindow(
-          mode,
-          ValueReaders.mapValue(built['plan']),
-          fullTasks,
-        );
-    final tasks = ValueReaders.mapList(
-      materialized['tasks'],
-    ).map(ValueReaders.deepCopyMap).toList(growable: false);
-    await _taskRepository.saveTasks(project, tasks);
-    await _taskRepository.saveRecord(
-      project,
-      planPath,
-      ValueReaders.mapValue(materialized['plan']),
-    );
-    await _taskRepository.writeTextFile(
-      project,
-      planMarkdownPath,
-      ValueReaders.stringValue(materialized['markdown']),
-    );
-    return <String, Object?>{
-      'ok': true,
-      'mode': _longTaskModeService.normalizeMode(mode),
-      'plan_id': planId,
-      'created_tasks': tasks,
-      'plan_path': planPath,
-      'plan_markdown_path': planMarkdownPath,
-      'changed_paths': <Object?>[
-        planPath,
-        planMarkdownPath,
-        ...tasks.map((task) => ValueReaders.stringValue(task['relative_path'])),
-      ],
-    };
   }
 
   Future<List<JsonMap>> listWorkflowTasks(
     ProjectDescriptor project, {
     JsonMap filters = const <String, Object?>{},
   }) async {
-    // 中文注释: 任务列表统一按 core 排序服务输出，保证不同宿主看到同一顺序。
-    final tasks = await _taskRepository.listTasks(project, filters: filters);
-    return _taskSelectionService.sortTasks(tasks, filters: filters);
+    return _workflowQueueRuntimeService.listWorkflowTasks(
+      project,
+      filters: filters,
+    );
   }
 
   Future<List<JsonMap>> _currentWorkflowTasks(
@@ -590,95 +646,10 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
     ProjectDescriptor project, {
     JsonMap filters = const <String, Object?>{},
   }) async {
-    // 中文注释: 下一可运行任务完全复用共享调度规则。
-    var tasks = _workflowTaskSelectionService.workflowScopedTasks(
-      await listWorkflowTasks(project, filters: filters),
-    );
-    var primaryTasks = _workflowTaskSelectionService.workflowPrimaryTasks(
-      tasks,
-    );
-    var nextTask = _workflowTaskSelectionService.nextRunnablePrimaryTask(
-      primaryTasks: primaryTasks,
-      allTasks: tasks,
-    );
-    if (nextTask.isNotEmpty) {
-      return nextTask;
-    }
-    final materialized = await _chapterQueueRuntimeService
-        .ensureMaterializedQueueForNextTask(project, tasks);
-    if (!ValueReaders.boolValue(materialized['ok'])) {
-      return <String, Object?>{};
-    }
-    if (ValueReaders.boolValue(materialized['materialized'])) {
-      tasks = _workflowTaskSelectionService.workflowScopedTasks(
-        await listWorkflowTasks(project, filters: filters),
-      );
-      primaryTasks = _workflowTaskSelectionService.workflowPrimaryTasks(tasks);
-      nextTask = _workflowTaskSelectionService.nextRunnablePrimaryTask(
-        primaryTasks: primaryTasks,
-        allTasks: tasks,
-      );
-      if (nextTask.isNotEmpty) {
-        return nextTask;
-      }
-    }
-    nextTask = _taskSelectionService.nextRunnableTaskFromTasks(tasks);
-    if (nextTask.isNotEmpty) {
-      return nextTask;
-    }
-    final recoveredTask = await _recoverResumeDispatchRunningTask(
+    return _workflowQueueRuntimeService.nextWorkflowTask(
       project,
-      tasks,
+      filters: filters,
     );
-    if (recoveredTask.isNotEmpty) {
-      return recoveredTask;
-    }
-    return const <String, Object?>{};
-  }
-
-  Future<JsonMap> _nextWorkflowQueueTask(
-    ProjectDescriptor project, {
-    JsonMap filters = const <String, Object?>{},
-  }) async {
-    // 中文注释: 受控队列默认只推进主链 primary task，checkpoint follow-up 留给显式动作或人工检查点收口。
-    var tasks = _workflowTaskSelectionService.workflowScopedTasks(
-      await listWorkflowTasks(project, filters: filters),
-    );
-    var primaryTasks = _workflowTaskSelectionService.workflowPrimaryTasks(
-      tasks,
-    );
-    var nextTask = _workflowTaskSelectionService.nextRunnablePrimaryTask(
-      primaryTasks: primaryTasks,
-      allTasks: tasks,
-    );
-    if (nextTask.isNotEmpty) {
-      return nextTask;
-    }
-    final materialized = await _chapterQueueRuntimeService
-        .ensureMaterializedQueueForNextTask(project, tasks);
-    if (ValueReaders.boolValue(materialized['ok']) &&
-        ValueReaders.boolValue(materialized['materialized'])) {
-      tasks = _workflowTaskSelectionService.workflowScopedTasks(
-        await listWorkflowTasks(project, filters: filters),
-      );
-      primaryTasks = _workflowTaskSelectionService.workflowPrimaryTasks(tasks);
-      nextTask = _workflowTaskSelectionService.nextRunnablePrimaryTask(
-        primaryTasks: primaryTasks,
-        allTasks: tasks,
-      );
-      if (nextTask.isNotEmpty) {
-        return nextTask;
-      }
-    }
-    final deferredFollowupTask = _workflowTaskSelectionService
-        .nextBlockingDeferredCheckpointFollowupTask(
-          tasks,
-          primaryTasks: primaryTasks,
-        );
-    if (deferredFollowupTask.isNotEmpty) {
-      return deferredFollowupTask;
-    }
-    return _recoverResumeDispatchRunningTask(project, primaryTasks);
   }
 
   Future<JsonMap> nextWorkflowPostprocessTask(
@@ -2846,47 +2817,6 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
         'review task 必须提交结构化 findings 和 recommended_disposition。工具轨迹：$toolTrace';
   }
 
-  Future<JsonMap> _recoverResumeDispatchRunningTask(
-    ProjectDescriptor project,
-    List<JsonMap> tasks,
-  ) async {
-    for (final task in tasks) {
-      if (ValueReaders.stringValue(task['status']) !=
-          TaskRuntimeConstants.statusRunning) {
-        continue;
-      }
-      final writingExecution = ValueReaders.mapValue(
-        task['last_writing_execution_result'],
-      );
-      final recovery = ValueReaders.mapValue(writingExecution['recovery']);
-      final nextAction = ValueReaders.stringValue(
-        writingExecution['next_action'],
-        ValueReaders.stringValue(recovery['recommended_action']),
-      ).trim();
-      if (nextAction != 'resume_dispatch') {
-        continue;
-      }
-      await _taskRepository.transitionTask(
-        project,
-        <String, Object?>{
-          'relative_path': ValueReaders.stringValue(task['relative_path']),
-        },
-        TaskRuntimeConstants.statusFailed,
-        note: '检测到遗留 running 恢复态任务，先标记为 failed 以进入受控重试。',
-      );
-      final recovered = await _taskRepository.transitionTask(
-        project,
-        <String, Object?>{
-          'relative_path': ValueReaders.stringValue(task['relative_path']),
-        },
-        TaskRuntimeConstants.statusRetrying,
-        note: '检测到遗留 running 恢复态任务，已恢复为 retrying 继续调度。',
-      );
-      return ValueReaders.mapValue(recovered['task']);
-    }
-    return const <String, Object?>{};
-  }
-
   JsonMap _firstInvalidSemanticReviewAttempt(List<Object?> executedTools) {
     for (final rawTool in executedTools) {
       final tool = ValueReaders.mapValue(rawTool);
@@ -3186,29 +3116,20 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
     AppSettings settings, {
     JsonMap agent = const <String, Object?>{},
   }) async {
-    // 中文注释: 下一任务单步执行只是对 next runnable 的薄包装。
-    final task = await nextWorkflowTask(project);
-    if (task.isEmpty) {
-      return <String, Object?>{
-        'ok': false,
-        'error': '当前没有可运行任务。',
-        'response': <String, Object?>{},
-      };
-    }
-    return runWorkflowTaskOnce(project, settings, <String, Object?>{
-      'relative_path': ValueReaders.stringValue(task['relative_path']),
-    }, agent: agent);
+    return _workflowQueueRuntimeService.runNextWorkflowTaskOnce(
+      project,
+      settings,
+      agent: agent,
+    );
   }
 
   Future<JsonMap> taskQueuePreflight(
     ProjectDescriptor project, {
     JsonMap options = const <String, Object?>{},
   }) async {
-    // 中文注释: 预检只读任务与最近运行摘要，解释“能不能跑、为什么会停”。
-    return _taskQueuePreflightService.preflightFromTasks(
-      await listWorkflowTasks(project),
+    return _workflowQueueRuntimeService.taskQueuePreflight(
+      project,
       options: options,
-      recentRuns: await listTaskQueueRuns(project),
     );
   }
 
@@ -3216,10 +3137,8 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
     ProjectDescriptor project, {
     int limit = 10,
   }) {
-    // 中文注释: 受控队列运行记录统一保存在 tracking/task_queue_runs/。
-    return _taskRepository.listRunRecords(
+    return _workflowQueueRuntimeService.listTaskQueueRuns(
       project,
-      prefix: 'tracking/task_queue_runs/',
       limit: limit,
     );
   }
@@ -3228,12 +3147,7 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
     ProjectDescriptor project, {
     int limit = 10,
   }) {
-    // 中文注释: 长任务运行记录统一保存在 tracking/long_task_runs/。
-    return _taskRepository.listRunRecords(
-      project,
-      prefix: 'tracking/long_task_runs/',
-      limit: limit,
-    );
+    return _workflowQueueRuntimeService.listLongTaskRuns(project, limit: limit);
   }
 
   Future<JsonMap> longTaskSchedulerPlan(
@@ -3241,40 +3155,11 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
     String relativePath = '',
     JsonMap options = const <String, Object?>{},
   }) async {
-    // 中文注释: 调度 tick 计划既支持指定运行记录，也支持默认使用最近一条长任务记录。
-    var runPath = relativePath.trim();
-    if (runPath.isEmpty) {
-      final recentRuns = await listLongTaskRuns(project, limit: 1);
-      if (recentRuns.isNotEmpty) {
-        runPath = ValueReaders.stringValue(recentRuns.first['relative_path']);
-      }
-    }
-    if (runPath.isEmpty) {
-      return <String, Object?>{
-        'ok': false,
-        'error': 'Long task run not found.',
-        'action': 'idle',
-      };
-    }
-    final record = await _taskRepository.loadRecord(project, runPath);
-    if (record.isEmpty) {
-      return <String, Object?>{
-        'ok': false,
-        'error': 'Long task run not found.',
-        'action': 'idle',
-      };
-    }
-    final snapshot = _buildLongTaskSchedulerSnapshotUseCase.execute(
-      record,
-      await _currentWorkflowTasks(project),
+    return _workflowQueueRuntimeService.longTaskSchedulerPlan(
+      project,
+      relativePath: relativePath,
       options: options,
     );
-    return <String, Object?>{
-      'ok': true,
-      'relative_path': runPath,
-      ...snapshot,
-      ...ValueReaders.mapValue(snapshot['scheduler_plan']),
-    };
   }
 
   Future<JsonMap> pauseLongTaskRun(
@@ -3282,42 +3167,11 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
     String relativePath, {
     String note = '用户暂停长任务。',
   }) async {
-    // 中文注释: 暂停只改运行记录，不隐式改动任务文件状态。
-    final record = await _taskRepository.loadRecord(project, relativePath);
-    if (record.isEmpty) {
-      return <String, Object?>{
-        'ok': false,
-        'error': 'Long task run not found.',
-      };
-    }
-    final updated = _lifecycleService.pauseRecord(
-      record,
-      reason: 'manual_pause',
-      note: note,
-    );
-    final savedRecord = await _taskRepository.saveRecord(
+    return _workflowQueueRuntimeService.pauseLongTaskRun(
       project,
       relativePath,
-      updated,
+      note: note,
     );
-    await _syncLongTaskRunRecord(project, savedRecord);
-    final schedulerSnapshot = _buildLongTaskSchedulerSnapshotUseCase.execute(
-      savedRecord,
-      await _currentWorkflowTasks(project),
-      options: ValueReaders.mapValue(savedRecord['options']),
-    );
-    final runCenterContract = _runCenterContractFromSchedulerSnapshot(
-      schedulerSnapshot,
-    );
-    return <String, Object?>{
-      'ok': true,
-      'record': savedRecord,
-      'run_center_contract': runCenterContract,
-      'scheduler_snapshot': <String, Object?>{
-        ...schedulerSnapshot,
-        'run_center_contract': runCenterContract,
-      },
-    };
   }
 
   Future<JsonMap> resumeLongTaskRun(
@@ -3327,71 +3181,13 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
     JsonMap options = const <String, Object?>{},
     JsonMap agent = const <String, Object?>{},
   }) async {
-    // 中文注释: 恢复长任务直接复用队列运行入口，并显式传入继续的运行记录路径。
-    await _autoConfirmCheckpointBeforeResumeIfPossible(project, relativePath);
-    return runWorkflowTaskQueue(
+    return _workflowQueueRuntimeService.resumeLongTaskRun(
       project,
       settings,
-      options: <String, Object?>{
-        ...options,
-        'continue_long_task_run_path': relativePath,
-      },
+      relativePath,
+      options: options,
       agent: agent,
     );
-  }
-
-  Future<void> _autoConfirmCheckpointBeforeResumeIfPossible(
-    ProjectDescriptor project,
-    String longTaskRunPath,
-  ) async {
-    final cleanRunPath = longTaskRunPath.trim();
-    if (cleanRunPath.isEmpty) {
-      return;
-    }
-    final runRecord = await _taskRepository.loadRecord(project, cleanRunPath);
-    if (runRecord.isEmpty) {
-      return;
-    }
-    final checkpointReviewPath = ValueReaders.stringValue(
-      runRecord['last_checkpoint_review_path'],
-    ).trim();
-    if (checkpointReviewPath.isEmpty) {
-      return;
-    }
-    final actionPackage = await _checkpointActionService.buildActionPackage(
-      project,
-      checkpointReviewPath,
-    );
-    if (!ValueReaders.boolValue(actionPackage['ok'])) {
-      return;
-    }
-    final command = _preferredCheckpointResumeCommand(actionPackage);
-    if (command.isEmpty) {
-      return;
-    }
-    await _checkpointActionService.applyAction(
-      project,
-      checkpointReviewPath,
-      command,
-    );
-  }
-
-  String _preferredCheckpointResumeCommand(JsonMap actionPackage) {
-    final actions = ValueReaders.mapList(actionPackage['actions']);
-    for (final preferred in const <String>[
-      'continue_long_task',
-      'confirm_checkpoint_continue',
-    ]) {
-      for (final action in actions) {
-        if (ValueReaders.stringValue(action['id']).trim() != preferred) {
-          continue;
-        }
-        if (ValueReaders.boolValue(action['enabled'])) {
-          return preferred;
-        }
-      }
-    }
-    return '';
   }
 
   Future<JsonMap> stopLongTaskRun(
@@ -3399,41 +3195,11 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
     String relativePath, {
     String note = '用户请求停止长任务。',
   }) async {
-    final record = await _taskRepository.loadRecord(project, relativePath);
-    if (record.isEmpty) {
-      return <String, Object?>{
-        'ok': false,
-        'error': 'Long task run not found.',
-      };
-    }
-    final updated = _lifecycleService.finishRecord(
-      record,
-      reason: 'manual_stop',
-      note: note,
-    );
-    final savedRecord = await _taskRepository.saveRecord(
+    return _workflowQueueRuntimeService.stopLongTaskRun(
       project,
       relativePath,
-      updated,
+      note: note,
     );
-    await _syncLongTaskRunRecord(project, savedRecord);
-    final schedulerSnapshot = _buildLongTaskSchedulerSnapshotUseCase.execute(
-      savedRecord,
-      await _currentWorkflowTasks(project),
-      options: ValueReaders.mapValue(savedRecord['options']),
-    );
-    final runCenterContract = _runCenterContractFromSchedulerSnapshot(
-      schedulerSnapshot,
-    );
-    return <String, Object?>{
-      'ok': true,
-      'record': savedRecord,
-      'run_center_contract': runCenterContract,
-      'scheduler_snapshot': <String, Object?>{
-        ...schedulerSnapshot,
-        'run_center_contract': runCenterContract,
-      },
-    };
   }
 
   Future<JsonMap> runWorkflowTaskQueue(
@@ -3442,311 +3208,12 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
     JsonMap options = const <String, Object?>{},
     JsonMap agent = const <String, Object?>{},
   }) async {
-    // 中文注释: 受控连续运行按安全步数推进，并把队列记录与长任务记录都写到 tracking/。
-    final resolvedOptions = await _taskQueueRuntimeOptionResolver.resolve(
+    return _workflowQueueRuntimeService.runWorkflowTaskQueue(
       project,
+      settings,
       options: options,
+      agent: agent,
     );
-    final cleanOptions = _taskQueueOptionService.normalizeOptions(
-      resolvedOptions,
-    );
-    final queueId = 'task_queue_${DateTime.now().microsecondsSinceEpoch}';
-    final queuePath = 'tracking/task_queue_runs/$queueId.json';
-    var queueRecord = <String, Object?>{
-      'schema_version': 1,
-      'id': queueId,
-      'status': 'running',
-      'options': cleanOptions,
-      'steps': <Object?>[],
-      'completed_steps': 0,
-      'created_at': DateTime.now().toIso8601String(),
-      'updated_at': DateTime.now().toIso8601String(),
-      'relative_path': queuePath,
-      'summary_path': 'tracking/task_queue_runs/$queueId.md',
-    };
-    await _taskRepository.saveRecord(project, queuePath, queueRecord);
-
-    var longRunPath = ValueReaders.stringValue(
-      resolvedOptions['continue_long_task_run_path'],
-      ValueReaders.stringValue(resolvedOptions['long_task_run_path']),
-    ).trim();
-    JsonMap longRunRecord = const <String, Object?>{};
-    final workflowTasks = await _currentWorkflowTasks(project);
-    if (longRunPath.isEmpty) {
-      final inferredStart = _startLongTaskRunUseCase.execute(
-        workflowTasks,
-        options: cleanOptions,
-      );
-      final inferredPath = ValueReaders.stringValue(
-        inferredStart['relative_path'],
-      );
-      if (inferredPath.isNotEmpty) {
-        final existing = await _taskRepository.loadRecord(
-          project,
-          inferredPath,
-        );
-        if (existing.isNotEmpty) {
-          longRunPath = inferredPath;
-          longRunRecord = _lifecycleService.resumeRecord(existing);
-          longRunRecord = await _taskRepository.saveRecord(
-            project,
-            longRunPath,
-            longRunRecord,
-          );
-          await _syncLongTaskRunRecord(project, longRunRecord);
-        }
-      }
-      if (longRunRecord.isEmpty) {
-        longRunPath = ValueReaders.stringValue(inferredStart['relative_path']);
-        longRunRecord = ValueReaders.mapValue(inferredStart['record']);
-        longRunRecord = await _taskRepository.saveRecord(
-          project,
-          longRunPath,
-          longRunRecord,
-        );
-        await _syncLongTaskRunRecord(project, longRunRecord);
-      }
-    } else {
-      longRunRecord = await _taskRepository.loadRecord(project, longRunPath);
-      if (longRunRecord.isNotEmpty) {
-        longRunRecord = _lifecycleService.resumeRecord(longRunRecord);
-        longRunRecord = await _taskRepository.saveRecord(
-          project,
-          longRunPath,
-          longRunRecord,
-        );
-        await _syncLongTaskRunRecord(project, longRunRecord);
-      }
-    }
-
-    var stepsRun = 0;
-    var stopReason = '';
-    var stopNote = '';
-    JsonMap lastResult = const <String, Object?>{};
-    final batchStartedAt = DateTime.now();
-    while (stepsRun < ValueReaders.intValue(cleanOptions['max_steps'], 3)) {
-      final maxSeconds = ValueReaders.intValue(cleanOptions['max_seconds'], -1);
-      if (maxSeconds > 0 &&
-          DateTime.now().difference(batchStartedAt).inSeconds >= maxSeconds) {
-        stopReason = 'max_seconds';
-        stopNote = '已达到本次运行的最长时间限制，长任务已暂停，可稍后继续。';
-        break;
-      }
-      final nextTask = await _nextWorkflowQueueTask(project);
-      if (nextTask.isEmpty) {
-        stopReason = 'no_runnable_task';
-        stopNote = '当前没有依赖满足且处于 queued/retrying 的任务。';
-        break;
-      }
-      final remainingDuration = maxSeconds <= 0
-          ? null
-          : Duration(seconds: maxSeconds) -
-                DateTime.now().difference(batchStartedAt);
-      final cancellationToken = remainingDuration == null
-          ? null
-          : DraftGenerationCancellationToken();
-      final safeTimeoutDuration = remainingDuration == null
-          ? null
-          : (remainingDuration <= Duration.zero
-                ? const Duration(milliseconds: 1)
-                : remainingDuration);
-      final stepSelector = <String, Object?>{
-        'relative_path': ValueReaders.stringValue(nextTask['relative_path']),
-      };
-      final stepFuture = runWorkflowTaskOnce(
-        project,
-        settings,
-        stepSelector,
-        runRecord: longRunRecord,
-        agent: agent,
-        options: cleanOptions,
-        cancellationToken: cancellationToken,
-      );
-      if (cancellationToken == null || safeTimeoutDuration == null) {
-        lastResult = await stepFuture;
-      } else {
-        final timeoutResult = Completer<JsonMap>();
-        final timeoutTimer = Timer(safeTimeoutDuration, () {
-          cancellationToken.cancel();
-          if (!timeoutResult.isCompleted) {
-            timeoutResult.complete(_workflowTaskTimeoutResult());
-          }
-        });
-        stepFuture.then(
-          (value) {
-            if (!timeoutResult.isCompleted) {
-              timeoutResult.complete(value);
-            }
-          },
-          onError: (Object error, StackTrace stackTrace) {
-            if (!timeoutResult.isCompleted) {
-              timeoutResult.completeError(error, stackTrace);
-            }
-          },
-        );
-        lastResult = await timeoutResult.future;
-        timeoutTimer.cancel();
-        if (ValueReaders.boolValue(lastResult['timeout'])) {
-          await _taskRepository.transitionTask(
-            project,
-            stepSelector,
-            TaskRuntimeConstants.statusQueued,
-            note: '当前批次已达到最长时间限制，已取消本步，等待后续继续。',
-          );
-        }
-      }
-      stepsRun += 1;
-      final updatedTask = await _taskRepository.loadTask(
-        project,
-        <String, Object?>{
-          'relative_path': ValueReaders.stringValue(nextTask['relative_path']),
-        },
-      );
-      queueRecord = _appendQueueStep(
-        queueRecord,
-        updatedTask,
-        lastResult,
-        index: stepsRun,
-      );
-      await _taskRepository.saveRecord(project, queuePath, queueRecord);
-
-      if (longRunRecord.isNotEmpty) {
-        longRunRecord = _longTaskRunStepRecorderService.recordStep(
-          longRunRecord,
-          updatedTask,
-          lastResult,
-        );
-        longRunRecord = await _taskRepository.saveRecord(
-          project,
-          longRunPath,
-          longRunRecord,
-        );
-        await _syncLongTaskRunRecord(project, longRunRecord);
-      }
-
-      if (ValueReaders.boolValue(lastResult['timeout'])) {
-        stopReason = 'max_seconds';
-        stopNote = '已达到本次运行的最长时间限制，长任务已暂停，可稍后继续。';
-        break;
-      }
-
-      final stopDecision = _taskQueueStopPolicyService.stopAfterStep(
-        lastResult,
-        updatedTask,
-        options: cleanOptions,
-      );
-      if (ValueReaders.boolValue(stopDecision['stop'])) {
-        stopReason = ValueReaders.stringValue(stopDecision['reason']);
-        stopNote = ValueReaders.stringValue(stopDecision['note']);
-        break;
-      }
-    }
-
-    if (stopReason.isEmpty) {
-      stopReason =
-          stepsRun >= ValueReaders.intValue(cleanOptions['max_steps'], 3)
-          ? 'max_steps'
-          : 'completed';
-      stopNote = stopReason == 'max_steps' ? '已达到本批最大步数。' : '队列已完成。';
-    }
-    queueRecord = ValueReaders.deepCopyMap(queueRecord)
-      ..['status'] = _taskQueueStopPolicyService.statusForReason(stopReason)
-      ..['completed_steps'] = stepsRun
-      ..['stop_reason'] = stopReason
-      ..['stop_note'] = stopNote
-      ..['updated_at'] = DateTime.now().toIso8601String();
-    await _taskRepository.saveRecord(project, queuePath, queueRecord);
-    await _taskRepository.writeTextFile(
-      project,
-      ValueReaders.stringValue(queueRecord['summary_path']),
-      TaskQueueRecordRenderer().renderMarkdown(queueRecord),
-    );
-
-    if (longRunRecord.isNotEmpty) {
-      final disposition = _finishDispositionService.finishDisposition(
-        stopReason,
-        stepsRun,
-        options: <String, Object?>{
-          ...cleanOptions,
-          'mode': ValueReaders.stringValue(longRunRecord['mode']),
-          'stop_note': stopNote,
-        },
-      );
-      longRunRecord =
-          ValueReaders.stringValue(disposition['record_action']) == 'pause'
-          ? _lifecycleService.pauseRecord(
-              longRunRecord,
-              reason: ValueReaders.stringValue(disposition['reason']),
-              note: ValueReaders.stringValue(disposition['note']),
-            )
-          : _lifecycleService.finishRecord(
-              longRunRecord,
-              reason: ValueReaders.stringValue(disposition['terminal_reason']),
-              note: ValueReaders.stringValue(disposition['note']),
-            );
-      longRunRecord = await _taskRepository.saveRecord(
-        project,
-        longRunPath,
-        longRunRecord,
-      );
-      await _syncLongTaskRunRecord(project, longRunRecord);
-      final schedulerSnapshot = _buildLongTaskSchedulerSnapshotUseCase.execute(
-        longRunRecord,
-        await _currentWorkflowTasks(project),
-        options: cleanOptions,
-      );
-      await _taskRepository.writeTextFile(
-        project,
-        ValueReaders.stringValue(longRunRecord['summary_path']),
-        ValueReaders.stringValue(schedulerSnapshot['markdown']),
-      );
-    }
-
-    return <String, Object?>{
-      'ok': ValueReaders.boolValue(lastResult['ok'], true) || stepsRun == 0,
-      'relative_path': queuePath,
-      'summary_path': ValueReaders.stringValue(queueRecord['summary_path']),
-      'stop_reason': stopReason,
-      'stop_note': stopNote,
-      'steps_run': stepsRun,
-      'last_result': lastResult,
-      'record': queueRecord,
-      'long_task_run_path': longRunPath,
-      'long_task_record': longRunRecord,
-      'long_task_run_center_contract': longRunRecord.isEmpty
-          ? const <String, Object?>{}
-          : _runCenterContractFromSchedulerSnapshot(
-              _buildLongTaskSchedulerSnapshotUseCase.execute(
-                longRunRecord,
-                await _currentWorkflowTasks(project),
-                options: cleanOptions,
-              ),
-            ),
-    };
-  }
-
-  Future<void> _syncLongTaskRunRecord(
-    ProjectDescriptor project,
-    JsonMap runRecord,
-  ) async {
-    final service = _longTaskRunRegistrySyncService;
-    if (service == null || runRecord.isEmpty) {
-      return;
-    }
-    await service.syncRecord(project, runRecord);
-  }
-
-  JsonMap _workflowTaskTimeoutResult() {
-    return const <String, Object?>{
-      'ok': false,
-      'error': '当前任务执行超过本批最长时间限制。',
-      'timeout': true,
-      'response': <String, Object?>{},
-      'waiting_for_user_choice': false,
-      'output_paths': <Object?>[],
-      'changed_paths': <Object?>[],
-      'executed_tools': <Object?>[],
-    };
   }
 
   bool _isRetryableWorkflowTaskTransportFailure(Object error) {
@@ -4714,57 +4181,6 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
         ],
       },
     };
-  }
-
-  JsonMap _appendQueueStep(
-    JsonMap record,
-    JsonMap task,
-    JsonMap result, {
-    required int index,
-  }) {
-    // 中文注释: 队列记录只保留审计摘要，不重复持久化大段正文和上下文包。
-    final next = ValueReaders.deepCopyMap(record);
-    final steps = ValueReaders.objectList(next['steps']);
-    steps.add(<String, Object?>{
-      'index': index,
-      'task_id': ValueReaders.stringValue(task['id']),
-      'task_title': ValueReaders.stringValue(task['title']),
-      'task_relative_path': ValueReaders.stringValue(task['relative_path']),
-      'task_status_after': ValueReaders.stringValue(task['status']),
-      'ok': ValueReaders.boolValue(result['ok']),
-      'error': ValueReaders.stringValue(result['error']),
-      'output_paths': ValueReaders.stringList(result['output_paths']),
-      'activation_report_path': ValueReaders.stringValue(
-        result['activation_report_path'],
-      ),
-      'activation_report_summary': ValueReaders.stringValue(
-        result['activation_report_summary'],
-      ),
-      'chapter_delivery_state': ValueReaders.stringValue(
-        result['chapter_delivery_state'],
-      ),
-      'chapter_delivery_path': ValueReaders.stringValue(
-        result['chapter_delivery_path'],
-      ),
-      'created_at': DateTime.now().toIso8601String(),
-    });
-    next['steps'] = steps;
-    next['completed_steps'] = steps.length;
-    next['last_task_id'] = ValueReaders.stringValue(task['id']);
-    next['last_task_relative_path'] = ValueReaders.stringValue(
-      task['relative_path'],
-    );
-    next['last_activation_report_path'] = ValueReaders.stringValue(
-      result['activation_report_path'],
-    );
-    next['last_chapter_delivery_state'] = ValueReaders.stringValue(
-      result['chapter_delivery_state'],
-    );
-    next['last_chapter_delivery_path'] = ValueReaders.stringValue(
-      result['chapter_delivery_path'],
-    );
-    next['updated_at'] = DateTime.now().toIso8601String();
-    return next;
   }
 
   JsonMap _buildWritingExecutionResult({

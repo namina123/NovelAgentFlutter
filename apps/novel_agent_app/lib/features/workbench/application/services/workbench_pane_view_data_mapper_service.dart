@@ -98,6 +98,7 @@ class WorkbenchPaneViewDataMapperService {
       sessionHistoryEntries: source.sessionHistoryEntries,
       activeSessionId: source.activeSessionId,
       showSessionHistory: source.showSessionHistory,
+      sessionRestoreResult: source.sessionRestoreResult,
       generationStatus: source.generationStatus,
       isGenerating: source.isGenerating,
     );

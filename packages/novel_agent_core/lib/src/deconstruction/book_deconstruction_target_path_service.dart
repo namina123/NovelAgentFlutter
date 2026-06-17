@@ -1,9 +1,15 @@
+import '../project/project_content_path_policy_service.dart';
 import '../inspiration/inspiration_premise.dart';
 import 'book_deconstruction_artifact_kind.dart';
 import 'book_deconstruction_chapter_outline.dart';
 
 class BookDeconstructionTargetPathService {
-  const BookDeconstructionTargetPathService();
+  const BookDeconstructionTargetPathService({
+    ProjectContentPathPolicyService? contentPathPolicyService,
+  }) : _contentPathPolicyService =
+           contentPathPolicyService ?? const ProjectContentPathPolicyService();
+
+  final ProjectContentPathPolicyService _contentPathPolicyService;
 
   String sourceArchivePath(String sourceAbsolutePath) {
     // 中文注释: 原文归档路径统一收口在 sources/original/，避免拆书源文本继续散在内存或正文目录里。
@@ -14,12 +20,12 @@ class BookDeconstructionTargetPathService {
         ? fileName.substring(0, separatorIndex)
         : fileName;
     final cleanStem = _safeId(stem);
-    return 'sources/original/book_deconstruction_source_$cleanStem.md';
+    return '${_contentPathPolicyService.directoryForContentType('source_original')}/book_deconstruction_source_$cleanStem.md';
   }
 
   String previewPath() {
     // 中文注释: 预演纪要统一写入 analysis/，保持它与正文层和原文层隔离。
-    return 'analysis/book_deconstruction_preview.md';
+    return '${_contentPathPolicyService.directoryForContentType('analysis')}/book_deconstruction_preview.md';
   }
 
   String followupPlanPath(String followupOptionId) {
@@ -41,18 +47,31 @@ class BookDeconstructionTargetPathService {
     final safeTitle = _safeId(title);
     final normalizedTitle = safeTitle.isEmpty ? '原作片段' : safeTitle;
     final chapterNumber = sequence <= 0 ? 1 : sequence;
-    return 'chapters/inherited/$safeRoute/${chapterNumber.toString().padLeft(3, '0')}_$normalizedTitle.md';
+    final derivedRoot = safeRoute.contains('fanfic')
+        ? _contentPathPolicyService.directoryForContentType(
+            'derived_fanfic_narrative',
+          )
+        : _contentPathPolicyService.directoryForContentType(
+            'derived_continuation_narrative',
+          );
+    return '$derivedRoot/$safeRoute/${chapterNumber.toString().padLeft(3, '0')}_$normalizedTitle.md';
   }
 
   String premisePath(InspirationPremise premise, int index) {
     // 中文注释: 拆书前提默认回到现有 premise/ 目录，后续 UI/adapter 只需消费稳定路径提示即可。
     final suffix = index <= 0 ? 1 : index;
-    return 'premise/book_deconstruction_premise_$suffix.md';
+    final sourceStem = _safeId(
+      premise.sourcePath.trim().isEmpty
+          ? premise.displayName.trim()
+          : premise.sourcePath.trim().split('/').last,
+    );
+    final cleanStem = sourceStem.isEmpty ? 'book_deconstruction_premise' : sourceStem;
+    return '${ProjectContentPathPolicyService.premiseRoot}/book_deconstruction_premise_${suffix}_$cleanStem.md';
   }
 
   String storyOutlinePath() {
     // 中文注释: 总体故事结构继续落到 outlines/story/，避免拆书结果另起一套目录协议。
-    return 'outlines/story/book_deconstruction_story_outline.md';
+    return '${_contentPathPolicyService.directoryForContentType('outline')}/book_deconstruction_story_outline.md';
   }
 
   String chapterOutlinePath(
@@ -61,7 +80,7 @@ class BookDeconstructionTargetPathService {
   ) {
     // 中文注释: 章级骨架沿用 outlines/chapters/，让后续一般小说与长任务都能直接复用。
     final sequence = outline.sequence > 0 ? outline.sequence : index;
-    return 'outlines/chapters/book_deconstruction_chapter_$sequence.md';
+    return '${_contentPathPolicyService.directoryForContentType('chapter_outline')}/book_deconstruction_chapter_$sequence.md';
   }
 
   String assetPath(String artifactKind, String assetId) {
@@ -69,11 +88,11 @@ class BookDeconstructionTargetPathService {
     final cleanId = _safeId(assetId);
     switch (artifactKind) {
       case BookDeconstructionArtifactKind.styleProfile:
-        return 'assets/styles/$cleanId.md';
+        return '${_contentPathPolicyService.directoryForContentType('style')}/$cleanId.md';
       case BookDeconstructionArtifactKind.worldRuleSet:
-        return 'assets/world/$cleanId.md';
+        return '${_contentPathPolicyService.directoryForContentType('setting')}/$cleanId.md';
       case BookDeconstructionArtifactKind.characterProfile:
-        return 'assets/characters/$cleanId.md';
+        return '${_contentPathPolicyService.directoryForContentType('character')}/$cleanId.md';
       case BookDeconstructionArtifactKind.organizationProfile:
         return 'assets/organizations/$cleanId.md';
       case BookDeconstructionArtifactKind.foreshadowRecord:

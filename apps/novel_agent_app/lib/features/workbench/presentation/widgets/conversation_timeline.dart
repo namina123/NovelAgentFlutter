@@ -4,6 +4,7 @@ import '../../../../../app/theme/app_chrome.dart';
 import '../../../../../shared/theme/novel_theme_context.dart';
 import '../models/conversation_transcript_lane_view_data.dart';
 import '../models/conversation_timeline_snapshot.dart';
+import 'package:novel_agent_core/novel_agent_core.dart';
 import '../services/conversation_timeline_auto_reveal_policy.dart';
 import 'conversation_panel_style.dart';
 import 'conversation_current_round_tool_strip.dart';
@@ -14,11 +15,13 @@ class ConversationTimeline extends StatefulWidget {
     super.key,
     required this.lanes,
     required this.renderContext,
+    this.restoreResult,
     this.rendererRegistry = const TranscriptBlockRendererRegistry(),
   });
 
   final ConversationTranscriptLaneViewData lanes;
   final TranscriptBlockRenderContext renderContext;
+  final SessionRestoreResult? restoreResult;
   final TranscriptBlockRendererRegistry rendererRegistry;
 
   @override
@@ -33,12 +36,14 @@ class _ConversationTimelineState extends State<ConversationTimeline> {
       const ConversationTimelineAutoRevealPolicy();
 
   late ConversationTimelineSnapshot _snapshot;
-  bool _anchoredToLatest = true;
+  late bool _anchoredToLatest;
   bool _initialRevealScheduled = false;
 
   @override
   void initState() {
     super.initState();
+    _anchoredToLatest = widget.restoreResult?.defaultScrollTarget !=
+        SessionRestoreScrollTarget.preserveCurrentPosition;
     _snapshot = _currentSnapshot();
     _scrollController.addListener(_handleScrollChanged);
     _scheduleInitialReveal();
@@ -47,6 +52,11 @@ class _ConversationTimelineState extends State<ConversationTimeline> {
   @override
   void didUpdateWidget(covariant ConversationTimeline oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.restoreResult != widget.restoreResult) {
+      _anchoredToLatest = widget.restoreResult?.defaultScrollTarget !=
+          SessionRestoreScrollTarget.preserveCurrentPosition;
+      _scheduleInitialReveal();
+    }
     final nextSnapshot = _currentSnapshot();
     if (_autoRevealPolicy.shouldAutoReveal(
       previous: _snapshot,
@@ -227,7 +237,11 @@ class _ConversationTimelineState extends State<ConversationTimeline> {
   }
 
   void _scheduleInitialReveal() {
-    if (_initialRevealScheduled || _snapshot.blockCount <= 0) {
+    if (_initialRevealScheduled ||
+        _snapshot.blockCount <= 0 ||
+        (widget.restoreResult != null &&
+            widget.restoreResult!.defaultScrollTarget !=
+                SessionRestoreScrollTarget.latest)) {
       return;
     }
     _initialRevealScheduled = true;

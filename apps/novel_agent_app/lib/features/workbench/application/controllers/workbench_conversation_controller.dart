@@ -42,10 +42,15 @@ import '../services/conversation_session_state_service.dart';
 import '../services/conversation_streaming_state_service.dart';
 import '../services/conversation_user_visible_text_service.dart';
 import '../services/workbench_primary_action_service.dart';
+import '../services/workbench_opening_launch_bridge_service.dart';
 import 'workbench_workspace_controller.dart';
 import '../models/opening_agent_group_summary.dart';
 import '../models/opening_session_projection.dart';
 import '../models/ordinary_conversation_task_profile.dart';
+
+part 'conversation_attachment_facade.dart';
+part 'conversation_workflow_launch_bridge.dart';
+part 'conversation_opening_flow_controller.dart';
 
 class WorkbenchConversationController implements ConversationActionHandler {
   WorkbenchConversationController({
@@ -84,10 +89,8 @@ class WorkbenchConversationController implements ConversationActionHandler {
     required UserOptionPromptBuilderService userOptionPromptBuilderService,
     required LoadModeGuidanceStateUseCase loadModeGuidanceStateUseCase,
     required AnswerModeGuidanceStageUseCase answerModeGuidanceStageUseCase,
-    required BuildModeGuidancePlanInputUseCase
-    buildModeGuidancePlanInputUseCase,
     required ModeGuidanceTransitionService modeGuidanceTransitionService,
-    required ProjectWorkflowRuntimeService workflowRuntimeService,
+    required WorkbenchOpeningLaunchBridgeService openingLaunchBridgeService,
     required WorkbenchWorkspaceController workspaceController,
     required WorkbenchConversationRuntimeState Function() readRuntimeState,
     required void Function(WorkbenchConversationRuntimeState state)
@@ -125,7 +128,6 @@ class WorkbenchConversationController implements ConversationActionHandler {
     conversationRequestAgentResolverService,
     ConversationGroupSelectorViewDataService?
     conversationGroupSelectorViewDataService,
-    LongTaskOpeningPromptBuilderService? longTaskOpeningPromptBuilderService,
     required void Function(String message) announce,
   }) : _generateDraftUseCaseFactory = generateDraftUseCaseFactory,
        _hostAwareGenerateDraftUseCaseFactory =
@@ -174,20 +176,8 @@ class WorkbenchConversationController implements ConversationActionHandler {
        _userOptionPromptBuilderService = userOptionPromptBuilderService,
        _loadModeGuidanceStateUseCase = loadModeGuidanceStateUseCase,
        _answerModeGuidanceStageUseCase = answerModeGuidanceStageUseCase,
-       _buildModeGuidancePlanInputUseCase = buildModeGuidancePlanInputUseCase,
        _modeGuidanceTransitionService = modeGuidanceTransitionService,
-       _workflowRuntimeService = workflowRuntimeService,
-       _projectLongTaskToolExecutor = ProjectLongTaskToolExecutor(
-         loadPlanInput: (project, {required modeId}) =>
-             buildModeGuidancePlanInputUseCase.execute(project, modeId: modeId),
-         createLongTaskWorkflow:
-             (project, runtimeMode, {options = const <String, Object?>{}}) =>
-                 workflowRuntimeService.createLongTaskWorkflow(
-                   project,
-                   runtimeMode,
-                   options: options,
-                 ),
-       ),
+       _openingLaunchBridgeService = openingLaunchBridgeService,
        _workspaceController = workspaceController,
        _readRuntimeState = readRuntimeState,
        _writeRuntimeState = writeRuntimeState,
@@ -216,13 +206,13 @@ class WorkbenchConversationController implements ConversationActionHandler {
        _conversationRequestAgentResolverService =
            conversationRequestAgentResolverService ??
            const ConversationRequestAgentResolverService(),
-       _conversationGroupSelectorViewDataService =
-           conversationGroupSelectorViewDataService ??
-           const ConversationGroupSelectorViewDataService(),
-       _longTaskOpeningPromptBuilderService =
-           longTaskOpeningPromptBuilderService ??
-           const LongTaskOpeningPromptBuilderService(),
-       _announce = announce;
+        _conversationGroupSelectorViewDataService =
+            conversationGroupSelectorViewDataService ??
+            const ConversationGroupSelectorViewDataService(),
+        _announce = announce {
+    _openingFlowController = ConversationOpeningFlowController(this);
+    _attachmentFacade = ConversationAttachmentFacade(this);
+  }
 
   final GenerateDraftUseCaseFactory _generateDraftUseCaseFactory;
   final HostAwareGenerateDraftUseCaseFactory?
@@ -259,10 +249,8 @@ class WorkbenchConversationController implements ConversationActionHandler {
   final UserOptionPromptBuilderService _userOptionPromptBuilderService;
   final LoadModeGuidanceStateUseCase _loadModeGuidanceStateUseCase;
   final AnswerModeGuidanceStageUseCase _answerModeGuidanceStageUseCase;
-  final BuildModeGuidancePlanInputUseCase _buildModeGuidancePlanInputUseCase;
   final ModeGuidanceTransitionService _modeGuidanceTransitionService;
-  final ProjectWorkflowRuntimeService _workflowRuntimeService;
-  final ProjectLongTaskToolExecutor _projectLongTaskToolExecutor;
+  final WorkbenchOpeningLaunchBridgeService _openingLaunchBridgeService;
   final WorkbenchWorkspaceController _workspaceController;
   final WorkbenchConversationRuntimeState Function() _readRuntimeState;
   final void Function(WorkbenchConversationRuntimeState state)
@@ -297,11 +285,11 @@ class WorkbenchConversationController implements ConversationActionHandler {
   _conversationRequestAgentResolverService;
   final ConversationGroupSelectorViewDataService
   _conversationGroupSelectorViewDataService;
-  final LongTaskOpeningPromptBuilderService
-  _longTaskOpeningPromptBuilderService;
   final void Function(String message) _announce;
   final ThemePreferenceResolver _themePreferenceResolver =
       ThemePreferenceResolver();
+  late final ConversationOpeningFlowController _openingFlowController;
+  late final ConversationAttachmentFacade _attachmentFacade;
   ConversationRequestHandle? _activeRequestHandle;
   Future<void> _sessionPersistenceChain = Future<void>.value();
 
@@ -351,11 +339,20 @@ class WorkbenchConversationController implements ConversationActionHandler {
           return restored.copyWith(pendingOptions: pendingOptions);
         })
         .toList(growable: false);
+    final restoreResult = _conversationSessionStateService.restoreResult(
+      sessions: restoredSessions,
+      activeSessionId: snapshot.activeSessionId,
+      showSessionHistory: restoredSessions.length > 1,
+      defaultScrollTarget: restoredSessions.length > 1
+          ? SessionRestoreScrollTarget.latest
+          : SessionRestoreScrollTarget.latest,
+    );
     _writeRuntimeState(
       _readRuntimeState().copyWith(
         sessions: restoredSessions,
         activeSessionId: snapshot.activeSessionId,
-        showSessionHistory: false,
+        showSessionHistory: restoreResult.showSessionHistory,
+        sessionRestoreResult: restoreResult,
         guideScope: '',
       ),
     );
@@ -424,6 +421,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
       ),
       activeSessionId: runtimeState.activeSessionId,
       showSessionHistory: runtimeState.showSessionHistory,
+      sessionRestoreResult: runtimeState.sessionRestoreResult,
       conversationContextProjection: conversationContextProjection,
       contextSummary:
           contextSummaryOverride ??
@@ -565,73 +563,26 @@ class WorkbenchConversationController implements ConversationActionHandler {
 
   @override
   void onModelSelected(String modelId) {
-    // 中文注释: 顶部模型切换继续写回共享设置，保证 GUI/CLI 默认模型配置一致。
-    final settings = _readSettings();
-    final cleanModelId = modelId.trim();
-    if (settings == null || cleanModelId.isEmpty) {
-      return;
-    }
-    final updated = settings.copyWith(
-      defaultModelId: cleanModelId,
-      extraSettings: <String, Object?>{
-        ...settings.extraSettings,
-        'model_settings': <String, Object?>{
-          ..._modelSettingsOf(settings),
-          'model_id': cleanModelId,
-        },
-      },
-    );
-    _persistSettings(updated, successMessage: '已切换模型：$cleanModelId');
+    _openingFlowController.onModelSelected(modelId);
   }
 
   @override
   void onAgentGroupSelected(String groupId) {
-    // 中文注释: 会话栏与 opening 面板共用同一条项目默认组切换链，保证 group-first 事实源只有一处。
-    unawaited(_selectOpeningAgentGroup(groupId));
+    _openingFlowController.onAgentGroupSelected(groupId);
   }
 
   @override
   void onConversationAgentSelected(String agentId) {
-    final cleanAgentId = agentId.trim();
-    if (cleanAgentId.isEmpty) {
-      return;
-    }
-    _mutateWorkbench(
-      (current) => applyConversationState(
-        current.copyWith(
-          agentSelector: current.agentSelector.copyWith(
-            currentAgentId: cleanAgentId,
-          ),
-        ),
-      ),
-    );
+    _openingFlowController.onConversationAgentSelected(agentId);
   }
 
   Future<void> selectProjectAgentGroup(String groupId) async {
-    // 中文注释: 项目级配置入口复用同一条组切换链，避免项目面板和会话栏各自维护绑定写入逻辑。
-    await _selectOpeningAgentGroup(groupId);
+    await _openingFlowController.selectProjectAgentGroup(groupId);
   }
 
   @override
   void onQuickThemeRequested() async {
-    // 中文注释: 快速主题切换直接复用正式主题偏好写盘链，避免工作台和设置页出现两套主题事实源。
-    final settings = _readSettings();
-    if (settings == null) {
-      return;
-    }
-    final nextThemeId = _themePreferenceResolver.quickToggleThemeId(
-      _readThemeId(),
-    );
-    final updated = settings.copyWith(
-      themeSettings: _themePreferenceResolver.payloadForSelectedTheme(
-        selectedThemeId: nextThemeId,
-        base: settings.themeSettings,
-      ),
-    );
-    await _saveSettingsSilently(updated);
-    _refreshSettingsViewData();
-    _notifyShell();
-    _announce('已切换主题：${_themePreferenceResolver.labelOf(nextThemeId)}');
+    _openingFlowController.onQuickThemeRequested();
   }
 
   ConversationGroupSelectorViewData _groupSelectorViewData({
@@ -668,124 +619,32 @@ class WorkbenchConversationController implements ConversationActionHandler {
 
   @override
   void onScreenModeRequested() {
-    // 中文注释: 会话/文档切换只改工作台显示态，不重载项目和文档内容。
-    final nextVisible = !_readWorkbench().isDocumentsWorkspaceVisible;
-    _mutateWorkbench(
-      (current) => applyConversationState(
-        current.copyWith(
-          isDocumentsWorkspaceVisible: nextVisible,
-          generationStatus: nextVisible ? '已切到文档视图。' : '已切回会话视图。',
-        ),
-      ),
-    );
+    _openingFlowController.onScreenModeRequested();
   }
 
   @override
   void onDocumentsWorkspaceRequested() {
-    // 中文注释: 窄屏文档入口只切换显示状态，不自行拼装工作台其他面板。
-    _mutateWorkbench(
-      (current) => applyConversationState(
-        current.copyWith(isDocumentsWorkspaceVisible: true),
-      ),
-    );
+    _openingFlowController.onDocumentsWorkspaceRequested();
   }
 
   @override
   void onDocumentsWorkspaceDismissRequested() {
-    // 中文注释: 文档工作区关闭只恢复会话视图，不改会话内容和项目状态。
-    _mutateWorkbench(
-      (current) => applyConversationState(
-        current.copyWith(isDocumentsWorkspaceVisible: false),
-      ),
-    );
+    _openingFlowController.onDocumentsWorkspaceDismissRequested();
   }
 
   @override
   void onHistoryRequested() {
-    // 中文注释: 历史面板切换只改当前会话视图投影，不触碰会话底层记录。
-    final runtimeState = _readRuntimeState();
-    _writeRuntimeState(
-      runtimeState.copyWith(
-        showSessionHistory: !runtimeState.showSessionHistory,
-      ),
-    );
-    _mutateWorkbench((current) => applyConversationState(current));
+    _openingFlowController.onHistoryRequested();
   }
 
   @override
   void onNewSessionRequested() {
-    // 中文注释: 新会话只重置交互链，不影响当前项目工作区和已打开文档。
-    final activeState = _activeConversationState();
-    if (activeState != null &&
-        activeState.entries.isEmpty &&
-        _needsGoalSelection(activeState)) {
-      _writeRuntimeState(
-        _readRuntimeState().copyWith(showSessionHistory: false),
-      );
-      _mutateWorkbench(
-        (current) => applyConversationState(
-          current.copyWith(generationStatus: '当前已经是一个待选择目标的新会话。'),
-        ),
-      );
-      unawaited(
-        _refreshOpeningProjection(
-          activeState: activeState,
-          forceReloadModeGuidance: false,
-        ),
-      );
-      return;
-    }
-    final session = _createConversationSession();
-    _replaceConversationSession(session, activate: true);
-    _writeRuntimeState(
-      _readRuntimeState().copyWith(
-        showSessionHistory: false,
-        guideScope: '',
-        activeModeGuidanceState: null,
-      ),
-    );
-    _mutateWorkbench(
-      (current) => applyConversationState(
-        current.copyWith(generationStatus: '已创建新会话，请先选择一个入口，或直接输入第一句话。'),
-      ),
-    );
-    unawaited(
-      _refreshOpeningProjection(
-        activeState: session,
-        forceReloadModeGuidance: true,
-      ),
-    );
+    _openingFlowController.onNewSessionRequested();
   }
 
   @override
   void onSessionHistorySelected(String sessionId) {
-    // 中文注释: 历史切换只改变活动会话指针，不让页面直接操作会话记录结构。
-    final runtimeState = _readRuntimeState();
-    final exists = runtimeState.sessions.any(
-      (state) => _sessionIdOf(state) == sessionId,
-    );
-    if (!exists) {
-      return;
-    }
-    _writeRuntimeState(
-      runtimeState.copyWith(
-        activeSessionId: sessionId,
-        showSessionHistory: false,
-        guideScope: '',
-      ),
-    );
-    _scheduleSessionPersistence();
-    _mutateWorkbench(
-      (current) => applyConversationState(
-        current.copyWith(generationStatus: '已切换到所选历史会话。'),
-      ),
-    );
-    unawaited(
-      _refreshOpeningProjection(
-        activeState: _activeConversationState(),
-        forceReloadModeGuidance: false,
-      ),
-    );
+    _openingFlowController.onSessionHistorySelected(sessionId);
   }
 
   @override
@@ -838,51 +697,12 @@ class WorkbenchConversationController implements ConversationActionHandler {
 
   @override
   void onConversationSettingsRequested() {
-    // 中文注释: 会话栏设置入口直接复用全局设置页，不再长一套局部设置状态。
-    _showSettings();
+    _openingFlowController.onConversationSettingsRequested();
   }
 
   @override
   Future<void> onPrimaryActionRequested(String actionId) async {
-    // 中文注释: 主动作计划在独立服务中解析，控制器只负责执行对应的三类结果。
-    PrimaryActionViewData? action;
-    for (final item in _readWorkbench().primaryActions) {
-      if (item.id == actionId) {
-        action = item;
-        break;
-      }
-    }
-    if (action == null) {
-      _announce('未找到对应的工作流入口。');
-      return;
-    }
-    if (await _handleGuideNavigationAction(action)) {
-      return;
-    }
-    if (await _handleDeterministicLongTaskPrimaryAction(action)) {
-      return;
-    }
-    final plan = _workbenchPrimaryActionService.build(
-      action: action,
-      project: _workspaceController.currentProjectInfo(),
-      activeDocumentPath: _workspaceController.activeDocumentPath,
-      activeDocumentBody: _workspaceController.activeDocumentBody,
-    );
-    switch (plan.kind) {
-      case WorkbenchPrimaryActionPlanKind.refreshProject:
-        _workspaceController.onRefreshFilesRequested();
-        return;
-      case WorkbenchPrimaryActionPlanKind.announce:
-        _announce(plan.message);
-        return;
-      case WorkbenchPrimaryActionPlanKind.sendPrompt:
-        _startPrimaryActionPrompt(
-          plan,
-          userVisibleText: _conversationUserVisibleTextService
-              .textForPrimaryAction(action, plan),
-        );
-        return;
-    }
+    await _openingFlowController.onPrimaryActionRequested(actionId);
   }
 
   Future<bool> _handleDeterministicLongTaskPrimaryAction(
@@ -890,23 +710,10 @@ class WorkbenchConversationController implements ConversationActionHandler {
   ) async {
     switch (action.commandId.trim()) {
       case 'long_task.run_next':
-        await _runLongTaskQueueFromPrimaryAction(
-          pendingMessage: '正在推进下一条长任务步骤...',
-          successMessage: '已推进下一条长任务步骤。',
-          options: const <String, Object?>{
-            'max_steps': 1,
-            'entry_reason': 'workbench_run_next',
-          },
-        );
+        _announce('当前长任务运行入口已收口到共享桥，请通过 opening.launch_long_task 进入。');
         return true;
       case 'long_task.run_controlled':
-        await _runLongTaskQueueFromPrimaryAction(
-          pendingMessage: '正在受控推进长任务...',
-          successMessage: '长任务已开始受控推进。',
-          options: const <String, Object?>{
-            'entry_reason': 'workbench_run_controlled',
-          },
-        );
+        _announce('当前长任务运行入口已收口到共享桥，请通过 opening.launch_long_task 进入。');
         return true;
       case 'long_task.open_detail':
         _workspaceController.onLongTaskStationRequested();
@@ -918,7 +725,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
 
   @override
   Future<void> onRetryLastFailedRequested() async {
-    // 中文注释: 重试只复用上一轮失败请求，不额外插入新的用户消息。
+    // TODO: route through runtime controller in next slice.
     final retryRequest = _activeConversationState()?.retryRequest;
     if (retryRequest == null) {
       _announce('当前没有可重试的失败请求。');
@@ -992,43 +799,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
 
   @override
   void onAttachmentRequested() async {
-    // 中文注释: 附件动作只负责编排 picker 和 session 暂存；文件探测与后续发送桥接继续留在独立服务。
-    if (_readRuntimeState().activeModeGuidanceState != null) {
-      _announce('当前引导阶段暂不接受会话附件。');
-      return;
-    }
-    final capabilities = const ConversationInputCapabilityService().resolve(
-      context: _readWorkbench().inputCapabilityContext.copyWith(
-        hasActiveProject: _workspaceController.currentProject != null,
-        isGenerating: _readWorkbench().isGenerating,
-      ),
-    );
-    if (!capabilities.supportsAttachmentEntry) {
-      _announce('当前模型或本机环境暂不支持会话附件。');
-      return;
-    }
-    if (_readWorkbench().isGenerating) {
-      _announce('请等待当前生成结束后再选择附件。');
-      return;
-    }
-    final selectedPaths = await _conversationAttachmentPickerService
-        .pickFiles();
-    if (selectedPaths.isEmpty) {
-      _announce('没有选择任何会话附件。');
-      return;
-    }
-    final activeState = _ensureConversationSession();
-    final incomingDrafts = await _conversationAttachmentDraftService
-        .createDrafts(selectedPaths);
-    final mergedDrafts = _conversationAttachmentDraftService.mergeDrafts(
-      currentDrafts: activeState.attachmentDrafts,
-      incomingDrafts: incomingDrafts,
-    );
-    final nextState = _conversationSessionStateService
-        .stateWithAttachmentDrafts(activeState, mergedDrafts);
-    _replaceConversationSession(nextState, activate: true);
-    _mutateWorkbench((current) => applyConversationState(current));
-    _announce(_attachmentSelectionMessage(incomingDrafts, mergedDrafts));
+    await _attachmentFacade.onAttachmentRequested();
   }
 
   @override
@@ -1421,7 +1192,26 @@ class WorkbenchConversationController implements ConversationActionHandler {
     final runtimeState = _readRuntimeState();
     switch (action.commandId.trim()) {
       case 'opening.launch_long_task':
-        await _launchLongTaskEntry();
+        final project = _workspaceController.currentProject;
+        if (project == null) {
+          _announce('请先创建或打开长篇项目。');
+          return true;
+        }
+        final projection = runtimeState.openingProjection;
+        final projectType = projection?.projectTypeId.trim().isNotEmpty == true
+            ? projection!.projectTypeId.trim()
+            : project.projectType.trim();
+        if (projectType != 'long_novel') {
+          _announce('只有长任务相关项目才会显示这个入口。');
+          return true;
+        }
+        final prompt = _openingLaunchBridgeService.buildLongTaskEntryPrompt(
+          project: project,
+          projection: projection,
+          activeDocumentPath: _workspaceController.activeDocumentPath,
+          activeDocumentExcerpt: _workspaceController.activeDocumentBody,
+        );
+        await _sendPrompt(prompt, visibleText: '启动长任务');
         return true;
       case 'guide.open_long_task_modes':
         _writeRuntimeState(
@@ -1530,19 +1320,12 @@ class WorkbenchConversationController implements ConversationActionHandler {
           action.payload['mode'],
           'seed_autopilot_novel',
         );
-        final planInput = await _buildModeGuidancePlanInputUseCase.execute(
-          project,
-          modeId: modeId,
-        );
-        if (planInput == null) {
-          _announce('当前还没有可用的模式状态，请先完成模式引导。');
-          return true;
-        }
-        if (!planInput.isReady) {
-          _announce('当前模式信息尚未收束完成，请先完成当前阶段。');
-          return true;
-        }
-        await _createWorkflowFromModeGuidance(planInput);
+        final result = await _openingLaunchBridgeService
+            .createWorkflowFromModeGuidance(
+              project,
+              modeId: modeId,
+            );
+        _announce(_resultMessage(result, success: '长任务队列已根据模式引导生成。'));
         return true;
       case 'opening.choose_long_task_mode':
         _writeRuntimeState(
@@ -1619,49 +1402,10 @@ class WorkbenchConversationController implements ConversationActionHandler {
     );
   }
 
-  Future<void> _createWorkflowFromModeGuidance(
-    ModeGuidancePlanInput planInput,
-  ) async {
-    // 中文注释: 模式引导完成后的队列创建直接走共享 runtime，而不是再让模型猜测结构。
-    final project = _workspaceController.currentProject;
-    if (project == null) {
-      _announce('请先创建或打开长篇项目。');
-      return;
-    }
-    _writeRuntimeState(
-      _readRuntimeState().copyWith(
-        guideScope: '',
-        activeModeGuidanceState: null,
-      ),
-    );
-    _mutateWorkbench(
-      (current) => applyConversationState(
-        current.copyWith(
-          generationStatus: '正在根据模式引导生成长任务队列...',
-          toolCoreStatus: '',
-        ),
-      ),
-    );
-    try {
-      final result = await _workflowRuntimeService.createLongTaskWorkflow(
-        project,
-        planInput.runtimeMode,
-        options: planInput.options,
-      );
-      _workspaceController.onRefreshFilesRequested();
-      await _workspaceController.refreshProjectLongTaskSummary();
-      _announce(_resultMessage(result, success: '长任务队列已根据模式引导生成。'));
-    } catch (error) {
-      _announce('根据模式引导生成长任务队列失败：$error');
-    } finally {
-      _mutateWorkbench((current) => applyConversationState(current));
-    }
-  }
-
   Future<void> _startLongTaskRunFromOpening(
     PrimaryActionViewData action,
   ) async {
-    // 中文注释: opening 阶段的正式启动动作必须真正落到“建链 + 跑首批队列”，不能停在只建队列或只发提示词。
+    // 中文注释: opening 阶段的正式启动动作统一交给共享桥，这里只负责触发和投影刷新。
     final project = _workspaceController.currentProject;
     if (project == null) {
       _announce('请先创建或打开长篇项目。');
@@ -1676,28 +1420,17 @@ class WorkbenchConversationController implements ConversationActionHandler {
       ),
     );
     try {
-      final result = await _ensureLongTaskWorkflowPrepared(
+      final result = await _openingLaunchBridgeService.launchLongTaskFromModeGuidance(
         project,
-        arguments: action.payload,
+        modeId: _stringValue(action.payload['mode_id'] ?? action.payload['mode']),
       );
       if (!ValueReaders.boolValue(result['ok'], true)) {
         _announce(_resultMessage(result, success: '启动长任务失败。'));
         return;
       }
-      final queueResult = await _runLongTaskQueue(
-        project,
-        options: <String, Object?>{
-          'entry_reason': 'opening_start_long_task_run',
-          'mode_id': _stringValue(
-            action.payload['mode_id'] ?? action.payload['mode'],
-          ),
-        },
-      );
       _workspaceController.onRefreshFilesRequested();
       await _workspaceController.refreshProjectLongTaskSummary();
-      final workflowMessage = _resultMessage(result, success: '已生成长任务链。');
-      final queueMessage = _resultMessage(queueResult, success: '已开始推进长任务。');
-      _announce('$workflowMessage\n$queueMessage');
+      _announce(_resultMessage(result, success: '已生成长任务链。'));
     } catch (error) {
       _announce('启动长任务失败：$error');
     } finally {
@@ -1707,153 +1440,6 @@ class WorkbenchConversationController implements ConversationActionHandler {
       );
       _mutateWorkbench((current) => applyConversationState(current));
     }
-  }
-
-  Future<void> _runLongTaskQueueFromPrimaryAction({
-    required String pendingMessage,
-    required String successMessage,
-    JsonMap options = const <String, Object?>{},
-  }) async {
-    final project = _workspaceController.currentProject;
-    if (project == null) {
-      _announce('请先创建或打开长篇项目。');
-      return;
-    }
-    _mutateWorkbench(
-      (current) => applyConversationState(
-        current.copyWith(generationStatus: pendingMessage, toolCoreStatus: ''),
-      ),
-    );
-    try {
-      final result = await _runLongTaskQueue(project, options: options);
-      _workspaceController.onRefreshFilesRequested();
-      await _workspaceController.refreshProjectLongTaskSummary();
-      _announce(_resultMessage(result, success: successMessage));
-    } catch (error) {
-      _announce('推进长任务失败：$error');
-    } finally {
-      _mutateWorkbench((current) => applyConversationState(current));
-    }
-  }
-
-  Future<JsonMap> _ensureLongTaskWorkflowPrepared(
-    ProjectDescriptor project, {
-    JsonMap arguments = const <String, Object?>{},
-  }) async {
-    final existingTasks = await _workflowRuntimeService.listWorkflowTasks(
-      project,
-    );
-    if (existingTasks.isNotEmpty) {
-      return <String, Object?>{
-        'ok': true,
-        'message': '当前项目已存在长任务队列，将直接继续正式运行。',
-        'reused_existing_workflow': true,
-        'existing_task_count': existingTasks.length,
-      };
-    }
-    return _projectLongTaskToolExecutor.startLongTaskRun(project, arguments);
-  }
-
-  Future<JsonMap> _runLongTaskQueue(
-    ProjectDescriptor project, {
-    JsonMap options = const <String, Object?>{},
-  }) async {
-    final settings = _readSettings();
-    if (settings == null) {
-      return const <String, Object?>{
-        'ok': false,
-        'error': '设置尚未加载完成，暂时不能启动长任务运行。',
-      };
-    }
-    return _workflowRuntimeService.runWorkflowTaskQueue(
-      project,
-      settings,
-      options: options,
-    );
-  }
-
-  Future<void> _launchLongTaskEntry() async {
-    final project = _workspaceController.currentProject;
-    if (project == null) {
-      _announce('请先创建或打开长篇项目。');
-      return;
-    }
-    final runtimeState = _readRuntimeState();
-    final projection = runtimeState.openingProjection;
-    final projectType = projection?.projectTypeId.trim().isNotEmpty == true
-        ? projection!.projectTypeId.trim()
-        : project.projectType.trim();
-    if (projectType != 'long_novel') {
-      _announce('只有长任务相关项目才会显示这个入口。');
-      return;
-    }
-    final readiness = projection?.orchestration.readiness;
-    final suggestedAction = _resolveLongTaskLaunchTarget(projection);
-    if (suggestedAction != null &&
-        suggestedAction.commandId.trim() != 'opening.launch_long_task') {
-      final handled = await _handleGuideNavigationAction(suggestedAction);
-      if (handled) {
-        return;
-      }
-    }
-    final prompt = _longTaskOpeningPromptBuilderService.build(
-      project: _workspaceController.currentProjectInfo(),
-      currentGroupDisplayName: projection?.currentGroupDisplayName ?? '',
-      canStartLongTask: readiness?.canStartLongTask ?? false,
-      missingRequirementTitles: readiness == null
-          ? const <String>[]
-          : readiness.missingRequirements
-                .map((item) => item.title.trim())
-                .where((title) => title.isNotEmpty)
-                .toList(growable: false),
-      effectiveModeId: _effectiveLongTaskModeId(projection),
-      suggestedActionTitle: suggestedAction?.title ?? '',
-      suggestedActionDescription: suggestedAction?.description ?? '',
-      activeDocumentPath: _workspaceController.activeDocumentPath,
-      activeDocumentExcerpt: _workspaceController.activeDocumentBody,
-    );
-    await _sendPrompt(prompt, visibleText: '启动长任务');
-  }
-
-  PrimaryActionViewData? _resolveLongTaskLaunchTarget(
-    OpeningSessionProjection? projection,
-  ) {
-    if (projection == null) {
-      return null;
-    }
-    final suggestedActions = projection.orchestration.suggestedActions;
-    if (suggestedActions.isEmpty) {
-      return null;
-    }
-    final action = suggestedActions.first;
-    return PrimaryActionViewData(
-      id: action.id,
-      title: action.title,
-      description: action.description,
-      commandId: action.commandId,
-      payload: action.payload,
-    );
-  }
-
-  String _effectiveLongTaskModeId(OpeningSessionProjection? projection) {
-    if (projection == null) {
-      return '';
-    }
-    final activeModeId = projection
-        .orchestration
-        .state
-        .modeGuidanceState
-        ?.modeId
-        .trim();
-    if (activeModeId != null && activeModeId.isNotEmpty) {
-      return activeModeId;
-    }
-    final readinessModeId = projection.orchestration.readiness.effectiveModeId
-        .trim();
-    if (readinessModeId.isNotEmpty) {
-      return readinessModeId;
-    }
-    return projection.orchestration.state.intent.modeId.trim();
   }
 
   Future<void> _selectOpeningAgentGroup(String groupId) async {
@@ -2638,3 +2224,5 @@ class WorkbenchConversationController implements ConversationActionHandler {
     return const <String, Object?>{};
   }
 }
+
+

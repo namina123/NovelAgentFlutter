@@ -3,9 +3,11 @@ class SettingsSearchOption<T> {
     required this.value,
     required this.label,
     this.note = '',
+    this.providerId = '',
   });
 
   final T value;
   final String label;
   final String note;
+  final String providerId;
 }

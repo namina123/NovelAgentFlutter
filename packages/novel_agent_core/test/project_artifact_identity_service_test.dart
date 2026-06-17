@@ -23,6 +23,32 @@ void main() {
     );
   });
 
+  test('classifies unified narrative and information roots', () {
+    expect(
+      service.classify(relativePath: 'knowledge/research_note.md').shortLabel,
+      '信息资料',
+    );
+    expect(
+      service.classify(relativePath: '.novel_agent/information/research_notes/001.json')
+          .shortLabel,
+      '信息资料',
+    );
+    expect(
+      service.classify(relativePath: 'sources/original/demo.md').shortLabel,
+      '原文归档',
+    );
+    expect(
+      service.classify(relativePath: 'chapters/inherited/continuation/001_demo.md')
+          .shortLabel,
+      '派生续写',
+    );
+    expect(
+      service.classify(relativePath: 'chapters/inherited/fanfic/001_demo.md')
+          .shortLabel,
+      '派生同人',
+    );
+  });
+
   test('keeps compatibility metadata for legacy project brief path', () {
     final identity = service.classify(relativePath: 'premise/project_brief.md');
 

@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novel_agent_app/features/inspiration_workbench/application/controllers/inspiration_workbench_controller.dart';
-import 'package:novel_agent_app/features/inspiration_workbench/application/models/inspiration_workbench_long_task_launch_result.dart';
-import 'package:novel_agent_app/features/inspiration_workbench/application/services/inspiration_workbench_long_task_launcher_service.dart';
 import 'package:novel_agent_app/features/inspiration_workbench/application/services/inspiration_workbench_long_task_launch_view_data_service.dart';
+import 'package:novel_agent_app/features/workbench/application/services/workbench_opening_launch_bridge_service.dart';
+import 'package:novel_agent_app/features/inspiration_workbench/application/models/inspiration_workbench_long_task_launch_result.dart';
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
@@ -21,6 +21,7 @@ void main() {
     final controller = InspirationWorkbenchController(
       loadModeGuidanceStateUseCase: loadUseCase,
       answerModeGuidanceStageUseCase: answerUseCase,
+      openingLaunchBridgeService: _bridge(),
       readCurrentProject: () => project,
       readCurrentProjectTitle: () => project.name,
       syncWorkbenchResources: () async {
@@ -28,7 +29,6 @@ void main() {
       },
       onBackRequested: () {},
       showTaskCenterRequested: () async {},
-      longTaskLauncherService: _FakeLongTaskLauncherService(),
     );
 
     await controller.initialize();
@@ -75,12 +75,12 @@ void main() {
       answerModeGuidanceStageUseCase: AnswerModeGuidanceStageUseCase(
         statePort: port,
       ),
+      openingLaunchBridgeService: _bridge(),
       readCurrentProject: () => project,
       readCurrentProjectTitle: () => project.name,
       syncWorkbenchResources: () async {},
       onBackRequested: () {},
       showTaskCenterRequested: () async {},
-      longTaskLauncherService: _FakeLongTaskLauncherService(),
     );
 
     await controller.refresh(preferredModeId: 'seed_autopilot_novel');
@@ -108,14 +108,12 @@ void main() {
       runtimeBaselineId: 'continuous_autonomous',
     );
     await port.save(project, state);
-    final launcher = _FakeLongTaskLauncherService(
-      result: const InspirationWorkbenchLongTaskLaunchResult(
-        ok: true,
-        message: '长任务队列已生成，共创建 7 个任务。',
-      ),
-    );
     var taskCenterShown = 0;
     var synced = 0;
+    final launchResult = const InspirationWorkbenchLongTaskLaunchResult(
+      ok: true,
+      message: '长任务队列已生成，共创建 7 个任务。',
+    );
     final controller = InspirationWorkbenchController(
       loadModeGuidanceStateUseCase: LoadModeGuidanceStateUseCase(
         statePort: port,
@@ -123,6 +121,7 @@ void main() {
       answerModeGuidanceStageUseCase: AnswerModeGuidanceStageUseCase(
         statePort: port,
       ),
+      openingLaunchBridgeService: _bridge(launchResult: launchResult),
       readCurrentProject: () => project,
       readCurrentProjectTitle: () => project.name,
       syncWorkbenchResources: () async {
@@ -132,17 +131,55 @@ void main() {
       showTaskCenterRequested: () async {
         taskCenterShown += 1;
       },
-      longTaskLauncherService: launcher,
     );
 
     await controller.refresh(preferredModeId: 'seed_autopilot_novel');
     await controller.onInspirationWorkbenchLongTaskLaunchRequested();
 
-    expect(launcher.lastProject?.rootPath, project.rootPath);
-    expect(launcher.lastModeId, 'seed_autopilot_novel');
     expect(taskCenterShown, 1);
     expect(synced, 1);
     expect(controller.viewData.status, contains('已自动切到长任务总站'));
+  });
+
+  test('灵感工作台只消费启动投影而不再自行裁决项目类型', () async {
+    final port = _InMemoryModeGuidanceStatePort();
+    final transitionService = ModeGuidanceTransitionService();
+    final state = _seedReadyState(
+      transitionService: transitionService,
+      modeId: 'seed_autopilot_novel',
+    );
+    final project = ProjectDescriptor(
+      id: 'project-4',
+      name: '普通项目',
+      rootPath: 'D:/Projects/normal_project',
+      projectType: 'novel',
+    );
+    await port.save(project, state);
+    var taskCenterShown = 0;
+    final controller = InspirationWorkbenchController(
+      loadModeGuidanceStateUseCase: LoadModeGuidanceStateUseCase(
+        statePort: port,
+      ),
+      answerModeGuidanceStageUseCase: AnswerModeGuidanceStageUseCase(
+        statePort: port,
+      ),
+      openingLaunchBridgeService: _bridge(),
+      readCurrentProject: () => project,
+      readCurrentProjectTitle: () => project.name,
+      syncWorkbenchResources: () async {},
+      onBackRequested: () {},
+      showTaskCenterRequested: () async {
+        taskCenterShown += 1;
+      },
+    );
+
+    await controller.refresh(preferredModeId: 'seed_autopilot_novel');
+    expect(controller.viewData.longTaskLaunch.isVisible, isFalse);
+
+    await controller.onInspirationWorkbenchLongTaskLaunchRequested();
+
+    expect(taskCenterShown, 0);
+    expect(controller.viewData.status, contains('当前项目不提供长任务启动入口'));
   });
 
   test('长任务启动视图只在长任务项目里显示', () {
@@ -184,33 +221,21 @@ class _InMemoryModeGuidanceStatePort implements ModeGuidanceStatePort {
   }
 }
 
-class _FakeLongTaskLauncherService
-    extends InspirationWorkbenchLongTaskLauncherService {
-  _FakeLongTaskLauncherService({
-    this.result = const InspirationWorkbenchLongTaskLaunchResult(
-      ok: false,
-      message: 'noop',
+WorkbenchOpeningLaunchBridgeService _bridge({
+  InspirationWorkbenchLongTaskLaunchResult launchResult =
+      const InspirationWorkbenchLongTaskLaunchResult(
+        ok: false,
+        message: 'noop',
+      ),
+}) {
+  return WorkbenchOpeningLaunchBridgeService(
+    buildModeGuidancePlanInputUseCase: BuildModeGuidancePlanInputUseCase(
+      statePort: _InMemoryModeGuidanceStatePort(),
     ),
-  }) : super(
-         buildModeGuidancePlanInputUseCase: BuildModeGuidancePlanInputUseCase(
-           statePort: _InMemoryModeGuidanceStatePort(),
-         ),
-         workflowRuntimeService: _UnsupportedWorkflowRuntimeService(),
-       );
-
-  final InspirationWorkbenchLongTaskLaunchResult result;
-  ProjectDescriptor? lastProject;
-  String lastModeId = '';
-
-  @override
-  Future<InspirationWorkbenchLongTaskLaunchResult> launch(
-    ProjectDescriptor project, {
-    required String modeId,
-  }) async {
-    lastProject = project;
-    lastModeId = modeId;
-    return result;
-  }
+    workflowRuntimeService: _UnsupportedWorkflowRuntimeService(
+      launchResult: launchResult,
+    ),
+  );
 }
 
 ModeGuidanceState _seedReadyState({
@@ -327,4 +352,25 @@ ModeGuidanceState _seedReadyState({
 }
 
 class _UnsupportedWorkflowRuntimeService extends Fake
-    implements ProjectWorkflowRuntimeService {}
+    implements ProjectWorkflowRuntimeService {
+  _UnsupportedWorkflowRuntimeService({required this.launchResult});
+
+  final InspirationWorkbenchLongTaskLaunchResult launchResult;
+
+  @override
+  Future<JsonMap> createLongTaskWorkflow(
+    ProjectDescriptor project,
+    String runtimeMode, {
+    JsonMap options = const <String, Object?>{},
+  }) async {
+    return <String, Object?>{
+      'ok': launchResult.ok,
+      'message': launchResult.message,
+      'created_tasks': launchResult.ok
+          ? <Object?>[
+              <String, Object?>{'id': 'task-1'},
+            ]
+          : const <Object?>[],
+    };
+  }
+}

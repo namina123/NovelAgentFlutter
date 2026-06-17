@@ -122,10 +122,18 @@ class _SettingsLabeledSearchDropdownFieldState<T>
   }
 
   void _handleTextChanged() {
-    if (!_menuRequested) {
+    if (!_menuRequested && widget.controller.text.trim().isNotEmpty) {
+      _menuRequested = true;
+      if (mounted) {
+        setState(() {});
+      }
+      _focusNode.requestFocus();
+      _scheduleOverlayRefresh(forceAllWhenEmpty: true);
       return;
     }
-    _scheduleOverlayRefresh();
+    if (_menuRequested) {
+      _scheduleOverlayRefresh();
+    }
   }
 
   void _toggleMenuFromButton() {

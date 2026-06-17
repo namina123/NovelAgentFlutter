@@ -207,6 +207,42 @@ void main() {
           ),
           ProbeReportCategories.technicalFailure,
         );
+        expect(
+          classifyDraftProbeReportCategory(
+            ok: false,
+            validation: const <String, Object?>{
+              'viewmodel': <String, Object?>{
+                'workbench_information_viewmodel': <String, Object?>{
+                  'has_content': false,
+                },
+                'project_file_counts': <String, Object?>{
+                  'chapter_files': 2,
+                  'research_notes': 0,
+                  'research_requests': 1,
+                },
+              },
+            },
+          ),
+          ProbeReportCategories.contractConflict,
+        );
+        expect(
+          classifyDraftProbeReportCategory(
+            ok: false,
+            validation: const <String, Object?>{
+              'viewmodel': <String, Object?>{
+                'workbench_information_viewmodel': <String, Object?>{
+                  'has_content': true,
+                },
+                'project_file_counts': <String, Object?>{
+                  'chapter_files': 0,
+                  'research_notes': 0,
+                  'research_requests': 0,
+                },
+              },
+            },
+          ),
+          ProbeReportCategories.contractConflict,
+        );
       },
     );
 

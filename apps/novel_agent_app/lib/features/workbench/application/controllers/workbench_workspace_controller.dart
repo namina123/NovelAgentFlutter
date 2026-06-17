@@ -33,6 +33,10 @@ import '../services/workspace_information_projection_service.dart';
 import '../services/workspace_primary_document_selection_service.dart';
 import '../services/workspace_resource_display_service.dart';
 
+part 'workbench_workspace_state_controller.dart';
+part 'workbench_project_navigation_bridge.dart';
+part 'workbench_project_action_facade.dart';
+
 typedef WorkbenchProjectLongTaskDetailLoader =
     Future<ProjectLongTaskStationDetail> Function(RunInstance run);
 
@@ -180,7 +184,11 @@ class WorkbenchWorkspaceController
            workbenchDraftRecoverySnapshotService ??
            const WorkbenchDraftRecoverySnapshotService(),
        _pendingResearchActionService = pendingResearchActionService,
-       _projectLongTaskDetailLoader = projectLongTaskDetailLoader;
+       _projectLongTaskDetailLoader = projectLongTaskDetailLoader {
+    _workspaceStateController = WorkbenchWorkspaceStateController(this);
+    _projectNavigationBridge = WorkbenchProjectNavigationBridge(this);
+    _projectActionFacade = WorkbenchProjectActionFacade(this);
+  }
 
   final LoadProjectWorkspaceUseCase _loadProjectWorkspaceUseCase;
   final ReadProjectFileUseCase _readProjectFileUseCase;
@@ -256,6 +264,10 @@ class WorkbenchWorkspaceController
   WorkbenchInformationViewData _latestInformationViewData =
       const WorkbenchInformationViewData();
 
+  late final WorkbenchWorkspaceStateController _workspaceStateController;
+  late final WorkbenchProjectNavigationBridge _projectNavigationBridge;
+  late final WorkbenchProjectActionFacade _projectActionFacade;
+
   ProjectCreationController? _projectCreationController;
 
   void attachProjectCreationController(ProjectCreationController controller) {
@@ -272,91 +284,34 @@ class WorkbenchWorkspaceController
       _readProjectState();
 
   JsonMap currentProjectInfo() {
-    // 中文注释: 会话与主动作需要轻量项目摘要，这里只返回运行时真正需要的字段。
-    final project = currentProject;
-    if (project == null) {
-      return const <String, Object?>{};
-    }
-    return <String, Object?>{
-      'id': project.id,
-      'title': project.name,
-      'path': project.rootPath,
-      'project_type': project.projectType,
-    };
+    // 中文注释: 会话与主动作需要轻量项目摘要，继续由状态层统一输出。
+    return _workspaceStateController.currentProjectInfo();
   }
 
-  String get activeDocumentPath => _readWorkbench().activeDocumentPath;
+  String get activeDocumentPath => _workspaceStateController.activeDocumentPath;
 
-  String get activeDocumentBody => _activeOpenDocument()?.content ?? '';
+  String get activeDocumentBody => _workspaceStateController.activeDocumentBody;
 
-  OpenDocumentState? activeOpenDocument() => _activeOpenDocument();
+  OpenDocumentState? activeOpenDocument() => _workspaceStateController.activeOpenDocument();
 
   Future<void> openResource(String relativePath) async {
-    // 中文注释: 给壳层与其他子域暴露受控的资源打开入口，但具体读盘细节仍留在工作区控制器内部。
-    await _openResource(relativePath);
+    // 中文注释: 资源打开入口继续交给状态层，只保留受控的公开方法。
+    await _workspaceStateController.openResource(relativePath);
   }
 
   Future<void> saveCurrentDocument() async {
-    // 中文注释: 壳层如果需要触发保存，只能通过工作区控制器暴露的最小入口。
-    await _saveCurrentDocument();
+    // 中文注释: 活动文档保存只属于状态层。
+    await _workspaceStateController.saveCurrentDocument();
   }
 
   bool stageGeneratedDraftOnActiveDocument(String content) {
-    // 中文注释: 普通会话 fallback 只允许把结果暂存成当前文档的未保存草稿，不直接冒充正式项目产物落盘。
-    final active = _activeOpenDocument();
-    final trimmedContent = content.trim();
-    if (active == null || trimmedContent.isEmpty) {
-      return false;
-    }
-    _replaceOpenDocument(
-      active.copyWith(
-        content: content,
-        isDirty: true,
-        isRendered: false,
-        isBufferedDraft: true,
-      ),
-    );
-    _mutateWorkbench((current) => applyWorkbenchState(current));
-    _persistWorkbenchSnapshot();
-    return true;
+    // 中文注释: 普通会话 fallback 仍然只能暂存到当前文档。
+    return _workspaceStateController.stageGeneratedDraftOnActiveDocument(content);
   }
 
   WorkbenchViewData applyWorkbenchState(WorkbenchViewData base) {
-    // 中文注释: 工作台文档与资源树投影统一由工作区控制器生成，避免其他 feature 直接读内部状态。
-    final active = _activeOpenDocument();
-    final state = _readProjectState();
-    return base.copyWith(
-      projectLongTaskSummary: _projectLongTaskSummaryViewDataService.build(
-        project: state.currentProject,
-        runs: state.currentProjectLongTaskRuns,
-        runDetails: state.currentProjectLongTaskRunDetails,
-        isLoading: state.isProjectLongTaskSummaryLoading,
-      ),
-      documents: state.openDocuments
-          .map(
-            (document) => DocumentTabViewData(
-              id: document.id,
-              title: document.title,
-              relativePath: document.relativePath,
-              tooltip: _workbenchDocumentIdentityService.tooltipLabel(
-                relativePath: document.relativePath,
-                title: document.title,
-                isDirty: document.isDirty,
-                isBufferedDraft: document.isBufferedDraft,
-              ),
-              isActive: document.id == state.activeOpenDocumentId,
-              isDirty: document.isDirty,
-            ),
-          )
-          .toList(growable: false),
-      activeDocumentTitle: active?.title ?? '',
-      activeDocumentPath: active?.relativePath ?? '',
-      activeDocumentBody: active?.content ?? '',
-      activeDocumentDirty: active?.isDirty ?? false,
-      activeDocumentBufferedDraft: active?.isBufferedDraft ?? false,
-      activeDocumentCanRender: _canRender(active?.relativePath ?? ''),
-      isActiveDocumentRendered: active?.isRendered ?? false,
-    );
+    // 中文注释: 工作台文档与资源树投影统一由状态层生成。
+    return _workspaceStateController.applyWorkbenchState(base);
   }
 
   Future<bool> loadProject(String rootPath) async {
@@ -835,43 +790,43 @@ class WorkbenchWorkspaceController
   @override
   void onCreateProjectRequested() {
     // 中文注释: 项目创建动作委派给专用控制器，避免工作区控制器再长创建向导状态机。
-    _projectCreationController?.onCreateProjectRequested();
+    _projectNavigationBridge.onCreateProjectRequested();
   }
 
   @override
   void onOpenProjectRequested() {
     // 中文注释: 打开已有项目同样委派给项目创建控制器，保持“项目入口”职责单点收束。
-    _projectCreationController?.onOpenProjectRequested();
+    _projectNavigationBridge.onOpenProjectRequested();
   }
 
   @override
   void onProjectLauncherDismissed() {
     // 中文注释: 启动器弹层生命周期完全交给项目创建控制器。
-    _projectCreationController?.onProjectLauncherDismissed();
+    _projectNavigationBridge.onProjectLauncherDismissed();
   }
 
   @override
   void onProjectLauncherRefreshRequested() {
     // 中文注释: 启动器列表刷新继续由项目创建控制器统一处理。
-    _projectCreationController?.onProjectLauncherRefreshRequested();
+    _projectNavigationBridge.onProjectLauncherRefreshRequested();
   }
 
   @override
   void onProjectEntryOpened(String projectPath) {
     // 中文注释: 从项目列表选中项目时，工作区只做委派，不重写选择逻辑。
-    _projectCreationController?.onProjectEntryOpened(projectPath);
+    _projectNavigationBridge.onProjectEntryOpened(projectPath);
   }
 
   @override
   void onProjectCreationBackRequested() {
     // 中文注释: 创建向导的返回动作继续委派给项目创建控制器，工作区不介入阶段状态机。
-    _projectCreationController?.onProjectCreationBackRequested();
+    _projectNavigationBridge.onProjectCreationBackRequested();
   }
 
   @override
   void onProjectCreationSubmitted(ProjectCreateRequestViewData request) {
     // 中文注释: 项目创建表单提交继续由创建控制器处理，工作区层不再理解运行基准判断。
-    _projectCreationController?.onProjectCreationSubmitted(request);
+    _projectNavigationBridge.onProjectCreationSubmitted(request);
   }
 
   @override
@@ -902,115 +857,31 @@ class WorkbenchWorkspaceController
   @override
   void onProjectTypeTransitionRequested() {
     // 中文注释: 项目类型转换入口先基于 core 计划投影出 blocker，再让用户在同一命令层完成确认。
-    final project = currentProject;
-    if (project == null) {
-      _announce('请先打开项目。');
-      return;
-    }
-    final targetProjectTypeId = _projectTypeTransitionTargetId(
-      project.projectType,
-    );
-    if (targetProjectTypeId.trim().isEmpty) {
-      _announce('当前项目类型不支持转换。');
-      return;
-    }
-    final availability = _projectTypeTransitionAvailabilityFor(project);
-    if (availability.isHidden) {
-      return;
-    }
-    final runtimeBaselineId = project.runtimeBaselineId.trim();
-    final hasActiveLongTaskRun = _readProjectState().currentProjectLongTaskRuns
-        .any((run) => run.isActive);
-    final plan = _projectTypeTransitionPreparationService.prepare(
-      project: project,
-      targetProjectTypeId: targetProjectTypeId,
-      runtimeBaselineId: runtimeBaselineId,
-      hasActiveLongTaskRun: hasActiveLongTaskRun,
-    );
-    _showWorkspaceCommand(
-      _projectTypeTransitionCommandViewDataService.build(
-        project: project,
-        plan: plan,
-        runtimeBaselineId: runtimeBaselineId,
-        confirmLabel: plan.canTransition ? '执行转换' : '重新检查',
-      ),
-    );
+    _projectActionFacade.onProjectTypeTransitionRequested();
   }
 
   @override
   void onRefreshFilesRequested() {
     // 中文注释: 刷新工作区时优先重载当前项目；如果还没有项目，则走默认项目恢复链。
-    final project = currentProject;
-    if (project != null) {
-      loadProject(project.rootPath);
-      return;
-    }
-    _projectCreationController?.loadDefaultProject();
+    _projectActionFacade.onRefreshFilesRequested();
   }
 
   @override
   void onCreateFileRequested() {
     // 中文注释: 文件创建继续统一落到工作区命令表单，后续 CLI 也能共用同一用例。
-    _showWorkspaceCommand(
-      WorkspaceCommandViewData(
-        mode: WorkspaceCommandMode.createFile,
-        title: '新建文件',
-        description: '在项目目录下创建一个新文件。',
-        confirmLabel: '创建文件',
-        status: '',
-        projectTitle: '',
-        projectType: '',
-        genre: '',
-        premise: '',
-        notes: '',
-        relativePath: _workspaceCommandDefaultTargetService
-            .createFileDirectory(),
-        entryName: 'new_file.md',
-        content: '',
-        sourcePathsText: '',
-        targetDirectory: '',
-      ),
-    );
+    _projectActionFacade.onCreateFileRequested();
   }
 
   @override
   void onCreateFolderRequested() {
     // 中文注释: 新建文件夹与新建文件共用命令面板，减少壳层表单散落。
-    _showWorkspaceCommand(
-      WorkspaceCommandViewData(
-        mode: WorkspaceCommandMode.createFolder,
-        title: '新建文件夹',
-        description: '在项目目录下创建一个新目录。',
-        confirmLabel: '创建目录',
-        status: '',
-        projectTitle: '',
-        projectType: '',
-        genre: '',
-        premise: '',
-        notes: '',
-        relativePath: _workspaceCommandDefaultTargetService
-            .createFolderParentDirectory(),
-        entryName: 'new_folder',
-        content: '',
-        sourcePathsText: '',
-        targetDirectory: '',
-      ),
-    );
+    _projectActionFacade.onCreateFolderRequested();
   }
 
   @override
   void onImportRequested() {
     // 中文注释: 导入入口统一走共享命令构建服务，项目类型差异留给策略层处理。
-    final project = currentProject;
-    if (project == null) {
-      _announce('请先打开项目。');
-      return;
-    }
-    _showWorkspaceCommand(
-      _projectImportWorkspaceCommandViewDataService.build(
-        projectType: project.projectType,
-      ),
-    );
+    _projectActionFacade.onImportRequested();
   }
 
   @override
@@ -1022,245 +893,134 @@ class WorkbenchWorkspaceController
   @override
   void onSaveCurrentRequested() {
     // 中文注释: 工具栏保存统一收口到当前工作区活动文档。
-    _saveCurrentDocument();
+    _projectActionFacade.onSaveCurrentRequested();
   }
 
   @override
   void onProjectAgentGroupRequested() {
     // 中文注释: 项目级智能体组入口必须在任意已打开项目下稳定可达，因此这里直接打开正式配置浮层。
-    final viewData = _readProjectAgentGroupWorkspaceViewData();
-    if (viewData == null) {
-      _announce('请先打开项目，再配置当前项目的智能体组。');
-      return;
-    }
-    _mutateWorkbench(
-      (current) => current.copyWith(projectAgentGroupWorkspace: viewData),
-    );
+    _projectActionFacade.onProjectAgentGroupRequested();
   }
 
   @override
   void onProjectAgentGroupDismissed() {
     // 中文注释: 项目级组配置浮层关闭只清理当前 overlay 状态，不影响会话和资源区。
-    _mutateWorkbench(
-      (current) => current.copyWith(projectAgentGroupWorkspace: null),
-    );
+    _projectActionFacade.onProjectAgentGroupDismissed();
   }
 
   @override
   void onProjectAgentGroupSelected(String groupId) {
     // 中文注释: 组切换属于项目级协作基线变更，因此这里统一走共享选择链并在成功后刷新浮层内容。
-    unawaited(_selectProjectAgentGroupAndRefreshOverlay(groupId));
+    _projectActionFacade.onProjectAgentGroupSelected(groupId);
   }
 
   @override
   void onAgentEcosystemRequested() {
     // 中文注释: 工作区只发起全局导航请求，不直接操作生态页数据。
-    _showAgentEcosystem();
+    _projectNavigationBridge.onAgentEcosystemRequested();
   }
 
   @override
   void onCurrentAgentSkillLoadoutRequested() {
-    final agentId = _readWorkbench().agentSelector.currentAgentId.trim();
-    if (agentId.isEmpty) {
-      _announce('当前没有可定位的会话智能体。');
-      return;
-    }
-    _showCurrentAgentSkillLoadout(agentId);
+    _projectNavigationBridge.onCurrentAgentSkillLoadoutRequested();
   }
 
   @override
   void onTasksRequested() {
     // 中文注释: 历史任务入口统一折返到长任务总站，工作台内不再保留第二套任务空间。
-    _showLongTaskStation();
+    _projectNavigationBridge.onTasksRequested();
   }
 
   void onLongTaskStationRequested() {
     // 中文注释: 长任务总站入口不再混进工作区自身状态机。
-    _showLongTaskStation();
+    _projectNavigationBridge.onLongTaskStationRequested();
   }
 
   @override
   void onReviewsRequested() {
     // 中文注释: 历史审稿入口同样折返到总站，具体结果查看回到工作台文件区。
-    _showLongTaskStation();
+    _projectNavigationBridge.onReviewsRequested();
   }
 
   @override
   void onTemplatesRequested() {
     // 中文注释: 模板页导航只发起全局切页请求，不带模板业务规则。
-    _showPromptTemplates();
+    _projectNavigationBridge.onTemplatesRequested();
   }
 
   @override
   void onProjectAssetsRequested() {
     // 中文注释: 项目资产页作为独立子域入口，从工作区只保留跳转动作。
-    _showProjectAssets();
+    _projectNavigationBridge.onProjectAssetsRequested();
   }
 
   @override
   void onCurrentAgentExpressionConstraintsRequested() {
-    final agentId = _readWorkbench().agentSelector.currentAgentId.trim();
-    if (agentId.isEmpty) {
-      _announce('当前没有可定位的会话智能体。');
-      return;
-    }
-    _showCurrentAgentExpressionConstraints(agentId);
+    _projectNavigationBridge.onCurrentAgentExpressionConstraintsRequested();
   }
 
   void onInspirationWorkbenchRequested() {
     // 中文注释: 灵感工作台从资源区独立进入，工作区只负责发起导航，不参与其状态机。
-    _showInspirationWorkbench();
+    _projectNavigationBridge.onInspirationWorkbenchRequested();
   }
 
   @override
   void onResourceEntrySelected(String entryId) {
     // 中文注释: 资源树点击统一走真实工作区读取链，避免 widget 直接读文件。
-    _openResource(entryId);
+    _projectActionFacade.onResourceEntrySelected(entryId);
   }
 
   @override
   Future<void> onPendingResearchApproved(String requestId) async {
-    await _applyPendingResearchAction(
-      requestId,
-      successMessage: '已确认资料请求。',
-      action: (service, project, cleanRequestId) => service.approve(
-        project,
-        requestId: cleanRequestId,
-        actorId: 'workbench_gui',
-        note: '在工作台中确认继续研究',
-      ),
-    );
+    await _projectActionFacade.onPendingResearchApproved(requestId);
   }
 
   @override
   Future<void> onPendingResearchRejected(String requestId) async {
-    await _applyPendingResearchAction(
-      requestId,
-      successMessage: '已拒绝资料请求。',
-      action: (service, project, cleanRequestId) => service.reject(
-        project,
-        requestId: cleanRequestId,
-        actorId: 'workbench_gui',
-        note: '在工作台中拒绝继续研究',
-      ),
-    );
+    await _projectActionFacade.onPendingResearchRejected(requestId);
   }
 
   @override
   void onWorkspaceCommandDismissed() {
     // 中文注释: 工作区命令关闭只清理弹层状态，不触碰项目本身。
-    _mutateWorkbench((current) => current.copyWith(workspaceCommand: null));
+    _projectActionFacade.onWorkspaceCommandDismissed();
   }
 
   @override
   void onWorkspaceImportFilesPickRequested(
     WorkspaceCommandRequestViewData request,
   ) {
-    unawaited(_pickImportFiles(request));
+    _projectActionFacade.onWorkspaceImportFilesPickRequested(request);
   }
 
   @override
   void onWorkspaceCommandSubmitted(WorkspaceCommandRequestViewData request) {
     // 中文注释: 工作区命令统一在这里分派到共享用例，界面层不直接碰业务依赖。
-    switch (request.mode) {
-      case WorkspaceCommandMode.editProjectInfo:
-        _submitProjectInfoCommand(request);
-        return;
-      case WorkspaceCommandMode.transitionProjectType:
-        _submitProjectTypeTransitionCommand(request);
-        return;
-      case WorkspaceCommandMode.createFile:
-        _submitCreateFileCommand(request);
-        return;
-      case WorkspaceCommandMode.createFolder:
-        _submitCreateFolderCommand(request);
-        return;
-      case WorkspaceCommandMode.importFiles:
-        _submitImportFilesCommand(request);
-        return;
-    }
+    _projectActionFacade.onWorkspaceCommandSubmitted(request);
   }
 
   @override
   void onDocumentActionRequested(DocumentToolbarAction action) {
     // 中文注释: 文档动作统一落到工作区控制器，保证文档标签、资源树和任务动作一起演进。
-    switch (action) {
-      case DocumentToolbarAction.save:
-        _saveCurrentDocument();
-        break;
-      case DocumentToolbarAction.render:
-        _toggleActiveDocumentRenderMode();
-        break;
-      case DocumentToolbarAction.outline:
-        _openLikelyOutlineDocument();
-        break;
-      case DocumentToolbarAction.review:
-        _createReviewTaskForCurrentDocument();
-        break;
-    }
+    _projectActionFacade.onDocumentActionRequested(action);
   }
 
   @override
   void onDocumentSelected(String documentId) {
     // 中文注释: 标签切换只修改活动文档指针，不产生读盘副作用。
-    final state = _readProjectState();
-    if (documentId.trim().isEmpty || documentId == state.activeOpenDocumentId) {
-      return;
-    }
-    _writeProjectState(state.copyWith(activeOpenDocumentId: documentId));
-    _mutateWorkbench(
-      (current) =>
-          applyWorkbenchState(current.copyWith(generationStatus: '已切换文档。')),
-    );
-    _persistWorkbenchSnapshot();
+    _projectActionFacade.onDocumentSelected(documentId);
   }
 
   @override
   void onDocumentClosed(String documentId) {
     // 中文注释: 关闭标签只变更内存态，保存行为仍旧必须显式触发。
-    final state = _readProjectState();
-    final index = state.openDocuments.indexWhere(
-      (document) => document.id == documentId,
-    );
-    if (index < 0) {
-      return;
-    }
-    final nextDocuments = List<OpenDocumentState>.from(state.openDocuments)
-      ..removeAt(index);
-    var nextActiveDocumentId = state.activeOpenDocumentId;
-    if (nextActiveDocumentId == documentId) {
-      if (nextDocuments.isEmpty) {
-        nextActiveDocumentId = '';
-      } else if (index >= nextDocuments.length) {
-        nextActiveDocumentId = nextDocuments.last.id;
-      } else {
-        nextActiveDocumentId = nextDocuments[index].id;
-      }
-    }
-    _writeProjectState(
-      state.copyWith(
-        openDocuments: nextDocuments,
-        activeOpenDocumentId: nextActiveDocumentId,
-      ),
-    );
-    _mutateWorkbench(
-      (current) =>
-          applyWorkbenchState(current.copyWith(generationStatus: '已关闭文档。')),
-    );
-    _persistWorkbenchSnapshot();
+    _projectActionFacade.onDocumentClosed(documentId);
   }
 
   @override
   void onDocumentBodyChanged(String value) {
     // 中文注释: 文本编辑只变更活动文档内容和脏标记，不在输入时做任何持久化。
-    final active = _activeOpenDocument();
-    if (active == null) {
-      return;
-    }
-    _replaceOpenDocument(
-      active.copyWith(content: value, isDirty: true, isRendered: false),
-    );
-    _mutateWorkbench((current) => applyWorkbenchState(current));
+    _projectActionFacade.onDocumentBodyChanged(value);
   }
 
   Future<void> _openResource(String relativePath) async {
@@ -2411,3 +2171,4 @@ const int _maxInformationSupportScanAttempts = 3;
 const Set<String> _informationSupportIgnoredRoots = <String>{
   '.novel_agent/reference_extraction',
 };
+

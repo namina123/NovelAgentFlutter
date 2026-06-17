@@ -25,6 +25,7 @@ class ProbeApiConfig {
 final class ProbeReportCategories {
   static const String success = 'success';
   static const String technicalFailure = 'technical_failure';
+  static const String contractConflict = 'contract_conflict';
   static const String waitingUser = 'waiting_user';
   static const String budgetFailure = 'budget_failure';
   static const String policyDisabled = 'policy_disabled';
@@ -219,6 +220,9 @@ String classifyDraftProbeReportCategory({
   }
   if (_validationSignalsInformationFailure(validation)) {
     return ProbeReportCategories.informationQualityFailure;
+  }
+  if (_validationSignalsContractConflict(validation)) {
+    return ProbeReportCategories.contractConflict;
   }
   final stopDiagnosis = _resolveProbeStopDiagnosis(validation);
   final stopCategory = ValueReaders.stringValue(
@@ -637,6 +641,39 @@ bool _validationSignalsInformationFailure(JsonMap validation) {
     return true;
   }
   if (!ValueReaders.boolValue(validation['information_probe_ok'], true)) {
+    return true;
+  }
+  return false;
+}
+
+bool _validationSignalsContractConflict(JsonMap validation) {
+  final viewmodel = ValueReaders.mapValue(validation['viewmodel']);
+  final workbenchVm = ValueReaders.mapValue(
+    viewmodel['workbench_information_viewmodel'],
+  );
+  final fileCounts = ValueReaders.mapValue(viewmodel['project_file_counts']);
+  final hasWorkbenchContent = ValueReaders.boolValue(
+    workbenchVm['has_content'],
+  );
+  final chapterFiles = ValueReaders.intValue(fileCounts['chapter_files']);
+  final researchNotes = ValueReaders.intValue(fileCounts['research_notes']);
+  final researchRequests = ValueReaders.intValue(
+    fileCounts['research_requests'],
+  );
+  final fileEvidencePresent =
+      chapterFiles > 0 || researchNotes > 0 || researchRequests > 0;
+  if (fileEvidencePresent && !hasWorkbenchContent) {
+    return true;
+  }
+  if (!fileEvidencePresent && hasWorkbenchContent) {
+    return true;
+  }
+  if (fileEvidencePresent &&
+      ValueReaders.mapValue(validation['information_probe']).isNotEmpty &&
+      !ValueReaders.boolValue(
+        ValueReaders.mapValue(validation['information_probe'])['ok'],
+        true,
+      )) {
     return true;
   }
   return false;

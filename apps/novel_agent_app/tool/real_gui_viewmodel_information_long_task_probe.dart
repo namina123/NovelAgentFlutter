@@ -1059,6 +1059,16 @@ JsonMap _validateReport(JsonMap report) {
   if (!ValueReaders.boolValue(batches['ok'])) {
     failureReasons.add('长任务批次运行失败。');
   }
+  final hasFileEvidence =
+      ValueReaders.intValue(fileCounts['chapter_files']) > 0 ||
+      ValueReaders.intValue(fileCounts['research_notes']) > 0 ||
+      ValueReaders.intValue(fileCounts['research_requests']) > 0;
+  if (hasFileEvidence && !ValueReaders.boolValue(workbenchVm['has_content'])) {
+    failureReasons.add('文件证据已存在，但 Workbench ViewModel 未投影出对应内容。');
+  }
+  if (!hasFileEvidence && ValueReaders.boolValue(workbenchVm['has_content'])) {
+    failureReasons.add('Workbench ViewModel 声称已有内容，但项目文件证据为空。');
+  }
   if (ValueReaders.intValue(fileCounts['chapter_files']) < 1) {
     failureReasons.add('项目内没有可读章节正文。');
   }
@@ -1087,11 +1097,18 @@ JsonMap _validateReport(JsonMap report) {
     );
   }
   final ok = failureReasons.isEmpty;
+  final reportCategory = ok
+      ? ProbeReportCategories.success
+      : failureReasons.any(
+          (reason) =>
+              reason.contains('Workbench ViewModel') ||
+              reason.contains('ViewModel'),
+        )
+      ? ProbeReportCategories.contractConflict
+      : ProbeReportCategories.contentQualityFailure;
   return <String, Object?>{
     'ok': ok,
-    'report_category': ok
-        ? ProbeReportCategories.success
-        : ProbeReportCategories.contentQualityFailure,
+    'report_category': reportCategory,
     'failure_reasons': failureReasons,
     'summary': ok
         ? 'GUI/viewmodel 资料摘要、章节产物与长任务运行状态均可见。'

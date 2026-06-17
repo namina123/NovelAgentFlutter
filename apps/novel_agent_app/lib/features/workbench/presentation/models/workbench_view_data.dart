@@ -70,6 +70,7 @@ class WorkbenchViewData {
     required this.sessionHistoryEntries,
     required this.activeSessionId,
     required this.showSessionHistory,
+    this.sessionRestoreResult,
     required this.isDocumentsWorkspaceVisible,
     required this.projectLauncher,
     required this.projectAgentGroupWorkspace,
@@ -116,6 +117,7 @@ class WorkbenchViewData {
   final List<SessionHistoryEntryViewData> sessionHistoryEntries;
   final String activeSessionId;
   final bool showSessionHistory;
+  final SessionRestoreResult? sessionRestoreResult;
   final bool isDocumentsWorkspaceVisible;
   final ProjectLauncherViewData? projectLauncher;
   final ProjectAgentGroupWorkspaceViewData? projectAgentGroupWorkspace;
@@ -178,6 +180,7 @@ class WorkbenchViewData {
       sessionHistoryEntries: [],
       activeSessionId: '',
       showSessionHistory: false,
+      sessionRestoreResult: null,
       isDocumentsWorkspaceVisible: false,
       projectLauncher: null,
       projectAgentGroupWorkspace: null,
@@ -232,6 +235,7 @@ class WorkbenchViewData {
     List<SessionHistoryEntryViewData>? sessionHistoryEntries,
     String? activeSessionId,
     bool? showSessionHistory,
+    Object? sessionRestoreResult = _sessionRestoreResultSentinel,
     bool? isDocumentsWorkspaceVisible,
     Object? projectLauncher = _projectLauncherSentinel,
     Object? projectAgentGroupWorkspace = _projectAgentGroupWorkspaceSentinel,
@@ -308,6 +312,10 @@ class WorkbenchViewData {
           sessionHistoryEntries ?? this.sessionHistoryEntries,
       activeSessionId: activeSessionId ?? this.activeSessionId,
       showSessionHistory: showSessionHistory ?? this.showSessionHistory,
+      sessionRestoreResult:
+          identical(sessionRestoreResult, _sessionRestoreResultSentinel)
+          ? this.sessionRestoreResult
+          : sessionRestoreResult as SessionRestoreResult?,
       isDocumentsWorkspaceVisible:
           isDocumentsWorkspaceVisible ?? this.isDocumentsWorkspaceVisible,
       projectLauncher: identical(projectLauncher, _projectLauncherSentinel)
@@ -333,6 +341,7 @@ const Object _projectLauncherSentinel = Object();
 const Object _projectAgentGroupWorkspaceSentinel = Object();
 const Object _workspaceCommandSentinel = Object();
 const Object _retryRequestViewSentinel = Object();
+const Object _sessionRestoreResultSentinel = Object();
 const Object _projectLongTaskSummarySentinel = Object();
 const Object _projectTypeTransitionAvailabilitySentinel = Object();
 const Object _conversationContextProjectionSentinel = Object();
