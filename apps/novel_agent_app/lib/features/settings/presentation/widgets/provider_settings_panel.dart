@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../shared/widgets/panel_surface.dart';
+import '../models/model_editor_view_data.dart';
 import '../models/settings_view_data.dart';
 import 'provider_detail_pane.dart';
 import 'provider_list_pane.dart';
@@ -11,21 +12,26 @@ class ProviderSettingsPanel extends StatelessWidget {
     required this.providers,
     required this.providerDirectoryOptions,
     required this.allModelOptions,
+    this.providerConnectionValidationResult =
+        ProviderConnectionValidationResultViewData.initial,
     required this.onProviderSelected,
     required this.onProviderCreateRequested,
     required this.onProviderDetailBackRequested,
     required this.onProviderSaved,
     required this.onProviderDeleted,
+    required this.onConnectionTestRequested,
   });
 
   final List<ProviderEndpointViewData> providers;
   final List<ProviderDirectoryOptionViewData> providerDirectoryOptions;
   final List<SettingsSearchOptionViewData> allModelOptions;
+  final ProviderConnectionValidationResultViewData providerConnectionValidationResult;
   final ValueChanged<String> onProviderSelected;
   final VoidCallback onProviderCreateRequested;
   final VoidCallback onProviderDetailBackRequested;
   final ValueChanged<Map<String, Object?>> onProviderSaved;
   final ValueChanged<String> onProviderDeleted;
+  final ValueChanged<Map<String, Object?>> onConnectionTestRequested;
 
   @override
   Widget build(BuildContext context) {
@@ -61,6 +67,7 @@ class ProviderSettingsPanel extends StatelessWidget {
                     provider: selected,
                     providerDirectoryOptions: providerDirectoryOptions,
                     modelOptions: allModelOptions,
+                    onConnectionTestRequested: onConnectionTestRequested,
                     onBackRequested: onProviderDetailBackRequested,
                     onProviderSaved: onProviderSaved,
                     onProviderDeleted: onProviderDeleted,
@@ -92,6 +99,7 @@ class ProviderSettingsPanel extends StatelessWidget {
                   provider: selected,
                   providerDirectoryOptions: providerDirectoryOptions,
                   modelOptions: allModelOptions,
+                  onConnectionTestRequested: onConnectionTestRequested,
                   onProviderSaved: onProviderSaved,
                   onProviderDeleted: onProviderDeleted,
                 ),

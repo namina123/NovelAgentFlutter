@@ -21,6 +21,19 @@ final class ProviderProfileConstants {
   static const String thinkingFormatReasoningEffortOnly =
       'reasoning_effort_only';
   static const String thinkingEffortAuto = 'auto';
+  static const String apiModeChat = 'chat';
+  static const String apiModeResponses = 'responses';
+  static const String apiModeMessages = 'messages';
+  static const String apiModeGenerateContent = 'generate_content';
+  static const String apiModeStreamGenerateContent = 'stream_generate_content';
+  static const String apiModeEmbeddings = 'embeddings';
+  static const String routeFamilyChatCompletions = 'chat_completions';
+  static const String routeFamilyResponses = 'responses';
+  static const String routeFamilyMessages = 'messages';
+  static const String routeFamilyGenerateContent = 'generate_content';
+  static const String routeFamilyStreamGenerateContent =
+      'stream_generate_content';
+  static const String routeFamilyEmbeddings = 'embeddings';
   static const List<String> customParameterTypes = <String>[
     'string',
     'number',

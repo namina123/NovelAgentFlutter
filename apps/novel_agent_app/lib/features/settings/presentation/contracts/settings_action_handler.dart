@@ -13,6 +13,8 @@ abstract class SettingsActionHandler {
 
   void onProviderDeleted(String providerId);
 
+  void onProviderConnectionTestRequested(Map<String, Object?> payload);
+
   void onModelSettingsSaved(Map<String, Object?> payload);
 
   void onPermissionSettingsSaved(Map<String, Object?> payload);

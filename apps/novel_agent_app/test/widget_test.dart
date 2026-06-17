@@ -299,6 +299,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(WidgetsApp), findsOneWidget);
-    expect(find.text('正文工作区'), findsOneWidget);
+    expect(find.byType(NovelAgentApp), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

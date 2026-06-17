@@ -106,6 +106,16 @@ void main() {
                   unsupportedParameters: [],
                   customReasoningOverride:
                       CustomModelReasoningOverrideViewData.initial,
+                  capabilityExposure: CapabilityExposureViewData(
+                    protocolMode: 'openai_compatible',
+                    protocolLabel: 'OpenAI 协议格式',
+                    apiMode: 'chat',
+                    routeFamily: 'chat_completions',
+                    allowedApiModes: ['chat'],
+                    allowedRouteFamilies: ['chat_completions'],
+                    apiModeVisible: false,
+                    visibleAdvancedFields: const ['top_k'],
+                  ),
                 ),
                 defaultProjectPath: '',
                 permissionSettings: const {},
@@ -141,6 +151,7 @@ void main() {
       expect(find.text('能力摘要'), findsNothing);
       expect(find.text('Base URL'), findsNothing);
       expect(find.text('参数支持'), findsNothing);
+      expect(find.text('API 模式'), findsNothing);
 
       expect(find.text('上下文窗口长度'), findsNothing);
       expect(find.text('Top K'), findsNothing);
@@ -657,6 +668,8 @@ void main() {
         200,
         scrollable: find.byType(Scrollable).first,
       );
+      await tester.ensureVisible(find.text('保存模型设置'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('保存模型设置'));
       await tester.pumpAndSettle();
 
@@ -951,6 +964,8 @@ void main() {
         200,
         scrollable: find.byType(Scrollable).first,
       );
+      await tester.ensureVisible(find.text('保存模型设置'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('保存模型设置'));
       await tester.pumpAndSettle();
 
@@ -1170,6 +1185,110 @@ void main() {
       expect(find.text('深度思考强度'), findsOneWidget);
       expect(find.text('温度'), findsNothing);
       expect(find.text('Top P'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'model settings panel hides api mode when capability exposure says only one route is visible',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light(),
+          home: Scaffold(
+            body: ModelSettingsPanel(
+              viewData: SettingsViewData(
+                activeTabId: 'models',
+                tabs: const [],
+                providers: const [
+                  ProviderEndpointViewData(
+                    id: 'anthropic',
+                    title: 'Anthropic',
+                    protocol: 'anthropic_compatible',
+                    baseUrl: 'https://api.anthropic.com/v1',
+                    rawApiKey: '',
+                    apiKeyState: 'configured',
+                    description: '',
+                  ),
+                ],
+                providerDirectoryOptions: const [],
+                allModelOptions: const [],
+                tabSections: const {},
+                defaultProviderId: 'anthropic',
+                defaultModelId: 'claude-3-5-sonnet-20241022',
+                modelSettings: const {
+                  'provider_id': 'anthropic',
+                  'model_id': 'claude-3-5-sonnet-20241022',
+                },
+                modelEditor: const ModelEditorViewData(
+                  providerId: 'anthropic',
+                  providerLabel: 'Anthropic',
+                  protocolMode: 'anthropic_compatible',
+                  baseUrl: 'https://api.anthropic.com/v1',
+                  modelId: 'claude-3-5-sonnet-20241022',
+                  supportsReasoning: true,
+                  reasoningCanToggle: false,
+                  reasoningDefaultEnabled: true,
+                  supportsTemperature: true,
+                  supportsTopP: true,
+                  supportsTopK: false,
+                  supportsStreaming: true,
+                  supportsTools: true,
+                  supportsToolChoice: false,
+                  supportsFileAttachments: false,
+                  supportsImageAttachments: false,
+                  supportsAttachmentUrlsOnly: false,
+                  supportsMultiAttachments: false,
+                  thinkingParameterFormat: 'content_block_thinking',
+                  thinkingParameterLabel: '深度思考',
+                  thinkingEnabled: true,
+                  thinkingEffortSupported: false,
+                  thinkingEffortParameterLabel: '深度思考强度',
+                  thinkingEffort: 'high',
+                  thinkingEffortOptions: ['high'],
+                  temperature: 0.7,
+                  topP: 0.9,
+                  topK: 0,
+                  modelSuggestions: const [],
+                  customParameters: const [],
+                  supportedParameters: const [],
+                  unsupportedParameters: const [],
+                  customReasoningOverride:
+                      CustomModelReasoningOverrideViewData.initial,
+                  capabilityExposure: CapabilityExposureViewData(
+                    protocolMode: 'anthropic_compatible',
+                    protocolLabel: 'Anthropic 协议格式',
+                    apiMode: 'messages',
+                    routeFamily: 'messages',
+                    allowedApiModes: ['messages'],
+                    allowedRouteFamilies: ['messages'],
+                    apiModeVisible: false,
+                    visibleAdvancedFields: const ['stream'],
+                  ),
+                ),
+                defaultProjectPath: '',
+                permissionSettings: const {},
+                toolStrategySettings: const {},
+                projectCreationExpressionConstraintDefaults:
+                    ProjectCreationExpressionConstraintDefaultsViewData.initial(),
+                networkSettings: const {},
+                contextSettings: const {},
+                themeSettings: const {},
+                themeViewData: ThemeSettingsViewData.initial(),
+                settingsRootPath: '',
+                settingsSearchRoots: const [],
+                defaultProjectsRootPath: '',
+                isMobileProjectRootLocked: false,
+              ),
+              onSaved: (_) {},
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('API 模式'), findsNothing);
+      expect(find.text('Top K'), findsNothing);
     },
   );
 }

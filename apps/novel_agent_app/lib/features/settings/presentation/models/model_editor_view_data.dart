@@ -37,6 +37,10 @@ class ModelEditorViewData {
     required this.supportedParameters,
     required this.unsupportedParameters,
     required this.customReasoningOverride,
+    this.capabilityExposure = CapabilityExposureViewData.initial,
+    this.visibleAdvancedFields = const <String>[],
+    this.connectionValidationResult =
+        ProviderConnectionValidationResultViewData.initial,
   });
 
   final String providerId;
@@ -72,6 +76,9 @@ class ModelEditorViewData {
   final List<String> supportedParameters;
   final List<String> unsupportedParameters;
   final CustomModelReasoningOverrideViewData customReasoningOverride;
+  final CapabilityExposureViewData capabilityExposure;
+  final List<String> visibleAdvancedFields;
+  final ProviderConnectionValidationResultViewData connectionValidationResult;
 
   static const ModelEditorViewData initial = ModelEditorViewData(
     providerId: '',
@@ -107,5 +114,99 @@ class ModelEditorViewData {
     supportedParameters: <String>[],
     unsupportedParameters: <String>[],
     customReasoningOverride: CustomModelReasoningOverrideViewData.initial,
+    capabilityExposure: CapabilityExposureViewData.initial,
+    connectionValidationResult:
+        ProviderConnectionValidationResultViewData.initial,
   );
+}
+
+class CapabilityExposureViewData {
+  const CapabilityExposureViewData({
+    required this.protocolMode,
+    required this.protocolLabel,
+    required this.apiMode,
+    required this.routeFamily,
+    required this.allowedApiModes,
+    required this.allowedRouteFamilies,
+    required this.apiModeVisible,
+    required this.visibleAdvancedFields,
+  });
+
+  final String protocolMode;
+  final String protocolLabel;
+  final String apiMode;
+  final String routeFamily;
+  final List<String> allowedApiModes;
+  final List<String> allowedRouteFamilies;
+  final bool apiModeVisible;
+  final List<String> visibleAdvancedFields;
+
+  static const CapabilityExposureViewData initial = CapabilityExposureViewData(
+    protocolMode: 'openai_compatible',
+    protocolLabel: 'OpenAI 协议格式',
+    apiMode: 'chat',
+    routeFamily: 'chat_completions',
+    allowedApiModes: <String>['chat'],
+    allowedRouteFamilies: <String>['chat_completions'],
+    apiModeVisible: false,
+    visibleAdvancedFields: <String>[],
+  );
+}
+
+class ProviderConnectionValidationResultViewData {
+  const ProviderConnectionValidationResultViewData({
+    required this.isSuccess,
+    required this.summary,
+    required this.details,
+    required this.errors,
+    required this.templateId,
+    required this.providerId,
+    required this.protocolId,
+    required this.protocolMode,
+    required this.routeFamily,
+    required this.selectedRouteFamily,
+    required this.allowedRouteFamilies,
+    required this.hideOptions,
+    required this.fallbackNotAllowed,
+    required this.warnings,
+    required this.matchedTemplateId,
+    required this.matchedTemplateLabel,
+  });
+
+  final bool isSuccess;
+  final String summary;
+  final List<String> details;
+  final List<String> errors;
+  final String templateId;
+  final String providerId;
+  final String protocolId;
+  final String protocolMode;
+  final String routeFamily;
+  final String selectedRouteFamily;
+  final List<String> allowedRouteFamilies;
+  final List<String> hideOptions;
+  final bool fallbackNotAllowed;
+  final List<String> warnings;
+  final String matchedTemplateId;
+  final String matchedTemplateLabel;
+
+  static const ProviderConnectionValidationResultViewData initial =
+      ProviderConnectionValidationResultViewData(
+        isSuccess: false,
+        summary: '',
+        details: <String>[],
+        errors: <String>[],
+        templateId: '',
+        providerId: '',
+        protocolId: '',
+        protocolMode: '',
+        routeFamily: '',
+        selectedRouteFamily: '',
+        allowedRouteFamilies: <String>[],
+        hideOptions: <String>[],
+        fallbackNotAllowed: false,
+        warnings: <String>[],
+        matchedTemplateId: '',
+        matchedTemplateLabel: '',
+      );
 }

@@ -44,7 +44,32 @@ const String providerInterfaceTemplateSeed = r'''
       "default_base_url": "https://api.openai.com/v1",
       "base_url_hints": ["api.openai.com"],
       "route_family": "responses_and_chat",
+      "allowed_route_families": ["chat_completions", "responses"],
       "notes": "OpenAI 官方接口；具体 endpoint family 仍应由模型/运行配置决定。"
+    },
+    {
+      "id": "google_openai_compatible",
+      "provider_id": "google",
+      "label": "Google / Gemini · OpenAI-compatible",
+      "aliases": ["google openai compatible", "gemini openai", "google gemini openai"],
+      "protocol": "openai_compatible",
+      "default_base_url": "https://generativelanguage.googleapis.com/v1beta",
+      "base_url_hints": ["generativelanguage.googleapis.com/v1beta/openai", "generativelanguage.googleapis.com/v1beta"],
+      "route_family": "chat_completions",
+      "allowed_route_families": ["chat_completions", "responses"],
+      "notes": "Google Gemini 的 OpenAI-compatible 入口，后续应与 Gemini native 分开建模。"
+    },
+    {
+      "id": "google_gemini_native",
+      "provider_id": "google",
+      "label": "Google / Gemini · Native",
+      "aliases": ["google gemini native", "gemini native", "google native gemini"],
+      "protocol": "gemini_native",
+      "default_base_url": "https://generativelanguage.googleapis.com/v1beta",
+      "base_url_hints": ["generativelanguage.googleapis.com/v1beta/models", "generativelanguage.googleapis.com/v1beta"],
+      "route_family": "generate_content",
+      "allowed_route_families": ["generate_content", "stream_generate_content"],
+      "notes": "Gemini 原生接口预留模板；运行时协议合同将在后续 session 正式接入。"
     },
     {
       "id": "anthropic_api",
@@ -58,15 +83,48 @@ const String providerInterfaceTemplateSeed = r'''
       "notes": "Anthropic 官方 Messages API。"
     },
     {
-      "id": "glm_openai",
+      "id": "tencent_hunyuan_openai",
+      "provider_id": "tencent_hunyuan",
+      "label": "腾讯混元",
+      "aliases": ["hunyuan", "腾讯混元", "腾讯云混元"],
+      "protocol": "openai_compatible",
+      "default_base_url": "https://api.hunyuan.cloud.tencent.com/v1",
+      "base_url_hints": ["api.hunyuan.cloud.tencent.com", "hunyuan.cloud.tencent.com"],
+      "route_family": "chat_completions",
+      "notes": "腾讯混元 OpenAI 兼容入口。"
+    },
+    {
+      "id": "baidu_qianfan_openai",
+      "provider_id": "baidu_qianfan",
+      "label": "百度千帆 / 文心",
+      "aliases": ["qianfan", "百度千帆", "文心", "文心一言", "ernie"],
+      "protocol": "openai_compatible",
+      "default_base_url": "https://qianfan.baidubce.com/v2",
+      "base_url_hints": ["qianfan.baidubce.com/v2", "qianfan.baidubce.com"],
+      "route_family": "chat_completions",
+      "notes": "百度千帆 ModelBuilder 的 OpenAI 兼容入口。"
+    },
+    {
+      "id": "minimax_openai",
+      "provider_id": "minimax",
+      "label": "MiniMax",
+      "aliases": ["minimax", "abab", "海螺", "mini max"],
+      "protocol": "openai_compatible",
+      "default_base_url": "https://api.minimax.chat/v1",
+      "base_url_hints": ["api.minimax.chat"],
+      "route_family": "chat_completions",
+      "notes": "MiniMax 官方 OpenAI 兼容入口。"
+    },
+    {
+      "id": "zhipu_openai",
       "provider_id": "glm",
-      "label": "Z.AI / GLM",
-      "aliases": ["glm", "bigmodel", "z.ai", "智谱", "glm openai"],
+      "label": "智谱 / GLM",
+      "aliases": ["zhipu", "智谱", "glm", "bigmodel", "z.ai"],
       "protocol": "openai_compatible",
       "default_base_url": "https://open.bigmodel.cn/api/paas/v4",
-      "base_url_hints": ["open.bigmodel.cn/api/paas/v4"],
+      "base_url_hints": ["open.bigmodel.cn/api/paas/v4", "open.bigmodel.cn"],
       "route_family": "chat_completions",
-      "notes": "GLM 官方 OpenAI 兼容入口。"
+      "notes": "智谱清言 / GLM 官方 OpenAI 兼容入口。"
     },
     {
       "id": "glm_anthropic",
@@ -89,6 +147,17 @@ const String providerInterfaceTemplateSeed = r'''
       "base_url_hints": ["api.moonshot.cn"],
       "route_family": "chat_completions",
       "notes": "Moonshot/Kimi 官方接口。"
+    },
+    {
+      "id": "moonshot_vision",
+      "provider_id": "moonshot",
+      "label": "Kimi Vision / Moonshot",
+      "aliases": ["kimi vision", "moonshot vision"],
+      "protocol": "openai_compatible",
+      "default_base_url": "https://api.moonshot.cn/v1",
+      "base_url_hints": ["api.moonshot.cn"],
+      "route_family": "chat_completions",
+      "notes": "Moonshot 视觉对话入口（按模型能力实际启用）。"
     },
     {
       "id": "mimo_openai",
@@ -121,18 +190,63 @@ const String providerInterfaceTemplateSeed = r'''
       "default_base_url": "https://ark.cn-beijing.volces.com/api/v3",
       "base_url_hints": ["volces.com/api/v3", "ark"],
       "route_family": "chat_and_responses",
+      "allowed_route_families": ["chat_completions", "responses"],
       "notes": "火山方舟 OpenAI 风格接入；具体 Chat/Responses 能力需按模型 offering 判断。"
+    },
+    {
+      "id": "doubao_anthropic",
+      "provider_id": "doubao",
+      "label": "Doubao / 火山方舟 · Anthropic",
+      "aliases": ["doubao anthropic", "ark anthropic"],
+      "protocol": "anthropic_compatible",
+      "default_base_url": "https://ark.cn-beijing.volces.com/api/v3",
+      "base_url_hints": ["ark.cn-beijing.volces.com/api/v3"],
+      "route_family": "messages",
+      "notes": "火山方舟 Anthropic 风格入口，视具体代理/路由能力而定。"
+    },
+    {
+      "id": "baichuan_openai",
+      "provider_id": "baichuan",
+      "label": "百川 / Baichuan",
+      "aliases": ["baichuan", "百川", "baichuan ai"],
+      "protocol": "openai_compatible",
+      "default_base_url": "https://api.baichuan-ai.com/v1",
+      "base_url_hints": ["api.baichuan-ai.com"],
+      "route_family": "chat_completions",
+      "notes": "百川 OpenAI 兼容入口。"
+    },
+    {
+      "id": "yi_openai",
+      "provider_id": "yi",
+      "label": "零一万物 / Yi",
+      "aliases": ["yi", "01ai", "零一万物", "lingyi", "yi openai"],
+      "protocol": "openai_compatible",
+      "default_base_url": "https://api.lingyiwanwu.com/v1",
+      "base_url_hints": ["api.lingyiwanwu.com", "api.01.ai"],
+      "route_family": "chat_completions",
+      "notes": "Yi / 零一万物 OpenAI 兼容入口。"
     },
     {
       "id": "dashscope_openai_cn",
       "provider_id": "dashscope",
       "label": "百炼 / DashScope",
-      "aliases": ["dashscope", "百炼", "model studio", "bailian"],
+      "aliases": ["dashscope", "百炼", "model studio", "bailian", "qwen"],
       "protocol": "openai_compatible",
       "default_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
       "base_url_hints": ["dashscope.aliyuncs.com/compatible-mode/v1"],
       "route_family": "chat_completions",
       "notes": "百炼中国内地 OpenAI 兼容入口。"
+    },
+    {
+      "id": "dashscope_qwen",
+      "provider_id": "dashscope",
+      "label": "Qwen / DashScope",
+      "aliases": ["qwen", "通义千问", "qwen chat"],
+      "protocol": "openai_compatible",
+      "default_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "base_url_hints": ["dashscope.aliyuncs.com/compatible-mode/v1"],
+      "route_family": "chat_completions",
+      "notes": "Qwen 系列在百炼上的常见入口。"
     },
     {
       "id": "dashscope_openai_us",
@@ -168,6 +282,28 @@ const String providerInterfaceTemplateSeed = r'''
       "notes": "百炼 Anthropic 兼容能力入口；具体地址通常受套餐/应用形态影响。"
     },
     {
+      "id": "dashscope_embeddings",
+      "provider_id": "dashscope",
+      "label": "百炼 / DashScope · Embeddings",
+      "aliases": ["dashscope embeddings", "bailian embeddings"],
+      "protocol": "openai_compatible",
+      "default_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "base_url_hints": ["dashscope.aliyuncs.com/compatible-mode/v1"],
+      "route_family": "embeddings",
+      "notes": "百炼向量嵌入接口入口。"
+    },
+    {
+      "id": "dashscope_coding",
+      "provider_id": "dashscope",
+      "label": "Qwen Coding / DashScope Coding Plan",
+      "aliases": ["qwen code", "qwen coding", "coding plan"],
+      "protocol": "openai_compatible",
+      "default_base_url": "https://coding.dashscope.aliyuncs.com/v1",
+      "base_url_hints": ["coding.dashscope.aliyuncs.com/v1"],
+      "route_family": "chat_completions",
+      "notes": "Qwen Coding Plan 的 OpenAI 兼容入口；适合编码智能体和代码工具链。"
+    },
+    {
       "id": "nvidia_openai",
       "provider_id": "nvidia",
       "label": "NVIDIA API Catalog",
@@ -187,6 +323,7 @@ const String providerInterfaceTemplateSeed = r'''
       "default_base_url": "https://opencode.ai/zen",
       "base_url_hints": ["opencode.ai/zen"],
       "route_family": "mixed",
+      "allowed_route_families": ["chat_completions", "messages", "generate_content"],
       "notes": "OpenCode Zen 是多协议路由壳层，具体模型可能走 OpenAI、Anthropic 或 Google 风格路径。"
     },
     {
@@ -198,6 +335,7 @@ const String providerInterfaceTemplateSeed = r'''
       "default_base_url": "https://opencode.ai/zen/go/v1",
       "base_url_hints": ["opencode.ai/zen/go/v1"],
       "route_family": "mixed",
+      "allowed_route_families": ["chat_completions", "messages", "generate_content", "embeddings"],
       "notes": "OpenCode Go 是多协议路由壳层，具体模型会分流到 messages/chat/models 等不同 endpoint。"
     }
   ]

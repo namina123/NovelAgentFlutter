@@ -75,6 +75,12 @@ void main() {
         expect(report['default_project_openable'], isTrue);
         expect(report['default_provider_present'], isTrue);
         expect(report['provider_count'], 1);
+        final sharedDiagnostics =
+            report['shared_diagnostics'] as Map<String, Object?>;
+        expect(sharedDiagnostics['resolved_protocol_kind'], 'openai_compatible');
+        expect(sharedDiagnostics['resolved_api_mode'], 'chat');
+        expect(sharedDiagnostics['selected_route_family'], 'chat_completions');
+        expect(sharedDiagnostics['visible_advanced_fields'], isNotEmpty);
         final successEvent =
             jsonDecode(stdoutLines.last) as Map<String, Object?>;
         expect(successEvent['type'], 'success');

@@ -285,7 +285,7 @@ Future<JsonMap> _validateEditProbe(
       .map((tool) => ValueReaders.stringValue(tool['name']))
       .toList(growable: false);
   final file = File(
-    '${project.rootPath}${Platform.pathSeparator}drafts${Platform.pathSeparator}compat_probe_edit.md',
+    '${project.rootPath}${Platform.pathSeparator}chapters${Platform.pathSeparator}compat_probe_edit.md',
   );
   final content = await file.readAsString();
   final hasEdit = toolNames.contains('edit_project_file');

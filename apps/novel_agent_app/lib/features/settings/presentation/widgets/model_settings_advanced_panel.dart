@@ -87,6 +87,16 @@ class ModelSettingsAdvancedPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 中文注释: 高级区承接运行兼容与协议细节，默认折叠，避免默认模型设置页退化成 provider 调试器。
+    final visibleAdvancedFields = editor.visibleAdvancedFields;
+    final showApiMode =
+        editor.capabilityExposure.apiModeVisible ||
+        editor.connectionValidationResult.allowedRouteFamilies.length > 1;
+    final showTopK = visibleAdvancedFields.isEmpty
+        ? editor.supportsTopK
+        : visibleAdvancedFields.contains('top_k');
+    final showStream = visibleAdvancedFields.isEmpty
+        ? true
+        : visibleAdvancedFields.contains('stream');
     return SettingsFormSection(
       title: '高级设置',
       description: '这里保留上下文窗口、流式模式和少数协议级参数，默认无需频繁调整。',
@@ -125,19 +135,30 @@ class ModelSettingsAdvancedPanel extends StatelessWidget {
                 onChanged: onStreamModeChanged,
               ),
               const SizedBox(height: 12),
-              SettingsLabeledDropdownField<String>(
-                label: 'API 模式',
-                value: apiMode,
-                options: const [
-                  SettingsDropdownOption(value: 'chat', label: '聊天 API'),
-                  SettingsDropdownOption(
-                    value: 'responses',
-                    label: 'Responses API',
-                  ),
-                ],
-                onChanged: onApiModeChanged,
-              ),
-              if (editor.supportsTopK) ...[
+              if (showApiMode) ...[
+                SettingsLabeledDropdownField<String>(
+                  label: 'API 模式',
+                  value: apiMode,
+                  options:
+                      (editor.capabilityExposure.allowedApiModes.isNotEmpty
+                              ? editor.capabilityExposure.allowedApiModes
+                              : editor
+                                    .connectionValidationResult
+                                    .allowedRouteFamilies)
+                          .map(
+                            (mode) => SettingsDropdownOption<String>(
+                              value: mode,
+                              label: mode == 'responses'
+                                  ? 'Responses API'
+                                  : '聊天 API',
+                            ),
+                          )
+                          .toList(growable: false),
+                  onChanged: onApiModeChanged,
+                ),
+                const SizedBox(height: 12),
+              ],
+              if (showTopK) ...[
                 const SizedBox(height: 12),
                 SettingsLabeledTextField(
                   label: 'Top K',
@@ -146,6 +167,7 @@ class ModelSettingsAdvancedPanel extends StatelessWidget {
                   keyboardType: TextInputType.number,
                 ),
               ],
+              if (showStream) const SizedBox(height: 0),
               if (customReasoningOverride.showCustomOverrideEditor) ...[
                 const SizedBox(height: 16),
                 CustomModelReasoningOverrideForm(

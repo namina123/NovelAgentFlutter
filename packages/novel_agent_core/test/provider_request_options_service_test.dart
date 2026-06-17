@@ -31,6 +31,65 @@ void main() {
       expect(options['enable_thinking'], isTrue);
       expect(options['reasoning_effort'], 'medium');
       expect(options.containsKey('thinking'), isFalse);
+      expect(options['api_mode'], 'chat');
+      expect(options['route_family'], 'chat_completions');
+      expect(options['protocol_kind'], 'openai_compatible');
+    });
+
+    test('projects api mode into the protocol default route family', () {
+      final runtime =
+          ProviderProfileService(
+            catalogPort: ProviderCatalogService.seeded(),
+            capabilityPort: ProviderCapabilityResolver.seeded(),
+          ).runtimeProfiles.composeRuntimeProfile(
+            <String, Object?>{
+              'name': 'Claude Sonnet',
+              'model': 'claude-3-5-sonnet-20241022',
+            },
+            <String, Object?>{
+              'name': 'Anthropic 主接口',
+              'provider_id': 'anthropic',
+              'kind': 'anthropic_compatible',
+              'base_url': 'https://api.anthropic.com/v1',
+            },
+          );
+
+      final options = ProviderRequestOptionsService().buildRequestOptions(
+        runtime,
+        apiMode: 'chat',
+      );
+
+      expect(options['api_mode'], 'messages');
+      expect(options['route_family'], 'messages');
+      expect(options['protocol_kind'], 'anthropic_compatible');
+    });
+
+    test('keeps responses as a canonical api mode when supported', () {
+      final runtime =
+          ProviderProfileService(
+            catalogPort: ProviderCatalogService.seeded(),
+            capabilityPort: ProviderCapabilityResolver.seeded(),
+          ).runtimeProfiles.composeRuntimeProfile(
+            <String, Object?>{
+              'name': 'GPT-5.5',
+              'model': 'gpt-5.5',
+            },
+            <String, Object?>{
+              'name': 'OpenAI 主接口',
+              'provider_id': 'openai',
+              'kind': 'openai_compatible',
+              'base_url': 'https://api.openai.com/v1',
+            },
+            apiMode: 'responses',
+          );
+
+      final options = ProviderRequestOptionsService().buildRequestOptions(
+        runtime,
+      );
+
+      expect(options['api_mode'], 'responses');
+      expect(options['route_family'], 'responses');
+      expect(options['protocol_kind'], 'openai_compatible');
     });
 
     test(

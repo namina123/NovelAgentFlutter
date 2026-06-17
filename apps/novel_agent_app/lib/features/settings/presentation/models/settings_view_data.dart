@@ -10,6 +10,8 @@ class SettingsViewData {
     required this.providerDirectoryOptions,
     required this.allModelOptions,
     required this.tabSections,
+    this.providerConnectionValidationResult =
+        ProviderConnectionValidationResultViewData.initial,
     required this.defaultProviderId,
     required this.defaultModelId,
     required this.modelSettings,
@@ -35,6 +37,8 @@ class SettingsViewData {
   final List<ProviderDirectoryOptionViewData> providerDirectoryOptions;
   final List<SettingsSearchOptionViewData> allModelOptions;
   final Map<String, List<SettingsSectionViewData>> tabSections;
+  final ProviderConnectionValidationResultViewData
+  providerConnectionValidationResult;
   final String defaultProviderId;
   final String defaultModelId;
   final Map<String, Object?> modelSettings;
@@ -70,6 +74,8 @@ class SettingsViewData {
       providerDirectoryOptions: [],
       allModelOptions: [],
       tabSections: <String, List<SettingsSectionViewData>>{},
+      providerConnectionValidationResult:
+          ProviderConnectionValidationResultViewData.initial,
       defaultProviderId: '',
       defaultModelId: '',
       modelSettings: <String, Object?>{},
@@ -102,6 +108,8 @@ class SettingsViewData {
     List<ProviderDirectoryOptionViewData>? providerDirectoryOptions,
     List<SettingsSearchOptionViewData>? allModelOptions,
     Map<String, List<SettingsSectionViewData>>? tabSections,
+    ProviderConnectionValidationResultViewData?
+    providerConnectionValidationResult,
     String? defaultProviderId,
     String? defaultModelId,
     Map<String, Object?>? modelSettings,
@@ -130,6 +138,9 @@ class SettingsViewData {
           providerDirectoryOptions ?? this.providerDirectoryOptions,
       allModelOptions: allModelOptions ?? this.allModelOptions,
       tabSections: tabSections ?? this.tabSections,
+      providerConnectionValidationResult:
+          providerConnectionValidationResult ??
+          this.providerConnectionValidationResult,
       defaultProviderId: defaultProviderId ?? this.defaultProviderId,
       defaultModelId: defaultModelId ?? this.defaultModelId,
       modelSettings: modelSettings ?? this.modelSettings,
@@ -172,6 +183,8 @@ class ProviderEndpointViewData {
     required this.rawApiKey,
     required this.apiKeyState,
     required this.description,
+    this.connectionValidationResult =
+        ProviderConnectionValidationResultViewData.initial,
     this.isSelected = false,
   });
 
@@ -182,6 +195,7 @@ class ProviderEndpointViewData {
   final String rawApiKey;
   final String apiKeyState;
   final String description;
+  final ProviderConnectionValidationResultViewData connectionValidationResult;
   final bool isSelected;
 }
 

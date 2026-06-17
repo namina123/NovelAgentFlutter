@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novel_agent_app/app/theme/app_theme.dart';
+import 'package:novel_agent_app/features/settings/presentation/models/model_editor_view_data.dart';
 import 'package:novel_agent_app/features/settings/presentation/models/settings_view_data.dart';
 import 'package:novel_agent_app/features/settings/presentation/widgets/provider_settings_panel.dart';
 
@@ -44,9 +45,9 @@ void main() {
                       isSelected: true,
                     ),
                 ];
-                return ProviderSettingsPanel(
-                  providers: providers,
-                  providerDirectoryOptions: const [
+                  return ProviderSettingsPanel(
+                    providers: providers,
+                    providerDirectoryOptions: const [
                     ProviderDirectoryOptionViewData(
                       id: 'openai',
                       label: 'OpenAI',
@@ -78,9 +79,10 @@ void main() {
                       selectedProviderId = null;
                     });
                   },
-                  onProviderSaved: (_) {},
-                  onProviderDeleted: (_) {},
-                );
+                    onProviderSaved: (_) {},
+                    onProviderDeleted: (_) {},
+                    onConnectionTestRequested: (_) {},
+                  );
               },
             ),
           ),
@@ -112,8 +114,7 @@ void main() {
       await tester.tap(find.text('测试连接'));
       await tester.pumpAndSettle();
 
-      expect(find.text('当前配置还不能稳定发起连接测试。'), findsOneWidget);
-      expect(find.textContaining('还没有填写 API Key'), findsOneWidget);
+      expect(find.byKey(const ValueKey('provider-connection-status')), findsOneWidget);
 
       await tester.scrollUntilVisible(
         find.text('展开高级设置'),
@@ -166,6 +167,8 @@ void main() {
                       rawApiKey: '',
                       apiKeyState: '已配置密钥',
                       description: '',
+                      connectionValidationResult:
+                          ProviderConnectionValidationResultViewData.initial,
                       isSelected: selectedProviderId == 'opencode',
                     ),
                   ],
@@ -197,6 +200,7 @@ void main() {
                   },
                   onProviderSaved: (_) {},
                   onProviderDeleted: (_) {},
+                  onConnectionTestRequested: (_) {},
                 );
               },
             ),

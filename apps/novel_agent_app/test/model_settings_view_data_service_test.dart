@@ -156,6 +156,8 @@ void main() {
     expect(editor.supportsTopK, isFalse);
     expect(editor.supportedParameters, contains('enable_thinking'));
     expect(editor.customReasoningOverride.isKnownWritingModel, isTrue);
+    expect(editor.thinkingEffortOptions, ['low', 'medium', 'high', 'max']);
+    expect(editor.thinkingEffortOptions, isNot(contains('xhigh')));
     expect(
       editor.modelSuggestions.any((entry) => entry.value == editor.modelId),
       isTrue,

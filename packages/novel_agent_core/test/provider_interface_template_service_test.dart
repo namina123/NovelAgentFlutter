@@ -17,13 +17,27 @@ void main() {
     test('keeps GLM openai and anthropic routes as separate templates', () {
       final service = ProviderInterfaceTemplateService.seeded();
 
-      final openai = service.templateById('glm_openai');
+      final openai = service.templateById('zhipu_openai');
       final anthropic = service.templateById('glm_anthropic');
 
       expect(openai['default_base_url'], 'https://open.bigmodel.cn/api/paas/v4');
       expect(anthropic['default_base_url'], 'https://open.bigmodel.cn/api/anthropic');
       expect(openai['protocol'], 'openai_compatible');
       expect(anthropic['protocol'], 'anthropic_compatible');
+    });
+
+    test('covers mainland mainstream providers by base url match', () {
+      final service = ProviderInterfaceTemplateService.seeded();
+
+      final hunyuan = service.bestTemplateMatch(
+        baseUrl: 'https://api.hunyuan.cloud.tencent.com/v1/chat/completions',
+      );
+      final qianfan = service.bestTemplateMatch(
+        baseUrl: 'https://qianfan.baidubce.com/v2/chat/completions',
+      );
+
+      expect(hunyuan['id'], 'tencent_hunyuan_openai');
+      expect(qianfan['id'], 'baidu_qianfan_openai');
     });
 
     test('finds opencode go by query aliases', () {
@@ -33,6 +47,24 @@ void main() {
 
       expect(matched['id'], 'opencode_go');
       expect(matched['route_family'], 'mixed');
+    });
+
+    test('exposes google openai-compatible and native templates distinctly', () {
+      final service = ProviderInterfaceTemplateService.seeded();
+
+      final openaiCompatible = service.templateById('google_openai_compatible');
+      final native = service.templateById('google_gemini_native');
+
+      expect(openaiCompatible['protocol'], 'openai_compatible');
+      expect(native['protocol'], 'gemini_native');
+      expect(
+        ValueReaders.stringList(openaiCompatible['allowed_route_families']),
+        containsAll(<String>['chat_completions', 'responses']),
+      );
+      expect(
+        ValueReaders.stringList(native['allowed_route_families']),
+        ['generate_content', 'stream_generate_content'],
+      );
     });
   });
 }

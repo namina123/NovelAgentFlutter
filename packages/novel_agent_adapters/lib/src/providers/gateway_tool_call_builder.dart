@@ -40,6 +40,16 @@ class GatewayToolCallBuilder {
     appendPartialArguments(chunk);
   }
 
+  bool get hasArguments => _argumentsBuffer.isNotEmpty;
+
+  void replaceArguments(String rawArguments) {
+    // 中文注释: Responses 的 done 事件有时会给出完整 arguments，这里允许一次性替换掉增量结果。
+    _argumentsBuffer.clear();
+    if (rawArguments.isNotEmpty) {
+      _argumentsBuffer.write(rawArguments);
+    }
+  }
+
   JsonMap build(Map<String, Object?> Function(Object? value) mapValue) {
     final rawArguments = _argumentsBuffer.toString();
     final parsedArguments = _parseArguments(rawArguments, mapValue);

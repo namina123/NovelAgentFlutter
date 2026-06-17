@@ -1,9 +1,9 @@
-import 'package:flutter_test/flutter_test.dart';
+import 'dart:io';
 
-import 'test_font_loader.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 Future<void> testExecutable(Future<void> Function() testMain) async {
   TestWidgetsFlutterBinding.ensureInitialized();
-  await GoldenTestFontLoader.ensureLoaded();
+  HttpOverrides.global = null;
   await testMain();
 }

@@ -45,6 +45,13 @@ class ModelSettingsPrimaryPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 中文注释: 主设置区只放写作时最常碰的模型选择与四个高价值参数，不把运行兼容细节掺进来。
+    final visibleAdvancedFields = editor.visibleAdvancedFields;
+    final showsReasoning = visibleAdvancedFields.isEmpty
+        ? editor.supportsReasoning
+        : visibleAdvancedFields.contains('thinking_enabled');
+    final showsEffort = visibleAdvancedFields.isEmpty
+        ? editor.supportsReasoning && editor.thinkingEffortSupported
+        : visibleAdvancedFields.contains('thinking_effort');
     return SettingsFormSection(
       title: '写作模型',
       description: '选择默认接口与写作模型，并设置写作时最常调整的默认参数。',
@@ -69,7 +76,7 @@ class ModelSettingsPrimaryPanel extends StatelessWidget {
             hintText: '输入模型名称或型号筛选，也可以直接选择',
             onSelected: onModelSelected,
           ),
-          if (editor.supportsReasoning) ...[
+          if (showsReasoning) ...[
             const SizedBox(height: 16),
             if (editor.reasoningCanToggle)
               SettingsSwitchRow(
@@ -86,7 +93,7 @@ class ModelSettingsPrimaryPanel extends StatelessWidget {
                 note: '当前模型始终启用',
               ),
           ],
-          if (editor.supportsReasoning && editor.thinkingEffortSupported) ...[
+          if (showsEffort) ...[
             const SizedBox(height: 12),
             SettingsLabeledDropdownField<String>(
               label: editor.thinkingEffortParameterLabel,

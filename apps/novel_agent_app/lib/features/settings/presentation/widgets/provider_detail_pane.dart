@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
-import '../../application/services/provider_connection_validation_service.dart';
 import '../../../../../shared/widgets/action_button.dart';
 import '../../../../../shared/widgets/section_heading.dart';
+import '../models/model_editor_view_data.dart';
 import '../models/settings_view_data.dart';
 import '../models/settings_search_option.dart';
 import 'settings_form_section.dart';
@@ -20,6 +20,7 @@ class ProviderDetailPane extends StatefulWidget {
     required this.modelOptions,
     required this.onProviderSaved,
     required this.onProviderDeleted,
+    required this.onConnectionTestRequested,
     this.onBackRequested,
   });
 
@@ -28,6 +29,7 @@ class ProviderDetailPane extends StatefulWidget {
   final List<SettingsSearchOptionViewData> modelOptions;
   final ValueChanged<Map<String, Object?>> onProviderSaved;
   final ValueChanged<String> onProviderDeleted;
+  final ValueChanged<Map<String, Object?>> onConnectionTestRequested;
   final VoidCallback? onBackRequested;
 
   @override
@@ -36,7 +38,6 @@ class ProviderDetailPane extends StatefulWidget {
 
 class _ProviderDetailPaneState extends State<ProviderDetailPane> {
   late final TextEditingController _titleController;
-  late final ProviderConnectionValidationService _connectionValidationService;
   late final ProviderProtocolService _protocolService;
   late final TextEditingController _baseUrlController;
   late final TextEditingController _apiKeyController;
@@ -46,12 +47,10 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
   String? _selectedDirectoryProviderId;
   bool _revealApiKey = false;
   String? _loadedProviderId;
-  ProviderConnectionValidationResult? _connectionValidationResult;
 
   @override
   void initState() {
     super.initState();
-    _connectionValidationService = const ProviderConnectionValidationService();
     _protocolService = ProviderProtocolService();
     _titleController = TextEditingController();
     _baseUrlController = TextEditingController();
@@ -197,13 +196,12 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
                 compact: true,
                 onPressed: _testConnection,
               ),
-              if (_connectionValidationResult != null) ...[
-                const SizedBox(height: 12),
-                _ProviderConnectionStatusCard(
-                  key: const ValueKey('provider-connection-status'),
-                  result: _connectionValidationResult!,
-                ),
-              ],
+              const SizedBox(height: 12),
+              _ProviderConnectionStatusCard(
+                key: const ValueKey('provider-connection-status'),
+                result: widget.provider?.connectionValidationResult ??
+                    ProviderConnectionValidationResultViewData.initial,
+              ),
             ],
           ),
         ),
@@ -298,7 +296,6 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
     _modelIdController.text = '';
     _selectedDirectoryProviderId = _directoryProviderIdFor(provider);
     _revealApiKey = false;
-    _connectionValidationResult = null;
   }
 
   void _save() {
@@ -334,7 +331,6 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
           widget.provider?.baseUrl.trim() == _baseUrlController.text.trim()) {
         _baseUrlController.text = option.defaultBaseUrl;
       }
-      _connectionValidationResult = null;
     });
   }
 
@@ -355,14 +351,14 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
   }
 
   void _testConnection() {
-    setState(() {
-      _connectionValidationResult = _connectionValidationService.validate(
-        title: _titleController.text,
-        protocol: _protocol,
-        baseUrl: _baseUrlController.text,
-        apiKey: _apiKeyController.text,
-        modelId: _modelIdController.text,
-      );
+    widget.onConnectionTestRequested(<String, Object?>{
+      'source_id': widget.provider?.id ?? '',
+      'title': _titleController.text.trim(),
+      'protocol': _protocol,
+      'base_url': _baseUrlController.text.trim(),
+      'api_key': _apiKeyController.text,
+      'model_id': _modelIdController.text.trim(),
+      'api_mode': widget.provider?.connectionValidationResult.selectedRouteFamily,
     });
   }
 }
@@ -373,7 +369,7 @@ class _ProviderConnectionStatusCard extends StatelessWidget {
     required this.result,
   });
 
-  final ProviderConnectionValidationResult result;
+  final ProviderConnectionValidationResultViewData result;
 
   @override
   Widget build(BuildContext context) {
@@ -421,6 +417,51 @@ class _ProviderConnectionStatusCard extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               '• $detail',
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.45,
+                color: foregroundColor,
+              ),
+            ),
+          ],
+          if (result.errors.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              '错误：${result.errors.join('；')}',
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.45,
+                color: foregroundColor,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+          if (result.hideOptions.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              '需要隐藏的选项：${result.hideOptions.join('、')}',
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.45,
+                color: foregroundColor,
+              ),
+            ),
+          ],
+          if (result.fallbackNotAllowed) ...[
+            const SizedBox(height: 8),
+            Text(
+              '当前组合不允许 fallback。',
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.45,
+                color: foregroundColor,
+              ),
+            ),
+          ],
+          if (result.warnings.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              '警告：${result.warnings.join('；')}',
               style: TextStyle(
                 fontSize: 12,
                 height: 1.45,

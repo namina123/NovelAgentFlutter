@@ -33,6 +33,14 @@ void main() {
       final metadata = profileService.metadata.buildEditorMetadata(runtime);
 
       expect(metadata['protocol_mode'], 'openai_compatible');
+      expect(metadata['protocol_label'], 'OpenAI 协议格式');
+      expect(metadata['route_family'], 'chat_completions');
+      expect(ValueReaders.stringList(metadata['allowed_api_modes']), ['chat']);
+      expect(metadata['api_mode_visible'], isFalse);
+      expect(
+        ValueReaders.stringList(metadata['visible_advanced_fields']),
+        isNot(contains('api_mode')),
+      );
       expect(metadata['supports_reasoning'], isTrue);
       expect(metadata['reasoning_mode_behavior'], 'hybrid_default_on');
       expect(metadata['reasoning_can_toggle'], isTrue);
@@ -80,6 +88,7 @@ void main() {
       expect(metadata['supports_image_attachments'], isTrue);
       expect(metadata['supports_attachment_urls_only'], isFalse);
       expect(metadata['supports_multi_attachments'], isTrue);
+      expect(metadata['api_mode_visible'], isFalse);
     });
 
     test('projects relay override metadata for siliconflow deepseek models', () {
@@ -102,6 +111,7 @@ void main() {
       expect(metadata['supports_reasoning'], isTrue);
       expect(metadata['reasoning_can_toggle'], isTrue);
       expect(metadata['thinking_parameter_format'], 'enable_thinking_boolean');
+      expect(metadata['protocol_mode'], 'openai_compatible');
       expect(
         metadata['thinking_enable_parameter_keys'],
         contains('enable_thinking'),
@@ -131,6 +141,7 @@ void main() {
       expect(metadata['supports_reasoning'], isTrue);
       expect(metadata['reasoning_mode_behavior'], 'thinking_only');
       expect(metadata['reasoning_can_toggle'], isFalse);
+      expect(metadata['api_mode_visible'], isFalse);
       expect(
         (metadata['model_default_parameters'] as List<Object?>)
             .whereType<Map<String, Object?>>()
@@ -226,6 +237,7 @@ void main() {
         expect(metadata['supports_reasoning'], isTrue);
         expect(metadata['reasoning_mode_behavior'], 'thinking_only');
         expect(metadata['reasoning_can_toggle'], isFalse);
+        expect(metadata['api_mode_visible'], isFalse);
         expect(metadata['thinking_enable_parameter_keys'], isEmpty);
         expect(metadata['thinking_effort_supported'], isTrue);
         expect(metadata['thinking_effort_options'], contains('medium'));
@@ -252,6 +264,7 @@ void main() {
 
         expect(metadata['supports_reasoning'], isTrue);
         expect(metadata['thinking_effort_supported'], isTrue);
+        expect(metadata['protocol_label'], 'OpenAI 协议格式');
         expect(
           metadata['thinking_effort_options'],
           containsAll(['dynamic', 'budget']),

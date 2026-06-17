@@ -2,6 +2,7 @@ import '../../common/json_types.dart';
 import '../../common/value_readers.dart';
 import '../catalog/writing_model_reasoning_profile_service.dart';
 import 'custom_model_reasoning_override_service.dart';
+import 'capability_exposure_view.dart';
 import 'provider_custom_parameter_service.dart';
 import 'provider_profile_constants.dart';
 import 'provider_thinking_parameter_service.dart';
@@ -29,6 +30,7 @@ class ProviderModelMetadataService {
 
   JsonMap buildEditorMetadata(JsonMap runtimeProfile) {
     // 中文注释: 这个服务只负责把运行态配置投影成前端更容易消费的“模型元能力摘要”。
+    final exposure = CapabilityExposureView.fromRuntimeProfile(runtimeProfile);
     final capability = ValueReaders.mapValue(
       runtimeProfile['provider_model_capability'],
     );
@@ -130,10 +132,11 @@ class ProviderModelMetadataService {
       'provider_label': ValueReaders.stringValue(
         runtimeProfile['provider_label'],
       ),
-      'protocol_mode': ValueReaders.stringValue(
-        runtimeProfile['kind'],
-        ProviderProfileConstants.kindOpenAiCompatible,
-      ),
+      'protocol_mode': exposure.protocolMode,
+      'protocol_label': exposure.protocolLabel,
+      'route_family': exposure.routeFamily,
+      'allowed_route_families': exposure.allowedRouteFamilies,
+      'allowed_api_modes': exposure.allowedApiModes,
       'base_url': ValueReaders.stringValue(runtimeProfile['base_url']).trim(),
       'model_id': ValueReaders.stringValue(runtimeProfile['model']).trim(),
       'model_name': ValueReaders.stringValue(runtimeProfile['name']).trim(),
@@ -196,6 +199,8 @@ class ProviderModelMetadataService {
         runtimeProfile['supports_tool_choice'],
         false,
       ),
+      'api_mode_visible': exposure.apiModeVisible,
+      'visible_advanced_fields': exposure.visibleAdvancedFields,
       'supports_file_attachments': ValueReaders.boolValue(
         runtimeProfile['supports_file_attachments'],
       ),

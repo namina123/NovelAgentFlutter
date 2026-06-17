@@ -3,15 +3,20 @@ import '../../common/value_readers.dart';
 import 'custom_model_reasoning_override_service.dart';
 import 'provider_custom_parameter_service.dart';
 import 'provider_model_metadata_service.dart';
+import 'provider_protocol_service.dart';
+import 'provider_route_contract.dart';
+import 'provider_runtime_route_contract.dart';
 import 'provider_thinking_parameter_service.dart';
 
 class ProviderRequestOptionsService {
   ProviderRequestOptionsService({
     ProviderModelMetadataService? metadataService,
+    ProviderProtocolService? protocolService,
     ProviderThinkingParameterService? thinkingService,
     ProviderCustomParameterService? customParameterService,
     CustomModelReasoningOverrideService? customReasoningOverrideService,
   }) : _metadataService = metadataService ?? ProviderModelMetadataService(),
+       _protocolService = protocolService ?? ProviderProtocolService(),
        _thinkingService = thinkingService ?? ProviderThinkingParameterService(),
        _customParameterService =
            customParameterService ?? ProviderCustomParameterService(),
@@ -20,6 +25,7 @@ class ProviderRequestOptionsService {
            CustomModelReasoningOverrideService();
 
   final ProviderModelMetadataService _metadataService;
+  final ProviderProtocolService _protocolService;
   final ProviderThinkingParameterService _thinkingService;
   final ProviderCustomParameterService _customParameterService;
   final CustomModelReasoningOverrideService _customReasoningOverrideService;
@@ -27,12 +33,28 @@ class ProviderRequestOptionsService {
   JsonMap buildRequestOptions(
     JsonMap runtimeProfile, {
     String apiMode = 'chat',
+    ProviderRuntimeRouteContract? runtimeRouteContract,
     JsonMap baseOptions = const <String, Object?>{},
   }) {
     // 中文注释: 这个服务只负责把运行态模型配置翻译成网关请求参数，不处理设置来源。
     final metadata = _metadataService.buildEditorMetadata(runtimeProfile);
     final result = ValueReaders.deepCopyMap(baseOptions);
-    result['api_mode'] = apiMode.trim().isEmpty ? 'chat' : apiMode.trim();
+    final resolvedRoute = runtimeRouteContract ??
+        ProviderRuntimeRouteContract.fromRuntimeProfile(runtimeProfile);
+    final protocolKind = resolvedRoute.protocolKind;
+    final requestedApiMode = ValueReaders.stringValue(
+      runtimeProfile['requested_api_mode'],
+      apiMode,
+    );
+    final resolvedApiMode = ValueReaders.stringValue(
+      runtimeProfile['resolved_selected_api_mode'],
+      resolvedRoute.resolvedApiMode,
+    );
+    result['protocol_kind'] = protocolKind.id;
+    result['route_family'] = resolvedRoute.selectedRouteFamily.id;
+    result['api_mode'] = resolvedApiMode;
+    result['runtime_route_contract'] = resolvedRoute.toJson();
+    result['requested_api_mode'] = requestedApiMode;
     result['stream'] = ValueReaders.boolValue(
       runtimeProfile['streaming_enabled'],
       true,

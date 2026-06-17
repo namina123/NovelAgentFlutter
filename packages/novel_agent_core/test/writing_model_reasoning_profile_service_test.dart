@@ -20,6 +20,10 @@ void main() {
           result['reasoning_toggle_parameter_strategy'] as Map<String, Object?>;
       expect(toggle['kind'], 'boolean');
       expect(toggle['key'], 'enable_thinking');
+      expect(
+        result['reasoning_effort_options'],
+        ['low', 'medium', 'high', 'max'],
+      );
     });
 
     test('projects non-toggle reasoning for thinking-only models', () {

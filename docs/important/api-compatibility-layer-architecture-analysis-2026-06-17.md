@@ -74,7 +74,7 @@ OpenAI 兼容链路目前是闭环的，但闭环里仍有结构性问题。
    - `ProviderRequestOptionsService` 会产出 `api_mode`
    - UI 高级设置也允许选择 `chat` / `responses`
    - 但 `OpenAiLlmGateway.requestChat()` 仍然固定请求 `/chat/completions`
-   - 这意味着“Responses API”目前只是 UI 选项，不是实际链路能力
+   - 这意味着当时的“Responses API”还只是 UI 选项，不是实际链路能力
 
 2. `OpenAiChatRequestPayloadBuilder` 本质是“Chat Completions payload builder”
    - 文件名已经说明这一点
@@ -317,6 +317,8 @@ Gemini 当前不是闭环，只存在“模型事实层”，不存在“协议�
 
 这是一个典型的“半接入字段”问题。
 
+注：这一段描述的是分析时点的历史问题。当前仓库里 `api_mode` 已经进入正式 route / capability 合同链路，设置页与 diagnostics 也已开始消费统一暴露视图。
+
 表现：
 
 1. `ModelSettingsAdvancedPanel` 有 API 模式下拉
@@ -332,6 +334,8 @@ Gemini 当前不是闭环，只存在“模型事实层”，不存在“协议�
 结论：
 
 `api_mode` 要么正式升级为 runtime route contract，要么暂时从 UI 隐藏，直到闭环完成。
+
+注：这条判断描述的是当时的风险状态。当前仓库里 `api_mode` 已经进入正式 route / capability 合同链路，后续需要继续以 `CapabilityExposureView` 和 `ProviderConnectionValidationResult` 收口显示与可用性。
 
 ## 6. 关于“应该隐藏什么”的判断规则
 
@@ -548,13 +552,13 @@ OpenAI 和 Anthropic 现在属于“能跑但仍有硬编码耦合”；Gemini �
 
 1. `ProviderRequestOptionsService` 会保留 `api_mode`
 2. `ModelSettingsAdvancedPanel` 会展示 `chat / responses`
-3. `OpenAiLlmGateway` 却固定打到 `/chat/completions`
+3. `OpenAiLlmGateway` 现在会按 `api_mode` 在 Chat / Responses 之间分流
 
 所以当前与官方接口面对齐的真实状态是：
 
-1. 项目现在真正实现的是 OpenAI 风格的 Chat Completions 主链
-2. 还没有实现 OpenAI 官方 Responses 主链
-3. 因而 UI 中的 Responses 目前属于“未闭环暴露”
+1. 项目现在已经有 OpenAI 风格的 Chat Completions 主链
+2. 项目现在也已经有 OpenAI 官方 Responses 的独立链路
+3. 但 UI 暴露与 route contract 仍然必须按 provider / route capability 严格收口，不能把“有链路”误当成“对所有配置都可见”
 
 ### 12.2 Anthropic 官方的 Messages 是一整套消息协议，不只是一个 URL
 
@@ -644,6 +648,8 @@ Gemini 这块最容易出误判，因为官方本来就有两种接入面：
 5. 参数合同则散落在 request options、metadata、gateway、reasoning profile 中
 
 这就是为什么当前很多地方会出现“看起来都支持，但一跑就不一定对”的情况。
+
+注：这段同样是在分析时点上总结的风险。当前实现已经把协议合同、route 合同、connection contract、capability exposure 和 validation 逐层建出，后续重点是继续收口和消除遗留双轨。
 
 ### 13.2 `route_family` 目前是标签，不是合同
 

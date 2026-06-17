@@ -88,11 +88,29 @@ class ProviderInterfaceTemplateService {
         score,
         _textScore(ValueReaders.stringValue(template['id']), queryText),
       );
+      score = _max(
+        score,
+        _textScore(ValueReaders.stringValue(template['protocol']), queryText),
+      );
       for (final alias in ValueReaders.objectList(template['aliases'])) {
         score = _max(
           score,
           _textScore(ValueReaders.stringValue(alias), queryText),
         );
+      }
+      final protocol = ValueReaders.stringValue(template['protocol']).trim().toLowerCase();
+      final asksForNative = queryText.contains('native');
+      final asksForCompatible = queryText.contains('compatible') ||
+          queryText.contains('openai') ||
+          queryText.contains('chat');
+      if (asksForNative && protocol == 'gemini_native') {
+        score = _max(score, 160);
+      }
+      if (asksForCompatible && protocol == 'openai_compatible') {
+        score = _max(score, 150);
+      }
+      if (queryText.contains('anthropic') && protocol == 'anthropic_compatible') {
+        score = _max(score, 150);
       }
     }
     if (urlText.isNotEmpty) {

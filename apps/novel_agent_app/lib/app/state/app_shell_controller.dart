@@ -55,9 +55,11 @@ import '../../features/review_center/presentation/models/review_center_view_data
 import '../../features/settings/application/services/model_settings_view_data_service.dart';
 import '../../features/settings/application/services/context_settings_contract_service.dart';
 import '../../features/settings/application/services/project_creation_expression_constraint_defaults_view_data_service.dart';
+import '../../features/settings/application/services/provider_connection_validation_service.dart';
 import '../../features/settings/application/services/provider_settings_directory_service.dart';
 import '../../features/settings/application/services/theme_settings_view_data_service.dart';
 import '../../features/settings/presentation/contracts/settings_action_handler.dart';
+import '../../features/settings/presentation/models/model_editor_view_data.dart';
 import '../../features/settings/presentation/models/settings_view_data.dart';
 import '../../features/task_center/application/services/task_center_command_orchestration_service.dart';
 import '../../features/task_center/application/services/task_center_refresh_service.dart';
@@ -765,6 +767,9 @@ class AppShellController extends ChangeNotifier
   final ProjectCreationExpressionConstraintDefaultsSettingsService
   _projectCreationExpressionConstraintDefaultsSettingsService;
   final ModelExecutionProfileService _modelExecutionProfileService;
+  final ProviderConnectionValidationService
+  _providerConnectionValidationService =
+      ProviderConnectionValidationService();
   final ModeGuidanceTransitionService _modeGuidanceTransitionService;
   final DesktopBookDeconstructionSourcePickerService
   _desktopBookDeconstructionSourcePickerService;
@@ -798,6 +803,9 @@ class AppShellController extends ChangeNotifier
   String _agentEcosystemStatusMessage = '';
   EcosystemImportCommandViewData? _ecosystemImportCommand;
   EcosystemEditorViewData? _ecosystemEditorViewData;
+  final Map<String, ProviderConnectionValidationResultViewData>
+  _providerConnectionValidationResults =
+      <String, ProviderConnectionValidationResultViewData>{};
   List<JsonMap> _taskCenterTasks = const <JsonMap>[];
   String _selectedTaskId = '';
   String _selectedLongTaskRunPath = '';
@@ -1492,6 +1500,30 @@ class AppShellController extends ChangeNotifier
       },
     );
     _persistSettings(updated, successMessage: '接口已删除。');
+  }
+
+  @override
+  void onProviderConnectionTestRequested(Map<String, Object?> payload) {
+    // 中文注释: 连接测试只更新共享投影缓存，不在 widget 层保存临时验证状态。
+    final settings = _settings;
+    if (settings == null) {
+      return;
+    }
+    final providerId = _stringValue(payload['source_id']);
+    final validation = _providerConnectionValidationService.validate(
+      title: _stringValue(payload['title']),
+      protocol: _stringValue(payload['protocol'], 'openai_compatible'),
+      baseUrl: _stringValue(payload['base_url']),
+      apiKey: _stringValue(payload['api_key']),
+      modelId: _stringValue(payload['model_id']),
+      apiMode: _stringValue(payload['api_mode'], 'chat'),
+    );
+    _providerConnectionValidationResults[
+      providerId.isNotEmpty ? providerId : '__new__'
+    ] = _toValidationViewData(validation);
+    _refreshSettingsViewData(
+      selectedProviderId: providerId.isNotEmpty ? providerId : '__new__',
+    );
   }
 
   @override
@@ -4283,6 +4315,11 @@ class AppShellController extends ChangeNotifier
             rawApiKey: provider.apiKey,
             apiKeyState: provider.apiKey.trim().isEmpty ? '未配置密钥' : '已配置密钥',
             description: provider.description,
+            connectionValidationResult: _providerConnectionValidationResultFor(
+              settings,
+              provider,
+              modelSettings,
+            ),
             isSelected: provider.id == effectiveProviderId,
           ),
         )
@@ -4298,6 +4335,8 @@ class AppShellController extends ChangeNotifier
                 rawApiKey: provider.rawApiKey,
                 apiKeyState: provider.apiKeyState,
                 description: provider.description,
+                connectionValidationResult:
+                    provider.connectionValidationResult,
                 isSelected: false,
               ),
             const ProviderEndpointViewData(
@@ -4308,10 +4347,21 @@ class AppShellController extends ChangeNotifier
               rawApiKey: '',
               apiKeyState: '未配置密钥',
               description: '',
+              connectionValidationResult:
+                  ProviderConnectionValidationResultViewData.initial,
               isSelected: true,
-            ),
+              ),
           ]
         : providers;
+    final providerConnectionValidationResult = effectiveProviderId == '__new__'
+        ? _providerConnectionValidationResults[effectiveProviderId] ??
+            ProviderConnectionValidationResultViewData.initial
+        : _providerConnectionValidationResults[effectiveProviderId] ??
+            providers
+                .where((entry) => entry.id == effectiveProviderId)
+                .map((entry) => entry.connectionValidationResult)
+                .firstOrNull ??
+            ProviderConnectionValidationResultViewData.initial;
     return SettingsViewData(
       activeTabId: const [
             'interfaces',
@@ -4337,6 +4387,7 @@ class AppShellController extends ChangeNotifier
       providerDirectoryOptions: providerDirectoryOptions,
       allModelOptions: allModelOptions,
       tabSections: _settingsSections(settings),
+      providerConnectionValidationResult: providerConnectionValidationResult,
       defaultProviderId: settings.defaultProviderId,
       defaultModelId: settings.defaultModelId,
       modelSettings: modelSettings,
@@ -4360,6 +4411,48 @@ class AppShellController extends ChangeNotifier
       settingsSearchRoots: _settingsSearchRoots,
       defaultProjectsRootPath: _defaultProjectsRootPath,
       isMobileProjectRootLocked: _isMobileProjectRootLocked,
+    );
+  }
+
+  ProviderConnectionValidationResultViewData
+  _providerConnectionValidationResultFor(
+    AppSettings settings,
+    ProviderEndpointSettings provider,
+    Map<String, Object?> modelSettings,
+  ) {
+    // 中文注释: 接口条目的连接状态直接来自共享验证服务和当前模型设置，不在详情 pane 里再自算一遍。
+    final validation = _providerConnectionValidationService.validate(
+      title: provider.title,
+      protocol: provider.protocol,
+      baseUrl: provider.baseUrl,
+      apiKey: provider.apiKey,
+      modelId: provider.modelId,
+      apiMode: _stringValue(modelSettings['api_mode'], 'chat'),
+    );
+    return _toValidationViewData(validation);
+  }
+
+  ProviderConnectionValidationResultViewData _toValidationViewData(
+    ProviderConnectionValidationResult result,
+  ) {
+    // 中文注释: 共享验证结果转成 UI 可消费的稳定视图对象，避免 widget 直接依赖 core service 返回类型。
+    return ProviderConnectionValidationResultViewData(
+      isSuccess: result.isSuccess,
+      summary: result.summary,
+      details: result.details,
+      errors: result.errors,
+      templateId: result.templateId,
+      providerId: result.providerId,
+      protocolId: result.protocolId,
+      protocolMode: result.protocolKind?.id ?? result.protocolId,
+      routeFamily: result.routeFamily,
+      selectedRouteFamily: result.selectedRouteFamily,
+      allowedRouteFamilies: result.allowedRouteFamilies,
+      hideOptions: result.hideOptions,
+      fallbackNotAllowed: result.fallbackNotAllowed,
+      warnings: result.warnings,
+      matchedTemplateId: result.matchedTemplateId,
+      matchedTemplateLabel: result.matchedTemplateLabel,
     );
   }
 

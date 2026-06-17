@@ -63,7 +63,7 @@ const String providerModelCapabilitiesSeed = r'''
         ]
       },
       "capabilities": {
-        "supports_streaming": false,
+        "supports_streaming": true,
         "supports_tools": true,
         "supports_tool_choice": true,
         "supports_file_attachments": true,
@@ -72,6 +72,12 @@ const String providerModelCapabilitiesSeed = r'''
         "supports_multi_attachments": true
       },
       "parameter_definitions": [
+        {
+          "key": "tool_choice",
+          "type": "json",
+          "description": "Anthropic 的工具选择参数，支持 auto / any / tool / none 等形式；应与 tools 一起按模型能力透传。",
+          "exclusive_group": "tool_choice_mode"
+        },
         {
           "key": "thinking",
           "type": "json",
@@ -202,6 +208,109 @@ const String providerModelCapabilitiesSeed = r'''
           "description": "部分模型接受的思考强度字段；应与模型的思考参数格式配套使用，取值由模型或中转层决定。"
         }
       ]
+    },
+    {
+      "id": "tencent_hunyuan",
+      "label": "腾讯混元",
+      "match": {
+        "any": [
+          {"base_url_contains": ["hunyuan.cloud.tencent.com", "api.hunyuan.cloud.tencent.com"]},
+          {"credential_name_contains": ["hunyuan", "腾讯混元", "腾讯云混元"]}
+        ]
+      },
+      "capabilities": {
+        "supports_streaming": true,
+        "supports_tools": true,
+        "supports_tool_choice": false
+      },
+      "excluded_parameters": ["tool_choice"]
+    },
+    {
+      "id": "baidu_qianfan",
+      "label": "百度千帆 / 文心",
+      "match": {
+        "any": [
+          {"base_url_contains": ["qianfan.baidubce.com", "baidu.com"]},
+          {"credential_name_contains": ["qianfan", "百度千帆", "文心", "ernie"]}
+        ]
+      },
+      "capabilities": {
+        "supports_streaming": true,
+        "supports_tools": true,
+        "supports_tool_choice": false
+      },
+      "excluded_parameters": ["tool_choice"]
+    },
+    {
+      "id": "dashscope_coding",
+      "label": "Qwen Coding / DashScope Coding",
+      "match": {
+        "any": [
+          {"base_url_contains": ["coding.dashscope.aliyuncs.com"]},
+          {"credential_name_contains": ["qwen code", "qwen coding", "coding plan"]}
+        ]
+      },
+      "capabilities": {
+        "supports_streaming": true,
+        "supports_tools": true,
+        "supports_tool_choice": false
+      },
+      "excluded_parameters": ["tool_choice"]
+    },
+    {
+      "id": "minimax",
+      "label": "MiniMax",
+      "match": {
+        "any": [
+          {"base_url_contains": ["api.minimaxi.com", "api.minimax.chat"]},
+          {"credential_name_contains": ["minimax", "abab", "海螺", "m2"]}
+        ]
+      },
+      "capabilities": {
+        "supports_streaming": true,
+        "supports_tools": true,
+        "supports_tool_choice": false
+      },
+      "excluded_parameters": ["tool_choice"]
+    },
+    {
+      "id": "baichuan",
+      "label": "百川 / Baichuan",
+      "match": {
+        "any": [
+          {"base_url_contains": ["api.baichuan-ai.com"]},
+          {"credential_name_contains": ["baichuan", "百川"]}
+        ]
+      },
+      "capabilities": {
+        "supports_streaming": true,
+        "supports_tools": true,
+        "supports_tool_choice": false
+      },
+      "excluded_parameters": ["tool_choice"]
+    },
+    {
+      "id": "doubao",
+      "label": "Doubao / 火山方舟",
+      "match": {
+        "any": [
+          {"base_url_contains": ["ark.cn-beijing.volces.com", "volces.com/api/v3", "ark"]},
+          {"credential_name_contains": ["doubao", "火山方舟", "ark", "volcengine"]}
+        ]
+      },
+      "capabilities": {
+        "supports_streaming": true,
+        "supports_tools": true,
+        "supports_tool_choice": false
+      },
+      "parameter_definitions": [
+        {
+          "key": "reasoning_effort",
+          "type": "string",
+          "description": "火山方舟部分模型会接受思考强度映射；如服务商实现不同，应由具体模型覆盖。"
+        }
+      ],
+      "excluded_parameters": ["tool_choice"]
     }
   ],
   "model_rules": [

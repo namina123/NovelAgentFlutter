@@ -54,12 +54,15 @@ class SettingsPage extends StatelessWidget {
         providers: viewData.providers,
         providerDirectoryOptions: viewData.providerDirectoryOptions,
         allModelOptions: viewData.allModelOptions,
+        providerConnectionValidationResult:
+            viewData.providerConnectionValidationResult,
         onProviderSelected: actionHandler.onProviderSelected,
         onProviderCreateRequested: actionHandler.onProviderCreateRequested,
         onProviderDetailBackRequested:
             actionHandler.onProviderDetailBackRequested,
         onProviderSaved: actionHandler.onProviderSaved,
         onProviderDeleted: actionHandler.onProviderDeleted,
+        onConnectionTestRequested: actionHandler.onProviderConnectionTestRequested,
       );
     }
     if (viewData.activeTabId == 'models') {

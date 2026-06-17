@@ -11,8 +11,7 @@ import '../packages/local_agent_package_catalog.dart';
 import '../packages/local_skill_group_catalog.dart';
 import '../packages/local_skill_package_catalog.dart';
 import '../packages/package_root_path_resolver.dart';
-import '../providers/anthropic_llm_gateway.dart';
-import '../providers/openai_llm_gateway.dart';
+import '../providers/gateway_factory_resolver.dart';
 import '../runtime/local_long_task_run_registry.dart';
 import '../runtime/long_task_heartbeat_scheduler.dart';
 import '../runtime/long_task_supervisor.dart';
@@ -248,15 +247,8 @@ class AdapterBundle {
     ProviderEndpointSettings provider, {
     JsonMap networkSettings = const <String, Object?>{},
   }) {
-    // 中文注释: provider 到具体网关实现的映射由 adapter bundle 承担，宿主层只依赖核心协议。
-    if (provider.protocol.trim() ==
-        ProviderProfileConstants.kindAnthropicCompatible) {
-      return AnthropicLlmGateway.fromProviderSettings(
-        provider,
-        networkSettings: networkSettings,
-      );
-    }
-    return OpenAiLlmGateway.fromProviderSettings(
+    // 中文注释: bundle 这里只负责装配，不再自己决定哪种协议对应哪种网关实现。
+    return GatewayFactoryResolver().resolve(
       provider,
       networkSettings: networkSettings,
     );

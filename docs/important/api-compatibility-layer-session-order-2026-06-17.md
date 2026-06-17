@@ -1432,22 +1432,22 @@
 
 ## 10. 完成记录占位
 
-- [ ] APC-01 协议与路由合同建模
-- [ ] APC-02 provider connection contract 与 template 归一化
-- [ ] APC-03 capability exposure 与 `api_mode` 真合同化
-- [ ] APC-04 OpenAI Chat 链拆层
-- [ ] APC-05 OpenAI Responses 真链路接入
-- [ ] APC-06 Anthropic protocol adapter 拆层
-- [ ] APC-07 gateway registry / factory resolver 替换 bundle 硬编码
-- [ ] APC-08 runtime profile 与 offering / route 绑定收口
-- [ ] APC-09 provider connection validation 接线
-- [ ] APC-10 GUI 设置页与高级参数显隐重构
-- [ ] APC-11 CLI / diagnostics / shared projection 最小接线
-- [ ] APC-12 Gemini OpenAI-compatible 接入
-- [ ] APC-13 Gemini native 接入
-- [ ] APC-14 protocol contract test 与 stream test 矩阵
-- [ ] APC-15 真实 provider probe / regression 收口
-- [ ] APC-16 文档、迁移说明、遗留双轨清理
+- [x] APC-01 协议与路由合同建模
+- [x] APC-02 provider connection contract 与 template 归一化
+- [x] APC-03 capability exposure 与 `api_mode` 真合同化
+- [x] APC-04 OpenAI Chat 链拆层
+- [x] APC-05 OpenAI Responses 真链路接入
+- [x] APC-06 Anthropic protocol adapter 拆层
+- [x] APC-07 gateway registry / factory resolver 替换 bundle 硬编码
+- [x] APC-08 runtime profile 与 offering / route 绑定收口
+- [x] APC-09 provider connection validation 接线
+- [x] APC-10 GUI 设置页与高级参数显隐重构
+- [x] APC-11 CLI / diagnostics / shared projection 最小接线
+- [x] APC-12 Gemini OpenAI-compatible 接入
+- [x] APC-13 Gemini native 接入
+- [x] APC-14 protocol contract test 与 stream test 矩阵
+- [x] APC-15 真实 provider probe / regression 收口
+- [x] APC-16 文档、迁移说明、遗留双轨清理
 
 ---
 

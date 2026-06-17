@@ -23,5 +23,54 @@ void main() {
       expect(result['id'], 'o4-mini');
       expect(result['provider_id'], 'openai');
     });
+
+    test('recognizes mainstream mainland provider endpoints', () {
+      final service = ProviderCatalogService.seeded();
+
+      final hunyuan = service.bestProviderMatch(
+        baseUrl: 'https://api.hunyuan.cloud.tencent.com/v1',
+      );
+      final qianfan = service.bestProviderMatch(
+        baseUrl: 'https://qianfan.baidubce.com/v2',
+      );
+
+      expect(hunyuan['id'], 'tencent_hunyuan');
+      expect(qianfan['id'], 'baidu_qianfan');
+    });
+
+    test('recognizes qwen coding endpoint by base url', () {
+      final service = ProviderCatalogService.seeded();
+
+      final coding = service.bestProviderMatch(
+        baseUrl: 'https://coding.dashscope.aliyuncs.com/v1',
+      );
+
+      expect(coding['id'], 'dashscope_coding');
+    });
+
+    test('recognizes minimax and doubao endpoints by base url', () {
+      final service = ProviderCatalogService.seeded();
+
+      final minimax = service.bestProviderMatch(
+        baseUrl: 'https://api.minimax.chat/v1',
+      );
+      final doubao = service.bestProviderMatch(
+        baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+      );
+
+      expect(minimax['id'], 'minimax');
+      expect(doubao['id'], 'doubao');
+    });
+
+    test('recognizes google gemini openai-compatible endpoint by base url', () {
+      final service = ProviderCatalogService.seeded();
+
+      final google = service.bestProviderMatch(
+        baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+      );
+
+      expect(google['id'], 'google');
+      expect(google['kind'], 'openai_compatible');
+    });
   });
 }

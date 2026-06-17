@@ -212,6 +212,9 @@ class _FakeSettingsActionHandler implements SettingsActionHandler {
   void onProviderDetailBackRequested() {}
 
   @override
+  void onProviderConnectionTestRequested(Map<String, Object?> payload) {}
+
+  @override
   void onProviderSaved(Map<String, Object?> payload) {}
 
   @override

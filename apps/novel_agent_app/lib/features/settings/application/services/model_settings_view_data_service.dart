@@ -6,11 +6,13 @@ import '../../presentation/models/custom_model_reasoning_override_view_data.dart
 import '../../presentation/models/model_editor_view_data.dart';
 import '../../presentation/models/model_parameter_entry_view_data.dart';
 import '../../presentation/models/settings_search_option.dart';
+import 'provider_connection_validation_service.dart';
 
 class ModelSettingsViewDataService {
   ModelSettingsViewDataService({
     ModelExecutionProfileService? modelExecutionProfileService,
     ProviderProfileService? profileService,
+    ProviderConnectionValidationService? providerConnectionValidationService,
   }) : _modelExecutionProfileService =
            modelExecutionProfileService ?? ModelExecutionProfileService(),
        _legacyCatalogBridgeService = LegacyProviderCatalogBridgeService(),
@@ -20,12 +22,17 @@ class ModelSettingsViewDataService {
            ProviderProfileService(
              catalogPort: ProviderCatalogService.seeded(),
              capabilityPort: ProviderCapabilityResolver.seeded(),
-           );
+           ),
+       _providerConnectionValidationService =
+           providerConnectionValidationService ??
+           ProviderConnectionValidationService();
 
   final ModelExecutionProfileService _modelExecutionProfileService;
   final LegacyProviderCatalogBridgeService _legacyCatalogBridgeService;
   final WritingModelOfferingCatalogService _offeringCatalogService;
   final ProviderProfileService _profileService;
+  final ProviderConnectionValidationService
+  _providerConnectionValidationService;
 
   ModelEditorViewData build(
     AppSettings settings,
@@ -40,6 +47,21 @@ class ModelSettingsViewDataService {
     final metadata = _profileService.metadata.buildEditorMetadata(
       runtimeProfile,
     );
+    final capabilityExposure = _capabilityExposureViewData(runtimeProfile);
+    final connectionValidationResult = _providerConnectionValidationService
+        .validate(
+          title: ValueReaders.stringValue(metadata['provider_label']),
+          protocol: ValueReaders.stringValue(metadata['protocol_mode']),
+          baseUrl: ValueReaders.stringValue(metadata['base_url']),
+          apiKey: ValueReaders.stringValue(runtimeProfile['api_key']),
+          modelId: ValueReaders.stringValue(metadata['model_id']),
+          apiMode: ValueReaders.stringValue(
+            ValueReaders.mapValue(
+              runtimeProfile['provider_runtime_route_contract'],
+            )['resolved_api_mode'],
+            ValueReaders.stringValue(metadata['api_mode'], 'chat'),
+          ),
+        );
     final customParameters = _customParameters(modelSettingsDocument, metadata);
     return ModelEditorViewData(
       providerId: ValueReaders.stringValue(metadata['provider_id']),
@@ -136,6 +158,45 @@ class ModelSettingsViewDataService {
         modelSettingsDocument,
         metadata,
       ),
+      capabilityExposure: capabilityExposure,
+      visibleAdvancedFields: capabilityExposure.visibleAdvancedFields,
+      connectionValidationResult: ProviderConnectionValidationResultViewData(
+        isSuccess: connectionValidationResult.isSuccess,
+        summary: connectionValidationResult.summary,
+        details: connectionValidationResult.details,
+        errors: connectionValidationResult.errors,
+        templateId: connectionValidationResult.templateId,
+        providerId: connectionValidationResult.providerId,
+        protocolId: connectionValidationResult.protocolId,
+        protocolMode:
+            connectionValidationResult.protocolKind?.id ??
+            connectionValidationResult.protocolId,
+        routeFamily: connectionValidationResult.routeFamily,
+        selectedRouteFamily: connectionValidationResult.selectedRouteFamily,
+        allowedRouteFamilies: connectionValidationResult.allowedRouteFamilies,
+        hideOptions: connectionValidationResult.hideOptions,
+        fallbackNotAllowed: connectionValidationResult.fallbackNotAllowed,
+        warnings: connectionValidationResult.warnings,
+        matchedTemplateId: connectionValidationResult.matchedTemplateId,
+        matchedTemplateLabel: connectionValidationResult.matchedTemplateLabel,
+      ),
+    );
+  }
+
+  CapabilityExposureViewData _capabilityExposureViewData(
+    Map<String, Object?> runtimeProfile,
+  ) {
+    // 中文注释: 设置页只消费共享曝光合同，不自己从 metadata 里再拼一套显隐逻辑。
+    final exposure = CapabilityExposureView.fromRuntimeProfile(runtimeProfile);
+    return CapabilityExposureViewData(
+      protocolMode: exposure.protocolMode,
+      protocolLabel: exposure.protocolLabel,
+      apiMode: exposure.apiMode,
+      routeFamily: exposure.routeFamily,
+      allowedApiModes: exposure.allowedApiModes,
+      allowedRouteFamilies: exposure.allowedRouteFamilies,
+      apiModeVisible: exposure.apiModeVisible,
+      visibleAdvancedFields: exposure.visibleAdvancedFields,
     );
   }
 

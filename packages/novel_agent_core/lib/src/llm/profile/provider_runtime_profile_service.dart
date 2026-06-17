@@ -3,6 +3,7 @@ import '../../common/value_readers.dart';
 import '../../ports/provider_capability_port.dart';
 import '../../ports/provider_catalog_port.dart';
 import '../catalog/legacy_provider_catalog_bridge_service.dart';
+import '../catalog/provider_connection_contract.dart';
 import '../catalog/provider_catalog_service.dart';
 import '../catalog/provider_interface_template_service.dart';
 import '../catalog/writing_model_offering_catalog_service.dart';
@@ -13,6 +14,8 @@ import 'provider_custom_parameter_service.dart';
 import 'provider_profile_constants.dart';
 import 'provider_profile_normalizer_service.dart';
 import 'provider_protocol_service.dart';
+import 'provider_route_contract.dart';
+import 'provider_runtime_route_contract.dart';
 import 'provider_thinking_parameter_service.dart';
 
 class ProviderRuntimeProfileService {
@@ -24,6 +27,7 @@ class ProviderRuntimeProfileService {
     required ProviderThinkingParameterService thinkingService,
     required ProviderCustomParameterService customParameterService,
     ProviderInterfaceTemplateService? providerInterfaceTemplateService,
+    ProviderConnectionContractService? providerConnectionContractService,
     LegacyProviderCatalogBridgeService? legacyProviderCatalogBridgeService,
     WritingModelOfferingCatalogService? writingModelOfferingCatalogService,
     WritingModelRuntimeDefaultsService? writingModelRuntimeDefaultsService,
@@ -38,6 +42,13 @@ class ProviderRuntimeProfileService {
        _providerInterfaceTemplateService =
            providerInterfaceTemplateService ??
            ProviderInterfaceTemplateService.seeded(),
+       _providerConnectionContractService =
+           providerConnectionContractService ??
+           ProviderConnectionContractService(
+             templateService:
+                 providerInterfaceTemplateService ??
+                 ProviderInterfaceTemplateService.seeded(),
+           ),
        _legacyProviderCatalogBridgeService =
            legacyProviderCatalogBridgeService ??
            (catalogPort is ProviderCatalogService
@@ -63,13 +74,18 @@ class ProviderRuntimeProfileService {
   final ProviderThinkingParameterService _thinkingService;
   final ProviderCustomParameterService _customParameterService;
   final ProviderInterfaceTemplateService _providerInterfaceTemplateService;
+  final ProviderConnectionContractService _providerConnectionContractService;
   final LegacyProviderCatalogBridgeService? _legacyProviderCatalogBridgeService;
   final WritingModelOfferingCatalogService _writingModelOfferingCatalogService;
   final WritingModelRuntimeDefaultsService _writingModelRuntimeDefaultsService;
   final WritingModelReasoningProfileService _writingReasoningProfileService;
   final CustomModelReasoningOverrideService _customReasoningOverrideService;
 
-  JsonMap composeRuntimeProfile(JsonMap modelProfile, JsonMap credential) {
+  JsonMap composeRuntimeProfile(
+    JsonMap modelProfile,
+    JsonMap credential, {
+    String apiMode = 'chat',
+  }) {
     // 中文注释: 运行配置组装是这一层的核心职责，负责把模型态与接口态合成可执行配置。
     final model = _normalizerService.normalizeModelProfile(modelProfile);
     final cred = credential.isEmpty
@@ -100,6 +116,30 @@ class ProviderRuntimeProfileService {
     final effectiveReasoning = customReasoning.isNotEmpty
         ? customReasoning
         : writingReasoning;
+    final providerConnectionContractResolution =
+        _providerConnectionContractService.resolve(
+          query: _providerTemplateQuery(
+            providerId: ValueReaders.stringValue(cred['provider_id']),
+            providerName: ValueReaders.stringValue(cred['name']),
+            runtimeKind: runtimeKind,
+          ),
+          baseUrl: ValueReaders.stringValue(cred['base_url']),
+          providerId: ValueReaders.stringValue(cred['provider_id']),
+          preferredProtocolId: runtimeKind,
+        );
+    final providerConnectionContract =
+        providerConnectionContractResolution.contract;
+    final runtimeRoute = ProviderRuntimeRouteContract.resolve(
+      protocolKind: ProtocolKindCodec.parse(runtimeKind),
+      connectionContract: providerConnectionContract,
+      apiMode: apiMode,
+      matchedWritingModelCanonicalId: ValueReaders.stringValue(
+        writingReasoning['matched_canonical_model_id'],
+      ),
+      matchedWritingModelOfferingId: ValueReaders.stringValue(
+        writingReasoning['matched_provider_offering_id'],
+      ),
+    );
     final defaultReasoningEnabled = ValueReaders.boolValue(
       effectiveReasoning['reasoning_default_enabled'],
     );
@@ -111,6 +151,32 @@ class ProviderRuntimeProfileService {
       'credential_name': cred['name'],
       'provider_id': cred['provider_id'],
       'provider_label': _providerLabelForCredential(cred),
+      'provider_connection_contract':
+          providerConnectionContract.toJson(),
+      'provider_connection_contract_id':
+          providerConnectionContract.templateId,
+      'provider_connection_protocol_id':
+          providerConnectionContract.protocolId,
+      'provider_connection_route_family':
+          providerConnectionContract.routeFamily.apiMode,
+      'provider_connection_allowed_route_families':
+          providerConnectionContract.allowedRouteFamilies
+              .map((family) => family.apiMode)
+              .toList(growable: false),
+      'provider_connection_allowed_api_modes':
+          providerConnectionContract.allowedApiModes,
+      'resolved_protocol_kind': runtimeRoute.protocolKind.id,
+      'resolved_route_families': runtimeRoute.allowedRouteFamilies
+          .map((family) => family.id)
+          .toList(growable: false),
+      'resolved_selected_route_family': runtimeRoute.selectedRouteFamily.id,
+      'resolved_selected_api_mode': runtimeRoute.resolvedApiMode,
+      'resolved_provider_connection_contract_id':
+          runtimeRoute.providerConnectionContractId,
+      'resolved_route_is_fallback_used': runtimeRoute.isFallbackUsed,
+      'resolved_route_is_allowed': runtimeRoute.isAllowed,
+      'requested_api_mode': runtimeRoute.requestedApiMode,
+      'provider_runtime_route_contract': runtimeRoute.toJson(),
       'kind': runtimeKind,
       'base_url': cred['base_url'],
       'api_key': cred['api_key'],
@@ -148,6 +214,11 @@ class ProviderRuntimeProfileService {
     };
     if (writingOffering != null) {
       runtime['matched_writing_model_offering'] = writingOffering;
+      runtime['matched_writing_model_offering_id'] = ValueReaders.stringValue(
+        writingOffering['model_id'],
+      );
+      runtime['matched_writing_model_offering_canonical_id'] =
+          ValueReaders.stringValue(writingOffering['canonical_model_id']);
       runtime['matched_writing_model_canonical_id'] = ValueReaders.stringValue(
         writingOffering['canonical_model_id'],
       );
@@ -197,6 +268,27 @@ class ProviderRuntimeProfileService {
       modelProfile: model,
       credential: cred,
     );
+  }
+
+  String _providerTemplateQuery({
+    required String providerId,
+    required String providerName,
+    required String runtimeKind,
+  }) {
+    // 中文注释: 接口模板匹配优先使用 provider + protocol 联合查询，避免同一 provider 的 native/compatible 模板互相抢占。
+    final cleanProviderId = providerId.trim();
+    final cleanProviderName = providerName.trim();
+    final cleanRuntimeKind = runtimeKind.trim();
+    final providerText = cleanProviderId.isNotEmpty
+        ? cleanProviderId
+        : cleanProviderName;
+    if (providerText.isEmpty) {
+      return cleanRuntimeKind;
+    }
+    if (cleanRuntimeKind.isEmpty) {
+      return providerText;
+    }
+    return '$providerText ${cleanRuntimeKind.replaceAll('_', ' ')}';
   }
 
   JsonMap applyModelCapabilityMapping(
@@ -316,9 +408,17 @@ class ProviderRuntimeProfileService {
               'base_url': profile['base_url'],
               'api_key': profile['api_key'],
             });
-        return composeRuntimeProfile(profile, runtimeCredential);
+        return composeRuntimeProfile(
+          profile,
+          runtimeCredential,
+          apiMode: ValueReaders.stringValue(profile['api_mode'], 'chat'),
+        );
       }
-      return composeRuntimeProfile(profile, const <String, Object?>{});
+      return composeRuntimeProfile(
+        profile,
+        const <String, Object?>{},
+        apiMode: ValueReaders.stringValue(profile['api_mode'], 'chat'),
+      );
     }
 
     final credential = _normalizerService.normalizeCredential(<String, Object?>{
@@ -355,7 +455,11 @@ class ProviderRuntimeProfileService {
       'supports_attachment_urls_only': profile['supports_attachment_urls_only'],
       'supports_multi_attachments': profile['supports_multi_attachments'],
     });
-    return composeRuntimeProfile(model, credential);
+    return composeRuntimeProfile(
+      model,
+      credential,
+      apiMode: ValueReaders.stringValue(profile['api_mode'], 'chat'),
+    );
   }
 
   JsonMap normalizeCredential(JsonMap credential) {

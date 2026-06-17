@@ -14,6 +14,7 @@ Future<int> _runDoctorCheck(DoctorCommand command) async {
     'default_provider_id': settings.defaultProviderId,
     'default_provider_present': settings.defaultProvider() != null,
     'temp_write_ok': await _canWriteTempFile(),
+    'shared_diagnostics': _sharedDiagnostics(settings),
     'capabilities': <String, Object?>{
       'stdout_terminal': stdout.hasTerminal,
       'stderr_terminal': stderr.hasTerminal,
@@ -64,6 +65,47 @@ Future<bool> _canWriteTempFile() async {
       await tempDir.delete(recursive: true);
     }
   }
+}
+
+JsonMap _sharedDiagnostics(AppSettings settings) {
+  // 中文注释: 共享诊断投影把核心 route / exposure 真相合并后输出，避免 doctor 自己重写 GUI 规则。
+  final provider = settings.defaultProvider();
+  if (provider == null) {
+    return const <String, Object?>{
+      'resolved_protocol_kind': 'openai_compatible',
+      'resolved_protocol_label': 'OpenAI 协议格式',
+      'resolved_api_mode': 'chat',
+      'selected_route_family': 'chat_completions',
+      'allowed_route_families': <String>['chat_completions'],
+      'api_mode_visible': false,
+      'validation_warnings': <String>[],
+      'validation_errors': <String>['missing_default_provider'],
+      'visible_advanced_fields': <String>[],
+    };
+  }
+
+  final profileService = ProviderProfileService(
+    catalogPort: ProviderCatalogService.seeded(),
+    capabilityPort: ProviderCapabilityResolver.seeded(),
+  );
+  final runtimeProfile = profileService.runtimeProfiles.composeRuntimeProfile(
+    <String, Object?>{
+      'name': provider.title,
+      'model': provider.modelId,
+    },
+    <String, Object?>{
+      'name': provider.title,
+      'provider_id': provider.id,
+      'kind': provider.protocol,
+      'base_url': provider.baseUrl,
+      'api_key': provider.apiKey,
+    },
+    apiMode: 'chat',
+  );
+  return const ProviderDiagnosticsProjectionService().buildJson(
+    runtimeProfile: runtimeProfile,
+    providerSettings: provider,
+  );
 }
 
 List<JsonMap> _providerChecks(AppSettings settings) {

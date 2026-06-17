@@ -12,6 +12,7 @@ import '../llm/catalog/writing_model_runtime_defaults_service.dart';
 import '../llm/profile/provider_profile_constants.dart';
 import '../llm/profile/provider_profile_service.dart';
 import '../llm/profile/provider_request_options_service.dart';
+import '../llm/profile/provider_runtime_route_contract.dart';
 import 'app_settings.dart';
 import 'provider_endpoint_settings.dart';
 
@@ -203,6 +204,7 @@ class ModelExecutionProfileService {
     var runtimeProfile = _profileService.runtimeProfiles.composeRuntimeProfile(
       modelProfile,
       credential,
+      apiMode: _stringValue(modelSettings['api_mode'], 'chat'),
     );
     final effectiveProjectOverride =
         projectAgentModelOverride ?? projectAgentBinding?.modelOverride;
@@ -220,7 +222,9 @@ class ModelExecutionProfileService {
     }
     final requestOptions = _requestOptionsService.buildRequestOptions(
       runtimeProfile,
-      apiMode: _stringValue(modelSettings['api_mode'], 'chat'),
+      runtimeRouteContract: ProviderRuntimeRouteContract.fromRuntimeProfile(
+        runtimeProfile,
+      ),
     );
     return <String, Object?>{
       'provider_id': resolvedProvider?.id ?? '',

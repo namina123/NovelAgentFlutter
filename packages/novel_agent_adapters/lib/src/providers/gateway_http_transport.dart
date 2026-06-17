@@ -87,6 +87,8 @@ class GatewayHttpTransport {
 
   Future<void> _configureProxy(HttpClient client, Uri requestUri) async {
     if (_shouldBypassProxy(requestUri)) {
+      // 中文注释: 本地 loopback 请求必须显式直连，否则默认系统代理会把测试流量误导到外部代理层。
+      client.findProxy = (_) => 'DIRECT';
       return;
     }
     final proxyRule = _proxyRule.isNotEmpty
