@@ -148,4 +148,23 @@ void main() {
     );
     expect(viewData.selectedBookDeconstructionFollowupRouteId, 'fanfic');
   });
+
+  test('拆书创建第三步仍会保留主存储策略选择', () {
+    final service = ProjectLauncherViewDataService();
+    final viewData = service.build(
+      mode: ProjectLauncherMode.create,
+      projectsRootPath: 'D:/Projects',
+      projects: const <JsonMap>[],
+      selectedProjectTypeId: 'book_deconstruction',
+      creationPhase: ProjectCreationPhase.storageStrategy,
+      selectedBookDeconstructionFollowupRouteId: 'continuation',
+    );
+
+    expect(viewData.title, '第3步：选择主存储策略');
+    expect(viewData.storageStrategyOptions, hasLength(2));
+    expect(
+      viewData.storageStrategyOptions.map((option) => option.id),
+      containsAll(<String>['markdown_project_store', 'sqlite_project_store']),
+    );
+  });
 }

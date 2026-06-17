@@ -161,7 +161,7 @@ void main() {
     expect(input.notes, '主角跨世界保留部分记忆。');
   });
 
-  test('拆书项目创建第二步为后续承接路线并会落盘默认配置', () async {
+  test('拆书项目创建会按 类型 -> 承接路线 -> 存储策略 推进并落盘默认配置', () async {
     final harness = _ProjectCreationHarness();
 
     await harness.controller.onCreateProjectRequested();
@@ -188,6 +188,20 @@ void main() {
       ),
     );
 
+    expect(
+      harness.workbench.projectLauncher!.creationPhase,
+      ProjectCreationPhase.storageStrategy,
+    );
+
+    await harness.controller.onProjectCreationSubmitted(
+      const ProjectCreateRequestViewData(
+        title: '哈利拆书承接',
+        projectTypeId: 'book_deconstruction',
+        storageStrategyId: 'markdown_project_store',
+        bookDeconstructionFollowupRouteId: 'fanfic',
+      ),
+    );
+
     expect(harness.loadedProjectPaths.single, 'D:/Projects/哈利拆书承接');
     expect(
       harness.workspacePort.readStoredTextFile(
@@ -203,6 +217,43 @@ void main() {
       ),
       contains('"preferred_followup_option_id": "fanfic_seed_autopilot_novel"'),
     );
+  });
+
+  test('拆书项目从存储阶段返回时会回到承接路线阶段', () async {
+    final harness = _ProjectCreationHarness();
+
+    await harness.controller.onCreateProjectRequested();
+    await harness.controller.onProjectCreationSubmitted(
+      const ProjectCreateRequestViewData(
+        title: '拆书回退',
+        projectTypeId: 'book_deconstruction',
+        storageStrategyId: 'markdown_project_store',
+        bookDeconstructionFollowupRouteId: 'continuation',
+      ),
+    );
+    await harness.controller.onProjectCreationSubmitted(
+      const ProjectCreateRequestViewData(
+        title: '拆书回退',
+        projectTypeId: 'book_deconstruction',
+        storageStrategyId: 'markdown_project_store',
+        bookDeconstructionFollowupRouteId: 'continuation',
+      ),
+    );
+
+    expect(
+      harness.workbench.projectLauncher!.creationPhase,
+      ProjectCreationPhase.storageStrategy,
+    );
+
+    await harness.controller.onProjectCreationBackRequested();
+
+    final launcher = harness.workbench.projectLauncher;
+    expect(launcher, isNotNull);
+    expect(
+      launcher!.creationPhase,
+      ProjectCreationPhase.bookDeconstructionFollowup,
+    );
+    expect(launcher.selectedBookDeconstructionFollowupRouteId, 'continuation');
   });
 
   test('拉起创建向导时会清理互斥工作台浮层', () async {

@@ -640,7 +640,7 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
       case ProjectCreationPhase.storageStrategy:
         return _selectedTypeRequiresRuntimeBaseline() ? '下一步' : '创建并打开';
       case ProjectCreationPhase.bookDeconstructionFollowup:
-        return '创建并打开';
+        return '下一步';
       case ProjectCreationPhase.runtimeBaseline:
         return '创建并打开';
     }
@@ -770,11 +770,9 @@ class _StepStrip extends StatelessWidget {
     final phases = <ProjectCreationPhase>[
       ProjectCreationPhase.projectType,
       if (selectedProjectTypeId == 'book_deconstruction')
-        ProjectCreationPhase.bookDeconstructionFollowup
-      else
-        ProjectCreationPhase.storageStrategy,
-      if (projectTypeRequiresRuntimeBaseline &&
-          selectedProjectTypeId != 'book_deconstruction')
+        ProjectCreationPhase.bookDeconstructionFollowup,
+      ProjectCreationPhase.storageStrategy,
+      if (projectTypeRequiresRuntimeBaseline)
         ProjectCreationPhase.runtimeBaseline,
     ];
     return Container(

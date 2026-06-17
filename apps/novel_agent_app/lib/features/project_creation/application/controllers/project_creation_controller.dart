@@ -87,7 +87,8 @@ class ProjectCreationController {
   _projectGeneralContinuitySetupService;
   final ProjectCreationExpressionConstraintDefaultsService?
   _projectCreationExpressionConstraintDefaultsService;
-  final ProjectCreationPhaseResolverService _projectCreationPhaseResolverService;
+  final ProjectCreationPhaseResolverService
+  _projectCreationPhaseResolverService;
   final BookDeconstructionProjectSetupDocumentService
   _bookDeconstructionProjectSetupDocumentService;
   final BookDeconstructionProjectSetupResolverService
@@ -231,7 +232,7 @@ class ProjectCreationController {
   Future<void> onProjectCreationSubmitted(
     ProjectCreateRequestViewData request,
   ) async {
-    // 中文注释: 前端创建向导严格按“类型 -> 存储 -> 运行基准”三段式推进，真正落盘前再交给 core 计划确认。
+    // 中文注释: 创建向导按项目类型对应的阶段树推进，拆书会插入“承接路线”，不会覆盖存储策略。
     final launcher = _readWorkbench().projectLauncher;
     final currentPhase =
         launcher?.creationPhase ?? ProjectCreationPhase.projectType;
@@ -239,20 +240,19 @@ class ProjectCreationController {
     final projectTypeId = request.projectTypeId.trim().isEmpty
         ? 'novel'
         : request.projectTypeId.trim();
+    final requiresRuntimeBaseline = _requiresRuntimeBaseline(projectTypeId);
     final storageStrategy = ProjectStorageStrategy.fromId(
       request.storageStrategyId,
     );
-    if (currentPhase == ProjectCreationPhase.projectType) {
-      final nextPhase = _projectCreationPhaseResolverService.nextPhaseAfterProjectType(
-        projectTypeId: projectTypeId,
-        requiresRuntimeBaselineSelection: _requiresRuntimeBaseline(projectTypeId),
-      );
-      final nextStatus = nextPhase == ProjectCreationPhase.bookDeconstructionFollowup
-          ? '已选择拆书项目类型，继续确定默认承接路线。'
-          : '已选择项目类型，继续确定主存储策略。';
+    final nextPhase = _projectCreationPhaseResolverService.nextPhaseAfter(
+      currentPhase: currentPhase,
+      projectTypeId: projectTypeId,
+      requiresRuntimeBaselineSelection: requiresRuntimeBaseline,
+    );
+    if (nextPhase != null) {
       await showLauncher(
         ProjectLauncherMode.create,
-        status: nextStatus,
+        status: _statusForNextPhase(nextPhase),
         draftTitle: cleanTitle,
         selectedProjectTypeId: projectTypeId,
         selectedStorageStrategy: storageStrategy,
@@ -279,6 +279,8 @@ class ProjectCreationController {
         draftTitle: creationPlan.request.title,
         selectedProjectTypeId: creationPlan.request.projectTypeId,
         selectedStorageStrategy: creationPlan.request.storageStrategy,
+        selectedBookDeconstructionFollowupRouteId:
+            request.bookDeconstructionFollowupRouteId,
         continuityInput: request.continuityInput,
         creationPhase: ProjectCreationPhase.runtimeBaseline,
         runtimeBaselineOptions: creationPlan.runtimeBaselineOptions,
@@ -363,41 +365,22 @@ class ProjectCreationController {
         }
         return;
       case ProjectCreationPhase.storageStrategy:
-        await showLauncher(
-          ProjectLauncherMode.create,
-          status: '返回项目类型选择。',
-          draftTitle: launcher.draftTitle,
-          selectedProjectTypeId: launcher.selectedProjectTypeId,
-          selectedStorageStrategy: ProjectStorageStrategy.fromId(
-            launcher.selectedStorageStrategyId,
-          ),
-          selectedBookDeconstructionFollowupRouteId:
-              launcher.selectedBookDeconstructionFollowupRouteId,
-          continuityInput: launcher.continuityInput,
-          creationPhase: ProjectCreationPhase.projectType,
-          canDismiss: launcher.canDismiss,
-        );
-        return;
       case ProjectCreationPhase.bookDeconstructionFollowup:
-        await showLauncher(
-          ProjectLauncherMode.create,
-          status: '返回项目类型选择。',
-          draftTitle: launcher.draftTitle,
-          selectedProjectTypeId: launcher.selectedProjectTypeId,
-          selectedStorageStrategy: ProjectStorageStrategy.fromId(
-            launcher.selectedStorageStrategyId,
-          ),
-          selectedBookDeconstructionFollowupRouteId:
-              launcher.selectedBookDeconstructionFollowupRouteId,
-          continuityInput: launcher.continuityInput,
-          creationPhase: ProjectCreationPhase.projectType,
-          canDismiss: launcher.canDismiss,
-        );
-        return;
       case ProjectCreationPhase.runtimeBaseline:
+        final previousPhase = _projectCreationPhaseResolverService
+            .previousPhaseBefore(
+              currentPhase: launcher.creationPhase,
+              projectTypeId: launcher.selectedProjectTypeId,
+              requiresRuntimeBaselineSelection: _requiresRuntimeBaseline(
+                launcher.selectedProjectTypeId,
+              ),
+            );
+        if (previousPhase == null) {
+          return;
+        }
         await showLauncher(
           ProjectLauncherMode.create,
-          status: '返回主存储策略选择。',
+          status: _statusForReturnPhase(previousPhase),
           draftTitle: launcher.draftTitle,
           selectedProjectTypeId: launcher.selectedProjectTypeId,
           selectedStorageStrategy: ProjectStorageStrategy.fromId(
@@ -406,7 +389,7 @@ class ProjectCreationController {
           selectedBookDeconstructionFollowupRouteId:
               launcher.selectedBookDeconstructionFollowupRouteId,
           continuityInput: launcher.continuityInput,
-          creationPhase: ProjectCreationPhase.storageStrategy,
+          creationPhase: previousPhase,
           runtimeBaselineOptions: launcher.runtimeBaselineOptions
               .map(
                 (option) => ProjectRuntimeBaselineDefinition(
@@ -499,14 +482,35 @@ class ProjectCreationController {
     if (creationPlan.request.runtimeBaselineId.trim().isNotEmpty) {
       return ProjectCreationPhase.runtimeBaseline;
     }
-    if (_projectCreationPhaseResolverService.usesBookDeconstructionFollowup(
-      creationPlan.request.projectTypeId,
-    )) {
-      return ProjectCreationPhase.bookDeconstructionFollowup;
-    }
     return currentPhase == ProjectCreationPhase.projectType
         ? ProjectCreationPhase.storageStrategy
         : currentPhase;
+  }
+
+  String _statusForNextPhase(ProjectCreationPhase nextPhase) {
+    switch (nextPhase) {
+      case ProjectCreationPhase.projectType:
+        return '继续确认项目类型。';
+      case ProjectCreationPhase.storageStrategy:
+        return '已确认上一步，继续确定主存储策略。';
+      case ProjectCreationPhase.bookDeconstructionFollowup:
+        return '已选择拆书项目类型，继续确定默认承接路线。';
+      case ProjectCreationPhase.runtimeBaseline:
+        return '已确认主存储策略，继续选择长任务运行基准。';
+    }
+  }
+
+  String _statusForReturnPhase(ProjectCreationPhase phase) {
+    switch (phase) {
+      case ProjectCreationPhase.projectType:
+        return '返回项目类型选择。';
+      case ProjectCreationPhase.storageStrategy:
+        return '返回主存储策略选择。';
+      case ProjectCreationPhase.bookDeconstructionFollowup:
+        return '返回拆书承接路线选择。';
+      case ProjectCreationPhase.runtimeBaseline:
+        return '返回长任务运行基准选择。';
+    }
   }
 
   Future<void> _applyContinuityInputIfNeeded(
