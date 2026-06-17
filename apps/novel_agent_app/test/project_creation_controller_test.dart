@@ -1,9 +1,13 @@
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novel_agent_app/features/project_creation/application/controllers/project_creation_controller.dart';
+import 'package:novel_agent_app/features/workbench/application/services/project_creation_phase_resolver_service.dart';
 import 'package:novel_agent_app/features/workbench/application/services/desktop_project_directory_picker_service.dart';
 import 'package:novel_agent_app/features/workbench/application/services/project_launcher_view_data_service.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/project_create_request_view_data.dart';
+import 'package:novel_agent_app/features/workbench/presentation/models/project_agent_group_option_view_data.dart';
+import 'package:novel_agent_app/features/workbench/presentation/models/project_agent_group_unsupported_view_data.dart';
+import 'package:novel_agent_app/features/workbench/presentation/models/project_agent_group_workspace_view_data.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/project_creation_phase.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/project_launcher_view_data.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/workbench_view_data.dart';
@@ -156,13 +160,97 @@ void main() {
     expect(input.worldLabels, <String>['主世界', '镜像线']);
     expect(input.notes, '主角跨世界保留部分记忆。');
   });
+
+  test('拆书项目创建第二步为后续承接路线并会落盘默认配置', () async {
+    final harness = _ProjectCreationHarness();
+
+    await harness.controller.onCreateProjectRequested();
+    await harness.controller.onProjectCreationSubmitted(
+      const ProjectCreateRequestViewData(
+        title: '哈利拆书承接',
+        projectTypeId: 'book_deconstruction',
+        storageStrategyId: 'markdown_project_store',
+        bookDeconstructionFollowupRouteId: 'fanfic',
+      ),
+    );
+
+    expect(
+      harness.workbench.projectLauncher!.creationPhase,
+      ProjectCreationPhase.bookDeconstructionFollowup,
+    );
+
+    await harness.controller.onProjectCreationSubmitted(
+      const ProjectCreateRequestViewData(
+        title: '哈利拆书承接',
+        projectTypeId: 'book_deconstruction',
+        storageStrategyId: 'markdown_project_store',
+        bookDeconstructionFollowupRouteId: 'fanfic',
+      ),
+    );
+
+    expect(harness.loadedProjectPaths.single, 'D:/Projects/哈利拆书承接');
+    expect(
+      harness.workspacePort.readStoredTextFile(
+        harness.currentProject!.rootPath,
+        BookDeconstructionProjectSetupDocumentService.relativePath,
+      ),
+      contains('"followup_route_id": "fanfic"'),
+    );
+    expect(
+      harness.workspacePort.readStoredTextFile(
+        harness.currentProject!.rootPath,
+        BookDeconstructionProjectSetupDocumentService.relativePath,
+      ),
+      contains('"preferred_followup_option_id": "fanfic_seed_autopilot_novel"'),
+    );
+  });
+
+  test('拉起创建向导时会清理互斥工作台浮层', () async {
+    final harness = _ProjectCreationHarness(
+      initialWorkbench: WorkbenchViewData.initial().copyWith(
+        workspaceCommand: const WorkspaceCommandViewData(
+          mode: WorkspaceCommandMode.importFiles,
+          title: '拆书导入',
+          description: '旧命令',
+          confirmLabel: '继续',
+          status: '',
+          projectTitle: '',
+          projectType: '',
+          genre: '',
+          premise: '',
+          notes: '',
+          relativePath: '',
+          entryName: '',
+          content: '',
+          sourcePathsText: '',
+          targetDirectory: '',
+        ),
+        projectAgentGroupWorkspace: const ProjectAgentGroupWorkspaceViewData(
+          title: '组配置',
+          description: '旧浮层',
+          currentGroupLabel: '默认组',
+          primaryAgentLabel: '主智能体',
+          primaryAgentDescription: '说明',
+          selectionHint: '选择一个组',
+          supportedGroups: <ProjectAgentGroupOptionViewData>[],
+          unsupportedGroups: <ProjectAgentGroupUnsupportedViewData>[],
+        ),
+      ),
+    );
+
+    await harness.controller.onCreateProjectRequested();
+
+    expect(harness.workbench.projectLauncher, isNotNull);
+    expect(harness.workbench.workspaceCommand, isNull);
+    expect(harness.workbench.projectAgentGroupWorkspace, isNull);
+  });
 }
 
 class _ProjectCreationHarness {
-  _ProjectCreationHarness({this.settings})
+  _ProjectCreationHarness({this.settings, WorkbenchViewData? initialWorkbench})
     : _workspacePort = _InMemoryProjectWorkspacePort(),
       _manifestCodecService = ProjectManifestCodecService(),
-      workbench = WorkbenchViewData.initial() {
+      workbench = initialWorkbench ?? WorkbenchViewData.initial() {
     projectContinuityInputRepository = ProjectContinuityInputRepository(
       workspacePort: _workspacePort,
     );
@@ -189,6 +277,9 @@ class _ProjectCreationHarness {
         projectReadableProjectionService:
             _FakeProjectReadableProjectionService(),
       ),
+      writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
+        projectWorkspacePort: _workspacePort,
+      ),
       desktopProjectDirectoryPickerService: _FakeDirectoryPickerService(),
       projectLauncherViewDataService: ProjectLauncherViewDataService(),
       readWorkbench: () => workbench,
@@ -210,6 +301,8 @@ class _ProjectCreationHarness {
       readSettings: () => settings,
       projectGeneralContinuitySetupService:
           projectGeneralContinuitySetupService,
+      projectCreationPhaseResolverService:
+          const ProjectCreationPhaseResolverService(),
       defaultProjectsRootPath: 'D:/Projects',
       isMobileProjectRootLocked: false,
     );
@@ -226,6 +319,8 @@ class _ProjectCreationHarness {
   late WorkbenchViewData workbench;
   String lastProjectlessStatus = '';
   ProjectDescriptor? currentProject;
+
+  _InMemoryProjectWorkspacePort get workspacePort => _workspacePort;
 }
 
 class _FakeDirectoryPickerService extends DesktopProjectDirectoryPickerService {

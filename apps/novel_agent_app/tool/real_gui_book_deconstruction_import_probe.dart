@@ -118,6 +118,9 @@ Future<JsonMap> runRealGuiBookDeconstructionImportProbe({
         const BookDeconstructionPreviewMarkdownService();
     final draftBuilderService = BookDeconstructionDraftBuilderService();
     final bookController = BookDeconstructionController(
+      readProjectFileUseCase: ReadProjectFileUseCase(
+        bundle.projectWorkspacePort,
+      ),
       writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
         projectWorkspacePort: bundle.projectWorkspacePort,
       ),

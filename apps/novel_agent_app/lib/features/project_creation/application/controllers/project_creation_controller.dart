@@ -2,6 +2,7 @@ import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../../../workbench/application/services/desktop_project_directory_picker_service.dart';
+import '../../../workbench/application/services/project_creation_phase_resolver_service.dart';
 import '../../../workbench/application/services/project_launcher_view_data_service.dart';
 import '../../../workbench/presentation/models/project_creation_phase.dart';
 import '../../../workbench/presentation/models/project_create_request_view_data.dart';
@@ -13,6 +14,7 @@ class ProjectCreationController {
   ProjectCreationController({
     required LoadProjectWorkspaceUseCase loadProjectWorkspaceUseCase,
     required CreateProjectWorkspaceUseCase createProjectWorkspaceUseCase,
+    required WriteProjectTextFileUseCase writeProjectTextFileUseCase,
     required DesktopProjectDirectoryPickerService
     desktopProjectDirectoryPickerService,
     required ProjectLauncherViewDataService projectLauncherViewDataService,
@@ -31,10 +33,16 @@ class ProjectCreationController {
     projectGeneralContinuitySetupService,
     ProjectCreationExpressionConstraintDefaultsService?
     projectCreationExpressionConstraintDefaultsService,
+    ProjectCreationPhaseResolverService? projectCreationPhaseResolverService,
+    BookDeconstructionProjectSetupDocumentService?
+    bookDeconstructionProjectSetupDocumentService,
+    BookDeconstructionProjectSetupResolverService?
+    bookDeconstructionProjectSetupResolverService,
     required String defaultProjectsRootPath,
     required bool isMobileProjectRootLocked,
   }) : _loadProjectWorkspaceUseCase = loadProjectWorkspaceUseCase,
        _createProjectWorkspaceUseCase = createProjectWorkspaceUseCase,
+       _writeProjectTextFileUseCase = writeProjectTextFileUseCase,
        _desktopProjectDirectoryPickerService =
            desktopProjectDirectoryPickerService,
        _projectLauncherViewDataService = projectLauncherViewDataService,
@@ -49,11 +57,21 @@ class ProjectCreationController {
            projectGeneralContinuitySetupService,
        _projectCreationExpressionConstraintDefaultsService =
            projectCreationExpressionConstraintDefaultsService,
+       _projectCreationPhaseResolverService =
+           projectCreationPhaseResolverService ??
+           const ProjectCreationPhaseResolverService(),
+       _bookDeconstructionProjectSetupDocumentService =
+           bookDeconstructionProjectSetupDocumentService ??
+           BookDeconstructionProjectSetupDocumentService(),
+       _bookDeconstructionProjectSetupResolverService =
+           bookDeconstructionProjectSetupResolverService ??
+           const BookDeconstructionProjectSetupResolverService(),
        _defaultProjectsRootPath = defaultProjectsRootPath,
        _isMobileProjectRootLocked = isMobileProjectRootLocked;
 
   final LoadProjectWorkspaceUseCase _loadProjectWorkspaceUseCase;
   final CreateProjectWorkspaceUseCase _createProjectWorkspaceUseCase;
+  final WriteProjectTextFileUseCase _writeProjectTextFileUseCase;
   final DesktopProjectDirectoryPickerService
   _desktopProjectDirectoryPickerService;
   final ProjectLauncherViewDataService _projectLauncherViewDataService;
@@ -69,6 +87,11 @@ class ProjectCreationController {
   _projectGeneralContinuitySetupService;
   final ProjectCreationExpressionConstraintDefaultsService?
   _projectCreationExpressionConstraintDefaultsService;
+  final ProjectCreationPhaseResolverService _projectCreationPhaseResolverService;
+  final BookDeconstructionProjectSetupDocumentService
+  _bookDeconstructionProjectSetupDocumentService;
+  final BookDeconstructionProjectSetupResolverService
+  _bookDeconstructionProjectSetupResolverService;
   final String _defaultProjectsRootPath;
   final bool _isMobileProjectRootLocked;
 
@@ -177,6 +200,8 @@ class ProjectCreationController {
         launcher.selectedStorageStrategyId,
       ),
       creationPhase: launcher.creationPhase,
+      selectedBookDeconstructionFollowupRouteId:
+          launcher.selectedBookDeconstructionFollowupRouteId,
       runtimeBaselineOptions: launcher.runtimeBaselineOptions
           .map(
             (option) => ProjectRuntimeBaselineDefinition(
@@ -218,14 +243,23 @@ class ProjectCreationController {
       request.storageStrategyId,
     );
     if (currentPhase == ProjectCreationPhase.projectType) {
+      final nextPhase = _projectCreationPhaseResolverService.nextPhaseAfterProjectType(
+        projectTypeId: projectTypeId,
+        requiresRuntimeBaselineSelection: _requiresRuntimeBaseline(projectTypeId),
+      );
+      final nextStatus = nextPhase == ProjectCreationPhase.bookDeconstructionFollowup
+          ? '已选择拆书项目类型，继续确定默认承接路线。'
+          : '已选择项目类型，继续确定主存储策略。';
       await showLauncher(
         ProjectLauncherMode.create,
-        status: '已选择项目类型，继续确定主存储策略。',
+        status: nextStatus,
         draftTitle: cleanTitle,
         selectedProjectTypeId: projectTypeId,
         selectedStorageStrategy: storageStrategy,
+        selectedBookDeconstructionFollowupRouteId:
+            request.bookDeconstructionFollowupRouteId,
         continuityInput: request.continuityInput,
-        creationPhase: ProjectCreationPhase.storageStrategy,
+        creationPhase: nextPhase,
         canDismiss: _readCurrentProject() != null,
       );
       return;
@@ -263,6 +297,8 @@ class ProjectCreationController {
           draftTitle: creationPlan.request.title,
           selectedProjectTypeId: creationPlan.request.projectTypeId,
           selectedStorageStrategy: creationPlan.request.storageStrategy,
+          selectedBookDeconstructionFollowupRouteId:
+              request.bookDeconstructionFollowupRouteId,
           continuityInput: request.continuityInput,
           creationPhase: currentPhase,
           runtimeBaselineOptions: creationPlan.runtimeBaselineOptions,
@@ -276,6 +312,10 @@ class ProjectCreationController {
       final project = await _createProjectWorkspaceUseCase.executePrepared(
         projectsRootPath: _defaultProjectsRootPath,
         plan: creationPlan,
+      );
+      await _applyBookDeconstructionSetupIfNeeded(
+        project,
+        request.bookDeconstructionFollowupRouteId,
       );
       await _applyContinuityInputIfNeeded(project, request.continuityInput);
       final settings = _readSettings();
@@ -293,10 +333,13 @@ class ProjectCreationController {
         draftTitle: creationPlan.request.title,
         selectedProjectTypeId: creationPlan.request.projectTypeId,
         selectedStorageStrategy: creationPlan.request.storageStrategy,
+        selectedBookDeconstructionFollowupRouteId:
+            request.bookDeconstructionFollowupRouteId,
         continuityInput: request.continuityInput,
-        creationPhase: creationPlan.request.runtimeBaselineId.trim().isNotEmpty
-            ? ProjectCreationPhase.runtimeBaseline
-            : ProjectCreationPhase.storageStrategy,
+        creationPhase: _failurePhaseFor(
+          currentPhase: currentPhase,
+          creationPlan: creationPlan,
+        ),
         runtimeBaselineOptions: creationPlan.runtimeBaselineOptions,
         selectedRuntimeBaselineId: creationPlan.request.runtimeBaselineId,
       );
@@ -328,6 +371,24 @@ class ProjectCreationController {
           selectedStorageStrategy: ProjectStorageStrategy.fromId(
             launcher.selectedStorageStrategyId,
           ),
+          selectedBookDeconstructionFollowupRouteId:
+              launcher.selectedBookDeconstructionFollowupRouteId,
+          continuityInput: launcher.continuityInput,
+          creationPhase: ProjectCreationPhase.projectType,
+          canDismiss: launcher.canDismiss,
+        );
+        return;
+      case ProjectCreationPhase.bookDeconstructionFollowup:
+        await showLauncher(
+          ProjectLauncherMode.create,
+          status: '返回项目类型选择。',
+          draftTitle: launcher.draftTitle,
+          selectedProjectTypeId: launcher.selectedProjectTypeId,
+          selectedStorageStrategy: ProjectStorageStrategy.fromId(
+            launcher.selectedStorageStrategyId,
+          ),
+          selectedBookDeconstructionFollowupRouteId:
+              launcher.selectedBookDeconstructionFollowupRouteId,
           continuityInput: launcher.continuityInput,
           creationPhase: ProjectCreationPhase.projectType,
           canDismiss: launcher.canDismiss,
@@ -342,6 +403,8 @@ class ProjectCreationController {
           selectedStorageStrategy: ProjectStorageStrategy.fromId(
             launcher.selectedStorageStrategyId,
           ),
+          selectedBookDeconstructionFollowupRouteId:
+              launcher.selectedBookDeconstructionFollowupRouteId,
           continuityInput: launcher.continuityInput,
           creationPhase: ProjectCreationPhase.storageStrategy,
           runtimeBaselineOptions: launcher.runtimeBaselineOptions
@@ -368,6 +431,8 @@ class ProjectCreationController {
     ProjectStorageStrategy selectedStorageStrategy =
         ProjectStorageStrategy.markdownProjectStore,
     ProjectCreationPhase creationPhase = ProjectCreationPhase.projectType,
+    String selectedBookDeconstructionFollowupRouteId =
+        BookDeconstructionProjectSetupResolverService.continuationRouteId,
     List<ProjectRuntimeBaselineDefinition> runtimeBaselineOptions =
         const <ProjectRuntimeBaselineDefinition>[],
     String selectedRuntimeBaselineId = '',
@@ -387,14 +452,61 @@ class ProjectCreationController {
           selectedProjectTypeId: selectedProjectTypeId,
           selectedStorageStrategy: selectedStorageStrategy,
           creationPhase: creationPhase,
+          selectedBookDeconstructionFollowupRouteId:
+              selectedBookDeconstructionFollowupRouteId,
           runtimeBaselineOptions: runtimeBaselineOptions,
           selectedRuntimeBaselineId: selectedRuntimeBaselineId,
           continuityInput: continuityInput,
           canDismiss: canDismiss ?? _readCurrentProject() != null,
           allowOpenExisting: !_isMobileProjectRootLocked,
         ),
+        projectAgentGroupWorkspace: null,
+        workspaceCommand: null,
       ),
     );
+  }
+
+  Future<void> _applyBookDeconstructionSetupIfNeeded(
+    ProjectDescriptor project,
+    String followupRouteId,
+  ) async {
+    if (project.projectType != 'book_deconstruction') {
+      return;
+    }
+    final normalizedRouteId = _bookDeconstructionProjectSetupResolverService
+        .normalizeRouteId(followupRouteId);
+    final setup = _bookDeconstructionProjectSetupDocumentService.create(
+      followupRouteId: normalizedRouteId,
+    );
+    await _writeProjectTextFileUseCase.execute(
+      project: project,
+      relativePath: BookDeconstructionProjectSetupDocumentService.relativePath,
+      content: _bookDeconstructionProjectSetupDocumentService.encode(setup),
+    );
+  }
+
+  bool _requiresRuntimeBaseline(String projectTypeId) {
+    final definition = const ProjectTypeCatalogService().definitionOf(
+      projectTypeId,
+    );
+    return definition.requiresRuntimeBaselineSelection;
+  }
+
+  ProjectCreationPhase _failurePhaseFor({
+    required ProjectCreationPhase currentPhase,
+    required ProjectCreationPlan creationPlan,
+  }) {
+    if (creationPlan.request.runtimeBaselineId.trim().isNotEmpty) {
+      return ProjectCreationPhase.runtimeBaseline;
+    }
+    if (_projectCreationPhaseResolverService.usesBookDeconstructionFollowup(
+      creationPlan.request.projectTypeId,
+    )) {
+      return ProjectCreationPhase.bookDeconstructionFollowup;
+    }
+    return currentPhase == ProjectCreationPhase.projectType
+        ? ProjectCreationPhase.storageStrategy
+        : currentPhase;
   }
 
   Future<void> _applyContinuityInputIfNeeded(

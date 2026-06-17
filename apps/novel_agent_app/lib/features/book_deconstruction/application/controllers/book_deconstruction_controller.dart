@@ -18,6 +18,7 @@ import '../services/desktop_book_deconstruction_source_picker_service.dart';
 class BookDeconstructionController extends ChangeNotifier
     implements BookDeconstructionActionHandler {
   BookDeconstructionController({
+    required ReadProjectFileUseCase readProjectFileUseCase,
     required WriteProjectTextFileUseCase writeProjectTextFileUseCase,
     required BookDeconstructionNarrativePersistenceService
     narrativePersistenceService,
@@ -34,12 +35,15 @@ class BookDeconstructionController extends ChangeNotifier
     BookDeconstructionConfirmWorkflowService? confirmWorkflowService,
     BookDeconstructionFollowupOptionSelectionService?
     followupOptionSelectionService,
+    BookDeconstructionProjectSetupDocumentService?
+    projectSetupDocumentService,
     BookDeconstructionDerivedProjectCreationService?
     derivedProjectCreationService,
     Future<void> Function(ProjectDescriptor project, String preferredOpenPath)?
     openDerivedProjectRequested,
     String projectsRootPath = '',
   }) : _readCurrentProject = readCurrentProject,
+       _readProjectFileUseCase = readProjectFileUseCase,
        _syncWorkbenchResources = syncWorkbenchResources,
        _onBackRequested = onBackRequested,
        _sourcePickerService =
@@ -52,6 +56,9 @@ class BookDeconstructionController extends ChangeNotifier
        _followupOptionSelectionService =
            followupOptionSelectionService ??
            const BookDeconstructionFollowupOptionSelectionService(),
+       _projectSetupDocumentService =
+           projectSetupDocumentService ??
+           BookDeconstructionProjectSetupDocumentService(),
        _derivedProjectCreationService = derivedProjectCreationService,
        _openDerivedProjectRequested = openDerivedProjectRequested,
        _projectsRootPath = projectsRootPath,
@@ -72,6 +79,7 @@ class BookDeconstructionController extends ChangeNotifier
        _viewData = BookDeconstructionViewData.initial();
 
   final ProjectDescriptor? Function() _readCurrentProject;
+  final ReadProjectFileUseCase _readProjectFileUseCase;
   final Future<void> Function() _syncWorkbenchResources;
   final VoidCallback _onBackRequested;
   final DesktopBookDeconstructionSourcePickerService _sourcePickerService;
@@ -79,6 +87,8 @@ class BookDeconstructionController extends ChangeNotifier
   final BookDeconstructionViewDataService _viewDataService;
   final BookDeconstructionFollowupOptionSelectionService
   _followupOptionSelectionService;
+  final BookDeconstructionProjectSetupDocumentService
+  _projectSetupDocumentService;
   final BookDeconstructionImportArchiveWorkflowService
   _importArchiveWorkflowService;
   final BookDeconstructionConfirmWorkflowService _confirmWorkflowService;
@@ -108,8 +118,10 @@ class BookDeconstructionController extends ChangeNotifier
       return;
     }
     if (_snapshot.projectRootPath != project.rootPath) {
+      final projectSetup = await _loadProjectSetup(project);
       _snapshot = BookDeconstructionSnapshot.initial().copyWith(
         projectRootPath: project.rootPath,
+        selectedFollowupOptionId: projectSetup.preferredFollowupOptionId,
       );
     }
     _statusMessage =
@@ -245,6 +257,7 @@ class BookDeconstructionController extends ChangeNotifier
         worldRulesText: _snapshot.worldRulesText,
         characterLinesText: _snapshot.characterLinesText,
         organizationLinesText: _snapshot.organizationLinesText,
+        preferredContinuationDirection: _preferredContinuationDirection(),
       );
       final selectedIds = buildResult.applicationPlan.items
           .map((item) => item.id)
@@ -447,6 +460,30 @@ class BookDeconstructionController extends ChangeNotifier
       project: project,
       buildResult: buildResult,
     );
+  }
+
+  Future<BookDeconstructionProjectSetup> _loadProjectSetup(
+    ProjectDescriptor project,
+  ) async {
+    final source = await _readProjectFileUseCase.execute(
+      project,
+      BookDeconstructionProjectSetupDocumentService.relativePath,
+    );
+    if (source == null || source.trim().isEmpty) {
+      return _projectSetupDocumentService.create();
+    }
+    return _projectSetupDocumentService.parse(source);
+  }
+
+  BookDeconstructionContinuationDirection _preferredContinuationDirection() {
+    final selectedOptionId = _snapshot.selectedFollowupOptionId.trim();
+    if (selectedOptionId.startsWith('fanfic_')) {
+      return BookDeconstructionContinuationDirection.longTaskPreferred;
+    }
+    if (selectedOptionId.startsWith('continuation_')) {
+      return BookDeconstructionContinuationDirection.generalNovelPreferred;
+    }
+    return BookDeconstructionContinuationDirection.analysisFirst;
   }
 
   Future<BookDeconstructionConfirmWorkflowResult> _persistConfirmation({

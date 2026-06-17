@@ -1,1 +1,6 @@
-enum ProjectCreationPhase { projectType, storageStrategy, runtimeBaseline }
+enum ProjectCreationPhase {
+  projectType,
+  storageStrategy,
+  bookDeconstructionFollowup,
+  runtimeBaseline,
+}

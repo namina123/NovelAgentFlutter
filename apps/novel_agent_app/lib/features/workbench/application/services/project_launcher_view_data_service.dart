@@ -2,18 +2,32 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../../presentation/models/project_entry_view_data.dart';
 import '../../presentation/models/project_creation_phase.dart';
+import '../../presentation/models/project_deconstruction_followup_option_view_data.dart';
 import '../../presentation/models/project_launcher_view_data.dart';
 import '../../presentation/models/project_runtime_baseline_option_view_data.dart';
 import '../../presentation/models/project_storage_strategy_option_view_data.dart';
 import '../../presentation/models/project_type_option_view_data.dart';
+import 'project_creation_phase_resolver_service.dart';
 
 class ProjectLauncherViewDataService {
   ProjectLauncherViewDataService({
     ProjectTypeCatalogService? projectTypeCatalogService,
+    ProjectCreationPhaseResolverService? projectCreationPhaseResolverService,
+    BookDeconstructionProjectSetupResolverService?
+    bookDeconstructionProjectSetupResolverService,
   }) : _projectTypeCatalogService =
-           projectTypeCatalogService ?? const ProjectTypeCatalogService();
+           projectTypeCatalogService ?? const ProjectTypeCatalogService(),
+       _projectCreationPhaseResolverService =
+           projectCreationPhaseResolverService ??
+           const ProjectCreationPhaseResolverService(),
+       _bookDeconstructionProjectSetupResolverService =
+           bookDeconstructionProjectSetupResolverService ??
+           const BookDeconstructionProjectSetupResolverService();
 
   final ProjectTypeCatalogService _projectTypeCatalogService;
+  final ProjectCreationPhaseResolverService _projectCreationPhaseResolverService;
+  final BookDeconstructionProjectSetupResolverService
+  _bookDeconstructionProjectSetupResolverService;
 
   ProjectLauncherViewData build({
     required ProjectLauncherMode mode,
@@ -25,6 +39,8 @@ class ProjectLauncherViewDataService {
     ProjectStorageStrategy selectedStorageStrategy =
         ProjectStorageStrategy.markdownProjectStore,
     ProjectCreationPhase creationPhase = ProjectCreationPhase.projectType,
+    String selectedBookDeconstructionFollowupRouteId =
+        BookDeconstructionProjectSetupResolverService.continuationRouteId,
     List<ProjectRuntimeBaselineDefinition> runtimeBaselineOptions =
         const <ProjectRuntimeBaselineDefinition>[],
     String selectedRuntimeBaselineId = '',
@@ -79,6 +95,12 @@ class ProjectLauncherViewDataService {
         selectedStorageStrategy,
       ),
       creationPhase: creationPhase,
+      bookDeconstructionFollowupOptions:
+          _bookDeconstructionFollowupOptionsOf(selectedProjectType.id),
+      selectedBookDeconstructionFollowupRouteId:
+          _bookDeconstructionProjectSetupResolverService.normalizeRouteId(
+            selectedBookDeconstructionFollowupRouteId,
+          ),
       runtimeBaselineOptions: runtimeBaselineOptions
           .map(
             (definition) => ProjectRuntimeBaselineOptionViewData(
@@ -110,6 +132,8 @@ class ProjectLauncherViewDataService {
             return '第一步：选择项目类型';
           case ProjectCreationPhase.storageStrategy:
             return '第二步：选择主存储策略';
+          case ProjectCreationPhase.bookDeconstructionFollowup:
+            return '第二步：选择拆书承接路线';
           case ProjectCreationPhase.runtimeBaseline:
             return '第三步：选择长任务运行基准';
         }
@@ -132,10 +156,35 @@ class ProjectLauncherViewDataService {
             return '先决定这个项目按哪类创作策略起步，项目名会随默认模板联动。';
           case ProjectCreationPhase.storageStrategy:
             return '接着确定正文主存储策略，后续文件树与数据组织都会按这里落定。';
+          case ProjectCreationPhase.bookDeconstructionFollowup:
+            return '拆书项目先确定后续承接路线，决定默认偏向续写还是同人派生。';
           case ProjectCreationPhase.runtimeBaseline:
             return '最后为需要长任务运行基准的项目补齐运行方式，再正式创建项目。';
         }
     }
+  }
+
+  List<ProjectDeconstructionFollowupOptionViewData>
+  _bookDeconstructionFollowupOptionsOf(String projectTypeId) {
+    if (!_projectCreationPhaseResolverService.usesBookDeconstructionFollowup(
+      projectTypeId,
+    )) {
+      return const <ProjectDeconstructionFollowupOptionViewData>[];
+    }
+    return const <ProjectDeconstructionFollowupOptionViewData>[
+      ProjectDeconstructionFollowupOptionViewData(
+        id: BookDeconstructionProjectSetupResolverService.continuationRouteId,
+        title: '续写承接',
+        description:
+            '默认把原作当作同一条正文连续体的前段，后续拆书预演和派生更偏向续写承接。',
+      ),
+      ProjectDeconstructionFollowupOptionViewData(
+        id: BookDeconstructionProjectSetupResolverService.fanficRouteId,
+        title: '同人派生',
+        description:
+            '默认把原作保留在来源与参考层，后续拆书预演和派生更偏向同人创作与世界观借力。',
+      ),
+    ];
   }
 
   ProjectTypeOptionViewData _projectTypeOptionFrom(

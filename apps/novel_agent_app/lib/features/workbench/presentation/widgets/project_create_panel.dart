@@ -6,10 +6,12 @@ import '../../../../../shared/theme/novel_theme_context.dart';
 import '../../../../../shared/widgets/action_button.dart';
 import '../models/project_create_request_view_data.dart';
 import '../models/project_creation_phase.dart';
+import '../models/project_deconstruction_followup_option_view_data.dart';
 import '../models/project_runtime_baseline_option_view_data.dart';
 import '../models/project_storage_strategy_option_view_data.dart';
 import '../models/project_type_option_view_data.dart';
 import 'project_continuity_input_panel.dart';
+import 'project_deconstruction_followup_option_tile.dart';
 import 'project_runtime_baseline_option_tile.dart';
 import 'project_storage_strategy_option_tile.dart';
 import 'project_type_option_tile.dart';
@@ -27,6 +29,8 @@ class ProjectCreatePanel extends StatefulWidget {
     required this.storageStrategyOptions,
     required this.selectedStorageStrategyId,
     required this.creationPhase,
+    required this.bookDeconstructionFollowupOptions,
+    required this.selectedBookDeconstructionFollowupRouteId,
     required this.runtimeBaselineOptions,
     required this.selectedRuntimeBaselineId,
     required this.selectedProjectTypeRequiresRuntimeBaseline,
@@ -47,6 +51,9 @@ class ProjectCreatePanel extends StatefulWidget {
   final List<ProjectStorageStrategyOptionViewData> storageStrategyOptions;
   final String selectedStorageStrategyId;
   final ProjectCreationPhase creationPhase;
+  final List<ProjectDeconstructionFollowupOptionViewData>
+  bookDeconstructionFollowupOptions;
+  final String selectedBookDeconstructionFollowupRouteId;
   final List<ProjectRuntimeBaselineOptionViewData> runtimeBaselineOptions;
   final String selectedRuntimeBaselineId;
   final bool selectedProjectTypeRequiresRuntimeBaseline;
@@ -65,6 +72,7 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
   late final ScrollController _scrollController;
   late String _selectedProjectTypeId;
   late String _selectedStorageStrategyId;
+  late String _selectedBookDeconstructionFollowupRouteId;
   late String _selectedRuntimeBaselineId;
   late ProjectContinuityInputProfile _continuityInput;
   late bool _showAdvancedContinuity;
@@ -75,6 +83,8 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
     super.initState();
     _selectedProjectTypeId = _resolvedSelectedTypeId();
     _selectedStorageStrategyId = _resolvedSelectedStorageStrategyId();
+    _selectedBookDeconstructionFollowupRouteId =
+        _resolvedSelectedBookDeconstructionFollowupRouteId();
     _selectedRuntimeBaselineId = _resolvedSelectedRuntimeBaselineId();
     _continuityInput = widget.continuityInput;
     _showAdvancedContinuity = _hasContinuityInput(_continuityInput);
@@ -93,6 +103,8 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
     // 中文注释: 创建面板会跨阶段复用，因此外层视图数据变化时要把选择状态同步回当前 State。
     _selectedProjectTypeId = _resolvedSelectedTypeId();
     _selectedStorageStrategyId = _resolvedSelectedStorageStrategyId();
+    _selectedBookDeconstructionFollowupRouteId =
+        _resolvedSelectedBookDeconstructionFollowupRouteId();
     _selectedRuntimeBaselineId = _resolvedSelectedRuntimeBaselineId();
     _continuityInput = widget.continuityInput;
     _lastDefaultTitle = _defaultTitleOf(_selectedProjectTypeId);
@@ -199,6 +211,7 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
                     const SizedBox(height: 14),
                     _StepStrip(
                       currentPhase: widget.creationPhase,
+                      selectedProjectTypeId: _selectedProjectTypeId,
                       projectTypeRequiresRuntimeBaseline:
                           _selectedTypeRequiresRuntimeBaseline(),
                     ),
@@ -360,6 +373,19 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
             ),
           ),
         ];
+      case ProjectCreationPhase.bookDeconstructionFollowup:
+        return [
+          ..._buildBookDeconstructionFollowupTiles(),
+          const SizedBox(height: 10),
+          Text(
+            '这里只决定拆书项目的默认承接路线；真正拆书时仍然可以在预演确认阶段改成另一条路线。',
+            style: TextStyle(
+              color: context.novelThemeColors.mutedTextColor,
+              fontSize: 12,
+              height: 1.45,
+            ),
+          ),
+        ];
       case ProjectCreationPhase.runtimeBaseline:
         return _buildRuntimeBaselineTiles();
     }
@@ -405,6 +431,28 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
     return children;
   }
 
+  List<Widget> _buildBookDeconstructionFollowupTiles() {
+    final children = <Widget>[];
+    for (
+      var index = 0;
+      index < widget.bookDeconstructionFollowupOptions.length;
+      index += 1
+    ) {
+      final option = widget.bookDeconstructionFollowupOptions[index];
+      children.add(
+        ProjectDeconstructionFollowupOptionTile(
+          option: option,
+          isSelected: option.id == _selectedBookDeconstructionFollowupRouteId,
+          onTap: () => _handleBookDeconstructionFollowupChanged(option.id),
+        ),
+      );
+      if (index != widget.bookDeconstructionFollowupOptions.length - 1) {
+        children.add(const SizedBox(height: 8));
+      }
+    }
+    return children;
+  }
+
   List<Widget> _buildRuntimeBaselineTiles() {
     final children = <Widget>[];
     for (
@@ -435,6 +483,8 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
         projectTypeId: _selectedProjectTypeId,
         storageStrategyId: _selectedStorageStrategyId,
         runtimeBaselineId: _selectedRuntimeBaselineId,
+        bookDeconstructionFollowupRouteId:
+            _selectedBookDeconstructionFollowupRouteId,
         continuityInput: _continuityInput,
       ),
     );
@@ -453,6 +503,8 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
     setState(() {
       _selectedProjectTypeId = projectTypeId;
       _selectedStorageStrategyId = _resolvedSelectedStorageStrategyId();
+      _selectedBookDeconstructionFollowupRouteId =
+          _resolvedSelectedBookDeconstructionFollowupRouteId();
       _selectedRuntimeBaselineId = '';
       _lastDefaultTitle = nextDefaultTitle;
     });
@@ -472,6 +524,12 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
     });
   }
 
+  void _handleBookDeconstructionFollowupChanged(String routeId) {
+    setState(() {
+      _selectedBookDeconstructionFollowupRouteId = routeId;
+    });
+  }
+
   void _handleContinuityInputChanged(ProjectContinuityInputProfile input) {
     setState(() {
       _continuityInput = input;
@@ -488,6 +546,8 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
         return '项目类型';
       case ProjectCreationPhase.storageStrategy:
         return '主存储策略';
+      case ProjectCreationPhase.bookDeconstructionFollowup:
+        return '拆书承接路线';
       case ProjectCreationPhase.runtimeBaseline:
         return '长任务运行基准';
     }
@@ -526,6 +586,17 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
         : widget.runtimeBaselineOptions.first.id;
   }
 
+  String _resolvedSelectedBookDeconstructionFollowupRouteId() {
+    for (final option in widget.bookDeconstructionFollowupOptions) {
+      if (option.id == widget.selectedBookDeconstructionFollowupRouteId) {
+        return option.id;
+      }
+    }
+    return widget.bookDeconstructionFollowupOptions.isEmpty
+        ? BookDeconstructionProjectSetupResolverService.continuationRouteId
+        : widget.bookDeconstructionFollowupOptions.first.id;
+  }
+
   ProjectTypeOptionViewData? _selectedOption() {
     for (final option in widget.projectTypeOptions) {
       if (option.id == _selectedProjectTypeId) {
@@ -555,6 +626,8 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
         return '输入要创建的资料知识库名称';
       case 'long_novel':
         return '输入要创建的长篇项目名称';
+      case 'book_deconstruction':
+        return '输入要创建的拆书承接项目名称';
       default:
         return '输入要创建的项目名称';
     }
@@ -566,6 +639,8 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
         return '下一步';
       case ProjectCreationPhase.storageStrategy:
         return _selectedTypeRequiresRuntimeBaseline() ? '下一步' : '创建并打开';
+      case ProjectCreationPhase.bookDeconstructionFollowup:
+        return '创建并打开';
       case ProjectCreationPhase.runtimeBaseline:
         return '创建并打开';
     }
@@ -681,10 +756,12 @@ class _AdvancedContinuitySection extends StatelessWidget {
 class _StepStrip extends StatelessWidget {
   const _StepStrip({
     required this.currentPhase,
+    required this.selectedProjectTypeId,
     required this.projectTypeRequiresRuntimeBaseline,
   });
 
   final ProjectCreationPhase currentPhase;
+  final String selectedProjectTypeId;
   final bool projectTypeRequiresRuntimeBaseline;
 
   @override
@@ -692,8 +769,12 @@ class _StepStrip extends StatelessWidget {
     final colors = context.novelThemeColors;
     final phases = <ProjectCreationPhase>[
       ProjectCreationPhase.projectType,
-      ProjectCreationPhase.storageStrategy,
-      if (projectTypeRequiresRuntimeBaseline)
+      if (selectedProjectTypeId == 'book_deconstruction')
+        ProjectCreationPhase.bookDeconstructionFollowup
+      else
+        ProjectCreationPhase.storageStrategy,
+      if (projectTypeRequiresRuntimeBaseline &&
+          selectedProjectTypeId != 'book_deconstruction')
         ProjectCreationPhase.runtimeBaseline,
     ];
     return Container(
@@ -728,6 +809,8 @@ class _StepStrip extends StatelessWidget {
         return '类型';
       case ProjectCreationPhase.storageStrategy:
         return '存储';
+      case ProjectCreationPhase.bookDeconstructionFollowup:
+        return '承接';
       case ProjectCreationPhase.runtimeBaseline:
         return '运行基准';
     }

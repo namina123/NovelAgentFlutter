@@ -2,6 +2,7 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 
 import 'project_entry_view_data.dart';
 import 'project_creation_phase.dart';
+import 'project_deconstruction_followup_option_view_data.dart';
 import 'project_runtime_baseline_option_view_data.dart';
 import 'project_storage_strategy_option_view_data.dart';
 import 'project_type_option_view_data.dart';
@@ -22,6 +23,8 @@ class ProjectLauncherViewData {
     required this.storageStrategyOptions,
     required this.selectedStorageStrategyId,
     required this.creationPhase,
+    required this.bookDeconstructionFollowupOptions,
+    required this.selectedBookDeconstructionFollowupRouteId,
     required this.runtimeBaselineOptions,
     required this.selectedRuntimeBaselineId,
     required this.selectedProjectTypeRequiresRuntimeBaseline,
@@ -42,6 +45,9 @@ class ProjectLauncherViewData {
   final List<ProjectStorageStrategyOptionViewData> storageStrategyOptions;
   final String selectedStorageStrategyId;
   final ProjectCreationPhase creationPhase;
+  final List<ProjectDeconstructionFollowupOptionViewData>
+  bookDeconstructionFollowupOptions;
+  final String selectedBookDeconstructionFollowupRouteId;
   final List<ProjectRuntimeBaselineOptionViewData> runtimeBaselineOptions;
   final String selectedRuntimeBaselineId;
   final bool selectedProjectTypeRequiresRuntimeBaseline;

@@ -48,6 +48,8 @@ void main() {
                 ],
             selectedStorageStrategyId: 'markdown_project_store',
             creationPhase: ProjectCreationPhase.projectType,
+            bookDeconstructionFollowupOptions: const [],
+            selectedBookDeconstructionFollowupRouteId: 'continuation',
             runtimeBaselineOptions:
                 const <ProjectRuntimeBaselineOptionViewData>[],
             selectedRuntimeBaselineId: '',

@@ -138,6 +138,10 @@ class ProjectLauncherOverlay extends StatelessWidget {
           storageStrategyOptions: viewData.storageStrategyOptions,
           selectedStorageStrategyId: viewData.selectedStorageStrategyId,
           creationPhase: viewData.creationPhase,
+          bookDeconstructionFollowupOptions:
+              viewData.bookDeconstructionFollowupOptions,
+          selectedBookDeconstructionFollowupRouteId:
+              viewData.selectedBookDeconstructionFollowupRouteId,
           runtimeBaselineOptions: viewData.runtimeBaselineOptions,
           selectedRuntimeBaselineId: viewData.selectedRuntimeBaselineId,
           selectedProjectTypeRequiresRuntimeBaseline:

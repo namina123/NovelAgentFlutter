@@ -545,6 +545,7 @@ class AppShellController extends ChangeNotifier
     _projectCreationController = ProjectCreationController(
       loadProjectWorkspaceUseCase: _loadProjectWorkspaceUseCase,
       createProjectWorkspaceUseCase: _createProjectWorkspaceUseCase,
+      writeProjectTextFileUseCase: _writeProjectTextFileUseCase,
       desktopProjectDirectoryPickerService:
           _desktopProjectDirectoryPickerService,
       projectLauncherViewDataService: _projectLauncherViewDataService,
@@ -569,7 +570,8 @@ class AppShellController extends ChangeNotifier
       _projectCreationController,
     );
     _projectOpenController = AppShellProjectOpenController(
-      showWorkbench: showWorkbench,
+      startProjectCreationFromProjectOpen:
+          _startProjectCreationFromProjectOpen,
       refreshProjectOpenView: _refreshProjectOpenView,
       selectProjectOpenEntry: _selectProjectOpenEntry,
       openProjectFromProjectOpen: _openProjectFromProjectOpen,
@@ -613,6 +615,7 @@ class AppShellController extends ChangeNotifier
             ),
       ),
       createBookDeconstructionController: () => BookDeconstructionController(
+        readProjectFileUseCase: _readProjectFileUseCase,
         writeProjectTextFileUseCase: _writeProjectTextFileUseCase,
         narrativePersistenceService:
             _bookDeconstructionNarrativePersistenceService,
@@ -1116,6 +1119,12 @@ class AppShellController extends ChangeNotifier
       return;
     }
     await _openProjectFromProjectOpen(snapshot.project.rootPath);
+  }
+
+  Future<void> _startProjectCreationFromProjectOpen() async {
+    // 中文注释: 项目入口页进入新建流程时统一切回工作台并拉起正式创建向导，避免落回旧命令面板。
+    showWorkbench();
+    await _projectCreationController.onCreateProjectRequested();
   }
 
   Future<void> _showCurrentAgentSkillLoadout(String agentId) async {

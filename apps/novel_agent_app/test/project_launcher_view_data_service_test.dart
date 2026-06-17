@@ -68,6 +68,10 @@ void main() {
             storageStrategyOptions: viewData.storageStrategyOptions,
             selectedStorageStrategyId: viewData.selectedStorageStrategyId,
             creationPhase: viewData.creationPhase,
+            bookDeconstructionFollowupOptions:
+                viewData.bookDeconstructionFollowupOptions,
+            selectedBookDeconstructionFollowupRouteId:
+                viewData.selectedBookDeconstructionFollowupRouteId,
             runtimeBaselineOptions: viewData.runtimeBaselineOptions,
             selectedRuntimeBaselineId: viewData.selectedRuntimeBaselineId,
             selectedProjectTypeRequiresRuntimeBaseline:
@@ -123,5 +127,25 @@ void main() {
         containsAll(<String>['markdown_project_store', 'sqlite_project_store']),
       );
     }
+  });
+
+  test('拆书创建第二步会暴露续写/同人承接路线', () {
+    final service = ProjectLauncherViewDataService();
+    final viewData = service.build(
+      mode: ProjectLauncherMode.create,
+      projectsRootPath: 'D:/Projects',
+      projects: const <JsonMap>[],
+      selectedProjectTypeId: 'book_deconstruction',
+      creationPhase: ProjectCreationPhase.bookDeconstructionFollowup,
+      selectedBookDeconstructionFollowupRouteId: 'fanfic',
+    );
+
+    expect(viewData.title, '第二步：选择拆书承接路线');
+    expect(viewData.bookDeconstructionFollowupOptions, hasLength(2));
+    expect(
+      viewData.bookDeconstructionFollowupOptions.map((option) => option.id),
+      containsAll(<String>['continuation', 'fanfic']),
+    );
+    expect(viewData.selectedBookDeconstructionFollowupRouteId, 'fanfic');
   });
 }

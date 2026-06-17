@@ -1,18 +1,20 @@
+import 'dart:async';
+
 class AppShellProjectOpenController {
   AppShellProjectOpenController({
-    required void Function() showWorkbench,
+    required Future<void> Function() startProjectCreationFromProjectOpen,
     required Future<void> Function() refreshProjectOpenView,
     required void Function(String entryId) selectProjectOpenEntry,
     required Future<void> Function(String projectPath)
     openProjectFromProjectOpen,
     required Future<void> Function() importLocalProjectFromProjectOpen,
-  }) : _showWorkbench = showWorkbench,
+  }) : _startProjectCreationFromProjectOpen = startProjectCreationFromProjectOpen,
        _refreshProjectOpenView = refreshProjectOpenView,
        _selectProjectOpenEntry = selectProjectOpenEntry,
        _openProjectFromProjectOpen = openProjectFromProjectOpen,
        _importLocalProjectFromProjectOpen = importLocalProjectFromProjectOpen;
 
-  final void Function() _showWorkbench;
+  final Future<void> Function() _startProjectCreationFromProjectOpen;
   final Future<void> Function() _refreshProjectOpenView;
   final void Function(String entryId) _selectProjectOpenEntry;
   final Future<void> Function(String projectPath) _openProjectFromProjectOpen;
@@ -24,8 +26,8 @@ class AppShellProjectOpenController {
   }
 
   void onProjectOpenCreateRequested() {
-    // 中文注释: 新建项目入口仍先回到工作台，后续项目创建流程继续由既有主入口承接。
-    _showWorkbench();
+    // 中文注释: 项目入口页新建动作统一接回正式创建链路，避免误落回旧工作台状态。
+    unawaited(_startProjectCreationFromProjectOpen());
   }
 
   void onProjectOpenImportRequested() {

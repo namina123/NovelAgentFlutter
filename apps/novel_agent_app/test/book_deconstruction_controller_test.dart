@@ -18,6 +18,7 @@ void main() {
       projectType: 'book_deconstruction',
     );
     final controller = BookDeconstructionController(
+      readProjectFileUseCase: ReadProjectFileUseCase(workspacePort),
       writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
         projectWorkspacePort: workspacePort,
       ),
@@ -172,6 +173,7 @@ void main() {
       projectType: 'book_deconstruction',
     );
     final controller = BookDeconstructionController(
+      readProjectFileUseCase: ReadProjectFileUseCase(workspacePort),
       writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
         projectWorkspacePort: workspacePort,
       ),
@@ -233,6 +235,48 @@ void main() {
     );
   });
 
+  test('拆书控制器会读取项目级默认承接路线作为初始选项', () async {
+    final workspacePort = _InMemoryProjectWorkspacePort();
+    const currentProject = ProjectDescriptor(
+      id: 'project-setup',
+      name: '拆书测试项目默认路线',
+      rootPath: 'D:/Projects/deconstruction_project_setup',
+      projectType: 'book_deconstruction',
+    );
+    await workspacePort.writeTextFile(
+      currentProject.rootPath,
+      BookDeconstructionProjectSetupDocumentService.relativePath,
+      BookDeconstructionProjectSetupDocumentService().encode(
+        const BookDeconstructionProjectSetup(
+          followupRouteId: 'fanfic',
+          preferredFollowupOptionId: 'fanfic_seed_autopilot_novel',
+          preferredContinuationDirection:
+              BookDeconstructionContinuationDirection.longTaskPreferred,
+        ),
+      ),
+    );
+    final controller = BookDeconstructionController(
+      readProjectFileUseCase: ReadProjectFileUseCase(workspacePort),
+      writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
+        projectWorkspacePort: workspacePort,
+      ),
+      narrativePersistenceService:
+          BookDeconstructionNarrativePersistenceService(
+            workspacePort: workspacePort,
+          ),
+      readCurrentProject: () => currentProject,
+      syncWorkbenchResources: () async {},
+      onBackRequested: () {},
+    );
+
+    await controller.initialize();
+
+    expect(
+      controller.viewData.selectedFollowupOptionId,
+      'fanfic_seed_autopilot_novel',
+    );
+  });
+
   test('拆书控制器可直接派生并打开后续项目', () async {
     final workspacePort = _InMemoryProjectWorkspacePort();
     const currentProject = ProjectDescriptor(
@@ -244,6 +288,7 @@ void main() {
     ProjectDescriptor? openedProject;
     String openedPath = '';
     final controller = BookDeconstructionController(
+      readProjectFileUseCase: ReadProjectFileUseCase(workspacePort),
       writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
         projectWorkspacePort: workspacePort,
       ),
@@ -328,6 +373,7 @@ void main() {
       projectType: 'book_deconstruction',
     );
     final controller = BookDeconstructionController(
+      readProjectFileUseCase: ReadProjectFileUseCase(workspacePort),
       writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
         projectWorkspacePort: workspacePort,
       ),
