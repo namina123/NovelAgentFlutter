@@ -12,6 +12,7 @@ import '../../presentation/models/book_deconstruction_preview_item_view_data.dar
 import '../../presentation/models/book_deconstruction_preview_section_view_data.dart';
 import '../../presentation/models/book_deconstruction_step_view_data.dart';
 import '../../presentation/models/book_deconstruction_view_data.dart';
+import '../models/book_deconstruction_operation_kind.dart';
 import '../models/book_deconstruction_snapshot.dart';
 import '../models/book_deconstruction_step_id.dart';
 
@@ -46,6 +47,7 @@ class BookDeconstructionViewDataService {
       projectTitle: projectTitle,
       status: status,
       isLoading: snapshot.isLoading,
+      operationKind: snapshot.operationKind,
       activeStepId: snapshot.activeStepId,
       steps: _stepsOf(snapshot),
       sourceAbsolutePath: snapshot.sourceAbsolutePath,
@@ -62,19 +64,42 @@ class BookDeconstructionViewDataService {
       totalItemCount: totalItemCount,
       selectedFollowupOptionId: snapshot.selectedFollowupOptionId,
       confirmedPreviewPath: snapshot.confirmedPreviewPath,
-      canBuildPreview: snapshot.sourceContent.trim().isNotEmpty,
+      canBuildPreview:
+          !snapshot.isLoading && snapshot.sourceContent.trim().isNotEmpty,
       canConfirmSelection:
+          !snapshot.isLoading &&
           buildResult != null &&
           snapshot.selectedItemIds.isNotEmpty &&
           snapshot.selectedFollowupOptionId.trim().isNotEmpty,
       canCreateDerivedProject:
+          !snapshot.isLoading &&
           buildResult != null &&
           snapshot.selectedItemIds.isNotEmpty &&
           snapshot.selectedFollowupOptionId.trim().isNotEmpty &&
           canCreateDerivedProject,
+      importActionLabel: _importActionLabel(snapshot.operationKind),
+      buildPreviewActionLabel: _buildPreviewActionLabel(snapshot.operationKind),
       informationBridge: informationBridge,
       continuity: continuity,
     );
+  }
+
+  String _importActionLabel(String operationKind) {
+    switch (operationKind) {
+      case BookDeconstructionOperationKind.importingSource:
+        return '正在导入';
+      default:
+        return '导入文件';
+    }
+  }
+
+  String _buildPreviewActionLabel(String operationKind) {
+    switch (operationKind) {
+      case BookDeconstructionOperationKind.buildingPreview:
+        return '正在拆书';
+      default:
+        return '生成结构化预览';
+    }
   }
 
   BookDeconstructionInformationBridgeViewData _informationBridgeOf(

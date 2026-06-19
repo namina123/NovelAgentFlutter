@@ -5,6 +5,7 @@ class ProjectCreateRequestViewData {
     required this.title,
     required this.projectTypeId,
     required this.storageStrategyId,
+    this.knowledgeBaseBranchId = '',
     this.runtimeBaselineId = '',
     this.bookDeconstructionFollowupRouteId = 'continuation',
     this.continuityInput = const ProjectContinuityInputProfile(),
@@ -13,6 +14,7 @@ class ProjectCreateRequestViewData {
   final String title;
   final String projectTypeId;
   final String storageStrategyId;
+  final String knowledgeBaseBranchId;
   final String runtimeBaselineId;
   final String bookDeconstructionFollowupRouteId;
   final ProjectContinuityInputProfile continuityInput;

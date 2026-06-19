@@ -101,6 +101,9 @@ class _EcosystemImportOverlayState extends State<EcosystemImportOverlay> {
                     value: _overwrite,
                     contentPadding: EdgeInsets.zero,
                     dense: true,
+                    visualDensity: VisualDensity.compact,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    titleAlignment: ListTileTitleAlignment.top,
                     title: const Text('覆盖项目内同 ID 条目'),
                     onChanged: (value) {
                       setState(() {
@@ -112,6 +115,9 @@ class _EcosystemImportOverlayState extends State<EcosystemImportOverlay> {
                     value: _allowBuiltinShadow,
                     contentPadding: EdgeInsets.zero,
                     dense: true,
+                    visualDensity: VisualDensity.compact,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    titleAlignment: ListTileTitleAlignment.top,
                     title: const Text('允许项目条目遮蔽内置条目'),
                     onChanged: (value) {
                       setState(() {

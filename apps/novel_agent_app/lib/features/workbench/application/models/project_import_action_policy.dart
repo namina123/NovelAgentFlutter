@@ -7,8 +7,12 @@ class ProjectImportActionPolicy {
     required this.canAutoDeconstruct,
     required this.smartAnalysis,
     required this.canSmartAnalyze,
-    required this.analysisAgentId,
-    required this.analysisAgentGroupId,
+    required this.smartAnalysisProviderId,
+    required this.smartAnalysisModelId,
+    required this.smartDeconstruction,
+    required this.canSmartDeconstruction,
+    required this.smartDeconstructionProviderId,
+    required this.smartDeconstructionModelId,
     required this.fileSelectionHint,
     required this.outputHint,
   });
@@ -20,8 +24,12 @@ class ProjectImportActionPolicy {
   final bool canAutoDeconstruct;
   final bool smartAnalysis;
   final bool canSmartAnalyze;
-  final String analysisAgentId;
-  final String analysisAgentGroupId;
+  final String smartAnalysisProviderId;
+  final String smartAnalysisModelId;
+  final bool smartDeconstruction;
+  final bool canSmartDeconstruction;
+  final String smartDeconstructionProviderId;
+  final String smartDeconstructionModelId;
   final String fileSelectionHint;
   final String outputHint;
 }

@@ -1,6 +1,7 @@
 import 'project_assets_catalog.dart';
 import 'project_assets_tab_id.dart';
 import '../../presentation/models/project_assets_view_data.dart';
+import 'project_rag_extraction_snapshot.dart';
 
 class ProjectAssetsSnapshot {
   const ProjectAssetsSnapshot({
@@ -12,6 +13,7 @@ class ProjectAssetsSnapshot {
     required this.selectedRelationshipId,
     required this.selectedGraphReferenceKey,
     required this.selectedReferenceExtractionStrategyId,
+    required this.ragExtraction,
     required this.entryAgentContextId,
     required this.availableAgentOptions,
     required this.availableModeOptions,
@@ -28,6 +30,7 @@ class ProjectAssetsSnapshot {
   final String selectedRelationshipId;
   final String selectedGraphReferenceKey;
   final String selectedReferenceExtractionStrategyId;
+  final ProjectRagExtractionSnapshot ragExtraction;
   final String entryAgentContextId;
   final List<ExpressionConstraintSelectableOptionViewData>
   availableAgentOptions;
@@ -38,7 +41,7 @@ class ProjectAssetsSnapshot {
   final bool isLoading;
 
   factory ProjectAssetsSnapshot.initial() {
-    return const ProjectAssetsSnapshot(
+    return ProjectAssetsSnapshot(
       activeTabId: ProjectAssetsTabId.styles,
       selectedStyleId: '',
       selectedExpressionConstraintId: '',
@@ -47,6 +50,7 @@ class ProjectAssetsSnapshot {
       selectedRelationshipId: '',
       selectedGraphReferenceKey: '',
       selectedReferenceExtractionStrategyId: '',
+      ragExtraction: ProjectRagExtractionSnapshot.initial(),
       entryAgentContextId: '',
       availableAgentOptions: <ExpressionConstraintSelectableOptionViewData>[],
       availableModeOptions: <ExpressionConstraintSelectableOptionViewData>[],
@@ -65,6 +69,7 @@ class ProjectAssetsSnapshot {
     String? selectedRelationshipId,
     String? selectedGraphReferenceKey,
     String? selectedReferenceExtractionStrategyId,
+    ProjectRagExtractionSnapshot? ragExtraction,
     String? entryAgentContextId,
     List<ExpressionConstraintSelectableOptionViewData>? availableAgentOptions,
     List<ExpressionConstraintSelectableOptionViewData>? availableModeOptions,
@@ -87,6 +92,7 @@ class ProjectAssetsSnapshot {
       selectedReferenceExtractionStrategyId:
           selectedReferenceExtractionStrategyId ??
           this.selectedReferenceExtractionStrategyId,
+      ragExtraction: ragExtraction ?? this.ragExtraction,
       entryAgentContextId: entryAgentContextId ?? this.entryAgentContextId,
       availableAgentOptions:
           availableAgentOptions ?? this.availableAgentOptions,

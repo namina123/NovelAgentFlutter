@@ -85,10 +85,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(WorkbenchObjectPanelBody), findsOneWidget);
-    expect(find.text('项目摘要'), findsOneWidget);
+    expect(find.text('项目摘要'), findsNothing);
     expect(find.text('当前项目动作'), findsOneWidget);
-    expect(find.text('当前协作摘要'), findsOneWidget);
-    expect(find.text('项目资料'), findsOneWidget);
+    expect(find.text('协作设置'), findsWidgets);
+    expect(find.text('写作资料'), findsOneWidget);
+    expect(find.text('资料库'), findsOneWidget);
     expect(find.text('长任务'), findsNothing);
   });
 }
@@ -145,6 +146,9 @@ class _FakeResourceHandler implements ResourceManagerActionHandler {
   void onProjectAssetsRequested() {}
 
   @override
+  void onProjectRagRequested() {}
+
+  @override
   void onProjectCreationBackRequested() {}
 
   @override
@@ -182,6 +186,11 @@ class _FakeResourceHandler implements ResourceManagerActionHandler {
 
   @override
   void onWorkspaceImportFilesPickRequested(
+    WorkspaceCommandRequestViewData request,
+  ) {}
+
+  @override
+  void onWorkspaceImportDirectoryPickRequested(
     WorkspaceCommandRequestViewData request,
   ) {}
 

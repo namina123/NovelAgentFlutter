@@ -291,4 +291,15 @@ class _FakeRuntimeQueryPort implements TaskCenterRuntimeQueryPort {
       'next_postprocess_task': <String, Object?>{},
     };
   }
+
+  @override
+  Future<JsonMap> saveWorkflowChainSnapshot(
+    ProjectDescriptor project, {
+    JsonMap filters = const <String, Object?>{},
+  }) async {
+    return const <String, Object?>{
+      'ok': true,
+      'snapshot_path': 'tracking/workflow_chain_snapshots/snapshot_001.json',
+    };
+  }
 }

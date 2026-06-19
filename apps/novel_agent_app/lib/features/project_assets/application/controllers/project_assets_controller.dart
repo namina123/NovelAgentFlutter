@@ -5,6 +5,7 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 import '../../presentation/contracts/project_assets_action_handler.dart';
 import '../../presentation/models/project_assets_view_data.dart';
 import '../models/project_assets_catalog.dart';
+import '../models/project_rag_extraction_execution_result.dart';
 import '../models/project_reference_extraction_execution_result.dart';
 import '../models/project_assets_snapshot.dart';
 import '../models/project_assets_tab_id.dart';
@@ -12,6 +13,7 @@ import '../services/project_assets_loader_service.dart';
 import '../services/project_expression_constraint_binding_action_service.dart';
 import '../services/project_expression_constraint_workspace_service.dart';
 import '../services/project_assets_view_data_service.dart';
+import '../services/project_rag_extraction_execution_service.dart';
 import '../services/project_reference_extraction_execution_service.dart';
 import '../services/project_reference_extraction_strategy_picker_view_data_service.dart';
 
@@ -28,6 +30,7 @@ class ProjectAssetsController extends ChangeNotifier
     required ReadAvailableProjectAgents readAvailableProjectAgents,
     required Future<void> Function() syncWorkbenchResources,
     required VoidCallback onBackRequested,
+    ProjectRagExtractionExecutionService? ragExtractionExecutionService,
     required ProjectReferenceExtractionExecutionService
     referenceExtractionExecutionService,
     ProjectAssetsViewDataService? viewDataService,
@@ -44,6 +47,9 @@ class ProjectAssetsController extends ChangeNotifier
        _readAvailableProjectAgents = readAvailableProjectAgents,
        _syncWorkbenchResources = syncWorkbenchResources,
        _onBackRequested = onBackRequested,
+       _ragExtractionExecutionService =
+           ragExtractionExecutionService ??
+           ProjectRagExtractionExecutionService(),
        _referenceExtractionExecutionService =
            referenceExtractionExecutionService,
        _viewDataService =
@@ -68,6 +74,8 @@ class ProjectAssetsController extends ChangeNotifier
   final ReadAvailableProjectAgents _readAvailableProjectAgents;
   final Future<void> Function() _syncWorkbenchResources;
   final VoidCallback _onBackRequested;
+  final ProjectRagExtractionExecutionService
+  _ragExtractionExecutionService;
   final ProjectReferenceExtractionExecutionService
   _referenceExtractionExecutionService;
   final ProjectAssetsViewDataService _viewDataService;
@@ -92,6 +100,9 @@ class ProjectAssetsController extends ChangeNotifier
       _rebuildView();
       return;
     }
+    if (_shouldPreferRagTab(project, _snapshot.activeTabId)) {
+      _snapshot = _snapshot.copyWith(activeTabId: ProjectAssetsTabId.ragExtraction);
+    }
     _snapshot = _snapshot.copyWith(isLoading: true);
     _statusMessage = status ?? '正在加载项目资产...';
     _rebuildView();
@@ -103,11 +114,26 @@ class ProjectAssetsController extends ChangeNotifier
           .buildExpressionConstraintModeOptions();
       final availableStageOptions = _viewDataService
           .buildExpressionConstraintStageOptions();
+      final ragSnapshot = await _ragExtractionExecutionService.loadSnapshot(
+        project: project,
+        selectedCorpusId: _snapshot.ragExtraction.selectedCorpusId,
+      );
       _snapshot = _snapshot.copyWith(
         catalog: catalog,
         availableAgentOptions: availableAgentOptions,
         availableModeOptions: availableModeOptions,
         availableStageOptions: availableStageOptions,
+        ragExtraction: _snapshot.ragExtraction.copyWith(
+          selectedCorpusId:
+              ragSnapshot.corpusPackage?.corpusId ?? _snapshot.ragExtraction.selectedCorpusId,
+          selectedCorpus: ragSnapshot.corpusPackage ?? _snapshot.ragExtraction.selectedCorpus,
+          mountSummary: ragSnapshot.mountSummary ??
+              _snapshot.ragExtraction.mountSummary,
+          statusMessage: ragSnapshot.statusMessage,
+          recentSourcePath:
+              ragSnapshot.corpusPackage?.metadata['source_file_path']?.toString() ??
+              _snapshot.ragExtraction.recentSourcePath,
+        ),
         selectedStyleId: _selectedStyleId(catalog, _snapshot.selectedStyleId),
         selectedExpressionConstraintId: _selectedExpressionConstraintId(
           catalog,
@@ -183,6 +209,67 @@ class ProjectAssetsController extends ChangeNotifier
   }
 
   @override
+  Future<void> onProjectAssetsExtractRagRequested({
+    String modeId = '',
+  }) async {
+    final project = _readCurrentProject();
+    if (project == null) {
+      await refresh(status: '请先创建或打开项目。');
+      return;
+    }
+    final selectedModeId = modeId.trim().isEmpty
+        ? _snapshot.ragExtraction.activeModeId
+        : modeId.trim();
+    _snapshot = _snapshot.copyWith(
+      activeTabId: ProjectAssetsTabId.ragExtraction,
+      ragExtraction: _snapshot.ragExtraction.copyWith(
+        activeModeId: selectedModeId,
+        isLoading: true,
+        statusMessage: '正在构建语料...',
+      ),
+    );
+    _rebuildView();
+    final result = await _ragExtractionExecutionService.pickAndExecute(
+      project: project,
+      modeId: selectedModeId,
+      onProgress: _handleRagExtractionProgress,
+    );
+    await _handleRagExtractionResult(result);
+  }
+
+  @override
+  Future<void> onProjectAssetsMountRagCorpusRequested() async {
+    final project = _readCurrentProject();
+    if (project == null) {
+      await refresh(status: '请先创建或打开项目。');
+      return;
+    }
+    final corpus = _snapshot.ragExtraction.selectedCorpus;
+    if (corpus == null) {
+      _snapshot = _snapshot.copyWith(
+        ragExtraction: _snapshot.ragExtraction.copyWith(
+          statusMessage: '当前没有可挂载的语料。',
+        ),
+      );
+      _rebuildView();
+      return;
+    }
+    _snapshot = _snapshot.copyWith(
+      activeTabId: ProjectAssetsTabId.ragExtraction,
+      ragExtraction: _snapshot.ragExtraction.copyWith(
+        isLoading: true,
+        statusMessage: '正在挂载语料...',
+      ),
+    );
+    _rebuildView();
+    final result = await _ragExtractionExecutionService.mountSelectedCorpus(
+      project: project,
+      corpusPackage: corpus,
+    );
+    await _handleRagExtractionResult(result);
+  }
+
+  @override
   void onProjectAssetsTabSelected(String tabId) {
     _snapshot = _snapshot.copyWith(activeTabId: tabId.trim());
     _rebuildView();
@@ -210,12 +297,27 @@ class ProjectAssetsController extends ChangeNotifier
     _rebuildView();
   }
 
+  void openRagExtractionWorkspace() {
+    _snapshot = _snapshot.copyWith(
+      activeTabId: ProjectAssetsTabId.ragExtraction,
+      entryAgentContextId: '',
+    );
+    _rebuildView();
+  }
+
   @override
   void onProjectAssetsEntrySelected(String entryId) {
     switch (_snapshot.activeTabId) {
       case ProjectAssetsTabId.expressionConstraints:
         _snapshot = _snapshot.copyWith(
           selectedExpressionConstraintId: entryId.trim(),
+        );
+        break;
+      case ProjectAssetsTabId.ragExtraction:
+        _snapshot = _snapshot.copyWith(
+          ragExtraction: _snapshot.ragExtraction.copyWith(
+            activeModeId: entryId.trim(),
+          ),
         );
         break;
       case ProjectAssetsTabId.foreshadows:
@@ -238,6 +340,46 @@ class ProjectAssetsController extends ChangeNotifier
         break;
     }
     _rebuildView();
+  }
+
+  Future<void> _handleRagExtractionResult(
+    ProjectRagExtractionExecutionResult result,
+  ) async {
+    final updatedCorpus = result.corpusPackage;
+    final updatedMountSummary = result.mountSummary;
+    if (result.didMutateProject) {
+      await _syncWorkbenchResources();
+    }
+    _snapshot = _snapshot.copyWith(
+      ragExtraction: _snapshot.ragExtraction.copyWith(
+        selectedCorpusId: updatedCorpus?.corpusId ??
+            _snapshot.ragExtraction.selectedCorpusId,
+        selectedCorpus: updatedCorpus ?? _snapshot.ragExtraction.selectedCorpus,
+        mountSummary: updatedMountSummary ??
+            _snapshot.ragExtraction.mountSummary,
+        isLoading: false,
+        statusMessage: result.statusMessage,
+        recentSourcePath: updatedCorpus?.metadata['source_file_path']
+                ?.toString() ??
+            _snapshot.ragExtraction.recentSourcePath,
+      ),
+    );
+    if (result.didMutateProject) {
+      await refresh(status: result.statusMessage);
+      return;
+    }
+    _rebuildView();
+  }
+
+  Future<void> _handleRagExtractionProgress(String statusMessage) async {
+    _snapshot = _snapshot.copyWith(
+      ragExtraction: _snapshot.ragExtraction.copyWith(
+        isLoading: true,
+        statusMessage: statusMessage,
+      ),
+    );
+    _rebuildView();
+    await Future<void>.delayed(Duration.zero);
   }
 
   @override
@@ -527,6 +669,19 @@ class ProjectAssetsController extends ChangeNotifier
     if (!_disposed) {
       notifyListeners();
     }
+  }
+
+  bool _shouldPreferRagTab(ProjectDescriptor project, String activeTabId) {
+    if (project.projectType.trim() != 'knowledge_base') {
+      return false;
+    }
+    if (!const KnowledgeBaseBranchCatalogService().isRagBranch(
+      project.projectBranchId,
+    )) {
+      return false;
+    }
+    final cleanActiveTabId = activeTabId.trim();
+    return cleanActiveTabId.isEmpty || cleanActiveTabId == ProjectAssetsTabId.styles;
   }
 
   String _selectedStyleId(ProjectAssetsCatalog catalog, String currentId) {

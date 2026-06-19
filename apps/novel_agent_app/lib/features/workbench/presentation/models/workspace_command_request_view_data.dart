@@ -14,6 +14,8 @@ class WorkspaceCommandViewData {
     required this.title,
     required this.description,
     required this.confirmLabel,
+    this.isBusy = false,
+    this.busyLabel = '',
     required this.status,
     required this.projectTitle,
     required this.projectType,
@@ -33,8 +35,14 @@ class WorkspaceCommandViewData {
     this.autoDeconstruct = false,
     this.smartAnalysis = false,
     this.canSmartAnalyze = false,
-    this.analysisAgentId = '',
-    this.analysisAgentGroupId = '',
+    this.smartAnalysisProviderId = '',
+    this.smartAnalysisModelId = '',
+    this.smartAnalysisModelOptions = const <SelectorOptionViewData>[],
+    this.smartDeconstruction = false,
+    this.canSmartDeconstruction = false,
+    this.smartDeconstructionProviderId = '',
+    this.smartDeconstructionModelId = '',
+    this.smartDeconstructionModelOptions = const <SelectorOptionViewData>[],
     this.canAutoDeconstruct = false,
     this.importFileSelectionHint = '',
     this.importOutputHint = '',
@@ -44,6 +52,8 @@ class WorkspaceCommandViewData {
   final String title;
   final String description;
   final String confirmLabel;
+  final bool isBusy;
+  final String busyLabel;
   final String status;
   final String projectTitle;
   final String projectType;
@@ -63,8 +73,14 @@ class WorkspaceCommandViewData {
   final bool autoDeconstruct;
   final bool smartAnalysis;
   final bool canSmartAnalyze;
-  final String analysisAgentId;
-  final String analysisAgentGroupId;
+  final String smartAnalysisProviderId;
+  final String smartAnalysisModelId;
+  final List<SelectorOptionViewData> smartAnalysisModelOptions;
+  final bool smartDeconstruction;
+  final bool canSmartDeconstruction;
+  final String smartDeconstructionProviderId;
+  final String smartDeconstructionModelId;
+  final List<SelectorOptionViewData> smartDeconstructionModelOptions;
   final bool canAutoDeconstruct;
   final String importFileSelectionHint;
   final String importOutputHint;
@@ -74,6 +90,8 @@ class WorkspaceCommandViewData {
     String? title,
     String? description,
     String? confirmLabel,
+    bool? isBusy,
+    String? busyLabel,
     String? status,
     String? projectTitle,
     String? projectType,
@@ -93,8 +111,14 @@ class WorkspaceCommandViewData {
     bool? autoDeconstruct,
     bool? smartAnalysis,
     bool? canSmartAnalyze,
-    String? analysisAgentId,
-    String? analysisAgentGroupId,
+    String? smartAnalysisProviderId,
+    String? smartAnalysisModelId,
+    List<SelectorOptionViewData>? smartAnalysisModelOptions,
+    bool? smartDeconstruction,
+    bool? canSmartDeconstruction,
+    String? smartDeconstructionProviderId,
+    String? smartDeconstructionModelId,
+    List<SelectorOptionViewData>? smartDeconstructionModelOptions,
     bool? canAutoDeconstruct,
     String? importFileSelectionHint,
     String? importOutputHint,
@@ -104,6 +128,8 @@ class WorkspaceCommandViewData {
       title: title ?? this.title,
       description: description ?? this.description,
       confirmLabel: confirmLabel ?? this.confirmLabel,
+      isBusy: isBusy ?? this.isBusy,
+      busyLabel: busyLabel ?? this.busyLabel,
       status: status ?? this.status,
       projectTitle: projectTitle ?? this.projectTitle,
       projectType: projectType ?? this.projectType,
@@ -131,8 +157,21 @@ class WorkspaceCommandViewData {
       autoDeconstruct: autoDeconstruct ?? this.autoDeconstruct,
       smartAnalysis: smartAnalysis ?? this.smartAnalysis,
       canSmartAnalyze: canSmartAnalyze ?? this.canSmartAnalyze,
-      analysisAgentId: analysisAgentId ?? this.analysisAgentId,
-      analysisAgentGroupId: analysisAgentGroupId ?? this.analysisAgentGroupId,
+      smartAnalysisProviderId:
+          smartAnalysisProviderId ?? this.smartAnalysisProviderId,
+      smartAnalysisModelId: smartAnalysisModelId ?? this.smartAnalysisModelId,
+      smartAnalysisModelOptions:
+          smartAnalysisModelOptions ?? this.smartAnalysisModelOptions,
+      smartDeconstruction: smartDeconstruction ?? this.smartDeconstruction,
+      canSmartDeconstruction:
+          canSmartDeconstruction ?? this.canSmartDeconstruction,
+      smartDeconstructionProviderId:
+          smartDeconstructionProviderId ?? this.smartDeconstructionProviderId,
+      smartDeconstructionModelId:
+          smartDeconstructionModelId ?? this.smartDeconstructionModelId,
+      smartDeconstructionModelOptions:
+          smartDeconstructionModelOptions ??
+          this.smartDeconstructionModelOptions,
       canAutoDeconstruct: canAutoDeconstruct ?? this.canAutoDeconstruct,
       importFileSelectionHint:
           importFileSelectionHint ?? this.importFileSelectionHint,
@@ -158,8 +197,12 @@ class WorkspaceCommandRequestViewData {
     this.targetDirectory = '',
     this.autoDeconstruct = false,
     this.smartAnalysis = false,
-    this.analysisAgentId = '',
-    this.analysisAgentGroupId = '',
+    this.smartAnalysisProviderId = '',
+    this.smartAnalysisModelId = '',
+    this.smartDeconstruction = false,
+    this.smartDeconstructionProviderId = '',
+    this.smartDeconstructionModelId = '',
+    this.pickDirectory = false,
   });
 
   final WorkspaceCommandMode mode;
@@ -177,8 +220,12 @@ class WorkspaceCommandRequestViewData {
   final String targetDirectory;
   final bool autoDeconstruct;
   final bool smartAnalysis;
-  final String analysisAgentId;
-  final String analysisAgentGroupId;
+  final String smartAnalysisProviderId;
+  final String smartAnalysisModelId;
+  final bool smartDeconstruction;
+  final String smartDeconstructionProviderId;
+  final String smartDeconstructionModelId;
+  final bool pickDirectory;
 
   List<String> get sourcePaths => sourcePathsText
       .split('\n')
@@ -202,8 +249,12 @@ class WorkspaceCommandRequestViewData {
     String? targetDirectory,
     bool? autoDeconstruct,
     bool? smartAnalysis,
-    String? analysisAgentId,
-    String? analysisAgentGroupId,
+    String? smartAnalysisProviderId,
+    String? smartAnalysisModelId,
+    bool? smartDeconstruction,
+    String? smartDeconstructionProviderId,
+    String? smartDeconstructionModelId,
+    bool? pickDirectory,
   }) {
     return WorkspaceCommandRequestViewData(
       mode: mode ?? this.mode,
@@ -223,8 +274,15 @@ class WorkspaceCommandRequestViewData {
       targetDirectory: targetDirectory ?? this.targetDirectory,
       autoDeconstruct: autoDeconstruct ?? this.autoDeconstruct,
       smartAnalysis: smartAnalysis ?? this.smartAnalysis,
-      analysisAgentId: analysisAgentId ?? this.analysisAgentId,
-      analysisAgentGroupId: analysisAgentGroupId ?? this.analysisAgentGroupId,
+      smartAnalysisProviderId:
+          smartAnalysisProviderId ?? this.smartAnalysisProviderId,
+      smartAnalysisModelId: smartAnalysisModelId ?? this.smartAnalysisModelId,
+      smartDeconstruction: smartDeconstruction ?? this.smartDeconstruction,
+      smartDeconstructionProviderId:
+          smartDeconstructionProviderId ?? this.smartDeconstructionProviderId,
+      smartDeconstructionModelId:
+          smartDeconstructionModelId ?? this.smartDeconstructionModelId,
+      pickDirectory: pickDirectory ?? this.pickDirectory,
     );
   }
 }

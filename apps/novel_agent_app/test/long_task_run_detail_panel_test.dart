@@ -68,10 +68,10 @@ void main() {
       informationProjectionItems: const <LongTaskRunRelatedItemViewData>[
         LongTaskRunRelatedItemViewData(
           title: '项目知识摘要',
-          subtitle: '资料投影',
-          summary: '打开当前 knowledge 卡片的可读投影。',
+          subtitle: '资料摘要',
+          summary: '打开当前 knowledge 卡片的可读摘要。',
           relativePath: 'knowledge/项目知识摘要.md',
-          actionLabel: '打开投影',
+          actionLabel: '打开摘要',
         ),
       ],
       informationPermissionItems: const <LongTaskRunRelatedItemViewData>[
@@ -188,7 +188,7 @@ void main() {
     expect(find.text('最近产物'), findsOneWidget);
     expect(find.textContaining('项目知识摘要'), findsWidgets);
     expect(find.textContaining('待确认调研请求'), findsOneWidget);
-    expect(find.text('资料投影'), findsOneWidget);
+    expect(find.text('资料摘要'), findsOneWidget);
     expect(find.text('待你确认'), findsWidgets);
     expect(find.text('已交付'), findsOneWidget);
     expect(find.text('运行诊断'), findsOneWidget);
@@ -202,7 +202,7 @@ void main() {
     expect(find.textContaining('先处理：待确认问题'), findsNothing);
     expect(find.textContaining('最近相关结果：正文交付'), findsNothing);
 
-    await tester.tap(find.text('打开投影').first);
+    await tester.tap(find.text('打开摘要').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('打开确认记录').first);
     await tester.pumpAndSettle();

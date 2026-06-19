@@ -42,6 +42,13 @@ class ProjectAssetsToolbar extends StatelessWidget {
           ),
         ),
         ActionButton(
+          label: '提取语料',
+          icon: Icons.dataset_outlined,
+          compact: true,
+          tone: ActionButtonTone.neutral,
+          onPressed: () => showProjectRagExtractionDialog(context, controller, viewData.ragExtraction),
+        ),
+        ActionButton(
           label: '导入资产包',
           icon: Icons.file_upload_outlined,
           compact: true,

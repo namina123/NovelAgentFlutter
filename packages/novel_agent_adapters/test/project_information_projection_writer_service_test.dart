@@ -138,7 +138,7 @@ void main() {
         expect(
           knowledgeMarkdown,
           contains(
-            '来源身份：来源-source-1 / `imports/reference/source-1.txt` / kind:`user`',
+            '来源类型：来源-source-1 / `imports/reference/source-1.txt` / kind:`user`',
           ),
         );
         expect(

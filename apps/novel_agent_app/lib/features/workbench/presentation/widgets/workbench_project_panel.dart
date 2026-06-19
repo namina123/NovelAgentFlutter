@@ -26,61 +26,35 @@ class WorkbenchProjectPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     // 中文注释: 项目面板继续收敛到“当前工程概况 + 命令入口”，更像 IDE 的侧栏概览而不是设置页。
     final style = WorkbenchDesktopStyle.of(context);
-    final surface = context.novelThemeSurfaces.sidebar;
     final visual = WorkbenchVisualStyle.of(context);
+    final isKnowledgeBaseProject = viewData.projectTypeId.trim() == 'knowledge_base';
+    final showLongTaskSection =
+        !isKnowledgeBaseProject &&
+        viewData.projectLongTaskSummary != null &&
+        (viewData.projectTypeId.trim() == 'long_novel' ||
+            viewData.projectLongTaskSummary!.hasRuns ||
+            viewData.projectLongTaskSummary!.totalCount > 0);
     return SingleChildScrollView(
       padding: visual.panelPadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _PanelOverviewBlock(
+          _PanelIdentityBlock(
             title: viewData.projectName.trim().isEmpty
                 ? '尚未打开项目'
                 : viewData.projectName,
             subtitle: viewData.projectSubtitle,
             badges: [
-              if (viewData.workflowTitle.trim().isNotEmpty)
+              if (viewData.projectTypeId.trim() == 'knowledge_base')
+                '资料知识库'
+              else if (viewData.workflowTitle.trim().isNotEmpty)
                 viewData.workflowTitle,
-              if (viewData.modelLabel.trim().isNotEmpty) viewData.modelLabel,
+              if (viewData.modelLabel.trim().isNotEmpty)
+                viewData.modelLabel,
             ],
           ),
-          SizedBox(height: style.headerGap),
-          _ProjectPanelSection(
-            title: '项目摘要',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _ProjectPanelMetaLine(
-                  label: '工作流',
-                  value: viewData.workflowTitle,
-                ),
-                const SizedBox(height: 8),
-                _ProjectPanelMetaLine(label: '模型', value: viewData.modelLabel),
-                const SizedBox(height: 8),
-                _ProjectPanelMetaLine(
-                  label: '智能体组',
-                  value: viewData.agentGroupLabel,
-                ),
-                const SizedBox(height: 8),
-                _ProjectPanelMetaLine(
-                  label: '主智能体',
-                  value: viewData.primaryAgentLabel,
-                ),
-                if (viewData.workflowDescription.trim().isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    viewData.workflowDescription,
-                    style: TextStyle(
-                      fontSize: visual.bodyFontSize,
-                      height: visual.bodyLineHeight,
-                      color: surface.mutedForegroundColor,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          if (viewData.projectLongTaskSummary != null) ...[
+          SizedBox(height: style.sectionGap),
+          if (showLongTaskSection) ...[
             SizedBox(height: style.sectionGap),
             _ProjectPanelSection(
               title: '长任务现场',
@@ -90,46 +64,48 @@ class WorkbenchProjectPanel extends StatelessWidget {
               ),
             ),
           ],
-          SizedBox(height: style.sectionGap),
           _ProjectPanelSection(
             title: viewData.hasActiveProject ? '当前项目动作' : '开始项目',
             child: _ProjectPanelActionList(
               actions: viewData.primaryActions,
               onAction: _handleAction,
+              showDescriptions: false,
             ),
           ),
           SizedBox(height: style.sectionGap),
           _ProjectPanelSection(
-            title: '当前协作摘要',
+            title: '协作设置',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  viewData.projectAgentGroupPanel.summary,
-                  style: TextStyle(
-                    fontSize: visual.bodyFontSize,
-                    height: visual.bodyLineHeight,
-                    color: surface.mutedForegroundColor,
-                  ),
-                ),
-                const SizedBox(height: 10),
                 ProjectPanelActionTile(
                   icon: Icons.group_work_outlined,
                   title: '协作设置',
                   description:
                       viewData.projectAgentGroupPanel.actionDescription,
+                  showDescription: false,
                   onPressed: resourceHandler.onProjectAgentGroupRequested,
                 ),
+                if (viewData.projectAgentGroupPanel.currentGroupLabel
+                    .trim()
+                    .isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  _ProjectPanelMetaLine(
+                    label: '当前协作组',
+                    value: viewData.projectAgentGroupPanel.currentGroupLabel,
+                  ),
+                ],
               ],
             ),
           ),
           if (viewData.assetActions.isNotEmpty) ...[
             SizedBox(height: style.sectionGap),
             _ProjectPanelSection(
-              title: '项目资料',
+              title: '写作资料',
               child: _ProjectPanelActionList(
                 actions: viewData.assetActions,
                 onAction: _handleAction,
+                showDescriptions: false,
               ),
             ),
           ],
@@ -157,6 +133,9 @@ class WorkbenchProjectPanel extends StatelessWidget {
         return;
       case WorkbenchProjectPanelActionIds.projectAssets:
         resourceHandler.onProjectAssetsRequested();
+        return;
+      case WorkbenchProjectPanelActionIds.projectRag:
+        resourceHandler.onProjectRagRequested();
         return;
     }
   }
@@ -191,8 +170,8 @@ class _ProjectPanelSection extends StatelessWidget {
   }
 }
 
-class _PanelOverviewBlock extends StatelessWidget {
-  const _PanelOverviewBlock({
+class _PanelIdentityBlock extends StatelessWidget {
+  const _PanelIdentityBlock({
     required this.title,
     required this.subtitle,
     required this.badges,
@@ -210,73 +189,62 @@ class _PanelOverviewBlock extends StatelessWidget {
         .map((badge) => badge.trim())
         .where((badge) => badge.isNotEmpty)
         .toList(growable: false);
-    return Container(
-      padding: const EdgeInsets.fromLTRB(10, 10, 10, 9),
-      decoration: BoxDecoration(
-        color: surface.backgroundColor.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: surface.borderColor.withValues(alpha: 0.16),
-          width: surface.borderWidth,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: visual.titleFontSize + 1,
+            height: visual.titleLineHeight,
+            fontWeight: FontWeight.w800,
+            color: surface.foregroundColor,
+          ),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+        if (subtitle.trim().isNotEmpty) ...[
+          SizedBox(height: visual.microGap),
           Text(
-            title,
-            maxLines: 1,
+            subtitle,
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: visual.titleFontSize,
-              height: visual.titleLineHeight,
-              fontWeight: FontWeight.w800,
-              color: surface.foregroundColor,
+              fontSize: visual.metaFontSize,
+              height: visual.bodyLineHeight,
+              color: surface.mutedForegroundColor,
             ),
           ),
-          if (subtitle.trim().isNotEmpty) ...[
-            SizedBox(height: visual.microGap),
-            Text(
-              subtitle,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: visual.metaFontSize,
-                height: visual.bodyLineHeight,
-                color: surface.mutedForegroundColor,
-              ),
-            ),
-          ],
-          if (visibleBadges.isNotEmpty) ...[
-            SizedBox(height: visual.compactGap + 1),
-            Wrap(
-              spacing: visual.microGap + 2,
-              runSpacing: visual.microGap + 2,
-              children: [
-                for (final badge in visibleBadges)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 7,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: surface.backgroundColor.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      badge,
-                      style: TextStyle(
-                        fontSize: visual.metaFontSize,
-                        fontWeight: FontWeight.w700,
-                        color: surface.mutedForegroundColor,
-                      ),
+        ],
+        if (visibleBadges.isNotEmpty) ...[
+          SizedBox(height: visual.compactGap + 1),
+          Wrap(
+            spacing: visual.microGap + 2,
+            runSpacing: visual.microGap + 2,
+            children: [
+              for (final badge in visibleBadges)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: surface.backgroundColor.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    badge,
+                    style: TextStyle(
+                      fontSize: visual.metaFontSize,
+                      fontWeight: FontWeight.w700,
+                      color: surface.mutedForegroundColor,
                     ),
                   ),
-              ],
-            ),
-          ],
+                ),
+            ],
+          ),
         ],
-      ),
+      ],
     );
   }
 }
@@ -320,10 +288,12 @@ class _ProjectPanelActionList extends StatelessWidget {
   const _ProjectPanelActionList({
     required this.actions,
     required this.onAction,
+    this.showDescriptions = true,
   });
 
   final List<WorkbenchProjectPanelActionViewData> actions;
   final ValueChanged<WorkbenchProjectPanelActionViewData> onAction;
+  final bool showDescriptions;
 
   @override
   Widget build(BuildContext context) {
@@ -342,6 +312,7 @@ class _ProjectPanelActionList extends StatelessWidget {
                 icon: action.icon,
                 title: action.title,
                 description: action.description,
+                showDescription: showDescriptions,
                 onPressed: () => onAction(action),
                 isEnabled: action.isEnabled,
                 disabledReason: action.disabledReason,

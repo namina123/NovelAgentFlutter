@@ -43,7 +43,7 @@ class ResourceTreeEntrySemanticService {
       case 'sqlite_projection':
         return ResourceTreeEntrySemanticViewData(
           detailLabel: identity.detailLabel,
-          badgeLabel: '投影',
+          badgeLabel: '结构',
           leadingIcon: _leadingIconFor(
             isDirectory: isDirectory,
             fileIcon: Icons.account_tree_outlined,

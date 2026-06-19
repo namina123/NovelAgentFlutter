@@ -485,6 +485,9 @@ class _FakeResourceManagerActionHandler
   void onProjectAssetsRequested() {}
 
   @override
+  void onProjectRagRequested() {}
+
+  @override
   void onProjectCreationBackRequested() {}
 
   @override
@@ -525,6 +528,11 @@ class _FakeResourceManagerActionHandler
 
   @override
   void onWorkspaceImportFilesPickRequested(
+    WorkspaceCommandRequestViewData request,
+  ) {}
+
+  @override
+  void onWorkspaceImportDirectoryPickRequested(
     WorkspaceCommandRequestViewData request,
   ) {}
 }

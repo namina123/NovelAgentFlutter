@@ -29,24 +29,15 @@ class ProjectAgentGroupDisplayTextPolicy {
   }
 
   String configuredProjectPanelSummary() {
-    return '当前项目已确定默认协作组，写作时会沿用这套协作摘要。';
+    return '当前项目已确定默认协作组。';
   }
 
   String unconfiguredProjectPanelSummary() {
-    return '当前项目还没有确定默认协作组，建议先补上再开始正式写作。';
-  }
-
-  String configureProjectPanelActionDescription({
-    required bool hasResolvedGroup,
-  }) {
-    if (hasResolvedGroup) {
-      return '查看当前项目协作摘要，并按需调整默认协作组。';
-    }
-    return '先确认当前项目该由哪组协作方式负责开局和后续写作。';
+    return '当前项目还没有确定默认协作组。';
   }
 
   String workspaceSelectionHint() {
-    return '这里负责当前项目的默认智能体组配置；当前会话实际使用的智能体由会话层单独决定。';
+    return '这里用于设置当前项目的默认协作组。';
   }
 
   String? _sanitizeUserFacingLabel(String? rawLabel) {

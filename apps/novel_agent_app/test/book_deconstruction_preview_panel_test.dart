@@ -8,7 +8,6 @@ import 'package:novel_agent_app/features/book_deconstruction/presentation/contra
 import 'package:novel_agent_app/features/book_deconstruction/presentation/models/book_deconstruction_continuity_view_data.dart';
 import 'package:novel_agent_app/features/book_deconstruction/presentation/models/book_deconstruction_followup_group_view_data.dart';
 import 'package:novel_agent_app/features/book_deconstruction/presentation/models/book_deconstruction_followup_option_view_data.dart';
-import 'package:novel_agent_app/features/book_deconstruction/presentation/models/book_deconstruction_information_bridge_view_data.dart';
 import 'package:novel_agent_app/features/book_deconstruction/presentation/models/book_deconstruction_plan_group_view_data.dart';
 import 'package:novel_agent_app/features/book_deconstruction/presentation/models/book_deconstruction_plan_item_view_data.dart';
 import 'package:novel_agent_app/features/book_deconstruction/presentation/models/book_deconstruction_preview_section_view_data.dart';
@@ -23,7 +22,7 @@ void main() {
     (WidgetTester tester) async {
       final draftBuilder = BookDeconstructionDraftBuilderService();
       final viewDataService = BookDeconstructionViewDataService();
-      final buildResult = draftBuilder.build(
+      final buildResult = await draftBuilder.build(
         sourceTitle: '海上城邦',
         sourceContent: '第一章 港口风暴\n主角在港口被迫卷入一场追捕。\n\n第二章 议会阴影\n城邦议会开始浮出水面。',
         sourceAbsolutePath: 'D:/books/harbor_story.txt',
@@ -101,84 +100,84 @@ void main() {
     },
   );
 
-  testWidgets(
-    'preview panel uses a natural note for empty follow-up groups',
-    (WidgetTester tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: AppTheme.light(),
-          home: Scaffold(
-            body: SizedBox(
-              width: 480,
-              height: 840,
-              child: BookDeconstructionPreviewPanel(
-                viewData: BookDeconstructionViewData(
-                  projectTitle: '空分组测试',
-                  status: '已生成结构化预览。',
-                  isLoading: false,
-                  activeStepId: '',
-                  steps: const <BookDeconstructionStepViewData>[],
-                  sourceAbsolutePath: '',
-                  sourceTitle: '',
-                  sourceContent: '',
-                  operatorNotes: '',
-                  styleSummary: '',
-                  worldRulesText: '',
-                  characterLinesText: '',
-                  organizationLinesText: '',
-                  previewSections: const <BookDeconstructionPreviewSectionViewData>[],
-                  planGroups: const <BookDeconstructionPlanGroupViewData>[
-                    BookDeconstructionPlanGroupViewData(
-                      id: 'plan_group',
-                      title: '结构预览',
-                      description: '仅用于打开连续预览区。',
-                      items: <BookDeconstructionPlanItemViewData>[],
+  testWidgets('preview panel uses a natural note for empty follow-up groups', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: SizedBox(
+            width: 480,
+            height: 840,
+            child: BookDeconstructionPreviewPanel(
+              viewData: BookDeconstructionViewData(
+                projectTitle: '空分组测试',
+                status: '已生成结构化预览。',
+                isLoading: false,
+                operationKind: '',
+                activeStepId: '',
+                steps: const <BookDeconstructionStepViewData>[],
+                sourceAbsolutePath: '',
+                sourceTitle: '',
+                sourceContent: '',
+                operatorNotes: '',
+                styleSummary: '',
+                worldRulesText: '',
+                characterLinesText: '',
+                organizationLinesText: '',
+                previewSections:
+                    const <BookDeconstructionPreviewSectionViewData>[],
+                planGroups: const <BookDeconstructionPlanGroupViewData>[
+                  BookDeconstructionPlanGroupViewData(
+                    id: 'plan_group',
+                    title: '结构预览',
+                    description: '仅用于打开连续预览区。',
+                    items: <BookDeconstructionPlanItemViewData>[],
+                  ),
+                ],
+                selectedItemCount: 0,
+                totalItemCount: 0,
+                selectedFollowupOptionId: '',
+                confirmedPreviewPath: '',
+                canBuildPreview: false,
+                canConfirmSelection: false,
+                canCreateDerivedProject: false,
+                importActionLabel: '导入文件',
+                buildPreviewActionLabel: '生成结构化预览',
+                informationBridge: null,
+                continuity: const BookDeconstructionContinuityViewData(
+                  preferredDirectionLabel: '偏向长任务',
+                  highlightedBuildTierLabel: '默认高亮',
+                  highlightedRouteTitle: '默认路线',
+                  selectedRouteOptionId: '',
+                  selectedRouteTitle: '默认路线',
+                  scopeHintCount: 0,
+                  identityMappingCount: 0,
+                  mechanicHintCount: 0,
+                  summary: '空分组测试',
+                  followupGroups: <BookDeconstructionFollowupGroupViewData>[
+                    BookDeconstructionFollowupGroupViewData(
+                      id: 'empty_group',
+                      title: '空分组',
+                      description: '无可用路线',
+                      options: <BookDeconstructionFollowupOptionViewData>[],
                     ),
                   ],
-                  selectedItemCount: 0,
-                  totalItemCount: 0,
-                  selectedFollowupOptionId: '',
-                  confirmedPreviewPath: '',
-                  canBuildPreview: false,
-                  canConfirmSelection: false,
-                  canCreateDerivedProject: false,
-                  informationBridge: null,
-                  continuity: const BookDeconstructionContinuityViewData(
-                    preferredDirectionLabel: '偏向长任务',
-                    highlightedBuildTierLabel: '默认高亮',
-                    highlightedRouteTitle: '默认路线',
-                    selectedRouteOptionId: '',
-                    selectedRouteTitle: '默认路线',
-                    scopeHintCount: 0,
-                    identityMappingCount: 0,
-                    mechanicHintCount: 0,
-                    summary: '空分组测试',
-                    followupGroups: <BookDeconstructionFollowupGroupViewData>[
-                      BookDeconstructionFollowupGroupViewData(
-                        id: 'empty_group',
-                        title: '空分组',
-                        description: '无可用路线',
-                        options: <BookDeconstructionFollowupOptionViewData>[],
-                      ),
-                    ],
-                  ),
                 ),
-                actionHandler: _FakeBookDeconstructionActionHandler(),
               ),
+              actionHandler: _FakeBookDeconstructionActionHandler(),
             ),
           ),
         ),
-      );
+      ),
+    );
 
-      await tester.pumpAndSettle();
+    await tester.pumpAndSettle();
 
-      expect(find.text('当前暂无可用路线。'), findsOneWidget);
-      expect(
-        find.text('当前保留为空分组，后续新增路线会继续挂到这里。'),
-        findsNothing,
-      );
-    },
-  );
+    expect(find.text('当前暂无可用路线。'), findsOneWidget);
+    expect(find.text('当前保留为空分组，后续新增路线会继续挂到这里。'), findsNothing);
+  });
 }
 
 class _FakeBookDeconstructionActionHandler

@@ -26,13 +26,13 @@ class ConversationOpeningGuideViewDataService {
     final orchestration = projection.orchestration;
     final readiness = orchestration.readiness;
     final currentGroupText = projection.currentGroupDisplayName.trim().isEmpty
-        ? '当前还没有确定开局智能体组。'
-        : '当前智能体组：${projection.currentGroupDisplayName}';
+        ? '还没有确定开局智能体组。'
+        : '开局智能体组：${projection.currentGroupDisplayName}';
     final readinessText = readiness.canStartLongTask
-        ? '当前开局信息已收束完成，可以直接启动长任务。'
+        ? '开局信息已经收束完成，可以直接启动长任务。'
         : orchestration.readiness.missingRequirements.isEmpty
-        ? '当前仍需补充长任务开局信息。'
-        : '仍需补充：${orchestration.readiness.missingRequirements.map((item) => item.title).join('、')}';
+        ? '还需要补充长任务开局信息。'
+        : '还需补齐：${orchestration.readiness.missingRequirements.map((item) => item.title).join('、')}';
     return ConversationGuideViewData(
       workflowTitle: '长任务开局',
       workflowDescription: '$currentGroupText\n$readinessText',
@@ -64,6 +64,14 @@ class ConversationOpeningGuideViewDataService {
     required ProjectOpeningMaturityAssessment maturity,
     required bool isGenerating,
   }) {
+    if (projection.projectTypeId == 'book_deconstruction') {
+      return decorateBookDeconstructionGuide(
+        fallbackGuide: fallbackGuide,
+        projection: projection,
+        maturity: maturity,
+        isGenerating: isGenerating,
+      );
+    }
     // 中文注释: 普通协作项目先复用现有轻会话入口，只把当前智能体组与 opening 状态补进描述层。
     final orchestration = projection.orchestration;
     final missingTitles = orchestration.readiness.missingRequirements
@@ -72,13 +80,13 @@ class ConversationOpeningGuideViewDataService {
         .join('、');
     final summaryLines = <String>[
       if (projection.currentGroupDisplayName.trim().isNotEmpty)
-        '当前智能体组：${projection.currentGroupDisplayName}',
-      if (projection.derivedFromAgentBinding) '当前智能体组来自旧项目智能体绑定自动派生。',
+        '开局智能体组：${projection.currentGroupDisplayName}',
+      if (projection.derivedFromAgentBinding) '这个智能体组由旧项目智能体绑定自动推导。',
       if (projection.currentGroupDisplayName.trim().isEmpty &&
           projection.groupSummaries.isEmpty)
         '当前项目还没有可直接使用的智能体组。',
-      if (missingTitles.trim().isNotEmpty) '当前还缺：$missingTitles',
-      if (orchestration.readiness.canStartInteractiveSession) '当前已可直接进入普通协作会话。',
+      if (missingTitles.trim().isNotEmpty) '还需补齐：$missingTitles',
+      if (orchestration.readiness.canStartInteractiveSession) '已经可以直接进入普通协作会话。',
     ];
     if (summaryLines.isEmpty) {
       return fallbackGuide;
@@ -115,11 +123,19 @@ class ConversationOpeningGuideViewDataService {
     required ProjectOpeningMaturityAssessment maturity,
     required bool isGenerating,
   }) {
+    if (projection.projectTypeId == 'book_deconstruction') {
+      return decorateBookDeconstructionGuide(
+        fallbackGuide: fallbackGuide,
+        projection: projection,
+        maturity: maturity,
+        isGenerating: isGenerating,
+      );
+    }
     final summaryLines = <String>[
       maturity.summary,
       if (projection.currentGroupDisplayName.trim().isNotEmpty)
-        '当前智能体组：${projection.currentGroupDisplayName}',
-      if (projection.derivedFromAgentBinding) '当前智能体组来自旧项目智能体绑定自动派生。',
+        '开局智能体组：${projection.currentGroupDisplayName}',
+      if (projection.derivedFromAgentBinding) '这个智能体组由旧项目智能体绑定自动推导。',
     ];
     if (projection.projectTypeId == 'long_novel' &&
         projection.orchestration.readiness.canStartLongTask) {
@@ -147,6 +163,46 @@ class ConversationOpeningGuideViewDataService {
             ? ''
             : fallbackGuide.primaryActions.first.title,
         preferSingleAction: true,
+      ),
+    );
+  }
+
+  ConversationGuideViewData decorateBookDeconstructionGuide({
+    required ConversationGuideViewData fallbackGuide,
+    required OpeningSessionProjection projection,
+    required ProjectOpeningMaturityAssessment maturity,
+    required bool isGenerating,
+  }) {
+    final summaryLines = <String>[
+      if (maturity.summary.trim().isNotEmpty) maturity.summary,
+      '拆书导向：导入书籍 -> 分析数据 -> 开始创作',
+      if (projection.currentGroupDisplayName.trim().isNotEmpty)
+        '开局智能体组：${projection.currentGroupDisplayName}',
+      if (projection.derivedFromAgentBinding) '这个智能体组由旧项目智能体绑定自动推导。',
+      if (maturity.isContinueReady || maturity.narrativeFileCount > 0)
+        '当前项目已经具备继续分析或承接创作的基础。'
+      else
+        '导入后应优先补齐结构化拆书资产，再进入正式创作。',
+    ];
+    final guide = ConversationGuideViewData(
+      workflowTitle: fallbackGuide.workflowTitle,
+      workflowDescription:
+          '${fallbackGuide.workflowDescription}\n\n${summaryLines.join('\n')}',
+      composerHint: isGenerating
+          ? '整理中：可以继续补充角色、背景、风格、剧情线、道具或后续路线要求。'
+          : '先导入书籍，或继续分析数据、开始创作。',
+      primaryActions: fallbackGuide.primaryActions,
+    );
+    return guide.copyWith(
+      openingState: _openingStateViewDataService.build(
+        projectType: projection.projectTypeId,
+        maturity: maturity,
+        primaryActions: fallbackGuide.primaryActions,
+        projection: projection,
+        preferredNextAction: null,
+        firstPromptOverride: '先确认这次是继续导入书籍、补齐分析数据，还是开始承接创作。',
+        nextStepLabelOverride: '导入书籍 / 分析数据 / 开始创作',
+        preferSingleAction: false,
       ),
     );
   }

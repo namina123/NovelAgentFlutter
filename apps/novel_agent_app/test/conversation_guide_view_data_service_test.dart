@@ -25,7 +25,7 @@ void main() {
     );
 
     expect(guide.workflowTitle, '长任务开局');
-    expect(guide.workflowDescription, contains('当前智能体组：默认长任务开局'));
+    expect(guide.workflowDescription, contains('开局智能体组：默认长任务开局'));
     expect(guide.primaryActions.single.commandId, 'opening.launch_long_task');
     expect(guide.openingState, isNotNull);
     expect(
@@ -77,7 +77,7 @@ void main() {
     );
 
     expect(guide.workflowTitle, '这次想让智能体做什么？');
-    expect(guide.workflowDescription, contains('当前智能体组：默认小说开局'));
+    expect(guide.workflowDescription, contains('开局智能体组：默认小说开局'));
     expect(guide.primaryActions, isNotEmpty);
     expect(guide.openingState, isNotNull);
     expect(
@@ -126,6 +126,24 @@ void main() {
     expect(guide.primaryActions.single.description, contains('直接启动正式长任务链'));
     expect(guide.openingState, isNotNull);
     expect(guide.openingState!.preferSingleAction, isTrue);
+  });
+
+  test('拆书项目默认 guide 会暴露导入、分析和开始创作三个入口', () {
+    final service = ConversationGuideViewDataService();
+    final guide = service.build(
+      projectType: 'book_deconstruction',
+      needsGoalSelection: true,
+      isGenerating: false,
+      openingMaturity: _openingMaturity(),
+    );
+
+    expect(guide.workflowTitle, '拆书工作台');
+    expect(guide.primaryActions.map((action) => action.title), <String>[
+      '导入书籍',
+      '分析书籍',
+      '开始创作',
+    ]);
+    expect(guide.workflowDescription, contains('先导入书籍原文'));
   });
 
   test('模式引导 ready 后会直接暴露正式启动长任务动作', () {
@@ -185,7 +203,7 @@ void main() {
     expect(guide.primaryActions, hasLength(1));
     expect(guide.primaryActions.single.commandId, 'opening.launch_long_task');
     expect(guide.primaryActions.single.description, contains('继续或恢复正式长任务链'));
-    expect(guide.primaryActions.single.description, isNot(contains('当前还缺')));
+    expect(guide.primaryActions.single.description, isNot(contains('还需补齐')));
   });
 }
 

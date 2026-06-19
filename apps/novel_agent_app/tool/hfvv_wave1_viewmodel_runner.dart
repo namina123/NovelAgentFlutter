@@ -25,9 +25,7 @@ Future<void> main(List<String> arguments) async {
 
 Future<JsonMap> runHfvvWave1({bool requireRealProbeOptIn = true}) async {
   if (requireRealProbeOptIn) {
-    await ensureLocalRealProbeOptIn(
-      probeName: 'hfvv_wave1_viewmodel_runner',
-    );
+    await ensureLocalRealProbeOptIn(probeName: 'hfvv_wave1_viewmodel_runner');
   }
   final repoRoot = resolveLocalProbeRepoRoot();
   final apiConfig = await loadProbeApiConfig(
@@ -98,7 +96,8 @@ Future<JsonMap> _runLaneA(ProbeApiConfig apiConfig) async {
     'lane_id': laneId,
     'run_id': _runId,
     'started_at': DateTime.now().toIso8601String(),
-    'workspace': 'artifacts/high_fidelity_viewmodel_validation/$_runId/$laneId/',
+    'workspace':
+        'artifacts/high_fidelity_viewmodel_validation/$_runId/$laneId/',
     'fixes_applied': const <Object?>[],
     'rerun_count': 0,
   };
@@ -162,7 +161,10 @@ Future<JsonMap> _runLaneA(ProbeApiConfig apiConfig) async {
     final waitingUser = laneAState.waitingUser;
     final projectEntries = laneAState.projectEntries;
     final expressionBindings = await _loadExpressionBindingProfileIds(harness);
-    final ok = hasResearchEvidence && !wroteChapter && expressionBindings.contains('de_ai');
+    final ok =
+        hasResearchEvidence &&
+        !wroteChapter &&
+        expressionBindings.contains('de_ai');
 
     report = <String, Object?>{
       ...report,
@@ -244,7 +246,8 @@ Future<JsonMap> _runLaneB(ProbeApiConfig apiConfig) async {
     'lane_id': laneId,
     'run_id': _runId,
     'started_at': DateTime.now().toIso8601String(),
-    'workspace': 'artifacts/high_fidelity_viewmodel_validation/$_runId/$laneId/',
+    'workspace':
+        'artifacts/high_fidelity_viewmodel_validation/$_runId/$laneId/',
     'fixes_applied': const <Object?>[],
     'rerun_count': 0,
   };
@@ -304,7 +307,8 @@ Future<JsonMap> _runLaneB(ProbeApiConfig apiConfig) async {
     final latestAssistant = _latestAssistantText(
       harness.conversation.conversationEntries,
     );
-    final ok = hasSubAgents && hasDistinctActivity && latestAssistant.isNotEmpty;
+    final ok =
+        hasSubAgents && hasDistinctActivity && latestAssistant.isNotEmpty;
 
     report = <String, Object?>{
       ...report,
@@ -385,7 +389,8 @@ Future<JsonMap> _runLaneC(ProbeApiConfig apiConfig) async {
     'lane_id': laneId,
     'run_id': _runId,
     'started_at': DateTime.now().toIso8601String(),
-    'workspace': 'artifacts/high_fidelity_viewmodel_validation/$_runId/$laneId/',
+    'workspace':
+        'artifacts/high_fidelity_viewmodel_validation/$_runId/$laneId/',
     'fixes_applied': const <Object?>[],
     'rerun_count': 0,
   };
@@ -423,7 +428,9 @@ Future<JsonMap> _runLaneC(ProbeApiConfig apiConfig) async {
     );
     await capture('reference_extraction_settled');
 
-    await harness.sendPrompt('只根据当前项目知识库，用中文回答：主角是谁？她隶属什么组织？禁忌是什么？核心冲突是什么？如果知识库没有就明确说不知道。');
+    await harness.sendPrompt(
+      '只根据当前项目知识库，用中文回答：主角是谁？她隶属什么组织？禁忌是什么？核心冲突是什么？如果知识库没有就明确说不知道。',
+    );
     await harness.waitForConversationActivity();
     await capture('query_turn_active');
     await harness.waitForConversationToSettle();
@@ -433,20 +440,21 @@ Future<JsonMap> _runLaneC(ProbeApiConfig apiConfig) async {
     final latestAssistant = _latestAssistantText(
       harness.conversation.conversationEntries,
     );
-    final extractionEvidence = _hasProjectPath(
-      projectEntries,
-      const <String>[
-        '.novel_agent/sqlite/novel_agent.db',
-        'knowledge/',
-        'research/',
-      ],
-    ) ||
-        harness.controller.projectAssetsController.viewData.entries.isNotEmpty ||
+    final extractionEvidence =
+        _hasProjectPath(projectEntries, const <String>[
+          '.novel_agent/sqlite/novel_agent.db',
+          'knowledge/',
+          'research/',
+        ]) ||
+        harness
+            .controller
+            .projectAssetsController
+            .viewData
+            .entries
+            .isNotEmpty ||
         harness.resources.informationViewData.entries.isNotEmpty;
-    final answerHasAnchors = _containsAll(
-      latestAssistant,
-      const <String>['林烬', '潮汐议会'],
-    ) &&
+    final answerHasAnchors =
+        _containsAll(latestAssistant, const <String>['林烬', '潮汐议会']) &&
         latestAssistant.contains('声纹钥');
     final leakCheck = await _containsSourceLeak(
       harness,
@@ -526,7 +534,8 @@ Future<JsonMap> _runLaneD(ProbeApiConfig apiConfig) async {
     'lane_id': laneId,
     'run_id': _runId,
     'started_at': DateTime.now().toIso8601String(),
-    'workspace': 'artifacts/high_fidelity_viewmodel_validation/$_runId/$laneId/',
+    'workspace':
+        'artifacts/high_fidelity_viewmodel_validation/$_runId/$laneId/',
     'fixes_applied': const <Object?>[],
     'rerun_count': 0,
   };
@@ -568,7 +577,9 @@ Future<JsonMap> _runLaneD(ProbeApiConfig apiConfig) async {
     );
     await capture('reference_extraction_settled');
 
-    await harness.sendPrompt('只根据当前项目知识库，用中文回答：哈利收到来信时住在哪条路？海格带他去哪里买魔法用品？奇洛教授有什么异常？如果知识库没有就明确说不知道。');
+    await harness.sendPrompt(
+      '只根据当前项目知识库，用中文回答：哈利收到来信时住在哪条路？海格带他去哪里买魔法用品？奇洛教授有什么异常？如果知识库没有就明确说不知道。',
+    );
     await harness.waitForConversationActivity();
     await capture('query_turn_active');
     await harness.waitForConversationToSettle(
@@ -580,20 +591,25 @@ Future<JsonMap> _runLaneD(ProbeApiConfig apiConfig) async {
     final latestAssistant = _latestAssistantText(
       harness.conversation.conversationEntries,
     );
-    final extractionEvidence = _hasProjectPath(
-      projectEntries,
-      const <String>[
-        '.novel_agent/sqlite/novel_agent.db',
-        'knowledge/',
-        'research/',
-      ],
-    ) ||
-        harness.controller.projectAssetsController.viewData.entries.isNotEmpty ||
+    final extractionEvidence =
+        _hasProjectPath(projectEntries, const <String>[
+          '.novel_agent/sqlite/novel_agent.db',
+          'knowledge/',
+          'research/',
+        ]) ||
+        harness
+            .controller
+            .projectAssetsController
+            .viewData
+            .entries
+            .isNotEmpty ||
         harness.resources.informationViewData.entries.isNotEmpty;
-    final answerAnchorCount = _anchorHitCount(
-      latestAssistant,
-      const <String>['女贞路', '对角巷', '海格', '奇洛'],
-    );
+    final answerAnchorCount = _anchorHitCount(latestAssistant, const <String>[
+      '女贞路',
+      '对角巷',
+      '海格',
+      '奇洛',
+    ]);
     final leakCheck = await _containsSourceLeak(
       harness,
       disallowedFragments: <String>[
@@ -601,7 +617,8 @@ Future<JsonMap> _runLaneD(ProbeApiConfig apiConfig) async {
         harness.workspaceRoot.path,
       ],
     );
-    final ok = extractionEvidence &&
+    final ok =
+        extractionEvidence &&
         answerAnchorCount >= 2 &&
         _containsChinese(latestAssistant) &&
         !leakCheck;
@@ -675,7 +692,8 @@ Future<JsonMap> _runLaneE(ProbeApiConfig apiConfig) async {
     'lane_id': laneId,
     'run_id': _runId,
     'started_at': DateTime.now().toIso8601String(),
-    'workspace': 'artifacts/high_fidelity_viewmodel_validation/$_runId/$laneId/',
+    'workspace':
+        'artifacts/high_fidelity_viewmodel_validation/$_runId/$laneId/',
     'fixes_applied': const <Object?>[],
     'rerun_count': 0,
   };
@@ -729,16 +747,15 @@ Future<JsonMap> _runLaneE(ProbeApiConfig apiConfig) async {
     final latestAssistant = _latestAssistantText(
       harness.conversation.conversationEntries,
     );
-    final hasNetworkKnowledgeEvidence = _hasProjectPath(
-      projectEntries,
-      const <String>[
-        'research/',
-        '.novel_agent/information/research_notes/',
-        'knowledge/',
-      ],
-    ) ||
+    final hasNetworkKnowledgeEvidence =
+        _hasProjectPath(projectEntries, const <String>[
+          'research/',
+          '.novel_agent/information/research_notes/',
+          'knowledge/',
+        ]) ||
         harness.resources.informationViewData.entries.isNotEmpty;
-    final fakeSuccess = !hasNetworkKnowledgeEvidence &&
+    final fakeSuccess =
+        !hasNetworkKnowledgeEvidence &&
         !_hasToolLifecycle(
           harness.conversation.conversationEntries,
           ConversationToolLifecycleStatus.failed,
@@ -811,7 +828,8 @@ JsonMap _conversationEvent(
         .map((option) => option.label)
         .toList(growable: false),
     'sub_agent_run_count': harness.conversation.subAgentRuns.length,
-    'information_entry_count': harness.resources.informationViewData.entries.length,
+    'information_entry_count':
+        harness.resources.informationViewData.entries.length,
     'latest_assistant_excerpt': _clip(latestAssistant, 500),
   };
 }
@@ -857,8 +875,7 @@ Future<_LaneAValidationState> _loadLaneAValidationState(
     projectEntries: projectEntries,
     hasResearchEvidence:
         projectEntries.any(_isLaneAInformationArtifact) ||
-        harness.resources.informationViewData.entries.isNotEmpty ||
-        harness.resources.informationViewData.pendingEntries.isNotEmpty,
+        harness.resources.informationViewData.entries.isNotEmpty,
     wroteChapterDirectly:
         _hasProjectPath(projectEntries, const <String>['chapters/chapter_']) ||
         latestAssistant.contains('第01章') ||
@@ -869,10 +886,9 @@ Future<_LaneAValidationState> _loadLaneAValidationState(
 }
 
 bool _isLaneAInformationArtifact(JsonMap entry) {
-  final path = ValueReaders.stringValue(entry['relative_path']).replaceAll(
-    '\\',
-    '/',
-  );
+  final path = ValueReaders.stringValue(
+    entry['relative_path'],
+  ).replaceAll('\\', '/');
   if (ValueReaders.boolValue(entry['is_dir'])) {
     return false;
   }
@@ -928,10 +944,9 @@ String _latestAssistantText(List<ConversationEntryViewData> entries) {
 
 bool _hasProjectPath(List<JsonMap> entries, List<String> prefixes) {
   for (final entry in entries) {
-    final path = ValueReaders.stringValue(entry['relative_path']).replaceAll(
-      '\\',
-      '/',
-    );
+    final path = ValueReaders.stringValue(
+      entry['relative_path'],
+    ).replaceAll('\\', '/');
     for (final prefix in prefixes) {
       if (path.contains(prefix)) {
         return true;

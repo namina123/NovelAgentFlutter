@@ -1069,6 +1069,7 @@ class _ConversationControllerHarness {
           BookDeconstructionNarrativePersistenceService(
             workspacePort: effectiveWorkspacePort,
           ),
+      generateDraftUseCaseFactory: (_, _) => this.generateDraftUseCase,
       longTaskSupervisor: _NoopLongTaskSupervisor(),
       reviewReportService: _NoopProjectReviewReportService(),
       projectRuntimeProfileRepository: _NoopProjectRuntimeProfileRepository(),

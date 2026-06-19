@@ -7,6 +7,7 @@ class ProjectDescriptor {
     required this.rootPath,
     this.projectType = 'novel',
     this.storageStrategy = ProjectStorageStrategy.markdownProjectStore,
+    this.projectBranchId = '',
     this.runtimeBaselineId = '',
   });
 
@@ -15,5 +16,6 @@ class ProjectDescriptor {
   final String rootPath;
   final String projectType;
   final ProjectStorageStrategy storageStrategy;
+  final String projectBranchId;
   final String runtimeBaselineId;
 }

@@ -11,7 +11,8 @@ class ProjectBundleFileAccessService {
     ProjectBundleDirectoryLayoutService? directoryLayoutService,
   }) : _hostPort = hostPort,
        _directoryLayoutService =
-           directoryLayoutService ?? const ProjectBundleDirectoryLayoutService();
+           directoryLayoutService ??
+           const ProjectBundleDirectoryLayoutService();
 
   final ProjectToolHostPort _hostPort;
   final ProjectBundleDirectoryLayoutService _directoryLayoutService;
@@ -20,15 +21,21 @@ class ProjectBundleFileAccessService {
     String sourcePath,
   ) async {
     // 中文注释: bundle 源读取统一兼容“目录根”与“单独 bundle.json 文件”两种入口，CLI 不再自己猜路径。
-    final absoluteSource = FileSystemEntity.isDirectorySync(sourcePath)
+    final entityType = await FileSystemEntity.type(
+      sourcePath,
+      followLinks: false,
+    );
+    final absoluteSource = entityType == FileSystemEntityType.directory
         ? Directory(sourcePath).absolute.path
         : File(sourcePath).absolute.path;
-    if (Directory(absoluteSource).existsSync()) {
+    if (entityType == FileSystemEntityType.directory) {
       final bundleFilePath = _join(
         absoluteSource,
         _directoryLayoutService.bundleFileName(),
       );
-      final bundleContent = await _hostPort.readExternalTextFile(bundleFilePath);
+      final bundleContent = await _hostPort.readExternalTextFile(
+        bundleFilePath,
+      );
       if ((bundleContent ?? '').trim().isEmpty) {
         return null;
       }
@@ -40,7 +47,7 @@ class ProjectBundleFileAccessService {
       );
     }
     final file = File(absoluteSource);
-    if (!file.existsSync()) {
+    if (!await file.exists()) {
       return null;
     }
     final bundleContent = await _hostPort.readExternalTextFile(absoluteSource);

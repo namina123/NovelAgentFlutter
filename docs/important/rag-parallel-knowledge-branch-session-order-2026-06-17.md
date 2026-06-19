@@ -44,6 +44,7 @@
 3. 如何先做基础 `txt` 模式，再逐步扩展到模型辅助 `epub / folder / md`。
 4. 如何抽象 Retrieval 接口，而不是把实现绑死到 Flutter 包或单一后端。
 5. 如何让项目能挂载结构化知识资产与 RAG 语料资产，而不是二选一。
+6. 如何确保 RAG 的正式系统动作走显式 GUI / CLI / toolcall，而不是依赖冷识别。
 
 ---
 
@@ -93,6 +94,7 @@ RAG 主线不得重新造出新的巨型 runtime、巨型 controller、巨型 ap
 2. 合同先行
 3. adapter 落后端
 4. GUI 最后消费
+5. 正式系统动作必须显式化，不依赖自然语言猜测
 
 ---
 
@@ -182,6 +184,7 @@ RAG 主线不得重新造出新的巨型 runtime、巨型 controller、巨型 ap
 8. Retrieval backend 已被抽象成接口族，可接 Flutter 本地、CLI sidecar、Docker 远端等不同实现。
 9. 基础 `txt` 模式可跑通。
 10. 模型辅助模式已留下正式扩展位，而不是硬编码第二套流程。
+11. RAG 构建 / 重建 / 挂载 / 卸载 / 检索的正式操作入口，已通过显式合同暴露给 GUI / CLI / 智能体，而不是依赖冷识别。
 
 ---
 
@@ -203,7 +206,7 @@ RAG 主线不得重新造出新的巨型 runtime、巨型 controller、巨型 ap
 3. adapters 元数据与 runtime
 4. backend/provider 适配
 5. project mount 与工具层
-6. GUI / CLI 最小接线
+6. GUI / CLI / toolcall 显式动作收口
 7. probe / regression / handoff
 
 ---
@@ -215,10 +218,10 @@ RAG 主线不得重新造出新的巨型 runtime、巨型 controller、巨型 ap
 3. `RPKB-03` RAG SQLite 元数据基座与 repository 草案落地
 4. `RPKB-04` 基础 txt ingestion runtime 打通
 5. `RPKB-05` Retrieval mount 语义与项目挂载主线落地
-6. `RPKB-06` RAG 检索工具与结构化知识工具边界收口
+6. `RPKB-06` RAG 工具分层与显式系统动作合同收口
 7. `RPKB-07` GUI 轻量提取分支与资产摘要接线
 8. `RPKB-08` CLI 最小构建 / 挂载 / diagnostics 接线
-9. `RPKB-09` 模型辅助标准化与分章扩展位建模
+9. `RPKB-09` RAG 前处理模式与智能拆书接入复用扩展位建模
 10. `RPKB-10` backend provider 插拔层与 host capability 收口
 11. `RPKB-11` project activation / retrieval activation package 接线
 12. `RPKB-12` probe / regression / high-fidelity 验证
@@ -254,6 +257,54 @@ RAG 主线不得重新造出新的巨型 runtime、巨型 controller、巨型 ap
    - 可读投影层入口
 2. 明确 RAG 不得替代哪些现有信息层对象。
 3. 明确 GUI / CLI / adapter / core 的职责分界。
+
+### 边界冻结清单
+
+本轮冻结后的正式边界如下，后续 session 只允许在此之上继续，不允许反向改写。
+
+1. 结构化知识层事实源
+   - `.novel_agent/information/knowledge_cards/*.json`
+   - `.novel_agent/information/design_elements/*.json`
+   - `.novel_agent/information/research_notes/*.json`
+   - `.novel_agent/information/reference_works/*.json`
+2. RAG 检索证据层事实源
+   - `RagCorpusPackage`
+   - `RagSourceDocument`
+   - `RagChunk`
+   - `RagIndexHandle`
+   - `RetrievalMountBinding`
+   - `RetrievalQuery`
+   - `RetrievalHit`
+   - `RetrievalActivationPackage`
+3. 可读投影层入口
+   - `knowledge/*.md`
+   - `research/*.md`
+   - `references/*.md`
+   - GUI / CLI 的资产摘要与状态投影
+4. RAG 不得替代的现有对象
+   - `ProjectKnowledgeCard`
+   - `DesignElementCard`
+   - `ResearchNote`
+   - `ReferenceWorkRecord`
+   - 现有 `information` repository / codec / validator / policy 合同
+   - ONS 开放叙事状态、来源、证据与激活合同
+5. 职责分界
+   - `core`：正式模型、检索合同、挂载语义、查询语义
+   - `adapters`：SQLite 元数据、runtime、provider 适配、索引实现
+   - `app`：提取入口、状态摘要、挂载入口、显式操作触发
+   - `cli`：最小构建、挂载、diagnostics、同合同消费
+6. 现有可复用锚点
+   - `packages/novel_agent_core/lib/src/information.dart`
+   - `packages/novel_agent_core/lib/src/deconstruction/book_deconstruction_information_bridge_service.dart`
+   - `packages/novel_agent_core/lib/src/ports/information_event_repository.dart`
+   - `packages/novel_agent_core/lib/src/ports/information_link_repository.dart`
+   - `packages/novel_agent_adapters/lib/src/storage/`
+
+补充约束：
+
+1. RAG 只能作为平行证据分支，不得反向成为新事实源。
+2. GUI / CLI / probe 只能消费正式合同，不得自建第二套真相判断。
+3. 任何正式状态变化都必须走显式合同，不依赖自然语言冷识别。
 
 ### 本轮不要做
 
@@ -341,6 +392,13 @@ RAG 主线不得重新造出新的巨型 runtime、巨型 controller、巨型 ap
 
 1. `core` 中已有完整、可编译、可测试的 Retrieval 合同。
 2. 后续实现可以只消费合同，不再靠文档口头约定。
+
+### 本轮交接摘要
+
+1. `packages/novel_agent_adapters/lib/src/providers/rag/` 已新增 retrieval provider registry / resolver / host capability port 的正式骨架，支持 local / remote placeholder provider。
+2. `packages/novel_agent_adapters/lib/novel_agent_adapters.dart` 已导出 RAG retrieval provider 的最小正式合同，供 GUI / CLI / probe 统一消费。
+3. `packages/novel_agent_adapters/test/rag_retrieval_provider_resolver_test.dart` 已覆盖 provider 支持性、可用性、失败原因与 host capability 摘要。
+4. `dart analyze lib/src/providers/rag lib/novel_agent_adapters.dart test/rag_retrieval_provider_resolver_test.dart` 与 `dart test test/rag_retrieval_provider_resolver_test.dart` 已通过；本轮未触碰 RPKB-11 的 activation 接线。
 
 ### 直接可用提示词
 
@@ -756,11 +814,11 @@ RAG 主线不得重新造出新的巨型 runtime、巨型 controller、巨型 ap
 
 ---
 
-## Session RPKB-09：模型辅助标准化与分章扩展位建模
+## Session RPKB-09：RAG 前处理模式与智能拆书接入复用扩展位建模
 
 ### 本轮目标
 
-在不直接吞完复杂格式支持的前提下，把模型辅助模式的正式扩展位建立好。
+在不直接吞完复杂格式支持的前提下，把 RAG 前处理模式正式建模为 `offline_basic` 与 `smart_deconstruction_assisted`，并让模型辅助模式复用现有智能拆书接入。
 
 ### 层级归属
 
@@ -772,48 +830,66 @@ RAG 主线不得重新造出新的巨型 runtime、巨型 controller、巨型 ap
 - `docs/important/rag-parallel-knowledge-branch-analysis-2026-06-17.md`
 - `RPKB-02`
 - `RPKB-04`
+- 现有智能拆书接入实现
 
 ### 必须完成
 
-1. 合同化：
+1. 合同化 RAG 前处理模式：
+   - `offline_basic`
+   - `smart_deconstruction_assisted`
+2. 合同化：
+   - 离线简单识别
    - 模型辅助标准化
    - 模型辅助分章
    - 干扰块剔除
    - 不确定块标记
-2. 给 `md / epub / folder` 模式预留正式 source kind 与 strategy 扩展点。
-3. 补 focused contract tests。
+3. 给 `md / epub / folder` 模式预留正式 source kind 与 strategy 扩展点。
+4. 明确 `smart_deconstruction_assisted` 复用现有智能拆书接入，不为 RAG 再平行实现第二套智能拆书。
+5. 明确两种前处理模式只影响 ingestion 前段，后续 chunk build / corpus ingest / mount / retrieve / activation 必须统一。
+6. 补 focused contract tests。
 
 ### 本轮不要做
 
 1. 不直接完成全部复杂格式解析。
 2. 不把“智能拆书”做成黑盒一步到位。
+3. 不把 RAG 绑定成拆书项目语义。
+4. 不把离线简单识别和模型辅助智能拆书做成两套后半段 ingestion。
 
 ### 验收标准
 
-1. 模型辅助模式已有正式扩展位。
+1. `offline_basic` 与 `smart_deconstruction_assisted` 两种前处理模式已有正式扩展位。
 2. 后续接入模型时不需要另造第二套体系。
+3. RAG 模型辅助模式能复用现有智能拆书接入，但仍然保持可选。
+4. 两种前处理模式进入同一条 RAG ingestion 主链。
 
 ### 直接可用提示词
 
 ```text
-执行 Session RPKB-09，只做模型辅助标准化与分章扩展位建模。
+执行 Session RPKB-09，只做 RAG 前处理模式与智能拆书接入复用扩展位建模。
 
 必读：
 - docs/important/rag-parallel-knowledge-branch-analysis-2026-06-17.md
 - RPKB-02 / RPKB-04 的结果
 
 本轮只做：
-1. 合同化模型辅助标准化与模型辅助分章扩展位。
-2. 为 md/epub/folder 预留正式 source kind 与 strategy。
-3. 补 focused tests。
+1. 合同化 `offline_basic` 与 `smart_deconstruction_assisted` 两种 RAG 前处理模式。
+2. 合同化离线简单识别、模型辅助标准化、模型辅助分章、干扰块剔除、不确定块标记。
+3. 为 md/epub/folder 预留正式 source kind 与 strategy。
+4. 明确 `smart_deconstruction_assisted` 复用现有智能拆书接入。
+5. 确保两种前处理模式只影响前段，后续 ingestion/mount/retrieve/activation 统一。
+6. 补 focused tests。
 
 本轮不要做：
 - 不完成全部复杂格式解析
 - 不做黑盒智能拆书
+- 不为 RAG 再造第二套智能拆书
+- 不让两种前处理模式分裂出两套后半段 ingestion
 - 不开启下一任务
 
 要求：
-- 模型辅助只是前段增强，不是第二套 RAG 主线
+- 离线简单识别与模型辅助智能拆书都是前处理策略
+- 模型辅助智能拆书复用现有智能拆书接入
+- 后续 RAG 主链保持统一
 ```
 
 ---
@@ -1117,19 +1193,19 @@ RAG 主线不得重新造出新的巨型 runtime、巨型 controller、巨型 ap
 
 ## 10. 完成记录占位
 
-- [ ] RPKB-01 边界冻结与现有 information 主线对齐
-- [ ] RPKB-02 RAG 正式模型与 Retrieval 合同落地
-- [ ] RPKB-03 RAG SQLite 元数据基座与 repository 草案落地
-- [ ] RPKB-04 基础 txt ingestion runtime 打通
-- [ ] RPKB-05 Retrieval mount 语义与项目挂载主线落地
-- [ ] RPKB-06 RAG 检索工具与结构化知识工具边界收口
-- [ ] RPKB-07 GUI 轻量提取分支与资产摘要接线
-- [ ] RPKB-08 CLI 最小构建 / 挂载 / diagnostics 接线
-- [ ] RPKB-09 模型辅助标准化与分章扩展位建模
-- [ ] RPKB-10 backend provider 插拔层与 host capability 收口
-- [ ] RPKB-11 project activation / retrieval activation package 接线
-- [ ] RPKB-12 probe / regression / high-fidelity 验证
-- [ ] RPKB-13 文档、迁移说明、残留双轨清理与交接
+- [x] RPKB-01 边界冻结与现有 information 主线对齐
+- [x] RPKB-02 RAG 正式模型与 Retrieval 合同落地
+- [x] RPKB-03 RAG SQLite 元数据基座与 repository 草案落地
+- [x] RPKB-04 基础 txt ingestion runtime 打通
+- [x] RPKB-05 Retrieval mount 语义与项目挂载主线落地
+- [x] RPKB-06 RAG 检索工具与结构化知识工具边界收口
+- [x] RPKB-07 GUI 轻量提取分支与资产摘要接线
+- [x] RPKB-08 CLI 最小构建 / 挂载 / diagnostics 接线
+- [x] RPKB-09 RAG 前处理模式与智能拆书接入复用扩展位建模
+- [x] RPKB-10 backend provider 插拔层与 host capability 收口
+- [x] RPKB-11 project activation / retrieval activation package 接线
+- [x] RPKB-12 probe / regression / high-fidelity 验证
+- [x] RPKB-13 文档、迁移说明、残留双轨清理与交接
 
 ---
 
@@ -1144,3 +1220,87 @@ RAG 主线不得重新造出新的巨型 runtime、巨型 controller、巨型 ap
 5. 每个 session 都有明确目标、边界、不要做、验收标准和可直接执行提示词。
 
 这份文档可以直接交给 `gpt-5.4-mini` 的目标模式连续执行。
+
+RPKB-01 交接摘要：
+
+1. 现有结构化知识层、RAG 证据层、可读投影层的边界已冻结。
+2. `core / adapters / app / cli` 的职责分界已写入 session 文档。
+3. `RPKB-02` 可以直接在正式模型与 Retrieval 合同上继续，不需要回头重判边界。
+4. `RPKB-02` 已完成，后续可以顺着 `RPKB-03` 进入 SQLite 元数据基座。
+
+RPKB-03 交接摘要：
+
+1. `packages/novel_agent_adapters/lib/src/storage/sqlite_rag_metadata_repository.dart` 已完成最小收口，写入闭包与读取接口参数形状已修正。
+2. `packages/novel_agent_adapters/lib/src/storage/sqlite_rag_metadata_store.dart` 已确认建表与 bootstrap 约定正常。
+3. `packages/novel_agent_adapters/test/sqlite_rag_metadata_store_test.dart` 与 `packages/novel_agent_adapters/test/sqlite_rag_metadata_repository_test.dart` 已通过。
+4. RPKB-04 可以在稳定的 RAG 元数据基座之上继续，不需要回头重判 SQLite 表族边界。
+
+RPKB-04 交接摘要：
+
+1. 新增 `packages/novel_agent_adapters/lib/src/storage/rag_txt_corpus_ingestion_service.dart`，作为第一阶段 txt ingestion 的薄编排入口。
+2. 复用现有 `ReferenceSourceDocumentFileReaderService` 与 `ReferenceSourceDocumentStructureService`，只做读取、规则分段、chunk 构建与 SQLite 元数据落库。
+3. 新增 `packages/novel_agent_adapters/test/rag_txt_corpus_ingestion_service_test.dart`，覆盖 txt 成功导入与非 txt 拒绝两条关键路径。
+4. `dart analyze` 与相关 focused tests 已通过，后续 `RPKB-05` 可以继续基于现有 corpus/source/chunk/index/run 元数据往挂载语义推进。
+
+RPKB-05 交接摘要：
+
+1. `packages/novel_agent_adapters/lib/src/storage/sqlite_rag_metadata_repository.dart` 已补充项目维度挂载查询、项目挂载存在性判断，以及 corpus 维度的 mount 过滤。
+2. `packages/novel_agent_adapters/lib/src/storage/rag_project_mount_summary_service.dart` 已提供项目挂载摘要，供后续 GUI/CLI/probe 轻量消费。
+3. 新增 `packages/novel_agent_adapters/test/rag_project_mount_summary_service_test.dart`，覆盖多 corpus 并存、项目挂载列表和摘要输出。
+4. `dart analyze` 与相关 focused tests 已通过，项目挂载语义已正式并入 RAG 元数据基座，可继续往 `RPKB-06` 的工具分层与显式系统动作收口推进。
+
+RPKB-06 交接摘要：
+
+1. `packages/novel_agent_adapters/lib/src/tools/project_rag_retrieval_tool_executor.dart` 已新增，作为独立的 project-level RAG 检索薄执行器，直接从 SQLite RAG 元数据与挂载摘要召回证据片段。
+2. `packages/novel_agent_adapters/lib/src/tools/project_tool_dispatcher.dart` 已接入 `retrieve_rag_passages` 分支，工具语义与结构化知识工具保持分离，不再混入 `information` domain executor。
+3. `packages/novel_agent_adapters/test/project_rag_retrieval_tool_executor_test.dart` 已覆盖挂载语料召回与非法参数拒绝两条关键路径。
+4. `dart test` 已在 `novel_agent_core` / `novel_agent_adapters` 的 focused 目标上通过；`dart analyze` 仍保留仓库既有的若干无关 warning，但本轮 RAG 工具收口本身没有新增阻断。
+
+RPKB-07 交接摘要：
+
+1. `apps/novel_agent_app/lib/features/project_assets/application/models/project_assets_snapshot.dart`、`apps/novel_agent_app/lib/features/project_assets/presentation/models/project_rag_extraction_view_data.dart` 已修正为非 `const` 初始构造，避免把 RAG 初始状态误写成 const 但调用非 const 构造的编译错误。
+2. `apps/novel_agent_app/lib/features/project_assets/presentation/widgets/project_rag_extraction_panel.dart` 已改为消费 `ProjectAssetsActionHandler`，不再错误依赖 `ProjectAssetsController` 具体类型。
+3. `apps/novel_agent_app/lib/features/project_assets/application/services/project_assets_view_data_service.dart`、`project_rag_extraction_execution_service.dart`、`project_rag_extraction_view_data_service.dart` 已清理无用导入。
+4. `dart analyze apps/novel_agent_app/lib/features/project_assets apps/novel_agent_app/lib/app/state/app_shell_controller.dart apps/novel_agent_app/test/project_assets_view_data_service_test.dart` 已通过；`flutter test` 在当前环境中对 `apps/novel_agent_app/test/*` 触发了 `HttpException: Connection closed before full header was received`，且连基础 `widget_test.dart` 也同样失败，判断为测试运行时环境问题而非本次 GUI 切片新增的静态编译错误。
+
+RPKB-08 交接摘要：
+
+1. `apps/novel_agent_cli/lib/commands/rag/rag_command.dart` 已新增为独立 CLI 命令族，包含 `build / list / mount / diagnostics / help` 五个最小子命令。
+2. `apps/novel_agent_cli/lib/bootstrap/cli_bootstrap.dart` 已将 `rag` 接入顶层命令分发，并在根帮助中公开正式入口。
+3. `apps/novel_agent_cli/test/rag_command_test.dart` 已覆盖 help、txt 构建、语料列表、项目挂载与诊断查询这五条最小合同路径。
+4. `dart analyze apps/novel_agent_cli/lib apps/novel_agent_cli/test/rag_command_test.dart` 与 `dart test test/rag_command_test.dart` 已通过，CLI 侧这轮 RAG 最小接线已达到可验证收口状态。
+
+RPKB-09 交接摘要：
+
+1. `packages/novel_agent_core/lib/src/rag/rag_source_models.dart` 已新增模型辅助标准化相关正式模型，覆盖 `RagNormalizedSource`、`RagNormalizedSourceUnit`、`RagDiscardedSourceUnit`、`RagUncertainSourceUnit`。
+2. `packages/novel_agent_core/lib/src/rag/rag_processing_models.dart` 已新增分章与 chunk 构建结果合同，覆盖 `RagSegmentationSegment`、`RagSegmentationResult`、`RagChunkBuildResult`、`RagIngestionResult`。
+3. `packages/novel_agent_core/lib/src/rag/rag_corpus_models.dart` 与 `rag_retrieval_models.dart` 已把 corpus / retrieval 侧模型拆成更小文件，`rag_models.dart` 退化为薄兼容聚合层。
+4. `packages/novel_agent_core/test/rag_contracts_test.dart` 已补充模型辅助 source kind、标准化、分段、chunk build 与 ingestion 结果 round-trip 验证，`dart test` 已通过；`dart analyze` 仍仅有仓库既有 warning，没有新增阻断。
+
+RPKB-10 交接摘要：
+
+1. `packages/novel_agent_adapters/lib/src/providers/rag/rag_retrieval_provider_contracts.dart` 已定义 retrieval provider profile、capability report 和 provider 抽象合同。
+2. `packages/novel_agent_adapters/lib/src/providers/rag/rag_retrieval_provider_registry.dart` 与 `rag_retrieval_provider_resolver.dart` 已把 provider 识别、支持性判断和 capability 归一收口到 registry/resolver。
+3. `packages/novel_agent_adapters/lib/src/providers/rag/rag_retrieval_provider_hosts.dart` 已提供 host capability port，GUI / CLI / probe 可以统一读取 RAG retrieval provider 摘要。
+4. `packages/novel_agent_adapters/test/rag_retrieval_provider_resolver_test.dart` 已通过，验证 local / remote placeholder provider 的支持性与未知 provider 的失败报告。
+
+RPKB-11 交接摘要：
+
+1. `packages/novel_agent_adapters/lib/src/workflow/project_rag_retrieval_activation_bridge_service.dart` 已新增，负责把 `retrieve_rag_passages` 的原始检索结果收束为正式 `RetrievalActivationPackage`。
+2. `packages/novel_agent_adapters/lib/src/tools/project_rag_retrieval_tool_executor.dart` 已回传 `retrieval_activation_package`，让上层消费共享 activation 包而不是只看原始 hit 列表。
+3. `packages/novel_agent_adapters/test/project_rag_retrieval_activation_bridge_service_test.dart` 与 `packages/novel_agent_adapters/test/project_rag_retrieval_tool_executor_test.dart` 已覆盖正式包投影、fallback 摘要与工具回传路径。
+4. `dart analyze` 与 focused `dart test` 已通过；RAG activation 现在可以沿共享合同被上层消费，不需要再在 GUI 私有逻辑里重建一套证据包形状。
+
+RPKB-12 交接摘要：
+
+1. `packages/novel_agent_adapters/test/rag_parallel_branch_regression_suite_test.dart` 已新增，作为 RAG 平行分支的正式回归验证，覆盖 txt 入库、挂载摘要、检索命中与 activation package。
+2. 回归套件使用真实 txt 文件、真实 SQLite RAG 元数据与真实检索执行器，不依赖临时 probe 脚本，也不复制第二套业务逻辑。
+3. `packages/novel_agent_adapters/test/project_rag_retrieval_activation_bridge_service_test.dart` 与 `packages/novel_agent_adapters/test/project_rag_retrieval_tool_executor_test.dart` 继续作为 focused contract tests，和 regression suite 互补。
+4. `dart analyze` 与 focused `dart test` 已通过；RPKB-13 现在可以只做文档、迁移说明、残留双轨清理与交接，不需要回头补验证闭环。
+
+RPKB-13 交接摘要：
+
+1. `docs/important/rag-parallel-knowledge-branch-session-order-2026-06-17.md` 已把 `RPKB-13` 标记为完成，并补齐最终交接口径。
+2. `docs/important/rag-parallel-knowledge-branch-analysis-2026-06-17.md` 与 `docs/important/rag-retrieval-contract-draft-2026-06-17.md` 已补充实施收口备注，明确 RAG 当前是已落地的平行证据分支，而不是仅停留在提案阶段。
+3. 现有实现保持边界清晰：结构化知识层继续做正式事实源，RAG 继续做检索证据层，GUI / CLI / probe 只消费正式合同，不再被描述成真相层。
+4. 后续如需扩展，只在已冻结的正式合同上增加新的 provider、宿主或模型辅助来源，不再回滚这条主线的边界定义。

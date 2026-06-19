@@ -58,6 +58,38 @@ class ProjectStructuredContentBridgeService {
     );
   }
 
+  Future<void> persistSourceOriginalArchive({
+    required ProjectDescriptor project,
+    required String archivePath,
+    required String archiveTitle,
+    required String sourceContent,
+    String statePath = '',
+  }) async {
+    // 中文注释: 原文归档在 SQLite 项目里也要进入主事实源，文件层只保留可读投影与兼容入口。
+    if (!_writePolicy.shouldWriteToSqlitePrimarySource(
+      storageStrategy: project.storageStrategy,
+      documentKind: 'source_original',
+    )) {
+      return;
+    }
+    final document = SqliteProjectBodyTextDocument(
+      documentId: archivePath.trim(),
+      documentKind: 'source_original',
+      title: archiveTitle.trim().isEmpty ? archivePath.trim() : archiveTitle.trim(),
+      storageFormat: SqliteProjectBodyTextStorageFormat.plainText,
+      plainText: sourceContent,
+      markdownPath: archivePath.trim(),
+      statePath: statePath.trim(),
+      status: 'archived',
+      createdAt: DateTime.now().toIso8601String(),
+      updatedAt: DateTime.now().toIso8601String(),
+    );
+    await _bodyTextRepository.saveDocument(
+      projectRootPath: project.rootPath,
+      document: document,
+    );
+  }
+
   Future<String?> readProjectedBodyText(
     ProjectDescriptor project,
     String relativePath,

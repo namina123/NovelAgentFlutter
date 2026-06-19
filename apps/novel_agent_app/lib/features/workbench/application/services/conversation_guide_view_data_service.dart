@@ -44,6 +44,7 @@ class ConversationGuideViewDataService {
 
   ConversationGuideViewData build({
     required String projectType,
+    String projectBranchId = '',
     required bool needsGoalSelection,
     required bool isGenerating,
     required ProjectOpeningMaturityAssessment openingMaturity,
@@ -73,6 +74,7 @@ class ConversationGuideViewDataService {
     }
     final profile = _sessionGuideProfileService.resolve(
       projectType: projectType,
+      projectBranchId: projectBranchId,
       needsGoalSelection: needsGoalSelection,
       isRunning: isGenerating,
     );

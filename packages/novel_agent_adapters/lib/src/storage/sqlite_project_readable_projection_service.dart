@@ -49,7 +49,7 @@ class SqliteProjectReadableProjectionService
   String _projectBrief(ProjectManifest manifest) {
     return '# 项目概览\n\n'
         '> 这是系统维护的 SQLite 项目快速概览，不是正式故事前提或项目宪章。\n'
-        '> 当前项目的正式主事实源是 SQLite；Markdown 仅承担只读投影、导出和入口说明作用。\n\n'
+        '> 当前项目的正式主事实源是 SQLite；Markdown 仅承担只读摘要、导出和入口说明作用。\n\n'
         '- 项目标题：${manifest.title}\n'
         '- 项目类型：${manifest.projectType}\n'
         '- 主存储策略：${manifest.storageStrategy.id}\n'

@@ -66,7 +66,7 @@ class SourceImportDiscoveryService implements SourceImportDiscoveryPort {
         skippedPaths.add(filePath);
         continue;
       }
-      final relativePathHint = _relativePathHint(selection, filePath);
+      final relativePathHint = await _relativePathHint(selection, filePath);
       discoveredSelections.add(
         selection.copyWith(
           selectionId: _expandedSelectionId(selection, index + 1, filePath),
@@ -160,7 +160,10 @@ class SourceImportDiscoveryService implements SourceImportDiscoveryPort {
     return const <String>[];
   }
 
-  String _relativePathHint(SourceImportSelection selection, String filePath) {
+  Future<String> _relativePathHint(
+    SourceImportSelection selection,
+    String filePath,
+  ) async {
     // 中文注释: relativePathHint 以目录相对路径优先，single file 则退回文件名，保证导入目标可稳定重建层级。
     final relativeHint = SourceAssetIdentity.normalizeLocalHintPath(
       selection.relativePathHint,
@@ -172,7 +175,10 @@ class SourceImportDiscoveryService implements SourceImportDiscoveryPort {
       }
       return _fileName(filePath);
     }
-    final locatorType = FileSystemEntity.typeSync(locator, followLinks: false);
+    final locatorType = await FileSystemEntity.type(
+      locator,
+      followLinks: false,
+    );
     if (locatorType == FileSystemEntityType.directory) {
       final childRelativePath = _directoryRelativePath(locator, filePath);
       if (childRelativePath.isNotEmpty) {

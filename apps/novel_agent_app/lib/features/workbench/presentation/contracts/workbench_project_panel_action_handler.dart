@@ -19,5 +19,7 @@ abstract class WorkbenchProjectPanelActionHandler {
 
   void onProjectAssetsRequested();
 
+  void onProjectRagRequested() => onProjectAssetsRequested();
+
   void onCurrentAgentExpressionConstraintsRequested();
 }

@@ -6,6 +6,7 @@ class WorkbenchProjectPanelViewData {
   const WorkbenchProjectPanelViewData({
     required this.projectName,
     required this.projectSubtitle,
+    required this.projectTypeId,
     required this.workflowTitle,
     required this.workflowDescription,
     required this.modelLabel,
@@ -20,6 +21,7 @@ class WorkbenchProjectPanelViewData {
 
   final String projectName;
   final String projectSubtitle;
+  final String projectTypeId;
   final String workflowTitle;
   final String workflowDescription;
   final String modelLabel;

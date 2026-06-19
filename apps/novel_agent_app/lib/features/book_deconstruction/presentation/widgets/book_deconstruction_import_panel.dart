@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import '../../presentation/contracts/book_deconstruction_action_handler.dart';
 import '../models/book_deconstruction_view_data.dart';
 
+const String _importingOperationKind = 'importing_source';
+const String _buildingPreviewOperationKind = 'building_preview';
+
 class BookDeconstructionImportPanel extends StatefulWidget {
   const BookDeconstructionImportPanel({
     super.key,
@@ -87,142 +90,181 @@ class _BookDeconstructionImportPanelState
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final isImporting =
+        widget.viewData.operationKind == _importingOperationKind;
+    final isBuildingPreview =
+        widget.viewData.operationKind == _buildingPreviewOperationKind;
+    return ListView(
+      padding: const EdgeInsets.all(16),
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-          child: Row(
-            children: [
-              Expanded(child: Text('源文稿与结构补充', style: textTheme.titleSmall)),
-              OutlinedButton.icon(
-                onPressed: widget
-                    .actionHandler
-                    .onBookDeconstructionImportFileRequested,
-                icon: const Icon(Icons.upload_file_outlined),
-                label: const Text('导入文本文件'),
-              ),
-            ],
-          ),
-        ),
-        if (widget.viewData.sourceAbsolutePath.trim().isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: Text(
-              widget.viewData.sourceAbsolutePath,
-              style: textTheme.bodySmall,
-            ),
-          ),
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              TextField(
-                controller: _sourceTitleController,
-                decoration: const InputDecoration(
-                  labelText: '来源标题',
-                  hintText: '例如：某部待拆解的作品名',
-                ),
-                onChanged:
-                    widget.actionHandler.onBookDeconstructionSourceTitleChanged,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _sourceContentController,
-                maxLines: 14,
-                minLines: 14,
-                decoration: const InputDecoration(
-                  labelText: '源文稿',
-                  hintText: '粘贴原文，或先从桌面端选择文本文件导入。',
-                  alignLabelWithHint: true,
-                ),
-                onChanged: widget
-                    .actionHandler
-                    .onBookDeconstructionSourceContentChanged,
-              ),
-              const SizedBox(height: 12),
-              ExpansionTile(
-                tilePadding: EdgeInsets.zero,
-                childrenPadding: EdgeInsets.zero,
-                title: const Text('结构补充'),
-                subtitle: const Text('可选，用于补强风格、世界规则与角色清单。'),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  TextField(
-                    controller: _operatorNotesController,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      labelText: '操作备注',
-                      hintText: '例如：只保留世界规则与章纲，不导入角色细节。',
-                    ),
-                    onChanged: widget
-                        .actionHandler
-                        .onBookDeconstructionOperatorNotesChanged,
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _styleSummaryController,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      labelText: '风格提要',
-                      hintText: '例如：商业节奏快、情节钩子强、叙述干净利落。',
-                    ),
-                    onChanged: widget
-                        .actionHandler
-                        .onBookDeconstructionStyleSummaryChanged,
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _worldRulesController,
-                    maxLines: 4,
-                    decoration: const InputDecoration(
-                      labelText: '世界规则',
-                      hintText: '每行一条规则。',
-                      alignLabelWithHint: true,
-                    ),
-                    onChanged: widget
-                        .actionHandler
-                        .onBookDeconstructionWorldRulesChanged,
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _characterLinesController,
-                    maxLines: 4,
-                    decoration: const InputDecoration(
-                      labelText: '角色清单',
-                      hintText: '每行一个角色，可写成“姓名：摘要”。',
-                      alignLabelWithHint: true,
-                    ),
-                    onChanged: widget
-                        .actionHandler
-                        .onBookDeconstructionCharacterLinesChanged,
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _organizationLinesController,
-                    maxLines: 4,
-                    decoration: const InputDecoration(
-                      labelText: '组织清单',
-                      hintText: '每行一个组织，可写成“组织：摘要”。',
-                      alignLabelWithHint: true,
-                    ),
-                    onChanged: widget
-                        .actionHandler
-                        .onBookDeconstructionOrganizationLinesChanged,
+                  Text('源文稿与结构补充', style: textTheme.titleSmall),
+                  const SizedBox(height: 4),
+                  Text(
+                    '先导入书籍原文，再补充风格、规则或角色清单，随后生成结构化预览。',
+                    style: textTheme.bodySmall,
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: widget.viewData.canBuildPreview
-                    ? widget
-                          .actionHandler
-                          .onBookDeconstructionBuildPreviewRequested
-                    : null,
-                icon: const Icon(Icons.auto_fix_high_outlined),
-                label: const Text('生成结构化预览'),
+            ),
+            const SizedBox(width: 12),
+            OutlinedButton.icon(
+              onPressed: widget.viewData.isLoading
+                  ? null
+                  : widget
+                        .actionHandler
+                        .onBookDeconstructionImportFileRequested,
+              icon: isImporting
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.upload_file_outlined),
+              label: Text(widget.viewData.importActionLabel),
+            ),
+          ],
+        ),
+        if (widget.viewData.sourceAbsolutePath.trim().isNotEmpty) ...[
+          const SizedBox(height: 12),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('已导入来源', style: textTheme.labelMedium),
+                  const SizedBox(height: 4),
+                  Text(
+                    widget.viewData.sourceAbsolutePath,
+                    style: textTheme.bodySmall,
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
+        ],
+        const SizedBox(height: 16),
+        TextField(
+          controller: _sourceTitleController,
+          enabled: !widget.viewData.isLoading,
+          decoration: const InputDecoration(
+            labelText: '来源标题',
+            hintText: '例如：某部待拆解的作品名',
+          ),
+          onChanged:
+              widget.actionHandler.onBookDeconstructionSourceTitleChanged,
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _sourceContentController,
+          enabled: !widget.viewData.isLoading,
+          maxLines: 14,
+          minLines: 14,
+          decoration: const InputDecoration(
+            labelText: '源文稿',
+            hintText: '粘贴原文，或先从桌面端选择文本 / Markdown / EPUB 导入。',
+            alignLabelWithHint: true,
+          ),
+          onChanged:
+              widget.actionHandler.onBookDeconstructionSourceContentChanged,
+        ),
+        const SizedBox(height: 12),
+        ExpansionTile(
+          tilePadding: EdgeInsets.zero,
+          childrenPadding: EdgeInsets.zero,
+          title: const Text('结构补充'),
+          subtitle: const Text('可选，用于补强风格、世界规则与角色清单。'),
+          children: [
+            TextField(
+              controller: _operatorNotesController,
+              enabled: !widget.viewData.isLoading,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: '操作备注',
+                hintText: '例如：只保留世界规则与章纲，不导入角色细节。',
+              ),
+              onChanged:
+                  widget.actionHandler.onBookDeconstructionOperatorNotesChanged,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _styleSummaryController,
+              enabled: !widget.viewData.isLoading,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: '风格提要',
+                hintText: '例如：商业节奏快、情节钩子强、叙述干净利落。',
+              ),
+              onChanged:
+                  widget.actionHandler.onBookDeconstructionStyleSummaryChanged,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _worldRulesController,
+              enabled: !widget.viewData.isLoading,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                labelText: '世界规则',
+                hintText: '每行一条规则。',
+                alignLabelWithHint: true,
+              ),
+              onChanged:
+                  widget.actionHandler.onBookDeconstructionWorldRulesChanged,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _characterLinesController,
+              enabled: !widget.viewData.isLoading,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                labelText: '角色清单',
+                hintText: '每行一个角色，可写成“姓名：摘要”。',
+                alignLabelWithHint: true,
+              ),
+              onChanged: widget
+                  .actionHandler
+                  .onBookDeconstructionCharacterLinesChanged,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _organizationLinesController,
+              enabled: !widget.viewData.isLoading,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                labelText: '组织清单',
+                hintText: '每行一个组织，可写成“组织：摘要”。',
+                alignLabelWithHint: true,
+              ),
+              onChanged: widget
+                  .actionHandler
+                  .onBookDeconstructionOrganizationLinesChanged,
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        FilledButton.icon(
+          onPressed: widget.viewData.canBuildPreview
+              ? widget.actionHandler.onBookDeconstructionBuildPreviewRequested
+              : null,
+          icon: isBuildingPreview
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.auto_fix_high_outlined),
+          label: Text(widget.viewData.buildPreviewActionLabel),
         ),
       ],
     );

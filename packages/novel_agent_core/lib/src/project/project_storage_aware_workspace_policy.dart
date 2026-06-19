@@ -84,6 +84,7 @@ class ProjectStorageAwareWorkspacePolicy {
       case 'style':
       case 'summary':
       case 'knowledge':
+      case 'source_original':
         return true;
       default:
         return false;

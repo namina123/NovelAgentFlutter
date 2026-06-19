@@ -17,6 +17,7 @@ class ConversationPanelHeader extends StatelessWidget {
     required this.onNewSessionRequested,
     required this.onConversationAgentSelected,
     required this.onDocumentsRequested,
+    required this.historyOpen,
     this.minimal = false,
   });
 
@@ -26,6 +27,7 @@ class ConversationPanelHeader extends StatelessWidget {
   final VoidCallback onNewSessionRequested;
   final ValueChanged<String> onConversationAgentSelected;
   final VoidCallback onDocumentsRequested;
+  final bool historyOpen;
   final bool minimal;
 
   @override
@@ -51,6 +53,7 @@ class ConversationPanelHeader extends StatelessWidget {
               title: '会话',
               onHistoryRequested: onHistoryRequested,
               onNewSessionRequested: onNewSessionRequested,
+              historyOpen: historyOpen,
               minimal: minimal,
             ),
             SizedBox(height: style.gap(-1, min: 2)),

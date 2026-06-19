@@ -9,6 +9,7 @@ class BookDeconstructionViewData {
     required this.projectTitle,
     required this.status,
     required this.isLoading,
+    required this.operationKind,
     required this.activeStepId,
     required this.steps,
     required this.sourceAbsolutePath,
@@ -28,6 +29,8 @@ class BookDeconstructionViewData {
     required this.canBuildPreview,
     required this.canConfirmSelection,
     required this.canCreateDerivedProject,
+    required this.importActionLabel,
+    required this.buildPreviewActionLabel,
     required this.informationBridge,
     this.continuity,
   });
@@ -37,6 +40,7 @@ class BookDeconstructionViewData {
       projectTitle: '',
       status: '',
       isLoading: false,
+      operationKind: '',
       activeStepId: '',
       steps: <BookDeconstructionStepViewData>[],
       sourceAbsolutePath: '',
@@ -56,6 +60,8 @@ class BookDeconstructionViewData {
       canBuildPreview: false,
       canConfirmSelection: false,
       canCreateDerivedProject: false,
+      importActionLabel: '导入文件',
+      buildPreviewActionLabel: '生成结构化预览',
       informationBridge: null,
       continuity: null,
     );
@@ -64,6 +70,7 @@ class BookDeconstructionViewData {
   final String projectTitle;
   final String status;
   final bool isLoading;
+  final String operationKind;
   final String activeStepId;
   final List<BookDeconstructionStepViewData> steps;
   final String sourceAbsolutePath;
@@ -83,6 +90,8 @@ class BookDeconstructionViewData {
   final bool canBuildPreview;
   final bool canConfirmSelection;
   final bool canCreateDerivedProject;
+  final String importActionLabel;
+  final String buildPreviewActionLabel;
   final BookDeconstructionInformationBridgeViewData? informationBridge;
   final BookDeconstructionContinuityViewData? continuity;
 }

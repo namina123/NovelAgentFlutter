@@ -19,7 +19,7 @@ void main() {
     );
     expect(
       service.identityLabel(relativePath: 'premise/sqlite_projection/index.md'),
-      'SQLite 投影',
+      'SQLite 资源',
     );
   });
 

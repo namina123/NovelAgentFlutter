@@ -101,6 +101,56 @@ void main() {
       expect(plan.canCreate, isTrue);
     });
 
+    test('executePrepared persists knowledge base branch into manifest', () async {
+      // 中文注释: 资料知识库的分支语义必须成为项目元数据的一部分，不能只停留在创建界面临时状态。
+      final workspacePort = _FakeProjectWorkspacePort();
+      final manifestCodec = ProjectManifestCodecService();
+      final useCase = CreateProjectWorkspaceUseCase(
+        projectRepository: _FakeProjectRepository(
+          workspacePort: workspacePort,
+          manifestCodecService: manifestCodec,
+        ),
+        projectWorkspacePort: workspacePort,
+        projectContentRepository: _FakeProjectContentRepository(),
+        projectReadableProjectionService:
+            _FakeProjectReadableProjectionService(),
+        projectManifestCodecService: manifestCodec,
+      );
+
+      final plan = useCase.prepare(
+        const ProjectCreateRequest(
+          title: '哈利语料',
+          projectTypeId: 'knowledge_base',
+          projectBranchId: KnowledgeBaseBranchCatalogService.ragBranchId,
+        ),
+      );
+      final descriptor = await useCase.executePrepared(
+        projectsRootPath: '/projects',
+        plan: plan,
+      );
+      final manifestContent = workspacePort.readStoredTextFile(
+        descriptor.rootPath,
+        ProjectManifestCodecService.manifestRelativePath,
+      );
+
+      expect(descriptor.projectType, 'knowledge_base');
+      expect(
+        descriptor.storageStrategy,
+        ProjectStorageStrategy.sqliteProjectStore,
+      );
+      expect(
+        descriptor.projectBranchId,
+        KnowledgeBaseBranchCatalogService.ragBranchId,
+      );
+      expect(manifestContent, isNotNull);
+
+      final manifest = manifestCodec.parse(manifestContent!);
+      expect(
+        manifest.projectBranchId,
+        KnowledgeBaseBranchCatalogService.ragBranchId,
+      );
+    });
+
     test(
       'executePrepared persists runtime baseline into manifest and profile',
       () async {
@@ -209,6 +259,7 @@ class _FakeProjectRepository implements ProjectRepository {
       rootPath: rootPath,
       projectType: manifest.projectType,
       storageStrategy: manifest.storageStrategy,
+      projectBranchId: manifest.projectBranchId,
       runtimeBaselineId: manifest.runtimeBaselineId,
     );
   }

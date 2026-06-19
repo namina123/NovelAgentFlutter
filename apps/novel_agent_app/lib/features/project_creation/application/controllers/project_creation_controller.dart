@@ -25,6 +25,7 @@ class ProjectCreationController {
     mutateWorkbench,
     required ProjectDescriptor? Function() readCurrentProject,
     required Future<bool> Function(String rootPath) loadProject,
+    Future<void> Function(ProjectDescriptor project)? onProjectCreatedAndOpened,
     required void Function({required String status})
     resetToProjectlessWorkbench,
     required void Function(String message) announce,
@@ -50,6 +51,7 @@ class ProjectCreationController {
        _mutateWorkbench = mutateWorkbench,
        _readCurrentProject = readCurrentProject,
        _loadProject = loadProject,
+       _onProjectCreatedAndOpened = onProjectCreatedAndOpened,
        _resetToProjectlessWorkbench = resetToProjectlessWorkbench,
        _announce = announce,
        _readSettings = readSettings,
@@ -80,6 +82,7 @@ class ProjectCreationController {
   _mutateWorkbench;
   final ProjectDescriptor? Function() _readCurrentProject;
   final Future<bool> Function(String rootPath) _loadProject;
+  final Future<void> Function(ProjectDescriptor project)? _onProjectCreatedAndOpened;
   final void Function({required String status}) _resetToProjectlessWorkbench;
   final void Function(String message) _announce;
   final AppSettings? Function() _readSettings;
@@ -201,6 +204,7 @@ class ProjectCreationController {
         launcher.selectedStorageStrategyId,
       ),
       creationPhase: launcher.creationPhase,
+      selectedKnowledgeBaseBranchId: launcher.selectedKnowledgeBaseBranchId,
       selectedBookDeconstructionFollowupRouteId:
           launcher.selectedBookDeconstructionFollowupRouteId,
       runtimeBaselineOptions: launcher.runtimeBaselineOptions
@@ -256,6 +260,7 @@ class ProjectCreationController {
         draftTitle: cleanTitle,
         selectedProjectTypeId: projectTypeId,
         selectedStorageStrategy: storageStrategy,
+        selectedKnowledgeBaseBranchId: request.knowledgeBaseBranchId,
         selectedBookDeconstructionFollowupRouteId:
             request.bookDeconstructionFollowupRouteId,
         continuityInput: request.continuityInput,
@@ -269,6 +274,7 @@ class ProjectCreationController {
         title: cleanTitle,
         projectTypeId: projectTypeId,
         storageStrategy: storageStrategy,
+        projectBranchId: request.knowledgeBaseBranchId.trim(),
         runtimeBaselineId: request.runtimeBaselineId.trim(),
       ),
     );
@@ -279,6 +285,7 @@ class ProjectCreationController {
         draftTitle: creationPlan.request.title,
         selectedProjectTypeId: creationPlan.request.projectTypeId,
         selectedStorageStrategy: creationPlan.request.storageStrategy,
+        selectedKnowledgeBaseBranchId: creationPlan.request.projectBranchId,
         selectedBookDeconstructionFollowupRouteId:
             request.bookDeconstructionFollowupRouteId,
         continuityInput: request.continuityInput,
@@ -299,6 +306,7 @@ class ProjectCreationController {
           draftTitle: creationPlan.request.title,
           selectedProjectTypeId: creationPlan.request.projectTypeId,
           selectedStorageStrategy: creationPlan.request.storageStrategy,
+          selectedKnowledgeBaseBranchId: creationPlan.request.projectBranchId,
           selectedBookDeconstructionFollowupRouteId:
               request.bookDeconstructionFollowupRouteId,
           continuityInput: request.continuityInput,
@@ -336,6 +344,7 @@ class ProjectCreationController {
           draftTitle: creationPlan.request.title,
           selectedProjectTypeId: creationPlan.request.projectTypeId,
           selectedStorageStrategy: creationPlan.request.storageStrategy,
+          selectedKnowledgeBaseBranchId: creationPlan.request.projectBranchId,
           selectedBookDeconstructionFollowupRouteId:
               request.bookDeconstructionFollowupRouteId,
           continuityInput: request.continuityInput,
@@ -350,6 +359,7 @@ class ProjectCreationController {
         _announce('项目已创建，但自动打开失败：${project.rootPath}');
         return;
       }
+      await _onProjectCreatedAndOpened?.call(project);
       _mutateWorkbench(
         (current) => current.copyWith(
           projectLauncher: null,
@@ -387,6 +397,7 @@ class ProjectCreationController {
         draftTitle: creationPlan.request.title,
         selectedProjectTypeId: creationPlan.request.projectTypeId,
         selectedStorageStrategy: creationPlan.request.storageStrategy,
+        selectedKnowledgeBaseBranchId: creationPlan.request.projectBranchId,
         selectedBookDeconstructionFollowupRouteId:
             request.bookDeconstructionFollowupRouteId,
         continuityInput: request.continuityInput,
@@ -416,6 +427,7 @@ class ProjectCreationController {
           );
         }
         return;
+      case ProjectCreationPhase.knowledgeBaseBranch:
       case ProjectCreationPhase.storageStrategy:
       case ProjectCreationPhase.bookDeconstructionFollowup:
       case ProjectCreationPhase.runtimeBaseline:
@@ -438,6 +450,7 @@ class ProjectCreationController {
           selectedStorageStrategy: ProjectStorageStrategy.fromId(
             launcher.selectedStorageStrategyId,
           ),
+          selectedKnowledgeBaseBranchId: launcher.selectedKnowledgeBaseBranchId,
           selectedBookDeconstructionFollowupRouteId:
               launcher.selectedBookDeconstructionFollowupRouteId,
           continuityInput: launcher.continuityInput,
@@ -466,6 +479,7 @@ class ProjectCreationController {
     ProjectStorageStrategy selectedStorageStrategy =
         ProjectStorageStrategy.markdownProjectStore,
     ProjectCreationPhase creationPhase = ProjectCreationPhase.projectType,
+    String selectedKnowledgeBaseBranchId = '',
     String selectedBookDeconstructionFollowupRouteId =
         BookDeconstructionProjectSetupResolverService.continuationRouteId,
     List<ProjectRuntimeBaselineDefinition> runtimeBaselineOptions =
@@ -487,6 +501,7 @@ class ProjectCreationController {
           selectedProjectTypeId: selectedProjectTypeId,
           selectedStorageStrategy: selectedStorageStrategy,
           creationPhase: creationPhase,
+          selectedKnowledgeBaseBranchId: selectedKnowledgeBaseBranchId,
           selectedBookDeconstructionFollowupRouteId:
               selectedBookDeconstructionFollowupRouteId,
           runtimeBaselineOptions: runtimeBaselineOptions,
@@ -534,15 +549,25 @@ class ProjectCreationController {
     if (creationPlan.request.runtimeBaselineId.trim().isNotEmpty) {
       return ProjectCreationPhase.runtimeBaseline;
     }
-    return currentPhase == ProjectCreationPhase.projectType
-        ? ProjectCreationPhase.storageStrategy
-        : currentPhase;
+    if (currentPhase == ProjectCreationPhase.projectType) {
+      return _projectCreationPhaseResolverService.nextPhaseAfter(
+            currentPhase: currentPhase,
+            projectTypeId: creationPlan.request.projectTypeId,
+            requiresRuntimeBaselineSelection: _requiresRuntimeBaseline(
+              creationPlan.request.projectTypeId,
+            ),
+          ) ??
+          ProjectCreationPhase.storageStrategy;
+    }
+    return currentPhase;
   }
 
   String _statusForNextPhase(ProjectCreationPhase nextPhase) {
     switch (nextPhase) {
       case ProjectCreationPhase.projectType:
         return '继续确认项目类型。';
+      case ProjectCreationPhase.knowledgeBaseBranch:
+        return '已选择资料知识库，继续确定使用结构化资料库还是语料库。';
       case ProjectCreationPhase.storageStrategy:
         return '已确认上一步，继续确定主存储策略。';
       case ProjectCreationPhase.bookDeconstructionFollowup:
@@ -556,6 +581,8 @@ class ProjectCreationController {
     switch (phase) {
       case ProjectCreationPhase.projectType:
         return '返回项目类型选择。';
+      case ProjectCreationPhase.knowledgeBaseBranch:
+        return '返回知识库分支选择。';
       case ProjectCreationPhase.storageStrategy:
         return '返回主存储策略选择。';
       case ProjectCreationPhase.bookDeconstructionFollowup:

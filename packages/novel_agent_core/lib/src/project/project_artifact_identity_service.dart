@@ -63,10 +63,10 @@ class ProjectArtifactIdentityService {
         normalized.startsWith('premise/sqlite_projection/')) {
       return ProjectArtifactIdentity(
         kindId: 'sqlite_projection',
-        shortLabel: 'SQLite 投影',
+        shortLabel: 'SQLite 资源',
         detailLabel: isDirectory || normalized == 'premise/sqlite_projection'
-            ? 'SQLite 投影目录 · 只读镜像 · 非事实源'
-            : 'SQLite 投影 · 只读镜像 · 非事实源',
+            ? 'SQLite 资源目录 · 只读镜像 · 非事实源'
+            : 'SQLite 资源 · 只读镜像 · 非事实源',
         isProjection: true,
       );
     }
@@ -173,21 +173,21 @@ class ProjectArtifactIdentityService {
       return const ProjectArtifactIdentity(
         kindId: 'knowledge',
         shortLabel: '信息资料',
-        detailLabel: '信息资料 · 研究/提取/知识卡等统一投影',
+        detailLabel: '信息资料 · 研究、提取、知识卡等统一收口',
       );
     }
     if (normalized == 'research' || normalized.startsWith('research/')) {
       return const ProjectArtifactIdentity(
         kindId: 'research',
         shortLabel: '研究资料',
-        detailLabel: '研究资料 · 资料研究与记录投影',
+        detailLabel: '研究资料 · 资料研究与记录收口',
       );
     }
     if (normalized.startsWith('.novel_agent/information/')) {
       return const ProjectArtifactIdentity(
         kindId: 'information_workspace',
         shortLabel: '信息资料',
-        detailLabel: '信息工作区 · 研究与提取投影',
+        detailLabel: '信息工作区 · 研究与提取收口',
       );
     }
     if (projectTypeId.trim() == 'sqlite_project_store') {

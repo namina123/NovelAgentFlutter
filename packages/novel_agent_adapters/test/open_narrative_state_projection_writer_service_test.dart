@@ -139,7 +139,7 @@ void main() {
         expect(await reviewsFile.exists(), isTrue);
         expect(
           await rulesFile.readAsString(),
-          contains('这份 Markdown 只是结构化事实源的可读投影'),
+          contains('这份 Markdown 只是结构化事实源的可读摘要'),
         );
 
         await rulesFile.delete();

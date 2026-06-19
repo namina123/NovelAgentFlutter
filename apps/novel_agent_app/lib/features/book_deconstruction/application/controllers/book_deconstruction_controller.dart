@@ -4,6 +4,7 @@ import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 
 import '../../presentation/contracts/book_deconstruction_action_handler.dart';
 import '../../presentation/models/book_deconstruction_view_data.dart';
+import '../models/book_deconstruction_operation_kind.dart';
 import '../models/book_deconstruction_snapshot.dart';
 import '../models/book_deconstruction_step_id.dart';
 import '../services/book_deconstruction_confirm_workflow_service.dart';
@@ -35,8 +36,7 @@ class BookDeconstructionController extends ChangeNotifier
     BookDeconstructionConfirmWorkflowService? confirmWorkflowService,
     BookDeconstructionFollowupOptionSelectionService?
     followupOptionSelectionService,
-    BookDeconstructionProjectSetupDocumentService?
-    projectSetupDocumentService,
+    BookDeconstructionProjectSetupDocumentService? projectSetupDocumentService,
     BookDeconstructionDerivedProjectCreationService?
     derivedProjectCreationService,
     Future<void> Function(ProjectDescriptor project, String preferredOpenPath)?
@@ -94,7 +94,10 @@ class BookDeconstructionController extends ChangeNotifier
   final BookDeconstructionConfirmWorkflowService _confirmWorkflowService;
   final BookDeconstructionDerivedProjectCreationService?
   _derivedProjectCreationService;
-  final Future<void> Function(ProjectDescriptor project, String preferredOpenPath)?
+  final Future<void> Function(
+    ProjectDescriptor project,
+    String preferredOpenPath,
+  )?
   _openDerivedProjectRequested;
   final String _projectsRootPath;
 
@@ -160,9 +163,13 @@ class BookDeconstructionController extends ChangeNotifier
       _rebuildView();
       return;
     }
-    _snapshot = _snapshot.copyWith(isLoading: true);
+    _snapshot = _snapshot.copyWith(
+      isLoading: true,
+      operationKind: BookDeconstructionOperationKind.importingSource,
+    );
     _statusMessage = '正在读取拆书源文件...';
     _rebuildView();
+    await Future<void>.delayed(const Duration(milliseconds: 16));
     try {
       final archiveResult = await _importArchiveWorkflowService.execute(
         project: project,
@@ -171,6 +178,7 @@ class BookDeconstructionController extends ChangeNotifier
       _snapshot = _invalidatePreview(
         _snapshot.copyWith(
           isLoading: false,
+          operationKind: BookDeconstructionOperationKind.idle,
           activeStepId: BookDeconstructionStepId.importSource,
           sourceAbsolutePath: archiveResult.sourceFilePath,
           sourceTitle: archiveResult.sourceTitle,
@@ -180,7 +188,10 @@ class BookDeconstructionController extends ChangeNotifier
       _statusMessage = '原文已归档到 ${archiveResult.archivePath}，可继续补充结构说明后生成预览。';
       _rebuildView();
     } catch (error) {
-      _snapshot = _snapshot.copyWith(isLoading: false);
+      _snapshot = _snapshot.copyWith(
+        isLoading: false,
+        operationKind: BookDeconstructionOperationKind.idle,
+      );
       _statusMessage = '读取源文件失败：$error';
       _rebuildView();
     }
@@ -244,11 +255,15 @@ class BookDeconstructionController extends ChangeNotifier
       _rebuildView();
       return;
     }
-    _snapshot = _snapshot.copyWith(isLoading: true);
+    _snapshot = _snapshot.copyWith(
+      isLoading: true,
+      operationKind: BookDeconstructionOperationKind.buildingPreview,
+    );
     _statusMessage = '正在生成结构化预览...';
     _rebuildView();
+    await Future<void>.delayed(const Duration(milliseconds: 16));
     try {
-      final buildResult = _draftBuilderService.build(
+      final buildResult = await _draftBuilderService.build(
         sourceTitle: _snapshot.sourceTitle,
         sourceContent: _snapshot.sourceContent,
         sourceAbsolutePath: _snapshot.sourceAbsolutePath,
@@ -264,6 +279,7 @@ class BookDeconstructionController extends ChangeNotifier
           .toSet();
       _snapshot = _snapshot.copyWith(
         isLoading: false,
+        operationKind: BookDeconstructionOperationKind.idle,
         activeStepId: BookDeconstructionStepId.previewStructure,
         buildResult: buildResult,
         selectedItemIds: selectedIds,
@@ -278,7 +294,10 @@ class BookDeconstructionController extends ChangeNotifier
           '已生成结构化预览，共 ${buildResult.applicationPlan.items.length} 项可应用。';
       _rebuildView();
     } catch (error) {
-      _snapshot = _snapshot.copyWith(isLoading: false);
+      _snapshot = _snapshot.copyWith(
+        isLoading: false,
+        operationKind: BookDeconstructionOperationKind.idle,
+      );
       _statusMessage = '生成结构化预览失败：$error';
       _rebuildView();
     }
@@ -342,9 +361,13 @@ class BookDeconstructionController extends ChangeNotifier
     if (!validation.isValid) {
       return;
     }
-    _snapshot = _snapshot.copyWith(isLoading: true);
+    _snapshot = _snapshot.copyWith(
+      isLoading: true,
+      operationKind: BookDeconstructionOperationKind.confirmingSelection,
+    );
     _statusMessage = '正在写入拆书预演纪要...';
     _rebuildView();
+    await Future<void>.delayed(const Duration(milliseconds: 16));
     try {
       final result = await _persistConfirmation(
         project: validation.project!,
@@ -353,7 +376,10 @@ class BookDeconstructionController extends ChangeNotifier
       _statusMessage = _confirmationSuccessMessage(result);
       _rebuildView();
     } catch (error) {
-      _snapshot = _snapshot.copyWith(isLoading: false);
+      _snapshot = _snapshot.copyWith(
+        isLoading: false,
+        operationKind: BookDeconstructionOperationKind.idle,
+      );
       _statusMessage = '写入拆书预演纪要失败：$error';
       _rebuildView();
     }
@@ -377,9 +403,13 @@ class BookDeconstructionController extends ChangeNotifier
       _rebuildView();
       return;
     }
-    _snapshot = _snapshot.copyWith(isLoading: true);
+    _snapshot = _snapshot.copyWith(
+      isLoading: true,
+      operationKind: BookDeconstructionOperationKind.creatingDerivedProject,
+    );
     _statusMessage = '正在派生并创建后续项目...';
     _rebuildView();
+    await Future<void>.delayed(const Duration(milliseconds: 16));
     try {
       if (_snapshot.confirmedPreviewPath.trim().isEmpty) {
         final confirmation = await _persistConfirmation(
@@ -387,6 +417,10 @@ class BookDeconstructionController extends ChangeNotifier
           buildResult: validation.buildResult!,
         );
         _statusMessage = _confirmationSuccessMessage(confirmation);
+        _snapshot = _snapshot.copyWith(
+          isLoading: true,
+          operationKind: BookDeconstructionOperationKind.creatingDerivedProject,
+        );
         _rebuildView();
       }
       final result = await creationService.execute(
@@ -396,7 +430,10 @@ class BookDeconstructionController extends ChangeNotifier
         selectedItemIds: _snapshot.selectedItemIds,
         selectedFollowupOptionId: _snapshot.selectedFollowupOptionId,
       );
-      _snapshot = _snapshot.copyWith(isLoading: false);
+      _snapshot = _snapshot.copyWith(
+        isLoading: false,
+        operationKind: BookDeconstructionOperationKind.idle,
+      );
       _statusMessage = '已派生项目：${result.project.name}';
       _rebuildView();
       await openDerivedProjectRequested(
@@ -404,7 +441,10 @@ class BookDeconstructionController extends ChangeNotifier
         result.preferredOpenPath,
       );
     } catch (error) {
-      _snapshot = _snapshot.copyWith(isLoading: false);
+      _snapshot = _snapshot.copyWith(
+        isLoading: false,
+        operationKind: BookDeconstructionOperationKind.idle,
+      );
       _statusMessage = '派生项目失败：$error';
       _rebuildView();
     }
@@ -499,6 +539,7 @@ class BookDeconstructionController extends ChangeNotifier
     await _syncWorkbenchResources();
     _snapshot = _snapshot.copyWith(
       isLoading: false,
+      operationKind: BookDeconstructionOperationKind.idle,
       activeStepId: BookDeconstructionStepId.confirmSelection,
       confirmedPreviewPath: result.previewPath,
     );

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../contracts/project_assets_action_handler.dart';
 import '../models/project_assets_view_data.dart';
+import '../models/project_rag_extraction_view_data.dart';
 
 class ProjectAssetsSidebarPanel extends StatelessWidget {
   const ProjectAssetsSidebarPanel({
@@ -16,13 +17,14 @@ class ProjectAssetsSidebarPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Column(
         children: [
           const TabBar(
             tabs: <Tab>[
               Tab(text: '图谱'),
               Tab(text: '时间线'),
+              Tab(text: '语料'),
             ],
           ),
           Expanded(
@@ -37,11 +39,50 @@ class ProjectAssetsSidebarPanel extends StatelessWidget {
                   onTimelineSelected: (timelineId) => actionHandler
                       .onProjectAssetsReferenceSelected('timeline:$timelineId'),
                 ),
+                _RagSummaryPane(viewData: viewData.ragExtraction),
               ],
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _RagSummaryPane extends StatelessWidget {
+  const _RagSummaryPane({required this.viewData});
+
+  final ProjectRagExtractionViewData viewData;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(12),
+      children: [
+        Text(
+          '语料摘要',
+          style: Theme.of(context).textTheme.titleSmall,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          viewData.corpusSummary.title,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          viewData.mountSummary.emptyMessage.isNotEmpty
+              ? viewData.mountSummary.emptyMessage
+              : '已挂载 ${viewData.mountSummary.bindingCount} 组语料。',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        if (viewData.corpusSummary.corpusId.trim().isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            'chunk ${viewData.corpusSummary.chunkCountLabel} · 章 ${viewData.corpusSummary.chapterCountLabel}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ],
     );
   }
 }

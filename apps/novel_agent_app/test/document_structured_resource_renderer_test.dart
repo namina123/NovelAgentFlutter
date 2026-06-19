@@ -6,7 +6,7 @@ import 'package:novel_agent_app/features/workbench/presentation/renderers/docume
 import 'package:novel_agent_app/features/workbench/presentation/widgets/document_workspace_display_mode.dart';
 
 void main() {
-  testWidgets('structured renderer shows sqlite projection metadata', (
+  testWidgets('structured renderer shows sqlite resource metadata', (
     WidgetTester tester,
   ) async {
     final renderer = DocumentStructuredResourceRenderer();
@@ -26,7 +26,7 @@ source_of_truth_paths:
 
 - 来源身份：SQLite 主事实源 / truth:sqlite_project_store / role:sqlite_projection / readonly
 ''',
-      status: 'SQLite 语义投影',
+      status: '结构化资料',
       displayMode: DocumentWorkspaceDisplayMode.source,
       canRender: false,
       isDirty: false,
@@ -45,11 +45,11 @@ source_of_truth_paths:
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('SQLite 语义投影'), findsWidgets);
-    expect(find.text('来源身份'), findsOneWidget);
-    expect(find.text('真相源标签'), findsOneWidget);
-    expect(find.text('只读投影状态'), findsOneWidget);
-    expect(find.text('sqlite_project_semantic_tree_index'), findsOneWidget);
-    expect(find.textContaining('SQLite 语义投影'), findsWidgets);
+    expect(find.textContaining('结构化资料'), findsWidgets);
+    expect(find.text('来源类型'), findsOneWidget);
+    expect(find.text('来源'), findsOneWidget);
+    expect(find.text('只读'), findsOneWidget);
+    expect(find.text('sqlite_project_semantic_tree_index'), findsNothing);
+    expect(find.textContaining('投影'), findsNothing);
   });
 }

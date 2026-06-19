@@ -2,11 +2,19 @@ import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../../../book_deconstruction/application/services/book_deconstruction_draft_builder_service.dart';
+import '../../../book_deconstruction/application/services/book_deconstruction_smart_import_agent_service.dart';
+import '../../../book_deconstruction/application/services/book_deconstruction_smart_import_orchestration_service.dart';
 import '../../../book_deconstruction/application/services/book_deconstruction_narrative_persistence_service.dart';
 import '../../../book_deconstruction/application/services/book_deconstruction_preview_markdown_service.dart';
+import '../../../workbench/application/controllers/generate_draft_use_case_factory.dart';
 import '../models/project_import_execution_result.dart';
 import '../models/project_import_request.dart';
+import 'delegating_project_source_original_archive_store.dart';
+import 'markdown_project_source_original_archive_store.dart';
 import 'project_import_action_policy_service.dart';
+import 'project_import_smart_analysis_agent_service.dart';
+import 'project_source_original_archive_store.dart';
+import 'sqlite_project_source_original_archive_store.dart';
 
 class ProjectImportExecutionService {
   ProjectImportExecutionService({
@@ -15,11 +23,15 @@ class ProjectImportExecutionService {
     required WriteProjectTextFileUseCase writeProjectTextFileUseCase,
     required BookDeconstructionNarrativePersistenceService
     narrativePersistenceService,
+    AppSettings? Function()? readSettings,
+    GenerateDraftUseCaseFactory? generateDraftUseCaseFactory,
     ReferenceSourceDocumentFileReaderService? sourceDocumentReaderService,
     ProjectImportActionPolicyService? actionPolicyService,
+    ProjectImportSmartAnalysisAgentService? smartAnalysisAgentService,
     BookDeconstructionDraftBuilderService? draftBuilderService,
     BookDeconstructionPreviewMarkdownService? previewMarkdownService,
     BookDeconstructionTargetPathService? targetPathService,
+    ProjectSourceOriginalArchiveStore? sourceOriginalArchiveStore,
   }) : _importProjectFilesUseCase = importProjectFilesUseCase,
        _projectToolHostPort = projectToolHostPort,
        _writeProjectTextFileUseCase = writeProjectTextFileUseCase,
@@ -27,15 +39,36 @@ class ProjectImportExecutionService {
        _sourceDocumentReaderService =
            sourceDocumentReaderService ??
            const ReferenceSourceDocumentFileReaderService(),
+       _readSettings = readSettings,
+       _generateDraftUseCaseFactory = generateDraftUseCaseFactory,
        _actionPolicyService =
            actionPolicyService ?? ProjectImportActionPolicyService(),
+       _smartAnalysisAgentService =
+           smartAnalysisAgentService ??
+           (readSettings != null && generateDraftUseCaseFactory != null
+               ? ProjectImportSmartAnalysisAgentService(
+                   readSettings: readSettings,
+                   generateDraftUseCaseFactory: generateDraftUseCaseFactory,
+                   projectToolHostPort: projectToolHostPort,
+                 )
+               : null),
        _draftBuilderService =
            draftBuilderService ?? BookDeconstructionDraftBuilderService(),
        _previewMarkdownService =
            previewMarkdownService ??
            const BookDeconstructionPreviewMarkdownService(),
        _targetPathService =
-           targetPathService ?? const BookDeconstructionTargetPathService();
+           targetPathService ?? const BookDeconstructionTargetPathService(),
+       _sourceOriginalArchiveStore =
+           sourceOriginalArchiveStore ??
+           DelegatingProjectSourceOriginalArchiveStore(
+             markdownStore: MarkdownProjectSourceOriginalArchiveStore(
+               projectToolHostPort: projectToolHostPort,
+             ),
+             sqliteStore: SqliteProjectSourceOriginalArchiveStore(
+               projectToolHostPort: projectToolHostPort,
+             ),
+           );
 
   final ImportProjectFilesUseCase _importProjectFilesUseCase;
   final ProjectToolHostPort _projectToolHostPort;
@@ -43,10 +76,14 @@ class ProjectImportExecutionService {
   final BookDeconstructionNarrativePersistenceService
   _narrativePersistenceService;
   final ReferenceSourceDocumentFileReaderService _sourceDocumentReaderService;
+  final AppSettings? Function()? _readSettings;
+  final GenerateDraftUseCaseFactory? _generateDraftUseCaseFactory;
   final ProjectImportActionPolicyService _actionPolicyService;
+  final ProjectImportSmartAnalysisAgentService? _smartAnalysisAgentService;
   final BookDeconstructionDraftBuilderService _draftBuilderService;
   final BookDeconstructionPreviewMarkdownService _previewMarkdownService;
   final BookDeconstructionTargetPathService _targetPathService;
+  final ProjectSourceOriginalArchiveStore _sourceOriginalArchiveStore;
 
   Future<ProjectImportExecutionResult> execute({
     required ProjectDescriptor project,
@@ -58,8 +95,8 @@ class ProjectImportExecutionService {
       requestedTargetDirectory: request.targetDirectory,
       requestedAutoDeconstruct: request.autoDeconstruct,
       requestedSmartAnalysis: request.smartAnalysis,
-      analysisAgentId: request.analysisAgentId,
-      analysisAgentGroupId: request.analysisAgentGroupId,
+      smartAnalysisProviderId: request.smartAnalysisProviderId,
+      smartAnalysisModelId: request.smartAnalysisModelId,
     );
     final importResult = await _importProjectFilesUseCase.execute(
       project: project,
@@ -94,10 +131,20 @@ class ProjectImportExecutionService {
       if (!policy.canAutoDeconstruct) {
         summaryParts.add(policy.outputHint);
       } else {
-        final autoResult = await _writeAutoDeconstructionPreview(
-          project: project,
-          sourcePath: request.sourcePaths.single.trim(),
-        );
+        final autoResult =
+            request.smartDeconstruction &&
+                project.projectType.trim() ==
+                    BookDeconstructionConstants.projectTypeId
+            ? await _writeSmartDeconstructionPreview(
+                project: project,
+                sourcePaths: request.sourcePaths,
+                providerId: request.smartDeconstructionProviderId,
+                modelId: request.smartDeconstructionModelId,
+              )
+            : await _writeAutoDeconstructionPreview(
+                project: project,
+                sourcePath: request.sourcePaths.single.trim(),
+              );
         autoDeconstructionApplied = true;
         autoDeconstructionPreviewPath = autoResult.previewPath;
         summaryParts.add('自动拆书预演纪要已写入 ${autoResult.previewPath}。');
@@ -112,8 +159,8 @@ class ProjectImportExecutionService {
       final smartResult = await _writeSmartAnalysisReport(
         project: project,
         importedPaths: importedPaths,
-        analysisAgentId: policy.analysisAgentId,
-        analysisAgentGroupId: policy.analysisAgentGroupId,
+        smartAnalysisProviderId: policy.smartAnalysisProviderId,
+        smartAnalysisModelId: policy.smartAnalysisModelId,
       );
       if (smartResult.reportPath.isNotEmpty) {
         smartAnalysisApplied = true;
@@ -153,7 +200,7 @@ class ProjectImportExecutionService {
         note: '自动拆书失败：所选文件不可读取或内容为空。',
       );
     }
-    final buildResult = _draftBuilderService.build(
+    final buildResult = await _draftBuilderService.build(
       sourceTitle: '',
       sourceContent: sourceContent,
       sourceAbsolutePath: sourcePath,
@@ -171,9 +218,10 @@ class ProjectImportExecutionService {
     if (project.projectType.trim() ==
         BookDeconstructionConstants.projectTypeId) {
       final archivePath = _targetPathService.sourceArchivePath(sourcePath);
-      await _writeProjectTextFileUseCase.execute(
+      await _sourceOriginalArchiveStore.persist(
         project: project,
         relativePath: archivePath,
+        title: _sourceTitleFromPath(sourcePath),
         content: sourceDocument.sourceText.trim(),
       );
       note = '原文文本归档已写入 $archivePath。';
@@ -197,11 +245,115 @@ class ProjectImportExecutionService {
     return _AutoDeconstructionOutcome(previewPath: previewPath, note: note);
   }
 
+  Future<_AutoDeconstructionOutcome> _writeSmartDeconstructionPreview({
+    required ProjectDescriptor project,
+    required List<String> sourcePaths,
+    required String providerId,
+    required String modelId,
+  }) async {
+    final readSettings = _readSettings;
+    final generateDraftUseCaseFactory = _generateDraftUseCaseFactory;
+    if (readSettings == null || generateDraftUseCaseFactory == null) {
+      return const _AutoDeconstructionOutcome(
+        previewPath: '',
+        note: '智能拆书未执行：缺少模型或运行时装配。',
+      );
+    }
+    if (providerId.trim().isEmpty || modelId.trim().isEmpty) {
+      return const _AutoDeconstructionOutcome(
+        previewPath: '',
+        note: '智能拆书未执行：需要先选择拆书专用模型。',
+      );
+    }
+    final orchestrationService =
+        BookDeconstructionSmartImportOrchestrationService(
+          agentService: BookDeconstructionSmartImportAgentService(
+            readSettings: readSettings,
+            generateDraftUseCaseFactory: generateDraftUseCaseFactory,
+          ),
+        );
+    final smartResult = await orchestrationService.execute(
+      project: project,
+      sourcePaths: sourcePaths,
+      providerId: providerId,
+      modelId: modelId,
+    );
+    if (smartResult.normalizedSourceText.trim().isEmpty) {
+      return _AutoDeconstructionOutcome(
+        previewPath: '',
+        note: smartResult.note.isNotEmpty
+            ? smartResult.note
+            : '智能拆书未产出有效的清洗文本。',
+      );
+    }
+    final buildResult = await _draftBuilderService.build(
+      sourceTitle: '',
+      sourceContent: smartResult.normalizedSourceText,
+      sourceAbsolutePath: sourcePaths.first.trim(),
+      operatorNotes: '',
+      styleSummary: '',
+      worldRulesText: '',
+      characterLinesText: '',
+      organizationLinesText: '',
+    );
+    final previewPath = _actionPolicyService.autoDeconstructionPreviewPath(
+      projectType: project.projectType,
+      sourcePath: sourcePaths.first.trim(),
+    );
+    var note = smartResult.note.trim().isEmpty
+        ? '智能拆书已完成。'
+        : smartResult.note.trim();
+    if (project.projectType.trim() ==
+        BookDeconstructionConstants.projectTypeId) {
+      final primarySourcePath = sourcePaths.first.trim();
+      final archivePath = _targetPathService.sourceArchivePath(
+        primarySourcePath,
+      );
+      await _sourceOriginalArchiveStore.persist(
+        project: project,
+        relativePath: archivePath,
+        title: _sourceTitleFromPath(primarySourcePath),
+        content: smartResult.normalizedSourceText.trim(),
+      );
+      note = note.isEmpty
+          ? '原文文本归档已写入 $archivePath。'
+          : '$note 原文文本归档已写入 $archivePath。';
+    }
+    final selectedItemIds = buildResult.applicationPlan.items
+        .map((item) => item.id)
+        .toSet();
+    final previewMarkdown = _previewMarkdownService.render(
+      buildResult: buildResult,
+      selectedItemIds: selectedItemIds,
+    );
+    await _writeProjectTextFileUseCase.execute(
+      project: project,
+      relativePath: previewPath,
+      content: previewMarkdown,
+    );
+    await _narrativePersistenceService.persist(
+      project: project,
+      narrativeArtifacts: buildResult.narrativeArtifacts,
+    );
+    final reportPath = 'analysis/book_deconstruction_smart_import_report.md';
+    if (smartResult.reportContent.trim().isNotEmpty) {
+      await _writeProjectTextFileUseCase.execute(
+        project: project,
+        relativePath: reportPath,
+        content: smartResult.reportContent,
+      );
+    }
+    if (smartResult.reportPath.isNotEmpty) {
+      note = '$note 报告已写入 $reportPath。';
+    }
+    return _AutoDeconstructionOutcome(previewPath: previewPath, note: note);
+  }
+
   Future<_SmartAnalysisOutcome> _writeSmartAnalysisReport({
     required ProjectDescriptor project,
     required List<String> importedPaths,
-    required String analysisAgentId,
-    required String analysisAgentGroupId,
+    required String smartAnalysisProviderId,
+    required String smartAnalysisModelId,
   }) async {
     // 中文注释: 一般项目导入的智能分析只消费已经落盘的导入文件，输出分类报告，不反向污染拆书主链。
     if (project.projectType.trim() ==
@@ -210,6 +362,28 @@ class ProjectImportExecutionService {
     }
     if (importedPaths.isEmpty) {
       return const _SmartAnalysisOutcome(note: '智能分析未执行：没有可分析的导入文件。');
+    }
+    var fallbackNote = '';
+    final smartAnalysisAgentService = _smartAnalysisAgentService;
+    if (smartAnalysisAgentService != null &&
+        smartAnalysisProviderId.trim().isNotEmpty &&
+        smartAnalysisModelId.trim().isNotEmpty) {
+      final smartAgentResult = await smartAnalysisAgentService.execute(
+        project: project,
+        importedPaths: importedPaths,
+        providerId: smartAnalysisProviderId,
+        modelId: smartAnalysisModelId,
+      );
+      if (smartAgentResult.applied &&
+          smartAgentResult.reportPath.trim().isNotEmpty) {
+        return _SmartAnalysisOutcome(
+          reportPath: smartAgentResult.reportPath,
+          note: smartAgentResult.note.trim().isEmpty
+              ? '智能分析已使用 ${smartAgentResult.resolvedModelId} 生成报告。'
+              : smartAgentResult.note,
+        );
+      }
+      fallbackNote = smartAgentResult.note.trim();
     }
     final analyses = <_ImportedFileAnalysis>[];
     for (final importedPath in importedPaths) {
@@ -221,7 +395,10 @@ class ProjectImportExecutionService {
         continue;
       }
       analyses.add(
-        _classifyImportedFile(relativePath: importedPath, content: content),
+        _classifyImportedFile(
+          relativePath: importedPath,
+          content: _classificationSample(content),
+        ),
       );
     }
     if (analyses.isEmpty) {
@@ -230,8 +407,8 @@ class ProjectImportExecutionService {
     final reportPath = 'analysis/project_import_analysis.md';
     final report = _renderSmartAnalysisReport(
       project: project,
-      analysisAgentId: analysisAgentId,
-      analysisAgentGroupId: analysisAgentGroupId,
+      smartAnalysisProviderId: smartAnalysisProviderId,
+      smartAnalysisModelId: smartAnalysisModelId,
       analyses: analyses,
     );
     await _writeProjectTextFileUseCase.execute(
@@ -241,7 +418,10 @@ class ProjectImportExecutionService {
     );
     return _SmartAnalysisOutcome(
       reportPath: reportPath,
-      note: _smartAnalysisSummary(analyses),
+      note: [
+        if (fallbackNote.isNotEmpty) fallbackNote,
+        _smartAnalysisSummary(analyses),
+      ].join(' '),
     );
   }
 
@@ -353,6 +533,16 @@ class ProjectImportExecutionService {
     );
   }
 
+  String _classificationSample(String content) {
+    final normalized = content.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+    if (normalized.length <= 16000) {
+      return normalized;
+    }
+    final head = normalized.substring(0, 12000);
+    final tail = normalized.substring(normalized.length - 4000);
+    return '$head\n...\n$tail';
+  }
+
   String _analysisReason(String category, String relativePath) {
     switch (category) {
       case 'novel_source_text':
@@ -372,19 +562,20 @@ class ProjectImportExecutionService {
 
   String _renderSmartAnalysisReport({
     required ProjectDescriptor project,
-    required String analysisAgentId,
-    required String analysisAgentGroupId,
+    required String smartAnalysisProviderId,
+    required String smartAnalysisModelId,
     required List<_ImportedFileAnalysis> analyses,
   }) {
     final buffer = StringBuffer()
       ..writeln('# 导入智能分析')
       ..writeln()
       ..writeln('- 项目类型: ${project.projectType}')
+      ..writeln('- 分析器: 内置导入分析智能体')
       ..writeln(
-        '- 智能体: ${analysisAgentId.trim().isEmpty ? '默认' : analysisAgentId.trim()}',
+        '- 模型: ${smartAnalysisModelId.trim().isEmpty ? '未指定，已回退到规则分析' : smartAnalysisModelId.trim()}',
       )
       ..writeln(
-        '- 智能体组: ${analysisAgentGroupId.trim().isEmpty ? '默认' : analysisAgentGroupId.trim()}',
+        '- Provider: ${smartAnalysisProviderId.trim().isEmpty ? '未指定' : smartAnalysisProviderId.trim()}',
       )
       ..writeln('- 分析文件数: ${analyses.length}')
       ..writeln();
@@ -421,6 +612,15 @@ class ProjectImportExecutionService {
       return cleanRoot;
     }
     return '$cleanRoot/$cleanRelative';
+  }
+
+  String _sourceTitleFromPath(String sourcePath) {
+    final normalized = sourcePath.trim().replaceAll('\\', '/');
+    if (normalized.isEmpty) {
+      return '原文归档';
+    }
+    final segments = normalized.split('/');
+    return segments.isEmpty ? normalized : segments.last;
   }
 }
 

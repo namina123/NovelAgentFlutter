@@ -3,6 +3,7 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 import '../../presentation/models/project_entry_view_data.dart';
 import '../../presentation/models/project_creation_phase.dart';
 import '../../presentation/models/project_deconstruction_followup_option_view_data.dart';
+import '../../presentation/models/project_knowledge_base_branch_option_view_data.dart';
 import '../../presentation/models/project_launcher_view_data.dart';
 import '../../presentation/models/project_runtime_baseline_option_view_data.dart';
 import '../../presentation/models/project_storage_strategy_option_view_data.dart';
@@ -40,6 +41,7 @@ class ProjectLauncherViewDataService {
     ProjectStorageStrategy selectedStorageStrategy =
         ProjectStorageStrategy.markdownProjectStore,
     ProjectCreationPhase creationPhase = ProjectCreationPhase.projectType,
+    String selectedKnowledgeBaseBranchId = '',
     String selectedBookDeconstructionFollowupRouteId =
         BookDeconstructionProjectSetupResolverService.continuationRouteId,
     List<ProjectRuntimeBaselineDefinition> runtimeBaselineOptions =
@@ -57,6 +59,11 @@ class ProjectLauncherViewDataService {
     final selectedProjectType = _projectTypeCatalogService.definitionOf(
       normalizedProjectTypeId,
     );
+    final normalizedKnowledgeBaseBranchId =
+        const KnowledgeBaseBranchCatalogService().normalize(
+          selectedProjectType.id,
+          selectedKnowledgeBaseBranchId,
+        );
     final options = _projectTypeCatalogService
         .enabledDefinitions()
         .map(_projectTypeOptionFrom)
@@ -93,7 +100,10 @@ class ProjectLauncherViewDataService {
           .toList(growable: false),
       status: status,
       draftTitle: draftTitle.trim().isEmpty
-          ? _projectTypeDefaultTitleOf(selectedProjectType)
+          ? _projectTypeDefaultTitleOf(
+              selectedProjectType,
+              knowledgeBaseBranchId: normalizedKnowledgeBaseBranchId,
+            )
           : draftTitle,
       projectTypeOptions: options,
       selectedProjectTypeId: normalizedProjectTypeId,
@@ -103,6 +113,11 @@ class ProjectLauncherViewDataService {
         selectedStorageStrategy,
       ),
       creationPhase: creationPhase,
+      knowledgeBaseBranchOptions: _knowledgeBaseBranchOptionsOf(
+        selectedProjectType.id,
+      ),
+      selectedKnowledgeBaseBranchId:
+          normalizedKnowledgeBaseBranchId,
       bookDeconstructionFollowupOptions: _bookDeconstructionFollowupOptionsOf(
         selectedProjectType.id,
       ),
@@ -150,6 +165,8 @@ class ProjectLauncherViewDataService {
         switch (creationPhase) {
           case ProjectCreationPhase.projectType:
             return '第$stepIndex步：选择项目类型';
+          case ProjectCreationPhase.knowledgeBaseBranch:
+            return '第$stepIndex步：选择知识库分支';
           case ProjectCreationPhase.storageStrategy:
             return '第$stepIndex步：选择主存储策略';
           case ProjectCreationPhase.bookDeconstructionFollowup:
@@ -175,6 +192,8 @@ class ProjectLauncherViewDataService {
         switch (creationPhase) {
           case ProjectCreationPhase.projectType:
             return '先决定这个项目按哪类创作策略起步，项目名会随默认模板联动。';
+          case ProjectCreationPhase.knowledgeBaseBranch:
+            return '资料知识库需要先决定走结构化知识沉淀，还是走语料构建。这一步会影响默认入口和后续工作面。';
           case ProjectCreationPhase.storageStrategy:
             return projectTypeId == 'book_deconstruction'
                 ? '确认拆书承接路线后，再确定这个项目的主存储策略，后续拆书资产与派生配置都会按这里落定。'
@@ -208,6 +227,25 @@ class ProjectLauncherViewDataService {
     ];
   }
 
+  List<ProjectKnowledgeBaseBranchOptionViewData> _knowledgeBaseBranchOptionsOf(
+    String projectTypeId,
+  ) {
+    final catalog = const KnowledgeBaseBranchCatalogService();
+    if (!catalog.usesBranchSelection(projectTypeId)) {
+      return const <ProjectKnowledgeBaseBranchOptionViewData>[];
+    }
+    return catalog
+        .definitions()
+        .map(
+          (definition) => ProjectKnowledgeBaseBranchOptionViewData(
+            id: definition.id,
+            title: definition.title,
+            description: definition.description,
+          ),
+        )
+        .toList(growable: false);
+  }
+
   ProjectTypeOptionViewData _projectTypeOptionFrom(
     ProjectTypeDefinition definition,
   ) {
@@ -218,25 +256,39 @@ class ProjectLauncherViewDataService {
     };
     final displayDescription = switch (definition.id) {
       'knowledge_base' =>
-        '适合导入、整理、审核和挂载参考资产，以 SQLite 作为主事实源，Markdown 仅保留投影与导出层。',
+        '适合导入、整理、审核和挂载参考资产，以 SQLite 作为主事实源，Markdown 主要保留展示与导出层。',
       _ => definition.description,
     };
     return ProjectTypeOptionViewData(
       id: definition.id,
       title: displayTitle,
       description: displayDescription,
-      defaultTitle: _projectTypeDefaultTitleOf(definition),
+      defaultTitle: _projectTypeDefaultTitleBase(definition),
       requiresRuntimeBaselineSelection:
           definition.requiresRuntimeBaselineSelection,
     );
   }
 
-  String _projectTypeDefaultTitleOf(ProjectTypeDefinition definition) {
+  String _projectTypeDefaultTitleBase(ProjectTypeDefinition definition) {
     // 中文注释: 默认标题也跟随资料知识库的治理语义单独收束，避免继续沿用普通知识库的旧称呼。
-    return switch (definition.id) {
-      'knowledge_base' => '未命名资料知识库',
-      _ => definition.defaultTitle,
-    };
+    return _projectTypeDefaultTitleOf(
+      definition,
+      knowledgeBaseBranchId: '',
+    );
+  }
+
+  String _projectTypeDefaultTitleOf(
+    ProjectTypeDefinition definition, {
+    required String knowledgeBaseBranchId,
+  }) {
+    if (definition.id == 'knowledge_base') {
+      return const KnowledgeBaseBranchCatalogService().isRagBranch(
+            knowledgeBaseBranchId,
+          )
+          ? '未命名语料库'
+          : '未命名资料知识库';
+    }
+    return definition.defaultTitle;
   }
 
   ProjectStorageStrategyOptionViewData _storageOptionFrom(
@@ -256,13 +308,13 @@ class ProjectLauncherViewDataService {
             id: 'sqlite_project_store',
             title: 'SQLite 参考资产库',
             description:
-                '主内容以结构化 SQLite 承载，便于导入、整理、审核和挂载参考资产，Markdown 仅保留投影或导出层。',
+                '主内容以结构化 SQLite 承载，便于导入、整理、审核和挂载参考资产，Markdown 主要保留展示或导出层。',
           );
         }
         return const ProjectStorageStrategyOptionViewData(
           id: 'sqlite_project_store',
           title: 'SQLite 项目',
-          description: '主内容以结构化存储为主，Markdown 作为投影或导出层，适合后续结构化扩展。',
+          description: '主内容以结构化存储为主，Markdown 作为展示或导出层，适合后续结构化扩展。',
         );
     }
   }

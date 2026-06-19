@@ -90,7 +90,7 @@ class ProjectReferenceExtractionExecutionService {
       );
     }
     final sourceFile = File(cleanSourcePath);
-    if (!sourceFile.existsSync()) {
+    if (!await sourceFile.exists()) {
       return ProjectReferenceExtractionExecutionResult(
         ok: false,
         didMutateProject: false,
@@ -137,7 +137,8 @@ class ProjectReferenceExtractionExecutionService {
           .normalizeProfileId(strategyProfileId);
       final gateway = _llmGatewayFactory(provider, settings.networkSettings);
       final runId = _runCoordinator.identityService.resolveRunId(
-        requestedRunId: 'reference_extraction_gui_${DateTime.now().microsecondsSinceEpoch}',
+        requestedRunId:
+            'reference_extraction_gui_${DateTime.now().microsecondsSinceEpoch}',
         now: DateTime.now(),
         fallbackPrefix: 'reference_extraction_gui',
       );
@@ -165,7 +166,9 @@ class ProjectReferenceExtractionExecutionService {
         request: request,
       );
       var continuationRound = 0;
-      while (_runCoordinator.publicationService.shouldContinueSemantically(result) &&
+      while (_runCoordinator.publicationService.shouldContinueSemantically(
+            result,
+          ) &&
           continuationRound < 2) {
         continuationRound += 1;
         request = ProjectReferenceExtractionRequest(
@@ -199,17 +202,22 @@ class ProjectReferenceExtractionExecutionService {
           request: request,
         );
       }
-      if (!_runCoordinator.publicationService.isPublishedProjectionResult(result)) {
+      if (!_runCoordinator.publicationService.isPublishedProjectionResult(
+        result,
+      )) {
         return ProjectReferenceExtractionExecutionResult(
           ok: false,
           didMutateProject: false,
-          statusMessage: _runCoordinator.publicationService.buildIncompleteStatusMessage(result),
+          statusMessage: _runCoordinator.publicationService
+              .buildIncompleteStatusMessage(result),
         );
       }
       return ProjectReferenceExtractionExecutionResult(
         ok: true,
         didMutateProject: true,
-        statusMessage: _runCoordinator.publicationService.buildSuccessMessage(result),
+        statusMessage: _runCoordinator.publicationService.buildSuccessMessage(
+          result,
+        ),
       );
     } catch (error) {
       return ProjectReferenceExtractionExecutionResult(

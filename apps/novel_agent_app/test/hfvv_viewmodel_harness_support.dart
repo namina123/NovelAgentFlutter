@@ -268,8 +268,6 @@ class HfvvAppShellHarness {
             .toList(growable: false),
         'information_summary': resources.informationViewData.summary,
         'information_usage_summary': resources.informationViewData.usageSummary,
-        'information_pending_count':
-            resources.informationViewData.pendingEntries.length,
       },
       'long_task_station': <String, Object?>{
         'status_message': longTaskView.statusMessage,

@@ -74,7 +74,7 @@ class ConversationOpeningStateSummary extends StatelessWidget {
           if (state.hasMissingRequirements) ...[
             const SizedBox(height: 8),
             Text(
-              '当前还缺：${state.missingRequirementTitles.join('、')}',
+              '还需补齐：${state.missingRequirementTitles.join('、')}',
               style: TextStyle(
                 color: colors.mutedTextColor,
                 fontSize: 11.5,

@@ -7,7 +7,6 @@ import '../../../../../app/layout/app_layout_scope.dart';
 import '../../../../../shared/widgets/panel_surface.dart';
 import '../contracts/conversation_action_handler.dart';
 import '../contracts/document_workspace_action_handler.dart';
-import '../contracts/pending_research_action_handler.dart';
 import '../contracts/resource_manager_action_handler.dart';
 import '../layout/workbench_surface_layout.dart';
 import '../layout/workbench_surface_layout_policy.dart';
@@ -317,14 +316,9 @@ class _ResourcePaneHost extends StatelessWidget {
     return ValueListenableBuilder<WorkbenchResourceViewData>(
       valueListenable: resourceListenable,
       builder: (context, viewData, _) {
-        final pendingResearchActionHandler =
-            actionHandler is PendingResearchActionHandler
-            ? actionHandler as PendingResearchActionHandler
-            : null;
         return ResourceManagerPanel(
           viewData: viewData,
           actionHandler: actionHandler,
-          pendingResearchActionHandler: pendingResearchActionHandler,
         );
       },
     );

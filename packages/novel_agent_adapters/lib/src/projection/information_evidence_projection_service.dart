@@ -283,7 +283,7 @@ class InformationEvidenceProjectionService {
     final userLines = <String>[
       if (statusLabel.isNotEmpty) '资料状态：$statusLabel',
       if (summary.isNotEmpty) summary,
-      if (projectionPaths.isNotEmpty) '资料投影：${projectionPaths.join(' | ')}',
+      if (projectionPaths.isNotEmpty) '资料摘要：${projectionPaths.join(' | ')}',
     ];
     final diagnosticLines = <String>[
       if (ValueReaders.stringValue(contract['risk_category']).trim().isNotEmpty)
@@ -421,7 +421,7 @@ class InformationEvidenceProjectionService {
         externalFactUnverifiedCount: externalFactUnverifiedCount,
       ),
       'executed_research' => '已执行资料研究，并更新相关资料摘要。',
-      'information_changed' => '已更新资料，可直接查看相关摘要投影。',
+      'information_changed' => '已更新资料，可直接查看相关摘要。',
       _ => '当前没有新的资料状态变化。',
     };
   }
@@ -475,7 +475,7 @@ class InformationEvidenceProjectionService {
           relativePath:
               InformationProjectionDocument.knowledgeSummaryRelativePath,
           status: 'projection',
-          subtitle: '可读资料摘要',
+          subtitle: '资料摘要',
           summary: '打开当前 knowledge 卡片的可读摘要。',
         ),
       InformationProjectionDocument.designSummaryRelativePath =>
@@ -484,7 +484,7 @@ class InformationEvidenceProjectionService {
           title: '设计元素摘要',
           relativePath: InformationProjectionDocument.designSummaryRelativePath,
           status: 'projection',
-          subtitle: '可读资料摘要',
+          subtitle: '资料摘要',
           summary: '打开当前 design element 的可读摘要。',
         ),
       InformationProjectionDocument.researchSummaryRelativePath =>
@@ -494,7 +494,7 @@ class InformationEvidenceProjectionService {
           relativePath:
               InformationProjectionDocument.researchSummaryRelativePath,
           status: 'projection',
-          subtitle: '可读资料摘要',
+          subtitle: '资料摘要',
           summary: '打开当前 research note 的可读摘要。',
         ),
       InformationProjectionDocument.referenceBoundaryRelativePath =>
@@ -504,7 +504,7 @@ class InformationEvidenceProjectionService {
           relativePath:
               InformationProjectionDocument.referenceBoundaryRelativePath,
           status: 'projection',
-          subtitle: '可读资料摘要',
+          subtitle: '资料摘要',
           summary: '打开当前 reference work 边界摘要。',
         ),
       _ => null,

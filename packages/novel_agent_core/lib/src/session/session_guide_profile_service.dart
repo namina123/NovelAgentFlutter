@@ -1,4 +1,5 @@
 import '../session/session_record_constants.dart';
+import '../project/knowledge_base_branch_catalog_service.dart';
 import 'session_guide_action.dart';
 import 'session_guide_profile.dart';
 
@@ -7,6 +8,7 @@ class SessionGuideProfileService {
 
   SessionGuideProfile resolve({
     required String projectType,
+    String projectBranchId = '',
     bool needsGoalSelection = true,
     bool isRunning = false,
   }) {
@@ -17,7 +19,10 @@ class SessionGuideProfileService {
       case 'long_novel':
         return _longNovelProfile(isRunning: isRunning);
       case 'knowledge_base':
-        return _knowledgeBaseProfile(isRunning: isRunning);
+        return _knowledgeBaseProfile(
+          projectBranchId: projectBranchId,
+          isRunning: isRunning,
+        );
       case 'short_collection':
         return _shortCollectionProfile(isRunning: isRunning);
       case 'novel':
@@ -138,7 +143,31 @@ class SessionGuideProfileService {
     );
   }
 
-  SessionGuideProfile _knowledgeBaseProfile({required bool isRunning}) {
+  SessionGuideProfile _knowledgeBaseProfile({
+    required String projectBranchId,
+    required bool isRunning,
+  }) {
+    if (const KnowledgeBaseBranchCatalogService().isRagBranch(
+      projectBranchId,
+    )) {
+      return SessionGuideProfile(
+        profileId: 'knowledge_base_rag',
+        title: '语料库工作台',
+        description: '语料库优先围绕语料导入、切分清洗、构建语料包和挂载验证展开，不把这里当作正式写作会话主面板。',
+        composerHint: isRunning
+            ? '运行中：补充切分要求、过滤约束或挂载目标，会在下一轮工具调用前送达。'
+            : '先进入语料提取面板，选择语料来源、构建方式或挂载目标。',
+        statusHint: '',
+        primaryActions: const <SessionGuideAction>[
+          SessionGuideAction(
+            id: 'guide.open_project_assets_rag',
+            commandId: 'guide.open_project_assets_rag',
+            title: '打开语料提取',
+            description: '进入语料提取与挂载面板，开始构建或检查当前资料库。',
+          ),
+        ],
+      );
+    }
     return SessionGuideProfile(
       profileId: 'knowledge_base',
       title: '知识库工作台',
@@ -173,18 +202,36 @@ class SessionGuideProfileService {
   SessionGuideProfile _bookDeconstructionProfile({required bool isRunning}) {
     return SessionGuideProfile(
       profileId: 'book_deconstruction',
-      title: '导入源文稿',
-      description: '拆书项目优先通过导入文件进入；导入后可以直接生成自动拆书预演纪要。',
+      title: '拆书工作台',
+      description: '先导入书籍原文；导入后应继续收束拆书分析资产，再进入续写或同人创作路线。',
       composerHint: isRunning
-          ? '整理中：可以继续补充角色、组织、世界规则和风格提要。'
-          : '先用导入文件选择源文稿；如果是单个文本或 Markdown 文件，可以直接启用自动拆书。',
-      statusHint: '自动拆书会先把结果写成项目内预演纪要，再进入后续真实应用链。',
+          ? '整理中：可以继续补充风格、世界规则、角色、剧情线或后续路线要求。'
+          : '先导入书籍，或继续分析数据、开始创作。',
+      statusHint: '导入后的原文、结构化拆书预览，以及角色/背景/风格/剧情线等分析资产都会保留在当前项目中。',
       primaryActions: const <SessionGuideAction>[
         SessionGuideAction(
           id: 'workspace.open_import_command',
           commandId: 'workspace.open_import_command',
-          title: '导入文件',
-          description: '选择源文稿并决定是否自动拆书；导入与预演纪要会统一回写当前项目。',
+          title: '导入书籍',
+          description: '选择源文稿或文件夹导入当前拆书项目，并为后续结构化分析准备原文材料。',
+        ),
+        SessionGuideAction(
+          id: 'session.goal.summarize_book.book_deconstruction',
+          commandId: 'session.goal',
+          title: '分析数据',
+          description: '围绕已导入原文整理结构、角色、背景、风格、剧情线与后续承接风险。',
+          payload: <String, Object?>{
+            'mode': SessionRecordConstants.modeSummarizeBook,
+          },
+        ),
+        SessionGuideAction(
+          id: 'session.goal.chapter_draft.book_deconstruction',
+          commandId: 'session.goal',
+          title: '开始创作',
+          description: '基于当前拆书结果进入续写或同人创作阶段，先产出正式可写内容。',
+          payload: <String, Object?>{
+            'mode': SessionRecordConstants.modeChapterDraft,
+          },
         ),
       ],
     );

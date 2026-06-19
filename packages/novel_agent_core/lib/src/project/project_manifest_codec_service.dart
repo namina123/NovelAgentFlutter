@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
+import 'knowledge_base_branch_catalog_service.dart';
 import 'project_manifest.dart';
 import 'project_runtime_baseline_catalog_service.dart';
 import 'project_storage_strategy.dart';
@@ -11,11 +12,15 @@ class ProjectManifestCodecService {
   ProjectManifestCodecService({
     ProjectTypeCatalogService? projectTypeCatalogService,
     ProjectRuntimeBaselineCatalogService? projectRuntimeBaselineCatalogService,
+    KnowledgeBaseBranchCatalogService? knowledgeBaseBranchCatalogService,
   }) : _projectTypeCatalogService =
            projectTypeCatalogService ?? const ProjectTypeCatalogService(),
        _projectRuntimeBaselineCatalogService =
            projectRuntimeBaselineCatalogService ??
-           const ProjectRuntimeBaselineCatalogService();
+           const ProjectRuntimeBaselineCatalogService(),
+       _knowledgeBaseBranchCatalogService =
+           knowledgeBaseBranchCatalogService ??
+           const KnowledgeBaseBranchCatalogService();
 
   static const String manifestRelativePath =
       '.novel_agent/project_manifest.json';
@@ -23,12 +28,14 @@ class ProjectManifestCodecService {
   final ProjectTypeCatalogService _projectTypeCatalogService;
   final ProjectRuntimeBaselineCatalogService
   _projectRuntimeBaselineCatalogService;
+  final KnowledgeBaseBranchCatalogService _knowledgeBaseBranchCatalogService;
 
   ProjectManifest create({
     required String title,
     required String projectType,
     ProjectStorageStrategy storageStrategy =
         ProjectStorageStrategy.markdownProjectStore,
+    String projectBranchId = '',
     String runtimeBaselineId = '',
   }) {
     // 中文注释: 新建 manifest 时在这里统一补齐标题和项目类型，避免不同创建入口写出不同结构。
@@ -42,10 +49,13 @@ class ProjectManifestCodecService {
     );
     final normalizedRuntimeBaselineId = _projectRuntimeBaselineCatalogService
         .normalizeForProjectType(normalizedType, runtimeBaselineId);
+    final normalizedProjectBranchId = _knowledgeBaseBranchCatalogService
+        .normalize(normalizedType, projectBranchId);
     return ProjectManifest(
       title: cleanTitle,
       projectType: normalizedType,
       storageStrategy: normalizedStorageStrategy,
+      projectBranchId: normalizedProjectBranchId,
       runtimeBaselineId: normalizedRuntimeBaselineId,
     );
   }
@@ -65,6 +75,7 @@ class ProjectManifestCodecService {
         title: fallbackTitle,
         projectType: fallbackProjectType,
         storageStrategy: fallbackStorageStrategy,
+        projectBranchId: '',
         runtimeBaselineId: fallbackRuntimeBaselineId,
       );
     }
@@ -74,6 +85,7 @@ class ProjectManifestCodecService {
         title: fallbackTitle,
         projectType: fallbackProjectType,
         storageStrategy: fallbackStorageStrategy,
+        projectBranchId: '',
         runtimeBaselineId: fallbackRuntimeBaselineId,
       );
     }
@@ -118,12 +130,17 @@ class ProjectManifestCodecService {
             fallbackRuntimeBaselineId,
           ),
         );
+    final projectBranchId = _knowledgeBaseBranchCatalogService.normalize(
+      normalizedType,
+      ValueReaders.stringValue(json['project_branch_id']),
+    );
     return ProjectManifest(
       title: title.trim().isEmpty
           ? _projectTypeCatalogService.defaultTitle(normalizedType)
           : title.trim(),
       projectType: normalizedType,
       storageStrategy: storageStrategy,
+      projectBranchId: projectBranchId,
       runtimeBaselineId: runtimeBaselineId,
       schemaVersion: ValueReaders.intValue(json['schema_version'], 1),
     );
@@ -138,6 +155,10 @@ class ProjectManifestCodecService {
         manifest.projectType,
       ),
       'storage_strategy': manifest.storageStrategy.id,
+      'project_branch_id': _knowledgeBaseBranchCatalogService.normalize(
+        manifest.projectType,
+        manifest.projectBranchId,
+      ),
       'runtime_baseline_id': _projectRuntimeBaselineCatalogService
           .normalizeForProjectType(
             manifest.projectType,

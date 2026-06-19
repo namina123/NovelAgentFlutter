@@ -44,7 +44,7 @@ class WorkbenchAgentPanel extends StatelessWidget {
           ),
           SizedBox(height: style.headerGap),
           ResourcePanelSection(
-            title: '当前协作摘要',
+            title: '协作概览',
             emphasized: true,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -63,6 +63,7 @@ class WorkbenchAgentPanel extends StatelessWidget {
                   title: '协作设置',
                   description:
                       viewData.projectAgentGroupPanel.actionDescription,
+                  showDescription: false,
                   onPressed: viewData.projectAgentGroupPanel.canConfigure
                       ? resourceHandler.onProjectAgentGroupRequested
                       : resourceHandler.onOpenProjectRequested,
@@ -72,7 +73,7 @@ class WorkbenchAgentPanel extends StatelessWidget {
           ),
           SizedBox(height: style.sectionGap),
           ResourcePanelSection(
-            title: '当前会话分工',
+            title: '当前分工',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -111,7 +112,7 @@ class WorkbenchAgentPanel extends StatelessWidget {
           ),
           SizedBox(height: style.sectionGap),
           ResourcePanelSection(
-            title: '智能体工作入口',
+            title: '工作入口',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: viewData.agentWorkspaceActions
@@ -130,6 +131,7 @@ class WorkbenchAgentPanel extends StatelessWidget {
                         icon: entry.value.icon,
                         title: entry.value.title,
                         description: entry.value.description,
+                        showDescription: false,
                         onPressed: _handlerForAction(entry.value.actionId),
                       ),
                     ),

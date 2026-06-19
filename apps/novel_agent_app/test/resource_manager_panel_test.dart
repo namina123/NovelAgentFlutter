@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novel_agent_app/app/theme/app_theme.dart';
 import 'package:novel_agent_app/features/workbench/application/services/workbench_pane_view_data_mapper_service.dart';
-import 'package:novel_agent_app/features/workbench/presentation/contracts/pending_research_action_handler.dart';
 import 'package:novel_agent_app/features/workbench/presentation/contracts/resource_manager_action_handler.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/project_create_request_view_data.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/workbench_information_view_data.dart';
@@ -160,14 +159,14 @@ void main() {
   );
 
   testWidgets(
-    'resource manager panel shows information projection entries and opens them',
+    'resource manager panel keeps information summaries out of file sidebar',
     (WidgetTester tester) async {
       final handler = _FakeResourceManagerActionHandler();
       const mapper = WorkbenchPaneViewDataMapperService();
       final baseViewData = WorkbenchViewData.initial().copyWith(
         projectName: '项目 A',
         informationViewData: const WorkbenchInformationViewData(
-          summary: '已整理 4 组资料摘要，4 项待确认',
+          summary: '已整理 4 组资料摘要',
           usageSummary: '本轮已使用：知识、巧思；本轮未使用：研究、引用边界',
           entries: <WorkbenchInformationEntryViewData>[
             WorkbenchInformationEntryViewData(
@@ -178,9 +177,9 @@ void main() {
               statusLabel: '知识',
               mountStatusLabel: '已挂载',
               usageLabel: '本轮已使用 1 次',
-              sourceOfTruthSummary: '真相源：project-information://knowledge_cards',
+              sourceOfTruthSummary: '来源：project-information://knowledge_cards',
               sourceIdentitySummary:
-                  '来源身份：来源-source-1 / `imports/reference/source-1.txt` / kind:`user`',
+                  '来源类型：来源-source-1 / `imports/reference/source-1.txt` / kind:`user`',
               actionLabel: '打开摘要',
               relativePath: 'knowledge/项目知识摘要.md',
             ),
@@ -188,7 +187,7 @@ void main() {
               id: 'design_projection',
               title: '巧思与设计',
               subtitle: '角色设计、结构巧思与创作方案',
-              summary: '查看 design element 的用户可读投影。',
+              summary: '查看 design element 的用户可读摘要。',
               statusLabel: '巧思',
               usageLabel: '本轮已使用 1 次',
               actionLabel: '打开摘要',
@@ -203,7 +202,7 @@ void main() {
               mountStatusLabel: '已挂载',
               usageLabel: '本轮未使用',
               riskLabel: '资料太旧',
-              sourceOfTruthSummary: '真相源：project-information://research_notes',
+              sourceOfTruthSummary: '来源：project-information://research_notes',
               actionLabel: '打开摘要',
               relativePath: 'research/资料研究摘要.md',
             ),
@@ -219,32 +218,6 @@ void main() {
               relativePath: 'references/引用作品边界.md',
             ),
           ],
-          pendingEntries: <WorkbenchInformationEntryViewData>[
-            WorkbenchInformationEntryViewData(
-              id: 'pending_research',
-              title: '待确认研究',
-              subtitle: '旧城钟楼在北境民俗中的象征意义',
-              summary: '这条外部研究请求还没完成确认，相关事实不应直接当作定论。',
-              statusLabel: '待确认',
-              usageLabel: '需要先明确是否继续研究',
-              riskLabel: '可能涉及事实缺口或外部资料风险',
-              actionLabel: '查看待确认',
-              relativePath:
-                  '.novel_agent/information/research_requests/research_request_1.json',
-              pendingResearchRequestId: 'research_request_1',
-            ),
-            WorkbenchInformationEntryViewData(
-              id: 'pending_knowledge',
-              title: '待确认知识',
-              subtitle: '王朝年号',
-              summary: '这条长期设定需要确认后再进入主知识层。',
-              statusLabel: '待确认',
-              usageLabel: '需要确认后才能稳定复用',
-              riskLabel: '会影响后续写作与信息激活',
-              actionLabel: '查看待确认',
-              relativePath: '.novel_agent/information/knowledge_cards/k1.json',
-            ),
-          ],
         ),
       );
 
@@ -258,7 +231,6 @@ void main() {
               child: ResourceManagerPanel(
                 viewData: mapper.toResourceViewData(baseViewData),
                 actionHandler: handler,
-                pendingResearchActionHandler: handler,
               ),
             ),
           ),
@@ -266,50 +238,21 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('资料与设定'), findsOneWidget);
-      expect(find.text('知识摘要'), findsOneWidget);
-      expect(find.text('巧思与设计'), findsOneWidget);
-      expect(find.text('研究摘要'), findsOneWidget);
-      expect(find.text('引用边界'), findsOneWidget);
-      expect(find.text('待确认'), findsAtLeastNWidgets(1));
-      expect(find.text('待确认知识'), findsOneWidget);
-      expect(find.text('本轮已使用：知识、巧思；本轮未使用：研究、引用边界'), findsOneWidget);
-      expect(
-        find.text('真相源：project-information://knowledge_cards'),
-        findsOneWidget,
-      );
-      expect(find.textContaining('来源-source-1'), findsOneWidget);
-      expect(find.text('已挂载'), findsAtLeastNWidgets(1));
-
-      await tester.tap(find.widgetWithText(TextButton, '打开摘要').first);
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(
-        find.widgetWithText(TextButton, '查看待确认').first,
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(TextButton, '查看待确认').first);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('确认').first);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('拒绝').first);
-      await tester.pumpAndSettle();
-
-      expect(handler.selectedEntries, <String>[
-        'knowledge/项目知识摘要.md',
-        '.novel_agent/information/research_requests/research_request_1.json',
-      ]);
-      expect(handler.approvedRequestIds, <String>['research_request_1']);
-      expect(handler.rejectedRequestIds, <String>['research_request_1']);
+      expect(find.text('资料与设定'), findsNothing);
+      expect(find.text('知识摘要'), findsNothing);
+      expect(find.text('巧思与设计'), findsNothing);
+      expect(find.text('研究摘要'), findsNothing);
+      expect(find.text('引用边界'), findsNothing);
+      expect(find.text('待确认知识'), findsNothing);
+      expect(find.text('浏览'), findsOneWidget);
     },
   );
 }
 
 class _FakeResourceManagerActionHandler
-    implements ResourceManagerActionHandler, PendingResearchActionHandler {
+    implements ResourceManagerActionHandler {
   int createFolderRequestedCount = 0;
   final List<String> selectedEntries = <String>[];
-  final List<String> approvedRequestIds = <String>[];
-  final List<String> rejectedRequestIds = <String>[];
 
   @override
   void onAgentEcosystemRequested() {}
@@ -362,6 +305,9 @@ class _FakeResourceManagerActionHandler
   void onProjectAssetsRequested() {}
 
   @override
+  void onProjectRagRequested() {}
+
+  @override
   void onProjectCreationBackRequested() {}
 
   @override
@@ -405,15 +351,10 @@ class _FakeResourceManagerActionHandler
   ) {}
 
   @override
+  void onWorkspaceImportDirectoryPickRequested(
+    WorkspaceCommandRequestViewData request,
+  ) {}
+
+  @override
   void onWorkspaceCommandSubmitted(WorkspaceCommandRequestViewData request) {}
-
-  @override
-  Future<void> onPendingResearchApproved(String requestId) async {
-    approvedRequestIds.add(requestId);
-  }
-
-  @override
-  Future<void> onPendingResearchRejected(String requestId) async {
-    rejectedRequestIds.add(requestId);
-  }
 }

@@ -40,6 +40,7 @@ import '../services/conversation_session_preflight_service.dart';
 import '../services/conversation_request_runtime_service.dart';
 import '../services/conversation_session_state_service.dart';
 import '../services/conversation_streaming_state_service.dart';
+import '../services/conversation_tool_payload_compaction_service.dart';
 import '../services/conversation_user_visible_text_service.dart';
 import '../services/workbench_primary_action_service.dart';
 import '../services/workbench_opening_launch_bridge_service.dart';
@@ -122,6 +123,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
     toolPermissionSettingsResolverService,
     required ProjectToolPermissionApprovalRecordService
     toolPermissionApprovalRecordService,
+    ConversationToolPayloadCompactionService? toolPayloadCompactionService,
     ConversationAgentSelectorViewDataService?
     conversationAgentSelectorViewDataService,
     ConversationRequestAgentResolverService?
@@ -200,16 +202,19 @@ class WorkbenchConversationController implements ConversationActionHandler {
            const ProjectToolPermissionSettingsResolverService(),
        _toolPermissionApprovalRecordService =
            toolPermissionApprovalRecordService,
+       _toolPayloadCompactionService =
+           toolPayloadCompactionService ??
+           const ConversationToolPayloadCompactionService(),
        _conversationAgentSelectorViewDataService =
            conversationAgentSelectorViewDataService ??
            const ConversationAgentSelectorViewDataService(),
        _conversationRequestAgentResolverService =
            conversationRequestAgentResolverService ??
            const ConversationRequestAgentResolverService(),
-        _conversationGroupSelectorViewDataService =
-            conversationGroupSelectorViewDataService ??
-            const ConversationGroupSelectorViewDataService(),
-        _announce = announce {
+       _conversationGroupSelectorViewDataService =
+           conversationGroupSelectorViewDataService ??
+           const ConversationGroupSelectorViewDataService(),
+       _announce = announce {
     _openingFlowController = ConversationOpeningFlowController(this);
     _attachmentFacade = ConversationAttachmentFacade(this);
   }
@@ -279,6 +284,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
   _toolPermissionSettingsResolverService;
   final ProjectToolPermissionApprovalRecordService
   _toolPermissionApprovalRecordService;
+  final ConversationToolPayloadCompactionService _toolPayloadCompactionService;
   final ConversationAgentSelectorViewDataService
   _conversationAgentSelectorViewDataService;
   final ConversationRequestAgentResolverService
@@ -384,6 +390,8 @@ class WorkbenchConversationController implements ConversationActionHandler {
     );
     final guide = _conversationGuideViewDataService.build(
       projectType: _workspaceController.currentProject?.projectType ?? 'novel',
+      projectBranchId:
+          _workspaceController.currentProject?.projectBranchId ?? '',
       needsGoalSelection: _needsGoalSelection(activeState),
       isGenerating: base.isGenerating,
       openingMaturity: openingMaturity,
@@ -925,8 +933,11 @@ class WorkbenchConversationController implements ConversationActionHandler {
           if (!_isActiveRequestHandle(requestHandle)) {
             return;
           }
+          final uiProgress = _toolPayloadCompactionService.compactProgress(
+            progress,
+          );
           final streamingState = _conversationStreamingStateService
-              .stateWithProgress(streamingBaseState, progress);
+              .stateWithProgress(streamingBaseState, uiProgress);
           streamingBaseState = streamingState;
           _replaceConversationSession(
             streamingState,
@@ -938,8 +949,11 @@ class WorkbenchConversationController implements ConversationActionHandler {
               current,
               activeState: streamingState,
               contextSummary: streamingContextSummary,
-              generationStatus: _streamingGenerationStatus(provider, progress),
-              toolCoreStatus: _streamingToolStatus(progress),
+              generationStatus: _streamingGenerationStatus(
+                provider,
+                uiProgress,
+              ),
+              toolCoreStatus: _streamingToolStatus(uiProgress),
             ),
           );
         },
@@ -1233,6 +1247,9 @@ class WorkbenchConversationController implements ConversationActionHandler {
       case 'guide.open_book_deconstruction_workbench':
         _workspaceController.onImportRequested();
         return true;
+      case 'guide.open_project_assets_rag':
+        _workspaceController.onProjectAssetsRequested();
+        return true;
       case 'guide.open_mode_guidance':
       case 'opening.open_mode_guidance':
       case 'opening.continue_mode_guidance':
@@ -1321,10 +1338,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
           'seed_autopilot_novel',
         );
         final result = await _openingLaunchBridgeService
-            .createWorkflowFromModeGuidance(
-              project,
-              modeId: modeId,
-            );
+            .createWorkflowFromModeGuidance(project, modeId: modeId);
         _announce(_resultMessage(result, success: '长任务队列已根据模式引导生成。'));
         return true;
       case 'opening.choose_long_task_mode':
@@ -1420,10 +1434,13 @@ class WorkbenchConversationController implements ConversationActionHandler {
       ),
     );
     try {
-      final result = await _openingLaunchBridgeService.launchLongTaskFromModeGuidance(
-        project,
-        modeId: _stringValue(action.payload['mode_id'] ?? action.payload['mode']),
-      );
+      final result = await _openingLaunchBridgeService
+          .launchLongTaskFromModeGuidance(
+            project,
+            modeId: _stringValue(
+              action.payload['mode_id'] ?? action.payload['mode'],
+            ),
+          );
       if (!ValueReaders.boolValue(result['ok'], true)) {
         _announce(_resultMessage(result, success: '启动长任务失败。'));
         return;
@@ -1766,6 +1783,11 @@ class WorkbenchConversationController implements ConversationActionHandler {
   }) async {
     // 中文注释: 成功后的文档落盘、资源刷新和右栏回写统一收口，避免再次散回发送主流程。
     final activeSessionId = _sessionIdOf(streamingBaseState);
+    _updateTransientGenerationStatus(
+      generationStatus: '正在整理工具结果...',
+      toolCoreStatus: '正在收口工具返回与待确认状态',
+    );
+    await _yieldToUi();
     final persistedApprovals = await _toolPermissionApprovalRecordService
         .persistPendingApprovalsForExecutedTools(
           project,
@@ -1779,10 +1801,18 @@ class WorkbenchConversationController implements ConversationActionHandler {
         persistedApprovals['executed_tools'],
       ),
     );
+    final uiResult = _toolPayloadCompactionService.compactResult(
+      effectiveResult,
+    );
+    _updateTransientGenerationStatus(
+      generationStatus: '正在回写会话状态...',
+      toolCoreStatus: '工具结果已返回，正在整理展示',
+    );
+    await _yieldToUi();
     final assistantState = _conversationSessionStateService
         .stateWithAssistantResult(
           streamingBaseState,
-          effectiveResult,
+          uiResult,
           strategySettings: contextStrategySettings,
           modelProfile: runtimeProfile,
         );
@@ -1805,6 +1835,11 @@ class WorkbenchConversationController implements ConversationActionHandler {
       stagedAutosaveFallback = _workspaceController
           .stageGeneratedDraftOnActiveDocument(effectiveResult.draftMarkdown);
     }
+    _updateTransientGenerationStatus(
+      generationStatus: '正在回写项目状态...',
+      toolCoreStatus: '正在同步正文与资料变更',
+    );
+    await _yieldToUi();
     final runtimeArtifacts = await _finalizeConversationDraftRuntime(
       project: project,
       result: effectiveResult,
@@ -1828,6 +1863,11 @@ class WorkbenchConversationController implements ConversationActionHandler {
         effectiveResult.writtenPaths.isNotEmpty ||
         effectiveResult.changedPaths.isNotEmpty ||
         runtimeArtifacts.changedPaths.isNotEmpty;
+    _updateTransientGenerationStatus(
+      generationStatus: shouldReloadResources ? '正在刷新资源与文档...' : '正在整理最终结果...',
+      toolCoreStatus: shouldReloadResources ? '正在同步工作区视图' : '正在完成本轮会话',
+    );
+    await _yieldToUi();
     final resourceEntries = shouldReloadResources
         ? await _workspaceController.reloadResourceEntries(
             selectedId: selectedResourcePath,
@@ -2054,6 +2094,23 @@ class WorkbenchConversationController implements ConversationActionHandler {
     );
   }
 
+  Future<void> _yieldToUi() {
+    return Future<void>.delayed(Duration.zero);
+  }
+
+  void _updateTransientGenerationStatus({
+    required String generationStatus,
+    required String toolCoreStatus,
+  }) {
+    _mutateWorkbench(
+      (current) => current.copyWith(
+        isGenerating: true,
+        generationStatus: generationStatus,
+        toolCoreStatus: toolCoreStatus,
+      ),
+    );
+  }
+
   String _resolvedPersistedOutputPath({
     required DraftGenerationResult result,
     required String savedPath,
@@ -2224,5 +2281,3 @@ class WorkbenchConversationController implements ConversationActionHandler {
     return const <String, Object?>{};
   }
 }
-
-

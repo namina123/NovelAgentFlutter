@@ -54,6 +54,7 @@ class LocalProjectRepository implements ProjectRepository {
       rootPath: directory.path,
       projectType: manifest.projectType,
       storageStrategy: storageStrategy,
+      projectBranchId: manifest.projectBranchId,
       runtimeBaselineId: manifest.runtimeBaselineId,
     );
   }

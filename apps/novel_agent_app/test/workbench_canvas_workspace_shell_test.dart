@@ -209,6 +209,9 @@ class _FakeResourceHandler implements ResourceManagerActionHandler {
   void onProjectAssetsRequested() {}
 
   @override
+  void onProjectRagRequested() {}
+
+  @override
   void onProjectCreationBackRequested() {}
 
   @override
@@ -246,6 +249,11 @@ class _FakeResourceHandler implements ResourceManagerActionHandler {
 
   @override
   void onWorkspaceImportFilesPickRequested(
+    WorkspaceCommandRequestViewData request,
+  ) {}
+
+  @override
+  void onWorkspaceImportDirectoryPickRequested(
     WorkspaceCommandRequestViewData request,
   ) {}
 

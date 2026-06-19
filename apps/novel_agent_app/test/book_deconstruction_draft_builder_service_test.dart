@@ -3,10 +3,10 @@ import 'package:novel_agent_app/features/book_deconstruction/application/service
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 void main() {
-  test('拆书草稿构建服务会把源文稿收束成结构化预览与应用计划', () {
+  test('拆书草稿构建服务会把源文稿收束成结构化预览与应用计划', () async {
     final service = BookDeconstructionDraftBuilderService();
 
-    final result = service.build(
+    final result = await service.build(
       sourceTitle: '海上城邦',
       sourceContent: '第一章 港口风暴\n主角在港口被迫卷入一场追捕。\n\n第二章 议会阴影\n城邦议会开始浮出水面。',
       sourceAbsolutePath: 'D:/books/harbor_story.txt',

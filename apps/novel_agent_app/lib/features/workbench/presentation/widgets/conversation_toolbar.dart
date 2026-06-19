@@ -10,12 +10,14 @@ class ConversationToolbar extends StatelessWidget {
     required this.title,
     required this.onHistoryRequested,
     required this.onNewSessionRequested,
+    this.historyOpen = false,
     this.minimal = false,
   });
 
   final String title;
   final VoidCallback onHistoryRequested;
   final VoidCallback onNewSessionRequested;
+  final bool historyOpen;
   final bool minimal;
 
   @override
@@ -50,6 +52,9 @@ class ConversationToolbar extends StatelessWidget {
                 ToolbarIconButton(
                   icon: Icons.history_rounded,
                   tooltip: '会话历史',
+                  tone: historyOpen
+                      ? ToolbarIconTone.accent
+                      : ToolbarIconTone.neutral,
                   dense: true,
                   onPressed: onHistoryRequested,
                 ),

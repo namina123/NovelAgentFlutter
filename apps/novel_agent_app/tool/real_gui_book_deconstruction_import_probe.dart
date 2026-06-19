@@ -149,7 +149,7 @@ Future<JsonMap> runRealGuiBookDeconstructionImportProbe({
       '霍格沃茨与原作组织关系保留来源身份。',
     );
     await bookController.onBookDeconstructionBuildPreviewRequested();
-    final bookBuildResult = draftBuilderService.build(
+    final bookBuildResult = await draftBuilderService.build(
       sourceTitle: bookController.viewData.sourceTitle,
       sourceContent: bookController.viewData.sourceContent,
       sourceAbsolutePath: bookController.viewData.sourceAbsolutePath,
@@ -219,8 +219,8 @@ Future<JsonMap> runRealGuiBookDeconstructionImportProbe({
       requestedTargetDirectory: 'assets',
       requestedAutoDeconstruct: false,
       requestedSmartAnalysis: true,
-      analysisAgentId: 'probe-analysis-agent',
-      analysisAgentGroupId: 'probe-analysis-group',
+      smartAnalysisProviderId: 'probe-provider',
+      smartAnalysisModelId: 'probe-model',
     );
     final generalImportCommand = generalCommandService.build(
       projectType: 'novel',
@@ -228,8 +228,8 @@ Future<JsonMap> runRealGuiBookDeconstructionImportProbe({
       requestedTargetDirectory: 'assets',
       requestedAutoDeconstruct: false,
       requestedSmartAnalysis: true,
-      analysisAgentId: 'probe-analysis-agent',
-      analysisAgentGroupId: 'probe-analysis-group',
+      smartAnalysisProviderId: 'probe-provider',
+      smartAnalysisModelId: 'probe-model',
     );
 
     final singleImportResult =
@@ -248,8 +248,8 @@ Future<JsonMap> runRealGuiBookDeconstructionImportProbe({
             targetDirectory: 'assets/single',
             autoDeconstruct: false,
             smartAnalysis: true,
-            analysisAgentId: 'probe-analysis-agent',
-            analysisAgentGroupId: 'probe-analysis-group',
+            smartAnalysisProviderId: 'probe-provider',
+            smartAnalysisModelId: 'probe-model',
           ),
         );
 
@@ -293,8 +293,8 @@ Future<JsonMap> runRealGuiBookDeconstructionImportProbe({
             targetDirectory: 'assets/bundle',
             autoDeconstruct: false,
             smartAnalysis: true,
-            analysisAgentId: 'probe-analysis-agent',
-            analysisAgentGroupId: 'probe-analysis-group',
+            smartAnalysisProviderId: 'probe-provider',
+            smartAnalysisModelId: 'probe-model',
           ),
         );
 

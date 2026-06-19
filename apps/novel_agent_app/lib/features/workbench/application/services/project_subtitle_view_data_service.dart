@@ -29,7 +29,7 @@ class ProjectSubtitleViewDataService {
     if (baseline != null) {
       segments.add(baseline.title);
     }
-    if (runtimeMode.isNotEmpty) {
+    if (runtimeMode.isNotEmpty && _shouldExposeRuntimeMode(project.projectType)) {
       segments.add(_runtimeLabelService.runtimeModeLabel(runtimeMode));
     }
     return segments.where((item) => item.trim().isNotEmpty).join(' · ');
@@ -41,12 +41,24 @@ class ProjectSubtitleViewDataService {
         return '普通小说项目';
       case 'long_novel':
         return '长篇项目';
+      case 'knowledge_base':
+        return '资料知识库';
       case 'short_story_collection':
         return '短篇集项目';
       case 'book_analysis':
+      case 'book_deconstruction':
         return '拆书项目';
       default:
         return projectType.trim().isEmpty ? '项目' : projectType.trim();
+    }
+  }
+
+  bool _shouldExposeRuntimeMode(String projectType) {
+    switch (projectType.trim()) {
+      case 'knowledge_base':
+        return false;
+      default:
+        return true;
     }
   }
 }

@@ -1,4 +1,5 @@
 import 'package:novel_agent_core/novel_agent_core.dart';
+import 'book_deconstruction_operation_kind.dart';
 import 'book_deconstruction_step_id.dart';
 
 class BookDeconstructionSnapshot {
@@ -14,6 +15,7 @@ class BookDeconstructionSnapshot {
     required this.characterLinesText,
     required this.organizationLinesText,
     required this.isLoading,
+    required this.operationKind,
     required this.buildResult,
     required this.selectedItemIds,
     required this.selectedFollowupOptionId,
@@ -33,6 +35,7 @@ class BookDeconstructionSnapshot {
       characterLinesText: '',
       organizationLinesText: '',
       isLoading: false,
+      operationKind: BookDeconstructionOperationKind.idle,
       buildResult: null,
       selectedItemIds: <String>{},
       selectedFollowupOptionId: '',
@@ -51,6 +54,7 @@ class BookDeconstructionSnapshot {
   final String characterLinesText;
   final String organizationLinesText;
   final bool isLoading;
+  final String operationKind;
   final BookDeconstructionDraftBuildResult? buildResult;
   final Set<String> selectedItemIds;
   final String selectedFollowupOptionId;
@@ -68,6 +72,7 @@ class BookDeconstructionSnapshot {
     String? characterLinesText,
     String? organizationLinesText,
     bool? isLoading,
+    String? operationKind,
     Object? buildResult = _buildResultSentinel,
     Set<String>? selectedItemIds,
     String? selectedFollowupOptionId,
@@ -87,6 +92,9 @@ class BookDeconstructionSnapshot {
       organizationLinesText:
           organizationLinesText ?? this.organizationLinesText,
       isLoading: isLoading ?? this.isLoading,
+      operationKind: operationKind == null
+          ? this.operationKind
+          : BookDeconstructionOperationKind.normalize(operationKind),
       buildResult: identical(buildResult, _buildResultSentinel)
           ? this.buildResult
           : buildResult as BookDeconstructionDraftBuildResult?,

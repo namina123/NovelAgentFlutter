@@ -13,7 +13,7 @@ class DocumentStructuredResourceRenderer implements DocumentResourceRenderer {
 
   @override
   Widget build(BuildContext context, DocumentResourceRenderRequest request) {
-    // 中文注释: 结构化渲染器负责把 SQLite 投影文档和数据库型资源说明白，而不是只给一块泛化的结构摘要。
+    // 中文注释: 结构化渲染器负责把 SQLite 结构化资源和数据库型资源说明白，而不是只给一块泛化的结构摘要。
     final metadata = _metadataFrom(request);
     final surface = context.novelThemeSurfaces.panel;
     final extension = request.fileExtension.isEmpty
@@ -50,21 +50,13 @@ class DocumentStructuredResourceRenderer implements DocumentResourceRenderer {
                 ),
                 if (metadata.sourceIdentityLabel.isNotEmpty)
                   _StructuredFactRow(
-                    label: '来源身份',
+                    label: '来源类型',
                     value: metadata.sourceIdentityLabel,
                   ),
                 if (metadata.truthLabel.isNotEmpty)
-                  _StructuredFactRow(
-                    label: '真相源标签',
-                    value: metadata.truthLabel,
-                  ),
-                if (metadata.projectionId.isNotEmpty)
-                  _StructuredFactRow(
-                    label: '投影 ID',
-                    value: metadata.projectionId,
-                  ),
+                  _StructuredFactRow(label: '来源', value: metadata.truthLabel),
                 _StructuredFactRow(
-                  label: '只读投影状态',
+                  label: '只读',
                   value: metadata.isProjectionOnly ? '是' : '否',
                 ),
                 _StructuredFactRow(
@@ -104,22 +96,22 @@ _StructuredResourceMetadata _metadataFrom(
     'premise/sqlite_projection/',
   );
   final sourceIdentityLabel = isProjectionDocument
-      ? 'SQLite 语义投影'
+      ? '结构化资料摘要'
       : isSqliteFile
-      ? 'SQLite 数据库文件'
+      ? '项目资料库文件'
       : isSqliteProjectionSurface
-      ? 'SQLite 语义树投影'
+      ? '结构化资料目录'
       : '';
   final truthLabel = sourceOfTruthPaths.isEmpty
-      ? (isSqliteFile ? 'SQLite 主事实源' : '')
+      ? (isSqliteFile ? '项目资料库主文件' : '')
       : sourceOfTruthPaths.join(' / ');
   final summaryLabel = isProjectionDocument
-      ? '当前资源是 SQLite 语义投影，可先确认来源身份、真相源标签与只读投影状态，再决定是否继续看关联内容。'
+      ? '这是当前项目整理出的结构化资料摘要，可以先确认来源、是否可直接编辑，以及它对应的原始资料位置。'
       : isSqliteFile
-      ? '当前资源是 SQLite 结构化文件，只读查看更适合先确认其真相源与结构位置。'
+      ? '当前资源是项目资料库文件，适合先确认来源和存放位置，再决定是否继续查看。'
       : '当前资源正在以结构摘要方式查看，适合先确认资源类型、路径和同步状态，再决定是否切回正文或继续查看关联内容。';
   return _StructuredResourceMetadata(
-    statusLabel: isProjectionDocument ? 'SQLite 语义投影' : '结构摘要',
+    statusLabel: isProjectionDocument ? '结构化资料' : '结构摘要',
     summaryLabel: summaryLabel,
     sourceIdentityLabel: sourceIdentityLabel,
     truthLabel: truthLabel,

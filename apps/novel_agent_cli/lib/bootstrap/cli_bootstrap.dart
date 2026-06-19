@@ -7,6 +7,7 @@ import '../commands/approval/approval_command.dart';
 import '../commands/config/config_command.dart';
 import '../commands/doctor/doctor_command.dart';
 import '../commands/project/project_command.dart';
+import '../commands/rag/rag_command.dart';
 import '../commands/shared/cli_project_context_loader.dart';
 import '../commands/shared/cli_settings_context_loader.dart';
 import '../commands/shared/cli_help_contract.dart';
@@ -299,6 +300,10 @@ class CliBootstrap {
       projectContextLoader: projectContextLoader,
       printer: printer,
     );
+    final ragCommand = RagCommand(
+      projectRepository: bundle.projectRepository,
+      printer: printer,
+    );
     final sessionCommand = SessionCommand(
       sessionShellService: projectSessionShellService,
       projectContextLoader: projectContextLoader,
@@ -335,6 +340,8 @@ class CliBootstrap {
           commandArgs.skip(1).toList(growable: false),
           defaultProjectPath: commandContext.defaultProjectPath,
         );
+      case 'rag':
+        return ragCommand.run(commandArgs.skip(1).toList(growable: false));
       case 'session':
         return sessionCommand.run(
           commandArgs.skip(1).toList(growable: false),
@@ -369,6 +376,7 @@ class CliBootstrap {
     CliHelpContract.printHelpBlock(printer, 'novel_agent help', [
       'workflow draft --prompt "写第一章开场"',
       'project --project D:\\YourNovel',
+      'rag build --source D:\\book.txt --project D:\\YourNovel',
       'review list --project D:\\YourNovel',
       'asset list --project D:\\YourNovel',
       'template list --project D:\\YourNovel',

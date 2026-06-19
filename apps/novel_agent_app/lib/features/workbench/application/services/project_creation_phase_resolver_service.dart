@@ -1,7 +1,14 @@
 import '../../presentation/models/project_creation_phase.dart';
+import 'package:novel_agent_core/novel_agent_core.dart';
 
 class ProjectCreationPhaseResolverService {
   const ProjectCreationPhaseResolverService();
+
+  bool usesKnowledgeBaseBranch(String projectTypeId) {
+    return const KnowledgeBaseBranchCatalogService().usesBranchSelection(
+      projectTypeId,
+    );
+  }
 
   bool usesBookDeconstructionFollowup(String projectTypeId) {
     return projectTypeId.trim() == 'book_deconstruction';
@@ -13,6 +20,8 @@ class ProjectCreationPhaseResolverService {
   }) {
     final phases = <ProjectCreationPhase>[
       ProjectCreationPhase.projectType,
+      if (usesKnowledgeBaseBranch(projectTypeId))
+        ProjectCreationPhase.knowledgeBaseBranch,
       if (usesBookDeconstructionFollowup(projectTypeId))
         ProjectCreationPhase.bookDeconstructionFollowup,
       ProjectCreationPhase.storageStrategy,

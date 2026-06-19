@@ -57,6 +57,9 @@ class WorkbenchProjectActionFacade {
     _controller._showWorkspaceCommand(
       _controller._projectImportWorkspaceCommandViewDataService.build(
         projectType: project.projectType,
+        smartAnalysisModelOptions: _controller._smartAnalysisModelOptions(),
+        smartDeconstructionModelOptions: _controller
+            ._smartDeconstructionModelOptions(),
         requestedTargetDirectory: _controller
             ._workspaceCommandDefaultTargetService
             .importTargetDirectory(),
@@ -187,6 +190,12 @@ class WorkbenchProjectActionFacade {
     unawaited(_controller._pickImportFiles(request));
   }
 
+  void onWorkspaceImportDirectoryPickRequested(
+    WorkspaceCommandRequestViewData request,
+  ) {
+    unawaited(_controller._pickImportDirectory(request));
+  }
+
   void onWorkspaceCommandSubmitted(WorkspaceCommandRequestViewData request) {
     switch (request.mode) {
       case WorkspaceCommandMode.editProjectInfo:
@@ -235,7 +244,9 @@ class WorkbenchProjectActionFacade {
     _controller._mutateWorkbench(
       (current) => _controller.applyWorkbenchState(current),
     );
-    unawaited(_controller._persistWorkbenchSnapshot());
+    _controller._scheduleWorkbenchSnapshotPersistence(
+      refreshDraftRecoveries: false,
+    );
   }
 
   void onDocumentClosed(String documentId) {
@@ -257,7 +268,7 @@ class WorkbenchProjectActionFacade {
     _controller._mutateWorkbench(
       (current) => _controller.applyWorkbenchState(current),
     );
-    unawaited(_controller._persistWorkbenchSnapshot());
+    _controller._scheduleWorkbenchSnapshotPersistence();
   }
 
   void onDocumentBodyChanged(String value) {

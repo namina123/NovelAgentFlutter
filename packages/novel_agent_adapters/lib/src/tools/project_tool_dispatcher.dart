@@ -16,6 +16,7 @@ import 'project_information_domain_tool_executor.dart';
 import 'project_long_task_tool_executor.dart';
 import 'project_management_tool_executor.dart';
 import 'project_narrative_domain_tool_executor.dart';
+import 'project_rag_retrieval_tool_executor.dart';
 import 'project_structured_memory_tool_executor.dart';
 import 'project_task_tool_executor.dart';
 import 'project_tool_path_policy.dart';
@@ -38,6 +39,7 @@ class ProjectToolDispatcher implements ToolExecutionPort {
     BuildModeGuidancePlanInputUseCase? buildModeGuidancePlanInputUseCase,
     ProjectWorkflowRuntimeService? workflowRuntimeService,
     ProjectLongTaskToolExecutor? longTaskToolExecutor,
+    ProjectRagRetrievalToolExecutor? ragRetrievalToolExecutor,
     ProjectAgentSkillRuntimeLoadoutService? agentSkillRuntimeLoadoutService,
     ProjectStorageAwareToolCapabilityMatrix? toolCapabilityMatrix,
   }) : _toolCallNormalizerService =
@@ -111,6 +113,9 @@ class ProjectToolDispatcher implements ToolExecutionPort {
                    resultFactory: resultFactory,
                  )
                : null),
+       _ragRetrievalToolExecutor =
+           ragRetrievalToolExecutor ??
+           ProjectRagRetrievalToolExecutor(),
        _agentSkillToolExecutor = ProjectAgentSkillToolExecutor(
          skillPackageCatalog: skillPackageCatalog,
          skillGroupCatalog: skillGroupCatalog,
@@ -158,6 +163,7 @@ class ProjectToolDispatcher implements ToolExecutionPort {
   final ProjectTaskToolExecutor _taskToolExecutor;
   final ProjectManagementToolExecutor _managementToolExecutor;
   final ProjectLongTaskToolExecutor? _longTaskToolExecutor;
+  final ProjectRagRetrievalToolExecutor _ragRetrievalToolExecutor;
   final ProjectAgentSkillToolExecutor _agentSkillToolExecutor;
   final EntryAvailabilityPolicyService _entryAvailabilityPolicyService;
   final HostInformationPermissionContext? _hostInformationPermissionContext;
@@ -410,6 +416,8 @@ class ProjectToolDispatcher implements ToolExecutionPort {
         return _managementToolExecutor.reorderProjectFile(project, arguments);
       case 'request_gateway_tool':
         return _managementToolExecutor.requestGatewayTool(project, arguments);
+      case 'retrieve_rag_passages':
+        return _ragRetrievalToolExecutor.retrievePassages(project, arguments);
       default:
         return _resultFactory.error('Unknown project tool: $toolName');
     }

@@ -13,6 +13,7 @@ import 'package:novel_agent_app/features/agent_ecosystem/presentation/widgets/pr
 import 'package:novel_agent_app/features/project_assets/presentation/contracts/project_assets_action_handler.dart';
 import 'package:novel_agent_app/features/project_assets/presentation/models/project_assets_view_data.dart';
 import 'package:novel_agent_app/features/project_assets/presentation/models/project_reference_extraction_strategy_picker_view_data.dart';
+import 'package:novel_agent_app/features/project_assets/presentation/models/project_rag_extraction_view_data.dart';
 import 'package:novel_agent_app/features/project_assets/presentation/widgets/expression_constraint_binding_editor_panel.dart';
 import 'package:novel_agent_app/features/project_assets/presentation/widgets/project_assets_entry_list_panel.dart';
 import 'package:novel_agent_app/features/workbench/presentation/contracts/resource_manager_action_handler.dart';
@@ -344,6 +345,7 @@ Future<void> _captureExpressionConstraintPanel(WidgetTester tester) async {
     foreshadowEditor: ForeshadowRecordEditorViewData.empty(),
     referenceExtractionStrategyPicker:
         ProjectReferenceExtractionStrategyPickerViewData.empty(),
+    ragExtraction: ProjectRagExtractionViewData.empty(),
     isLoading: false,
   );
   const actionHandler = _FakeProjectAssetsActionHandler();
@@ -519,6 +521,9 @@ class _FakeResourceManagerActionHandler
   void onProjectAssetsRequested() {}
 
   @override
+  void onProjectRagRequested() {}
+
+  @override
   void onProjectCreationBackRequested() {}
 
   @override
@@ -556,6 +561,11 @@ class _FakeResourceManagerActionHandler
 
   @override
   void onWorkspaceImportFilesPickRequested(
+    WorkspaceCommandRequestViewData request,
+  ) {}
+
+  @override
+  void onWorkspaceImportDirectoryPickRequested(
     WorkspaceCommandRequestViewData request,
   ) {}
 
@@ -686,6 +696,14 @@ class _FakeProjectAssetsActionHandler implements ProjectAssetsActionHandler {
   Future<void> onProjectAssetsExtractReferenceRequested({
     String strategyProfileId = '',
   }) async {}
+
+  @override
+  Future<void> onProjectAssetsExtractRagRequested({
+    String modeId = '',
+  }) async {}
+
+  @override
+  Future<void> onProjectAssetsMountRagCorpusRequested() async {}
 
   @override
   void onProjectAssetsEntrySelected(String entryId) {}

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../application/models/project_assets_tab_id.dart';
 import '../contracts/project_assets_action_handler.dart';
 import '../models/project_assets_view_data.dart';
+import 'project_rag_extraction_panel.dart';
 import 'expression_constraint_binding_editor_panel.dart';
 import 'foreshadow_record_editor_panel.dart';
 import 'project_assets_inspector_panel.dart';
@@ -35,6 +36,11 @@ class ProjectAssetsDetailPanel extends StatelessWidget {
               .onProjectAssetsSaveExpressionConstraintBindingRequested,
           onRemoveRequested: actionHandler
               .onProjectAssetsRemoveExpressionConstraintBindingRequested,
+        );
+      case ProjectAssetsTabId.ragExtraction:
+        return ProjectRagExtractionPanel(
+          viewData: viewData.ragExtraction,
+          actionHandler: actionHandler,
         );
       case ProjectAssetsTabId.foreshadows:
         return ForeshadowRecordEditorPanel(

@@ -49,6 +49,16 @@ void main() {
     );
   });
 
+  test('uses user-facing labels for sqlite projection resources', () {
+    final identity = service.classify(
+      relativePath: 'premise/sqlite_projection/index.md',
+    );
+
+    expect(identity.shortLabel, 'SQLite 资源');
+    expect(identity.detailLabel, contains('SQLite 资源'));
+    expect(identity.detailLabel, isNot(contains('投影')));
+  });
+
   test('keeps compatibility metadata for legacy project brief path', () {
     final identity = service.classify(relativePath: 'premise/project_brief.md');
 

@@ -31,6 +31,7 @@ import '../../features/inspiration_workbench/application/controllers/inspiration
 import '../../features/long_task_station/application/controllers/long_task_station_controller.dart';
 import '../../features/project_assets/application/controllers/project_assets_controller.dart';
 import '../../features/project_assets/application/services/project_assets_loader_service.dart';
+import '../../features/project_assets/application/services/project_rag_extraction_execution_service.dart';
 import '../../features/project_assets/application/services/project_reference_extraction_execution_service.dart';
 import '../../features/project_assets/application/services/project_expression_constraint_workspace_service.dart';
 import '../../features/project_creation/application/controllers/project_creation_controller.dart';
@@ -440,6 +441,7 @@ class AppShellController extends ChangeNotifier
       writeProjectTextFileUseCase: _writeProjectTextFileUseCase,
       narrativePersistenceService:
           _bookDeconstructionNarrativePersistenceService,
+      generateDraftUseCaseFactory: _generateDraftUseCaseFactory,
       longTaskSupervisor: longTaskSupervisor,
       reviewReportService: _reviewReportService,
       projectRuntimeProfileRepository: projectRuntimeProfileRepository,
@@ -473,6 +475,10 @@ class AppShellController extends ChangeNotifier
       showInspirationWorkbench: _destinationController.showInspirationWorkbench,
       showPromptTemplates: _destinationController.showPromptTemplates,
       showProjectAssets: _destinationController.showProjectAssets,
+      showProjectRagAssets: () async {
+        projectAssetsController.openRagExtractionWorkspace();
+        await _destinationController.showProjectAssets();
+      },
       showCurrentAgentSkillLoadout: _showCurrentAgentSkillLoadout,
       showCurrentAgentExpressionConstraints:
           _showCurrentAgentExpressionConstraints,
@@ -553,6 +559,7 @@ class AppShellController extends ChangeNotifier
       mutateWorkbench: _mutateWorkbench,
       readCurrentProject: () => _workbenchWorkspaceController.currentProject,
       loadProject: _workbenchWorkspaceController.loadProject,
+      onProjectCreatedAndOpened: _handleProjectCreatedAndOpened,
       resetToProjectlessWorkbench:
           _workbenchWorkspaceController.resetToProjectlessWorkbench,
       announce: _announce,
@@ -593,6 +600,7 @@ class AppShellController extends ChangeNotifier
             List<JsonMap>.from(_agentEcosystemSnapshot.agents.map(_mapValue)),
         syncWorkbenchResources: _syncWorkbenchResources,
         onBackRequested: showWorkbench,
+        ragExtractionExecutionService: ProjectRagExtractionExecutionService(),
         referenceExtractionExecutionService:
             _injectedProjectReferenceExtractionExecutionService ??
             ProjectReferenceExtractionExecutionService(
@@ -1059,6 +1067,15 @@ class AppShellController extends ChangeNotifier
     _destinationController.showProjectAssets();
   }
 
+  Future<void> _handleProjectCreatedAndOpened(ProjectDescriptor project) async {
+    if (_shouldOpenProjectAssetsByDefault(project)) {
+      await projectAssetsController.refresh();
+      showProjectAssets();
+      return;
+    }
+    showWorkbench();
+  }
+
   Future<void> _refreshProjectOpenView({String status = ''}) async {
     final settings = _settings;
     final viewData = await _projectOpenViewDataService.build(
@@ -1097,6 +1114,11 @@ class AppShellController extends ChangeNotifier
     );
     if (!loaded) {
       await _refreshProjectOpenView(status: '打开项目失败：$normalizedPath');
+      return;
+    }
+    if (_shouldOpenProjectAssetsByDefault(_currentProject)) {
+      await projectAssetsController.refresh();
+      showProjectAssets();
       return;
     }
     showWorkbench();
@@ -1164,6 +1186,18 @@ class AppShellController extends ChangeNotifier
       return;
     }
     showWorkbench();
+  }
+
+  bool _shouldOpenProjectAssetsByDefault(ProjectDescriptor? project) {
+    if (project == null) {
+      return false;
+    }
+    if (project.projectType.trim() != 'knowledge_base') {
+      return false;
+    }
+    return const KnowledgeBaseBranchCatalogService().definitionOf(
+      project.projectBranchId,
+    ).opensProjectAssetsByDefault;
   }
 
   @override
@@ -1635,6 +1669,11 @@ class AppShellController extends ChangeNotifier
 
   void onProjectAssetsRequested() =>
       _workbenchWorkspaceController.onProjectAssetsRequested();
+
+  void onProjectRagRequested() {
+    projectAssetsController.openRagExtractionWorkspace();
+    showProjectAssets();
+  }
 
   void onCurrentAgentExpressionConstraintsRequested() =>
       _workbenchWorkspaceController

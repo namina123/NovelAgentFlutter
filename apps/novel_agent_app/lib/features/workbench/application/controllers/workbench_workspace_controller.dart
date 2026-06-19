@@ -21,7 +21,9 @@ import '../../presentation/models/sub_agent_run_view_data.dart';
 import '../../presentation/models/user_option_view_data.dart';
 import '../../presentation/models/workbench_information_view_data.dart';
 import '../../presentation/models/workbench_view_data.dart';
+import 'generate_draft_use_case_factory.dart';
 import '../models/open_document_state.dart';
+import '../models/project_import_action_policy.dart';
 import '../models/project_import_request.dart';
 import '../models/workbench_project_runtime_state.dart';
 import '../services/desktop_project_import_file_picker_service.dart';
@@ -30,7 +32,6 @@ import '../services/project_import_workspace_command_view_data_service.dart';
 import '../services/project_long_task_summary_view_data_service.dart';
 import '../services/project_subtitle_view_data_service.dart';
 import '../services/project_type_transition_workspace_command_view_data_service.dart';
-import '../services/workbench_document_identity_service.dart';
 import '../services/workbench_draft_recovery_snapshot_service.dart';
 import '../services/workspace_command_default_target_service.dart';
 import '../services/workspace_information_projection_service.dart';
@@ -61,6 +62,7 @@ class WorkbenchWorkspaceController
     required WriteProjectTextFileUseCase writeProjectTextFileUseCase,
     required BookDeconstructionNarrativePersistenceService
     narrativePersistenceService,
+    required GenerateDraftUseCaseFactory generateDraftUseCaseFactory,
     required LongTaskSupervisor longTaskSupervisor,
     required ProjectReviewReportService reviewReportService,
     required ProjectRuntimeProfileRepository projectRuntimeProfileRepository,
@@ -97,6 +99,7 @@ class WorkbenchWorkspaceController
     required Future<void> Function() showInspirationWorkbench,
     required Future<void> Function() showPromptTemplates,
     required Future<void> Function() showProjectAssets,
+    required Future<void> Function() showProjectRagAssets,
     required Future<void> Function(String agentId) showCurrentAgentSkillLoadout,
     required Future<void> Function(String agentId)
     showCurrentAgentExpressionConstraints,
@@ -112,7 +115,6 @@ class WorkbenchWorkspaceController
     ProjectImportExecutionService? projectImportExecutionService,
     WorkspaceInformationProjectionService?
     workspaceInformationProjectionService,
-    WorkbenchDocumentIdentityService? workbenchDocumentIdentityService,
     WorkbenchDraftRecoverySnapshotService?
     workbenchDraftRecoverySnapshotService,
     ProjectPendingResearchActionService? pendingResearchActionService,
@@ -150,6 +152,7 @@ class WorkbenchWorkspaceController
        _showInspirationWorkbench = showInspirationWorkbench,
        _showPromptTemplates = showPromptTemplates,
        _showProjectAssets = showProjectAssets,
+       _showProjectRagAssets = showProjectRagAssets,
        _showCurrentAgentSkillLoadout = showCurrentAgentSkillLoadout,
        _showCurrentAgentExpressionConstraints =
            showCurrentAgentExpressionConstraints,
@@ -177,13 +180,12 @@ class WorkbenchWorkspaceController
              projectToolHostPort: projectToolHostPort,
              writeProjectTextFileUseCase: writeProjectTextFileUseCase,
              narrativePersistenceService: narrativePersistenceService,
+             readSettings: readSettings,
+             generateDraftUseCaseFactory: generateDraftUseCaseFactory,
            ),
        _workspaceInformationProjectionService =
            workspaceInformationProjectionService ??
            const WorkspaceInformationProjectionService(),
-       _workbenchDocumentIdentityService =
-           workbenchDocumentIdentityService ??
-           const WorkbenchDocumentIdentityService(),
        _workbenchDraftRecoverySnapshotService =
            workbenchDraftRecoverySnapshotService ??
            const WorkbenchDraftRecoverySnapshotService(),
@@ -231,6 +233,7 @@ class WorkbenchWorkspaceController
   final Future<void> Function() _showInspirationWorkbench;
   final Future<void> Function() _showPromptTemplates;
   final Future<void> Function() _showProjectAssets;
+  final Future<void> Function() _showProjectRagAssets;
   final Future<void> Function(String agentId) _showCurrentAgentSkillLoadout;
   final Future<void> Function(String agentId)
   _showCurrentAgentExpressionConstraints;
@@ -249,11 +252,12 @@ class WorkbenchWorkspaceController
   final ProjectImportExecutionService _projectImportExecutionService;
   final WorkspaceInformationProjectionService
   _workspaceInformationProjectionService;
-  final WorkbenchDocumentIdentityService _workbenchDocumentIdentityService;
   final WorkbenchDraftRecoverySnapshotService
   _workbenchDraftRecoverySnapshotService;
   final ProjectPendingResearchActionService? _pendingResearchActionService;
   final WorkbenchProjectLongTaskDetailLoader? _projectLongTaskDetailLoader;
+  Timer? _workbenchSnapshotDebounceTimer;
+  bool _pendingWorkbenchSnapshotNeedsDraftRecoveries = false;
   final WorkspaceResourceDisplayService _workspaceResourceDisplayService =
       const WorkspaceResourceDisplayService();
   final WorkspacePrimaryDocumentSelectionService
@@ -1052,6 +1056,13 @@ class WorkbenchWorkspaceController
   }
 
   @override
+  void onWorkspaceImportDirectoryPickRequested(
+    WorkspaceCommandRequestViewData request,
+  ) {
+    _projectActionFacade.onWorkspaceImportDirectoryPickRequested(request);
+  }
+
+  @override
   void onCreateChapterRequested() {
     // 中文注释: 当前章节创建仍走自然语言发送链，这里只给统一提示，不偷偷生成空稿。
     _announce('直接在右侧输入章节需求并发送；正式章节需由工具链提交，普通回复只会暂存为当前文档草稿。');
@@ -1119,6 +1130,11 @@ class WorkbenchWorkspaceController
   void onProjectAssetsRequested() {
     // 中文注释: 项目资产页作为独立子域入口，从工作区只保留跳转动作。
     _projectNavigationBridge.onProjectAssetsRequested();
+  }
+
+  @override
+  void onProjectRagRequested() {
+    _projectNavigationBridge.onProjectRagRequested();
   }
 
   @override
@@ -1235,7 +1251,7 @@ class WorkbenchWorkspaceController
         ),
       ),
     );
-    _persistWorkbenchSnapshot();
+    _scheduleWorkbenchSnapshotPersistence(refreshDraftRecoveries: false);
   }
 
   Future<void> _saveCurrentDocument() async {
@@ -1281,7 +1297,7 @@ class WorkbenchWorkspaceController
           ),
         ),
       );
-      _persistWorkbenchSnapshot();
+      _scheduleWorkbenchSnapshotPersistence();
     } catch (error) {
       _announce('保存失败：$error');
     }
@@ -1488,9 +1504,16 @@ class WorkbenchWorkspaceController
       request: request,
     );
     if (policy.sourcePaths.isEmpty) {
-      _announce('请先选择至少一个要导入的文件。');
+      _showImportWorkspaceCommand(request, status: '请先选择至少一个要导入的文件。');
       return;
     }
+    _showImportWorkspaceCommand(
+      request,
+      isBusy: true,
+      busyLabel: _importBusyLabel(policy),
+      status: _importBusyStatus(policy),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 16));
     try {
       final result = await _projectImportExecutionService.execute(
         project: project,
@@ -1499,8 +1522,11 @@ class WorkbenchWorkspaceController
           targetDirectory: policy.resolvedTargetDirectory,
           autoDeconstruct: policy.autoDeconstruct,
           smartAnalysis: policy.smartAnalysis,
-          analysisAgentId: policy.analysisAgentId,
-          analysisAgentGroupId: policy.analysisAgentGroupId,
+          smartAnalysisProviderId: policy.smartAnalysisProviderId,
+          smartAnalysisModelId: policy.smartAnalysisModelId,
+          smartDeconstruction: policy.smartDeconstruction,
+          smartDeconstructionProviderId: policy.smartDeconstructionProviderId,
+          smartDeconstructionModelId: policy.smartDeconstructionModelId,
         ),
       );
       final selectedId = result.autoDeconstructionPreviewPath.trim().isNotEmpty
@@ -1537,7 +1563,9 @@ class WorkbenchWorkspaceController
       );
       _announce(result.summary);
     } catch (error) {
-      _announce('导入文件失败：$error');
+      final message = '导入文件失败：$error';
+      _showImportWorkspaceCommand(request, status: message);
+      _announce(message);
     }
   }
 
@@ -1560,8 +1588,44 @@ class WorkbenchWorkspaceController
         requestedTargetDirectory: request.targetDirectory,
         requestedAutoDeconstruct: request.autoDeconstruct,
         requestedSmartAnalysis: request.smartAnalysis,
-        analysisAgentId: request.analysisAgentId,
-        analysisAgentGroupId: request.analysisAgentGroupId,
+        smartAnalysisProviderId: request.smartAnalysisProviderId,
+        smartAnalysisModelId: request.smartAnalysisModelId,
+        requestedSmartDeconstruction: request.smartDeconstruction,
+        smartDeconstructionProviderId: request.smartDeconstructionProviderId,
+        smartDeconstructionModelId: request.smartDeconstructionModelId,
+        smartAnalysisModelOptions: _smartAnalysisModelOptions(),
+        smartDeconstructionModelOptions: _smartDeconstructionModelOptions(),
+      ),
+    );
+  }
+
+  Future<void> _pickImportDirectory(
+    WorkspaceCommandRequestViewData request,
+  ) async {
+    final project = currentProject;
+    if (project == null) {
+      _announce('请先打开项目。');
+      return;
+    }
+    final sourcePaths = await _desktopProjectImportFilePickerService
+        .pickDirectories();
+    if (sourcePaths.isEmpty) {
+      return;
+    }
+    _showWorkspaceCommand(
+      _projectImportWorkspaceCommandViewDataService.build(
+        projectType: project.projectType,
+        sourcePaths: sourcePaths,
+        requestedTargetDirectory: request.targetDirectory,
+        requestedAutoDeconstruct: request.autoDeconstruct,
+        requestedSmartAnalysis: request.smartAnalysis,
+        smartAnalysisProviderId: request.smartAnalysisProviderId,
+        smartAnalysisModelId: request.smartAnalysisModelId,
+        requestedSmartDeconstruction: request.smartDeconstruction,
+        smartDeconstructionProviderId: request.smartDeconstructionProviderId,
+        smartDeconstructionModelId: request.smartDeconstructionModelId,
+        smartAnalysisModelOptions: _smartAnalysisModelOptions(),
+        smartDeconstructionModelOptions: _smartDeconstructionModelOptions(),
       ),
     );
   }
@@ -1655,6 +1719,53 @@ class WorkbenchWorkspaceController
     _mutateWorkbench((current) => current.copyWith(workspaceCommand: command));
   }
 
+  void _showImportWorkspaceCommand(
+    WorkspaceCommandRequestViewData request, {
+    String status = '',
+    bool isBusy = false,
+    String busyLabel = '',
+  }) {
+    _showWorkspaceCommand(
+      _projectImportWorkspaceCommandViewDataService.rebuild(
+        request: request,
+        status: status,
+        isBusy: isBusy,
+        busyLabel: busyLabel,
+      ),
+    );
+  }
+
+  String _importBusyLabel(ProjectImportActionPolicy policy) {
+    if (policy.projectType == BookDeconstructionConstants.projectTypeId) {
+      if (policy.smartDeconstruction) {
+        return '正在智能拆书';
+      }
+      if (policy.autoDeconstruct) {
+        return '正在拆书';
+      }
+    }
+    if (policy.smartAnalysis) {
+      return '正在导入并分析';
+    }
+    return '正在导入';
+  }
+
+  String _importBusyStatus(ProjectImportActionPolicy policy) {
+    if (policy.projectType == BookDeconstructionConstants.projectTypeId) {
+      if (policy.smartDeconstruction) {
+        return '正在导入并调用拆书专用智能体处理章节识别、清理干扰内容。';
+      }
+      if (policy.autoDeconstruct) {
+        return '正在导入并生成拆书结构化预览。';
+      }
+      return '正在导入书籍原文。';
+    }
+    if (policy.smartAnalysis) {
+      return '正在导入资料，并由内置分析器判断内容类型与建议落位。';
+    }
+    return '正在导入文件。';
+  }
+
   Future<void> _selectProjectAgentGroupAndRefreshOverlay(String groupId) async {
     final cleanGroupId = groupId.trim();
     if (cleanGroupId.isEmpty) {
@@ -1703,7 +1814,26 @@ class WorkbenchWorkspaceController
     await _persistWorkbenchSnapshot();
   }
 
-  Future<void> _persistWorkbenchSnapshot() async {
+  void _scheduleWorkbenchSnapshotPersistence({
+    bool refreshDraftRecoveries = true,
+    Duration delay = const Duration(milliseconds: 220),
+  }) {
+    _pendingWorkbenchSnapshotNeedsDraftRecoveries =
+        _pendingWorkbenchSnapshotNeedsDraftRecoveries || refreshDraftRecoveries;
+    _workbenchSnapshotDebounceTimer?.cancel();
+    _workbenchSnapshotDebounceTimer = Timer(delay, () {
+      final needsDraftRecoveries =
+          _pendingWorkbenchSnapshotNeedsDraftRecoveries;
+      _pendingWorkbenchSnapshotNeedsDraftRecoveries = false;
+      unawaited(
+        _persistWorkbenchSnapshot(refreshDraftRecoveries: needsDraftRecoveries),
+      );
+    });
+  }
+
+  Future<void> _persistWorkbenchSnapshot({
+    bool refreshDraftRecoveries = true,
+  }) async {
     // 中文注释: 工作区快照只记录恢复工作台所需的轻量状态，不承担项目主存储职责。
     final settings = _readSettings();
     final project = currentProject;
@@ -1718,6 +1848,14 @@ class WorkbenchWorkspaceController
       final persistedActiveDocumentPath = _persistableWorkbenchDocumentPath(
         _readWorkbench().activeDocumentPath,
       );
+      final currentSnapshot = _mapValue(
+        settings.extraSettings['workbench_state'],
+      );
+      final draftRecoveries = refreshDraftRecoveries
+          ? _workbenchDraftRecoverySnapshotService.captureRecoveries(
+              state.openDocuments,
+            )
+          : ValueReaders.mapList(currentSnapshot['draft_recoveries']);
       final payload = <String, Object?>{
         'project_root_path': project.rootPath,
         'active_document_path': persistedActiveDocumentPath,
@@ -1726,12 +1864,8 @@ class WorkbenchWorkspaceController
         ),
         'selected_conversation_agent_id':
             _readWorkbench().agentSelector.currentAgentId,
-        'draft_recoveries': _workbenchDraftRecoverySnapshotService
-            .captureRecoveries(state.openDocuments),
+        'draft_recoveries': draftRecoveries,
       };
-      final currentSnapshot = _mapValue(
-        settings.extraSettings['workbench_state'],
-      );
       if (_normalizePathForCompare(
             _stringValue(currentSnapshot['project_root_path']),
           ) ==
@@ -1764,6 +1898,45 @@ class WorkbenchWorkspaceController
         _readProjectState().copyWith(isSavingWorkbenchSnapshot: false),
       );
     }
+  }
+
+  List<SelectorOptionViewData> _smartDeconstructionModelOptions() {
+    return _importAssistantModelOptions();
+  }
+
+  List<SelectorOptionViewData> _smartAnalysisModelOptions() {
+    return _importAssistantModelOptions();
+  }
+
+  List<SelectorOptionViewData> _importAssistantModelOptions() {
+    final settings = _readSettings();
+    if (settings == null) {
+      return const <SelectorOptionViewData>[];
+    }
+    final options = <SelectorOptionViewData>[];
+    final seen = <String>{};
+    for (final provider in settings.providers) {
+      final providerId = provider.id.trim();
+      final modelId = provider.modelId.trim();
+      if (providerId.isEmpty || modelId.isEmpty) {
+        continue;
+      }
+      final key = '$providerId::$modelId';
+      if (!seen.add(key)) {
+        continue;
+      }
+      final providerLabel = provider.title.trim().isEmpty
+          ? providerId
+          : provider.title.trim();
+      options.add(
+        SelectorOptionViewData(
+          id: key,
+          label: '$providerLabel · $modelId',
+          note: providerId,
+        ),
+      );
+    }
+    return List<SelectorOptionViewData>.unmodifiable(options);
   }
 
   List<ResourceEntryViewData> _resourceEntriesFrom(List<JsonMap> entries) {
@@ -1865,7 +2038,7 @@ class WorkbenchWorkspaceController
         informationViewData: _latestInformationViewData,
       ),
     );
-    _persistWorkbenchSnapshot();
+    _scheduleWorkbenchSnapshotPersistence(refreshDraftRecoveries: false);
   }
 
   Future<List<JsonMap>> _scanInformationSupportEntries(String rootPath) async {
@@ -2167,14 +2340,17 @@ class WorkbenchWorkspaceController
   bool _canReadAsText(String relativePath) {
     final lower = relativePath.toLowerCase();
     return lower.endsWith('.md') ||
+        lower.endsWith('.markdown') ||
         lower.endsWith('.txt') ||
+        lower.endsWith('.epub') ||
         lower.endsWith('.json') ||
         lower.endsWith('.yaml') ||
         lower.endsWith('.yml');
   }
 
   bool _canRender(String relativePath) {
-    return relativePath.toLowerCase().endsWith('.md');
+    final lower = relativePath.toLowerCase();
+    return lower.endsWith('.md') || lower.endsWith('.markdown');
   }
 
   bool _shouldRestoreWorkbenchDocument(String relativePath) {

@@ -1,14 +1,15 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:novel_agent_app/features/book_deconstruction/application/models/book_deconstruction_operation_kind.dart';
 import 'package:novel_agent_app/features/book_deconstruction/application/models/book_deconstruction_snapshot.dart';
 import 'package:novel_agent_app/features/book_deconstruction/application/services/book_deconstruction_draft_builder_service.dart';
 import 'package:novel_agent_app/features/book_deconstruction/application/services/book_deconstruction_view_data_service.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 void main() {
-  test('拆书 view data 会投影 continuity 默认导向与后续菜单', () {
+  test('拆书 view data 会投影 continuity 默认导向与后续菜单', () async {
     final draftBuilder = BookDeconstructionDraftBuilderService();
     final viewDataService = BookDeconstructionViewDataService();
-    final buildResult = draftBuilder.build(
+    final buildResult = await draftBuilder.build(
       sourceTitle: '海上城邦',
       sourceContent: '第一章 港口风暴\n主角在港口被迫卷入一场追捕。\n\n第二章 议会阴影\n城邦议会开始浮出水面。',
       sourceAbsolutePath: 'D:/books/harbor_story.txt',
@@ -64,5 +65,32 @@ void main() {
     expect(designStatus.statusLabel, '确认后出现在巧思与设计');
     expect(designStatus.summary, isNot(contains('information GUI')));
     expect(viewData.informationBridge!.reuseSummary, contains('continuation'));
+  });
+
+  test('拆书 view data 会按运行阶段切换按钮文案', () {
+    final viewDataService = BookDeconstructionViewDataService();
+
+    final importingViewData = viewDataService.build(
+      projectTitle: '拆书测试项目',
+      snapshot: BookDeconstructionSnapshot.initial().copyWith(
+        isLoading: true,
+        operationKind: BookDeconstructionOperationKind.importingSource,
+      ),
+      status: '正在读取拆书源文件...',
+    );
+    final buildingViewData = viewDataService.build(
+      projectTitle: '拆书测试项目',
+      snapshot: BookDeconstructionSnapshot.initial().copyWith(
+        isLoading: true,
+        sourceContent: '第一章 港口风暴',
+        operationKind: BookDeconstructionOperationKind.buildingPreview,
+      ),
+      status: '正在生成结构化预览...',
+    );
+
+    expect(importingViewData.importActionLabel, '正在导入');
+    expect(importingViewData.canBuildPreview, isFalse);
+    expect(buildingViewData.buildPreviewActionLabel, '正在拆书');
+    expect(buildingViewData.canBuildPreview, isFalse);
   });
 }

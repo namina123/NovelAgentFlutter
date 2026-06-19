@@ -22,6 +22,7 @@ class ProjectStructuredContentWritePolicy {
     'style',
     'summary',
     'knowledge',
+    'source_original',
   };
 
   ProjectContentStorageDisposition dispositionOfBodyTextDocument({

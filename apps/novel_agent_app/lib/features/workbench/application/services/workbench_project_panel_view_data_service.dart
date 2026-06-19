@@ -16,6 +16,7 @@ class WorkbenchProjectPanelViewDataService {
     return WorkbenchProjectPanelViewData(
       projectName: source.projectName,
       projectSubtitle: source.projectSubtitle,
+      projectTypeId: source.projectTypeId,
       workflowTitle: source.workflowTitle,
       workflowDescription: source.workflowDescription,
       modelLabel: source.modelLabel,
@@ -31,6 +32,7 @@ class WorkbenchProjectPanelViewDataService {
       ),
       assetActions: _actionPolicyService.assetActions(
         hasActiveProject: hasActiveProject,
+        projectTypeId: source.projectTypeId,
       ),
       projectLongTaskSummary: source.projectLongTaskSummary,
     );

@@ -6,6 +6,7 @@ import '../models/project_assets_tab_id.dart';
 import 'project_assets_expression_constraint_view_data_service.dart';
 import 'project_assets_graph_view_data_service.dart';
 import 'project_assets_timeline_view_data_service.dart';
+import 'project_rag_extraction_view_data_service.dart';
 import 'project_reference_extraction_strategy_picker_view_data_service.dart';
 
 class ProjectAssetsViewDataService {
@@ -16,6 +17,7 @@ class ProjectAssetsViewDataService {
     ProjectAssetsTimelineViewDataService? timelineViewDataService,
     ProjectReferenceExtractionStrategyPickerViewDataService?
     referenceExtractionStrategyPickerViewDataService,
+    ProjectRagExtractionViewDataService? ragExtractionViewDataService,
   }) : _expressionConstraintViewDataService =
            expressionConstraintViewDataService ??
            const ProjectAssetsExpressionConstraintViewDataService(),
@@ -26,7 +28,10 @@ class ProjectAssetsViewDataService {
            const ProjectAssetsTimelineViewDataService(),
        _referenceExtractionStrategyPickerViewDataService =
            referenceExtractionStrategyPickerViewDataService ??
-           const ProjectReferenceExtractionStrategyPickerViewDataService();
+           const ProjectReferenceExtractionStrategyPickerViewDataService(),
+       _ragExtractionViewDataService =
+           ragExtractionViewDataService ??
+           const ProjectRagExtractionViewDataService();
 
   final ProjectAssetsExpressionConstraintViewDataService
   _expressionConstraintViewDataService;
@@ -34,6 +39,7 @@ class ProjectAssetsViewDataService {
   final ProjectAssetsTimelineViewDataService _timelineViewDataService;
   final ProjectReferenceExtractionStrategyPickerViewDataService
   _referenceExtractionStrategyPickerViewDataService;
+  final ProjectRagExtractionViewDataService _ragExtractionViewDataService;
 
   ProjectAssetsViewData build({
     required ProjectAssetsSnapshot snapshot,
@@ -63,6 +69,9 @@ class ProjectAssetsViewDataService {
           _referenceExtractionStrategyPickerViewDataService.build(
             selectedProfileId: snapshot.selectedReferenceExtractionStrategyId,
           ),
+      ragExtraction: _ragExtractionViewDataService.build(
+        snapshot: snapshot.ragExtraction,
+      ),
       isLoading: snapshot.isLoading,
     );
   }

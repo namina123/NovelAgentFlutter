@@ -884,9 +884,6 @@ Future<JsonMap> _buildGuiViewModelReport({
       'entries': informationViewData.entries
           .map(_workbenchInformationEntry)
           .toList(growable: false),
-      'pending_entries': informationViewData.pendingEntries
-          .map(_workbenchInformationEntry)
-          .toList(growable: false),
     },
     'long_task_station_viewmodel': <String, Object?>{
       'title': stationViewData.title,

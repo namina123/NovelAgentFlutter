@@ -1,5 +1,6 @@
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../../presentation/models/selector_option_view_data.dart';
 import '../../presentation/models/workspace_command_request_view_data.dart';
 import '../models/project_import_action_policy.dart';
 import 'project_import_action_policy_service.dart';
@@ -18,8 +19,17 @@ class ProjectImportWorkspaceCommandViewDataService {
     String requestedTargetDirectory = '',
     bool requestedAutoDeconstruct = false,
     bool? requestedSmartAnalysis,
-    String analysisAgentId = '',
-    String analysisAgentGroupId = '',
+    String smartAnalysisProviderId = '',
+    String smartAnalysisModelId = '',
+    List<SelectorOptionViewData> smartAnalysisModelOptions =
+        const <SelectorOptionViewData>[],
+    bool requestedSmartDeconstruction = false,
+    String smartDeconstructionProviderId = '',
+    String smartDeconstructionModelId = '',
+    List<SelectorOptionViewData> smartDeconstructionModelOptions =
+        const <SelectorOptionViewData>[],
+    bool isBusy = false,
+    String busyLabel = '',
     String status = '',
   }) {
     final defaultSmartAnalysis =
@@ -32,14 +42,19 @@ class ProjectImportWorkspaceCommandViewDataService {
       requestedTargetDirectory: requestedTargetDirectory,
       requestedAutoDeconstruct: requestedAutoDeconstruct,
       requestedSmartAnalysis: resolvedSmartAnalysis,
-      analysisAgentId: analysisAgentId,
-      analysisAgentGroupId: analysisAgentGroupId,
+      smartAnalysisProviderId: smartAnalysisProviderId,
+      smartAnalysisModelId: smartAnalysisModelId,
+      requestedSmartDeconstruction: requestedSmartDeconstruction,
+      smartDeconstructionProviderId: smartDeconstructionProviderId,
+      smartDeconstructionModelId: smartDeconstructionModelId,
     );
     return WorkspaceCommandViewData(
       mode: WorkspaceCommandMode.importFiles,
       title: '导入文件',
       description: _descriptionFor(projectType.trim()),
       confirmLabel: '导入文件',
+      isBusy: isBusy,
+      busyLabel: busyLabel.trim(),
       status: status,
       projectTitle: '',
       projectType: projectType.trim(),
@@ -55,8 +70,14 @@ class ProjectImportWorkspaceCommandViewDataService {
       canAutoDeconstruct: policy.canAutoDeconstruct,
       smartAnalysis: policy.smartAnalysis,
       canSmartAnalyze: policy.canSmartAnalyze,
-      analysisAgentId: policy.analysisAgentId,
-      analysisAgentGroupId: policy.analysisAgentGroupId,
+      smartAnalysisProviderId: policy.smartAnalysisProviderId,
+      smartAnalysisModelId: policy.smartAnalysisModelId,
+      smartAnalysisModelOptions: smartAnalysisModelOptions,
+      smartDeconstruction: policy.smartDeconstruction,
+      canSmartDeconstruction: policy.canSmartDeconstruction,
+      smartDeconstructionProviderId: policy.smartDeconstructionProviderId,
+      smartDeconstructionModelId: policy.smartDeconstructionModelId,
+      smartDeconstructionModelOptions: smartDeconstructionModelOptions,
       importFileSelectionHint: policy.fileSelectionHint,
       importOutputHint: policy.outputHint,
     );
@@ -64,6 +85,8 @@ class ProjectImportWorkspaceCommandViewDataService {
 
   WorkspaceCommandViewData rebuild({
     required WorkspaceCommandRequestViewData request,
+    bool isBusy = false,
+    String busyLabel = '',
     String status = '',
   }) {
     return build(
@@ -72,8 +95,13 @@ class ProjectImportWorkspaceCommandViewDataService {
       requestedTargetDirectory: request.targetDirectory,
       requestedAutoDeconstruct: request.autoDeconstruct,
       requestedSmartAnalysis: request.smartAnalysis,
-      analysisAgentId: request.analysisAgentId,
-      analysisAgentGroupId: request.analysisAgentGroupId,
+      smartAnalysisProviderId: request.smartAnalysisProviderId,
+      smartAnalysisModelId: request.smartAnalysisModelId,
+      requestedSmartDeconstruction: request.smartDeconstruction,
+      smartDeconstructionProviderId: request.smartDeconstructionProviderId,
+      smartDeconstructionModelId: request.smartDeconstructionModelId,
+      isBusy: isBusy,
+      busyLabel: busyLabel,
       status: status,
     );
   }
@@ -87,15 +115,18 @@ class ProjectImportWorkspaceCommandViewDataService {
       requestedTargetDirectory: request.targetDirectory,
       requestedAutoDeconstruct: request.autoDeconstruct,
       requestedSmartAnalysis: request.smartAnalysis,
-      analysisAgentId: request.analysisAgentId,
-      analysisAgentGroupId: request.analysisAgentGroupId,
+      smartAnalysisProviderId: request.smartAnalysisProviderId,
+      smartAnalysisModelId: request.smartAnalysisModelId,
+      requestedSmartDeconstruction: request.smartDeconstruction,
+      smartDeconstructionProviderId: request.smartDeconstructionProviderId,
+      smartDeconstructionModelId: request.smartDeconstructionModelId,
     );
   }
 
   String _descriptionFor(String projectType) {
     if (projectType == BookDeconstructionConstants.projectTypeId) {
-      return '选择源文稿导入当前拆书项目；支持自动拆书预演，并把纪要写回项目。';
+      return '导入源文稿或文件夹，随后生成结构化预览。';
     }
-    return '选择一个或多个本地文件导入当前项目；可默认开启智能分析，先判断资料更像正文、设定还是参考。';
+    return '导入一个或多个本地文件，可按需启用智能分析。';
   }
 }

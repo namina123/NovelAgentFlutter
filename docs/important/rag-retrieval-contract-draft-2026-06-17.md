@@ -593,7 +593,7 @@ Docker 可以直接接：
 
 用户可见：
 
-- 无模型
+- 纯离线简单识别
 - 首批只开放 txt
 
 合同层真实含义：
@@ -607,19 +607,27 @@ Docker 可以直接接：
 
 用户可见：
 
-- 有模型
+- 模型辅助智能拆书
 - 支持 epub / folder / md 等
+- 只有用户选择该模式时才启用模型辅助
 
 合同层真实含义：
 
-- `RagSourceNormalizer`: 允许模型辅助标准化
-- `RagSegmentationStrategy`: 允许模型分章
+- `RagSourceNormalizer`: 允许接入现有智能拆书能力完成模型辅助标准化
+- `RagSegmentationStrategy`: 允许复用现有智能拆书的章节识别 / 去噪结果
 - `RagChunkBuilder`: 仍然走统一 chunk 规则
 - `EmbeddingProviderPort`: 可选本地或远端
 
 这里最重要的约束是：
 
 **模型辅助模式只是前段标准化与分章增强，不是另一套 RAG 正式体系。**
+
+更准确的合同表达是：
+
+- `source_preprocessing_mode = offline_basic`
+- `source_preprocessing_mode = smart_deconstruction_assisted`
+
+这两个模式只影响 RAG ingestion 的前处理阶段，后续 `chunk build / corpus ingest / mount / retrieve / activation` 必须走同一套主链。
 
 ---
 
@@ -664,3 +672,12 @@ Docker 可以直接接：
 - 远端 embedding / 混合索引
 
 都不会反向破坏项目已经建立起来的知识体系与架构边界。
+
+## 13. 实施收口备注
+
+这份草案对应的正式合同已经进入实现与回归验证，当前可按已落地基线理解：
+
+1. `RagCorpusPackage`、`RagSourceDocument`、`RagNormalizedSource`、`RagSegmentationResult`、`RagChunk`、`RagIndexHandle`、`RetrievalMountBinding`、`RetrievalQuery`、`RetrievalHit`、`RetrievalActivationPackage` 等模型已经用于代码实现。
+2. `RagSourceNormalizer`、`RagSegmentationStrategy`、`RagChunkBuilder`、`EmbeddingProviderPort`、`RetrievalIndexPort`、`RetrievalSearchPort`、`RetrievalHealthPort`、`RetrievalIngestionPort` 等接口族已经作为共享合同被消费。
+3. 基础 txt ingestion、挂载、检索、activation bridge、provider capability reporting 以及 CLI / GUI 消费边界都已经按这份合同收口。
+4. 这份文档现在主要承担“合同说明 + 扩展位保留”的角色，不再是待实现草案。

@@ -12,7 +12,7 @@ class WorkbenchSidePanelContractService {
         label: '文件',
         tooltip: '项目文件与资源树',
         objectTitle: '文件',
-        summary: '只承接文件动作和资源树，不夹带项目配置或系统跳板入口。',
+        summary: '只保留文件操作和资源树，不放项目配置入口。',
         responsibilities: <String>['资源树浏览与文件选择', '新建文件、文件夹、章节与导入', '当前文档保存'],
         allowedEntryKinds: <WorkbenchSidePanelEntryKind>[
           WorkbenchSidePanelEntryKind.fileOperation,
@@ -27,10 +27,10 @@ class WorkbenchSidePanelContractService {
       WorkbenchSidePanelContract(
         panelId: WorkbenchNavigationPanelId.project,
         label: '项目',
-        tooltip: '当前项目摘要与协作基线',
+        tooltip: '当前项目摘要与协作设置',
         objectTitle: '项目',
-        summary: '只承接当前项目摘要、项目级协作基线和少量项目动作。',
-        responsibilities: <String>['当前项目摘要', '项目级协作配置', '项目内少量必要动作'],
+        summary: '只保留当前项目摘要、协作设置和少量项目动作。',
+        responsibilities: <String>['当前项目摘要', '项目协作设置', '项目内少量必要动作'],
         allowedEntryKinds: <WorkbenchSidePanelEntryKind>[
           WorkbenchSidePanelEntryKind.projectSummary,
           WorkbenchSidePanelEntryKind.projectScopedAction,
@@ -48,10 +48,10 @@ class WorkbenchSidePanelContractService {
       WorkbenchSidePanelContract(
         panelId: WorkbenchNavigationPanelId.agent,
         label: '智能体',
-        tooltip: '当前会话智能体与项目协作基线',
+        tooltip: '当前会话智能体与项目协作设置',
         objectTitle: '智能体',
-        summary: '只承接当前会话智能体摘要与项目级智能体组配置入口，不复制第二套生态页。',
-        responsibilities: <String>['当前会话智能体摘要', '项目级智能体组基线', '智能体组配置入口'],
+        summary: '只保留当前会话智能体摘要与项目协作设置，不重复整套独立页面。',
+        responsibilities: <String>['当前会话智能体摘要', '项目协作设置', '默认组配置入口'],
         allowedEntryKinds: <WorkbenchSidePanelEntryKind>[
           WorkbenchSidePanelEntryKind.conversationAgentSummary,
           WorkbenchSidePanelEntryKind.projectScopedConfiguration,

@@ -1,4 +1,5 @@
 import '../project/project_descriptor.dart';
+import '../project/knowledge_base_branch_catalog_service.dart';
 import '../project/project_manifest_codec_service.dart';
 import '../project/project_storage_strategy.dart';
 import '../project/project_support_document_catalog.dart';
@@ -20,6 +21,7 @@ class UpdateProjectManifestUseCase {
     required String title,
     required String projectType,
     ProjectStorageStrategy? storageStrategy,
+    String? projectBranchId,
     String? runtimeBaselineId,
     String genre = '',
     String premise = '',
@@ -30,6 +32,7 @@ class UpdateProjectManifestUseCase {
       title: title,
       projectType: projectType,
       storageStrategy: storageStrategy ?? project.storageStrategy,
+      projectBranchId: projectBranchId ?? project.projectBranchId,
       runtimeBaselineId: runtimeBaselineId ?? project.runtimeBaselineId,
     );
     await _writeProjectTextFileUseCase.execute(
@@ -37,7 +40,10 @@ class UpdateProjectManifestUseCase {
       relativePath: ProjectManifestCodecService.manifestRelativePath,
       content: _projectManifestCodecService.encode(manifest),
     );
-    final typeLabel = _projectTypeLabel(manifest.projectType);
+    final typeLabel = _projectTypeLabel(
+      manifest.projectType,
+      projectBranchId: manifest.projectBranchId,
+    );
     await _writeProjectTextFileUseCase.execute(
       project: project,
       relativePath: ProjectSupportDocumentCatalog.projectOverviewRelativePath,
@@ -53,13 +59,17 @@ class UpdateProjectManifestUseCase {
     );
   }
 
-  String _projectTypeLabel(String projectType) {
+  String _projectTypeLabel(String projectType, {String projectBranchId = ''}) {
     // 中文注释: 项目类型标签只在简介文档中使用，因此保留轻量级本地映射即可。
     switch (projectType.trim()) {
       case 'long_novel':
         return '长任务长篇';
       case 'knowledge_base':
-        return '知识库';
+        return const KnowledgeBaseBranchCatalogService().isRagBranch(
+              projectBranchId,
+            )
+            ? '语料库'
+            : '结构化资料知识库';
       case 'short_collection':
         return '短文集';
       case 'book_deconstruction':

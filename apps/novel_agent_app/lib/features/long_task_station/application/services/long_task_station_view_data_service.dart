@@ -215,7 +215,7 @@ class LongTaskStationViewDataService {
       ),
       narrativeProjectionItems:
           detail?.narrativeSummary?.projectionItems
-              .map((item) => _relatedItem(item, actionLabel: '打开投影')!)
+              .map((item) => _relatedItem(item, actionLabel: '打开摘要')!)
               .toList(growable: false) ??
           const <LongTaskRunRelatedItemViewData>[],
       narrativePermissionItems:
@@ -225,7 +225,7 @@ class LongTaskStationViewDataService {
           const <LongTaskRunRelatedItemViewData>[],
       informationProjectionItems:
           detail?.narrativeSummary?.informationProjectionItems
-              .map((item) => _relatedItem(item, actionLabel: '打开投影')!)
+              .map((item) => _relatedItem(item, actionLabel: '打开摘要')!)
               .toList(growable: false) ??
           const <LongTaskRunRelatedItemViewData>[],
       informationPermissionItems:
@@ -1021,11 +1021,11 @@ class LongTaskStationViewDataService {
   }
 
   String _narrativeProjectionSectionTitle() {
-    return _exposureTier == RuntimeExposureTier.diagnostic ? '开放叙事投影' : '可读摘要';
+    return _exposureTier == RuntimeExposureTier.diagnostic ? '开放叙事摘要' : '可读摘要';
   }
 
   String _informationProjectionSectionTitle() {
-    return _exposureTier == RuntimeExposureTier.diagnostic ? '信息投影' : '资料摘要';
+    return _exposureTier == RuntimeExposureTier.diagnostic ? '信息摘要' : '资料摘要';
   }
 
   String _narrativePermissionSectionTitle() {

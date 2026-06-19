@@ -210,6 +210,7 @@ class _ConversationSidebarState extends State<ConversationSidebar> {
         child: ConversationPanelHeader(
           agentSelector: widget.viewData.agentSelector,
           showWorkspaceShortcuts: widget.showWorkspaceShortcuts,
+          historyOpen: widget.viewData.showSessionHistory,
           onHistoryRequested: widget.actionHandler.onHistoryRequested,
           onNewSessionRequested: widget.actionHandler.onNewSessionRequested,
           onConversationAgentSelected:
@@ -298,49 +299,81 @@ class _ConversationSidebarState extends State<ConversationSidebar> {
         openingState: widget.viewData.openingState,
       );
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Stack(
       children: [
-        if (widget.viewData.showSessionHistory) ...[
-          SessionHistoryPanel(
-            entries: widget.viewData.sessionHistoryEntries,
-            onSelected: widget.actionHandler.onSessionHistorySelected,
-          ),
-          SizedBox(height: ConversationPanelStyle.of(context).bodyGap),
-        ],
-        Expanded(
-          child: hasConversation
-              ? ConversationTimeline(
-                  lanes: widget.viewData.transcriptLanes,
-                  restoreResult: widget.viewData.sessionRestoreResult,
-                  renderContext: TranscriptBlockRenderContext(
-                    showToolDetails: _statusSummaryService.showToolDetails(
-                      widget.viewData,
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: hasConversation
+                  ? ConversationTimeline(
+                      lanes: widget.viewData.transcriptLanes,
+                      restoreResult: widget.viewData.sessionRestoreResult,
+                      renderContext: TranscriptBlockRenderContext(
+                        showToolDetails: _statusSummaryService.showToolDetails(
+                          widget.viewData,
+                        ),
+                        onRetryRequested:
+                            widget.actionHandler.onRetryLastFailedRequested,
+                        onUserOptionSelected: _handleOptionSelected,
+                        onSubAgentSelected: _selectSubAgentRun,
+                        activeSubAgentRunId: activeSubAgentRunId,
+                      ),
+                    )
+                  : WorkflowGuideCard(
+                      title: widget.viewData.workflowTitle,
+                      description: widget.viewData.workflowDescription,
+                      actions: emptyStateActions,
+                      openingState: widget.viewData.openingState,
+                      actionHandler: widget.actionHandler,
                     ),
-                    onRetryRequested:
-                        widget.actionHandler.onRetryLastFailedRequested,
-                    onUserOptionSelected: _handleOptionSelected,
-                    onSubAgentSelected: _selectSubAgentRun,
-                    activeSubAgentRunId: activeSubAgentRunId,
-                  ),
-                )
-              : WorkflowGuideCard(
-                  title: widget.viewData.workflowTitle,
-                  description: widget.viewData.workflowDescription,
-                  actions: emptyStateActions,
-                  openingState: widget.viewData.openingState,
-                  actionHandler: widget.actionHandler,
-                ),
+            ),
+            if (!hasConversation &&
+                widget.viewData.openingState == null &&
+                emptyStateActions.isNotEmpty) ...[
+              SizedBox(height: ConversationPanelStyle.of(context).sectionGap),
+              PrimaryActionList(
+                actions: emptyStateActions,
+                actionHandler: widget.actionHandler,
+              ),
+            ],
+          ],
         ),
-        if (!hasConversation &&
-            widget.viewData.openingState == null &&
-            emptyStateActions.isNotEmpty) ...[
-          SizedBox(height: ConversationPanelStyle.of(context).sectionGap),
-          PrimaryActionList(
-            actions: emptyStateActions,
-            actionHandler: widget.actionHandler,
+        if (widget.viewData.showSessionHistory &&
+            widget.viewData.sessionHistoryEntries.isNotEmpty)
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: widget.actionHandler.onHistoryRequested,
+              child: Align(
+                alignment: Alignment.topRight,
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    left: isMinimalSurface ? 8 : 16,
+                    top: 2,
+                    right: isMinimalSurface ? 2 : 6,
+                  ),
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {},
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: isMinimalSurface ? 420 : 336,
+                        minWidth: isMinimalSurface ? 220 : 280,
+                      ),
+                      child: SessionHistoryPanel(
+                        entries: widget.viewData.sessionHistoryEntries,
+                        onSelected:
+                            widget.actionHandler.onSessionHistorySelected,
+                        onDismiss: widget.actionHandler.onHistoryRequested,
+                        floating: true,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
-        ],
       ],
     );
   }

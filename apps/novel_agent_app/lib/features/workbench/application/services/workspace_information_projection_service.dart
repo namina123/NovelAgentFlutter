@@ -89,7 +89,7 @@ class WorkspaceInformationProjectionService {
           id: 'design_projection',
           title: '巧思与设计',
           subtitle: '角色设计、结构巧思与创作方案',
-          summary: '查看 design element 的用户可读投影。',
+          summary: '查看 design element 的用户可读摘要。',
           statusLabel: '巧思',
           relativePath: InformationProjectionDocument.designSummaryRelativePath,
           fileMap: fileMap,
@@ -129,30 +129,17 @@ class WorkspaceInformationProjectionService {
               usageByPath[InformationProjectionDocument
                   .referenceBoundaryRelativePath],
         ),
-      if (normalizedPaths.contains('premise/sqlite_projection/index.md'))
-        _projectionEntry(
-          id: 'sqlite_projection',
-          title: 'SQLite 语义树',
-          subtitle: 'SQLite 主事实源的只读投影入口',
-          summary: '查看 SQLite 项目语义树、来源身份与只读投影状态。',
-          statusLabel: 'SQLite',
-          relativePath: 'premise/sqlite_projection/index.md',
-          fileMap: fileMap,
-          usage: usageByPath['premise/sqlite_projection/index.md'],
-        ),
     ];
 
-    final pendingEntries = _pendingInformationEntries(normalizedPaths, fileMap);
     final usageSummary = _usageSummary(
       selectedSections: selectedSections,
       omittedSections: omittedSections,
     );
-    final summary = _summary(entries: entries, pendingEntries: pendingEntries);
+    final summary = _summary(entries: entries);
     return WorkbenchInformationViewData(
       summary: summary,
       usageSummary: usageSummary,
       entries: entries,
-      pendingEntries: pendingEntries,
     );
   }
 
@@ -183,109 +170,11 @@ class WorkspaceInformationProjectionService {
     );
   }
 
-  List<WorkbenchInformationEntryViewData> _pendingInformationEntries(
-    Set<String> normalizedPaths,
-    Map<String, String> fileMap,
-  ) {
-    final entries = <WorkbenchInformationEntryViewData>[];
-    for (final path in normalizedPaths.toList()..sort()) {
-      if (path.startsWith('.novel_agent/information/knowledge_cards/')) {
-        final card = ProjectKnowledgeCard.fromJson(_decodedMap(fileMap[path]));
-        if (card.lifecycleStatus == InformationLifecycleStatuses.proposed) {
-          entries.add(
-            WorkbenchInformationEntryViewData(
-              id: card.cardId,
-              title: '待确认知识',
-              subtitle: card.title,
-              summary: card.summary.trim().isEmpty
-                  ? '这条长期设定需要确认后再进入主知识层。'
-                  : card.summary.trim(),
-              statusLabel: '待确认',
-              usageLabel: '需要确认后才能稳定复用',
-              riskLabel: '会影响后续写作与信息激活',
-              actionLabel: '查看待确认',
-              relativePath: path,
-            ),
-          );
-        }
-      } else if (path.startsWith('.novel_agent/information/design_elements/')) {
-        final card = DesignElementCard.fromJson(_decodedMap(fileMap[path]));
-        if (card.lifecycleStatus == InformationLifecycleStatuses.proposed) {
-          entries.add(
-            WorkbenchInformationEntryViewData(
-              id: card.designId,
-              title: '待确认巧思',
-              subtitle: card.designLabel,
-              summary: '这条巧思/设计还在提案阶段，确认后才会进入稳定资料层。',
-              statusLabel: '待确认',
-              usageLabel: '未确认前不应当成既定事实',
-              riskLabel: '可能改变后续结构或角色设计',
-              actionLabel: '查看待确认',
-              relativePath: path,
-            ),
-          );
-        }
-      } else if (path.startsWith(
-        '.novel_agent/information/research_requests/',
-      )) {
-        final record = _decodedMap(fileMap[path]);
-        final requestState = _string(record['request_state']);
-        if (requestState.isNotEmpty && requestState != 'completed') {
-          final request = _map(record['research_request']);
-          entries.add(
-            WorkbenchInformationEntryViewData(
-              id: _string(record['request_id'], path),
-              title: '待确认研究',
-              subtitle: _string(request['query']),
-              summary: '这条外部研究请求还没完成确认，相关事实不应直接当作定论。',
-              statusLabel: '待确认',
-              usageLabel: '需要先明确是否继续研究',
-              riskLabel: '可能涉及事实缺口或外部资料风险',
-              actionLabel: '查看待确认',
-              relativePath: path,
-              pendingResearchRequestId: _string(record['request_id'], path),
-            ),
-          );
-        }
-      } else if (path.startsWith('.novel_agent/information/reference_works/')) {
-        final record = ReferenceWorkRecord.fromJson(_decodedMap(fileMap[path]));
-        if (record.requiresConfirmation) {
-          entries.add(
-            WorkbenchInformationEntryViewData(
-              id: record.referenceWorkId,
-              title: '待确认引用边界',
-              subtitle: record.title,
-              summary: record.allowedUsageSummary.trim().isEmpty
-                  ? record.declaredUsageIntent
-                  : record.allowedUsageSummary.trim(),
-              statusLabel: '待确认',
-              usageLabel: '边界未确认前请谨慎复用',
-              riskLabel: '存在引用关系或风险说明需要处理',
-              actionLabel: '查看待确认',
-              relativePath: path,
-            ),
-          );
-        }
-      }
-    }
-    return entries;
-  }
-
-  String _summary({
-    required List<WorkbenchInformationEntryViewData> entries,
-    required List<WorkbenchInformationEntryViewData> pendingEntries,
-  }) {
-    if (entries.isEmpty && pendingEntries.isEmpty) {
+  String _summary({required List<WorkbenchInformationEntryViewData> entries}) {
+    if (entries.isEmpty) {
       return '当前项目还没有形成可回看的资料与巧思摘要。';
     }
-    final parts = <String>[];
-    if (entries.isNotEmpty) {
-      parts.add('已整理 ${entries.length} 组资料摘要');
-    }
-    if (pendingEntries.isNotEmpty) {
-      parts.add('${pendingEntries.length} 项待确认');
-    }
-    return parts.join('，');
+    return '已整理 ${entries.length} 组资料摘要';
   }
 
   String _usageSummary({
@@ -326,8 +215,31 @@ class WorkspaceInformationProjectionService {
     }
     final reason = usage.omittedReasons
         .where((item) => item.trim().isNotEmpty)
+        .map(_humanizedOmissionReason)
         .join(' ');
     return reason.isEmpty ? '本轮没有进入上下文' : reason;
+  }
+
+  String _humanizedOmissionReason(String reason) {
+    switch (reason.trim()) {
+      case 'budget_exhausted':
+        return '上下文预算不足';
+      case 'out_of_budget':
+        return '上下文预算不足';
+      case '资料太旧':
+        return '资料太旧';
+      case '还没确认边界':
+        return '引用边界尚未确认';
+      default:
+        final trimmed = reason.trim();
+        return _looksLikeInternalCode(trimmed) ? '未纳入本轮摘要' : trimmed;
+    }
+  }
+
+  bool _looksLikeInternalCode(String text) {
+    return text.isNotEmpty &&
+        RegExp(r'^[a-z0-9_:-]+$').hasMatch(text) &&
+        text.contains(RegExp(r'[_:-]'));
   }
 
   List<String> _kindLabels(List<JsonMap> sections) {
@@ -359,10 +271,10 @@ class WorkspaceInformationProjectionService {
       mountStatusLabel: sourceOfTruthPaths.isEmpty ? '' : '已挂载',
       sourceOfTruthSummary: sourceOfTruthPaths.isEmpty
           ? ''
-          : '真相源：${_joinedSummary(sourceOfTruthPaths)}',
+          : '来源：${_joinedSummary(sourceOfTruthPaths)}',
       sourceIdentitySummary: sourceIdentityItems.isEmpty
           ? ''
-          : '来源身份：${_joinedSummary(sourceIdentityItems)}',
+          : '来源类型：${_joinedSummary(sourceIdentityItems)}',
     );
   }
 
@@ -399,10 +311,15 @@ class WorkspaceInformationProjectionService {
     final items = <String>[];
     for (final rawLine in markdown.split('\n')) {
       final trimmedLine = rawLine.trim();
-      if (!trimmedLine.startsWith('- 来源身份：')) {
+      final prefix = trimmedLine.startsWith('- 来源类型：')
+          ? '- 来源类型：'
+          : trimmedLine.startsWith('- 来源身份：')
+          ? '- 来源身份：'
+          : '';
+      if (prefix.isEmpty) {
         continue;
       }
-      final item = _string(trimmedLine.substring('- 来源身份：'.length));
+      final item = _string(trimmedLine.substring(prefix.length));
       if (item.isNotEmpty) {
         items.add(item);
       }

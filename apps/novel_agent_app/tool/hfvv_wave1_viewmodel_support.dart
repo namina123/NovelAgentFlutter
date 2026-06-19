@@ -598,20 +598,6 @@ class HfvvWave1AppShellHarness {
               },
             )
             .toList(growable: false),
-        'information_pending_entries': resources
-            .informationViewData
-            .pendingEntries
-            .map(
-              (entry) => <String, Object?>{
-                'id': entry.id,
-                'title': entry.title,
-                'summary': entry.summary,
-                'status_label': entry.statusLabel,
-                'relative_path': entry.relativePath,
-                'pending_research_request_id': entry.pendingResearchRequestId,
-              },
-            )
-            .toList(growable: false),
       },
       'project_assets': <String, Object?>{
         'status': projectAssetsView.status,
@@ -1195,6 +1181,12 @@ class HfvvWave1AppShellHarness {
           projectExpressionConstraintWorkspaceService,
       projectGeneralContinuitySetupService:
           projectGeneralContinuitySetupService,
+      toolPermissionApprovalRecordService:
+          ProjectToolPermissionApprovalRecordService(
+            taskRepository: ProjectTaskRepository(
+              workspacePort: bundle.projectWorkspacePort,
+            ),
+          ),
       longTaskSupervisor: bundle.longTaskSupervisor,
       longTaskStationController: longTaskStationController,
     );

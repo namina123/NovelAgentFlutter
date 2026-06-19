@@ -4,14 +4,20 @@ class ProjectImportRequest {
     required this.targetDirectory,
     required this.autoDeconstruct,
     this.smartAnalysis = false,
-    this.analysisAgentId = '',
-    this.analysisAgentGroupId = '',
+    this.smartAnalysisProviderId = '',
+    this.smartAnalysisModelId = '',
+    this.smartDeconstruction = false,
+    this.smartDeconstructionProviderId = '',
+    this.smartDeconstructionModelId = '',
   });
 
   final List<String> sourcePaths;
   final String targetDirectory;
   final bool autoDeconstruct;
   final bool smartAnalysis;
-  final String analysisAgentId;
-  final String analysisAgentGroupId;
+  final String smartAnalysisProviderId;
+  final String smartAnalysisModelId;
+  final bool smartDeconstruction;
+  final String smartDeconstructionProviderId;
+  final String smartDeconstructionModelId;
 }

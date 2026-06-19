@@ -104,7 +104,7 @@ void main() {
           'constraints/项目约束摘要.md',
           'reviews/语义复核摘要.md',
         ]);
-        expect(documents.first.markdown, contains('这份 Markdown 只是结构化事实源的可读投影'));
+        expect(documents.first.markdown, contains('这份 Markdown 只是结构化事实源的可读摘要'));
         expect(
           documents.first.markdown,
           contains(

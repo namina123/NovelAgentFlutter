@@ -8,6 +8,7 @@ import '../project/project_descriptor.dart';
 import '../project/project_create_request.dart';
 import '../project/project_creation_next_step.dart';
 import '../project/project_creation_plan.dart';
+import '../project/knowledge_base_branch_catalog_service.dart';
 import '../project/project_manifest_codec_service.dart';
 import '../project/project_readable_projection_service.dart';
 import '../project/project_runtime_baseline_catalog_service.dart';
@@ -90,6 +91,8 @@ class CreateProjectWorkspaceUseCase {
       projectTypeDefinition,
       request.storageStrategy,
     );
+    final normalizedProjectBranchId = const KnowledgeBaseBranchCatalogService()
+        .normalize(normalizedProjectType, request.projectBranchId);
     final runtimeBaselineOptions = _projectRuntimeBaselineCatalogService
         .definitionsForProjectType(normalizedProjectType);
     final normalizedRuntimeBaselineId = _projectRuntimeBaselineCatalogService
@@ -101,6 +104,7 @@ class CreateProjectWorkspaceUseCase {
       title: normalizedTitle,
       projectTypeId: normalizedProjectType,
       storageStrategy: normalizedStorageStrategy,
+      projectBranchId: normalizedProjectBranchId,
       runtimeBaselineId: normalizedRuntimeBaselineId,
     );
     final nextStep =
@@ -122,6 +126,7 @@ class CreateProjectWorkspaceUseCase {
     String projectType = 'novel',
     ProjectStorageStrategy storageStrategy =
         ProjectStorageStrategy.markdownProjectStore,
+    String projectBranchId = '',
     String runtimeBaselineId = '',
   }) async {
     // 中文注释: 直接执行入口保留给现有探针和脚本，但仍会严格走三段式准备结果，不再绕开运行基准判断。
@@ -130,6 +135,7 @@ class CreateProjectWorkspaceUseCase {
         title: title,
         projectTypeId: projectType,
         storageStrategy: storageStrategy,
+        projectBranchId: projectBranchId,
         runtimeBaselineId: runtimeBaselineId,
       ),
     );
@@ -158,6 +164,7 @@ class CreateProjectWorkspaceUseCase {
       normalizedTitle,
       plan.request.projectTypeId,
       plan.request.storageStrategy,
+      plan.request.projectBranchId,
       plan.request.runtimeBaselineId,
     );
     final project = await _projectRepository.openByPath(rootPath);
@@ -172,6 +179,7 @@ class CreateProjectWorkspaceUseCase {
     String title,
     String projectType,
     ProjectStorageStrategy storageStrategy,
+    String projectBranchId,
     String runtimeBaselineId,
   ) async {
     // 中文注释: 项目骨架先统一走“目录布局 + 内容仓储 + 可读投影”三段式，后续换目录结构时只改集中合同。
@@ -180,6 +188,7 @@ class CreateProjectWorkspaceUseCase {
       title: title,
       projectType: projectType,
       storageStrategy: storageStrategy,
+      projectBranchId: projectBranchId,
       runtimeBaselineId: runtimeBaselineId,
     );
     await _projectContentRepository.initializeProjectContent(

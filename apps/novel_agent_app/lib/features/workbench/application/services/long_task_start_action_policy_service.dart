@@ -51,7 +51,7 @@ class LongTaskStartActionPolicyService {
       return '当前项目已经有可继续推进的长篇基础，点击后会继续或恢复正式长任务链。';
     }
     if (readiness.missingRequirements.isNotEmpty) {
-      return '当前还缺：${readiness.missingRequirements.map((item) => item.title).join('、')}。点击后继续补齐并进入下一步。';
+      return '还需补齐：${readiness.missingRequirements.map((item) => item.title).join('、')}。点击后继续补齐并进入下一步。';
     }
     final targetCommandId = projection.orchestration.suggestedActions.isEmpty
         ? ''

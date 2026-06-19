@@ -19,9 +19,9 @@ class ProjectAgentGroupPanelViewDataService {
       return const ProjectAgentGroupPanelViewData(
         currentGroupLabel: '未打开项目',
         primaryAgentLabel: '综合创作智能体',
-        summary: '先打开项目，再为当前项目确定默认智能体组。',
+        summary: '先打开项目。',
         actionTitle: '项目智能体组',
-        actionDescription: '打开项目后，这里会成为当前项目的正式协作配置入口。',
+        actionDescription: '打开项目后可在这里调整默认协作组。',
         canConfigure: false,
       );
     }
@@ -41,8 +41,7 @@ class ProjectAgentGroupPanelViewDataService {
         primaryAgentLabel: resolvedPrimaryAgentLabel,
         summary: _displayTextPolicy.unconfiguredProjectPanelSummary(),
         actionTitle: '项目智能体组',
-        actionDescription: _displayTextPolicy
-            .configureProjectPanelActionDescription(hasResolvedGroup: false),
+        actionDescription: '先补上默认协作组。',
         canConfigure: true,
       );
     }
@@ -51,8 +50,7 @@ class ProjectAgentGroupPanelViewDataService {
       primaryAgentLabel: resolvedPrimaryAgentLabel,
       summary: _displayTextPolicy.configuredProjectPanelSummary(),
       actionTitle: '项目智能体组',
-      actionDescription: _displayTextPolicy
-          .configureProjectPanelActionDescription(hasResolvedGroup: true),
+      actionDescription: '查看或调整默认协作组。',
       canConfigure: true,
     );
   }

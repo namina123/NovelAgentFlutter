@@ -50,18 +50,29 @@ class WorkbenchProjectPanelActionPolicyService {
 
   List<WorkbenchProjectPanelActionViewData> assetActions({
     required bool hasActiveProject,
+    String projectTypeId = '',
   }) {
     if (!hasActiveProject) {
       return const <WorkbenchProjectPanelActionViewData>[];
     }
-    return const <WorkbenchProjectPanelActionViewData>[
-      WorkbenchProjectPanelActionViewData(
+    if (projectTypeId.trim() == 'knowledge_base') {
+      return const <WorkbenchProjectPanelActionViewData>[];
+    }
+    final actions = <WorkbenchProjectPanelActionViewData>[
+      const WorkbenchProjectPanelActionViewData(
+        icon: Icons.dataset_outlined,
+        title: '资料库',
+        description: '导入资料、提取语料并挂载到当前项目。',
+        actionId: WorkbenchProjectPanelActionIds.projectRag,
+      ),
+      const WorkbenchProjectPanelActionViewData(
         icon: Icons.auto_awesome_mosaic_outlined,
-        title: '项目资产',
-        description: '查看和整理当前项目的风格、表达限制、伏笔、时间线与关系。',
+        title: '规则与资料卡',
+        description: '查看风格、表达限制、伏笔、时间线和项目资料卡。',
         actionId: WorkbenchProjectPanelActionIds.projectAssets,
       ),
     ];
+    return List<WorkbenchProjectPanelActionViewData>.unmodifiable(actions);
   }
 
   List<WorkbenchProjectPanelActionViewData> _projectTypeTransitionAction(
@@ -100,4 +111,5 @@ class WorkbenchProjectPanelActionIds {
   static const String transitionProjectType = 'transition_project_type';
   static const String refreshProject = 'refresh_project';
   static const String projectAssets = 'project_assets';
+  static const String projectRag = 'project_rag';
 }

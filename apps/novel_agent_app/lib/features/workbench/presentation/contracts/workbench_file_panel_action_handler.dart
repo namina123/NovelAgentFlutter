@@ -38,5 +38,9 @@ abstract class WorkbenchFilePanelActionHandler {
     WorkspaceCommandRequestViewData request,
   );
 
+  void onWorkspaceImportDirectoryPickRequested(
+    WorkspaceCommandRequestViewData request,
+  );
+
   void onWorkspaceCommandSubmitted(WorkspaceCommandRequestViewData request);
 }

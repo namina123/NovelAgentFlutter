@@ -1,6 +1,7 @@
 class ProjectAssetsTabId {
   static const String styles = 'styles';
   static const String expressionConstraints = 'expression_constraints';
+  static const String ragExtraction = 'rag_extraction';
   static const String foreshadows = 'foreshadows';
   static const String timelines = 'timelines';
   static const String relationships = 'relationships';
@@ -9,6 +10,7 @@ class ProjectAssetsTabId {
   static const List<String> values = <String>[
     styles,
     expressionConstraints,
+    ragExtraction,
     foreshadows,
     timelines,
     relationships,

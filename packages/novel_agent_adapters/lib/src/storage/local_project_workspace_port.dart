@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import 'project_text_file_read_service.dart';
 import 'project_relative_path_resolver.dart';
 import 'project_tree_order_service.dart';
 
@@ -9,11 +10,15 @@ class LocalProjectWorkspacePort implements ProjectWorkspacePort {
   LocalProjectWorkspacePort({
     ProjectRelativePathResolver? pathResolver,
     ProjectTreeOrderService? treeOrderService,
+    ProjectTextFileReadService? textFileReadService,
   }) : _pathResolver = pathResolver ?? ProjectRelativePathResolver(),
-       _treeOrderService = treeOrderService ?? ProjectTreeOrderService();
+       _treeOrderService = treeOrderService ?? ProjectTreeOrderService(),
+       _textFileReadService =
+           textFileReadService ?? const ProjectTextFileReadService();
 
   final ProjectRelativePathResolver _pathResolver;
   final ProjectTreeOrderService _treeOrderService;
+  final ProjectTextFileReadService _textFileReadService;
   static const int _maxListEntriesAttempts = 3;
 
   @override
@@ -94,16 +99,12 @@ class LocalProjectWorkspacePort implements ProjectWorkspacePort {
 
   @override
   Future<String?> readTextFile(String rootPath, String relativePath) async {
-    // 中文注释: 本地文本读取只做文件存在与编码读取，不夹带任何创作层规则。
+    // 中文注释: 项目文本读取对 source document 走统一 reader，对其余文本保留严格读取，避免导入资料因编码差异把整条链路炸掉。
     final resolvedPath = _pathResolver.resolve(
       rootPath: rootPath,
       relativePath: relativePath,
     );
-    final file = File(resolvedPath);
-    if (!await file.exists()) {
-      return null;
-    }
-    return file.readAsString();
+    return _textFileReadService.readFile(resolvedPath);
   }
 
   @override

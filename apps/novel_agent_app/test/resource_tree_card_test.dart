@@ -64,7 +64,7 @@ void main() {
     expect(selectedId, 'chapter-1');
   });
 
-  testWidgets('resource tree card shows sqlite projection metadata', (
+  testWidgets('resource tree card shows sqlite resource metadata', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -96,9 +96,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('SQLite 语义树'), findsOneWidget);
-    expect(find.text('投影'), findsOneWidget);
+    expect(find.text('结构'), findsOneWidget);
     expect(find.byIcon(Icons.account_tree_outlined), findsOneWidget);
-    expect(find.textContaining('SQLite 投影'), findsOneWidget);
+    expect(find.textContaining('SQLite 资源'), findsOneWidget);
     expect(find.textContaining('只读镜像'), findsOneWidget);
     expect(find.textContaining('非事实源'), findsOneWidget);
   });

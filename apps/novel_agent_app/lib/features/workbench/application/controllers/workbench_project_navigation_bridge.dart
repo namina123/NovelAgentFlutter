@@ -70,5 +70,7 @@ class WorkbenchProjectNavigationBridge {
 
   void onProjectAssetsRequested() => _controller._showProjectAssets();
 
+  void onProjectRagRequested() => _controller._showProjectRagAssets();
+
   void onInspirationWorkbenchRequested() => _controller._showInspirationWorkbench();
 }

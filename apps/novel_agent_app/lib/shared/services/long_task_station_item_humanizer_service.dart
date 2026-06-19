@@ -52,9 +52,9 @@ class LongTaskStationItemHumanizerService {
   String _humanizedSubtitle(String subtitle) {
     switch (subtitle) {
       case 'Readable projection':
-        return '可读投影';
+        return '可读摘要';
       case 'Information projection':
-        return '资料投影';
+        return '资料摘要';
       case 'quality gate':
         return '质量关口';
       default:

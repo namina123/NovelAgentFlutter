@@ -10,6 +10,7 @@ class ProjectPanelActionTile extends StatelessWidget {
     required this.title,
     required this.description,
     required this.onPressed,
+    this.showDescription = true,
     this.isEnabled = true,
     this.disabledReason = '',
   });
@@ -18,6 +19,7 @@ class ProjectPanelActionTile extends StatelessWidget {
   final String title;
   final String description;
   final VoidCallback onPressed;
+  final bool showDescription;
   final bool isEnabled;
   final String disabledReason;
 
@@ -77,16 +79,19 @@ class ProjectPanelActionTile extends StatelessWidget {
                             color: surface.foregroundColor,
                           ),
                         ),
-                        SizedBox(height: visual.microGap - 1),
-                        Text(
-                          description,
-                          style: TextStyle(
-                            fontSize: visual.bodyFontSize,
-                            height: visual.bodyLineHeight,
-                            fontWeight: FontWeight.w500,
-                            color: surface.mutedForegroundColor,
+                        if (showDescription &&
+                            description.trim().isNotEmpty) ...[
+                          SizedBox(height: visual.microGap - 1),
+                          Text(
+                            description,
+                            style: TextStyle(
+                              fontSize: visual.bodyFontSize,
+                              height: visual.bodyLineHeight,
+                              fontWeight: FontWeight.w500,
+                              color: surface.mutedForegroundColor,
+                            ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                   ),

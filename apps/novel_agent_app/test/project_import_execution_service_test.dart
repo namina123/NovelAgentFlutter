@@ -238,8 +238,8 @@ void main() {
           targetDirectory: 'assets',
           autoDeconstruct: false,
           smartAnalysis: true,
-          analysisAgentId: 'analysis-agent',
-          analysisAgentGroupId: 'analysis-group',
+          smartAnalysisProviderId: 'provider-a',
+          smartAnalysisModelId: 'model-a',
         ),
       );
 
@@ -256,8 +256,9 @@ void main() {
       );
       expect(reportContent, isNotNull);
       expect(reportContent, contains('# 导入智能分析'));
-      expect(reportContent, contains('analysis-agent'));
-      expect(reportContent, contains('analysis-group'));
+      expect(reportContent, contains('内置导入分析智能体'));
+      expect(reportContent, contains('model-a'));
+      expect(reportContent, contains('provider-a'));
       expect(reportContent, contains('novel_source_text'));
       expect(result.summary, contains('智能分析报告已写入'));
     },
@@ -340,8 +341,8 @@ void main() {
           targetDirectory: 'assets/bundle',
           autoDeconstruct: false,
           smartAnalysis: true,
-          analysisAgentId: 'analysis-agent',
-          analysisAgentGroupId: 'analysis-group',
+          smartAnalysisProviderId: 'provider-a',
+          smartAnalysisModelId: 'model-a',
         ),
       );
 

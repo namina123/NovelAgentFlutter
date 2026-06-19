@@ -24,7 +24,7 @@ class ReferenceExtractionPublicationService {
 
   String buildSuccessMessage(ProjectReferenceExtractionResult result) {
     final projectionHint = result.generatedProjectionPaths.isEmpty
-        ? '可返回工作台资料区查看新生成的项目资料投影。'
+        ? '可返回工作台资料区查看新生成的项目资料摘要。'
         : '已生成 ${result.generatedProjectionPaths.join('、')}，可返回工作台资料区查看。';
     return '参考资料提取完成：接纳 ${result.acceptedProposalCount} 条，沉淀 ${result.finalizedEntryCount} 条结构化条目。$projectionHint';
   }

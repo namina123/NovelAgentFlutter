@@ -3,6 +3,7 @@ import 'package:novel_agent_core/src/project/project_descriptor.dart';
 import 'package:novel_agent_core/src/project/project_manifest_codec_service.dart';
 import 'package:novel_agent_core/src/project/project_runtime_profile_document_service.dart';
 import 'package:novel_agent_core/src/project/project_storage_strategy.dart';
+import 'package:novel_agent_core/src/project/project_support_document_catalog.dart';
 import 'package:novel_agent_core/src/project/project_type_transition_preparation_service.dart';
 import 'package:novel_agent_core/src/use_cases/execute_project_type_transition_use_case.dart';
 import 'package:novel_agent_core/src/use_cases/update_project_manifest_use_case.dart';
@@ -76,7 +77,7 @@ void main() {
       );
       final briefContent = workspacePort.readStoredTextFile(
         project.rootPath,
-        'premise/project_brief.md',
+        ProjectSupportDocumentCatalog.projectOverviewRelativePath,
       );
       final runtimeProfileContent = workspacePort.readStoredTextFile(
         project.rootPath,
@@ -147,7 +148,7 @@ void main() {
           allOf(
             isA<StateError>(),
             predicate<StateError>(
-              (error) => error.message?.contains('归档') ?? false,
+              (error) => error.message.contains('归档'),
             ),
           ),
         ),

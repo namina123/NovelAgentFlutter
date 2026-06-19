@@ -3,9 +3,11 @@ import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_app/features/project_assets/application/controllers/project_assets_controller.dart';
 import 'package:novel_agent_app/features/project_assets/application/models/project_assets_catalog.dart';
 import 'package:novel_agent_app/features/project_assets/application/models/project_assets_tab_id.dart';
+import 'package:novel_agent_app/features/project_assets/application/models/project_rag_extraction_execution_result.dart';
 import 'package:novel_agent_app/features/project_assets/application/models/project_reference_extraction_execution_result.dart';
 import 'package:novel_agent_app/features/project_assets/application/services/project_assets_loader_service.dart';
 import 'package:novel_agent_app/features/project_assets/application/services/project_expression_constraint_workspace_service.dart';
+import 'package:novel_agent_app/features/project_assets/application/services/project_rag_extraction_execution_service.dart';
 import 'package:novel_agent_app/features/project_assets/application/services/project_reference_extraction_execution_service.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
@@ -120,14 +122,45 @@ void main() {
       controller.onProjectAssetsReferenceSelected('timeline:event-1');
 
       expect(controller.viewData.activeTabId, ProjectAssetsTabId.timelines);
-      expect(
-        controller.viewData.timeline.items
-            .singleWhere((item) => item.isSelected)
-            .id,
-        'event-1',
-      );
-    },
+    expect(
+      controller.viewData.timeline.items
+          .singleWhere((item) => item.isSelected)
+          .id,
+      'event-1',
+    );
+  },
   );
+
+  test('onProjectAssetsExtractRagRequested reflects progress status before completion', () async {
+    final controller = ProjectAssetsController(
+      projectAssetLibraryService: _NoopProjectAssetLibraryService(),
+      expressionConstraintWorkspaceService:
+          ProjectExpressionConstraintWorkspaceService(
+            loadProfiles: (project) async =>
+                const <ExpressionConstraintProfile>[],
+            loadBindings: (_) async =>
+                const <ProjectExpressionConstraintBinding>[],
+            saveBindings: (project, bindings) async {},
+          ),
+      loaderService: _NoopProjectAssetsLoaderService(),
+      readCurrentProject: () => const ProjectDescriptor(
+        id: 'project_rag',
+        name: '语料项目',
+        rootPath: 'D:/Projects/rag_demo',
+      ),
+      readAvailableProjectAgents: () => const <JsonMap>[],
+      syncWorkbenchResources: () async {},
+      onBackRequested: () {},
+      ragExtractionExecutionService: _FakeProgressRagExtractionExecutionService(),
+      referenceExtractionExecutionService: _noopReferenceExtractionService(),
+    );
+
+    await controller.onProjectAssetsExtractRagRequested();
+
+    expect(controller.viewData.ragExtraction.status, contains('构建完成'));
+    expect(controller.viewData.ragExtraction.isLoading, isFalse);
+    expect(controller.viewData.activeTabId, ProjectAssetsTabId.ragExtraction);
+  });
 }
 
 ProjectReferenceExtractionExecutionService _noopReferenceExtractionService() {
@@ -421,6 +454,27 @@ class _FakeSuccessfulReferenceExtractionService
       didMutateProject: true,
       statusMessage:
           '参考资料提取完成：接纳 2 条，沉淀 7 条结构化条目。已生成 knowledge/项目知识摘要.md，可返回工作台资料区查看。',
+    );
+  }
+}
+
+class _FakeProgressRagExtractionExecutionService
+    extends ProjectRagExtractionExecutionService {
+  @override
+  Future<ProjectRagExtractionExecutionResult> pickAndExecute({
+    required ProjectDescriptor project,
+    String modeId = '',
+    Future<void> Function(String statusMessage)? onProgress,
+  }) async {
+    if (onProgress != null) {
+      await onProgress('正在读取 txt 源文...');
+      await onProgress('正在构建语料分片... 12 / 48');
+      await onProgress('正在写入语料元数据... 32 / 48 分片');
+    }
+    return const ProjectRagExtractionExecutionResult(
+      ok: true,
+      didMutateProject: false,
+      statusMessage: 'txt 语料构建完成。',
     );
   }
 }

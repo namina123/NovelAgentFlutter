@@ -9,6 +9,12 @@ abstract class ProjectAssetsActionHandler {
     String strategyProfileId = '',
   });
 
+  Future<void> onProjectAssetsExtractRagRequested({
+    String modeId = '',
+  });
+
+  Future<void> onProjectAssetsMountRagCorpusRequested();
+
   void onProjectAssetsTabSelected(String tabId);
 
   void onProjectAssetsEntrySelected(String entryId);

@@ -174,7 +174,7 @@ void main() {
       expect(entries.first.detailBody, contains('信息摘要'));
       expect(entries.first.detailBody, contains('资料状态：已更新资料'));
       expect(entries.first.detailBody, contains('information 改动 2 项'));
-      expect(entries.first.detailBody, contains('资料投影：knowledge/项目知识摘要.md'));
+      expect(entries.first.detailBody, contains('资料摘要：knowledge/项目知识摘要.md'));
     });
 
     test('maps clarification-style tool results to confirmation wording', () {

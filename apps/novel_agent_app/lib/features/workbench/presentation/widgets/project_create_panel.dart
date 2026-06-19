@@ -7,11 +7,13 @@ import '../../../../../shared/widgets/action_button.dart';
 import '../models/project_create_request_view_data.dart';
 import '../models/project_creation_phase.dart';
 import '../models/project_deconstruction_followup_option_view_data.dart';
+import '../models/project_knowledge_base_branch_option_view_data.dart';
 import '../models/project_runtime_baseline_option_view_data.dart';
 import '../models/project_storage_strategy_option_view_data.dart';
 import '../models/project_type_option_view_data.dart';
 import 'project_continuity_input_panel.dart';
 import 'project_deconstruction_followup_option_tile.dart';
+import 'project_knowledge_base_branch_option_tile.dart';
 import 'project_runtime_baseline_option_tile.dart';
 import 'project_storage_strategy_option_tile.dart';
 import 'project_type_option_tile.dart';
@@ -29,6 +31,8 @@ class ProjectCreatePanel extends StatefulWidget {
     required this.storageStrategyOptions,
     required this.selectedStorageStrategyId,
     required this.creationPhase,
+    required this.knowledgeBaseBranchOptions,
+    required this.selectedKnowledgeBaseBranchId,
     required this.bookDeconstructionFollowupOptions,
     required this.selectedBookDeconstructionFollowupRouteId,
     required this.runtimeBaselineOptions,
@@ -51,6 +55,8 @@ class ProjectCreatePanel extends StatefulWidget {
   final List<ProjectStorageStrategyOptionViewData> storageStrategyOptions;
   final String selectedStorageStrategyId;
   final ProjectCreationPhase creationPhase;
+  final List<ProjectKnowledgeBaseBranchOptionViewData> knowledgeBaseBranchOptions;
+  final String selectedKnowledgeBaseBranchId;
   final List<ProjectDeconstructionFollowupOptionViewData>
   bookDeconstructionFollowupOptions;
   final String selectedBookDeconstructionFollowupRouteId;
@@ -72,6 +78,7 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
   late final ScrollController _scrollController;
   late String _selectedProjectTypeId;
   late String _selectedStorageStrategyId;
+  late String _selectedKnowledgeBaseBranchId;
   late String _selectedBookDeconstructionFollowupRouteId;
   late String _selectedRuntimeBaselineId;
   late ProjectContinuityInputProfile _continuityInput;
@@ -83,12 +90,16 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
     super.initState();
     _selectedProjectTypeId = _resolvedSelectedTypeId();
     _selectedStorageStrategyId = _resolvedSelectedStorageStrategyId();
+    _selectedKnowledgeBaseBranchId = _resolvedSelectedKnowledgeBaseBranchId();
     _selectedBookDeconstructionFollowupRouteId =
         _resolvedSelectedBookDeconstructionFollowupRouteId();
     _selectedRuntimeBaselineId = _resolvedSelectedRuntimeBaselineId();
     _continuityInput = widget.continuityInput;
     _showAdvancedContinuity = _hasContinuityInput(_continuityInput);
-    _lastDefaultTitle = _defaultTitleOf(_selectedProjectTypeId);
+    _lastDefaultTitle = _defaultTitleOf(
+      _selectedProjectTypeId,
+      knowledgeBaseBranchId: _selectedKnowledgeBaseBranchId,
+    );
     _scrollController = ScrollController();
     _controller = TextEditingController(
       text: widget.draftTitle.trim().isEmpty
@@ -103,11 +114,15 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
     // 中文注释: 创建面板会跨阶段复用，因此外层视图数据变化时要把选择状态同步回当前 State。
     _selectedProjectTypeId = _resolvedSelectedTypeId();
     _selectedStorageStrategyId = _resolvedSelectedStorageStrategyId();
+    _selectedKnowledgeBaseBranchId = _resolvedSelectedKnowledgeBaseBranchId();
     _selectedBookDeconstructionFollowupRouteId =
         _resolvedSelectedBookDeconstructionFollowupRouteId();
     _selectedRuntimeBaselineId = _resolvedSelectedRuntimeBaselineId();
     _continuityInput = widget.continuityInput;
-    _lastDefaultTitle = _defaultTitleOf(_selectedProjectTypeId);
+    _lastDefaultTitle = _defaultTitleOf(
+      _selectedProjectTypeId,
+      knowledgeBaseBranchId: _selectedKnowledgeBaseBranchId,
+    );
     if (widget.draftTitle != oldWidget.draftTitle &&
         widget.draftTitle.trim().isNotEmpty &&
         widget.draftTitle != _controller.text) {
@@ -359,6 +374,19 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
     switch (widget.creationPhase) {
       case ProjectCreationPhase.projectType:
         return _buildProjectTypeTiles();
+      case ProjectCreationPhase.knowledgeBaseBranch:
+        return [
+          ..._buildKnowledgeBaseBranchTiles(),
+          const SizedBox(height: 10),
+          Text(
+            '结构化资料库更偏向知识沉淀与复用，语料库更偏向切分、挂载与检索增强。',
+            style: TextStyle(
+              color: context.novelThemeColors.mutedTextColor,
+              fontSize: 12,
+              height: 1.45,
+            ),
+          ),
+        ];
       case ProjectCreationPhase.storageStrategy:
         final title = selectedOption?.title ?? '当前项目';
         return [
@@ -431,6 +459,28 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
     return children;
   }
 
+  List<Widget> _buildKnowledgeBaseBranchTiles() {
+    final children = <Widget>[];
+    for (
+      var index = 0;
+      index < widget.knowledgeBaseBranchOptions.length;
+      index += 1
+    ) {
+      final option = widget.knowledgeBaseBranchOptions[index];
+      children.add(
+        ProjectKnowledgeBaseBranchOptionTile(
+          option: option,
+          isSelected: option.id == _selectedKnowledgeBaseBranchId,
+          onTap: () => _handleKnowledgeBaseBranchChanged(option.id),
+        ),
+      );
+      if (index != widget.knowledgeBaseBranchOptions.length - 1) {
+        children.add(const SizedBox(height: 8));
+      }
+    }
+    return children;
+  }
+
   List<Widget> _buildBookDeconstructionFollowupTiles() {
     final children = <Widget>[];
     for (
@@ -482,6 +532,7 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
         title: text.trim(),
         projectTypeId: _selectedProjectTypeId,
         storageStrategyId: _selectedStorageStrategyId,
+        knowledgeBaseBranchId: _selectedKnowledgeBaseBranchId,
         runtimeBaselineId: _selectedRuntimeBaselineId,
         bookDeconstructionFollowupRouteId:
             _selectedBookDeconstructionFollowupRouteId,
@@ -492,7 +543,11 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
 
   void _handleProjectTypeChanged(String projectTypeId) {
     // 中文注释: 切换项目类型时，如果标题仍是旧默认值，就跟着切换默认标题，减少创建摩擦。
-    final nextDefaultTitle = _defaultTitleOf(projectTypeId);
+    final nextBranchId = _resolvedKnowledgeBaseBranchIdFor(projectTypeId);
+    final nextDefaultTitle = _defaultTitleOf(
+      projectTypeId,
+      knowledgeBaseBranchId: nextBranchId,
+    );
     final cleanTitle = _controller.text.trim();
     if (cleanTitle.isEmpty || cleanTitle == _lastDefaultTitle) {
       _controller.value = TextEditingValue(
@@ -502,10 +557,33 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
     }
     setState(() {
       _selectedProjectTypeId = projectTypeId;
+      _selectedKnowledgeBaseBranchId = nextBranchId;
       _selectedStorageStrategyId = _resolvedSelectedStorageStrategyId();
       _selectedBookDeconstructionFollowupRouteId =
           _resolvedSelectedBookDeconstructionFollowupRouteId();
       _selectedRuntimeBaselineId = '';
+      _lastDefaultTitle = nextDefaultTitle;
+    });
+  }
+
+  void _handleKnowledgeBaseBranchChanged(String branchId) {
+    final cleanTitle = _controller.text.trim();
+    final previousDefaultTitle = _defaultTitleOf(
+      _selectedProjectTypeId,
+      knowledgeBaseBranchId: _selectedKnowledgeBaseBranchId,
+    );
+    final nextDefaultTitle = _defaultTitleOf(
+      _selectedProjectTypeId,
+      knowledgeBaseBranchId: branchId,
+    );
+    if (cleanTitle.isEmpty || cleanTitle == previousDefaultTitle) {
+      _controller.value = TextEditingValue(
+        text: nextDefaultTitle,
+        selection: TextSelection.collapsed(offset: nextDefaultTitle.length),
+      );
+    }
+    setState(() {
+      _selectedKnowledgeBaseBranchId = branchId;
       _lastDefaultTitle = nextDefaultTitle;
     });
   }
@@ -544,6 +622,8 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
     switch (phase) {
       case ProjectCreationPhase.projectType:
         return '项目类型';
+      case ProjectCreationPhase.knowledgeBaseBranch:
+        return '知识库分支';
       case ProjectCreationPhase.storageStrategy:
         return '主存储策略';
       case ProjectCreationPhase.bookDeconstructionFollowup:
@@ -573,6 +653,17 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
     return widget.storageStrategyOptions.isEmpty
         ? 'markdown_project_store'
         : widget.storageStrategyOptions.first.id;
+  }
+
+  String _resolvedSelectedKnowledgeBaseBranchId() {
+    for (final option in widget.knowledgeBaseBranchOptions) {
+      if (option.id == widget.selectedKnowledgeBaseBranchId) {
+        return option.id;
+      }
+    }
+    return widget.knowledgeBaseBranchOptions.isEmpty
+        ? ''
+        : widget.knowledgeBaseBranchOptions.first.id;
   }
 
   String _resolvedSelectedRuntimeBaselineId() {
@@ -608,9 +699,18 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
         : widget.projectTypeOptions.first;
   }
 
-  String _defaultTitleOf(String projectTypeId) {
+  String _defaultTitleOf(
+    String projectTypeId, {
+    String? knowledgeBaseBranchId,
+  }) {
     for (final option in widget.projectTypeOptions) {
       if (option.id == projectTypeId) {
+        if (projectTypeId == 'knowledge_base') {
+        return (knowledgeBaseBranchId ?? _selectedKnowledgeBaseBranchId) ==
+                  KnowledgeBaseBranchCatalogService.ragBranchId
+              ? '未命名语料库'
+              : '未命名资料知识库';
+        }
         return option.defaultTitle;
       }
     }
@@ -619,11 +719,24 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
         : widget.projectTypeOptions.first.defaultTitle;
   }
 
+  String _resolvedKnowledgeBaseBranchIdFor(String projectTypeId) {
+    if (projectTypeId != 'knowledge_base') {
+      return '';
+    }
+    final resolved = _resolvedSelectedKnowledgeBaseBranchId();
+    return resolved.isEmpty
+        ? KnowledgeBaseBranchCatalogService.structuredBranchId
+        : resolved;
+  }
+
   String _projectNameHintText() {
     // 中文注释: 名称输入提示跟随项目类型切换，避免默认把知识库也说成小说项目。
     switch (_selectedProjectTypeId) {
       case 'knowledge_base':
-        return '输入要创建的资料知识库名称';
+        return _selectedKnowledgeBaseBranchId ==
+                KnowledgeBaseBranchCatalogService.ragBranchId
+            ? '输入要创建的语料库名称'
+            : '输入要创建的资料知识库名称';
       case 'long_novel':
         return '输入要创建的长篇项目名称';
       case 'book_deconstruction':
@@ -636,6 +749,8 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
   String _submitButtonLabel() {
     switch (widget.creationPhase) {
       case ProjectCreationPhase.projectType:
+        return '下一步';
+      case ProjectCreationPhase.knowledgeBaseBranch:
         return '下一步';
       case ProjectCreationPhase.storageStrategy:
         return _selectedTypeRequiresRuntimeBaseline() ? '下一步' : '创建并打开';
@@ -769,6 +884,8 @@ class _StepStrip extends StatelessWidget {
     final colors = context.novelThemeColors;
     final phases = <ProjectCreationPhase>[
       ProjectCreationPhase.projectType,
+      if (selectedProjectTypeId == 'knowledge_base')
+        ProjectCreationPhase.knowledgeBaseBranch,
       if (selectedProjectTypeId == 'book_deconstruction')
         ProjectCreationPhase.bookDeconstructionFollowup,
       ProjectCreationPhase.storageStrategy,
@@ -805,6 +922,8 @@ class _StepStrip extends StatelessWidget {
     switch (phase) {
       case ProjectCreationPhase.projectType:
         return '类型';
+      case ProjectCreationPhase.knowledgeBaseBranch:
+        return '分支';
       case ProjectCreationPhase.storageStrategy:
         return '存储';
       case ProjectCreationPhase.bookDeconstructionFollowup:

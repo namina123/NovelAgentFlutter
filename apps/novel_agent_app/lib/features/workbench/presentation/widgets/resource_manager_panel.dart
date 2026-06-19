@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../shared/theme/novel_theme_context.dart';
-import '../contracts/pending_research_action_handler.dart';
 import '../contracts/workbench_file_panel_action_handler.dart';
 import '../models/workbench_resource_view_data.dart';
 import 'file_tool_group.dart';
-import 'resource_information_section.dart';
 import 'resource_manager_header.dart';
 import 'resource_panel_section.dart';
 import 'resource_tree_card.dart';
@@ -16,12 +14,10 @@ class ResourceManagerPanel extends StatelessWidget {
     super.key,
     required this.viewData,
     required this.actionHandler,
-    this.pendingResearchActionHandler,
   });
 
   final WorkbenchResourceViewData viewData;
   final WorkbenchFilePanelActionHandler actionHandler;
-  final PendingResearchActionHandler? pendingResearchActionHandler;
 
   @override
   Widget build(BuildContext context) {
@@ -68,18 +64,6 @@ class ResourceManagerPanel extends StatelessWidget {
                   ),
                 ),
               ),
-              if (viewData.informationViewData.hasContent) ...[
-                SliverToBoxAdapter(
-                  child: SizedBox(height: visual.compactGap + 2),
-                ),
-                SliverToBoxAdapter(
-                  child: ResourceInformationSection(
-                    viewData: viewData.informationViewData,
-                    actionHandler: actionHandler,
-                    pendingResearchActionHandler: pendingResearchActionHandler,
-                  ),
-                ),
-              ],
               SliverToBoxAdapter(
                 child: SizedBox(height: visual.compactGap + 1),
               ),

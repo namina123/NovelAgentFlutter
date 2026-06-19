@@ -24,7 +24,7 @@ void main() {
       expect(projection.userLines, contains('资料状态：需要资料'));
       expect(
         projection.userLines,
-        contains('资料投影：knowledge/项目知识摘要.md | research/资料研究摘要.md'),
+        contains('资料摘要：knowledge/项目知识摘要.md | research/资料研究摘要.md'),
       );
       expect(projection.diagnosticLines, contains('pending_research_count=1'));
     });

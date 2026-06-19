@@ -4,16 +4,14 @@ class WorkbenchInformationViewData {
     this.summary = '当前项目还没有可回看的资料摘要。',
     this.usageSummary = '本轮还没有可解释的资料使用记录。',
     this.entries = const <WorkbenchInformationEntryViewData>[],
-    this.pendingEntries = const <WorkbenchInformationEntryViewData>[],
   });
 
   final String title;
   final String summary;
   final String usageSummary;
   final List<WorkbenchInformationEntryViewData> entries;
-  final List<WorkbenchInformationEntryViewData> pendingEntries;
 
-  bool get hasContent => entries.isNotEmpty || pendingEntries.isNotEmpty;
+  bool get hasContent => entries.isNotEmpty;
 
   @override
   bool operator ==(Object other) {
@@ -22,18 +20,12 @@ class WorkbenchInformationViewData {
             other.title == title &&
             other.summary == summary &&
             other.usageSummary == usageSummary &&
-            _listEquals(other.entries, entries) &&
-            _listEquals(other.pendingEntries, pendingEntries);
+            _listEquals(other.entries, entries);
   }
 
   @override
-  int get hashCode => Object.hash(
-    title,
-    summary,
-    usageSummary,
-    Object.hashAll(entries),
-    Object.hashAll(pendingEntries),
-  );
+  int get hashCode =>
+      Object.hash(title, summary, usageSummary, Object.hashAll(entries));
 }
 
 bool _listEquals<T>(List<T> left, List<T> right) {

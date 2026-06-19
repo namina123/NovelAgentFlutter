@@ -313,6 +313,7 @@ extension on ProjectAssetsViewData {
       referenceExtractionStrategyPicker:
           referenceExtractionStrategyPicker ??
           this.referenceExtractionStrategyPicker,
+      ragExtraction: ragExtraction,
       isLoading: isLoading,
     );
   }

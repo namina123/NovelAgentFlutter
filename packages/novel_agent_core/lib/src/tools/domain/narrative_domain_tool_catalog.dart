@@ -1689,4 +1689,5 @@ class NarrativeDomainToolCatalog {
     },
     'additionalProperties': true,
   };
+
 }

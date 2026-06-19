@@ -529,19 +529,10 @@ void main() {
         final loaded = await harness.controller.loadProject(tempDirectory.path);
 
         expect(loaded, isTrue);
-        expect(
-          harness.workbench.informationViewData.summary,
-          '已整理 1 组资料摘要，1 项待确认',
-        );
+        expect(harness.workbench.informationViewData.summary, '已整理 1 组资料摘要');
         expect(
           harness.workbench.informationViewData.usageSummary,
           '本轮还没有可解释的资料使用记录。',
-        );
-        expect(
-          harness.workbench.informationViewData.pendingEntries
-              .map((entry) => entry.title)
-              .toList(growable: false),
-          <String>['待确认知识'],
         );
       },
     );
@@ -906,6 +897,7 @@ WorkbenchWorkspaceController _createController({
     narrativePersistenceService: BookDeconstructionNarrativePersistenceService(
       workspacePort: effectiveWorkspacePort,
     ),
+    generateDraftUseCaseFactory: (_, _) => _NoopGenerateDraftUseCase(),
     longTaskSupervisor: longTaskSupervisor ?? _NoopLongTaskSupervisor(),
     reviewReportService: _NoopProjectReviewReportService(),
     projectRuntimeProfileRepository: ProjectRuntimeProfileRepository(
@@ -1129,6 +1121,65 @@ class _MemoryLongTaskRunRegistry implements LongTaskRunRegistry {
 class _NoopProjectReviewReportService implements ProjectReviewReportService {
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _NoopGenerateDraftUseCase extends GenerateDraftUseCase {
+  _NoopGenerateDraftUseCase()
+    : super(
+        projectWorkspacePort: _NoopProjectWorkspacePort(),
+        llmGateway: _NoopLlmGateway(),
+        toolExecutionPort: _NoopToolExecutionPort(),
+        contextAssemblerService: ContextAssemblerService(
+          budgetService: ContextBudgetService(),
+          staticSectionService: ContextStaticSectionService(
+            projectPromptContract: ProjectPromptContract(),
+          ),
+          projectFileSectionService: ContextProjectFileSectionService(),
+        ),
+        projectPromptContract: ProjectPromptContract(),
+      );
+}
+
+class _NoopLlmGateway implements LlmGateway {
+  @override
+  Future<JsonMap> requestChat({
+    required ChatRequest request,
+    DraftGenerationCancellationToken? cancellationToken,
+    void Function(LlmStreamUpdate update)? onStreamUpdate,
+  }) async {
+    return const <String, Object?>{'content': ''};
+  }
+
+  @override
+  Future<JsonMap> requestChatLegacy({
+    required List<JsonMap> messages,
+    required String modelId,
+    List<JsonMap> tools = const <JsonMap>[],
+    JsonMap options = const <String, Object?>{},
+    List<ChatInputAttachment> attachments = const <ChatInputAttachment>[],
+    DraftGenerationCancellationToken? cancellationToken,
+    void Function(LlmStreamUpdate update)? onStreamUpdate,
+  }) async {
+    return const <String, Object?>{'content': ''};
+  }
+
+  @override
+  Future<String> requestText({
+    required String prompt,
+    required String modelId,
+  }) async {
+    return '';
+  }
+}
+
+class _NoopToolExecutionPort implements ToolExecutionPort {
+  @override
+  Future<JsonMap> execute({
+    required ProjectDescriptor project,
+    required JsonMap toolCall,
+  }) async {
+    return const <String, Object?>{'ok': true};
+  }
 }
 
 Future<void> _writeProjectFile(

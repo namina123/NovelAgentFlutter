@@ -23,8 +23,11 @@ class ProjectImportActionPolicyService {
     String requestedTargetDirectory = '',
     bool requestedAutoDeconstruct = false,
     bool requestedSmartAnalysis = false,
-    String analysisAgentId = '',
-    String analysisAgentGroupId = '',
+    String smartAnalysisProviderId = '',
+    String smartAnalysisModelId = '',
+    bool requestedSmartDeconstruction = false,
+    String smartDeconstructionProviderId = '',
+    String smartDeconstructionModelId = '',
   }) {
     final normalizedProjectType = projectType.trim();
     final cleanSourcePaths = sourcePaths
@@ -34,6 +37,11 @@ class ProjectImportActionPolicyService {
     final canAutoDeconstruct = _supportsAutoDeconstruction(cleanSourcePaths);
     final canSmartAnalyze =
         normalizedProjectType != BookDeconstructionConstants.projectTypeId;
+    final canSmartDeconstruction =
+        normalizedProjectType == BookDeconstructionConstants.projectTypeId &&
+        cleanSourcePaths.isNotEmpty;
+    final cleanSmartAnalysisProviderId = smartAnalysisProviderId.trim();
+    final cleanSmartAnalysisModelId = smartAnalysisModelId.trim();
     final resolvedTargetDirectory = _resolvedTargetDirectory(
       projectType: normalizedProjectType,
       requestedTargetDirectory: requestedTargetDirectory,
@@ -44,7 +52,19 @@ class ProjectImportActionPolicyService {
                       BookDeconstructionConstants.projectTypeId &&
                   cleanSourcePaths.isNotEmpty)
         : false;
-    final smartAnalysis = canSmartAnalyze ? requestedSmartAnalysis : false;
+    final cleanSmartDeconstructionProviderId = smartDeconstructionProviderId
+        .trim();
+    final cleanSmartDeconstructionModelId = smartDeconstructionModelId.trim();
+    final smartAnalysis =
+        canSmartAnalyze &&
+        requestedSmartAnalysis &&
+        cleanSmartAnalysisProviderId.isNotEmpty &&
+        cleanSmartAnalysisModelId.isNotEmpty;
+    final smartDeconstruction =
+        canSmartDeconstruction &&
+        requestedSmartDeconstruction &&
+        cleanSmartDeconstructionProviderId.isNotEmpty &&
+        cleanSmartDeconstructionModelId.isNotEmpty;
     return ProjectImportActionPolicy(
       projectType: normalizedProjectType,
       resolvedTargetDirectory: resolvedTargetDirectory,
@@ -53,8 +73,12 @@ class ProjectImportActionPolicyService {
       canAutoDeconstruct: canAutoDeconstruct,
       smartAnalysis: smartAnalysis,
       canSmartAnalyze: canSmartAnalyze,
-      analysisAgentId: analysisAgentId.trim(),
-      analysisAgentGroupId: analysisAgentGroupId.trim(),
+      smartAnalysisProviderId: cleanSmartAnalysisProviderId,
+      smartAnalysisModelId: cleanSmartAnalysisModelId,
+      smartDeconstruction: smartDeconstruction,
+      canSmartDeconstruction: canSmartDeconstruction,
+      smartDeconstructionProviderId: cleanSmartDeconstructionProviderId,
+      smartDeconstructionModelId: cleanSmartDeconstructionModelId,
       fileSelectionHint: _fileSelectionHint(cleanSourcePaths),
       outputHint: _outputHint(
         projectType: normalizedProjectType,
@@ -63,8 +87,12 @@ class ProjectImportActionPolicyService {
         autoDeconstruct: autoDeconstruct,
         canSmartAnalyze: canSmartAnalyze,
         smartAnalysis: smartAnalysis,
-        analysisAgentId: analysisAgentId,
-        analysisAgentGroupId: analysisAgentGroupId,
+        smartAnalysisProviderId: cleanSmartAnalysisProviderId,
+        smartAnalysisModelId: cleanSmartAnalysisModelId,
+        canSmartDeconstruction: canSmartDeconstruction,
+        smartDeconstruction: smartDeconstruction,
+        smartDeconstructionProviderId: cleanSmartDeconstructionProviderId,
+        smartDeconstructionModelId: cleanSmartDeconstructionModelId,
       ),
     );
   }
@@ -126,26 +154,30 @@ class ProjectImportActionPolicyService {
     required bool autoDeconstruct,
     required bool canSmartAnalyze,
     required bool smartAnalysis,
-    required String analysisAgentId,
-    required String analysisAgentGroupId,
+    required String smartAnalysisProviderId,
+    required String smartAnalysisModelId,
+    required bool canSmartDeconstruction,
+    required bool smartDeconstruction,
+    required String smartDeconstructionProviderId,
+    required String smartDeconstructionModelId,
   }) {
     if (cleanSourcePaths.isEmpty) {
       if (projectType == BookDeconstructionConstants.projectTypeId) {
-        return '拆书项目默认允许自动拆书；选择单个 .txt / .md / .markdown / .epub 文件后会自动启用。';
+        return '导入支持格式的文件后，可选启用智能拆书。';
       }
       return canSmartAnalyze
-          ? '导入后可启用智能分析，先判断资料更像正文、设定、大纲还是参考；请选择一个或多个本地 .txt / .md / .markdown / .epub 文件。'
+          ? '导入后可启用智能分析，判断资料更像正文、设定、大纲还是参考。'
           : '当前导入不支持智能分析。';
     }
     if (!canAutoDeconstruct) {
       if (canSmartAnalyze) {
         final analysisHint = _smartAnalysisHint(
           smartAnalysis: smartAnalysis,
-          analysisAgentId: analysisAgentId,
-          analysisAgentGroupId: analysisAgentGroupId,
+          smartAnalysisProviderId: smartAnalysisProviderId,
+          smartAnalysisModelId: smartAnalysisModelId,
         );
         return analysisHint.isEmpty
-            ? '当前选择不支持自动拆书；如需智能分析，请继续确认分析智能体或智能体组。'
+            ? '当前选择不支持自动拆书；如需智能分析，请先选择内置分析器使用的模型。'
             : analysisHint;
       }
       return '当前选择不支持自动拆书；请改为单个 .txt / .md / .markdown / .epub 文件。';
@@ -156,37 +188,58 @@ class ProjectImportActionPolicyService {
     );
     final smartAnalysisHint = _smartAnalysisHint(
       smartAnalysis: smartAnalysis,
-      analysisAgentId: analysisAgentId,
-      analysisAgentGroupId: analysisAgentGroupId,
+      smartAnalysisProviderId: smartAnalysisProviderId,
+      smartAnalysisModelId: smartAnalysisModelId,
     );
     if (projectType == BookDeconstructionConstants.projectTypeId) {
-      return '导入原文会归档到 sources/original/，自动拆书预演纪要会写入 $previewPath。';
+      final smartDeconstructionHint = _smartDeconstructionHint(
+        canSmartDeconstruction: canSmartDeconstruction,
+        smartDeconstruction: smartDeconstruction,
+        smartDeconstructionProviderId: smartDeconstructionProviderId,
+        smartDeconstructionModelId: smartDeconstructionModelId,
+      );
+      final base = '导入原文后，预演纪要会写入 $previewPath。';
+      return smartDeconstructionHint.isEmpty
+          ? base
+          : '$base $smartDeconstructionHint';
     }
-    final base = '自动拆书预演纪要会写入 $previewPath，原始导入文件仍保留在所选目标目录。';
+    final base = '预演纪要会写入 $previewPath，原始导入文件保留在目标目录。';
     return smartAnalysisHint.isEmpty ? base : '$base $smartAnalysisHint';
   }
 
   String _smartAnalysisHint({
     required bool smartAnalysis,
-    required String analysisAgentId,
-    required String analysisAgentGroupId,
+    required String smartAnalysisProviderId,
+    required String smartAnalysisModelId,
   }) {
+    final providerId = smartAnalysisProviderId.trim();
+    final modelId = smartAnalysisModelId.trim();
+    if (providerId.isEmpty || modelId.isEmpty) {
+      return '如需智能分析，请先选择模型。';
+    }
     if (!smartAnalysis) {
+      return '已选择分析模型，可按需开启。';
+    }
+    return '智能分析已开启，将使用 $modelId 判断内容类型。';
+  }
+
+  String _smartDeconstructionHint({
+    required bool canSmartDeconstruction,
+    required bool smartDeconstruction,
+    required String smartDeconstructionProviderId,
+    required String smartDeconstructionModelId,
+  }) {
+    if (!canSmartDeconstruction) {
       return '';
     }
-    final agentId = analysisAgentId.trim();
-    final agentGroupId = analysisAgentGroupId.trim();
-    if (agentId.isEmpty && agentGroupId.isEmpty) {
-      return '智能分析默认开启，会先大致判断导入内容类型。';
+    if (smartDeconstructionProviderId.trim().isEmpty ||
+        smartDeconstructionModelId.trim().isEmpty) {
+      return '如需智能拆书，请先选择专用模型。';
     }
-    final selected = <String>[];
-    if (agentId.isNotEmpty) {
-      selected.add('智能体 $agentId');
+    if (!smartDeconstruction) {
+      return '已选择拆书模型，可按需开启。';
     }
-    if (agentGroupId.isNotEmpty) {
-      selected.add('智能体组 $agentGroupId');
-    }
-    return '智能分析默认开启，将由${selected.join(' / ')} 先判断导入内容类型。';
+    return '智能拆分已开启，将使用 $smartDeconstructionModelId 处理章节划分。';
   }
 
   String _fileStem(String sourcePath) {

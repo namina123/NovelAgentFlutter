@@ -5,6 +5,7 @@ import '../../../../../shared/widgets/panel_surface.dart';
 import '../contracts/resource_manager_action_handler.dart';
 import '../models/selector_option_view_data.dart';
 import '../models/workspace_command_request_view_data.dart';
+import 'conversation_model_strip.dart';
 import 'selector_field.dart';
 
 class WorkspaceCommandOverlay extends StatefulWidget {
@@ -33,12 +34,13 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
   late final TextEditingController _contentController;
   late final TextEditingController _sourcePathsController;
   late final TextEditingController _targetDirectoryController;
-  late final TextEditingController _analysisAgentController;
-  late final TextEditingController _analysisAgentGroupController;
   late String _selectedTransitionTargetProjectTypeId;
   late String _selectedTransitionRuntimeBaselineId;
+  late String _selectedSmartAnalysisProviderModelKey;
+  late String _selectedSmartDeconstructionProviderModelKey;
   late bool _autoDeconstruct;
   late bool _smartAnalysis;
+  late bool _smartDeconstruction;
 
   @override
   void initState() {
@@ -65,18 +67,18 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
     _targetDirectoryController = TextEditingController(
       text: widget.viewData.targetDirectory,
     );
-    _analysisAgentController = TextEditingController(
-      text: widget.viewData.analysisAgentId,
-    );
-    _analysisAgentGroupController = TextEditingController(
-      text: widget.viewData.analysisAgentGroupId,
-    );
     _selectedTransitionTargetProjectTypeId =
         widget.viewData.transitionTargetProjectTypeId;
     _selectedTransitionRuntimeBaselineId =
         widget.viewData.transitionRuntimeBaselineId;
+    _selectedSmartAnalysisProviderModelKey = _smartAnalysisProviderModelKeyOf(
+      widget.viewData,
+    );
+    _selectedSmartDeconstructionProviderModelKey =
+        _smartDeconstructionProviderModelKeyOf(widget.viewData);
     _autoDeconstruct = widget.viewData.autoDeconstruct;
     _smartAnalysis = widget.viewData.smartAnalysis;
+    _smartDeconstruction = widget.viewData.smartDeconstruction;
   }
 
   @override
@@ -97,11 +99,6 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
     _syncController(
       _targetDirectoryController,
       widget.viewData.targetDirectory,
-    );
-    _syncController(_analysisAgentController, widget.viewData.analysisAgentId);
-    _syncController(
-      _analysisAgentGroupController,
-      widget.viewData.analysisAgentGroupId,
     );
     if (_selectedTransitionTargetProjectTypeId !=
             widget.viewData.transitionTargetProjectTypeId ||
@@ -124,6 +121,29 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
         _smartAnalysis = widget.viewData.smartAnalysis;
       });
     }
+    final nextSmartAnalysisKey = _smartAnalysisProviderModelKeyOf(
+      widget.viewData,
+    );
+    if (_selectedSmartAnalysisProviderModelKey != nextSmartAnalysisKey) {
+      setState(() {
+        _selectedSmartAnalysisProviderModelKey = nextSmartAnalysisKey;
+      });
+    }
+    final nextSmartDeconstructionKey = _smartDeconstructionProviderModelKeyOf(
+      widget.viewData,
+    );
+    if (_selectedSmartDeconstructionProviderModelKey !=
+        nextSmartDeconstructionKey) {
+      setState(() {
+        _selectedSmartDeconstructionProviderModelKey =
+            nextSmartDeconstructionKey;
+      });
+    }
+    if (_smartDeconstruction != widget.viewData.smartDeconstruction) {
+      setState(() {
+        _smartDeconstruction = widget.viewData.smartDeconstruction;
+      });
+    }
   }
 
   @override
@@ -138,8 +158,6 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
     _contentController.dispose();
     _sourcePathsController.dispose();
     _targetDirectoryController.dispose();
-    _analysisAgentController.dispose();
-    _analysisAgentGroupController.dispose();
     super.dispose();
   }
 
@@ -187,8 +205,9 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
                         ),
                       ),
                       IconButton(
-                        onPressed:
-                            widget.actionHandler.onWorkspaceCommandDismissed,
+                        onPressed: widget.viewData.isBusy
+                            ? null
+                            : widget.actionHandler.onWorkspaceCommandDismissed,
                         icon: const Icon(Icons.close_rounded),
                       ),
                     ],
@@ -214,14 +233,34 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
                   Row(
                     children: [
                       TextButton(
-                        onPressed:
-                            widget.actionHandler.onWorkspaceCommandDismissed,
+                        onPressed: widget.viewData.isBusy
+                            ? null
+                            : widget.actionHandler.onWorkspaceCommandDismissed,
                         child: const Text('取消'),
                       ),
                       const Spacer(),
                       FilledButton(
-                        onPressed: _submit,
-                        child: Text(widget.viewData.confirmLabel),
+                        onPressed: widget.viewData.isBusy ? null : _submit,
+                        child: widget.viewData.isBusy
+                            ? Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    widget.viewData.busyLabel.trim().isEmpty
+                                        ? widget.viewData.confirmLabel
+                                        : widget.viewData.busyLabel,
+                                  ),
+                                ],
+                              )
+                            : Text(widget.viewData.confirmLabel),
                       ),
                     ],
                   ),
@@ -253,6 +292,7 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
               label: '目标项目类型',
               value: _selectedTransitionTargetProjectTypeId,
               options: widget.viewData.transitionTargetProjectTypeOptions,
+              enabled: !widget.viewData.isBusy,
               onSelected: (value) {
                 setState(() {
                   _selectedTransitionTargetProjectTypeId = value;
@@ -274,6 +314,7 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
                 label: '运行基准',
                 value: _selectedTransitionRuntimeBaselineId,
                 options: widget.viewData.transitionRuntimeBaselineOptions,
+                enabled: !widget.viewData.isBusy,
                 emptyLabel: '请选择运行基准',
                 onSelected: (value) {
                   setState(() {
@@ -305,10 +346,20 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
             Row(
               children: [
                 FilledButton.tonalIcon(
-                  onPressed: _pickImportFiles,
+                  onPressed: widget.viewData.isBusy ? null : _pickImportFiles,
                   icon: const Icon(Icons.upload_file_rounded),
                   label: const Text('选择文件'),
                 ),
+                if (widget.viewData.projectType == 'book_deconstruction') ...[
+                  const SizedBox(width: 8),
+                  FilledButton.tonalIcon(
+                    onPressed: widget.viewData.isBusy
+                        ? null
+                        : _pickImportDirectory,
+                    icon: const Icon(Icons.folder_open_rounded),
+                    label: const Text('选择文件夹'),
+                  ),
+                ],
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
@@ -331,103 +382,88 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
               readOnly: true,
             ),
             _field(_targetDirectoryController, '导入到项目目录', hint: '例如：assets'),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Checkbox(
-                  value: widget.viewData.canAutoDeconstruct
-                      ? _autoDeconstruct
-                      : false,
-                  onChanged: widget.viewData.canAutoDeconstruct
-                      ? (value) {
-                          setState(() {
-                            _autoDeconstruct = value ?? false;
-                          });
-                        }
-                      : null,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          '自动拆书',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: AppPalette.text,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          widget.viewData.importOutputHint,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: AppPalette.mutedText,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+            _ImportOptionBlock(
+              title: '自动拆书',
+              description: widget.viewData.importOutputHint,
+              value: widget.viewData.canAutoDeconstruct
+                  ? _autoDeconstruct
+                  : false,
+              enabled:
+                  widget.viewData.canAutoDeconstruct && !widget.viewData.isBusy,
+              onChanged: (value) {
+                setState(() {
+                  _autoDeconstruct = value;
+                });
+              },
             ),
+            if (widget.viewData.canSmartDeconstruction) ...[
+              const SizedBox(height: 8),
+              _modelSelectorField(
+                label: '智能拆书模型',
+                value: _selectedSmartDeconstructionProviderModelKey,
+                options: widget.viewData.smartDeconstructionModelOptions,
+                enabled: !widget.viewData.isBusy,
+                emptyLabel: '请选择拆书模型',
+                onSelected: (value) {
+                  setState(() {
+                    _selectedSmartDeconstructionProviderModelKey = value;
+                    if (value.trim().isEmpty) {
+                      _smartDeconstruction = false;
+                    }
+                  });
+                },
+              ),
+              _ImportOptionBlock(
+                title: '智能拆书',
+                description:
+                    _selectedSmartDeconstructionProviderModelKey.trim().isEmpty
+                    ? '先选择模型后才能启用。'
+                    : '启用后会自动识别章节并整理干扰内容。',
+                value: _smartDeconstruction,
+                enabled:
+                    !widget.viewData.isBusy &&
+                    _selectedSmartDeconstructionProviderModelKey
+                        .trim()
+                        .isNotEmpty,
+                onChanged: (value) {
+                  setState(() {
+                    _smartDeconstruction = value;
+                  });
+                },
+              ),
+            ],
             if (widget.viewData.canSmartAnalyze) ...[
               const SizedBox(height: 8),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Checkbox(
-                    value: _smartAnalysis,
-                    onChanged: (value) {
-                      setState(() {
-                        _smartAnalysis = value ?? false;
-                      });
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 10),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            '智能分析',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: AppPalette.text,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            widget.viewData.importOutputHint,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: AppPalette.mutedText,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+              _modelSelectorField(
+                label: '分析模型',
+                value: _selectedSmartAnalysisProviderModelKey,
+                options: widget.viewData.smartAnalysisModelOptions,
+                enabled: !widget.viewData.isBusy,
+                emptyLabel: '请选择分析模型',
+                onSelected: (value) {
+                  setState(() {
+                    _selectedSmartAnalysisProviderModelKey = value;
+                    if (value.trim().isEmpty) {
+                      _smartAnalysis = false;
+                    }
+                  });
+                },
               ),
-              _field(
-                _analysisAgentController,
-                '分析智能体',
-                hint: '可留空，或填写 agent id',
-              ),
-              _field(
-                _analysisAgentGroupController,
-                '分析智能体组',
-                hint: '可留空，或填写 group id',
+              _ImportOptionBlock(
+                title: '智能分析',
+                description:
+                    _selectedSmartAnalysisProviderModelKey.trim().isEmpty
+                    ? '先选择模型后才能启用。'
+                    : '启用后会先判断导入内容更像正文、设定、大纲、角色资料还是参考材料。',
+                value: _smartAnalysis,
+                enabled:
+                    !widget.viewData.isBusy &&
+                    _selectedSmartAnalysisProviderModelKey.trim().isNotEmpty,
+                onChanged: (value) {
+                  setState(() {
+                    _smartAnalysis = value;
+                  });
+                },
               ),
             ],
           ],
@@ -478,6 +514,7 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
     required String value,
     required List<SelectorOptionViewData> options,
     required ValueChanged<String> onSelected,
+    bool enabled = true,
     String emptyLabel = '请选择',
   }) {
     final resolvedLabel = _selectorLabelOf(
@@ -504,8 +541,46 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
             value: resolvedLabel,
             options: options,
             onSelected: onSelected,
-            enabled: options.length > 1 || value.trim().isEmpty,
+            enabled: enabled && (options.length > 1 || value.trim().isEmpty),
             showLabel: false,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _modelSelectorField({
+    required String label,
+    required String value,
+    required List<SelectorOptionViewData> options,
+    required ValueChanged<String> onSelected,
+    bool enabled = true,
+    String emptyLabel = '请选择',
+  }) {
+    final resolvedLabel = _selectorLabelOf(
+      value: value,
+      options: options,
+      emptyLabel: emptyLabel,
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: AppPalette.mutedText,
+            ),
+          ),
+          const SizedBox(height: 6),
+          ConversationModelStrip(
+            modelLabel: resolvedLabel,
+            modelOptions: options,
+            onModelSelected: enabled ? onSelected : (_) {},
+            showSurface: false,
           ),
         ],
       ),
@@ -537,8 +612,18 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
       targetDirectory: _targetDirectoryController.text,
       autoDeconstruct: _autoDeconstruct,
       smartAnalysis: _smartAnalysis,
-      analysisAgentId: _analysisAgentController.text,
-      analysisAgentGroupId: _analysisAgentGroupController.text,
+      smartAnalysisProviderId: _providerIdOfSmartAnalysisSelection(),
+      smartAnalysisModelId: _modelIdOfSmartAnalysisSelection(),
+      smartDeconstruction: _smartDeconstruction,
+      smartDeconstructionProviderId:
+          _providerIdOfSmartDeconstructionSelection(),
+      smartDeconstructionModelId: _modelIdOfSmartDeconstructionSelection(),
+    );
+  }
+
+  void _pickImportDirectory() {
+    widget.actionHandler.onWorkspaceImportDirectoryPickRequested(
+      _currentRequest().copyWith(pickDirectory: true),
     );
   }
 
@@ -568,5 +653,122 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
       }
     }
     return cleanValue;
+  }
+
+  String _smartAnalysisProviderModelKeyOf(WorkspaceCommandViewData viewData) {
+    final providerId = viewData.smartAnalysisProviderId.trim();
+    final modelId = viewData.smartAnalysisModelId.trim();
+    if (providerId.isEmpty || modelId.isEmpty) {
+      return '';
+    }
+    return '$providerId::$modelId';
+  }
+
+  String _smartDeconstructionProviderModelKeyOf(
+    WorkspaceCommandViewData viewData,
+  ) {
+    final providerId = viewData.smartDeconstructionProviderId.trim();
+    final modelId = viewData.smartDeconstructionModelId.trim();
+    if (providerId.isEmpty || modelId.isEmpty) {
+      return '';
+    }
+    return '$providerId::$modelId';
+  }
+
+  String _providerIdOfSmartAnalysisSelection() {
+    final key = _selectedSmartAnalysisProviderModelKey.trim();
+    if (!key.contains('::')) {
+      return '';
+    }
+    return key.split('::').first.trim();
+  }
+
+  String _modelIdOfSmartAnalysisSelection() {
+    final key = _selectedSmartAnalysisProviderModelKey.trim();
+    if (!key.contains('::')) {
+      return '';
+    }
+    return key.substring(key.indexOf('::') + 2).trim();
+  }
+
+  String _providerIdOfSmartDeconstructionSelection() {
+    final key = _selectedSmartDeconstructionProviderModelKey.trim();
+    if (!key.contains('::')) {
+      return '';
+    }
+    return key.split('::').first.trim();
+  }
+
+  String _modelIdOfSmartDeconstructionSelection() {
+    final key = _selectedSmartDeconstructionProviderModelKey.trim();
+    if (!key.contains('::')) {
+      return '';
+    }
+    return key.substring(key.indexOf('::') + 2).trim();
+  }
+}
+
+class _ImportOptionBlock extends StatelessWidget {
+  const _ImportOptionBlock({
+    required this.title,
+    required this.description,
+    required this.value,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final String title;
+  final String description;
+  final bool value;
+  final bool enabled;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Checkbox(
+            value: value,
+            onChanged: enabled
+                ? (nextValue) => onChanged(nextValue ?? false)
+                : null,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            visualDensity: const VisualDensity(horizontal: -3, vertical: -3),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 5),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppPalette.text,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    description,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      height: 1.4,
+                      fontWeight: FontWeight.w500,
+                      color: AppPalette.mutedText,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

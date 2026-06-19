@@ -1,12 +1,18 @@
 import 'dart:io';
 
+import 'project_text_file_read_service.dart';
 import 'project_relative_path_resolver.dart';
 
 class LocalProjectFileMutationAdapter {
-  LocalProjectFileMutationAdapter({ProjectRelativePathResolver? pathResolver})
-    : _pathResolver = pathResolver ?? ProjectRelativePathResolver();
+  LocalProjectFileMutationAdapter({
+    ProjectRelativePathResolver? pathResolver,
+    ProjectTextFileReadService? textFileReadService,
+  }) : _pathResolver = pathResolver ?? ProjectRelativePathResolver(),
+       _textFileReadService =
+           textFileReadService ?? const ProjectTextFileReadService();
 
   final ProjectRelativePathResolver _pathResolver;
+  final ProjectTextFileReadService _textFileReadService;
 
   Future<bool> entryExists(String rootPath, String relativePath) async {
     // 中文注释: 文件变更适配器专门承接宿主层存在性判断，避免工作区读取端口继续膨胀。
@@ -72,15 +78,14 @@ class LocalProjectFileMutationAdapter {
   }
 
   Future<String?> readExternalTextFile(String absolutePath) async {
-    // 中文注释: 外部文本读取只承接宿主绝对路径，不参与项目内相对路径规则。
-    final file = File(absolutePath);
-    if (!await file.exists()) {
-      return null;
-    }
-    return file.readAsString();
+    // 中文注释: 外部文本读取复用统一 reader，让导入前的 txt / markdown / epub 探测也具备同样的容错编码策略。
+    return _textFileReadService.readFile(absolutePath);
   }
 
-  Future<void> writeExternalTextFile(String absolutePath, String content) async {
+  Future<void> writeExternalTextFile(
+    String absolutePath,
+    String content,
+  ) async {
     // 中文注释: 目录导出先统一收口到绝对路径写文本，后续 zip 导出只需替换这一层实现。
     final file = File(absolutePath);
     await file.parent.create(recursive: true);

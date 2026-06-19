@@ -1,4 +1,5 @@
 import 'project_reference_extraction_strategy_picker_view_data.dart';
+import 'project_rag_extraction_view_data.dart';
 
 class ProjectAssetsViewData {
   const ProjectAssetsViewData({
@@ -16,6 +17,7 @@ class ProjectAssetsViewData {
     required this.expressionConstraintEditor,
     required this.foreshadowEditor,
     required this.referenceExtractionStrategyPicker,
+    required this.ragExtraction,
     required this.isLoading,
   });
 
@@ -34,6 +36,7 @@ class ProjectAssetsViewData {
   final ForeshadowRecordEditorViewData foreshadowEditor;
   final ProjectReferenceExtractionStrategyPickerViewData
   referenceExtractionStrategyPicker;
+  final ProjectRagExtractionViewData ragExtraction;
   final bool isLoading;
 
   factory ProjectAssetsViewData.initial() {
@@ -46,6 +49,7 @@ class ProjectAssetsViewData {
       tabs: const <ProjectAssetsTabViewData>[
         ProjectAssetsTabViewData(id: 'styles', label: '风格'),
         ProjectAssetsTabViewData(id: 'expression_constraints', label: '表达限制'),
+        ProjectAssetsTabViewData(id: 'rag_extraction', label: '语料提取'),
         ProjectAssetsTabViewData(id: 'foreshadows', label: '伏笔'),
         ProjectAssetsTabViewData(id: 'timelines', label: '时间线'),
         ProjectAssetsTabViewData(id: 'relationships', label: '关系'),
@@ -61,6 +65,7 @@ class ProjectAssetsViewData {
       foreshadowEditor: ForeshadowRecordEditorViewData.empty(),
       referenceExtractionStrategyPicker:
           ProjectReferenceExtractionStrategyPickerViewData.empty(),
+      ragExtraction: ProjectRagExtractionViewData.empty(),
       isLoading: false,
     );
   }

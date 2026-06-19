@@ -183,7 +183,7 @@ void main() {
             relativePath: 'continuity/最近状态变化.md',
             status: 'projection',
             subtitle: 'Readable projection',
-            summary: '打开最近 claims 与 ledger 变化投影。',
+            summary: '打开最近 claims 与 ledger 变化摘要。',
           ),
           ProjectLongTaskStationItemSummary(
             id: 'projection_review_summary',
@@ -191,7 +191,7 @@ void main() {
             relativePath: 'reviews/语义复核摘要.md',
             status: 'projection',
             subtitle: 'Readable projection',
-            summary: '打开当前语义复核投影。',
+            summary: '打开当前语义复核摘要。',
           ),
         ],
         permissionItems: <ProjectLongTaskStationItemSummary>[
@@ -212,7 +212,7 @@ void main() {
             relativePath: 'knowledge/项目知识摘要.md',
             status: 'information_projection',
             subtitle: 'Information projection',
-            summary: '打开当前 knowledge 卡片的可读投影。',
+            summary: '打开当前 knowledge 卡片的可读摘要。',
           ),
           ProjectLongTaskStationItemSummary(
             id: 'design_projection',
@@ -220,7 +220,7 @@ void main() {
             relativePath: 'knowledge/设计元素摘要.md',
             status: 'information_projection',
             subtitle: 'Information projection',
-            summary: '打开当前 design element 的可读投影。',
+            summary: '打开当前 design element 的可读摘要。',
           ),
         ],
         informationPermissionItems: <ProjectLongTaskStationItemSummary>[
@@ -307,11 +307,11 @@ void main() {
     expect(viewData.selectedRun!.informationProjectionItems, hasLength(2));
     expect(
       viewData.selectedRun!.narrativeProjectionItems.first.subtitle,
-      '可读投影',
+      '可读摘要',
     );
     expect(
       viewData.selectedRun!.informationProjectionItems.first.subtitle,
-      '资料投影',
+      '资料摘要',
     );
     expect(
       viewData.selectedRun!.informationProjectionItems.first.relativePath,

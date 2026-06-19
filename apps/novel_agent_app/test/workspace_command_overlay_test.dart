@@ -108,8 +108,20 @@ void main() {
         autoDeconstruct: false,
         smartAnalysis: true,
         canSmartAnalyze: true,
-        analysisAgentId: 'analysis-agent',
-        analysisAgentGroupId: 'analysis-group',
+        smartAnalysisProviderId: 'provider-a',
+        smartAnalysisModelId: 'model-a',
+        smartAnalysisModelOptions: <SelectorOptionViewData>[
+          SelectorOptionViewData(
+            id: 'provider-a::model-a',
+            label: 'Provider A · model-a',
+            note: 'provider-a',
+          ),
+          SelectorOptionViewData(
+            id: 'provider-b::model-b',
+            label: 'Provider B · model-b',
+            note: 'provider-b',
+          ),
+        ],
         canAutoDeconstruct: false,
         importFileSelectionHint: '请选择一个或多个本地文件。',
         importOutputHint: '导入后会先做智能分析。',
@@ -133,18 +145,87 @@ void main() {
       await tester.pump();
 
       expect(find.text('智能分析'), findsOneWidget);
-      expect(find.text('分析智能体'), findsOneWidget);
-      expect(find.text('分析智能体组'), findsOneWidget);
+      expect(find.text('分析模型'), findsOneWidget);
+      expect(find.text('Provider A · model-a'), findsOneWidget);
+      expect(find.textContaining('用户不需要也不能自行选择 agent'), findsOneWidget);
 
       await tester.tap(find.widgetWithText(FilledButton, '导入文件'));
       await tester.pump();
 
       expect(handler.lastSubmittedRequest, isNotNull);
       expect(handler.lastSubmittedRequest!.smartAnalysis, isTrue);
-      expect(handler.lastSubmittedRequest!.analysisAgentId, 'analysis-agent');
       expect(
-        handler.lastSubmittedRequest!.analysisAgentGroupId,
-        'analysis-group',
+        handler.lastSubmittedRequest!.smartAnalysisProviderId,
+        'provider-a',
+      );
+      expect(handler.lastSubmittedRequest!.smartAnalysisModelId, 'model-a');
+    },
+  );
+
+  testWidgets(
+    'workspace command overlay shows busy import state and disables actions',
+    (WidgetTester tester) async {
+      final handler = _FakeResourceManagerActionHandler();
+      const viewData = WorkspaceCommandViewData(
+        mode: WorkspaceCommandMode.importFiles,
+        title: '导入文件',
+        description: '选择一个或多个本地文件。',
+        confirmLabel: '导入文件',
+        isBusy: true,
+        busyLabel: '正在拆书',
+        status: '正在导入并生成拆书结构化预览。',
+        projectTitle: '',
+        projectType: 'book_deconstruction',
+        genre: '',
+        premise: '',
+        notes: '',
+        relativePath: '',
+        entryName: '',
+        content: '',
+        sourcePathsText: 'C:/imports/source.epub',
+        targetDirectory: 'sources/original',
+        autoDeconstruct: true,
+        canAutoDeconstruct: true,
+        importFileSelectionHint: '已选择 1 个文件。',
+        importOutputHint: '导入原文会归档到 sources/original/。',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light(),
+          home: Scaffold(
+            body: Stack(
+              children: [
+                WorkspaceCommandOverlay(
+                  viewData: viewData,
+                  actionHandler: handler,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('正在拆书'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(find.widgetWithText(FilledButton, '正在拆书'))
+            .onPressed,
+        isNull,
+      );
+      expect(
+        tester
+            .widget<TextButton>(find.widgetWithText(TextButton, '取消'))
+            .onPressed,
+        isNull,
+      );
+      expect(
+        tester
+            .widget<FilledButton>(find.widgetWithText(FilledButton, '选择文件'))
+            .onPressed,
+        isNull,
       );
     },
   );
@@ -244,6 +325,7 @@ void main() {
 class _FakeResourceManagerActionHandler
     implements ResourceManagerActionHandler {
   WorkspaceCommandRequestViewData? lastPickRequest;
+  WorkspaceCommandRequestViewData? lastDirectoryPickRequest;
   WorkspaceCommandRequestViewData? lastSubmittedRequest;
 
   @override
@@ -295,6 +377,9 @@ class _FakeResourceManagerActionHandler
   void onProjectAssetsRequested() {}
 
   @override
+  void onProjectRagRequested() {}
+
+  @override
   void onProjectCreationBackRequested() {}
 
   @override
@@ -335,6 +420,13 @@ class _FakeResourceManagerActionHandler
     WorkspaceCommandRequestViewData request,
   ) {
     lastPickRequest = request;
+  }
+
+  @override
+  void onWorkspaceImportDirectoryPickRequested(
+    WorkspaceCommandRequestViewData request,
+  ) {
+    lastDirectoryPickRequest = request;
   }
 
   @override

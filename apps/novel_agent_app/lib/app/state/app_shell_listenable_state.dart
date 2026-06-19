@@ -176,7 +176,7 @@ class AppShellListenableState {
         contextSummary: '会话面板初始化失败，已切换为安全视图。',
         conversationContextProjection: null,
         workflowTitle: workbench.workflowTitle,
-        workflowDescription: '会话投影恢复失败，请重新开始新会话或稍后再试。',
+        workflowDescription: '会话恢复失败，请重新开始新会话或稍后再试。',
         primaryActions: workbench.primaryActions,
         openingPanel: null,
         openingState: null,
