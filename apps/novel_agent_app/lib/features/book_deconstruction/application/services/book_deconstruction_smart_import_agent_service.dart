@@ -1,6 +1,7 @@
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import 'book_deconstruction_smart_import_contract.dart';
 import '../../../workbench/application/controllers/generate_draft_use_case_factory.dart';
 import 'book_deconstruction_smart_import_result.dart';
 import 'book_deconstruction_smart_import_workspace_service.dart';
@@ -76,47 +77,134 @@ class BookDeconstructionSmartImportAgentService {
       provider,
       settings.networkSettings,
     );
-    await useCase.execute(
+    final result = await useCase.execute(
       project: workspace.tempProject,
       userPrompt:
-          '请按 task.md 的要求完成拆书导入清洗，只处理导入文件，并把产物写到 outputs/normalized_source.md 与 outputs/import_report.md。',
+          '请按 ${BookDeconstructionSmartImportContract.taskRelativePath} 的要求完成拆书导入分析，只处理导入文件，并把规则写到 ${BookDeconstructionSmartImportContract.rulesPath}，说明写到 ${BookDeconstructionSmartImportContract.reportPath}。',
       modelId: resolvedModelId,
       intent: 'book_deconstruction_import',
-      title: '拆书导入智能清洗',
+      title: '拆书导入规则分析',
       exposedToolIds: _exposedToolIds,
     );
 
     final workspacePort = LocalProjectWorkspacePort();
-    final normalizedSourceText =
+    const rulesPath = BookDeconstructionSmartImportContract.rulesPath;
+    var rulesContent =
         await workspacePort.readTextFile(
           workspace.tempProject.rootPath,
-          'outputs/normalized_source.md',
+          rulesPath,
         ) ??
         '';
-    final reportPath = 'outputs/import_report.md';
-    final reportContent =
+    var normalizedSourceText =
+        await workspacePort.readTextFile(
+          workspace.tempProject.rootPath,
+          BookDeconstructionSmartImportContract.normalizedSourcePath,
+        ) ??
+        '';
+    const reportPath = BookDeconstructionSmartImportContract.reportPath;
+    var reportContent =
         await workspacePort.readTextFile(
           workspace.tempProject.rootPath,
           reportPath,
         ) ??
         '';
-    if (normalizedSourceText.trim().isEmpty) {
+    final noteParts = <String>[];
+    if (result.stoppedByToolError &&
+        result.toolErrorSummary.trim().isNotEmpty) {
+      noteParts.add('智能拆书工具调用未完全成功：${result.toolErrorSummary.trim()}');
+    }
+    if (rulesContent.trim().isEmpty) {
+      final fallbackText = _fallbackRulesContent(result);
+      if (fallbackText.isNotEmpty) {
+        rulesContent = fallbackText;
+        noteParts.add('智能拆书未按约定落盘规则文件，已回退使用模型返回内容解析规则。');
+      }
+    }
+    if (reportContent.trim().isEmpty) {
+      reportContent = _fallbackReportContent(
+        result: result,
+        providerId: providerId,
+        resolvedModelId: resolvedModelId,
+        usedDraftFallback: noteParts.any(
+          (part) => part.contains('回退使用模型返回内容解析规则'),
+        ),
+      );
+    }
+    if (rulesContent.trim().isEmpty) {
       return BookDeconstructionSmartImportResult(
         applied: false,
-        normalizedSourceText: '',
+        normalizedSourceText: normalizedSourceText,
+        rulesPath: '',
+        rulesContent: '',
         reportPath: reportContent.trim().isEmpty ? '' : reportPath,
         reportContent: reportContent,
         tempWorkspaceRootPath: workspace.rootPath,
-        note: '智能拆书未按约定写出 outputs/normalized_source.md。',
+        note: noteParts.isEmpty
+            ? '智能拆书未按约定写出 ${BookDeconstructionSmartImportContract.rulesPath}。'
+            : noteParts.join(' '),
       );
+    }
+    if (reportContent.trim().isNotEmpty) {
+      noteParts.add('智能拆书报告已生成。');
     }
     return BookDeconstructionSmartImportResult(
       applied: true,
       normalizedSourceText: normalizedSourceText,
+      rulesPath: rulesPath,
+      rulesContent: rulesContent,
       reportPath: reportContent.trim().isEmpty ? '' : reportPath,
       reportContent: reportContent,
       tempWorkspaceRootPath: workspace.rootPath,
-      note: reportContent.trim().isEmpty ? '' : '智能拆书报告已生成。',
+      note: noteParts.join(' '),
     );
+  }
+
+  String _fallbackRulesContent(DraftGenerationResult result) {
+    final draftText = result.draftMarkdown.trim();
+    if (draftText.isEmpty || result.waitingForUserChoice) {
+      return '';
+    }
+    return draftText;
+  }
+
+  String _fallbackReportContent({
+    required DraftGenerationResult result,
+    required String providerId,
+    required String resolvedModelId,
+    required bool usedDraftFallback,
+  }) {
+    final changedPaths = <String>{
+      ...result.writtenPaths
+          .map((path) => path.trim())
+          .where((path) => path.isNotEmpty),
+      ...result.changedPaths
+          .map((path) => path.trim())
+          .where((path) => path.isNotEmpty),
+    }.toList(growable: false);
+    if (changedPaths.isEmpty &&
+        result.toolErrorSummary.trim().isEmpty &&
+        !usedDraftFallback) {
+      return '';
+    }
+    final buffer = StringBuffer()
+      ..writeln('# 智能拆书执行报告')
+      ..writeln()
+      ..writeln('- provider: $providerId')
+      ..writeln('- model: $resolvedModelId')
+      ..writeln('- 等待用户选择: ${result.waitingForUserChoice ? '是' : '否'}')
+      ..writeln('- 工具错误停止: ${result.stoppedByToolError ? '是' : '否'}')
+      ..writeln('- 使用正文兜底: ${usedDraftFallback ? '是' : '否'}');
+    final toolErrorSummary = result.toolErrorSummary.trim();
+    if (toolErrorSummary.isNotEmpty) {
+      buffer.writeln('- 工具错误摘要: $toolErrorSummary');
+    }
+    if (changedPaths.isNotEmpty) {
+      buffer.writeln();
+      buffer.writeln('## 变更路径');
+      for (final path in changedPaths) {
+        buffer.writeln('- $path');
+      }
+    }
+    return buffer.toString().trimRight();
   }
 }

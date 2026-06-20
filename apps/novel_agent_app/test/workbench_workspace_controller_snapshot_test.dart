@@ -71,60 +71,64 @@ void main() {
       },
     );
 
-    test('persisted snapshot includes selected conversation agent id', () {
-      final harness = _ControllerHarness(
-        settings: _baseSettings(),
-        workbench: WorkbenchViewData.initial().copyWith(
-          projectPath: 'D:/Projects/novel_project',
-          activeDocumentPath: 'chapters/chapter_01.md',
-          agentSelector: const ConversationAgentSelectorViewData(
-            currentAgentLabel: '审阅智能体',
-            currentAgentId: 'reviewer',
-            currentAgentDescription: '质量审阅',
-            agentOptions: <SelectorOptionViewData>[],
-            canSwitchAgent: false,
+    test(
+      'persisted snapshot includes selected conversation agent id',
+      () async {
+        final harness = _ControllerHarness(
+          settings: _baseSettings(),
+          workbench: WorkbenchViewData.initial().copyWith(
+            projectPath: 'D:/Projects/novel_project',
+            activeDocumentPath: 'chapters/chapter_01.md',
+            agentSelector: const ConversationAgentSelectorViewData(
+              currentAgentLabel: '审阅智能体',
+              currentAgentId: 'reviewer',
+              currentAgentDescription: '质量审阅',
+              agentOptions: <SelectorOptionViewData>[],
+              canSwitchAgent: false,
+            ),
           ),
-        ),
-        projectState: WorkbenchProjectRuntimeState(
-          currentProject: _project('D:/Projects/novel_project'),
-          openDocuments: const <OpenDocumentState>[
-            OpenDocumentState(
-              id: 'doc-1',
-              title: 'Chapter 1',
-              relativePath: 'chapters/chapter_01.md',
-              content: 'body',
-            ),
-            OpenDocumentState(
-              id: 'doc-2',
-              title: 'Chapter 2',
-              relativePath: 'chapters/chapter_02.md',
-              content: 'body 2',
-            ),
-          ],
-          activeOpenDocumentId: 'doc-1',
-          expandedResourceDirectories: const <String>{'chapters'},
-        ),
-      );
+          projectState: WorkbenchProjectRuntimeState(
+            currentProject: _project('D:/Projects/novel_project'),
+            openDocuments: const <OpenDocumentState>[
+              OpenDocumentState(
+                id: 'doc-1',
+                title: 'Chapter 1',
+                relativePath: 'chapters/chapter_01.md',
+                content: 'body',
+              ),
+              OpenDocumentState(
+                id: 'doc-2',
+                title: 'Chapter 2',
+                relativePath: 'chapters/chapter_02.md',
+                content: 'body 2',
+              ),
+            ],
+            activeOpenDocumentId: 'doc-1',
+            expandedResourceDirectories: const <String>{'chapters'},
+          ),
+        );
 
-      harness.controller.onDocumentSelected('doc-2');
+        harness.controller.onDocumentSelected('doc-2');
+        await Future<void>.delayed(const Duration(milliseconds: 300));
 
-      expect(harness.savedSettings, isNotEmpty);
-      final snapshot = _mapValue(
-        harness.savedSettings.last.extraSettings['workbench_state'],
-      );
-      expect(snapshot['project_root_path'], 'D:/Projects/novel_project');
-      expect(snapshot['active_document_path'], 'chapters/chapter_02.md');
-      expect(snapshot['selected_conversation_agent_id'], 'reviewer');
-      expect(
-        ValueReaders.stringList(snapshot['expanded_directories']),
-        <String>['chapters'],
-      );
-      expect(ValueReaders.mapList(snapshot['draft_recoveries']), isEmpty);
-    });
+        expect(harness.savedSettings, isNotEmpty);
+        final snapshot = _mapValue(
+          harness.savedSettings.last.extraSettings['workbench_state'],
+        );
+        expect(snapshot['project_root_path'], 'D:/Projects/novel_project');
+        expect(snapshot['active_document_path'], 'chapters/chapter_02.md');
+        expect(snapshot['selected_conversation_agent_id'], 'reviewer');
+        expect(
+          ValueReaders.stringList(snapshot['expanded_directories']),
+          <String>['chapters'],
+        );
+        expect(ValueReaders.mapList(snapshot['draft_recoveries']), isEmpty);
+      },
+    );
 
     test(
       'persisted snapshot keeps dirty content documents as draft recovery',
-      () {
+      () async {
         final harness = _ControllerHarness(
           settings: _baseSettings(),
           workbench: WorkbenchViewData.initial().copyWith(
@@ -162,6 +166,7 @@ void main() {
 
         harness.controller.onDocumentBodyChanged('新的未保存正文');
         harness.controller.onDocumentSelected('doc-2');
+        await Future<void>.delayed(const Duration(milliseconds: 300));
 
         final snapshot = _mapValue(
           harness.savedSettings.last.extraSettings['workbench_state'],
@@ -179,42 +184,46 @@ void main() {
       },
     );
 
-    test('persisted snapshot drops hidden internal active document path', () {
-      final harness = _ControllerHarness(
-        settings: _baseSettings(),
-        workbench: WorkbenchViewData.initial().copyWith(
-          projectPath: 'D:/Projects/novel_project',
-          activeDocumentPath: '.novel_agent/state/characters/lin/history.md',
-          agentSelector: const ConversationAgentSelectorViewData(
-            currentAgentLabel: '审阅智能体',
-            currentAgentId: 'reviewer',
-            currentAgentDescription: '质量审阅',
-            agentOptions: <SelectorOptionViewData>[],
-            canSwitchAgent: false,
-          ),
-        ),
-        projectState: WorkbenchProjectRuntimeState(
-          currentProject: _project('D:/Projects/novel_project'),
-          openDocuments: const <OpenDocumentState>[
-            OpenDocumentState(
-              id: 'doc-hidden',
-              title: 'history',
-              relativePath: '.novel_agent/state/characters/lin/history.md',
-              content: 'body',
+    test(
+      'persisted snapshot drops hidden internal active document path',
+      () async {
+        final harness = _ControllerHarness(
+          settings: _baseSettings(),
+          workbench: WorkbenchViewData.initial().copyWith(
+            projectPath: 'D:/Projects/novel_project',
+            activeDocumentPath: '.novel_agent/state/characters/lin/history.md',
+            agentSelector: const ConversationAgentSelectorViewData(
+              currentAgentLabel: '审阅智能体',
+              currentAgentId: 'reviewer',
+              currentAgentDescription: '质量审阅',
+              agentOptions: <SelectorOptionViewData>[],
+              canSwitchAgent: false,
             ),
-          ],
-          activeOpenDocumentId: '',
-          expandedResourceDirectories: const <String>{'drafts'},
-        ),
-      );
+          ),
+          projectState: WorkbenchProjectRuntimeState(
+            currentProject: _project('D:/Projects/novel_project'),
+            openDocuments: const <OpenDocumentState>[
+              OpenDocumentState(
+                id: 'doc-hidden',
+                title: 'history',
+                relativePath: '.novel_agent/state/characters/lin/history.md',
+                content: 'body',
+              ),
+            ],
+            activeOpenDocumentId: '',
+            expandedResourceDirectories: const <String>{'drafts'},
+          ),
+        );
 
-      harness.controller.onDocumentSelected('doc-hidden');
+        harness.controller.onDocumentSelected('doc-hidden');
+        await Future<void>.delayed(const Duration(milliseconds: 300));
 
-      final snapshot = _mapValue(
-        harness.savedSettings.last.extraSettings['workbench_state'],
-      );
-      expect(snapshot['active_document_path'], '');
-    });
+        final snapshot = _mapValue(
+          harness.savedSettings.last.extraSettings['workbench_state'],
+        );
+        expect(snapshot['active_document_path'], '');
+      },
+    );
 
     test(
       'restoreWorkbenchSnapshot ignores hidden internal markdown path',
@@ -884,6 +893,7 @@ WorkbenchWorkspaceController _createController({
     ),
     importProjectFilesUseCase: ImportProjectFilesUseCase(
       projectToolHostPort: effectiveToolHostPort,
+      sourceImportDiscoveryPort: const SourceImportDiscoveryService(),
     ),
     updateProjectManifestUseCase: UpdateProjectManifestUseCase(
       writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
@@ -925,6 +935,7 @@ WorkbenchWorkspaceController _createController({
     showInspirationWorkbench: () async {},
     showPromptTemplates: () async {},
     showProjectAssets: () async {},
+    showProjectRagAssets: () async {},
     showCurrentAgentSkillLoadout: (_) async {},
     showCurrentAgentExpressionConstraints: (_) async {},
     announce: announce ?? (_) {},

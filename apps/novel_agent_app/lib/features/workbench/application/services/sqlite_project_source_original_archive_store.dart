@@ -8,12 +8,10 @@ class SqliteProjectSourceOriginalArchiveStore
   SqliteProjectSourceOriginalArchiveStore({
     required ProjectToolHostPort projectToolHostPort,
     ProjectStructuredContentBridgeService? structuredContentBridgeService,
-  }) : _projectToolHostPort = projectToolHostPort,
-       _structuredContentBridgeService =
+  }) : _structuredContentBridgeService =
            structuredContentBridgeService ??
            ProjectStructuredContentBridgeService();
 
-  final ProjectToolHostPort _projectToolHostPort;
   final ProjectStructuredContentBridgeService _structuredContentBridgeService;
 
   @override
@@ -24,12 +22,7 @@ class SqliteProjectSourceOriginalArchiveStore
     required String content,
     String statePath = '',
   }) async {
-    // 中文注释: SQLite 项目同时保留文件投影与数据库主事实源，避免导入链自己理解双写细节。
-    await _projectToolHostPort.writeTextFile(
-      project.rootPath,
-      relativePath,
-      content,
-    );
+    // 中文注释: SQLite 项目不再把原文归档额外双写到用户可见 Markdown 面；文件树只保留导入原件与必要结构入口。
     await _structuredContentBridgeService.persistSourceOriginalArchive(
       project: project,
       archivePath: relativePath,

@@ -1,4 +1,3 @@
-import '../common/source_asset_identity.dart';
 import '../common/value_readers.dart';
 import '../continuity/narrative_state/narrative_source_ref.dart';
 import '../information/design_element_card.dart';

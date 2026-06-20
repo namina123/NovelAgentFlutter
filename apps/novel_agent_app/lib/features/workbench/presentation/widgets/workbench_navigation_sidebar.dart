@@ -2,9 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../../shared/theme/novel_theme_context.dart';
-import '../../application/services/workbench_agent_panel_view_data_service.dart';
 import '../../application/services/workbench_side_panel_contract_service.dart';
-import '../../application/services/workbench_workspace_shell_view_data_service.dart';
 import '../contracts/resource_manager_action_handler.dart';
 import '../models/workbench_canvas_view_data.dart';
 import '../models/workbench_conversation_view_data.dart';
@@ -38,10 +36,6 @@ class _WorkbenchNavigationSidebarState
     extends State<WorkbenchNavigationSidebar> {
   static const WorkbenchSidePanelContractService _panelContractService =
       WorkbenchSidePanelContractService();
-  static const WorkbenchAgentPanelViewDataService _agentPanelViewDataService =
-      WorkbenchAgentPanelViewDataService();
-  static const WorkbenchWorkspaceShellViewDataService _shellViewDataService =
-      WorkbenchWorkspaceShellViewDataService();
   static final List<WorkbenchSidePanelContract> _panelContracts =
       _panelContractService.contracts();
 
@@ -50,66 +44,40 @@ class _WorkbenchNavigationSidebarState
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: Listenable.merge([
-        widget.resourceListenable,
-        widget.canvasListenable,
-        widget.conversationListenable,
-      ]),
-      builder: (context, _) {
-        final surface = context.novelThemeSurfaces.sidebar;
-        final visual = WorkbenchVisualStyle.of(context);
-        final resource = widget.resourceListenable.value;
-        final canvas = widget.canvasListenable.value;
-        final conversation = widget.conversationListenable.value;
-        final shellViewData = _shellViewDataService.build(
-          resource: resource,
-          canvas: canvas,
-          conversation: conversation,
-        );
-        final agentPanelViewData = _agentPanelViewDataService.build(
-          shellViewData: shellViewData,
-          conversationViewData: conversation,
-        );
-        final selectedContract = _panelContractService.contractOf(
-          _selectedPanelId,
-        );
-        return DecoratedBox(
-          decoration: BoxDecoration(
-            color: surface.backgroundColor,
-            border: Border(
-              right: BorderSide(
-                color: visual.subtleBorder(surface.borderColor),
+    final surface = context.novelThemeSurfaces.sidebar;
+    final visual = WorkbenchVisualStyle.of(context);
+    final selectedContract = _panelContractService.contractOf(_selectedPanelId);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: surface.backgroundColor,
+        border: Border(
+          right: BorderSide(color: visual.subtleBorder(surface.borderColor)),
+        ),
+      ),
+      child: Padding(
+        padding: visual.sidebarPadding,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _WorkbenchSidebarHeader(
+              contract: selectedContract,
+              panelContracts: _panelContracts,
+              selectedPanelId: _selectedPanelId,
+              onPanelSelected: _handlePanelSelected,
+            ),
+            SizedBox(height: visual.sectionGap),
+            Expanded(
+              child: WorkbenchSidePanelHost(
+                selectedPanelId: _selectedPanelId,
+                selectedContract: selectedContract,
+                resourceListenable: widget.resourceListenable,
+                conversationListenable: widget.conversationListenable,
+                resourceHandler: widget.resourceHandler,
               ),
             ),
-          ),
-          child: Padding(
-            padding: visual.sidebarPadding,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _WorkbenchSidebarHeader(
-                  contract: selectedContract,
-                  panelContracts: _panelContracts,
-                  selectedPanelId: _selectedPanelId,
-                  onPanelSelected: _handlePanelSelected,
-                ),
-                SizedBox(height: visual.sectionGap),
-                Expanded(
-                  child: WorkbenchSidePanelHost(
-                    selectedPanelId: _selectedPanelId,
-                    selectedContract: selectedContract,
-                    resourceViewData: resource,
-                    agentPanelViewData: agentPanelViewData,
-                    shellViewData: shellViewData,
-                    resourceHandler: widget.resourceHandler,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+          ],
+        ),
+      ),
     );
   }
 

@@ -1,7 +1,7 @@
 name: novel_agent_app
 description: NovelAgent Flutter GUI shell.
 publish_to: 'none'
-version: 0.1.8+8
+version: 0.1.9+9
 
 environment:
   sdk: ^3.9.0
@@ -24,3 +24,4 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+

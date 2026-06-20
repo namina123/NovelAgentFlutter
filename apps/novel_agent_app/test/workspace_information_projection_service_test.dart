@@ -237,6 +237,50 @@ void main() {
         '来源：project-information://research_notes',
       );
     });
+
+    test('build projects sqlite-first information summaries without markdown projections', () {
+      const service = WorkspaceInformationProjectionService();
+
+      final viewData = service.build(
+        workspaceEntries: const <JsonMap>[
+          <String, Object?>{
+            'relative_path':
+                '.novel_agent/information/knowledge_cards/knowledge_1.json',
+            'is_dir': false,
+          },
+          <String, Object?>{
+            'relative_path':
+                '.novel_agent/information/design_elements/design_1.json',
+            'is_dir': false,
+          },
+          <String, Object?>{
+            'relative_path':
+                '.novel_agent/information/research_notes/research_1.json',
+            'is_dir': false,
+          },
+          <String, Object?>{
+            'relative_path':
+                '.novel_agent/information/reference_works/reference_1.json',
+            'is_dir': false,
+          },
+        ],
+        fileContents: const <String, String>{},
+      );
+
+      expect(viewData.summary, '已整理 4 组资料摘要');
+      expect(
+        viewData.entries.map((entry) => entry.title).toList(growable: false),
+        <String>['知识摘要', '巧思与设计', '研究摘要', '引用边界'],
+      );
+      expect(
+        viewData.entries.every((entry) => entry.relativePath.isEmpty),
+        isTrue,
+      );
+      expect(
+        viewData.entries.every((entry) => entry.actionLabel == '查看资料'),
+        isTrue,
+      );
+    });
   });
 }
 

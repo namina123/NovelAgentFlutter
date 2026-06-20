@@ -64,11 +64,20 @@ void main() {
   test(
     'project import execution service writes auto deconstruction preview for book projects',
     () async {
+      final tempDirectory = await Directory.systemTemp.createTemp(
+        'project_import_execution_markdown_test_',
+      );
+      addTearDown(() async {
+        if (await tempDirectory.exists()) {
+          await tempDirectory.delete(recursive: true);
+        }
+      });
+      final sourcePath =
+          '${tempDirectory.path}${Platform.pathSeparator}source_book.md';
+      const sourceContent = '第一章 港口风暴\n主角在港口被迫卷入追捕。\n\n第二章 议会阴影\n城邦议会开始浮出水面。';
+      await File(sourcePath).writeAsString(sourceContent);
       final hostPort = _FakeProjectToolHostPort(
-        externalFiles: <String, String>{
-          'C:/imports/source_book.md':
-              '第一章 港口风暴\n主角在港口被迫卷入追捕。\n\n第二章 议会阴影\n城邦议会开始浮出水面。',
-        },
+        externalFiles: <String, String>{sourcePath: sourceContent},
       );
       final workspacePort = _InMemoryProjectWorkspacePort();
       final importUseCase = ImportProjectFilesUseCase(
@@ -93,8 +102,8 @@ void main() {
           rootPath: 'D:/Projects/deconstruction_project',
           projectType: 'book_deconstruction',
         ),
-        request: const ProjectImportRequest(
-          sourcePaths: <String>['C:/imports/source_book.md'],
+        request: ProjectImportRequest(
+          sourcePaths: <String>[sourcePath],
           targetDirectory: 'chapters',
           autoDeconstruct: true,
         ),
@@ -106,16 +115,16 @@ void main() {
       expect(result.smartAnalysisReportPath, isEmpty);
       expect(
         result.autoDeconstructionPreviewPath,
-        'chapters/book_deconstruction_source_book.md',
+        'analysis/deconstruction/book_deconstruction_source_book.md',
       );
       expect(result.importedPaths, <String>['sources/original/source_book.md']);
       final previewContent = workspacePort.readStoredTextFile(
         'D:/Projects/deconstruction_project',
-        'chapters/book_deconstruction_source_book.md',
+        'analysis/deconstruction/book_deconstruction_source_book.md',
       );
       expect(previewContent, isNotNull);
       expect(previewContent, contains('# 拆书结构化预演'));
-      final archiveContent = workspacePort.readStoredTextFile(
+      final archiveContent = await hostPort.readTextFile(
         'D:/Projects/deconstruction_project',
         'sources/original/book_deconstruction_source_source_book.md',
       );
@@ -187,18 +196,19 @@ void main() {
       expect(result.autoDeconstructionApplied, isTrue);
       expect(
         result.autoDeconstructionPreviewPath,
-        'chapters/book_deconstruction_source_book.md',
+        'analysis/deconstruction/book_deconstruction_source_book.md',
       );
       final previewContent = await bundle.projectWorkspacePort.readTextFile(
         'D:/Projects/deconstruction_epub_project',
-        'chapters/book_deconstruction_source_book.md',
+        'analysis/deconstruction/book_deconstruction_source_book.md',
       );
       expect(previewContent, contains('# 拆书结构化预演'));
-      final archiveContent = await bundle.projectWorkspacePort.readTextFile(
+      final archiveContent = await bundle.projectToolHostPort.readTextFile(
         'D:/Projects/deconstruction_epub_project',
         'sources/original/book_deconstruction_source_source_book.md',
       );
-      expect(archiveContent, contains('Chapter 1: The Boy Who Lived'));
+      expect(archiveContent, contains('第一章 港口风暴'));
+      expect(archiveContent, contains('第二章 议会阴影'));
     },
   );
 

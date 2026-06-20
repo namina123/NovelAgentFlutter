@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/navigation/app_shell_navigation_action_handler.dart';
+import '../../app/navigation/app_shell_navigation_section.dart';
 import '../../app/routing/app_destination.dart';
 import 'app_shell_compact_bar.dart';
 import 'app_shell_compact_dock_layout.dart';
@@ -12,12 +13,14 @@ class AppShellCompactScaffold extends StatefulWidget {
   const AppShellCompactScaffold({
     super.key,
     required this.page,
+    required this.navigationSections,
     required this.selectedDestination,
     required this.actionHandler,
     required this.onSystemBackRequested,
   });
 
   final Widget page;
+  final List<AppShellNavigationSection> navigationSections;
   final AppDestination selectedDestination;
   final AppShellNavigationActionHandler actionHandler;
   final Future<void> Function() onSystemBackRequested;
@@ -66,6 +69,7 @@ class _AppShellCompactScaffoldState extends State<AppShellCompactScaffold> {
       child: Column(
         children: [
           AppShellCompactBar(
+            navigationSections: widget.navigationSections,
             selectedDestination: widget.selectedDestination,
             onMenuRequested: _drawerController.toggle,
           ),
@@ -80,6 +84,7 @@ class _AppShellCompactScaffoldState extends State<AppShellCompactScaffold> {
                 ),
                 Positioned.fill(
                   child: AppShellCompactDrawerHost(
+                    navigationSections: widget.navigationSections,
                     selectedDestination: widget.selectedDestination,
                     actionHandler: widget.actionHandler,
                     controller: _drawerController,

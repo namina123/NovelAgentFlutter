@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../shared/theme/novel_theme_context.dart';
+import '../../../../../shared/widgets/horizontal_overflow_scrollbar.dart';
 import '../../../../../shared/widgets/toolbar_icon_button.dart';
 
 class FileToolGroup extends StatelessWidget {
@@ -94,10 +95,17 @@ class FileToolGroup extends StatelessWidget {
               compact ? 4 : 8,
               8,
             ),
-            child: Row(
-              key: const ValueKey<String>('file_tool_group_primary_row'),
-              mainAxisSize: MainAxisSize.min,
-              children: rowChildren,
+            child: HorizontalOverflowScrollbar(
+              builder: (context, controller) => SingleChildScrollView(
+                controller: controller,
+                scrollDirection: Axis.horizontal,
+                primary: false,
+                child: Row(
+                  key: const ValueKey<String>('file_tool_group_primary_row'),
+                  mainAxisSize: MainAxisSize.min,
+                  children: rowChildren,
+                ),
+              ),
             ),
           ),
         );

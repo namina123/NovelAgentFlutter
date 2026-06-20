@@ -7,7 +7,9 @@ class ProjectRagExtractionViewData {
     required this.modes,
     required this.corpusSummary,
     required this.mountSummary,
+    required this.analysisSummary,
     required this.recentSourcePath,
+    required this.normalizationNote,
     required this.canBuildTxt,
     required this.canMountCorpus,
     required this.isLoading,
@@ -20,7 +22,9 @@ class ProjectRagExtractionViewData {
   final List<ProjectRagExtractionModeViewData> modes;
   final ProjectRagExtractionCorpusSummaryViewData corpusSummary;
   final ProjectRagExtractionMountSummaryViewData mountSummary;
+  final ProjectRagExtractionAnalysisSummaryViewData analysisSummary;
   final String recentSourcePath;
+  final String normalizationNote;
   final bool canBuildTxt;
   final bool canMountCorpus;
   final bool isLoading;
@@ -35,10 +39,65 @@ class ProjectRagExtractionViewData {
       modes: <ProjectRagExtractionModeViewData>[],
       corpusSummary: ProjectRagExtractionCorpusSummaryViewData.empty(),
       mountSummary: ProjectRagExtractionMountSummaryViewData.empty(),
+      analysisSummary: ProjectRagExtractionAnalysisSummaryViewData.empty(),
       recentSourcePath: '',
+      normalizationNote: '',
       canBuildTxt: false,
       canMountCorpus: false,
       isLoading: false,
+    );
+  }
+}
+
+class ProjectRagExtractionAnalysisSummaryViewData {
+  const ProjectRagExtractionAnalysisSummaryViewData({
+    required this.storyOutlineSummary,
+    required this.premiseSummary,
+    required this.styleSummary,
+    required this.chapterTitles,
+    required this.characterNames,
+    required this.organizationNames,
+    required this.worldRuleTitles,
+    required this.relationshipPairs,
+    required this.timelineLabels,
+    required this.foreshadowTitles,
+  });
+
+  final String storyOutlineSummary;
+  final String premiseSummary;
+  final String styleSummary;
+  final List<String> chapterTitles;
+  final List<String> characterNames;
+  final List<String> organizationNames;
+  final List<String> worldRuleTitles;
+  final List<String> relationshipPairs;
+  final List<String> timelineLabels;
+  final List<String> foreshadowTitles;
+
+  bool get isEmpty =>
+      storyOutlineSummary.trim().isEmpty &&
+      premiseSummary.trim().isEmpty &&
+      styleSummary.trim().isEmpty &&
+      chapterTitles.isEmpty &&
+      characterNames.isEmpty &&
+      organizationNames.isEmpty &&
+      worldRuleTitles.isEmpty &&
+      relationshipPairs.isEmpty &&
+      timelineLabels.isEmpty &&
+      foreshadowTitles.isEmpty;
+
+  factory ProjectRagExtractionAnalysisSummaryViewData.empty() {
+    return const ProjectRagExtractionAnalysisSummaryViewData(
+      storyOutlineSummary: '',
+      premiseSummary: '',
+      styleSummary: '',
+      chapterTitles: <String>[],
+      characterNames: <String>[],
+      organizationNames: <String>[],
+      worldRuleTitles: <String>[],
+      relationshipPairs: <String>[],
+      timelineLabels: <String>[],
+      foreshadowTitles: <String>[],
     );
   }
 }

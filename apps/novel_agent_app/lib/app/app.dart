@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'scroll/app_scroll_behavior.dart';
 import 'theme/app_theme.dart';
 import '../shared/widgets/app_shell.dart';
 import 'state/app_shell_controller.dart';
@@ -19,6 +20,7 @@ class NovelAgentApp extends StatelessWidget {
           title: 'NovelAgent',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.themeDataFor(themeId),
+          scrollBehavior: const AppScrollBehavior(),
           home: AppShell(controller: controller),
         );
       },

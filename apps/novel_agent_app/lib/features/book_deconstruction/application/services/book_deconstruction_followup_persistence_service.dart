@@ -120,6 +120,7 @@ class BookDeconstructionFollowupPersistenceService {
         followupOptionId: followupOptionId,
         sequence: section.sectionIndex,
         title: title,
+        storageStrategy: project.storageStrategy,
       );
       final buffer = StringBuffer()..writeln(title);
       if (section.content.trim().isNotEmpty) {

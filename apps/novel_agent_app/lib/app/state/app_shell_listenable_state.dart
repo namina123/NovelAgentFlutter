@@ -111,29 +111,93 @@ class AppShellListenableState {
     required String activeThemeId,
   }) {
     // 中文注释: 壳层细粒度监听值统一在这里同步，避免 AppShellController 到处散落 ValueNotifier 赋值逻辑。
-    _destination.value = viewModel.destination;
-    _activeThemeId.value = activeThemeId;
-    _workbench.value = viewModel.workbench;
-    _workbenchResource.value = _paneViewDataMapperService.toResourceViewData(
-      viewModel.workbench,
-    );
-    _workbenchCanvas.value = _paneViewDataMapperService.toCanvasViewData(
-      viewModel.workbench,
-    );
-    _workbenchConversation.value = _safeConversationViewData(
-      _paneViewDataMapperService,
-      viewModel.workbench,
-    );
-    _workbenchOverlay.value = _paneViewDataMapperService.toOverlayViewData(
-      viewModel.workbench,
-    );
-    _settings.value = viewModel.settings;
-    _agentEcosystem.value = viewModel.agentEcosystem;
-    _projectOpen.value = viewModel.projectOpen;
-    _projectCollection.value = viewModel.projectCollection;
-    _taskCenter.value = viewModel.taskCenter;
-    _reviewCenter.value = viewModel.reviewCenter;
-    _promptTemplates.value = viewModel.promptTemplates;
+    final previousDestination = _destination.value;
+    final nextDestination = viewModel.destination;
+    final destinationChanged = previousDestination != nextDestination;
+    if (destinationChanged) {
+      _destination.value = nextDestination;
+    }
+    if (_activeThemeId.value != activeThemeId) {
+      _activeThemeId.value = activeThemeId;
+    }
+
+    final previousWorkbench = _workbench.value;
+    final nextWorkbench = viewModel.workbench;
+    if (!identical(previousWorkbench, nextWorkbench)) {
+      _workbench.value = nextWorkbench;
+    }
+
+    if (nextDestination == AppDestination.workbench) {
+      _syncWorkbenchPanes(
+        previousWorkbench: previousWorkbench,
+        nextWorkbench: nextWorkbench,
+        forceRefreshAll: destinationChanged,
+      );
+    }
+
+    if (nextDestination == AppDestination.settings &&
+        !identical(_settings.value, viewModel.settings)) {
+      _settings.value = viewModel.settings;
+    }
+    if (nextDestination == AppDestination.agentEcosystem &&
+        !identical(_agentEcosystem.value, viewModel.agentEcosystem)) {
+      _agentEcosystem.value = viewModel.agentEcosystem;
+    }
+    if (nextDestination == AppDestination.projectOpen &&
+        !identical(_projectOpen.value, viewModel.projectOpen)) {
+      _projectOpen.value = viewModel.projectOpen;
+    }
+    if (nextDestination == AppDestination.taskCenter &&
+        !identical(_taskCenter.value, viewModel.taskCenter)) {
+      _taskCenter.value = viewModel.taskCenter;
+    }
+  }
+
+  void _syncWorkbenchPanes({
+    required WorkbenchViewData previousWorkbench,
+    required WorkbenchViewData nextWorkbench,
+    required bool forceRefreshAll,
+  }) {
+    if (forceRefreshAll ||
+        _shouldRefreshResourcePane(previousWorkbench, nextWorkbench)) {
+      final nextResource = _paneViewDataMapperService.toResourceViewData(
+        nextWorkbench,
+      );
+      if (_workbenchResource.value != nextResource) {
+        _workbenchResource.value = nextResource;
+      }
+    }
+
+    if (forceRefreshAll ||
+        _shouldRefreshCanvasPane(previousWorkbench, nextWorkbench)) {
+      final nextCanvas = _paneViewDataMapperService.toCanvasViewData(
+        nextWorkbench,
+      );
+      if (_workbenchCanvas.value != nextCanvas) {
+        _workbenchCanvas.value = nextCanvas;
+      }
+    }
+
+    if (forceRefreshAll ||
+        _shouldRefreshConversationPane(previousWorkbench, nextWorkbench)) {
+      final nextConversation = _safeConversationViewData(
+        _paneViewDataMapperService,
+        nextWorkbench,
+      );
+      if (_workbenchConversation.value != nextConversation) {
+        _workbenchConversation.value = nextConversation;
+      }
+    }
+
+    if (forceRefreshAll ||
+        _shouldRefreshOverlayPane(previousWorkbench, nextWorkbench)) {
+      final nextOverlay = _paneViewDataMapperService.toOverlayViewData(
+        nextWorkbench,
+      );
+      if (_workbenchOverlay.value != nextOverlay) {
+        _workbenchOverlay.value = nextOverlay;
+      }
+    }
   }
 
   void dispose() {
@@ -212,5 +276,83 @@ class AppShellListenableState {
       return warning;
     }
     return '$prefix\n$warning';
+  }
+
+  static bool _shouldRefreshResourcePane(
+    WorkbenchViewData previous,
+    WorkbenchViewData next,
+  ) {
+    return previous.projectName != next.projectName ||
+        previous.projectSubtitle != next.projectSubtitle ||
+        previous.projectTypeId != next.projectTypeId ||
+        previous.projectTypeTransitionAvailability !=
+            next.projectTypeTransitionAvailability ||
+        !listEquals(previous.resourceEntries, next.resourceEntries) ||
+        previous.informationViewData != next.informationViewData ||
+        previous.projectLongTaskSummary != next.projectLongTaskSummary;
+  }
+
+  static bool _shouldRefreshCanvasPane(
+    WorkbenchViewData previous,
+    WorkbenchViewData next,
+  ) {
+    return !listEquals(previous.documents, next.documents) ||
+        previous.activeDocumentTitle != next.activeDocumentTitle ||
+        previous.activeDocumentPath != next.activeDocumentPath ||
+        previous.activeDocumentBody != next.activeDocumentBody ||
+        previous.activeDocumentDirty != next.activeDocumentDirty ||
+        previous.activeDocumentBufferedDraft !=
+            next.activeDocumentBufferedDraft ||
+        previous.activeDocumentCanRender != next.activeDocumentCanRender ||
+        previous.isActiveDocumentRendered != next.isActiveDocumentRendered ||
+        previous.isDocumentsWorkspaceVisible !=
+            next.isDocumentsWorkspaceVisible ||
+        previous.generationStatus != next.generationStatus;
+  }
+
+  static bool _shouldRefreshConversationPane(
+    WorkbenchViewData previous,
+    WorkbenchViewData next,
+  ) {
+    return previous.projectPath != next.projectPath ||
+        previous.toolCoreStatus != next.toolCoreStatus ||
+        previous.toolPreviewMode != next.toolPreviewMode ||
+        previous.modelLabel != next.modelLabel ||
+        !listEquals(previous.modelOptions, next.modelOptions) ||
+        previous.groupSelector != next.groupSelector ||
+        previous.agentSelector != next.agentSelector ||
+        previous.inputCapabilityContext != next.inputCapabilityContext ||
+        previous.contextSummary != next.contextSummary ||
+        previous.conversationContextProjection !=
+            next.conversationContextProjection ||
+        previous.workflowTitle != next.workflowTitle ||
+        previous.workflowDescription != next.workflowDescription ||
+        !listEquals(previous.primaryActions, next.primaryActions) ||
+        previous.openingPanel != next.openingPanel ||
+        previous.openingState != next.openingState ||
+        previous.composerHint != next.composerHint ||
+        !listEquals(previous.conversationEntries, next.conversationEntries) ||
+        !listEquals(previous.pendingOptions, next.pendingOptions) ||
+        !listEquals(previous.subAgentRuns, next.subAgentRuns) ||
+        previous.retryRequest != next.retryRequest ||
+        !listEquals(
+          previous.sessionHistoryEntries,
+          next.sessionHistoryEntries,
+        ) ||
+        previous.activeSessionId != next.activeSessionId ||
+        previous.showSessionHistory != next.showSessionHistory ||
+        previous.sessionRestoreResult != next.sessionRestoreResult ||
+        previous.generationStatus != next.generationStatus ||
+        previous.isGenerating != next.isGenerating;
+  }
+
+  static bool _shouldRefreshOverlayPane(
+    WorkbenchViewData previous,
+    WorkbenchViewData next,
+  ) {
+    return previous.projectLauncher != next.projectLauncher ||
+        previous.projectAgentGroupWorkspace !=
+            next.projectAgentGroupWorkspace ||
+        previous.workspaceCommand != next.workspaceCommand;
   }
 }

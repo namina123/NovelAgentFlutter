@@ -44,15 +44,13 @@ class _AppShellState extends State<AppShell> {
       valueListenable: widget.controller.destinationListenable,
       builder: (context, destination, _) {
         final metrics = AppLayoutMetrics.fromMediaQuery(MediaQuery.of(context));
+        final navigationSections = widget.controller.navigationSections();
         final page = AppLayoutScope(
           metrics: metrics,
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 180),
-            child: KeyedSubtree(
-              key: ValueKey(destination),
-              child: _router.buildPage(widget.controller),
-            ),
-          ),
+          child: _router.buildPageHost(widget.controller),
+        );
+        widget.controller.navigationTraceService?.markDestinationVisible(
+          destination,
         );
 
         return Scaffold(
@@ -60,6 +58,7 @@ class _AppShellState extends State<AppShell> {
           body: SafeArea(
             child: metrics.isCompact
                 ? AppShellCompactScaffold(
+                    navigationSections: navigationSections,
                     selectedDestination: destination,
                     actionHandler: widget.controller,
                     onSystemBackRequested: () =>
@@ -77,6 +76,7 @@ class _AppShellState extends State<AppShell> {
                     child: Row(
                       children: [
                         AppShellActivityRail(
+                          sections: navigationSections,
                           selectedDestination: destination,
                           actionHandler: widget.controller,
                         ),

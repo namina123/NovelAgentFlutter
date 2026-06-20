@@ -1,15 +1,21 @@
 import '../../presentation/models/project_rag_extraction_view_data.dart';
 import '../models/project_rag_extraction_snapshot.dart';
 import '../models/project_rag_extraction_mode_id.dart';
+import 'project_rag_analysis_summary_decoder.dart';
 import 'project_rag_extraction_mode_view_data_service.dart';
 
 class ProjectRagExtractionViewDataService {
   const ProjectRagExtractionViewDataService({
     ProjectRagExtractionModeViewDataService? modeViewDataService,
+    ProjectRagAnalysisSummaryDecoder? analysisSummaryDecoder,
   }) : _modeViewDataService =
-           modeViewDataService ?? const ProjectRagExtractionModeViewDataService();
+           modeViewDataService ??
+           const ProjectRagExtractionModeViewDataService(),
+       _analysisSummaryDecoder =
+           analysisSummaryDecoder ?? const ProjectRagAnalysisSummaryDecoder();
 
   final ProjectRagExtractionModeViewDataService _modeViewDataService;
+  final ProjectRagAnalysisSummaryDecoder _analysisSummaryDecoder;
 
   ProjectRagExtractionViewData build({
     required ProjectRagExtractionSnapshot snapshot,
@@ -31,8 +37,8 @@ class ProjectRagExtractionViewDataService {
             modelAssistedLabel: selectedCorpus.isModelAssisted ? '是' : '否',
             indexBackendLabel: selectedCorpus.indexBackend,
             updatedAt: selectedCorpus.updatedAt,
-            sourcePath: selectedCorpus.metadata['source_file_path']?.toString() ??
-                '',
+            sourcePath:
+                selectedCorpus.metadata['source_file_path']?.toString() ?? '',
           );
     final mountSummary = ProjectRagExtractionMountSummaryViewData(
       bindingCount: snapshot.mountSummary.bindingCount,
@@ -42,10 +48,11 @@ class ProjectRagExtractionViewDataService {
       topMountScope: snapshot.mountSummary.topMountScope,
       topUsagePolicy: snapshot.mountSummary.topUsagePolicy,
       topActivationPolicy: snapshot.mountSummary.topActivationPolicy,
-      emptyMessage: snapshot.mountSummary.hasBindings
-          ? ''
-          : '当前项目尚未挂载任何语料。',
+      emptyMessage: snapshot.mountSummary.hasBindings ? '' : '当前项目尚未挂载任何语料。',
     );
+    final analysisSummary = snapshot.analysisSummary.isEmpty
+        ? _analysisSummaryDecoder.decode(selectedCorpus)
+        : snapshot.analysisSummary;
     return ProjectRagExtractionViewData(
       title: '语料提取',
       description: '先提取 txt 语料，再挂载到当前项目。挂载完成后，这份语料才能在后续写作里被项目调用。',
@@ -56,7 +63,20 @@ class ProjectRagExtractionViewDataService {
       ),
       corpusSummary: corpusSummary,
       mountSummary: mountSummary,
+      analysisSummary: ProjectRagExtractionAnalysisSummaryViewData(
+        storyOutlineSummary: analysisSummary.storyOutlineSummary,
+        premiseSummary: analysisSummary.premiseSummary,
+        styleSummary: analysisSummary.styleSummary,
+        chapterTitles: analysisSummary.chapterTitles,
+        characterNames: analysisSummary.characterNames,
+        organizationNames: analysisSummary.organizationNames,
+        worldRuleTitles: analysisSummary.worldRuleTitles,
+        relationshipPairs: analysisSummary.relationshipPairs,
+        timelineLabels: analysisSummary.timelineLabels,
+        foreshadowTitles: analysisSummary.foreshadowTitles,
+      ),
       recentSourcePath: snapshot.recentSourcePath,
+      normalizationNote: snapshot.normalizationNote,
       canBuildTxt: ProjectRagExtractionModeId.isImplemented(
         snapshot.activeModeId,
       ),

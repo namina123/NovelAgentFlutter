@@ -65,15 +65,19 @@ class WorkspaceInformationProjectionService {
       );
     }
 
+    final hiddenCounts = _hiddenInformationCounts(normalizedPaths);
     final entries = <WorkbenchInformationEntryViewData>[
       if (normalizedPaths.contains(
-        InformationProjectionDocument.knowledgeSummaryRelativePath,
-      ))
+            InformationProjectionDocument.knowledgeSummaryRelativePath,
+          ) ||
+          hiddenCounts.knowledgeCount > 0)
         _projectionEntry(
           id: 'knowledge_projection',
           title: '知识摘要',
           subtitle: '已整理的长期设定与世界事实',
-          summary: '查看当前 knowledge 卡片的用户可读摘要。',
+          summary: hiddenCounts.knowledgeCount > 0
+              ? '已整理 ${hiddenCounts.knowledgeCount} 条知识条目。'
+              : '查看当前 knowledge 卡片的用户可读摘要。',
           statusLabel: '知识',
           relativePath:
               InformationProjectionDocument.knowledgeSummaryRelativePath,
@@ -81,30 +85,41 @@ class WorkspaceInformationProjectionService {
           usage:
               usageByPath[InformationProjectionDocument
                   .knowledgeSummaryRelativePath],
+          hiddenItemCount: hiddenCounts.knowledgeCount,
         ),
       if (normalizedPaths.contains(
-        InformationProjectionDocument.designSummaryRelativePath,
-      ))
+            InformationProjectionDocument.designSummaryRelativePath,
+          ) ||
+          hiddenCounts.designCount > 0)
         _projectionEntry(
           id: 'design_projection',
           title: '巧思与设计',
           subtitle: '角色设计、结构巧思与创作方案',
-          summary: '查看 design element 的用户可读摘要。',
+          summary: hiddenCounts.designCount > 0
+              ? '已整理 ${hiddenCounts.designCount} 条设计条目。'
+              : '查看 design element 的用户可读摘要。',
           statusLabel: '巧思',
           relativePath: InformationProjectionDocument.designSummaryRelativePath,
           fileMap: fileMap,
           usage:
               usageByPath[InformationProjectionDocument
                   .designSummaryRelativePath],
+          hiddenItemCount: hiddenCounts.designCount,
         ),
       if (normalizedPaths.contains(
-        InformationProjectionDocument.researchSummaryRelativePath,
-      ))
+            InformationProjectionDocument.researchSummaryRelativePath,
+          ) ||
+          hiddenCounts.researchCount > 0 ||
+          hiddenCounts.researchRequestCount > 0)
         _projectionEntry(
           id: 'research_projection',
           title: '研究摘要',
           subtitle: '资料研究、事实摘录与创作建议',
-          summary: '查看 research note 的用户可读摘要。',
+          summary: hiddenCounts.researchCount > 0
+              ? '已整理 ${hiddenCounts.researchCount} 条研究记录。'
+              : hiddenCounts.researchRequestCount > 0
+              ? '当前有 ${hiddenCounts.researchRequestCount} 条待处理研究请求。'
+              : '查看 research note 的用户可读摘要。',
           statusLabel: '研究',
           relativePath:
               InformationProjectionDocument.researchSummaryRelativePath,
@@ -112,15 +127,20 @@ class WorkspaceInformationProjectionService {
           usage:
               usageByPath[InformationProjectionDocument
                   .researchSummaryRelativePath],
+          hiddenItemCount:
+              hiddenCounts.researchCount + hiddenCounts.researchRequestCount,
         ),
       if (normalizedPaths.contains(
-        InformationProjectionDocument.referenceBoundaryRelativePath,
-      ))
+            InformationProjectionDocument.referenceBoundaryRelativePath,
+          ) ||
+          hiddenCounts.referenceCount > 0)
         _projectionEntry(
           id: 'reference_projection',
           title: '引用边界',
           subtitle: '引用作品关系、用途边界与风险说明',
-          summary: '查看 reference work 的边界与风险摘要。',
+          summary: hiddenCounts.referenceCount > 0
+              ? '已整理 ${hiddenCounts.referenceCount} 条引用边界记录。'
+              : '查看 reference work 的边界与风险摘要。',
           statusLabel: '引用',
           relativePath:
               InformationProjectionDocument.referenceBoundaryRelativePath,
@@ -128,6 +148,7 @@ class WorkspaceInformationProjectionService {
           usage:
               usageByPath[InformationProjectionDocument
                   .referenceBoundaryRelativePath],
+          hiddenItemCount: hiddenCounts.referenceCount,
         ),
     ];
 
@@ -152,8 +173,15 @@ class WorkspaceInformationProjectionService {
     required String relativePath,
     required Map<String, String> fileMap,
     required _UsageProjection? usage,
+    int hiddenItemCount = 0,
   }) {
     final projectionMetadata = _projectionMetadata(fileMap[relativePath]);
+    final hasProjection = fileMap.containsKey(relativePath);
+    final actionLabel = hasProjection
+        ? '打开摘要'
+        : hiddenItemCount > 0
+        ? '查看资料'
+        : '查看状态';
     return WorkbenchInformationEntryViewData(
       id: id,
       title: title,
@@ -165,8 +193,8 @@ class WorkspaceInformationProjectionService {
       mountStatusLabel: projectionMetadata.mountStatusLabel,
       sourceOfTruthSummary: projectionMetadata.sourceOfTruthSummary,
       sourceIdentitySummary: projectionMetadata.sourceIdentitySummary,
-      actionLabel: '打开摘要',
-      relativePath: relativePath,
+      actionLabel: actionLabel,
+      relativePath: hasProjection ? relativePath : '',
     );
   }
 
@@ -464,6 +492,55 @@ class WorkspaceInformationProjectionService {
     final text = value?.toString().trim() ?? '';
     return text.isEmpty ? fallback : text;
   }
+}
+
+_HiddenInformationCounts _hiddenInformationCounts(Set<String> normalizedPaths) {
+  var knowledgeCount = 0;
+  var designCount = 0;
+  var researchCount = 0;
+  var researchRequestCount = 0;
+  var referenceCount = 0;
+  for (final path in normalizedPaths) {
+    if (path.startsWith('.novel_agent/information/knowledge_cards/') &&
+        path.endsWith('.json')) {
+      knowledgeCount += 1;
+    } else if (path.startsWith('.novel_agent/information/design_elements/') &&
+        path.endsWith('.json')) {
+      designCount += 1;
+    } else if (path.startsWith('.novel_agent/information/research_notes/') &&
+        path.endsWith('.json')) {
+      researchCount += 1;
+    } else if (path.startsWith('.novel_agent/information/research_requests/') &&
+        path.endsWith('.json')) {
+      researchRequestCount += 1;
+    } else if (path.startsWith('.novel_agent/information/reference_works/') &&
+        path.endsWith('.json')) {
+      referenceCount += 1;
+    }
+  }
+  return _HiddenInformationCounts(
+    knowledgeCount: knowledgeCount,
+    designCount: designCount,
+    researchCount: researchCount,
+    researchRequestCount: researchRequestCount,
+    referenceCount: referenceCount,
+  );
+}
+
+class _HiddenInformationCounts {
+  const _HiddenInformationCounts({
+    required this.knowledgeCount,
+    required this.designCount,
+    required this.researchCount,
+    required this.researchRequestCount,
+    required this.referenceCount,
+  });
+
+  final int knowledgeCount;
+  final int designCount;
+  final int researchCount;
+  final int researchRequestCount;
+  final int referenceCount;
 }
 
 class _UsageProjection {

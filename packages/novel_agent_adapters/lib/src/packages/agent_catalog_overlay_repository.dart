@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:novel_agent_core/novel_agent_core.dart';
 
@@ -14,14 +15,19 @@ class AgentCatalogOverlayRepository {
   }) : _settingsRootPath = settingsRootPath,
        _pathService = pathService ?? const CatalogOverlayPathService(),
        _codecService =
-           codecService ?? AgentCatalogOverlayDocumentCodecService();
+           codecService ?? AgentCatalogOverlayDocumentCodecService(),
+       _canUseBackgroundIsolate = pathService == null && codecService == null;
 
   final String _settingsRootPath;
   final CatalogOverlayPathService _pathService;
   final AgentCatalogOverlayDocumentCodecService _codecService;
+  final bool _canUseBackgroundIsolate;
 
   Future<List<JsonMap>> listOverlays() async {
     // 中文注释: 全局 overlay 列表只扫描设置根目录，不把项目级绑定混进来。
+    if (_canUseBackgroundIsolate) {
+      return Isolate.run(() => _listAgentOverlaysSync(_settingsRootPath));
+    }
     final root = Directory(
       _pathService.agentOverlayDirectoryPath(_settingsRootPath),
     );
@@ -89,4 +95,38 @@ class AgentCatalogOverlayRepository {
       return <String, Object?>{};
     }
   }
+}
+
+List<JsonMap> _listAgentOverlaysSync(String settingsRootPath) {
+  final pathService = const CatalogOverlayPathService();
+  final codecService = AgentCatalogOverlayDocumentCodecService();
+  final root = Directory(pathService.agentOverlayDirectoryPath(settingsRootPath));
+  if (!root.existsSync()) {
+    return const <JsonMap>[];
+  }
+  final result = <JsonMap>[];
+  for (final entity in root.listSync(followLinks: false)) {
+    if (entity is! File || !entity.path.toLowerCase().endsWith('.json')) {
+      continue;
+    }
+    try {
+      final decoded = jsonDecode(entity.readAsStringSync());
+      final overlay = codecService.normalize(ValueReaders.mapValue(decoded));
+      if (ValueReaders.stringValue(overlay['agent_id']).trim().isEmpty) {
+        continue;
+      }
+      result.add(<String, Object?>{
+        ...overlay,
+        'overlay_relative_path': entity.path,
+      });
+    } catch (_) {
+      continue;
+    }
+  }
+  result.sort((left, right) {
+    return ValueReaders.stringValue(
+      left['agent_id'],
+    ).compareTo(ValueReaders.stringValue(right['agent_id']));
+  });
+  return result;
 }

@@ -4,7 +4,9 @@ class ReferenceSourceDocumentStructureService {
   const ReferenceSourceDocumentStructureService();
 
   static final RegExp _chapterHeadingPattern = RegExp(
-    r'^[^A-Za-z\u4E00-\u9FFF]{0,12}(chapter\s+[^\n]+|第[一二三四五六七八九十百千0-9]+章[^\n]*)\s*$',
+    r'^(?:#{1,6}\s*)?[^A-Za-z\u4E00-\u9FFF]{0,12}'
+    r'(chapter\s*[^\n]*|第[^\n]{0,18}[章节回卷][^\n]*)'
+    r'\s*(?:[:：\-]\s*.*)?$',
     multiLine: true,
     caseSensitive: false,
   );

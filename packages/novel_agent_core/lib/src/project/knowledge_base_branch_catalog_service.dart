@@ -11,14 +11,14 @@ class KnowledgeBaseBranchCatalogService {
         KnowledgeBaseBranchDefinition(
           id: structuredBranchId,
           title: '结构化资料库',
-          description:
-              '把资料提取为结构化知识、卡片、设计元素和参考记录，适合后续复用、分享与精细检索。',
+          description: '把资料提取为结构化知识、卡片、设计元素和参考记录，适合后续复用、分享与精细检索。',
+          opensProjectAssetsByDefault: true,
+          preferredAssetsTabId: 'reference_extraction',
         ),
         KnowledgeBaseBranchDefinition(
           id: ragBranchId,
           title: '语料库',
-          description:
-              '把资料切分、清洗并构建为可挂载的语料包，适合检索增强和证据型引用，不把它当作正式写作工作区主面板。',
+          description: '把资料切分、清洗并构建为可挂载的语料包，适合检索增强和证据型引用，不把它当作正式写作工作区主面板。',
           opensProjectAssetsByDefault: true,
           preferredAssetsTabId: 'rag_extraction',
         ),

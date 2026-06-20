@@ -46,7 +46,7 @@ void main() {
       expect(find.byTooltip('更多文件操作'), findsOneWidget);
       expect(find.byTooltip('新文件夹'), findsNothing);
       expect(find.byTooltip('模型与接口设置'), findsNothing);
-      expect(find.byType(CustomScrollView), findsOneWidget);
+      expect(find.byType(CustomScrollView), findsNothing);
       expect(find.byType(SingleChildScrollView), findsNothing);
     },
   );
@@ -90,11 +90,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(
-        find.byKey(const ValueKey<String>('resource_manager_scroll_view')),
-        findsOneWidget,
-      );
-      expect(find.byType(CustomScrollView), findsOneWidget);
+      expect(find.byType(ListView), findsOneWidget);
+      expect(find.byType(CustomScrollView), findsNothing);
       expect(find.byType(SingleChildScrollView), findsNothing);
       expect(find.text('项目 A'), findsOneWidget);
     },

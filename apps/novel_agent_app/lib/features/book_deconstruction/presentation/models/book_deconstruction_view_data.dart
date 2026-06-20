@@ -1,4 +1,3 @@
-import 'book_deconstruction_information_bridge_view_data.dart';
 import 'book_deconstruction_plan_group_view_data.dart';
 import 'book_deconstruction_continuity_view_data.dart';
 import 'book_deconstruction_preview_section_view_data.dart';
@@ -31,7 +30,6 @@ class BookDeconstructionViewData {
     required this.canCreateDerivedProject,
     required this.importActionLabel,
     required this.buildPreviewActionLabel,
-    required this.informationBridge,
     this.continuity,
   });
 
@@ -62,7 +60,6 @@ class BookDeconstructionViewData {
       canCreateDerivedProject: false,
       importActionLabel: '导入文件',
       buildPreviewActionLabel: '生成结构化预览',
-      informationBridge: null,
       continuity: null,
     );
   }
@@ -92,6 +89,5 @@ class BookDeconstructionViewData {
   final bool canCreateDerivedProject;
   final String importActionLabel;
   final String buildPreviewActionLabel;
-  final BookDeconstructionInformationBridgeViewData? informationBridge;
   final BookDeconstructionContinuityViewData? continuity;
 }

@@ -52,5 +52,27 @@ Letters kept arriving at Privet Drive.
       );
       expect(structure.sections, isNotEmpty);
     });
+
+    test('detects markdown-style Chinese chapter headings', () {
+      final structure = service.analyze('''
+# 卷一
+
+## 第一章 夜行
+主角第一次进入陌生都城。
+
+## 第二章 入局
+朝堂与江湖同时向他逼近。
+''');
+
+      expect(
+        structure.structureKind,
+        ReferenceSourceDocumentStructureKinds.explicitChapter,
+      );
+      expect(structure.sections, hasLength(2));
+      expect(
+        structure.sections.map((entry) => entry.heading).toList(),
+        <String>['第一章 夜行', '第二章 入局'],
+      );
+    });
   });
 }

@@ -217,12 +217,9 @@ class SessionGuideProfileService {
         ),
         SessionGuideAction(
           id: 'session.goal.summarize_book.book_deconstruction',
-          commandId: 'session.goal',
+          commandId: 'guide.open_book_deconstruction_analysis',
           title: '分析数据',
-          description: '围绕已导入原文整理结构、角色、背景、风格、剧情线与后续承接风险。',
-          payload: <String, Object?>{
-            'mode': SessionRecordConstants.modeSummarizeBook,
-          },
+          description: '进入正式分析入口，把导入原文沉淀成结构化资产、参考提案与后续承接基础。',
         ),
         SessionGuideAction(
           id: 'session.goal.chapter_draft.book_deconstruction',

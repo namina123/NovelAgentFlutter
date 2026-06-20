@@ -3,7 +3,7 @@ import 'dart:async';
 class AppShellProjectOpenController {
   AppShellProjectOpenController({
     required Future<void> Function() startProjectCreationFromProjectOpen,
-    required Future<void> Function() refreshProjectOpenView,
+    required Future<void> Function({bool forceRefresh}) refreshProjectOpenView,
     required void Function(String entryId) selectProjectOpenEntry,
     required Future<void> Function(String projectPath)
     openProjectFromProjectOpen,
@@ -15,14 +15,14 @@ class AppShellProjectOpenController {
        _importLocalProjectFromProjectOpen = importLocalProjectFromProjectOpen;
 
   final Future<void> Function() _startProjectCreationFromProjectOpen;
-  final Future<void> Function() _refreshProjectOpenView;
+  final Future<void> Function({bool forceRefresh}) _refreshProjectOpenView;
   final void Function(String entryId) _selectProjectOpenEntry;
   final Future<void> Function(String projectPath) _openProjectFromProjectOpen;
   final Future<void> Function() _importLocalProjectFromProjectOpen;
 
   void onProjectOpenRefreshRequested() {
     // 中文注释: 项目入口页刷新只重建项目发现结果，不切换当前全局目的地。
-    _refreshProjectOpenView();
+    _refreshProjectOpenView(forceRefresh: true);
   }
 
   void onProjectOpenCreateRequested() {

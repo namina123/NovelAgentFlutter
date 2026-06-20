@@ -6,6 +6,7 @@ class ProjectAssetsViewData {
     required this.title,
     required this.description,
     required this.status,
+    required this.useDedicatedRagWorkspace,
     required this.activeTabId,
     required this.entryAgentContextId,
     required this.tabs,
@@ -24,6 +25,7 @@ class ProjectAssetsViewData {
   final String title;
   final String description;
   final String status;
+  final bool useDedicatedRagWorkspace;
   final String activeTabId;
   final String entryAgentContextId;
   final List<ProjectAssetsTabViewData> tabs;
@@ -42,11 +44,13 @@ class ProjectAssetsViewData {
   factory ProjectAssetsViewData.initial() {
     return ProjectAssetsViewData(
       title: '项目资产',
-      description: '集中管理风格、表达限制、伏笔、项目资产包与参考资料提取结果。',
+      description: '集中管理知识提取结果、风格、表达限制、伏笔与项目资产包。',
       status: '',
+      useDedicatedRagWorkspace: false,
       activeTabId: 'styles',
       entryAgentContextId: '',
       tabs: const <ProjectAssetsTabViewData>[
+        ProjectAssetsTabViewData(id: 'reference_extraction', label: '知识提取'),
         ProjectAssetsTabViewData(id: 'styles', label: '风格'),
         ProjectAssetsTabViewData(id: 'expression_constraints', label: '表达限制'),
         ProjectAssetsTabViewData(id: 'rag_extraction', label: '语料提取'),

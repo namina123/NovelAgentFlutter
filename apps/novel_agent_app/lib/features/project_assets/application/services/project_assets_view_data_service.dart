@@ -44,19 +44,47 @@ class ProjectAssetsViewDataService {
   ProjectAssetsViewData build({
     required ProjectAssetsSnapshot snapshot,
     required String status,
+    ProjectDescriptor? project,
   }) {
     // 中文注释: 资产中心的投影统一在这里收口，控制器只保留原始资产与选择状态。
+    final isKnowledgeBaseProject =
+        project?.projectType.trim() == 'knowledge_base';
+    final isKnowledgeBaseRagWorkspace =
+        isKnowledgeBaseProject &&
+        const KnowledgeBaseBranchCatalogService().isRagBranch(
+          project?.projectBranchId ?? '',
+        );
+    final isKnowledgeBaseStructuredWorkspace =
+        isKnowledgeBaseProject && !isKnowledgeBaseRagWorkspace;
     final activeTabId = snapshot.activeTabId.trim().isEmpty
-        ? ProjectAssetsTabId.styles
+        ? (isKnowledgeBaseRagWorkspace
+              ? ProjectAssetsTabId.ragExtraction
+              : ProjectAssetsTabId.referenceExtraction)
         : snapshot.activeTabId;
     final entries = _entriesForTab(snapshot, activeTabId);
     return ProjectAssetsViewData(
-      title: ProjectAssetsViewData.initial().title,
-      description: _descriptionFor(snapshot, activeTabId),
+      title: isKnowledgeBaseRagWorkspace
+          ? '语料库'
+          : (isKnowledgeBaseStructuredWorkspace
+                ? '资料库'
+                : ProjectAssetsViewData.initial().title),
+      description: isKnowledgeBaseRagWorkspace
+          ? '导入源文、构建语料、挂载到项目。这里不是普通创作工作台，而是知识库语料专用面板。'
+          : isKnowledgeBaseStructuredWorkspace
+          ? '这里是结构化资料库的正式工作区。它不作为普通创作台使用，知识提取、资料整理与结构化沉淀都在这里完成。'
+          : _descriptionFor(snapshot, activeTabId),
       status: status,
+      useDedicatedRagWorkspace: isKnowledgeBaseRagWorkspace,
       activeTabId: activeTabId,
       entryAgentContextId: snapshot.entryAgentContextId,
-      tabs: ProjectAssetsViewData.initial().tabs,
+      tabs: isKnowledgeBaseRagWorkspace
+          ? const <ProjectAssetsTabViewData>[
+              ProjectAssetsTabViewData(
+                id: ProjectAssetsTabId.ragExtraction,
+                label: '语料提取',
+              ),
+            ]
+          : ProjectAssetsViewData.initial().tabs,
       entries: entries,
       inspector: _inspector(snapshot, activeTabId),
       timeline: _timelineViewDataService.build(snapshot),
@@ -68,6 +96,9 @@ class ProjectAssetsViewDataService {
       referenceExtractionStrategyPicker:
           _referenceExtractionStrategyPickerViewDataService.build(
             selectedProfileId: snapshot.selectedReferenceExtractionStrategyId,
+            useDeconstructionProjection:
+                project?.projectType.trim() ==
+                BookDeconstructionConstants.projectTypeId,
           ),
       ragExtraction: _ragExtractionViewDataService.build(
         snapshot: snapshot.ragExtraction,
@@ -92,6 +123,9 @@ class ProjectAssetsViewDataService {
   }
 
   String _descriptionFor(ProjectAssetsSnapshot snapshot, String activeTabId) {
+    if (activeTabId == ProjectAssetsTabId.referenceExtraction) {
+      return '知识提取是手动触发的正式流程，会把资料沉淀成结构化知识与参考结果；它不是拆书的一部分，也不是一次性聊天摘要。';
+    }
     if (activeTabId == ProjectAssetsTabId.expressionConstraints) {
       final agentId = snapshot.entryAgentContextId.trim();
       if (agentId.isNotEmpty) {
@@ -107,6 +141,8 @@ class ProjectAssetsViewDataService {
     String activeTabId,
   ) {
     switch (activeTabId) {
+      case ProjectAssetsTabId.referenceExtraction:
+        return const <ProjectAssetEntryViewData>[];
       case ProjectAssetsTabId.expressionConstraints:
         return _expressionConstraintViewDataService.buildEntries(snapshot);
       case ProjectAssetsTabId.foreshadows:
@@ -289,6 +325,33 @@ class ProjectAssetsViewDataService {
     String activeTabId,
   ) {
     switch (activeTabId) {
+      case ProjectAssetsTabId.referenceExtraction:
+        return ProjectAssetsInspectorViewData(
+          title: '知识提取',
+          subtitle: '手动执行知识提取，把资料沉淀为结构化知识、设计、研究与引用边界结果。',
+          badge: '正式入口',
+          sourcePath: '',
+          sections: <ProjectAssetsInspectorSectionViewData>[
+            ProjectAssetsInspectorSectionViewData(
+              title: '当前作用',
+              lines: const <String>[
+                '这是独立的知识提取流程，不会随着拆书自动发生。',
+                '普通项目会从你手动选择的资料开始提取；拆书项目则会直接使用已确认的拆书产物。',
+                '提取结果会沉淀到资料与设定层，而不是停留在一次性预览里。',
+              ],
+            ),
+            ProjectAssetsInspectorSectionViewData(
+              title: '建议顺序',
+              lines: const <String>[
+                '1. 先准备资料源，或在拆书项目里先完成拆书预览并确认。',
+                '2. 再手动进入这里执行知识提取。',
+                '3. 最后根据提取结果进入续写、同人或普通创作。',
+              ],
+            ),
+          ],
+          relatedAssets: const <ProjectAssetsRelatedAssetViewData>[],
+          emptyMessage: '',
+        );
       case ProjectAssetsTabId.expressionConstraints:
         return ProjectAssetsInspectorViewData.empty();
       case ProjectAssetsTabId.timelines:

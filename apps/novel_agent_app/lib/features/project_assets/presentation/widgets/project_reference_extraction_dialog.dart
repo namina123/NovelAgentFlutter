@@ -15,7 +15,7 @@ Future<void> showProjectReferenceExtractionDialog(
       return StatefulBuilder(
         builder: (context, setState) {
           return AlertDialog(
-            title: const Text('提取参考资料'),
+            title: const Text('知识提取'),
             content: SizedBox(
               width: 560,
               child: Column(
@@ -26,6 +26,13 @@ Future<void> showProjectReferenceExtractionDialog(
                     picker.summary,
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
+                  if (picker.sourceHint.trim().isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      picker.sourceHint,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   Flexible(
                     child: SingleChildScrollView(
@@ -90,7 +97,7 @@ Future<void> showProjectReferenceExtractionDialog(
                         );
                         Navigator.of(dialogContext).pop();
                       },
-                child: const Text('开始提取'),
+                child: Text(picker.confirmButtonLabel),
               ),
             ],
           );

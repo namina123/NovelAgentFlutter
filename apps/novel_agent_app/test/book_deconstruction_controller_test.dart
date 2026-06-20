@@ -81,39 +81,13 @@ void main() {
     expect(claimsLog, contains('analysis.deconstruction.story_outline'));
     expect(proposalIndex, contains('proposal_'));
     expect(reviewIndex, contains('review_'));
-    final knowledgeIndex = workspacePort.readStoredTextFile(
+    final structuredSource = workspacePort.readStoredTextFile(
       'D:/Projects/deconstruction_project',
-      '.novel_agent/information/knowledge_cards/index.json',
+      'analysis/book_deconstruction_structured_source.md',
     );
-    final designIndex = workspacePort.readStoredTextFile(
-      'D:/Projects/deconstruction_project',
-      '.novel_agent/information/design_elements/index.json',
-    );
-    final researchIndex = workspacePort.readStoredTextFile(
-      'D:/Projects/deconstruction_project',
-      '.novel_agent/information/research_notes/index.json',
-    );
-    final referenceIndex = workspacePort.readStoredTextFile(
-      'D:/Projects/deconstruction_project',
-      '.novel_agent/information/reference_works/index.json',
-    );
-    final designProjection = workspacePort.readStoredTextFile(
-      'D:/Projects/deconstruction_project',
-      'knowledge/设计元素摘要.md',
-    );
-    final referenceProjection = workspacePort.readStoredTextFile(
-      'D:/Projects/deconstruction_project',
-      'references/引用作品边界.md',
-    );
-    expect(knowledgeIndex, contains('knowledge_'));
-    expect(designIndex, contains('design_'));
-    expect(researchIndex, contains('research_'));
-    expect(referenceIndex, contains('reference_'));
-    expect(
-      designProjection,
-      contains('analysis.deconstruction.design.system_rule'),
-    );
-    expect(referenceProjection, contains('deconstruction_source_work'));
+    expect(structuredSource, isNotNull);
+    expect(structuredSource, contains('## 规范化正文'));
+    expect(structuredSource, contains('第一章 港口风暴'));
     expect(
       controller.viewData.confirmedPreviewPath,
       'analysis/book_deconstruction_preview.md',
@@ -229,7 +203,7 @@ void main() {
     expect(
       workspacePort.readStoredTextFile(
         currentProject.rootPath,
-        'chapters/inherited/continuation_novel/001_第一章_港口风暴.md',
+        'chapters/inherited/continuation/continuation_novel/001_第一章_港口风暴.md',
       ),
       contains('主角在港口被迫卷入一场追捕'),
     );
@@ -339,8 +313,33 @@ void main() {
     controller.onBookDeconstructionCharacterLinesChanged('林砚：主角');
 
     await controller.onBookDeconstructionBuildPreviewRequested();
+    controller.onBookDeconstructionSelectAllRequested();
+    controller.onBookDeconstructionFollowupOptionSelected('continuation_novel');
+    expect(controller.viewData.selectedFollowupOptionId, 'continuation_novel');
+    expect(controller.viewData.canCreateDerivedProject, isTrue);
     await controller.onBookDeconstructionCreateDerivedProjectRequested();
 
+    final expectedBuildResult = BuildBookDeconstructionDraftUseCase().execute(
+      sourceTitle: '海上城邦',
+      sourceContent:
+          '第一章 港口风暴\n主角在港口被迫卷入一场追捕。\n\n第二章 议会阴影\n城邦议会开始浮出水面。',
+      sourceAbsolutePath: '',
+      operatorNotes: '继续拆书并派生。',
+      styleSummary: '节奏明快。',
+      worldRulesText: '港口贸易绑定超常权力。',
+      characterLinesText: '林砚：主角',
+      organizationLinesText: '',
+    );
+    final expectedPremisePath = expectedBuildResult.applicationPlan.items
+        .firstWhere(
+          (item) => item.sourceKind == BookDeconstructionArtifactKind.premise,
+        )
+        .relativePathHint;
+
+    expect(
+      controller.viewData.status,
+      isNot(anyOf(contains('派生项目失败'), contains('暂不可用'), contains('请先'))),
+    );
     expect(openedProject, isNotNull);
     expect(openedProject!.projectType, 'novel');
     expect(openedProject!.name, '海上城邦 - 一般小说');
@@ -358,7 +357,7 @@ void main() {
     expect(
       workspacePort.readStoredTextFile(
         openedProject!.rootPath,
-        'premise/book_deconstruction_premise_1.md',
+        expectedPremisePath,
       ),
       isNotNull,
     );

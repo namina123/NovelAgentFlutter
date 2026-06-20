@@ -151,7 +151,8 @@ void main() {
 
     expect(find.text('文件'), findsWidgets);
     expect(find.text('快速操作'), findsOneWidget);
-    expect(find.byType(CustomScrollView), findsOneWidget);
+    expect(find.byType(CustomScrollView), findsNothing);
+    expect(find.byType(ListView), findsOneWidget);
 
     await expectLater(
       find.byKey(const ValueKey<String>('sr14_left_sidebar_compact_shell')),

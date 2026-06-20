@@ -846,12 +846,7 @@ class ProjectLongTaskStationDetailService {
     if (paths.isNotEmpty) {
       return paths;
     }
-    return const <String>[
-      InformationProjectionDocument.knowledgeSummaryRelativePath,
-      InformationProjectionDocument.designSummaryRelativePath,
-      InformationProjectionDocument.researchSummaryRelativePath,
-      InformationProjectionDocument.referenceBoundaryRelativePath,
-    ];
+    return const <String>[];
   }
 
   List<ProjectLongTaskStationItemSummary> _summaryItemsFromProjectionItems(

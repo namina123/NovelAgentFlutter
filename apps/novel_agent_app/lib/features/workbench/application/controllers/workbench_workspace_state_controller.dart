@@ -73,9 +73,15 @@ class WorkbenchWorkspaceStateController {
     return _controller._projectedWorkbenchState(base);
   }
 
-  Future<bool> loadProject(String rootPath) async {
+  Future<bool> loadProject(
+    String rootPath, {
+    bool deferHydration = false,
+  }) async {
     // 中文注释: 项目加载属于工作区状态生命周期，保持单一入口。
-    return _controller.loadProject(rootPath);
+    return _controller.loadProject(
+      rootPath,
+      deferHydration: deferHydration,
+    );
   }
 
   Future<void> refreshProjectLongTaskSummary() async {

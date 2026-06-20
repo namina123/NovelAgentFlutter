@@ -29,11 +29,13 @@ void main() {
       }
     });
 
-    test('ingests txt file into corpus, source documents, chunks and run metadata', () async {
-      final sourceFile = File(
-        '${tempDirectory.path}${Platform.pathSeparator}sample.txt',
-      );
-      await sourceFile.writeAsString('''
+    test(
+      'ingests txt file into corpus, source documents, chunks and run metadata',
+      () async {
+        final sourceFile = File(
+          '${tempDirectory.path}${Platform.pathSeparator}sample.txt',
+        );
+        await sourceFile.writeAsString('''
 第一章
 这里是第一段。
 
@@ -41,61 +43,86 @@ void main() {
 这里是第二段，内容稍长一些，用于测试 chunk 构建。
 ''');
 
-      final corpusPackage = RagCorpusPackage(
-        corpusId: 'corpus-rag-txt-1',
-        title: 'txt 基础语料',
-        sourceKind: 'txt',
-        buildMode: 'basic',
-        language: 'zh-CN',
-        version: 'v1',
-      );
+        final corpusPackage = RagCorpusPackage(
+          corpusId: 'corpus-rag-txt-1',
+          title: 'txt 基础语料',
+          sourceKind: 'txt',
+          buildMode: 'basic',
+          language: 'zh-CN',
+          version: 'v1',
+        );
 
-      final result = await service.ingestFile(
-        project: project,
-        sourceFilePath: sourceFile.path,
-        corpusPackage: corpusPackage,
-        ingestedAt: '2026-06-17T10:00:00Z',
-      );
+        final result = await service.ingestFile(
+          project: project,
+          sourceFilePath: sourceFile.path,
+          corpusPackage: corpusPackage,
+          ingestedAt: '2026-06-17T10:00:00Z',
+        );
 
-      final repository = SqliteRagMetadataRepository();
-      final storedCorpus = await repository.readCorpus(
-        project,
-        corpusId: 'corpus-rag-txt-1',
-      );
-      final storedSources = await repository.listSourceDocuments(
-        project,
-        corpusId: 'corpus-rag-txt-1',
-      );
-      final storedChunks = await repository.listChunks(
-        project,
-        corpusId: 'corpus-rag-txt-1',
-      );
-      final storedHandles = await repository.listIndexHandles(
-        project,
-        corpusId: 'corpus-rag-txt-1',
-      );
-      final storedRuns = await repository.listIngestionRuns(
-        project,
-        corpusId: 'corpus-rag-txt-1',
-      );
+        final repository = SqliteRagMetadataRepository();
+        final storedCorpus = await repository.readCorpus(
+          project,
+          corpusId: 'corpus-rag-txt-1',
+        );
+        final storedSources = await repository.listSourceDocuments(
+          project,
+          corpusId: 'corpus-rag-txt-1',
+        );
+        final storedChunks = await repository.listChunks(
+          project,
+          corpusId: 'corpus-rag-txt-1',
+        );
+        final storedHandles = await repository.listIndexHandles(
+          project,
+          corpusId: 'corpus-rag-txt-1',
+        );
+        final storedRuns = await repository.listIngestionRuns(
+          project,
+          corpusId: 'corpus-rag-txt-1',
+        );
 
-      expect(result.corpusId, 'corpus-rag-txt-1');
-      expect(result.sourceKind, 'txt');
-      expect(result.chunkCount, greaterThan(0));
-      expect(storedCorpus, isNotNull);
-      expect(storedCorpus!.sourceCount, 1);
-      expect(storedCorpus.chunkCount, greaterThan(0));
-      expect(storedSources, hasLength(1));
-      expect(storedSources.single.originPath, sourceFile.path);
-      expect(storedChunks, isNotEmpty);
-      expect(storedChunks.first.chapterTitle, '第一章');
-      expect(storedChunks.first.text, contains('这里是第一段'));
-      expect(storedHandles, hasLength(1));
-      expect(storedHandles.single.backendKind, 'sqlite-meta');
-      expect(storedRuns, hasLength(1));
-      expect(storedRuns.single['status'], 'completed');
-      expect(storedRuns.single['chunk_count'], result.chunkCount);
-    });
+        expect(result.corpusId, 'corpus-rag-txt-1');
+        expect(result.sourceKind, 'txt');
+        expect(result.chunkCount, greaterThan(0));
+        expect(storedCorpus, isNotNull);
+        expect(storedCorpus!.sourceCount, 1);
+        expect(storedCorpus.chunkCount, greaterThan(0));
+        final corpusAnalysis = ValueReaders.mapValue(
+          storedCorpus.metadata['source_analysis_summary'],
+        );
+        expect(
+          ValueReaders.stringValue(corpusAnalysis['story_outline_summary']),
+          contains('第一章'),
+        );
+        expect(storedSources, hasLength(1));
+        expect(storedSources.single.originPath, sourceFile.path);
+        final sourceAnalysis = ValueReaders.mapValue(
+          storedSources.single.metadata['source_analysis_summary'],
+        );
+        expect(
+          ValueReaders.stringValue(sourceAnalysis['premise_summary']),
+          isNotEmpty,
+        );
+        expect(storedChunks, isNotEmpty);
+        expect(storedChunks.first.chapterTitle, '第一章');
+        expect(storedChunks.first.text, contains('这里是第一段'));
+        expect(storedHandles, hasLength(1));
+        expect(storedHandles.single.backendKind, 'sqlite-meta');
+        expect(storedRuns, hasLength(1));
+        expect(storedRuns.single['status'], 'completed');
+        expect(storedRuns.single['chunk_count'], result.chunkCount);
+        final runPayload = ValueReaders.mapValue(
+          storedRuns.single['payload_json'],
+        );
+        final runAnalysis = ValueReaders.mapValue(
+          runPayload['source_analysis_summary'],
+        );
+        expect(
+          ValueReaders.stringValue(runAnalysis['style_summary']),
+          isNotEmpty,
+        );
+      },
+    );
 
     test('rejects non txt sources', () async {
       final sourceFile = File(
@@ -127,10 +154,12 @@ void main() {
       final sourceFile = File(
         '${tempDirectory.path}${Platform.pathSeparator}sample_progress.txt',
       );
-      await sourceFile.writeAsString(List<String>.generate(
-        40,
-        (index) => '第${index + 1}章\n这是第 ${index + 1} 段的内容，用于测试进度回调。\n',
-      ).join('\n'));
+      await sourceFile.writeAsString(
+        List<String>.generate(
+          40,
+          (index) => '第${index + 1}章\n这是第 ${index + 1} 段的内容，用于测试进度回调。\n',
+        ).join('\n'),
+      );
 
       final corpusPackage = RagCorpusPackage(
         corpusId: 'corpus-rag-progress-1',

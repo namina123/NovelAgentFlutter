@@ -63,3 +63,5 @@ docs/**/*closeout*.md
 **/__pycache__/
 **/*.pyc
 **/node_modules/
+references/RE0/
+apps/novel_agent_app/test/failures/

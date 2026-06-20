@@ -1,17 +1,24 @@
 import '../project/project_content_path_policy_service.dart';
+import '../project/project_storage_strategy.dart';
+import '../project/project_storage_strategy_path_policy_service.dart';
 import '../inspiration/inspiration_premise.dart';
 import 'book_deconstruction_artifact_kind.dart';
 import 'book_deconstruction_chapter_outline.dart';
 
 class BookDeconstructionTargetPathService {
   const BookDeconstructionTargetPathService({
-    ProjectContentPathPolicyService? contentPathPolicyService,
-  }) : _contentPathPolicyService =
-           contentPathPolicyService ?? const ProjectContentPathPolicyService();
+    ProjectStorageStrategyPathPolicyService? storageStrategyPathPolicyService,
+  }) : _storageStrategyPathPolicyService =
+           storageStrategyPathPolicyService ??
+           const ProjectStorageStrategyPathPolicyService();
 
-  final ProjectContentPathPolicyService _contentPathPolicyService;
+  final ProjectStorageStrategyPathPolicyService _storageStrategyPathPolicyService;
 
-  String sourceArchivePath(String sourceAbsolutePath) {
+  String sourceArchivePath(
+    String sourceAbsolutePath, {
+    ProjectStorageStrategy storageStrategy =
+        ProjectStorageStrategy.markdownProjectStore,
+  }) {
     // 中文注释: 原文归档路径统一收口在 sources/original/，避免拆书源文本继续散在内存或正文目录里。
     final normalized = sourceAbsolutePath.replaceAll('\\', '/').trim();
     final fileName = normalized.split('/').last;
@@ -20,12 +27,22 @@ class BookDeconstructionTargetPathService {
         ? fileName.substring(0, separatorIndex)
         : fileName;
     final cleanStem = _safeId(stem);
-    return '${_contentPathPolicyService.directoryForContentType('source_original')}/book_deconstruction_source_$cleanStem.md';
+    return '${_storageStrategyPathPolicyService.directoryForContentType(storageStrategy: storageStrategy, contentType: 'source_original')}/book_deconstruction_source_$cleanStem.md';
   }
 
-  String previewPath() {
+  String previewPath({
+    ProjectStorageStrategy storageStrategy =
+        ProjectStorageStrategy.markdownProjectStore,
+  }) {
     // 中文注释: 预演纪要统一写入 analysis/，保持它与正文层和原文层隔离。
-    return '${_contentPathPolicyService.directoryForContentType('analysis')}/book_deconstruction_preview.md';
+    return '${_storageStrategyPathPolicyService.directoryForContentType(storageStrategy: storageStrategy, contentType: 'analysis')}/book_deconstruction_preview.md';
+  }
+
+  String structuredSourcePath({
+    ProjectStorageStrategy storageStrategy =
+        ProjectStorageStrategy.markdownProjectStore,
+  }) {
+    return '${_storageStrategyPathPolicyService.directoryForContentType(storageStrategy: storageStrategy, contentType: 'analysis')}/book_deconstruction_structured_source.md';
   }
 
   String followupPlanPath(String followupOptionId) {
@@ -42,17 +59,21 @@ class BookDeconstructionTargetPathService {
     required String followupOptionId,
     required int sequence,
     required String title,
+    ProjectStorageStrategy storageStrategy =
+        ProjectStorageStrategy.markdownProjectStore,
   }) {
     final safeRoute = _safeId(followupOptionId);
     final safeTitle = _safeId(title);
     final normalizedTitle = safeTitle.isEmpty ? '原作片段' : safeTitle;
     final chapterNumber = sequence <= 0 ? 1 : sequence;
     final derivedRoot = safeRoute.contains('fanfic')
-        ? _contentPathPolicyService.directoryForContentType(
-            'derived_fanfic_narrative',
+        ? _storageStrategyPathPolicyService.directoryForContentType(
+            storageStrategy: storageStrategy,
+            contentType: 'derived_fanfic_narrative',
           )
-        : _contentPathPolicyService.directoryForContentType(
-            'derived_continuation_narrative',
+        : _storageStrategyPathPolicyService.directoryForContentType(
+            storageStrategy: storageStrategy,
+            contentType: 'derived_continuation_narrative',
           );
     return '$derivedRoot/$safeRoute/${chapterNumber.toString().padLeft(3, '0')}_$normalizedTitle.md';
   }
@@ -69,38 +90,58 @@ class BookDeconstructionTargetPathService {
     return '${ProjectContentPathPolicyService.premiseRoot}/book_deconstruction_premise_${suffix}_$cleanStem.md';
   }
 
-  String storyOutlinePath() {
+  String storyOutlinePath({
+    ProjectStorageStrategy storageStrategy =
+        ProjectStorageStrategy.markdownProjectStore,
+  }) {
     // 中文注释: 总体故事结构继续落到 outlines/story/，避免拆书结果另起一套目录协议。
-    return '${_contentPathPolicyService.directoryForContentType('outline')}/book_deconstruction_story_outline.md';
+    return '${_storageStrategyPathPolicyService.directoryForContentType(storageStrategy: storageStrategy, contentType: 'outline')}/book_deconstruction_story_outline.md';
   }
 
   String chapterOutlinePath(
     BookDeconstructionChapterOutline outline,
     int index,
+    {
+    ProjectStorageStrategy storageStrategy =
+        ProjectStorageStrategy.markdownProjectStore,
+    }
   ) {
     // 中文注释: 章级骨架沿用 outlines/chapters/，让后续一般小说与长任务都能直接复用。
     final sequence = outline.sequence > 0 ? outline.sequence : index;
-    return '${_contentPathPolicyService.directoryForContentType('chapter_outline')}/book_deconstruction_chapter_$sequence.md';
+    return '${_storageStrategyPathPolicyService.directoryForContentType(storageStrategy: storageStrategy, contentType: 'chapter_outline')}/book_deconstruction_chapter_$sequence.md';
   }
 
-  String assetPath(String artifactKind, String assetId) {
+  String assetPath(
+    String artifactKind,
+    String assetId, {
+    ProjectStorageStrategy storageStrategy =
+        ProjectStorageStrategy.markdownProjectStore,
+  }) {
     // 中文注释: 结构化资产路径统一在这里推导，后续若目录策略调整，只改这一层。
     final cleanId = _safeId(assetId);
     switch (artifactKind) {
       case BookDeconstructionArtifactKind.styleProfile:
-        return '${_contentPathPolicyService.directoryForContentType('style')}/$cleanId.md';
+        return '${_storageStrategyPathPolicyService.directoryForContentType(storageStrategy: storageStrategy, contentType: 'style')}/$cleanId.md';
       case BookDeconstructionArtifactKind.worldRuleSet:
-        return '${_contentPathPolicyService.directoryForContentType('setting')}/$cleanId.md';
+        return '${_storageStrategyPathPolicyService.directoryForContentType(storageStrategy: storageStrategy, contentType: 'setting')}/$cleanId.md';
       case BookDeconstructionArtifactKind.characterProfile:
-        return '${_contentPathPolicyService.directoryForContentType('character')}/$cleanId.md';
+        return '${_storageStrategyPathPolicyService.directoryForContentType(storageStrategy: storageStrategy, contentType: 'character')}/$cleanId.md';
       case BookDeconstructionArtifactKind.organizationProfile:
-        return 'assets/organizations/$cleanId.md';
+        return storageStrategy == ProjectStorageStrategy.sqliteProjectStore
+            ? 'imports/analysis/assets/organizations/$cleanId.md'
+            : 'assets/organizations/$cleanId.md';
       case BookDeconstructionArtifactKind.foreshadowRecord:
-        return 'assets/foreshadows/$cleanId.foreshadow.md';
+        return storageStrategy == ProjectStorageStrategy.sqliteProjectStore
+            ? 'imports/analysis/assets/foreshadows/$cleanId.foreshadow.md'
+            : 'assets/foreshadows/$cleanId.foreshadow.md';
       case BookDeconstructionArtifactKind.timelineRecord:
-        return 'assets/timeline/$cleanId.timeline.md';
+        return storageStrategy == ProjectStorageStrategy.sqliteProjectStore
+            ? 'imports/analysis/assets/timeline/$cleanId.timeline.md'
+            : 'assets/timeline/$cleanId.timeline.md';
       case BookDeconstructionArtifactKind.relationshipRecord:
-        return 'assets/relationships/$cleanId.relationship.md';
+        return storageStrategy == ProjectStorageStrategy.sqliteProjectStore
+            ? 'imports/analysis/assets/relationships/$cleanId.relationship.md'
+            : 'assets/relationships/$cleanId.relationship.md';
       default:
         return '';
     }

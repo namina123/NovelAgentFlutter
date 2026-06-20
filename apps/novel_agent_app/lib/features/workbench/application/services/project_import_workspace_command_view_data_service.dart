@@ -15,6 +15,7 @@ class ProjectImportWorkspaceCommandViewDataService {
 
   WorkspaceCommandViewData build({
     required String projectType,
+    required ProjectStorageStrategy storageStrategy,
     List<String> sourcePaths = const <String>[],
     String requestedTargetDirectory = '',
     bool requestedAutoDeconstruct = false,
@@ -38,6 +39,7 @@ class ProjectImportWorkspaceCommandViewDataService {
         requestedSmartAnalysis ?? defaultSmartAnalysis;
     final policy = _actionPolicyService.build(
       projectType: projectType,
+      storageStrategy: storageStrategy,
       sourcePaths: sourcePaths,
       requestedTargetDirectory: requestedTargetDirectory,
       requestedAutoDeconstruct: requestedAutoDeconstruct,
@@ -85,12 +87,14 @@ class ProjectImportWorkspaceCommandViewDataService {
 
   WorkspaceCommandViewData rebuild({
     required WorkspaceCommandRequestViewData request,
+    required ProjectStorageStrategy storageStrategy,
     bool isBusy = false,
     String busyLabel = '',
     String status = '',
   }) {
     return build(
       projectType: request.projectType,
+      storageStrategy: storageStrategy,
       sourcePaths: request.sourcePaths,
       requestedTargetDirectory: request.targetDirectory,
       requestedAutoDeconstruct: request.autoDeconstruct,
@@ -108,9 +112,11 @@ class ProjectImportWorkspaceCommandViewDataService {
 
   ProjectImportActionPolicy resolvePolicy({
     required WorkspaceCommandRequestViewData request,
+    required ProjectStorageStrategy storageStrategy,
   }) {
     return _actionPolicyService.build(
       projectType: request.projectType,
+      storageStrategy: storageStrategy,
       sourcePaths: request.sourcePaths,
       requestedTargetDirectory: request.targetDirectory,
       requestedAutoDeconstruct: request.autoDeconstruct,

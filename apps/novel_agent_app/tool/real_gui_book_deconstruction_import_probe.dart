@@ -17,7 +17,7 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 import '../../../tools/probe_config_support.dart';
 import 'probe_support.dart';
 
-Future<void> main(List<String> arguments) async {
+Future<void> main([List<String> arguments = const <String>[]]) async {
   await ensureLocalRealProbeOptIn(
     probeName: 'real_gui_book_deconstruction_import_probe',
   );
@@ -215,6 +215,7 @@ Future<JsonMap> runRealGuiBookDeconstructionImportProbe({
         ProjectImportWorkspaceCommandViewDataService();
     final bookImportCommand = generalCommandService.build(
       projectType: BookDeconstructionConstants.projectTypeId,
+      storageStrategy: ProjectStorageStrategy.markdownProjectStore,
       sourcePaths: <String>[assets.generalSingleSourcePath],
       requestedTargetDirectory: 'assets',
       requestedAutoDeconstruct: false,
@@ -224,6 +225,7 @@ Future<JsonMap> runRealGuiBookDeconstructionImportProbe({
     );
     final generalImportCommand = generalCommandService.build(
       projectType: 'novel',
+      storageStrategy: ProjectStorageStrategy.markdownProjectStore,
       sourcePaths: <String>[assets.generalSingleSourcePath],
       requestedTargetDirectory: 'assets',
       requestedAutoDeconstruct: false,
@@ -329,8 +331,9 @@ Future<JsonMap> runRealGuiBookDeconstructionImportProbe({
       'continuity_groups': bookViewData.continuity!.followupGroups
           .map((group) => group.id)
           .toList(growable: false),
-      'information_routes': bookViewData.informationBridge!.followupRoutes
-          .map((route) => route.title)
+      'followup_routes': bookViewData.continuity!.followupGroups
+          .expand((group) => group.options)
+          .map((option) => option.title)
           .toList(growable: false),
       'continuation_plan': <String, Object?>{
         'followup_option_id': continuationPlan.followupOptionId,

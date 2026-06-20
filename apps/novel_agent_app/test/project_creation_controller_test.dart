@@ -1,5 +1,6 @@
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:novel_agent_app/app/state/project_lifecycle_coordinator.dart';
 import 'package:novel_agent_app/features/project_creation/application/controllers/project_creation_controller.dart';
 import 'package:novel_agent_app/features/workbench/application/services/project_creation_phase_resolver_service.dart';
 import 'package:novel_agent_app/features/workbench/application/services/desktop_project_directory_picker_service.dart';
@@ -412,22 +413,27 @@ class _ProjectCreationHarness {
       ),
       desktopProjectDirectoryPickerService: _FakeDirectoryPickerService(),
       projectLauncherViewDataService: ProjectLauncherViewDataService(),
+      projectLifecycleCoordinator: ProjectLifecycleCoordinator(
+        readSettings: () => settings,
+        loadProject: (rootPath, {bool deferHydration = false}) async {
+          loadedProjectPaths.add(rootPath);
+          currentProject = await projectRepository.openByPath(rootPath);
+          if (!loadProjectResult) {
+            return false;
+          }
+          if (!keepLauncherOnLoad) {
+            workbench = workbench.copyWith(projectLauncher: null);
+          }
+          return true;
+        },
+        readCurrentProject: () => currentProject,
+        isMobileProjectRootLocked: () => false,
+      ),
       readWorkbench: () => workbench,
       mutateWorkbench: (updater) {
         workbench = updater(workbench);
       },
       readCurrentProject: () => currentProject,
-      loadProject: (rootPath) async {
-        loadedProjectPaths.add(rootPath);
-        currentProject = await projectRepository.openByPath(rootPath);
-        if (!loadProjectResult) {
-          return false;
-        }
-        if (!keepLauncherOnLoad) {
-          workbench = workbench.copyWith(projectLauncher: null);
-        }
-        return true;
-      },
       resetToProjectlessWorkbench: ({required String status}) {
         lastProjectlessStatus = status;
         currentProject = null;

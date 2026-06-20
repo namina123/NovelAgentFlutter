@@ -1,4 +1,5 @@
 class ProjectAssetsTabId {
+  static const String referenceExtraction = 'reference_extraction';
   static const String styles = 'styles';
   static const String expressionConstraints = 'expression_constraints';
   static const String ragExtraction = 'rag_extraction';
@@ -8,6 +9,7 @@ class ProjectAssetsTabId {
   static const String graph = 'graph';
 
   static const List<String> values = <String>[
+    referenceExtraction,
     styles,
     expressionConstraints,
     ragExtraction,

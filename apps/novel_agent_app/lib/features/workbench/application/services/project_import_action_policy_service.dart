@@ -4,9 +4,10 @@ import '../models/project_import_action_policy.dart';
 
 class ProjectImportActionPolicyService {
   ProjectImportActionPolicyService({
-    ProjectContentPathPolicyService? contentPathPolicyService,
-  }) : _contentPathPolicyService =
-           contentPathPolicyService ?? const ProjectContentPathPolicyService();
+    ProjectStorageStrategyPathPolicyService? storageStrategyPathPolicyService,
+  }) : _storageStrategyPathPolicyService =
+           storageStrategyPathPolicyService ??
+           const ProjectStorageStrategyPathPolicyService();
 
   static const List<String> _autoDeconstructionExtensions = <String>[
     '.txt',
@@ -15,10 +16,13 @@ class ProjectImportActionPolicyService {
     '.epub',
   ];
 
-  final ProjectContentPathPolicyService _contentPathPolicyService;
+  final ProjectStorageStrategyPathPolicyService
+  _storageStrategyPathPolicyService;
 
   ProjectImportActionPolicy build({
     required String projectType,
+    ProjectStorageStrategy storageStrategy =
+        ProjectStorageStrategy.markdownProjectStore,
     required List<String> sourcePaths,
     String requestedTargetDirectory = '',
     bool requestedAutoDeconstruct = false,
@@ -44,6 +48,7 @@ class ProjectImportActionPolicyService {
     final cleanSmartAnalysisModelId = smartAnalysisModelId.trim();
     final resolvedTargetDirectory = _resolvedTargetDirectory(
       projectType: normalizedProjectType,
+      storageStrategy: storageStrategy,
       requestedTargetDirectory: requestedTargetDirectory,
     );
     final autoDeconstruct = canAutoDeconstruct
@@ -102,9 +107,6 @@ class ProjectImportActionPolicyService {
     required String sourcePath,
   }) {
     final slug = _safeSlug(_fileStem(sourcePath), fallback: 'imported_source');
-    if (projectType.trim() == BookDeconstructionConstants.projectTypeId) {
-      return 'chapters/book_deconstruction_$slug.md';
-    }
     return 'analysis/deconstruction/book_deconstruction_$slug.md';
   }
 
@@ -123,28 +125,29 @@ class ProjectImportActionPolicyService {
 
   String _resolvedTargetDirectory({
     required String projectType,
+    required ProjectStorageStrategy storageStrategy,
     required String requestedTargetDirectory,
   }) {
+    if (projectType == BookDeconstructionConstants.projectTypeId) {
+      return _storageStrategyPathPolicyService.directoryForContentType(
+        storageStrategy: storageStrategy,
+        contentType: 'source_original',
+      );
+    }
     final cleanRequestedTarget = requestedTargetDirectory.trim();
     if (cleanRequestedTarget.isNotEmpty) {
       return cleanRequestedTarget;
     }
-    if (projectType == BookDeconstructionConstants.projectTypeId) {
-      return const ProjectContentPathPolicyService().directoryForContentType(
-        'source_original',
-      );
-    }
-    return _contentPathPolicyService.defaultImportTargetDirectory();
+    return _storageStrategyPathPolicyService.defaultImportTargetDirectory(
+      storageStrategy,
+    );
   }
 
   String _fileSelectionHint(List<String> sourcePaths) {
     if (sourcePaths.isEmpty) {
-      return '请选择一个或多个本地文件。';
+      return '请选择一个或多个本地文件或文件夹。';
     }
-    if (sourcePaths.length == 1) {
-      return '已选择 1 个文件。';
-    }
-    return '已选择 ${sourcePaths.length} 个文件。自动拆书仅支持单个 .txt / .md / .markdown / .epub 文件。';
+    return '已选择 ${sourcePaths.length} 个来源。';
   }
 
   String _outputHint({
@@ -163,13 +166,25 @@ class ProjectImportActionPolicyService {
   }) {
     if (cleanSourcePaths.isEmpty) {
       if (projectType == BookDeconstructionConstants.projectTypeId) {
-        return '导入支持格式的文件后，可选启用智能拆书。';
+        return '导入支持格式的文件或文件夹后，可按需启用结构化预演或智能拆书。';
       }
       return canSmartAnalyze
-          ? '导入后可启用智能分析，判断资料更像正文、设定、大纲还是参考。'
+          ? '导入文件或文件夹后，可按需启用智能分析，判断资料更像正文、设定、大纲还是参考。'
           : '当前导入不支持智能分析。';
     }
     if (!canAutoDeconstruct) {
+      if (projectType == BookDeconstructionConstants.projectTypeId &&
+          canSmartDeconstruction) {
+        final smartDeconstructionHint = _smartDeconstructionHint(
+          canSmartDeconstruction: canSmartDeconstruction,
+          smartDeconstruction: smartDeconstruction,
+          smartDeconstructionProviderId: smartDeconstructionProviderId,
+          smartDeconstructionModelId: smartDeconstructionModelId,
+        );
+        return smartDeconstructionHint.isEmpty
+            ? '当前选择不能直接生成纯离线预演，可改用智能拆书。'
+            : smartDeconstructionHint;
+      }
       if (canSmartAnalyze) {
         final analysisHint = _smartAnalysisHint(
           smartAnalysis: smartAnalysis,
@@ -198,7 +213,7 @@ class ProjectImportActionPolicyService {
         smartDeconstructionProviderId: smartDeconstructionProviderId,
         smartDeconstructionModelId: smartDeconstructionModelId,
       );
-      final base = '导入原文后，预演纪要会写入 $previewPath。';
+      final base = '导入原文后，结构化预演会写入 $previewPath。';
       return smartDeconstructionHint.isEmpty
           ? base
           : '$base $smartDeconstructionHint';
@@ -234,12 +249,12 @@ class ProjectImportActionPolicyService {
     }
     if (smartDeconstructionProviderId.trim().isEmpty ||
         smartDeconstructionModelId.trim().isEmpty) {
-      return '如需智能拆书，请先选择专用模型。';
+      return '如需智能拆书，请先选择拆书专用模型。';
     }
     if (!smartDeconstruction) {
-      return '已选择拆书模型，可按需开启。';
+      return '已选择拆书模型，可按需开启；模型只负责识别规则，实际清洗由程序执行。';
     }
-    return '智能拆分已开启，将使用 $smartDeconstructionModelId 处理章节划分。';
+    return '智能拆书已开启，将使用 $smartDeconstructionModelId 识别章节规则，再交由程序执行清洗与预演。';
   }
 
   String _fileStem(String sourcePath) {

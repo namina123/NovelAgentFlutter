@@ -22,6 +22,11 @@ class ProjectAssetsDetailPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     switch (viewData.activeTabId) {
+      case ProjectAssetsTabId.referenceExtraction:
+        return ProjectAssetsInspectorPanel(
+          viewData: viewData.inspector,
+          onReferenceSelected: actionHandler.onProjectAssetsReferenceSelected,
+        );
       case ProjectAssetsTabId.styles:
         return StyleProfileEditorPanel(
           viewData: viewData.styleEditor,

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novel_agent_app/app/state/app_shell_project_open_controller.dart';
 
@@ -13,8 +15,9 @@ void main() {
       startProjectCreationFromProjectOpen: () async {
         createRequested = true;
       },
-      refreshProjectOpenView: () async {
+      refreshProjectOpenView: ({bool forceRefresh = false}) async {
         refreshed = true;
+        expect(forceRefresh, isTrue);
       },
       selectProjectOpenEntry: (entryId) {
         selectedEntryId = entryId;
@@ -35,5 +38,29 @@ void main() {
     expect(selectedEntryId, isNull);
     expect(openedProjectPath, isNull);
     expect(imported, isFalse);
+  });
+
+  test('项目入口页刷新不会阻塞当前调用链', () async {
+    final refreshCompleter = Completer<void>();
+    var refreshed = false;
+
+    final controller = AppShellProjectOpenController(
+      startProjectCreationFromProjectOpen: () async {},
+      refreshProjectOpenView: ({bool forceRefresh = false}) async {
+        refreshed = true;
+        expect(forceRefresh, isTrue);
+        await refreshCompleter.future;
+      },
+      selectProjectOpenEntry: (_) {},
+      openProjectFromProjectOpen: (_) async {},
+      importLocalProjectFromProjectOpen: () async {},
+    );
+
+    controller.onProjectOpenRefreshRequested();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(refreshed, isTrue);
+
+    refreshCompleter.complete();
   });
 }

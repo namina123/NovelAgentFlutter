@@ -1,10 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+import 'dart:developer' as developer;
 
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../../../../app/diagnostics/project_hydration_trace_service.dart';
 import '../../../book_deconstruction/application/services/book_deconstruction_narrative_persistence_service.dart';
 import '../../../project_creation/application/controllers/project_creation_controller.dart';
 import '../../presentation/contracts/document_workspace_action_handler.dart';
@@ -32,8 +33,10 @@ import '../services/project_import_workspace_command_view_data_service.dart';
 import '../services/project_long_task_summary_view_data_service.dart';
 import '../services/project_subtitle_view_data_service.dart';
 import '../services/project_type_transition_workspace_command_view_data_service.dart';
+import '../services/workbench_resource_tree_projection_service.dart';
 import '../services/workbench_draft_recovery_snapshot_service.dart';
 import '../services/workspace_command_default_target_service.dart';
+import '../services/workspace_information_refresh_service.dart';
 import '../services/workspace_information_projection_service.dart';
 import '../services/workspace_primary_document_selection_service.dart';
 import '../services/workspace_resource_display_service.dart';
@@ -115,10 +118,14 @@ class WorkbenchWorkspaceController
     ProjectImportExecutionService? projectImportExecutionService,
     WorkspaceInformationProjectionService?
     workspaceInformationProjectionService,
+    WorkspaceInformationRefreshService? workspaceInformationRefreshService,
     WorkbenchDraftRecoverySnapshotService?
     workbenchDraftRecoverySnapshotService,
+    WorkbenchResourceTreeProjectionService?
+    workbenchResourceTreeProjectionService,
     ProjectPendingResearchActionService? pendingResearchActionService,
     WorkbenchProjectLongTaskDetailLoader? projectLongTaskDetailLoader,
+    ProjectHydrationTraceService? projectHydrationTraceService,
   }) : _loadProjectWorkspaceUseCase = loadProjectWorkspaceUseCase,
        _readProjectFileUseCase = readProjectFileUseCase,
        _saveDraftUseCase = saveDraftUseCase,
@@ -169,7 +176,6 @@ class WorkbenchWorkspaceController
        _desktopProjectImportFilePickerService =
            desktopProjectImportFilePickerService ??
            const DesktopProjectImportFilePickerService(),
-       _projectToolHostPort = projectToolHostPort,
        _projectImportWorkspaceCommandViewDataService =
            projectImportWorkspaceCommandViewDataService ??
            ProjectImportWorkspaceCommandViewDataService(),
@@ -183,14 +189,22 @@ class WorkbenchWorkspaceController
              readSettings: readSettings,
              generateDraftUseCaseFactory: generateDraftUseCaseFactory,
            ),
-       _workspaceInformationProjectionService =
-           workspaceInformationProjectionService ??
-           const WorkspaceInformationProjectionService(),
+       _workspaceInformationRefreshService =
+           workspaceInformationRefreshService ??
+           WorkspaceInformationRefreshService(
+             projectionService:
+                 workspaceInformationProjectionService ??
+                 const WorkspaceInformationProjectionService(),
+           ),
        _workbenchDraftRecoverySnapshotService =
            workbenchDraftRecoverySnapshotService ??
            const WorkbenchDraftRecoverySnapshotService(),
+       _workbenchResourceTreeProjectionService =
+           workbenchResourceTreeProjectionService ??
+           WorkbenchResourceTreeProjectionService(),
        _pendingResearchActionService = pendingResearchActionService,
-       _projectLongTaskDetailLoader = projectLongTaskDetailLoader {
+       _projectLongTaskDetailLoader = projectLongTaskDetailLoader,
+       _projectHydrationTraceService = projectHydrationTraceService {
     _workspaceStateController = WorkbenchWorkspaceStateController(this);
     _projectNavigationBridge = WorkbenchProjectNavigationBridge(this);
     _projectActionFacade = WorkbenchProjectActionFacade(this);
@@ -242,7 +256,6 @@ class WorkbenchWorkspaceController
   final ProjectSubtitleViewDataService _projectSubtitleViewDataService;
   final ProjectLongTaskSummaryViewDataService
   _projectLongTaskSummaryViewDataService;
-  final ProjectToolHostPort _projectToolHostPort;
   final WorkspaceCommandDefaultTargetService
   _workspaceCommandDefaultTargetService;
   final DesktopProjectImportFilePickerService
@@ -250,14 +263,20 @@ class WorkbenchWorkspaceController
   final ProjectImportWorkspaceCommandViewDataService
   _projectImportWorkspaceCommandViewDataService;
   final ProjectImportExecutionService _projectImportExecutionService;
-  final WorkspaceInformationProjectionService
-  _workspaceInformationProjectionService;
+  final WorkspaceInformationRefreshService _workspaceInformationRefreshService;
   final WorkbenchDraftRecoverySnapshotService
   _workbenchDraftRecoverySnapshotService;
+  final WorkbenchResourceTreeProjectionService
+  _workbenchResourceTreeProjectionService;
   final ProjectPendingResearchActionService? _pendingResearchActionService;
   final WorkbenchProjectLongTaskDetailLoader? _projectLongTaskDetailLoader;
+  final ProjectHydrationTraceService? _projectHydrationTraceService;
   Timer? _workbenchSnapshotDebounceTimer;
   bool _pendingWorkbenchSnapshotNeedsDraftRecoveries = false;
+  int _projectHydrationToken = 0;
+  String _projectHydrationProjectPath = '';
+  String _projectHydrationCurrentStageLabel = '';
+  bool _projectHydrationActive = false;
   final WorkspaceResourceDisplayService _workspaceResourceDisplayService =
       const WorkspaceResourceDisplayService();
   final WorkspacePrimaryDocumentSelectionService
@@ -290,6 +309,8 @@ class WorkbenchWorkspaceController
 
   WorkbenchProjectRuntimeState get currentProjectRuntimeState =>
       _readProjectState();
+
+  bool get isProjectHydrationInProgress => _projectHydrationActive;
 
   JsonMap currentProjectInfo() {
     // 中文注释: 会话与主动作需要轻量项目摘要，继续由状态层统一输出。
@@ -325,14 +346,24 @@ class WorkbenchWorkspaceController
     return _projectedWorkbenchState(base);
   }
 
-  Future<bool> loadProject(String rootPath) async {
-    // 中文注释: 工作区项目加载只负责把有效快照转成工作台运行时状态，不再决定是否弹创建向导。
+  Future<bool> loadProject(
+    String rootPath, {
+    bool deferHydration = false,
+    bool openDefaultDocument = true,
+  }) async {
+    // 中文注释: 项目加载拆成“首屏可见”和“后续恢复”两段，避免把会话/资料/快照恢复整串堵在 UI 首帧上。
+    final hydrationToken = ++_projectHydrationToken;
     _mutateWorkbench(
       (current) =>
           current.copyWith(generationStatus: '正在加载项目...', toolCoreStatus: ''),
     );
+    _traceProjectLoad(rootPath, 'workspace_snapshot:start');
     final snapshot = await _loadProjectWorkspaceUseCase.execute(rootPath);
+    _traceProjectLoad(rootPath, 'workspace_snapshot:done');
     if (snapshot == null) {
+      _projectHydrationActive = false;
+      _projectHydrationProjectPath = '';
+      _projectHydrationCurrentStageLabel = '';
       _writeProjectState(
         _readProjectState().copyWith(
           currentProject: null,
@@ -352,22 +383,22 @@ class WorkbenchWorkspaceController
       return false;
     }
 
-    final loadWarnings = <String>[];
-    final runtimeProfile = await _runNonFatalProjectLoadStage(
-      warnings: loadWarnings,
-      stageLabel: '运行时配置恢复',
-      action: () => _projectRuntimeProfileRepository.load(snapshot.project),
-      fallback: () => null,
+    _projectHydrationActive = true;
+    _projectHydrationToken = hydrationToken;
+    _projectHydrationProjectPath = snapshot.project.rootPath;
+    _projectHydrationCurrentStageLabel = 'hydrate';
+    _projectHydrationTraceService?.beginHydration(
+      token: hydrationToken,
+      projectPath: snapshot.project.rootPath,
     );
-
+    _latestInformationViewData = const WorkbenchInformationViewData();
     _writeProjectState(
       _readProjectState().copyWith(
         currentProject: snapshot.project,
-        currentRuntimeProfile: runtimeProfile,
+        currentRuntimeProfile: null,
         resourceSnapshotEntries: snapshot.entries,
-        expandedResourceDirectories: _defaultExpandedDirectories(
-          snapshot.entries,
-        ),
+        expandedResourceDirectories: _workbenchResourceTreeProjectionService
+            .defaultExpandedDirectories(snapshot.entries),
         openDocuments: const <OpenDocumentState>[],
         activeOpenDocumentId: '',
         currentProjectLongTaskRuns: const <RunInstance>[],
@@ -376,25 +407,14 @@ class WorkbenchWorkspaceController
         isProjectLongTaskSummaryLoading: true,
       ),
     );
+    _recordProjectHydrationWrite('load_project_snapshot');
     _resetConversationRuntimeState();
-    await _runNonFatalProjectLoadStage(
-      warnings: loadWarnings,
-      stageLabel: '会话恢复',
-      action: () => _restoreConversationRuntimeState(snapshot.project),
-      fallback: () {},
-    );
-    _latestInformationViewData = await _runNonFatalProjectLoadStage(
-      warnings: loadWarnings,
-      stageLabel: '资料面板恢复',
-      action: () =>
-          _buildInformationViewData(snapshot.project, snapshot.entries),
-      fallback: () => const WorkbenchInformationViewData(),
-    );
+    _refreshSettingsViewData();
     var workbench = _readWorkbench().copyWith(
       projectName: snapshot.project.name,
       projectSubtitle: _projectSubtitleViewDataService.build(
         snapshot.project,
-        runtimeProfile: runtimeProfile,
+        runtimeProfile: null,
       ),
       projectPath: snapshot.project.rootPath,
       projectTypeId: snapshot.project.projectType,
@@ -407,13 +427,14 @@ class WorkbenchWorkspaceController
           : _modelOptionsBuilder(_readSettings()!),
       groupSelector: const ConversationGroupSelectorViewData.initial(),
       agentSelector: const ConversationAgentSelectorViewData.initial(),
-      resourceEntries: _markResourceSelection(
-        _resourceEntriesFrom(snapshot.entries),
+      resourceEntries: _workbenchResourceTreeProjectionService.project(
+        snapshotEntries: snapshot.entries,
+        expandedDirectories: _readProjectState().expandedResourceDirectories,
         selectedId: '',
       ),
-      informationViewData: _latestInformationViewData,
+      informationViewData: const WorkbenchInformationViewData(),
       contextSummary: '资源 ${snapshot.entries.length} 项',
-      generationStatus: '',
+      generationStatus: deferHydration ? '正在恢复项目内容...' : '',
       documents: const <DocumentTabViewData>[],
       activeDocumentTitle: '',
       activeDocumentPath: '',
@@ -426,69 +447,261 @@ class WorkbenchWorkspaceController
       isGenerating: false,
       isDocumentsWorkspaceVisible: false,
     );
-    final firstOpenable = _firstOpenablePath(snapshot.entries);
-    if (firstOpenable.trim().isNotEmpty) {
-      _expandResourceAncestors(firstOpenable);
-      final content = await _readProjectFileUseCase.execute(
-        snapshot.project,
-        firstOpenable,
-      );
-      if (content != null && content.trim().isNotEmpty) {
+    workbench = _applyConversationStateSafely(workbench, warnings: <String>[]);
+    _mutateWorkbench((_) => workbench);
+    _recordProjectHydrationWrite('workbench_shell_snapshot');
+
+    final hydration = _hydrateLoadedProject(
+      snapshot: snapshot,
+      hydrationToken: hydrationToken,
+      openDefaultDocument: openDefaultDocument,
+    );
+    if (deferHydration) {
+      unawaited(hydration);
+    } else {
+      await hydration;
+    }
+    return true;
+  }
+
+  Future<void> _hydrateLoadedProject({
+    required ProjectWorkspaceSnapshot snapshot,
+    required int hydrationToken,
+    bool openDefaultDocument = true,
+  }) async {
+    final rootPath = snapshot.project.rootPath;
+    final loadWarnings = <String>[];
+    final stopwatch = Stopwatch()..start();
+    _traceProjectLoad(rootPath, 'hydrate:start');
+    try {
+      Future<void> guardStage(
+        String stageLabel,
+        Future<void> Function() action,
+      ) async {
+        if (!_isProjectHydrationCurrent(hydrationToken, rootPath)) {
+          return;
+        }
+        _projectHydrationCurrentStageLabel = stageLabel;
+        final stageWatch = Stopwatch()..start();
+        _traceProjectLoad(rootPath, '$stageLabel:start');
+        _projectHydrationTraceService?.markStageStarted(
+          token: hydrationToken,
+          projectPath: rootPath,
+          stageLabel: stageLabel,
+        );
+        try {
+          await action();
+        } catch (error) {
+          loadWarnings.add('$stageLabel失败：$error');
+          _traceProjectLoad(rootPath, '$stageLabel:error:$error');
+        } finally {
+          stageWatch.stop();
+          _traceProjectLoad(
+            rootPath,
+            '$stageLabel:done:${stageWatch.elapsedMilliseconds}ms',
+          );
+          if (_isProjectHydrationCurrent(hydrationToken, rootPath)) {
+            _projectHydrationTraceService?.markStageCompleted(
+              token: hydrationToken,
+              projectPath: rootPath,
+              stageLabel: stageLabel,
+              elapsed: stageWatch.elapsed,
+            );
+          }
+        }
+        _projectHydrationCurrentStageLabel = '';
+        if (_isProjectHydrationCurrent(hydrationToken, rootPath)) {
+          await Future<void>.delayed(Duration.zero);
+        }
+      }
+
+      await guardStage('运行时配置恢复', () async {
+        await _setProjectLoadStatus(hydrationToken, rootPath, '正在恢复项目配置...');
+        final runtimeProfile = await _projectRuntimeProfileRepository.load(
+          snapshot.project,
+        );
+        if (!_isProjectHydrationCurrent(hydrationToken, rootPath)) {
+          return;
+        }
+        _writeProjectState(
+          _readProjectState().copyWith(currentRuntimeProfile: runtimeProfile),
+        );
+        _recordProjectHydrationWrite('runtime_profile_state');
+        _mutateWorkbench(
+          (current) => current.copyWith(
+            projectSubtitle: _projectSubtitleViewDataService.build(
+              snapshot.project,
+              runtimeProfile: runtimeProfile,
+            ),
+          ),
+        );
+        _recordProjectHydrationWrite('runtime_profile_subtitle');
+      });
+
+      await guardStage('会话恢复', () async {
+        await _setProjectLoadStatus(hydrationToken, rootPath, '正在恢复会话...');
+        await _restoreConversationRuntimeState(snapshot.project);
+        if (!_isProjectHydrationCurrent(hydrationToken, rootPath)) {
+          return;
+        }
+        _mutateWorkbench(
+          (current) =>
+              _applyConversationStateSafely(current, warnings: loadWarnings),
+        );
+        _recordProjectHydrationWrite('conversation_state');
+      });
+
+      await guardStage('资料面板恢复', () async {
+        await _setProjectLoadStatus(hydrationToken, rootPath, '正在整理资料视图...');
+        _latestInformationViewData = await _buildInformationViewData(
+          snapshot.project,
+          snapshot.entries,
+        );
+        if (!_isProjectHydrationCurrent(hydrationToken, rootPath)) {
+          return;
+        }
+        _mutateWorkbench((current) => applyWorkbenchState(current));
+        _recordProjectHydrationWrite('information_view');
+      });
+
+      await guardStage('记录最后项目', () async {
+        await _persistLastProjectPath(snapshot.project.rootPath);
+      });
+
+      await guardStage('智能体生态刷新', () async {
+        await _setProjectLoadStatus(hydrationToken, rootPath, '正在刷新智能体生态...');
+        await _refreshAgentEcosystem();
+      });
+
+      await guardStage('工作台快照恢复', () async {
+        await _setProjectLoadStatus(hydrationToken, rootPath, '正在恢复工作台...');
+        await restoreWorkbenchSnapshot(snapshot.project);
+      });
+
+      await guardStage('默认文档恢复', () async {
+        if (!openDefaultDocument) {
+          return;
+        }
+        if (_readProjectState().openDocuments.isNotEmpty) {
+          return;
+        }
+        final firstOpenable = _firstOpenablePath(snapshot.entries);
+        if (firstOpenable.trim().isEmpty) {
+          return;
+        }
+        await _setProjectLoadStatus(hydrationToken, rootPath, '正在打开项目文档...');
+        _expandResourceAncestors(firstOpenable);
+        final content = await _readProjectFileUseCase.execute(
+          snapshot.project,
+          firstOpenable,
+        );
+        if (!_isProjectHydrationCurrent(hydrationToken, rootPath) ||
+            content == null ||
+            content.trim().isEmpty) {
+          return;
+        }
         openOrActivateDocument(
           relativePath: firstOpenable,
           title: _displayNameOf(firstOpenable),
           content: content,
         );
-        workbench = applyWorkbenchState(
-          workbench.copyWith(
-            resourceEntries: _markResourceSelection(
-              workbench.resourceEntries,
-              selectedId: firstOpenable,
-            ),
-            generationStatus: '已打开 $firstOpenable',
+        _mutateWorkbench(
+          (current) => applyWorkbenchState(
+            current.copyWith(generationStatus: '已打开 $firstOpenable'),
           ),
         );
+        _recordProjectHydrationWrite('default_document');
+      });
+
+      await guardStage('长任务摘要刷新', () async {
+        await _setProjectLoadStatus(hydrationToken, rootPath, '正在同步长任务状态...');
+        await refreshProjectLongTaskSummary();
+      });
+
+      await guardStage('目标页刷新', () async {
+        await _refreshActiveDestinationAfterProjectLoad();
+      });
+
+      if (!_isProjectHydrationCurrent(hydrationToken, rootPath)) {
+        return;
+      }
+      stopwatch.stop();
+      _traceProjectLoad(
+        rootPath,
+        'hydrate:done:${stopwatch.elapsedMilliseconds}ms',
+      );
+      if (loadWarnings.isNotEmpty) {
+        final summary = _summarizeProjectLoadWarnings(loadWarnings);
+        _mutateWorkbench(
+          (current) => current.copyWith(generationStatus: summary),
+        );
+        _announce(summary);
+        return;
+      }
+      _mutateWorkbench((current) {
+        final message = current.generationStatus.trim();
+        if (!message.startsWith('正在')) {
+          return current;
+        }
+        return current.copyWith(generationStatus: '');
+      });
+    } finally {
+      if (_isProjectHydrationCurrent(hydrationToken, rootPath)) {
+        stopwatch.stop();
+        _projectHydrationTraceService?.completeHydration(
+          token: hydrationToken,
+          projectPath: rootPath,
+          elapsed: stopwatch.elapsed,
+        );
+        _projectHydrationActive = false;
+        _projectHydrationProjectPath = '';
+        _projectHydrationCurrentStageLabel = '';
       }
     }
-    _refreshSettingsViewData();
-    workbench = _applyConversationStateSafely(
-      workbench,
-      warnings: loadWarnings,
-    );
-    _mutateWorkbench((_) => workbench);
-    await _persistLastProjectPath(snapshot.project.rootPath);
-    await _runNonFatalProjectLoadStage(
-      warnings: loadWarnings,
-      stageLabel: '智能体生态刷新',
-      action: _refreshAgentEcosystem,
-      fallback: () {},
-    );
-    await _runNonFatalProjectLoadStage(
-      warnings: loadWarnings,
-      stageLabel: '工作台快照恢复',
-      action: () => restoreWorkbenchSnapshot(snapshot.project),
-      fallback: () {},
-    );
-    await _runNonFatalProjectLoadStage(
-      warnings: loadWarnings,
-      stageLabel: '长任务摘要刷新',
-      action: refreshProjectLongTaskSummary,
-      fallback: () {},
-    );
-    await _runNonFatalProjectLoadStage(
-      warnings: loadWarnings,
-      stageLabel: '目标页刷新',
-      action: _refreshActiveDestinationAfterProjectLoad,
-      fallback: () {},
-    );
-    if (loadWarnings.isNotEmpty) {
-      final summary = _summarizeProjectLoadWarnings(loadWarnings);
-      _mutateWorkbench(
-        (current) => current.copyWith(generationStatus: summary),
-      );
-      _announce(summary);
+  }
+
+  bool _isProjectHydrationCurrent(int hydrationToken, String rootPath) {
+    if (hydrationToken != _projectHydrationToken) {
+      return false;
     }
-    return true;
+    final project = currentProject;
+    if (project == null) {
+      return false;
+    }
+    return _normalizePathForCompare(project.rootPath) ==
+        _normalizePathForCompare(rootPath);
+  }
+
+  Future<void> _setProjectLoadStatus(
+    int hydrationToken,
+    String rootPath,
+    String status,
+  ) async {
+    if (!_isProjectHydrationCurrent(hydrationToken, rootPath)) {
+      return;
+    }
+    _mutateWorkbench((current) => current.copyWith(generationStatus: status));
+    _recordProjectHydrationWrite('status:$status');
+  }
+
+  void _traceProjectLoad(String rootPath, String event) {
+    developer.log('[$rootPath] $event', name: 'WorkbenchProjectLoad');
+  }
+
+  void _recordProjectHydrationWrite([String detail = 'state_write']) {
+    // 中文注释: hydration 期间的状态回写统一经过这里计数，后续就能看见每个阶段到底写了几次壳层状态。
+    if (!_projectHydrationActive || _projectHydrationProjectPath.isEmpty) {
+      return;
+    }
+    final stageLabel = _projectHydrationCurrentStageLabel.isEmpty
+        ? 'hydrate'
+        : _projectHydrationCurrentStageLabel;
+    _projectHydrationTraceService?.recordStageWrite(
+      token: _projectHydrationToken,
+      projectPath: _projectHydrationProjectPath,
+      stageLabel: stageLabel,
+      detail: detail,
+    );
   }
 
   WorkbenchViewData _projectedWorkbenchState(WorkbenchViewData base) {
@@ -506,8 +719,9 @@ class WorkbenchWorkspaceController
         isLoading: state.isProjectLongTaskSummaryLoading,
       ),
       documents: _documentTabsFromState(state),
-      resourceEntries: _markResourceSelection(
-        _resourceEntriesFrom(state.resourceSnapshotEntries),
+      resourceEntries: _workbenchResourceTreeProjectionService.project(
+        snapshotEntries: state.resourceSnapshotEntries,
+        expandedDirectories: state.expandedResourceDirectories,
         selectedId: selectedResourceId,
       ),
       informationViewData: _latestInformationViewData,
@@ -554,20 +768,6 @@ class WorkbenchWorkspaceController
       }
     }
     return '';
-  }
-
-  Future<T> _runNonFatalProjectLoadStage<T>({
-    required List<String> warnings,
-    required String stageLabel,
-    required Future<T> Function() action,
-    required T Function() fallback,
-  }) async {
-    try {
-      return await action();
-    } catch (error) {
-      warnings.add('$stageLabel失败：$error');
-      return fallback();
-    }
   }
 
   WorkbenchViewData _applyConversationStateSafely(
@@ -738,18 +938,22 @@ class WorkbenchWorkspaceController
     _writeProjectState(
       _readProjectState().copyWith(
         resourceSnapshotEntries: snapshot.entries,
-        expandedResourceDirectories: _mergedExpandedDirectories(
-          entries: snapshot.entries,
-          selectedId: selectedId,
-        ),
+        expandedResourceDirectories: _workbenchResourceTreeProjectionService
+            .mergedExpandedDirectories(
+              snapshotEntries: snapshot.entries,
+              currentExpandedDirectories:
+                  _readProjectState().expandedResourceDirectories,
+              selectedId: selectedId,
+            ),
       ),
     );
     _latestInformationViewData = await _buildInformationViewData(
       snapshot.project,
       snapshot.entries,
     );
-    return _markResourceSelection(
-      _resourceEntriesFrom(snapshot.entries),
+    return _workbenchResourceTreeProjectionService.project(
+      snapshotEntries: snapshot.entries,
+      expandedDirectories: _readProjectState().expandedResourceDirectories,
       selectedId: selectedId,
     );
   }
@@ -758,48 +962,19 @@ class WorkbenchWorkspaceController
     ProjectDescriptor project,
     List<JsonMap> workspaceEntries,
   ) async {
-    final entryByPath = <String, JsonMap>{};
-    for (final entry in workspaceEntries) {
-      final relativePath = _normalizeRelativePath(
-        _stringValue(entry['relative_path']),
-      );
-      if (relativePath.isEmpty) {
-        continue;
-      }
-      entryByPath[relativePath] = ValueReaders.deepCopyMap(entry);
-    }
-
-    for (final entry in await _scanInformationSupportEntries(
-      project.rootPath,
-    )) {
-      final relativePath = _normalizeRelativePath(
-        _stringValue(entry['relative_path']),
-      );
-      if (relativePath.isEmpty) {
-        continue;
-      }
-      entryByPath[relativePath] = entry;
-    }
-
-    final fileContents = <String, String>{};
-    for (final path in entryByPath.keys.toList()..sort()) {
-      if (!_shouldReadInformationProjectionFile(path)) {
-        continue;
-      }
-      final content = await _projectToolHostPort.readTextFile(
-        project.rootPath,
-        path,
-      );
-      if ((content ?? '').trim().isEmpty) {
-        continue;
-      }
-      fileContents[path] = content!;
-    }
-
-    return _workspaceInformationProjectionService.build(
-      workspaceEntries: entryByPath.values.toList(growable: false),
-      fileContents: fileContents,
+    return _workspaceInformationRefreshService.build(
+      project: project,
+      workspaceEntries: workspaceEntries,
     );
+  }
+
+  void invalidateInformationViewCache() {
+    // 中文注释: 外部动作如果已经写过隐藏资料树，就在下一次刷新前清掉缓存，避免工作台继续复用旧投影。
+    final project = currentProject;
+    if (project == null) {
+      return;
+    }
+    _workspaceInformationRefreshService.invalidateProject(project.rootPath);
   }
 
   Future<String> resolvedDocumentBody({
@@ -871,11 +1046,8 @@ class WorkbenchWorkspaceController
         _normalizePathForCompare(project.rootPath)) {
       return;
     }
-    final knownDirectoryPaths = _readProjectState().resourceSnapshotEntries
-        .where((entry) => entry['is_dir'] == true)
-        .map((entry) => _stringValue(entry['relative_path']))
-        .where((entry) => entry.isNotEmpty)
-        .toSet();
+    final knownDirectoryPaths = _workbenchResourceTreeProjectionService
+        .knownDirectoryPaths(_readProjectState().resourceSnapshotEntries);
     final expandedDirectories = ValueReaders.stringList(
       snapshot['expanded_directories'],
     ).where(knownDirectoryPaths.contains).toSet();
@@ -886,8 +1058,9 @@ class WorkbenchWorkspaceController
     );
     _mutateWorkbench(
       (current) => current.copyWith(
-        resourceEntries: _markResourceSelection(
-          _resourceEntriesFrom(_readProjectState().resourceSnapshotEntries),
+        resourceEntries: _workbenchResourceTreeProjectionService.project(
+          snapshotEntries: _readProjectState().resourceSnapshotEntries,
+          expandedDirectories: _readProjectState().expandedResourceDirectories,
           selectedId: '',
         ),
         informationViewData: _latestInformationViewData,
@@ -939,8 +1112,10 @@ class WorkbenchWorkspaceController
     _mutateWorkbench(
       (current) => applyWorkbenchState(
         current.copyWith(
-          resourceEntries: _markResourceSelection(
-            _resourceEntriesFrom(_readProjectState().resourceSnapshotEntries),
+          resourceEntries: _workbenchResourceTreeProjectionService.project(
+            snapshotEntries: _readProjectState().resourceSnapshotEntries,
+            expandedDirectories:
+                _readProjectState().expandedResourceDirectories,
             selectedId: restoredActivePath,
           ),
           informationViewData: _latestInformationViewData,
@@ -1213,8 +1388,10 @@ class WorkbenchWorkspaceController
       _announce('项目尚未加载完成。');
       return;
     }
-    final selectedEntry = _resourceEntryById(relativePath);
-    if (selectedEntry != null && selectedEntry.isDirectory) {
+    if (_workbenchResourceTreeProjectionService.isDirectory(
+      snapshotEntries: _readProjectState().resourceSnapshotEntries,
+      relativePath: relativePath,
+    )) {
       _toggleResourceDirectory(relativePath);
       return;
     }
@@ -1226,8 +1403,10 @@ class WorkbenchWorkspaceController
     if (content == null) {
       _mutateWorkbench(
         (current) => current.copyWith(
-          resourceEntries: _markResourceSelection(
-            current.resourceEntries,
+          resourceEntries: _workbenchResourceTreeProjectionService.project(
+            snapshotEntries: _readProjectState().resourceSnapshotEntries,
+            expandedDirectories:
+                _readProjectState().expandedResourceDirectories,
             selectedId: relativePath,
           ),
           generationStatus: '已选中目录或非文本资源：$relativePath',
@@ -1243,8 +1422,10 @@ class WorkbenchWorkspaceController
     _mutateWorkbench(
       (current) => applyWorkbenchState(
         current.copyWith(
-          resourceEntries: _markResourceSelection(
-            current.resourceEntries,
+          resourceEntries: _workbenchResourceTreeProjectionService.project(
+            snapshotEntries: _readProjectState().resourceSnapshotEntries,
+            expandedDirectories:
+                _readProjectState().expandedResourceDirectories,
             selectedId: relativePath,
           ),
           generationStatus: '已打开 $relativePath',
@@ -1269,6 +1450,7 @@ class WorkbenchWorkspaceController
         title: _readWorkbench().activeDocumentTitle,
         relativePath: _readWorkbench().activeDocumentPath,
       );
+      invalidateInformationViewCache();
       final resourceEntries = await reloadResourceEntries(
         selectedId: savedPath,
       );
@@ -1420,6 +1602,7 @@ class WorkbenchWorkspaceController
         return;
       }
       final createdPath = _stringValue(result['relative_path']);
+      invalidateInformationViewCache();
       final resourceEntries = await reloadResourceEntries(
         selectedId: createdPath,
       );
@@ -1475,6 +1658,7 @@ class WorkbenchWorkspaceController
       }
       final createdPath = _stringValue(result['relative_path']);
       _expandResourceAncestors(createdPath);
+      invalidateInformationViewCache();
       final resourceEntries = await reloadResourceEntries(
         selectedId: createdPath,
       );
@@ -1502,9 +1686,10 @@ class WorkbenchWorkspaceController
     }
     final policy = _projectImportWorkspaceCommandViewDataService.resolvePolicy(
       request: request,
+      storageStrategy: project.storageStrategy,
     );
     if (policy.sourcePaths.isEmpty) {
-      _showImportWorkspaceCommand(request, status: '请先选择至少一个要导入的文件。');
+      _showImportWorkspaceCommand(request, status: '请先选择至少一个要导入的文件或文件夹。');
       return;
     }
     _showImportWorkspaceCommand(
@@ -1535,6 +1720,7 @@ class WorkbenchWorkspaceController
       if (selectedId.isNotEmpty) {
         _expandResourceAncestors(selectedId);
       }
+      invalidateInformationViewCache();
       final resourceEntries = await reloadResourceEntries(
         selectedId: selectedId,
       );
@@ -1584,6 +1770,7 @@ class WorkbenchWorkspaceController
     _showWorkspaceCommand(
       _projectImportWorkspaceCommandViewDataService.build(
         projectType: project.projectType,
+        storageStrategy: project.storageStrategy,
         sourcePaths: sourcePaths,
         requestedTargetDirectory: request.targetDirectory,
         requestedAutoDeconstruct: request.autoDeconstruct,
@@ -1615,6 +1802,7 @@ class WorkbenchWorkspaceController
     _showWorkspaceCommand(
       _projectImportWorkspaceCommandViewDataService.build(
         projectType: project.projectType,
+        storageStrategy: project.storageStrategy,
         sourcePaths: sourcePaths,
         requestedTargetDirectory: request.targetDirectory,
         requestedAutoDeconstruct: request.autoDeconstruct,
@@ -1656,8 +1844,10 @@ class WorkbenchWorkspaceController
     final candidates = _workspaceResourceDisplayService
         .likelyOutlineDocumentCandidates();
     for (final candidate in candidates) {
-      final entry = _resourceEntryById(candidate);
-      if (entry != null) {
+      if (_workbenchResourceTreeProjectionService.containsPath(
+        snapshotEntries: _readProjectState().resourceSnapshotEntries,
+        relativePath: candidate,
+      )) {
         _openResource(candidate);
         return;
       }
@@ -1728,6 +1918,8 @@ class WorkbenchWorkspaceController
     _showWorkspaceCommand(
       _projectImportWorkspaceCommandViewDataService.rebuild(
         request: request,
+        storageStrategy: currentProject?.storageStrategy ??
+            ProjectStorageStrategy.markdownProjectStore,
         status: status,
         isBusy: isBusy,
         busyLabel: busyLabel,
@@ -1939,87 +2131,6 @@ class WorkbenchWorkspaceController
     return List<SelectorOptionViewData>.unmodifiable(options);
   }
 
-  List<ResourceEntryViewData> _resourceEntriesFrom(List<JsonMap> entries) {
-    // 中文注释: 资源树显示逻辑统一由工作区控制器完成，中文映射只停留在展示层。
-    final visibleEntries = entries
-        .where(
-          (entry) => !_workspaceResourceDisplayService.shouldHidePath(
-            _stringValue(entry['relative_path']),
-          ),
-        )
-        .toList(growable: false);
-    final byParent = <String, List<JsonMap>>{};
-    for (final entry in visibleEntries) {
-      final relativePath = _stringValue(entry['relative_path']);
-      final parentPath = _parentPathOf(relativePath);
-      byParent.putIfAbsent(parentPath, () => <JsonMap>[]).add(entry);
-    }
-    final result = <ResourceEntryViewData>[];
-
-    void visit(String parentPath, int depth) {
-      final siblings = byParent[parentPath];
-      if (siblings == null || siblings.isEmpty) {
-        return;
-      }
-      final orderedSiblings = siblings.toList(growable: true)
-        ..sort(_workspaceResourceDisplayService.compareEntries);
-      for (final entry in orderedSiblings) {
-        final relativePath = _stringValue(entry['relative_path']);
-        final isDirectory = entry['is_dir'] == true;
-        final visibleChildren = (byParent[relativePath] ?? const <JsonMap>[]);
-        final isExpanded =
-            !isDirectory ||
-            _readProjectState().expandedResourceDirectories.contains(
-              relativePath,
-            );
-        result.add(
-          ResourceEntryViewData(
-            id: relativePath,
-            title: _workspaceResourceDisplayService.titleOf(
-              relativePath,
-              isDirectory: isDirectory,
-            ),
-            relativePath: relativePath,
-            depth: depth,
-            isDirectory: isDirectory,
-            childCount: visibleChildren.length,
-            hasChildren: visibleChildren.isNotEmpty,
-            isExpanded: isExpanded,
-          ),
-        );
-        if (isDirectory && isExpanded) {
-          visit(relativePath, depth + 1);
-        }
-      }
-    }
-
-    visit('', 0);
-    return result;
-  }
-
-  List<ResourceEntryViewData> _markResourceSelection(
-    List<ResourceEntryViewData> entries, {
-    required String selectedId,
-  }) {
-    // 中文注释: 资源树选中态单独投影，避免原始目录快照被 UI 需求污染。
-    return entries
-        .map(
-          (entry) => entry.copyWith(isSelected: entry.id == selectedId.trim()),
-        )
-        .toList(growable: false);
-  }
-
-  ResourceEntryViewData? _resourceEntryById(String entryId) {
-    for (final entry in _resourceEntriesFrom(
-      _readProjectState().resourceSnapshotEntries,
-    )) {
-      if (entry.id == entryId.trim()) {
-        return entry;
-      }
-    }
-    return null;
-  }
-
   void _toggleResourceDirectory(String relativePath) {
     // 中文注释: 目录折叠只维护运行时显隐集合，不改动任何真实文件结构。
     final state = _readProjectState();
@@ -2034,179 +2145,15 @@ class WorkbenchWorkspaceController
     );
     _mutateWorkbench(
       (current) => current.copyWith(
-        resourceEntries: _resourceEntriesFrom(state.resourceSnapshotEntries),
+        resourceEntries: _workbenchResourceTreeProjectionService.project(
+          snapshotEntries: state.resourceSnapshotEntries,
+          expandedDirectories: nextExpanded,
+          selectedId: relativePath,
+        ),
         informationViewData: _latestInformationViewData,
       ),
     );
     _scheduleWorkbenchSnapshotPersistence(refreshDraftRecoveries: false);
-  }
-
-  Future<List<JsonMap>> _scanInformationSupportEntries(String rootPath) async {
-    final entries = <JsonMap>[];
-    final seenPaths = <String>{};
-
-    Future<void> addFileIfExists(String relativePath) async {
-      final normalizedPath = _normalizeRelativePath(relativePath);
-      if (normalizedPath.isEmpty || seenPaths.contains(normalizedPath)) {
-        return;
-      }
-      final resolved = _resolveProjectFilePath(rootPath, normalizedPath);
-      if (!await File(resolved).exists()) {
-        return;
-      }
-      seenPaths.add(normalizedPath);
-      entries.add(<String, Object?>{
-        'relative_path': normalizedPath,
-        'display_name': normalizedPath.split('/').last,
-        'is_dir': false,
-      });
-    }
-
-    for (final projectionPath in _informationProjectionPaths) {
-      await addFileIfExists(projectionPath);
-    }
-
-    await for (final relativePath in _scanRelativeFilesUnder(
-      rootPath,
-      '.novel_agent/information',
-    )) {
-      if (_isPendingInformationPath(relativePath)) {
-        await addFileIfExists(relativePath);
-      }
-    }
-
-    await for (final relativePath in _scanRelativeFilesUnder(
-      rootPath,
-      'tracking',
-    )) {
-      if (relativePath.endsWith('activation_report.json')) {
-        await addFileIfExists(relativePath);
-      }
-    }
-
-    await for (final relativePath in _scanRelativeFilesUnder(
-      rootPath,
-      '.novel_agent',
-    )) {
-      if (relativePath.endsWith('activation_report.json')) {
-        await addFileIfExists(relativePath);
-      }
-    }
-
-    return entries;
-  }
-
-  Stream<String> _scanRelativeFilesUnder(
-    String rootPath,
-    String relativeRoot,
-  ) async* {
-    final normalizedRoot = _normalizeRelativePath(relativeRoot);
-    final directory = Directory(
-      _resolveProjectFilePath(rootPath, normalizedRoot),
-    );
-    if (!await directory.exists()) {
-      return;
-    }
-    FileSystemException? lastError;
-    for (
-      var attempt = 1;
-      attempt <= _maxInformationSupportScanAttempts;
-      attempt++
-    ) {
-      final pendingDirectories = <Directory>[directory];
-      try {
-        while (pendingDirectories.isNotEmpty) {
-          final currentDirectory = pendingDirectories.removeLast();
-          await for (final entity in currentDirectory.list(
-            recursive: false,
-            followLinks: false,
-          )) {
-            final relativePath = _relativePathFromAbsolute(
-              rootPath,
-              entity.path,
-            );
-            if (relativePath.isEmpty ||
-                _shouldSkipInformationSupportScanPath(
-                  scanRoot: normalizedRoot,
-                  relativePath: relativePath,
-                )) {
-              continue;
-            }
-            if (entity is File) {
-              yield relativePath;
-              continue;
-            }
-            if (entity is Directory) {
-              pendingDirectories.add(entity);
-            }
-          }
-        }
-        return;
-      } on FileSystemException catch (error) {
-        lastError = error;
-        if (attempt >= _maxInformationSupportScanAttempts) {
-          rethrow;
-        }
-        await Future<void>.delayed(Duration(milliseconds: 80 * attempt));
-      }
-    }
-    throw lastError ?? FileSystemException('扫描资料支持文件失败。', directory.path);
-  }
-
-  bool _shouldSkipInformationSupportScanPath({
-    required String scanRoot,
-    required String relativePath,
-  }) {
-    if (!scanRoot.startsWith('.novel_agent')) {
-      return false;
-    }
-    return _informationSupportIgnoredRoots.any(
-      (ignoredRoot) =>
-          relativePath == ignoredRoot ||
-          relativePath.startsWith('$ignoredRoot/'),
-    );
-  }
-
-  bool _shouldReadInformationProjectionFile(String relativePath) {
-    return _informationProjectionPaths.contains(relativePath) ||
-        _isPendingInformationPath(relativePath) ||
-        relativePath.endsWith('activation_report.json');
-  }
-
-  bool _isPendingInformationPath(String relativePath) {
-    return relativePath.startsWith(
-          '.novel_agent/information/knowledge_cards/',
-        ) ||
-        relativePath.startsWith('.novel_agent/information/design_elements/') ||
-        relativePath.startsWith(
-          '.novel_agent/information/research_requests/',
-        ) ||
-        relativePath.startsWith('.novel_agent/information/reference_works/');
-  }
-
-  String _resolveProjectFilePath(String rootPath, String relativePath) {
-    final normalizedRoot = rootPath.replaceAll('\\', Platform.pathSeparator);
-    final normalizedRelative = relativePath.replaceAll(
-      '/',
-      Platform.pathSeparator,
-    );
-    return '$normalizedRoot${Platform.pathSeparator}$normalizedRelative';
-  }
-
-  String _relativePathFromAbsolute(String rootPath, String absolutePath) {
-    final normalizedRoot = _normalizeRelativePath(rootPath);
-    final normalizedAbsolute = _normalizeRelativePath(absolutePath);
-    if (normalizedRoot.isEmpty || normalizedAbsolute.isEmpty) {
-      return '';
-    }
-    if (normalizedAbsolute == normalizedRoot) {
-      return '';
-    }
-    final prefix = '$normalizedRoot/';
-    if (!normalizedAbsolute.startsWith(prefix)) {
-      return '';
-    }
-    return normalizedAbsolute.substring(prefix.length);
   }
 
   String _normalizeRelativePath(String value) {
@@ -2229,42 +2176,6 @@ class WorkbenchWorkspaceController
     _writeProjectState(
       state.copyWith(expandedResourceDirectories: nextExpanded),
     );
-  }
-
-  Set<String> _defaultExpandedDirectories(List<JsonMap> entries) {
-    // 中文注释: 默认展开规则只展开首层目录，避免首次进入时资源树完全塌缩。
-    return entries
-        .where((entry) => entry['is_dir'] == true)
-        .map((entry) => _stringValue(entry['relative_path']))
-        .where((path) => path.isNotEmpty && !path.contains('/'))
-        .toSet();
-  }
-
-  Set<String> _mergedExpandedDirectories({
-    required List<JsonMap> entries,
-    required String selectedId,
-  }) {
-    // 中文注释: 重刷资源树后尽量保留用户现有展开状态，并确保当前选中文件祖先可见。
-    final knownDirectories = entries
-        .where((entry) => entry['is_dir'] == true)
-        .map((entry) => _stringValue(entry['relative_path']))
-        .where((path) => path.isNotEmpty)
-        .toSet();
-    final nextExpanded = _readProjectState().expandedResourceDirectories
-        .where(knownDirectories.contains)
-        .toSet();
-    final parts = selectedId.split('/');
-    var current = '';
-    for (var index = 0; index < parts.length - 1; index++) {
-      current = current.isEmpty ? parts[index] : '$current/${parts[index]}';
-      if (knownDirectories.contains(current)) {
-        nextExpanded.add(current);
-      }
-    }
-    if (nextExpanded.isEmpty) {
-      return _defaultExpandedDirectories(entries);
-    }
-    return nextExpanded;
   }
 
   String _displayNameOf(String relativePath) {
@@ -2387,14 +2298,6 @@ class WorkbenchWorkspaceController
     return '$normalizedDirectory/$normalizedEntry';
   }
 
-  String _parentPathOf(String relativePath) {
-    final separatorIndex = relativePath.lastIndexOf('/');
-    if (separatorIndex <= 0) {
-      return '';
-    }
-    return relativePath.substring(0, separatorIndex);
-  }
-
   bool _listEquals(List<String> left, List<String> right) {
     if (left.length != right.length) {
       return false;
@@ -2480,6 +2383,7 @@ class WorkbenchWorkspaceController
         return;
       }
       final selectedId = _readWorkbench().activeDocumentPath;
+      invalidateInformationViewCache();
       final resourceEntries = await reloadResourceEntries(
         selectedId: selectedId,
       );
@@ -2501,16 +2405,3 @@ class WorkbenchWorkspaceController
     }
   }
 }
-
-const Set<String> _informationProjectionPaths = <String>{
-  InformationProjectionDocument.knowledgeSummaryRelativePath,
-  InformationProjectionDocument.designSummaryRelativePath,
-  InformationProjectionDocument.researchSummaryRelativePath,
-  InformationProjectionDocument.referenceBoundaryRelativePath,
-};
-
-const int _maxInformationSupportScanAttempts = 3;
-
-const Set<String> _informationSupportIgnoredRoots = <String>{
-  '.novel_agent/reference_extraction',
-};

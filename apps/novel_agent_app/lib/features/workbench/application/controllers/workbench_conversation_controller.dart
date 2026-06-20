@@ -1247,6 +1247,9 @@ class WorkbenchConversationController implements ConversationActionHandler {
       case 'guide.open_book_deconstruction_workbench':
         _workspaceController.onImportRequested();
         return true;
+      case 'guide.open_book_deconstruction_analysis':
+        _workspaceController.onProjectAssetsRequested();
+        return true;
       case 'guide.open_project_assets_rag':
         _workspaceController.onProjectAssetsRequested();
         return true;

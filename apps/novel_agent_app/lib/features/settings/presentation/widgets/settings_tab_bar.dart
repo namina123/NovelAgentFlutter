@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../shared/widgets/horizontal_overflow_scrollbar.dart';
 import '../models/settings_view_data.dart';
 
 class SettingsTabBar extends StatelessWidget {
@@ -17,21 +18,26 @@ class SettingsTabBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 中文注释: 设置标签条拆开后，后续切成滚动标签或分组标签时不需要改页面主体结构。
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: SegmentedButton<String>(
-        segments: tabs
-            .map(
-              (tab) =>
-                  ButtonSegment<String>(value: tab.id, label: Text(tab.label)),
-            )
-            .toList(),
-        selected: {activeTabId},
-        showSelectedIcon: false,
-        onSelectionChanged: (selection) {
-          // 中文注释: tab 变化只回传选中的 id，由外层控制器统一更新视图模型。
-          onTabSelected(selection.first);
-        },
+    return HorizontalOverflowScrollbar(
+      builder: (context, controller) => SingleChildScrollView(
+        controller: controller,
+        scrollDirection: Axis.horizontal,
+        child: SegmentedButton<String>(
+          segments: tabs
+              .map(
+                (tab) => ButtonSegment<String>(
+                  value: tab.id,
+                  label: Text(tab.label),
+                ),
+              )
+              .toList(),
+          selected: {activeTabId},
+          showSelectedIcon: false,
+          onSelectionChanged: (selection) {
+            // 中文注释: tab 变化只回传选中的 id，由外层控制器统一更新视图模型。
+            onTabSelected(selection.first);
+          },
+        ),
       ),
     );
   }

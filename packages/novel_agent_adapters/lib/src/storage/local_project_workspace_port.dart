@@ -1,3 +1,4 @@
+import 'dart:isolate';
 import 'dart:io';
 
 import 'package:novel_agent_core/novel_agent_core.dart';
@@ -5,6 +6,7 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 import 'project_text_file_read_service.dart';
 import 'project_relative_path_resolver.dart';
 import 'project_tree_order_service.dart';
+import 'project_tree_order_store.dart';
 
 class LocalProjectWorkspacePort implements ProjectWorkspacePort {
   LocalProjectWorkspacePort({
@@ -33,20 +35,10 @@ class LocalProjectWorkspacePort implements ProjectWorkspacePort {
     }
     FileSystemException? lastError;
     for (var attempt = 1; attempt <= _maxListEntriesAttempts; attempt++) {
-      final entries = <JsonMap>[];
       try {
-        await _collectEntries(
-          rootPath: root.path,
-          directory: root,
-          recursive: recursive,
-          entries: entries,
+        final entries = await Isolate.run(
+          () => _scanProjectEntriesSync(root.path, recursive: recursive),
         );
-        entries.sort((left, right) {
-          // 中文注释: 列表稳定排序可以让 CLI 输出、GUI 资源树和测试结果都保持一致。
-          final leftPath = left['relative_path']?.toString() ?? '';
-          final rightPath = right['relative_path']?.toString() ?? '';
-          return leftPath.compareTo(rightPath);
-        });
         return _treeOrderService.sortEntries(root.path, entries);
       } on FileSystemException catch (error) {
         lastError = error;
@@ -57,44 +49,6 @@ class LocalProjectWorkspacePort implements ProjectWorkspacePort {
       }
     }
     throw lastError ?? FileSystemException('列举项目目录失败。', root.path);
-  }
-
-  Future<void> _collectEntries({
-    required String rootPath,
-    required Directory directory,
-    required bool recursive,
-    required List<JsonMap> entries,
-  }) async {
-    await for (final entity in directory.list(
-      recursive: false,
-      followLinks: false,
-    )) {
-      final absolutePath = entity.absolute.path;
-      final relativePath = _pathResolver.relative(
-        rootPath: rootPath,
-        absolutePath: absolutePath,
-      );
-      if (relativePath.trim().isEmpty) {
-        continue;
-      }
-      if (_treeOrderService.isInternalPath(relativePath)) {
-        continue;
-      }
-      final displayName = relativePath.split('/').last;
-      entries.add(<String, Object?>{
-        'relative_path': relativePath,
-        'display_name': displayName,
-        'is_dir': entity is Directory,
-      });
-      if (recursive && entity is Directory) {
-        await _collectEntries(
-          rootPath: rootPath,
-          directory: entity,
-          recursive: true,
-          entries: entries,
-        );
-      }
-    }
   }
 
   @override
@@ -132,4 +86,58 @@ class LocalProjectWorkspacePort implements ProjectWorkspacePort {
     await file.parent.create(recursive: true);
     await file.writeAsString(content, flush: true);
   }
+}
+
+List<JsonMap> _scanProjectEntriesSync(
+  String rootPath, {
+  required bool recursive,
+}) {
+  final root = Directory(rootPath);
+  if (!root.existsSync()) {
+    return const <JsonMap>[];
+  }
+  final pathResolver = ProjectRelativePathResolver();
+  final entries = <JsonMap>[];
+
+  void collect(Directory directory) {
+    final children = directory.listSync(recursive: false, followLinks: false);
+    for (final entity in children) {
+      final absolutePath = entity.absolute.path;
+      final relativePath = pathResolver.relative(
+        rootPath: root.path,
+        absolutePath: absolutePath,
+      );
+      if (relativePath.trim().isEmpty) {
+        continue;
+      }
+      if (_isInternalProjectPath(relativePath)) {
+        continue;
+      }
+      entries.add(<String, Object?>{
+        'relative_path': relativePath,
+        'display_name': relativePath.split('/').last,
+        'is_dir': entity is Directory,
+      });
+      if (recursive && entity is Directory) {
+        collect(entity);
+      }
+    }
+  }
+
+  collect(root);
+  entries.sort((left, right) {
+    final leftPath = left['relative_path']?.toString() ?? '';
+    final rightPath = right['relative_path']?.toString() ?? '';
+    return leftPath.compareTo(rightPath);
+  });
+  return entries;
+}
+
+bool _isInternalProjectPath(String relativePath) {
+  final cleanPath = relativePath.replaceAll('\\', '/').trim();
+  if (cleanPath.isEmpty) {
+    return false;
+  }
+  return cleanPath == ProjectTreeOrderStore.internalDirectoryPath ||
+      cleanPath.startsWith('${ProjectTreeOrderStore.internalDirectoryPath}/');
 }

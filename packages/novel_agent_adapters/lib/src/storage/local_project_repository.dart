@@ -18,7 +18,7 @@ class LocalProjectRepository implements ProjectRepository {
 
   @override
   Future<ProjectDescriptor?> openByPath(String rootPath) async {
-    // 中文注释: 本地项目仓储只负责目录存在性与基础描述信息识别，不侵入工作流和 UI 状态。
+    // 中文注释: 本地项目仓储只接受真正带 manifest 的项目根目录，普通文件夹不能再被误认成项目。
     final directory = Directory(rootPath).absolute;
     if (!await directory.exists()) {
       return null;
@@ -34,20 +34,18 @@ class LocalProjectRepository implements ProjectRepository {
     final manifestPath =
         '${directory.path}${Platform.pathSeparator}${ProjectManifestCodecService.manifestRelativePath.replaceAll('/', Platform.pathSeparator)}';
     final manifestFile = File(manifestPath);
-    final manifest = await manifestFile.exists()
-        ? _projectManifestCodecService.parse(
-            await manifestFile.readAsString(),
-            fallbackTitle: projectName,
-          )
-        : _projectManifestCodecService.create(
-            title: projectName,
-            projectType: 'novel',
-          );
-    final storageStrategy = manifestFile.existsSync()
-        ? await _projectStorageStrategyResolver.resolveFromRootPath(
-            directory.path,
-          )
-        : ProjectStorageStrategy.markdownProjectStore;
+    final manifestExists = await manifestFile.exists();
+    if (!manifestExists) {
+      return null;
+    }
+    final manifest = _projectManifestCodecService.parse(
+      await manifestFile.readAsString(),
+      fallbackTitle: projectName,
+    );
+    final storageStrategy =
+        await _projectStorageStrategyResolver.resolveFromRootPath(
+          directory.path,
+        );
     return ProjectDescriptor(
       id: _projectIdFromName(manifest.title),
       name: manifest.title,

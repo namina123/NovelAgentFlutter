@@ -2,17 +2,23 @@ class ProjectReferenceExtractionStrategyPickerViewData {
   const ProjectReferenceExtractionStrategyPickerViewData({
     required this.selectedProfileId,
     required this.summary,
+    required this.sourceHint,
+    required this.confirmButtonLabel,
     required this.options,
   });
 
   final String selectedProfileId;
   final String summary;
+  final String sourceHint;
+  final String confirmButtonLabel;
   final List<ProjectReferenceExtractionStrategyOptionViewData> options;
 
   factory ProjectReferenceExtractionStrategyPickerViewData.empty() {
     return const ProjectReferenceExtractionStrategyPickerViewData(
       selectedProfileId: '',
       summary: '',
+      sourceHint: '',
+      confirmButtonLabel: '开始提取',
       options: <ProjectReferenceExtractionStrategyOptionViewData>[],
     );
   }

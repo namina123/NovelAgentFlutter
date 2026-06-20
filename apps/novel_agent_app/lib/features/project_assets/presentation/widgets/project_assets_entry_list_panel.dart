@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../shared/widgets/horizontal_overflow_scrollbar.dart';
 import '../contracts/project_assets_action_handler.dart';
 import '../models/project_assets_view_data.dart';
 
@@ -18,23 +19,26 @@ class ProjectAssetsEntryListPanel extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-          child: Row(
-            children: viewData.tabs
-                .map(
-                  (item) => Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Text(item.label),
-                      selected: item.id == viewData.activeTabId,
-                      onSelected: (_) =>
-                          actionHandler.onProjectAssetsTabSelected(item.id),
+        HorizontalOverflowScrollbar(
+          builder: (context, controller) => SingleChildScrollView(
+            controller: controller,
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+            child: Row(
+              children: viewData.tabs
+                  .map(
+                    (item) => Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text(item.label),
+                        selected: item.id == viewData.activeTabId,
+                        onSelected: (_) =>
+                            actionHandler.onProjectAssetsTabSelected(item.id),
+                      ),
                     ),
-                  ),
-                )
-                .toList(growable: false),
+                  )
+                  .toList(growable: false),
+            ),
           ),
         ),
         const Divider(height: 1),

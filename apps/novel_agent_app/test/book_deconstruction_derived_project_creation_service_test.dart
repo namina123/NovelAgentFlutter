@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_app/features/book_deconstruction/application/services/book_deconstruction_derived_project_creation_service.dart';
 import 'package:novel_agent_app/features/book_deconstruction/application/services/book_deconstruction_narrative_persistence_service.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
@@ -32,9 +33,10 @@ void main() {
       writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
         projectWorkspacePort: workspacePort,
       ),
-      narrativePersistenceService: BookDeconstructionNarrativePersistenceService(
-        workspacePort: workspacePort,
-      ),
+      narrativePersistenceService:
+          BookDeconstructionNarrativePersistenceService(
+            workspacePort: workspacePort,
+          ),
     );
 
     final result = await service.execute(
@@ -53,19 +55,27 @@ void main() {
     );
 
     expect(result.project.projectType, 'novel');
-    expect(result.project.storageStrategy, ProjectStorageStrategy.markdownProjectStore);
     expect(
-      workspacePort.readStoredTextFile(
-        result.project.rootPath,
-        'premise/book_deconstruction_premise_1.md',
-      ),
-      contains('# 核心前提'),
+      result.project.storageStrategy,
+      ProjectStorageStrategy.markdownProjectStore,
     );
+    final premisePath = buildResult.applicationPlan.items
+        .firstWhere(
+          (item) => item.sourceKind == BookDeconstructionArtifactKind.premise,
+        )
+        .relativePathHint;
     expect(
-      workspacePort.readStoredTextFile(
-        result.project.rootPath,
-        'chapters/inherited/continuation_novel/001_第一章_港口风暴.md',
-      ),
+      workspacePort.readStoredTextFile(result.project.rootPath, premisePath),
+      allOf(contains('# 核心前提'), contains('第一章 港口风暴')),
+    );
+    final inheritedPath = const BookDeconstructionTargetPathService()
+        .inheritedChapterPath(
+          followupOptionId: 'continuation_novel',
+          sequence: 1,
+          title: '第一章 港口风暴',
+        );
+    expect(
+      workspacePort.readStoredTextFile(result.project.rootPath, inheritedPath),
       contains('主角在港口被迫卷入一场追捕'),
     );
     expect(
@@ -74,6 +84,80 @@ void main() {
         'sources/original/book_deconstruction_1_海上城邦.md',
       ),
       contains('第一章 港口风暴'),
+    );
+  });
+
+  test('派生服务会继承源项目的 sqlite 存储策略并把知识资产写入 sqlite', () async {
+    final workspacePort = _InMemoryProjectWorkspacePort();
+    final manifestCodec = ProjectManifestCodecService();
+    final buildResult = BuildBookDeconstructionDraftUseCase().execute(
+      sourceTitle: '海上城邦',
+      sourceContent: '第一章 港口风暴\n主角在港口被迫卷入一场追捕。\n\n第二章 议会阴影\n城邦议会开始浮出水面。',
+      sourceAbsolutePath: 'D:/Books/source_book.md',
+      operatorNotes: '继续续写',
+      styleSummary: '节奏偏商业。',
+      worldRulesText: '航线掌握着超常权力。',
+      characterLinesText: '林砚：主角',
+      organizationLinesText: '议会：海上城邦中枢',
+    );
+    final service = BookDeconstructionDerivedProjectCreationService(
+      createProjectWorkspaceUseCase: CreateProjectWorkspaceUseCase(
+        projectRepository: _FakeProjectRepository(
+          workspacePort: workspacePort,
+          manifestCodecService: manifestCodec,
+        ),
+        projectWorkspacePort: workspacePort,
+        projectContentRepository: _FakeProjectContentRepository(),
+        projectReadableProjectionService:
+            _FakeProjectReadableProjectionService(),
+        projectManifestCodecService: manifestCodec,
+      ),
+      writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
+        projectWorkspacePort: workspacePort,
+      ),
+      narrativePersistenceService:
+          BookDeconstructionNarrativePersistenceService(
+            workspacePort: workspacePort,
+          ),
+    );
+
+    final result = await service.execute(
+      projectsRootPath: 'D:/Projects',
+      sourceProject: const ProjectDescriptor(
+        id: 'source',
+        name: '拆书源项目',
+        rootPath: 'D:/Projects/source',
+        projectType: 'book_deconstruction',
+        storageStrategy: ProjectStorageStrategy.sqliteProjectStore,
+      ),
+      buildResult: buildResult,
+      selectedItemIds: buildResult.applicationPlan.items
+          .map((item) => item.id)
+          .toSet(),
+      selectedFollowupOptionId: 'continuation_novel',
+    );
+
+    expect(
+      result.project.storageStrategy,
+      ProjectStorageStrategy.sqliteProjectStore,
+    );
+
+    final knowledgeRepository = SqliteKnowledgeCardRepository();
+    final cards = await knowledgeRepository.listKnowledgeCards(result.project);
+    expect(cards, isNotEmpty);
+
+    final referenceRepository = SqliteReferenceWorkRepository();
+    final references = await referenceRepository.listReferenceWorks(
+      result.project,
+    );
+    expect(references, isNotEmpty);
+
+    expect(
+      workspacePort.readStoredTextFile(
+        result.project.rootPath,
+        InformationProjectionDocument.knowledgeSummaryRelativePath,
+      ),
+      isNull,
     );
   });
 
@@ -105,9 +189,10 @@ void main() {
       writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
         projectWorkspacePort: workspacePort,
       ),
-      narrativePersistenceService: BookDeconstructionNarrativePersistenceService(
-        workspacePort: workspacePort,
-      ),
+      narrativePersistenceService:
+          BookDeconstructionNarrativePersistenceService(
+            workspacePort: workspacePort,
+          ),
     );
 
     final result = await service.execute(

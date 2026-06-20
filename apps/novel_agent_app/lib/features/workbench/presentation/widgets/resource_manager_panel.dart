@@ -34,40 +34,30 @@ class ResourceManagerPanel extends StatelessWidget {
             horizontalPadding,
             4,
           ),
-          child: CustomScrollView(
-            key: const ValueKey<String>('resource_manager_scroll_view'),
-            slivers: [
-              SliverToBoxAdapter(
-                child: ResourceManagerHeader(
-                  title: viewData.projectName,
-                  subtitle: viewData.projectSubtitle,
-                  itemCount: entries.length,
-                  directoryCount: directoryCount,
-                  fileCount: entries.length - directoryCount,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ResourceManagerHeader(
+                title: viewData.projectName,
+                subtitle: viewData.projectSubtitle,
+                itemCount: entries.length,
+                directoryCount: directoryCount,
+                fileCount: entries.length - directoryCount,
+              ),
+              SizedBox(height: visual.compactGap + 2),
+              _ResourceInlineTools(
+                itemCount: entries.length,
+                child: FileToolGroup(
+                  onCreateFileRequested: actionHandler.onCreateFileRequested,
+                  onCreateFolderRequested: actionHandler.onCreateFolderRequested,
+                  onImportRequested: actionHandler.onImportRequested,
+                  onCreateChapterRequested:
+                      actionHandler.onCreateChapterRequested,
+                  onSaveCurrentRequested: actionHandler.onSaveCurrentRequested,
                 ),
               ),
-              SliverToBoxAdapter(
-                child: SizedBox(height: visual.compactGap + 2),
-              ),
-              SliverToBoxAdapter(
-                child: _ResourceInlineTools(
-                  itemCount: entries.length,
-                  child: FileToolGroup(
-                    onCreateFileRequested: actionHandler.onCreateFileRequested,
-                    onCreateFolderRequested:
-                        actionHandler.onCreateFolderRequested,
-                    onImportRequested: actionHandler.onImportRequested,
-                    onCreateChapterRequested:
-                        actionHandler.onCreateChapterRequested,
-                    onSaveCurrentRequested:
-                        actionHandler.onSaveCurrentRequested,
-                  ),
-                ),
-              ),
-              SliverToBoxAdapter(
-                child: SizedBox(height: visual.compactGap + 1),
-              ),
-              SliverToBoxAdapter(
+              SizedBox(height: visual.compactGap + 1),
+              Expanded(
                 child: ResourcePanelSection(
                   title: '浏览',
                   trailing: Text(
@@ -76,11 +66,12 @@ class ResourceManagerPanel extends StatelessWidget {
                   ),
                   padding: const EdgeInsets.fromLTRB(0, 2, 0, 0),
                   emphasized: false,
+                  expandChild: true,
                   child: ResourceTreeCard(
                     entries: entries,
                     projectTypeId: viewData.projectTypeId,
                     onEntrySelected: actionHandler.onResourceEntrySelected,
-                    embeddedInScrollView: true,
+                    embeddedInScrollView: false,
                   ),
                 ),
               ),

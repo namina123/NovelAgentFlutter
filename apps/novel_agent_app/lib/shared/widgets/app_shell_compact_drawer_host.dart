@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/navigation/app_shell_navigation_action_handler.dart';
+import '../../app/navigation/app_shell_navigation_section.dart';
 import '../../app/routing/app_destination.dart';
 import 'app_shell_compact_dock_layout.dart';
 import 'app_shell_compact_drawer.dart';
@@ -9,12 +10,14 @@ import 'app_shell_compact_drawer_controller.dart';
 class AppShellCompactDrawerHost extends StatelessWidget {
   const AppShellCompactDrawerHost({
     super.key,
+    required this.navigationSections,
     required this.selectedDestination,
     required this.actionHandler,
     required this.controller,
     required this.dockLayout,
   });
 
+  final List<AppShellNavigationSection> navigationSections;
   final AppDestination selectedDestination;
   final AppShellNavigationActionHandler actionHandler;
   final AppShellCompactDrawerController controller;
@@ -48,6 +51,7 @@ class AppShellCompactDrawerHost extends StatelessWidget {
                   ),
                   child: AppShellCompactDrawerPanel(
                     width: dockLayout.panelWidth,
+                    navigationSections: navigationSections,
                     selectedDestination: selectedDestination,
                     actionHandler: actionHandler,
                     onDismissRequested: controller.close,

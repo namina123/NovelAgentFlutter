@@ -7,6 +7,11 @@ import '../information/information_activation_policy.dart';
 import '../information/information_policy_constants.dart';
 import '../information/information_source_ref.dart';
 import '../information/information_usage_policy.dart';
+import '../source_analysis/source_analysis_entity_extractor_service.dart';
+import '../source_analysis/source_analysis_entity_rank.dart';
+import '../source_analysis/source_analysis_narrative_asset_inference_service.dart';
+import '../source_analysis/source_analysis_outline_service.dart';
+import '../source_analysis/source_analysis_style_signal_service.dart';
 import 'reference_package_models.dart';
 import 'reference_source_document_models.dart';
 import 'reference_source_document_structure_service.dart';
@@ -16,9 +21,26 @@ class ReferenceSourceDocumentExtractionService {
   const ReferenceSourceDocumentExtractionService({
     ReferenceSourceDocumentStructureService structureService =
         const ReferenceSourceDocumentStructureService(),
-  }) : _structureService = structureService;
+    SourceAnalysisOutlineService outlineService =
+        const SourceAnalysisOutlineService(),
+    SourceAnalysisEntityExtractorService entityExtractorService =
+        const SourceAnalysisEntityExtractorService(),
+    SourceAnalysisNarrativeAssetInferenceService narrativeInferenceService =
+        const SourceAnalysisNarrativeAssetInferenceService(),
+    SourceAnalysisStyleSignalService styleSignalService =
+        const SourceAnalysisStyleSignalService(),
+  }) : _structureService = structureService,
+       _outlineService = outlineService,
+       _entityExtractorService = entityExtractorService,
+       _narrativeInferenceService = narrativeInferenceService,
+       _styleSignalService = styleSignalService;
 
   final ReferenceSourceDocumentStructureService _structureService;
+  final SourceAnalysisOutlineService _outlineService;
+  final SourceAnalysisEntityExtractorService _entityExtractorService;
+  final SourceAnalysisNarrativeAssetInferenceService
+  _narrativeInferenceService;
+  final SourceAnalysisStyleSignalService _styleSignalService;
 
   ReferenceSourceDocumentIngestionResult extract(
     ReferenceSourceDocumentIngestionRequest request,
@@ -52,7 +74,8 @@ class ReferenceSourceDocumentExtractionService {
     );
     final structure = _structureService.analyze(normalizedText);
     final sections = structure.sections;
-    final entityRanks = _extractNamedEntities(
+    final outline = _outlineService.analyze(normalizedText);
+    final entityRanks = _entityExtractorService.extractLatinNamedEntities(
       normalizedText,
       maxCount: request.maxEntityEntries,
     );
@@ -70,6 +93,14 @@ class ReferenceSourceDocumentExtractionService {
         sourceRef: sourceInfoRef,
         sourceLanguage: sourceLanguage,
         targetLanguage: targetLanguage,
+      ),
+      ..._buildNarrativeAssetEntries(
+        request,
+        normalizedText: normalizedText,
+        sourceRef: sourceInfoRef,
+        sourceLanguage: sourceLanguage,
+        targetLanguage: targetLanguage,
+        chapterSummaries: outline.chapterSummaries,
       ),
       _buildStyleEntry(
         request,
@@ -208,7 +239,7 @@ class ReferenceSourceDocumentExtractionService {
 
   List<ReferenceEntryRecord> _buildEntityEntries(
     ReferenceSourceDocumentIngestionRequest request, {
-    required List<_RankedEntity> entityRanks,
+    required List<SourceAnalysisEntityRank> entityRanks,
     required InformationSourceRef sourceRef,
     required String sourceLanguage,
     required String targetLanguage,
@@ -270,17 +301,14 @@ class ReferenceSourceDocumentExtractionService {
     required String sourceLanguage,
     required String targetLanguage,
   }) {
-    final paragraphCount = normalizedText
-        .split(RegExp(r'\n\s*\n|\r\n\s*\r\n'))
-        .where((entry) => entry.trim().isNotEmpty)
-        .length;
-    final dialogueCount = RegExp(r'["“”]').allMatches(normalizedText).length;
-    final avgSectionLength = sections.isEmpty
-        ? normalizedText.length
-        : (normalizedText.length / sections.length).round();
-    final summary = targetLanguage.startsWith('zh')
-        ? '该文本呈现出明显的章节推进结构，共识别 ${sections.length} 个章节/片段，约 ${paragraphCount} 个段落，含 ${dialogueCount} 处对话引号，适合作为叙事节奏与视角组织的风格依据。'
-        : 'The document shows a chapter-based progression with ${sections.length} sections, about $paragraphCount paragraphs and $dialogueCount dialogue quotes.';
+    final metrics = _styleSignalService.analyze(
+      normalizedText: normalizedText,
+      sections: sections,
+    );
+    final summary = _styleSignalService.localizedSummary(
+      metrics,
+      targetLanguage: targetLanguage,
+    );
     return ReferenceEntryRecord(
       entryId: 'style_profile_primary',
       packageId: request.packageId,
@@ -292,10 +320,10 @@ class ReferenceSourceDocumentExtractionService {
           : 'Narrative style profile',
       summary: summary,
       payload: <String, Object?>{
-        'section_count': sections.length,
-        'paragraph_count': paragraphCount,
-        'dialogue_quote_count': dialogueCount,
-        'average_section_length_chars': avgSectionLength,
+        'section_count': metrics.sectionCount,
+        'paragraph_count': metrics.paragraphCount,
+        'dialogue_quote_count': metrics.dialogueQuoteCount,
+        'average_section_length_chars': metrics.averageSectionLengthChars,
         'source_language': sourceLanguage,
         'target_language': targetLanguage,
       },
@@ -323,6 +351,263 @@ class ReferenceSourceDocumentExtractionService {
       confidence: 0.74,
       lifecycleStatus: 'extracted',
     );
+  }
+
+  List<ReferenceEntryRecord> _buildNarrativeAssetEntries(
+    ReferenceSourceDocumentIngestionRequest request, {
+    required String normalizedText,
+    required InformationSourceRef sourceRef,
+    required String sourceLanguage,
+    required String targetLanguage,
+    required dynamic chapterSummaries,
+  }) {
+    final characterProfiles = _narrativeInferenceService
+        .inferCharacterProfilesFromSource(
+          normalizedText,
+          maxCount: request.maxEntityEntries,
+        );
+    final organizationProfiles = _narrativeInferenceService
+        .inferOrganizationProfilesFromSource(normalizedText);
+    final worldRuleSets = _narrativeInferenceService.inferWorldRuleSetsFromSource(
+      normalizedText,
+      chapterSummaries,
+    );
+    final relationshipRecords = _narrativeInferenceService
+        .inferRelationshipRecords(
+          characterProfiles,
+          chapterSummaries,
+          organizationProfiles,
+        );
+    final timelineRecords = _narrativeInferenceService
+        .inferTimelineRecordsFromChapterSummaries(chapterSummaries);
+    final foreshadowRecords = _narrativeInferenceService
+        .inferForeshadowRecordsFromChapterSummaries(chapterSummaries);
+    final entries = <ReferenceEntryRecord>[];
+    entries.addAll(
+      characterProfiles.take(4).map(
+        (profile) => ReferenceEntryRecord(
+          entryId: 'character_${_safeId(profile.displayName, fallback: profile.id)}',
+          packageId: request.packageId,
+          packageVersionId: request.packageVersionId,
+          entryNamespace: 'character_clues',
+          entryKind: ReferenceEntryKinds.designElement,
+          title: targetLanguage.startsWith('zh')
+              ? '角色线索 ${profile.displayName}'
+              : 'Character clue ${profile.displayName}',
+          summary: profile.summary.trim().isNotEmpty
+              ? profile.summary
+              : (targetLanguage.startsWith('zh')
+                    ? '从原文高频线索中抽取的角色候选。'
+                    : 'Character candidate extracted from the source text.'),
+          payload: <String, Object?>{
+            'display_name': profile.displayName,
+            'source_language': sourceLanguage,
+            'target_language': targetLanguage,
+            ...profile.metadata,
+          },
+          sourceRefs: <InformationSourceRef>[sourceRef],
+          tags: <String>['character', profile.displayName],
+          activationPolicy: const InformationActivationPolicy(
+            activationPriority: InformationActivationPriorities.reference,
+            preferredBudgetChars: 220,
+          ),
+          usagePolicy: const InformationUsagePolicy(
+            usageMode: InformationUsageModes.referenceOnly,
+            citationRiskLevel: InformationCitationRiskLevels.highRisk,
+            requiresConfirmation: true,
+            allowsDerivativeUse: true,
+            allowsDirectQuote: false,
+          ),
+          confidence: 0.7,
+          lifecycleStatus: 'candidate',
+        ),
+      ),
+    );
+    entries.addAll(
+      organizationProfiles.take(3).map(
+        (profile) => ReferenceEntryRecord(
+          entryId: 'organization_${_safeId(profile.displayName, fallback: profile.id)}',
+          packageId: request.packageId,
+          packageVersionId: request.packageVersionId,
+          entryNamespace: 'organization_clues',
+          entryKind: ReferenceEntryKinds.designElement,
+          title: targetLanguage.startsWith('zh')
+              ? '组织线索 ${profile.displayName}'
+              : 'Organization clue ${profile.displayName}',
+          summary: profile.summary.trim().isNotEmpty
+              ? profile.summary
+              : (targetLanguage.startsWith('zh')
+                    ? '从原文高频线索中抽取的组织候选。'
+                    : 'Organization candidate extracted from the source text.'),
+          payload: <String, Object?>{
+            'display_name': profile.displayName,
+            'source_language': sourceLanguage,
+            'target_language': targetLanguage,
+            ...profile.metadata,
+          },
+          sourceRefs: <InformationSourceRef>[sourceRef],
+          tags: <String>['organization', profile.displayName],
+          activationPolicy: const InformationActivationPolicy(
+            activationPriority: InformationActivationPriorities.reference,
+            preferredBudgetChars: 220,
+          ),
+          usagePolicy: const InformationUsagePolicy(
+            usageMode: InformationUsageModes.referenceOnly,
+            citationRiskLevel: InformationCitationRiskLevels.highRisk,
+            requiresConfirmation: true,
+            allowsDerivativeUse: true,
+            allowsDirectQuote: false,
+          ),
+          confidence: 0.68,
+          lifecycleStatus: 'candidate',
+        ),
+      ),
+    );
+    entries.addAll(
+      worldRuleSets.take(2).map(
+        (item) => ReferenceEntryRecord(
+          entryId: item.id,
+          packageId: request.packageId,
+          packageVersionId: request.packageVersionId,
+          entryNamespace: 'world_rule_clues',
+          entryKind: ReferenceEntryKinds.designElement,
+          title: targetLanguage.startsWith('zh')
+              ? item.displayName
+              : 'World rule clue',
+          summary: item.summary,
+          payload: <String, Object?>{
+            'rules': item.rules,
+            'source_language': sourceLanguage,
+            'target_language': targetLanguage,
+          },
+          sourceRefs: <InformationSourceRef>[sourceRef],
+          tags: const <String>['world_rule'],
+          activationPolicy: const InformationActivationPolicy(
+            activationPriority: InformationActivationPriorities.reference,
+            preferredBudgetChars: 240,
+          ),
+          usagePolicy: const InformationUsagePolicy(
+            usageMode: InformationUsageModes.referenceOnly,
+            citationRiskLevel: InformationCitationRiskLevels.highRisk,
+            requiresConfirmation: true,
+            allowsDerivativeUse: true,
+            allowsDirectQuote: false,
+          ),
+          confidence: 0.66,
+          lifecycleStatus: 'candidate',
+        ),
+      ),
+    );
+    entries.addAll(
+      relationshipRecords.take(3).map(
+        (item) => ReferenceEntryRecord(
+          entryId: item.id,
+          packageId: request.packageId,
+          packageVersionId: request.packageVersionId,
+          entryNamespace: 'relationship_clues',
+          entryKind: ReferenceEntryKinds.knowledgeFact,
+          title: targetLanguage.startsWith('zh')
+              ? '关系线索 ${item.displayName}'
+              : 'Relationship clue ${item.displayName}',
+          summary: item.summary,
+          payload: <String, Object?>{
+            'relationship_type': item.relationshipType,
+            'left_entity_id': item.leftEntityId,
+            'right_entity_id': item.rightEntityId,
+            'source_language': sourceLanguage,
+            'target_language': targetLanguage,
+          },
+          sourceRefs: <InformationSourceRef>[sourceRef],
+          tags: <String>['relationship', item.displayName],
+          activationPolicy: const InformationActivationPolicy(
+            activationPriority: InformationActivationPriorities.reference,
+            preferredBudgetChars: 220,
+          ),
+          usagePolicy: const InformationUsagePolicy(
+            usageMode: InformationUsageModes.referenceOnly,
+            citationRiskLevel: InformationCitationRiskLevels.highRisk,
+            requiresConfirmation: true,
+            allowsDerivativeUse: true,
+            allowsDirectQuote: false,
+          ),
+          confidence: 0.64,
+          lifecycleStatus: 'candidate',
+        ),
+      ),
+    );
+    entries.addAll(
+      timelineRecords.take(3).map(
+        (item) => ReferenceEntryRecord(
+          entryId: item.id,
+          packageId: request.packageId,
+          packageVersionId: request.packageVersionId,
+          entryNamespace: 'timeline_clues',
+          entryKind: ReferenceEntryKinds.knowledgeFact,
+          title: targetLanguage.startsWith('zh')
+              ? '时间线片段 ${item.displayName}'
+              : 'Timeline shard ${item.displayName}',
+          summary: item.summary,
+          payload: <String, Object?>{
+            'phase_label': item.phaseLabel,
+            'sequence': item.sequence,
+            'source_language': sourceLanguage,
+            'target_language': targetLanguage,
+          },
+          sourceRefs: <InformationSourceRef>[sourceRef],
+          tags: const <String>['timeline'],
+          activationPolicy: const InformationActivationPolicy(
+            activationPriority: InformationActivationPriorities.background,
+            preferredBudgetChars: 180,
+          ),
+          usagePolicy: const InformationUsagePolicy(
+            usageMode: InformationUsageModes.referenceOnly,
+            citationRiskLevel: InformationCitationRiskLevels.highRisk,
+            requiresConfirmation: true,
+            allowsDerivativeUse: true,
+            allowsDirectQuote: false,
+          ),
+          confidence: 0.62,
+          lifecycleStatus: 'candidate',
+        ),
+      ),
+    );
+    entries.addAll(
+      foreshadowRecords.take(3).map(
+        (item) => ReferenceEntryRecord(
+          entryId: item.id,
+          packageId: request.packageId,
+          packageVersionId: request.packageVersionId,
+          entryNamespace: 'foreshadow_clues',
+          entryKind: ReferenceEntryKinds.knowledgeFact,
+          title: targetLanguage.startsWith('zh')
+              ? item.title
+              : 'Foreshadow clue',
+          summary: item.summary,
+          payload: <String, Object?>{
+            'status': item.status,
+            'planted_chapter_path': item.plantedChapterPath,
+            'source_language': sourceLanguage,
+            'target_language': targetLanguage,
+          },
+          sourceRefs: <InformationSourceRef>[sourceRef],
+          tags: const <String>['foreshadow'],
+          activationPolicy: const InformationActivationPolicy(
+            activationPriority: InformationActivationPriorities.background,
+            preferredBudgetChars: 180,
+          ),
+          usagePolicy: const InformationUsagePolicy(
+            usageMode: InformationUsageModes.referenceOnly,
+            citationRiskLevel: InformationCitationRiskLevels.highRisk,
+            requiresConfirmation: true,
+            allowsDerivativeUse: true,
+            allowsDirectQuote: false,
+          ),
+          confidence: 0.6,
+          lifecycleStatus: 'candidate',
+        ),
+      ),
+    );
+    return entries;
   }
 
   ReferenceEntryRecord _buildReferenceBoundaryEntry(
@@ -373,92 +658,6 @@ class ReferenceSourceDocumentExtractionService {
       confidence: 0.9,
       lifecycleStatus: 'active',
     );
-  }
-
-  List<_RankedEntity> _extractNamedEntities(
-    String sourceText, {
-    required int maxCount,
-  }) {
-    final counts = <String, int>{};
-    final entityPattern = RegExp(r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2}\b');
-    final stopWords = <String>{
-      'Chapter',
-      'Mr',
-      'Mrs',
-      'The',
-      'And',
-      'But',
-      'His',
-      'Her',
-      'Its',
-      'Their',
-      'There',
-      'This',
-      'That',
-      'These',
-      'Those',
-      'Then',
-      'When',
-      'Where',
-      'What',
-      'Why',
-      'How',
-      'Well',
-      'Now',
-      'Look',
-      'Come',
-      'Into',
-      'From',
-      'With',
-      'Without',
-      'After',
-      'Before',
-      'Over',
-      'Under',
-      'Around',
-      'About',
-      'Through',
-      'Because',
-      'Though',
-      'While',
-      'Yes',
-      'No',
-      'One',
-      'Two',
-      'Three',
-      'Four',
-      'Five',
-      'It',
-      'He',
-      'She',
-      'They',
-      'Them',
-      'We',
-      'You',
-      'I',
-      'A',
-      'An',
-    };
-    for (final match in entityPattern.allMatches(sourceText)) {
-      final value = match.group(0)?.trim() ?? '';
-      if (value.isEmpty || stopWords.contains(value)) {
-        continue;
-      }
-      counts[value] = (counts[value] ?? 0) + 1;
-    }
-    final ranked =
-        counts.entries
-            .where((entry) => entry.value >= 2)
-            .map((entry) => _RankedEntity(entry.key, entry.value))
-            .toList(growable: false)
-          ..sort((left, right) {
-            final countCompare = right.count.compareTo(left.count);
-            if (countCompare != 0) {
-              return countCompare;
-            }
-            return left.label.compareTo(right.label);
-          });
-    return ranked.take(maxCount.clamp(1, 12).toInt()).toList(growable: false);
   }
 
   String _packageDescription(
@@ -592,11 +791,4 @@ class ReferenceSourceDocumentExtractionService {
       metadata: const <String, Object?>{},
     );
   }
-}
-
-class _RankedEntity {
-  const _RankedEntity(this.label, this.count);
-
-  final String label;
-  final int count;
 }

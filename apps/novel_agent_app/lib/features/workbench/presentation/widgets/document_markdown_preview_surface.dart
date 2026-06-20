@@ -6,6 +6,7 @@ import 'package:markdown/markdown.dart' as md;
 
 import '../../../../../app/theme/app_chrome.dart';
 import '../../../../../app/theme/app_typography.dart';
+import '../../../../../shared/widgets/horizontal_overflow_scrollbar.dart';
 import '../../../../../shared/theme/novel_theme_context.dart';
 
 class DocumentMarkdownPreviewSurface extends StatefulWidget {
@@ -21,12 +22,10 @@ class DocumentMarkdownPreviewSurface extends StatefulWidget {
 class _DocumentMarkdownPreviewSurfaceState
     extends State<DocumentMarkdownPreviewSurface> {
   final ScrollController _verticalController = ScrollController();
-  final ScrollController _horizontalController = ScrollController();
 
   @override
   void dispose() {
     _verticalController.dispose();
-    _horizontalController.dispose();
     super.dispose();
   }
 
@@ -35,7 +34,11 @@ class _DocumentMarkdownPreviewSurfaceState
     final surface = context.novelThemeSurfaces.panel;
     final colors = context.novelThemeColors;
     final styleSheet = MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-      p: TextStyle(fontSize: 16.2, height: 1.84, color: surface.foregroundColor),
+      p: TextStyle(
+        fontSize: 16.2,
+        height: 1.84,
+        color: surface.foregroundColor,
+      ),
       pPadding: EdgeInsets.zero,
       a: TextStyle(
         fontSize: 15,
@@ -173,26 +176,28 @@ class _DocumentMarkdownPreviewSurfaceState
             padding: const EdgeInsets.fromLTRB(2, 2, 12, 18),
             child: LayoutBuilder(
               builder: (context, constraints) {
-                return RawScrollbar(
-                  controller: _horizontalController,
-                  thumbVisibility: true,
-                  radius: const Radius.circular(999),
-                  thickness: 8,
-                  notificationPredicate: (notification) =>
-                      notification.metrics.axis == Axis.horizontal,
-                  child: SingleChildScrollView(
-                    controller: _horizontalController,
-                    scrollDirection: Axis.horizontal,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minWidth: math.max(0, constraints.maxWidth),
-                      ),
-                      child: MarkdownBody(
-                        data: widget.content,
-                        selectable: true,
-                        styleSheet: normalizedStyleSheet,
-                        extensionSet: md.ExtensionSet.gitHubFlavored,
-                        softLineBreak: true,
+                return HorizontalOverflowScrollbar(
+                  builder: (context, controller) => RawScrollbar(
+                    controller: controller,
+                    thumbVisibility: true,
+                    radius: const Radius.circular(999),
+                    thickness: 8,
+                    notificationPredicate: (notification) =>
+                        notification.metrics.axis == Axis.horizontal,
+                    child: SingleChildScrollView(
+                      controller: controller,
+                      scrollDirection: Axis.horizontal,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minWidth: math.max(0, constraints.maxWidth),
+                        ),
+                        child: MarkdownBody(
+                          data: widget.content,
+                          selectable: true,
+                          styleSheet: normalizedStyleSheet,
+                          extensionSet: md.ExtensionSet.gitHubFlavored,
+                          softLineBreak: true,
+                        ),
                       ),
                     ),
                   ),

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../app/navigation/app_shell_navigation_action_handler.dart';
-import '../../app/navigation/app_shell_navigation_catalog.dart';
 import '../../app/navigation/app_shell_navigation_item.dart';
 import '../../app/navigation/app_shell_navigation_section.dart';
 import '../../app/routing/app_destination.dart';
@@ -12,12 +11,14 @@ import 'app_shell_compact_drawer_controller.dart';
 class AppShellCompactDrawer extends StatelessWidget {
   const AppShellCompactDrawer({
     super.key,
+    required this.navigationSections,
     required this.selectedDestination,
     required this.actionHandler,
     required this.controller,
     required this.dockLayout,
   });
 
+  final List<AppShellNavigationSection> navigationSections;
   final AppDestination selectedDestination;
   final AppShellNavigationActionHandler actionHandler;
   final AppShellCompactDrawerController controller;
@@ -50,6 +51,7 @@ class AppShellCompactDrawer extends StatelessWidget {
                 ),
                 child: _CompactDrawerDock(
                   isOpen: isOpen,
+                  navigationSections: navigationSections,
                   selectedDestination: selectedDestination,
                   actionHandler: actionHandler,
                   dockLayout: dockLayout,
@@ -68,6 +70,7 @@ class AppShellCompactDrawer extends StatelessWidget {
 class _CompactDrawerDock extends StatelessWidget {
   const _CompactDrawerDock({
     required this.isOpen,
+    required this.navigationSections,
     required this.selectedDestination,
     required this.actionHandler,
     required this.dockLayout,
@@ -76,6 +79,7 @@ class _CompactDrawerDock extends StatelessWidget {
   });
 
   final bool isOpen;
+  final List<AppShellNavigationSection> navigationSections;
   final AppDestination selectedDestination;
   final AppShellNavigationActionHandler actionHandler;
   final AppShellCompactDockLayout dockLayout;
@@ -94,6 +98,7 @@ class _CompactDrawerDock extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 10),
             child: AppShellCompactDrawerPanel(
               width: dockLayout.panelWidth,
+              navigationSections: navigationSections,
               selectedDestination: selectedDestination,
               actionHandler: actionHandler,
               onDismissRequested: onDismissRequested,
@@ -113,12 +118,14 @@ class AppShellCompactDrawerPanel extends StatelessWidget {
   const AppShellCompactDrawerPanel({
     super.key,
     required this.width,
+    required this.navigationSections,
     required this.selectedDestination,
     required this.actionHandler,
     required this.onDismissRequested,
   });
 
   final double width;
+  final List<AppShellNavigationSection> navigationSections;
   final AppDestination selectedDestination;
   final AppShellNavigationActionHandler actionHandler;
   final VoidCallback onDismissRequested;
@@ -126,7 +133,6 @@ class AppShellCompactDrawerPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sidebarSurface = context.novelThemeSurfaces.sidebar;
-    final sections = AppShellNavigationCatalog.sections();
     return Material(
       color: Colors.transparent,
       child: Container(
@@ -155,11 +161,11 @@ class AppShellCompactDrawerPanel extends StatelessWidget {
               child: ListView.separated(
                 primary: false,
                 shrinkWrap: true,
-                itemCount: sections.length,
+                itemCount: navigationSections.length,
                 separatorBuilder: (_, _) => const SizedBox(height: 10),
                 itemBuilder: (context, index) {
                   return _CompactDrawerSection(
-                    section: sections[index],
+                    section: navigationSections[index],
                     selectedDestination: selectedDestination,
                     onSelected: (destination) async {
                       await actionHandler.onAppShellDestinationRequested(

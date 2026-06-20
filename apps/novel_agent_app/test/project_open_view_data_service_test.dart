@@ -1,67 +1,67 @@
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
+import 'package:novel_agent_app/features/project_open/application/models/project_open_snapshot.dart';
 import 'package:novel_agent_app/features/project_open/application/services/project_open_view_data_service.dart';
 import 'package:novel_agent_app/features/project_open/presentation/models/project_open_view_data.dart';
-import 'package:novel_agent_core/novel_agent_core.dart';
 
 void main() {
   group('ProjectOpenViewDataService', () {
     test(
-      'build merges default root and recent project while prioritizing current project',
-      () async {
-        final rootDirectory = await Directory.systemTemp.createTemp(
-          'project_open_view_data_service_test',
-        );
-        addTearDown(() async {
-          if (await rootDirectory.exists()) {
-            await rootDirectory.delete(recursive: true);
-          }
-        });
-
-        final currentDirectory = Directory(
-          '${rootDirectory.path}${Platform.pathSeparator}alpha_project',
-        );
-        final recentDirectory = Directory(
-          '${rootDirectory.path}${Platform.pathSeparator}beta_project',
-        );
-        await currentDirectory.create(recursive: true);
-        await recentDirectory.create(recursive: true);
-
-        final snapshots = <String, ProjectWorkspaceSnapshot>{
-          currentDirectory.path: _snapshotOf(
-            name: 'Alpha Project',
-            rootPath: currentDirectory.path,
-            projectType: 'novel',
-          ),
-          recentDirectory.path: _snapshotOf(
-            name: 'Beta Project',
-            rootPath: recentDirectory.path,
-            projectType: 'outline',
-            runtimeBaselineId: 'continuous_autonomous',
-          ),
-        };
-
+      'build maps snapshot records into project open view data',
+      () {
         final service = ProjectOpenViewDataService();
-        final viewData = await service.build(
-          projectsRootPath: rootDirectory.path,
-          recentProjectPath: recentDirectory.path,
-          currentProjectPath: currentDirectory.path,
+        final snapshot = ProjectOpenSnapshot(
+          projectsRootPath: 'D:/Projects',
+          recentProjectPath: 'D:/Projects/beta_project',
+          currentProjectPath: 'D:/Projects/alpha_project',
           allowImportLocal: true,
-          loadWorkspace: (rootPath) async => snapshots[rootPath],
+          selectedEntryId: 'alpha',
+          status: '',
+          records: <ProjectOpenProjectRecord>[
+            ProjectOpenProjectRecord(
+              id: 'alpha',
+              title: 'Alpha Project',
+              path: 'D:/Projects/alpha_project',
+              projectTypeId: 'novel',
+              storageStrategyId: 'markdown_project_store',
+              runtimeBaselineId: '',
+              modifiedAt: DateTime.fromMillisecondsSinceEpoch(0),
+              sourceBadges: <String>['默认目录'],
+              isCurrentProject: true,
+            ),
+            ProjectOpenProjectRecord(
+              id: 'beta',
+              title: 'Beta Project',
+              path: 'D:/Projects/beta_project',
+              projectTypeId: 'long_novel',
+              storageStrategyId: 'sqlite_project_store',
+              runtimeBaselineId: 'continuous_autonomous',
+              modifiedAt: DateTime(2026, 6, 19, 14, 30),
+              sourceBadges: <String>['最近项目'],
+              isCurrentProject: false,
+            ),
+          ],
         );
+
+        final viewData = service.build(snapshot);
 
         expect(viewData.entries, hasLength(2));
         expect(viewData.title, '作品库');
-        expect(viewData.description, '先新建作品，或从默认项目目录继续打开已有作品。');
+        expect(
+          viewData.description,
+          '先新建作品，或从默认项目目录继续打开已有作品。',
+        );
+        expect(viewData.projectsRootPath, 'D:/Projects');
+        expect(viewData.currentProjectPath, 'D:/Projects/alpha_project');
         expect(viewData.entries.first.title, 'Alpha Project');
         expect(viewData.entries.first.isCurrentProject, isTrue);
-        expect(viewData.selectedEntryId, viewData.entries.first.id);
-
-        final recentEntry = viewData.entries.last;
-        expect(recentEntry.title, 'Beta Project');
-        expect(recentEntry.sourceBadges, containsAll(<String>['默认目录', '最近项目']));
-        expect(recentEntry.runtimeBaselineLabel, 'continuous_autonomous');
+        expect(viewData.selectedEntryId, 'alpha');
+        expect(viewData.entries.last.title, 'Beta Project');
+        expect(
+          viewData.entries.last.sourceBadges,
+          containsAll(<String>['最近项目']),
+        );
+        expect(viewData.entries.last.runtimeBaselineLabel, 'continuous_autonomous');
+        expect(viewData.entries.first.runtimeBaselineLabel, '未指定');
       },
     );
 
@@ -69,15 +69,8 @@ void main() {
       'selectEntry updates selected marker without rebuilding discovery result',
       () {
         final service = ProjectOpenViewDataService();
-        final viewData = ProjectOpenViewData(
-          title: '作品库',
-          description: 'desc',
-          projectsRootPath: 'D:/Projects',
-          currentProjectPath: '',
-          allowImportLocal: true,
-          selectedEntryId: 'a',
-          status: '',
-          entries: const <ProjectOpenEntryViewData>[
+        final viewData = ProjectOpenViewData.initial().copyWith(
+          entries: <ProjectOpenEntryViewData>[
             ProjectOpenEntryViewData(
               id: 'a',
               title: 'A',
@@ -103,6 +96,7 @@ void main() {
               isSelected: false,
             ),
           ],
+          selectedEntryId: 'a',
         );
 
         final selected = service.selectEntry(viewData, 'b');
@@ -113,24 +107,4 @@ void main() {
       },
     );
   });
-}
-
-ProjectWorkspaceSnapshot _snapshotOf({
-  required String name,
-  required String rootPath,
-  required String projectType,
-  String runtimeBaselineId = '',
-}) {
-  return ProjectWorkspaceSnapshot(
-    project: ProjectDescriptor(
-      id: name,
-      name: name,
-      rootPath: rootPath,
-      projectType: projectType,
-      storageStrategy: ProjectStorageStrategy.markdownProjectStore,
-      runtimeBaselineId: runtimeBaselineId,
-    ),
-    projectInfo: const <String, Object?>{},
-    entries: const <JsonMap>[],
-  );
 }

@@ -1,11 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
+import 'package:novel_agent_app/app/diagnostics/navigation_trace_service.dart';
 import 'package:novel_agent_app/features/long_task_station/application/controllers/long_task_station_controller.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 void main() {
   group('LongTaskStationController auto refresh', () {
     test('schedules refresh only when enabled and active run exists', () async {
+      final trace = NavigationTraceService();
       final supervisor = _FakeLongTaskSupervisor(
         sequences: <List<RunInstance>>[
           <RunInstance>[
@@ -22,6 +24,7 @@ void main() {
         longTaskSupervisor: supervisor,
         detailService: _NoopDetailService(),
         detailLoader: _loadEmptyDetail,
+        navigationTraceService: trace,
       );
       controller.attachNavigationCallbacks(
         openProjectRequested: (_) async {},
@@ -31,14 +34,18 @@ void main() {
       );
 
       controller.setAutoRefreshEnabled(true);
-      await controller.initialize();
+      await controller.onVisibilityRequested();
 
       expect(controller.isAutoRefreshScheduled, isTrue);
+      final snapshot = trace.snapshot();
+      expect(snapshot.pageInitializedCount, 1);
+      expect(snapshot.pageRefreshCompletedCount, 1);
 
       controller.dispose();
     });
 
     test('does not schedule refresh when only paused run exists', () async {
+      final trace = NavigationTraceService();
       final supervisor = _FakeLongTaskSupervisor(
         sequences: <List<RunInstance>>[
           <RunInstance>[
@@ -55,6 +62,7 @@ void main() {
         longTaskSupervisor: supervisor,
         detailService: _NoopDetailService(),
         detailLoader: _loadEmptyDetail,
+        navigationTraceService: trace,
       );
       controller.attachNavigationCallbacks(
         openProjectRequested: (_) async {},
@@ -64,14 +72,16 @@ void main() {
       );
 
       controller.setAutoRefreshEnabled(true);
-      await controller.initialize();
+      await controller.onVisibilityRequested();
 
       expect(controller.isAutoRefreshScheduled, isFalse);
+      expect(trace.snapshot().pageRefreshCompletedCount, 1);
 
       controller.dispose();
     });
 
     test('cancels scheduled refresh when disabled', () async {
+      final trace = NavigationTraceService();
       final supervisor = _FakeLongTaskSupervisor(
         sequences: <List<RunInstance>>[
           <RunInstance>[
@@ -88,6 +98,7 @@ void main() {
         longTaskSupervisor: supervisor,
         detailService: _NoopDetailService(),
         detailLoader: _loadEmptyDetail,
+        navigationTraceService: trace,
       );
       controller.attachNavigationCallbacks(
         openProjectRequested: (_) async {},
@@ -97,17 +108,19 @@ void main() {
       );
 
       controller.setAutoRefreshEnabled(true);
-      await controller.initialize();
+      await controller.onVisibilityRequested();
       expect(controller.isAutoRefreshScheduled, isTrue);
 
       controller.setAutoRefreshEnabled(false);
 
       expect(controller.isAutoRefreshScheduled, isFalse);
+      expect(trace.snapshot().pageRefreshCompletedCount, 1);
 
       controller.dispose();
     });
 
     test('approving pending research refreshes selected run detail', () async {
+      final trace = NavigationTraceService();
       var approved = false;
       final run = _run(
         runId: 'run-1',
@@ -132,6 +145,7 @@ void main() {
         pendingResearchActionService: actionService,
         detailLoader: (_) async =>
             _detailWithPendingResearch(includePendingResearch: !approved),
+        navigationTraceService: trace,
       );
       controller.attachNavigationCallbacks(
         openProjectRequested: (_) async {},
@@ -140,7 +154,7 @@ void main() {
         readCurrentProjectPathRequested: () => 'D:/novels/demo',
       );
 
-      await controller.initialize();
+      await controller.onVisibilityRequested();
       expect(
         controller.viewData.selectedRun!.informationPermissionItems,
         isNotEmpty,
@@ -154,6 +168,7 @@ void main() {
         isEmpty,
       );
       expect(controller.viewData.statusMessage, '已确认资料请求。');
+      expect(trace.snapshot().pageRefreshCompletedCount, 2);
       controller.dispose();
     });
   });

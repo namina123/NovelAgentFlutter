@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../app/navigation/app_shell_navigation_action_handler.dart';
-import '../../app/navigation/app_shell_navigation_catalog.dart';
 import '../../app/navigation/app_shell_navigation_item.dart';
 import '../../app/navigation/app_shell_navigation_section.dart';
 import '../../app/routing/app_destination.dart';
@@ -10,17 +9,18 @@ import '../theme/novel_theme_context.dart';
 class AppShellActivityRail extends StatelessWidget {
   const AppShellActivityRail({
     super.key,
+    required this.sections,
     required this.selectedDestination,
     required this.actionHandler,
   });
 
+  final List<AppShellNavigationSection> sections;
   final AppDestination selectedDestination;
   final AppShellNavigationActionHandler actionHandler;
 
   @override
   Widget build(BuildContext context) {
     final sidebarSurface = context.novelThemeSurfaces.sidebar;
-    final sections = AppShellNavigationCatalog.sections();
     return Container(
       width: 86,
       decoration: BoxDecoration(

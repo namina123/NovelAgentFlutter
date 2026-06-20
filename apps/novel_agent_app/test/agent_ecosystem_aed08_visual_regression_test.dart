@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novel_agent_app/app/navigation/app_shell_navigation_action_handler.dart';
+import 'package:novel_agent_app/app/navigation/app_shell_navigation_catalog.dart';
 import 'package:novel_agent_app/app/routing/app_destination.dart';
 import 'package:novel_agent_app/app/theme/app_theme.dart';
 import 'package:novel_agent_app/features/agent_ecosystem/presentation/contracts/agent_ecosystem_action_handler.dart';
@@ -71,6 +72,7 @@ Future<void> _captureNavigationRail(WidgetTester tester) async {
               width: 88,
               height: 620,
               child: AppShellActivityRail(
+                sections: AppShellNavigationCatalog.sections(),
                 selectedDestination: AppDestination.agentEcosystem,
                 actionHandler: const _FakeNavigationHandler(),
               ),
@@ -83,7 +85,7 @@ Future<void> _captureNavigationRail(WidgetTester tester) async {
   await tester.pumpAndSettle();
 
   expect(find.text('工作'), findsOneWidget);
-  expect(find.text('工作台'), findsOneWidget);
+  expect(find.text('创作台'), findsOneWidget);
   expect(find.text('智能体生态'), findsOneWidget);
   expect(find.text('长任务'), findsOneWidget);
 
@@ -237,6 +239,7 @@ Future<void> _captureExpressionConstraintPanel(WidgetTester tester) async {
     title: '项目资产',
     description: '表达限制是项目级写作约束系统；当前正从智能体 reviewer 进入，可继续为它定向绑定内置或自定义规则方案。',
     status: '已加载表达限制方案。',
+    useDedicatedRagWorkspace: false,
     activeTabId: 'expression_constraints',
     entryAgentContextId: 'reviewer',
     tabs: const <ProjectAssetsTabViewData>[

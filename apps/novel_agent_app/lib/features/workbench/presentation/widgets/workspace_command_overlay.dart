@@ -350,16 +350,14 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
                   icon: const Icon(Icons.upload_file_rounded),
                   label: const Text('选择文件'),
                 ),
-                if (widget.viewData.projectType == 'book_deconstruction') ...[
-                  const SizedBox(width: 8),
-                  FilledButton.tonalIcon(
-                    onPressed: widget.viewData.isBusy
-                        ? null
-                        : _pickImportDirectory,
-                    icon: const Icon(Icons.folder_open_rounded),
-                    label: const Text('选择文件夹'),
-                  ),
-                ],
+                const SizedBox(width: 8),
+                FilledButton.tonalIcon(
+                  onPressed: widget.viewData.isBusy
+                      ? null
+                      : _pickImportDirectory,
+                  icon: const Icon(Icons.folder_open_rounded),
+                  label: const Text('选择文件夹'),
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
@@ -376,14 +374,16 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
             const SizedBox(height: 12),
             _field(
               _sourcePathsController,
-              '已选文件',
-              hint: '尚未选择文件',
+              '已选来源',
+              hint: '尚未选择文件或文件夹',
               maxLines: 6,
               readOnly: true,
             ),
             _field(_targetDirectoryController, '导入到项目目录', hint: '例如：assets'),
             _ImportOptionBlock(
-              title: '自动拆书',
+              title: widget.viewData.projectType == 'book_deconstruction'
+                  ? '生成结构化预演'
+                  : '自动拆书',
               description: widget.viewData.importOutputHint,
               value: widget.viewData.canAutoDeconstruct
                   ? _autoDeconstruct
@@ -414,11 +414,11 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
                 },
               ),
               _ImportOptionBlock(
-                title: '智能拆书',
+                title: '使用模型辅助拆书',
                 description:
                     _selectedSmartDeconstructionProviderModelKey.trim().isEmpty
-                    ? '先选择模型后才能启用。'
-                    : '启用后会自动识别章节并整理干扰内容。',
+                     ? '先选择模型后才能启用。'
+                    : '启用后会先识别章节规则与清理规则，再交由程序执行拆分与清洗。',
                 value: _smartDeconstruction,
                 enabled:
                     !widget.viewData.isBusy &&
@@ -727,47 +727,61 @@ class _ImportOptionBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(top: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Checkbox(
-            value: value,
-            onChanged: enabled
-                ? (nextValue) => onChanged(nextValue ?? false)
-                : null,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            visualDensity: const VisualDensity(horizontal: -3, vertical: -3),
-          ),
-          const SizedBox(width: 4),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 5),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: AppPalette.text,
+      child: InkWell(
+        onTap: enabled ? () => onChanged(!value) : null,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: Checkbox(
+                    value: value,
+                    onChanged: enabled
+                        ? (nextValue) => onChanged(nextValue ?? false)
+                        : null,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: const VisualDensity(
+                      horizontal: -4,
+                      vertical: -4,
                     ),
                   ),
-                  const SizedBox(height: 3),
-                  Text(
-                    description,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      height: 1.4,
-                      fontWeight: FontWeight.w500,
-                      color: AppPalette.mutedText,
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppPalette.text,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      description,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        height: 1.4,
+                        fontWeight: FontWeight.w500,
+                        color: AppPalette.mutedText,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

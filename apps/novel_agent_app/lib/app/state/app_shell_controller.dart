@@ -7,6 +7,9 @@ import 'package:flutter/material.dart';
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../diagnostics/controller_notify_trace_service.dart';
+import '../diagnostics/navigation_trace_service.dart';
+import '../diagnostics/project_hydration_trace_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_preference_resolver.dart';
 import '../../features/agent_ecosystem/application/models/agent_ecosystem_snapshot.dart';
@@ -44,6 +47,7 @@ import '../../features/project_collection/application/models/project_collection_
 import '../../features/project_collection/application/services/project_collection_loader_service.dart';
 import '../../features/project_collection/presentation/contracts/project_collection_action_handler.dart';
 import '../../features/project_collection/presentation/models/project_collection_view_data.dart';
+import '../../features/project_open/application/controllers/project_open_controller.dart';
 import '../../features/project_open/application/services/project_open_view_data_service.dart';
 import '../../features/project_open/presentation/contracts/project_open_action_handler.dart';
 import '../../features/project_open/presentation/models/project_open_view_data.dart';
@@ -106,12 +110,18 @@ import '../../features/workbench/presentation/models/workbench_overlay_view_data
 import '../../features/workbench/presentation/models/workbench_resource_view_data.dart';
 import '../../features/workbench/presentation/models/workbench_view_data.dart';
 import '../navigation/app_shell_navigation_action_handler.dart';
+import '../navigation/app_shell_navigation_catalog.dart';
+import '../navigation/app_shell_navigation_section.dart';
 import '../../shared/view_models/app_shell_view_model.dart';
 import '../routing/app_destination.dart';
 import 'app_shell_auxiliary_controllers.dart';
 import 'app_shell_destination_controller.dart';
+import 'feature_refresh_intent.dart';
+import 'feature_visibility_state.dart';
 import 'app_shell_listenable_state.dart';
 import 'app_shell_project_open_controller.dart';
+import 'project_bound_feature_refresh_policy.dart';
+import 'project_lifecycle_coordinator.dart';
 
 typedef LoadAgentPackages =
     Future<List<JsonMap>> Function(ProjectDescriptor project);
@@ -246,6 +256,7 @@ class AppShellController extends ChangeNotifier
     ProjectSkillLoadoutViewDataService? projectSkillLoadoutViewDataService,
     CustomizationImportPreviewTextService?
     customizationImportPreviewTextService,
+    ProjectOpenController? projectOpenController,
     ProjectOpenViewDataService? projectOpenViewDataService,
     ProjectCollectionLoaderService? projectCollectionLoaderService,
     TaskCenterCommandOrchestrationService?
@@ -267,6 +278,11 @@ class AppShellController extends ChangeNotifier
     ThemeSettingsViewDataService? themeSettingsViewDataService,
     ModelExecutionProfileService? modelExecutionProfileService,
     ModeGuidanceTransitionService? modeGuidanceTransitionService,
+    ProjectLifecycleCoordinator? projectLifecycleCoordinator,
+    ProjectBoundFeatureRefreshPolicy? projectBoundFeatureRefreshPolicy,
+    ControllerNotifyTraceService? controllerNotifyTraceService,
+    NavigationTraceService? navigationTraceService,
+    ProjectHydrationTraceService? projectHydrationTraceService,
   }) : _settingsRepository = settingsRepository,
        _loadProjectWorkspaceUseCase = loadProjectWorkspaceUseCase,
        _loadModeGuidanceStateUseCase = loadModeGuidanceStateUseCase,
@@ -365,6 +381,8 @@ class AppShellController extends ChangeNotifier
        _customizationImportPreviewTextService =
            customizationImportPreviewTextService ??
            const CustomizationImportPreviewTextService(),
+       _projectOpenLifecycleController =
+           projectOpenController ?? ProjectOpenController(),
        _projectOpenViewDataService =
            projectOpenViewDataService ?? ProjectOpenViewDataService(),
        _projectCollectionLoaderService =
@@ -415,6 +433,9 @@ class AppShellController extends ChangeNotifier
            modelExecutionProfileService ?? ModelExecutionProfileService(),
        _modeGuidanceTransitionService =
            modeGuidanceTransitionService ?? ModeGuidanceTransitionService(),
+       _controllerNotifyTraceService = controllerNotifyTraceService,
+       _navigationTraceService = navigationTraceService,
+       _projectHydrationTraceService = projectHydrationTraceService,
        _desktopBookDeconstructionSourcePickerService =
            desktopBookDeconstructionSourcePickerService ??
            const DesktopBookDeconstructionSourcePickerService(),
@@ -424,10 +445,16 @@ class AppShellController extends ChangeNotifier
       activeThemeId: _activeThemeId,
     );
     _destinationController = AppShellDestinationController(
+      readCurrentDestination: () => _viewModel.destination,
       changeDestination: _changeDestination,
       refreshProjectOpen: _refreshProjectOpenView,
       refreshTaskCenter: _refreshTaskCenter,
       longTaskStationController: _longTaskStationController,
+      navigationTraceService: _navigationTraceService,
+      projectHydrationTraceService: _projectHydrationTraceService,
+      readCurrentProjectPath: () => _currentProject?.rootPath ?? '',
+      isProjectHydrationInProgress: () =>
+          _workbenchWorkspaceController.isProjectHydrationInProgress,
     );
     _workbenchWorkspaceController = WorkbenchWorkspaceController(
       loadProjectWorkspaceUseCase: _loadProjectWorkspaceUseCase,
@@ -474,7 +501,13 @@ class AppShellController extends ChangeNotifier
       showLongTaskStation: _destinationController.showLongTaskStation,
       showInspirationWorkbench: _destinationController.showInspirationWorkbench,
       showPromptTemplates: _destinationController.showPromptTemplates,
-      showProjectAssets: _destinationController.showProjectAssets,
+      showProjectAssets: () async {
+        if (_currentProject?.projectType.trim() == 'book_deconstruction') {
+          await _showBookDeconstructionAnalysis();
+          return;
+        }
+        await _destinationController.showProjectAssets();
+      },
       showProjectRagAssets: () async {
         projectAssetsController.openRagExtractionWorkspace();
         await _destinationController.showProjectAssets();
@@ -485,6 +518,7 @@ class AppShellController extends ChangeNotifier
       announce: _announce,
       pendingResearchActionService: pendingResearchActionService,
       projectLongTaskDetailLoader: longTaskStationController.loadDetailForRun,
+      projectHydrationTraceService: _projectHydrationTraceService,
     );
     _workbenchConversationController = WorkbenchConversationController(
       openingLaunchBridgeService: WorkbenchOpeningLaunchBridgeService(
@@ -548,6 +582,27 @@ class AppShellController extends ChangeNotifier
       selectedModelProvider: _selectedModelProvider,
       announce: _announce,
     );
+    _projectLifecycleCoordinator =
+        projectLifecycleCoordinator ??
+        ProjectLifecycleCoordinator(
+          readSettings: () => _settings,
+          loadProject:
+              (
+                rootPath, {
+                bool deferHydration = false,
+                bool openDefaultDocument = true,
+              }) => _workbenchWorkspaceController.loadProject(
+                rootPath,
+                deferHydration: deferHydration,
+                openDefaultDocument: openDefaultDocument,
+              ),
+          readCurrentProject: () =>
+              _workbenchWorkspaceController.currentProject,
+          isMobileProjectRootLocked: () => _isMobileProjectRootLocked,
+        );
+    _projectBoundFeatureRefreshPolicy =
+        projectBoundFeatureRefreshPolicy ??
+        const ProjectBoundFeatureRefreshPolicy();
     _projectCreationController = ProjectCreationController(
       loadProjectWorkspaceUseCase: _loadProjectWorkspaceUseCase,
       createProjectWorkspaceUseCase: _createProjectWorkspaceUseCase,
@@ -555,10 +610,10 @@ class AppShellController extends ChangeNotifier
       desktopProjectDirectoryPickerService:
           _desktopProjectDirectoryPickerService,
       projectLauncherViewDataService: _projectLauncherViewDataService,
+      projectLifecycleCoordinator: _projectLifecycleCoordinator,
       readWorkbench: () => _viewModel.workbench,
       mutateWorkbench: _mutateWorkbench,
       readCurrentProject: () => _workbenchWorkspaceController.currentProject,
-      loadProject: _workbenchWorkspaceController.loadProject,
       onProjectCreatedAndOpened: _handleProjectCreatedAndOpened,
       resetToProjectlessWorkbench:
           _workbenchWorkspaceController.resetToProjectlessWorkbench,
@@ -599,7 +654,7 @@ class AppShellController extends ChangeNotifier
         readAvailableProjectAgents: () =>
             List<JsonMap>.from(_agentEcosystemSnapshot.agents.map(_mapValue)),
         syncWorkbenchResources: _syncWorkbenchResources,
-        onBackRequested: showWorkbench,
+        onBackRequested: _handleProjectAssetsBackRequested,
         ragExtractionExecutionService: ProjectRagExtractionExecutionService(),
         referenceExtractionExecutionService:
             _injectedProjectReferenceExtractionExecutionService ??
@@ -644,10 +699,9 @@ class AppShellController extends ChangeNotifier
             ),
         openDerivedProjectRequested:
             (ProjectDescriptor project, String preferredOpenPath) async {
-              final loaded = await _workbenchWorkspaceController.loadProject(
-                project.rootPath,
-              );
-              if (!loaded) {
+              final result = await _projectLifecycleCoordinator
+                  .openProjectFromPath(project.rootPath);
+              if (!result.isLoaded) {
                 _announce('派生项目已创建，但自动打开失败：${project.rootPath}');
                 return;
               }
@@ -791,6 +845,11 @@ class AppShellController extends ChangeNotifier
   final ProjectCreationExpressionConstraintDefaultsSettingsService
   _projectCreationExpressionConstraintDefaultsSettingsService;
   final ModelExecutionProfileService _modelExecutionProfileService;
+  late final ProjectLifecycleCoordinator _projectLifecycleCoordinator;
+  late final ProjectBoundFeatureRefreshPolicy _projectBoundFeatureRefreshPolicy;
+  final ControllerNotifyTraceService? _controllerNotifyTraceService;
+  final NavigationTraceService? _navigationTraceService;
+  final ProjectHydrationTraceService? _projectHydrationTraceService;
   final app_settings.ProviderConnectionValidationService
   _providerConnectionValidationService =
       app_settings.ProviderConnectionValidationService();
@@ -804,6 +863,7 @@ class AppShellController extends ChangeNotifier
   late final ProjectCreationController _projectCreationController;
   late final AppShellAuxiliaryControllers _auxiliaryControllers;
   late final AppShellProjectOpenController _projectOpenController;
+  late final ProjectOpenController _projectOpenLifecycleController;
   final ReviewReportChapterAnalysisProjectionService
   _reviewReportChapterAnalysisProjectionService =
       ReviewReportChapterAnalysisProjectionService();
@@ -910,6 +970,9 @@ class AppShellController extends ChangeNotifier
 
   LongTaskStationController get longTaskStationController =>
       _longTaskStationController;
+  NavigationTraceService? get navigationTraceService => _navigationTraceService;
+  bool get isProjectHydrationInProgress =>
+      _workbenchWorkspaceController.isProjectHydrationInProgress;
   ProjectAssetsController get projectAssetsController =>
       _auxiliaryControllers.projectAssetsController;
   BookDeconstructionController get bookDeconstructionController =>
@@ -924,6 +987,14 @@ class AppShellController extends ChangeNotifier
       _workbenchConversationController;
   ProjectDescriptor? get _currentProject =>
       _workbenchWorkspaceController.currentProject;
+  bool get usesProjectAssetsAsPrimaryWorkspace =>
+      _usesProjectAssetsAsPrimaryWorkspace(_currentProject);
+
+  List<AppShellNavigationSection> navigationSections() {
+    return AppShellNavigationCatalog.sections(
+      projectAssetsPrimaryWorkspace: usesProjectAssetsAsPrimaryWorkspace,
+    );
+  }
 
   Future<void> initialize() async {
     // 中文注释: 控制器初始化负责加载默认设置和项目，但不会把适配器实例化逻辑带进状态层。
@@ -966,6 +1037,17 @@ class AppShellController extends ChangeNotifier
 
   void showWorkbench() {
     // 中文注释: 该方法统一负责切回主工作台，避免页面自己决定全局导航状态。
+    if (usesProjectAssetsAsPrimaryWorkspace) {
+      showProjectAssets();
+      return;
+    }
+    if (_currentProject?.projectType.trim() ==
+            BookDeconstructionConstants.projectTypeId &&
+        _viewModel.destination == AppDestination.bookDeconstruction) {
+      _destinationController.showWorkbench();
+      unawaited(_workbenchWorkspaceController.refreshProjectLongTaskSummary());
+      return;
+    }
     _destinationController.showWorkbench();
     unawaited(_workbenchWorkspaceController.refreshProjectLongTaskSummary());
   }
@@ -1013,15 +1095,28 @@ class AppShellController extends ChangeNotifier
         return true;
       case AppDestination.projectOpen:
         if (_currentProject != null) {
-          showWorkbench();
+          _showPrimaryWorkspaceForCurrentProject();
           return false;
         }
         return true;
       case AppDestination.settings:
       case AppDestination.agentEcosystem:
-      case AppDestination.projectAssets:
       case AppDestination.longTaskStation:
       case AppDestination.taskCenter:
+        _showPrimaryWorkspaceForCurrentProject();
+        return false;
+      case AppDestination.bookDeconstruction:
+        if (_currentProject?.projectType.trim() ==
+            BookDeconstructionConstants.projectTypeId) {
+          showWorkbench();
+          return false;
+        }
+        _showPrimaryWorkspaceForCurrentProject();
+        return false;
+      case AppDestination.projectAssets:
+        if (usesProjectAssetsAsPrimaryWorkspace) {
+          return true;
+        }
         showWorkbench();
         return false;
     }
@@ -1068,6 +1163,12 @@ class AppShellController extends ChangeNotifier
   }
 
   Future<void> _handleProjectCreatedAndOpened(ProjectDescriptor project) async {
+    if (project.projectType.trim() ==
+        BookDeconstructionConstants.projectTypeId) {
+      await bookDeconstructionController.refresh();
+      await _destinationController.showBookDeconstructionWorkbench();
+      return;
+    }
     if (_shouldOpenProjectAssetsByDefault(project)) {
       await projectAssetsController.refresh();
       showProjectAssets();
@@ -1076,23 +1177,32 @@ class AppShellController extends ChangeNotifier
     showWorkbench();
   }
 
-  Future<void> _refreshProjectOpenView({String status = ''}) async {
+  Future<void> _refreshProjectOpenView({
+    String status = '',
+    bool forceRefresh = false,
+  }) async {
     final settings = _settings;
-    final viewData = await _projectOpenViewDataService.build(
+    final snapshot = await _projectOpenLifecycleController.refreshSnapshot(
       projectsRootPath: _defaultProjectsRootPath,
       recentProjectPath: settings?.defaultProjectPath ?? '',
       currentProjectPath: _currentProject?.rootPath ?? '',
       allowImportLocal: !_isMobileProjectRootLocked,
-      loadWorkspace: _loadProjectWorkspaceUseCase.execute,
       selectedEntryId: _viewModel.projectOpen.selectedEntryId,
       status: status,
+      forceRefresh: forceRefresh || status.trim().isNotEmpty,
     );
+    final viewData = _projectOpenViewDataService.build(snapshot);
     _viewModel = _viewModel.copyWith(projectOpen: viewData);
     _safeNotifyListeners();
+    _navigationTraceService?.markPageRefreshCompleted(
+      AppDestination.projectOpen,
+      label: 'project_open_refresh',
+    );
   }
 
   void _selectProjectOpenEntry(String entryId) {
     // 中文注释: 条目选中只更新项目入口页的局部视图态，不触发项目加载。
+    _projectOpenLifecycleController.selectEntry(entryId);
     _viewModel = _viewModel.copyWith(
       projectOpen: _projectOpenViewDataService.selectEntry(
         _viewModel.projectOpen,
@@ -1109,16 +1219,26 @@ class AppShellController extends ChangeNotifier
       return;
     }
     _announce('正在打开项目...');
-    final loaded = await _workbenchWorkspaceController.loadProject(
+    final result = await _projectLifecycleCoordinator.openProjectFromPath(
       normalizedPath,
+      failureLauncherMode: _currentProject == null
+          ? ProjectLauncherMode.guard
+          : null,
+      failureLauncherStatus: '打开项目失败：$normalizedPath',
     );
-    if (!loaded) {
+    if (!result.isLoaded) {
       await _refreshProjectOpenView(status: '打开项目失败：$normalizedPath');
       return;
     }
     if (_shouldOpenProjectAssetsByDefault(_currentProject)) {
       await projectAssetsController.refresh();
       showProjectAssets();
+      return;
+    }
+    if (_currentProject?.projectType.trim() ==
+        BookDeconstructionConstants.projectTypeId) {
+      await bookDeconstructionController.refresh();
+      await _destinationController.showBookDeconstructionWorkbench();
       return;
     }
     showWorkbench();
@@ -1172,10 +1292,20 @@ class AppShellController extends ChangeNotifier
     await _destinationController.showProjectAssets();
   }
 
+  Future<void> _showBookDeconstructionAnalysis() async {
+    await bookDeconstructionController.refresh(status: '可以开始分析书籍，提取结构化拆书资产。');
+    await _destinationController.showBookDeconstructionWorkbench();
+  }
+
   @override
   Future<void> onAppShellDestinationRequested(
     AppDestination destination,
   ) async {
+    if (destination == AppDestination.workbench &&
+        usesProjectAssetsAsPrimaryWorkspace) {
+      await _destinationController.showProjectAssets();
+      return;
+    }
     await _destinationController.showDestination(destination);
   }
 
@@ -1189,15 +1319,41 @@ class AppShellController extends ChangeNotifier
   }
 
   bool _shouldOpenProjectAssetsByDefault(ProjectDescriptor? project) {
+    return _usesProjectAssetsAsPrimaryWorkspace(project);
+  }
+
+  bool _usesProjectAssetsAsPrimaryWorkspace(ProjectDescriptor? project) {
     if (project == null) {
       return false;
     }
     if (project.projectType.trim() != 'knowledge_base') {
       return false;
     }
-    return const KnowledgeBaseBranchCatalogService().definitionOf(
-      project.projectBranchId,
-    ).opensProjectAssetsByDefault;
+    return const KnowledgeBaseBranchCatalogService()
+        .definitionOf(project.projectBranchId)
+        .opensProjectAssetsByDefault;
+  }
+
+  void _showPrimaryWorkspaceForCurrentProject() {
+    if (_currentProject?.projectType.trim() ==
+        BookDeconstructionConstants.projectTypeId) {
+      unawaited(_showBookDeconstructionAnalysis());
+      return;
+    }
+    if (usesProjectAssetsAsPrimaryWorkspace) {
+      showProjectAssets();
+      return;
+    }
+    _destinationController.showWorkbench();
+    unawaited(_workbenchWorkspaceController.refreshProjectLongTaskSummary());
+  }
+
+  void _handleProjectAssetsBackRequested() {
+    if (usesProjectAssetsAsPrimaryWorkspace) {
+      unawaited(_destinationController.showProjectOpen());
+      return;
+    }
+    showWorkbench();
   }
 
   @override
@@ -1557,7 +1713,7 @@ class AppShellController extends ChangeNotifier
     if (cleanRelativePath.isNotEmpty) {
       await _workbenchWorkspaceController.openResource(cleanRelativePath);
     }
-    _destinationController.showWorkbench();
+    _showPrimaryWorkspaceForCurrentProject();
   }
 
   Future<bool> _ensureLongTaskStationProjectLoaded(RunInstance run) async {
@@ -1568,10 +1724,10 @@ class AppShellController extends ChangeNotifier
             _normalizePathForCompare(run.project.rootPath)) {
       return true;
     }
-    final loaded = await _workbenchWorkspaceController.loadProject(
+    final result = await _projectLifecycleCoordinator.openProjectFromPath(
       run.project.rootPath,
     );
-    if (!loaded) {
+    if (!result.isLoaded) {
       _announce('无法打开长任务对应项目：${run.project.rootPath}');
       return false;
     }
@@ -3569,6 +3725,10 @@ class AppShellController extends ChangeNotifier
       _taskCenterStatusMessage = result.statusMessage;
       _viewModel = _viewModel.copyWith(taskCenter: result.viewData);
       _safeNotifyListeners();
+      _navigationTraceService?.markPageRefreshCompleted(
+        AppDestination.taskCenter,
+        label: 'task_center_refresh',
+      );
     } on FileSystemException {
       if (_shouldSilenceTaskCenterRefreshFileSystemError(projectRootPath)) {
         return;
@@ -3988,6 +4148,7 @@ class AppShellController extends ChangeNotifier
     final currentSelectedId = selectedId.trim().isEmpty
         ? _viewModel.workbench.activeDocumentPath
         : selectedId.trim();
+    _workbenchWorkspaceController.invalidateInformationViewCache();
     final entries = await _reloadResourceEntries(selectedId: currentSelectedId);
     _viewModel = _viewModel.copyWith(
       workbench: _workbenchConversationController.applyConversationState(
@@ -4330,26 +4491,56 @@ class AppShellController extends ChangeNotifier
   }
 
   Future<void> _refreshActiveDestinationAfterProjectLoad() async {
-    // 中文注释: 切换项目后只刷新仍可直达的主空间，避免旧项目快照继续留在次级页面。
-    switch (_viewModel.destination) {
-      case AppDestination.projectOpen:
-        await _refreshProjectOpenView();
-        return;
-      case AppDestination.agentEcosystem:
-        await _refreshAgentEcosystem();
-        return;
-      case AppDestination.projectAssets:
-        await projectAssetsController.refresh();
-        return;
-      case AppDestination.longTaskStation:
-        await _longTaskStationController.refresh();
-        return;
-      case AppDestination.taskCenter:
-        await _refreshTaskCenter();
-        return;
-      case AppDestination.workbench:
-      case AppDestination.settings:
-        return;
+    // 中文注释: 切换项目后只按照正式刷新 policy 处理当前可见页，壳层不再直接用 destination 确定业务刷新逻辑。
+    await _reconcilePrimaryWorkspaceDestinationAfterProjectLoad();
+    final intents = _projectBoundFeatureRefreshPolicy.resolveAfterProjectLoad(
+      FeatureVisibilityState(
+        destination: _viewModel.destination,
+        projectPath: _currentProject?.rootPath ?? '',
+        isProjectHydrationInProgress:
+            _workbenchWorkspaceController.isProjectHydrationInProgress,
+      ),
+    );
+    for (final intent in intents) {
+      switch (intent.target) {
+        case FeatureRefreshTarget.projectOpen:
+          await _refreshProjectOpenView();
+          break;
+        case FeatureRefreshTarget.bookDeconstruction:
+          await bookDeconstructionController.refresh();
+          break;
+        case FeatureRefreshTarget.projectAssets:
+          await projectAssetsController.refresh();
+          break;
+        case FeatureRefreshTarget.longTaskStation:
+          await _longTaskStationController.refresh();
+          break;
+        case FeatureRefreshTarget.taskCenter:
+          await _refreshTaskCenter();
+          break;
+      }
+    }
+  }
+
+  Future<void> _reconcilePrimaryWorkspaceDestinationAfterProjectLoad() async {
+    final project = _currentProject;
+    if (project == null) {
+      return;
+    }
+    final currentDestination = _viewModel.destination;
+    if (currentDestination != AppDestination.workbench &&
+        currentDestination != AppDestination.projectOpen) {
+      return;
+    }
+    if (project.projectType.trim() ==
+        BookDeconstructionConstants.projectTypeId) {
+      await bookDeconstructionController.refresh();
+      await _destinationController.showBookDeconstructionWorkbench();
+      return;
+    }
+    if (_usesProjectAssetsAsPrimaryWorkspace(project)) {
+      await projectAssetsController.refresh();
+      await _destinationController.showProjectAssets();
     }
   }
 
@@ -5001,6 +5192,12 @@ class AppShellController extends ChangeNotifier
     _listenableState.syncFrom(
       viewModel: _viewModel,
       activeThemeId: _activeThemeId,
+    );
+    _controllerNotifyTraceService?.record(
+      controllerName: 'AppShellController',
+      reason: '_safeNotifyListeners',
+      destination: _viewModel.destination.name,
+      projectPath: _currentProject?.rootPath ?? '',
     );
     notifyListeners();
   }

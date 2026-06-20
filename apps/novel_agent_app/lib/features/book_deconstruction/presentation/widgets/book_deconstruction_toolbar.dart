@@ -18,7 +18,7 @@ class BookDeconstructionToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return WorkspacePageHeader(
-      title: '拆书导入向导',
+      title: '拆书分析',
       subtitle: viewData.projectTitle.trim().isEmpty
           ? null
           : viewData.projectTitle,

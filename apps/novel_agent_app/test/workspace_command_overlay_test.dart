@@ -29,11 +29,12 @@ void main() {
         entryName: '',
         content: '',
         sourcePathsText: '',
-        targetDirectory: 'chapters',
+        targetDirectory: 'sources/original',
         autoDeconstruct: false,
         canAutoDeconstruct: true,
         importFileSelectionHint: '请选择一个或多个本地文件。',
-        importOutputHint: '自动拆书预演纪要会写回当前项目。',
+        importOutputHint:
+            '导入原文后，结构化预演会写入 analysis/deconstruction/book_deconstruction_source_book.md。',
       );
 
       Future<void> pumpOverlay() async {
@@ -147,7 +148,7 @@ void main() {
       expect(find.text('智能分析'), findsOneWidget);
       expect(find.text('分析模型'), findsOneWidget);
       expect(find.text('Provider A · model-a'), findsOneWidget);
-      expect(find.textContaining('用户不需要也不能自行选择 agent'), findsOneWidget);
+      expect(find.text('请选择分析模型'), findsNothing);
 
       await tester.tap(find.widgetWithText(FilledButton, '导入文件'));
       await tester.pump();

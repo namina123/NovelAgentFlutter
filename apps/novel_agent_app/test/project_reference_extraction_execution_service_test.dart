@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
+import 'package:novel_agent_app/features/book_deconstruction/application/services/book_deconstruction_structured_source_projection_service.dart';
+import 'package:novel_agent_app/features/project_assets/application/services/project_reference_extraction_source_resolution_service.dart';
 import 'package:novel_agent_app/features/project_assets/application/services/project_reference_extraction_execution_service.dart';
 import 'package:novel_agent_app/shared/services/desktop_text_file_picker_service.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
@@ -345,6 +347,89 @@ void main() {
     expect(result.ok, isFalse);
     expect(result.didMutateProject, isFalse);
     expect(result.statusMessage, '已取消参考资料提取。');
+  });
+
+  test('pickAndExecute uses structured deconstruction source for book projects', () async {
+    final workspacePort = LocalProjectWorkspacePort();
+    const project = ProjectDescriptor(
+      id: 'project_deconstruction',
+      name: '拆书测试项目',
+      rootPath: 'D:/Projects/deconstruction_reference_project',
+      projectType: BookDeconstructionConstants.projectTypeId,
+    );
+    final structuredPath =
+        const BookDeconstructionStructuredSourceProjectionService().targetPath(
+          storageStrategy: project.storageStrategy,
+        );
+    await workspacePort.writeTextFile(
+      project.rootPath,
+      structuredPath,
+      '# 拆书结构化源文\n\n## 规范化正文\n\n第一章 港口风暴',
+    );
+    String? capturedSourcePath;
+    final service = ProjectReferenceExtractionExecutionService(
+      readSettings: () => const AppSettings(
+        defaultProviderId: 'provider_a',
+        defaultAgentId: 'default_generalist',
+        defaultModelId: 'deepseek-v4-flash',
+        defaultProjectPath: 'D:/Projects/demo',
+        autoSaveDrafts: false,
+        providers: <ProviderEndpointSettings>[
+          ProviderEndpointSettings(
+            id: 'provider_a',
+            title: 'Provider A',
+            protocol: 'openai_compatible',
+            baseUrl: 'https://example.invalid/v1',
+            apiKey: 'test-key',
+            modelId: 'deepseek-v4-flash',
+            description: 'test',
+            isDefault: true,
+          ),
+        ],
+      ),
+      llmGatewayFactory: (_, networkSettings) => _FakeLlmGateway(),
+      executeReferenceExtraction:
+          ({
+            required project,
+            required llmGateway,
+            required modelId,
+            required request,
+          }) async {
+            capturedSourcePath = request.sourceFilePath;
+            return const ProjectReferenceExtractionResult(
+              runId: 'run_deconstruction',
+              packageId: 'pkg_a',
+              packageVersionId: 'v1',
+              sourceFilePath: 'D:/source/book.txt',
+              sourceDecodeMode: 'utf8',
+              groupResolutionKind: 'single_agent_fallback',
+              selectedGroupId: 'reference_extraction_group',
+              strategyProfileId: 'reference_extraction.standard',
+              executionConcurrencyMode:
+                  ReferenceExtractionConcurrencyModes.single,
+              proposalCount: 4,
+              acceptedProposalCount: 2,
+              finalizedEntryCount: 6,
+              publishedSnapshotAvailable: true,
+              projectMountStatus: ProjectReferenceMountStatuses.applied,
+              generatedProjectionPaths: <String>['knowledge/项目知识摘要.md'],
+            );
+          },
+      sourcePickerService: const _FakePickerService(null),
+      sourceResolutionService: ProjectReferenceExtractionSourceResolutionService(
+        workspacePort: workspacePort,
+      ),
+    );
+
+    final result = await service.pickAndExecute(project: project);
+
+    expect(result.ok, isTrue);
+    expect(result.statusMessage, contains('已使用拆书产物作为提取源文。'));
+    expect(capturedSourcePath, isNotNull);
+    expect(
+      capturedSourcePath!.replaceAll('\\', '/'),
+      endsWith('analysis/book_deconstruction_structured_source.md'),
+    );
   });
 }
 

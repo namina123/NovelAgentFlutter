@@ -76,9 +76,10 @@ void main() {
     );
     expect(
       find.byKey(const ValueKey<String>('resource_manager_scroll_view')),
-      findsOneWidget,
+      findsNothing,
     );
-    expect(find.byType(CustomScrollView), findsOneWidget);
+    expect(find.byType(CustomScrollView), findsNothing);
+    expect(find.byType(ListView), findsOneWidget);
     expect(find.byType(SingleChildScrollView), findsNothing);
 
     await tester.tap(find.text('项目'));

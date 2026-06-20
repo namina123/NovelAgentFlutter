@@ -3,6 +3,7 @@ import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_app/features/project_assets/application/controllers/project_assets_controller.dart';
 import 'package:novel_agent_app/features/project_assets/application/models/project_assets_catalog.dart';
 import 'package:novel_agent_app/features/project_assets/application/models/project_assets_tab_id.dart';
+import 'package:novel_agent_app/features/project_assets/application/models/project_rag_analysis_summary.dart';
 import 'package:novel_agent_app/features/project_assets/application/models/project_rag_extraction_execution_result.dart';
 import 'package:novel_agent_app/features/project_assets/application/models/project_reference_extraction_execution_result.dart';
 import 'package:novel_agent_app/features/project_assets/application/services/project_assets_loader_service.dart';
@@ -87,6 +88,10 @@ void main() {
       expect(controller.viewData.status, contains('knowledge/项目知识摘要.md'));
       expect(controller.viewData.isLoading, isFalse);
       expect(
+        controller.viewData.activeTabId,
+        ProjectAssetsTabId.referenceExtraction,
+      );
+      expect(
         controller.viewData.referenceExtractionStrategyPicker.selectedProfileId,
         'reference_extraction.fact_focused',
       );
@@ -122,45 +127,138 @@ void main() {
       controller.onProjectAssetsReferenceSelected('timeline:event-1');
 
       expect(controller.viewData.activeTabId, ProjectAssetsTabId.timelines);
-    expect(
-      controller.viewData.timeline.items
-          .singleWhere((item) => item.isSelected)
-          .id,
-      'event-1',
-    );
-  },
+      expect(
+        controller.viewData.timeline.items
+            .singleWhere((item) => item.isSelected)
+            .id,
+        'event-1',
+      );
+    },
   );
 
-  test('onProjectAssetsExtractRagRequested reflects progress status before completion', () async {
-    final controller = ProjectAssetsController(
-      projectAssetLibraryService: _NoopProjectAssetLibraryService(),
-      expressionConstraintWorkspaceService:
-          ProjectExpressionConstraintWorkspaceService(
-            loadProfiles: (project) async =>
-                const <ExpressionConstraintProfile>[],
-            loadBindings: (_) async =>
-                const <ProjectExpressionConstraintBinding>[],
-            saveBindings: (project, bindings) async {},
-          ),
-      loaderService: _NoopProjectAssetsLoaderService(),
-      readCurrentProject: () => const ProjectDescriptor(
-        id: 'project_rag',
-        name: '语料项目',
-        rootPath: 'D:/Projects/rag_demo',
-      ),
-      readAvailableProjectAgents: () => const <JsonMap>[],
-      syncWorkbenchResources: () async {},
-      onBackRequested: () {},
-      ragExtractionExecutionService: _FakeProgressRagExtractionExecutionService(),
-      referenceExtractionExecutionService: _noopReferenceExtractionService(),
-    );
+  test(
+    'onProjectAssetsExtractRagRequested reflects progress status before completion',
+    () async {
+      final controller = ProjectAssetsController(
+        projectAssetLibraryService: _NoopProjectAssetLibraryService(),
+        expressionConstraintWorkspaceService:
+            ProjectExpressionConstraintWorkspaceService(
+              loadProfiles: (project) async =>
+                  const <ExpressionConstraintProfile>[],
+              loadBindings: (_) async =>
+                  const <ProjectExpressionConstraintBinding>[],
+              saveBindings: (project, bindings) async {},
+            ),
+        loaderService: _NoopProjectAssetsLoaderService(),
+        readCurrentProject: () => const ProjectDescriptor(
+          id: 'project_rag',
+          name: '语料项目',
+          rootPath: 'D:/Projects/rag_demo',
+        ),
+        readAvailableProjectAgents: () => const <JsonMap>[],
+        syncWorkbenchResources: () async {},
+        onBackRequested: () {},
+        ragExtractionExecutionService:
+            _FakeProgressRagExtractionExecutionService(),
+        referenceExtractionExecutionService: _noopReferenceExtractionService(),
+      );
 
-    await controller.onProjectAssetsExtractRagRequested();
+      await controller.onProjectAssetsExtractRagRequested();
 
-    expect(controller.viewData.ragExtraction.status, contains('构建完成'));
-    expect(controller.viewData.ragExtraction.isLoading, isFalse);
-    expect(controller.viewData.activeTabId, ProjectAssetsTabId.ragExtraction);
-  });
+      expect(controller.viewData.ragExtraction.status, contains('构建完成'));
+      expect(controller.viewData.ragExtraction.isLoading, isFalse);
+      expect(controller.viewData.activeTabId, ProjectAssetsTabId.ragExtraction);
+      expect(
+        controller.viewData.ragExtraction.normalizationNote,
+        contains('先整理'),
+      );
+      expect(
+        controller.viewData.ragExtraction.analysisSummary.storyOutlineSummary,
+        contains('镜潮回扣'),
+      );
+      expect(
+        controller.viewData.ragExtraction.analysisSummary.characterNames,
+        contains('林砚'),
+      );
+    },
+  );
+
+  test(
+    'knowledge_base rag project uses dedicated rag workspace surface',
+    () async {
+      final controller = ProjectAssetsController(
+        projectAssetLibraryService: _NoopProjectAssetLibraryService(),
+        expressionConstraintWorkspaceService:
+            ProjectExpressionConstraintWorkspaceService(
+              loadProfiles: (project) async =>
+                  const <ExpressionConstraintProfile>[],
+              loadBindings: (_) async =>
+                  const <ProjectExpressionConstraintBinding>[],
+              saveBindings: (project, bindings) async {},
+            ),
+        loaderService: _NoopProjectAssetsLoaderService(),
+        readCurrentProject: () => const ProjectDescriptor(
+          id: 'kb_rag',
+          name: '哈利资料语料库',
+          rootPath: 'D:/Projects/hp_rag',
+          projectType: 'knowledge_base',
+          projectBranchId: KnowledgeBaseBranchCatalogService.ragBranchId,
+        ),
+        readAvailableProjectAgents: () => const <JsonMap>[],
+        syncWorkbenchResources: () async {},
+        onBackRequested: () {},
+        referenceExtractionExecutionService: _noopReferenceExtractionService(),
+      );
+
+      await controller.refresh();
+
+      expect(controller.viewData.useDedicatedRagWorkspace, isTrue);
+      expect(controller.viewData.tabs, hasLength(1));
+      expect(
+        controller.viewData.tabs.single.id,
+        ProjectAssetsTabId.ragExtraction,
+      );
+    },
+  );
+
+  test(
+    'knowledge_base structured project opens in structured library surface',
+    () async {
+      final controller = ProjectAssetsController(
+        projectAssetLibraryService: _NoopProjectAssetLibraryService(),
+        expressionConstraintWorkspaceService:
+            ProjectExpressionConstraintWorkspaceService(
+              loadProfiles: (project) async =>
+                  const <ExpressionConstraintProfile>[],
+              loadBindings: (_) async =>
+                  const <ProjectExpressionConstraintBinding>[],
+              saveBindings: (project, bindings) async {},
+            ),
+        loaderService: _NoopProjectAssetsLoaderService(),
+        readCurrentProject: () => const ProjectDescriptor(
+          id: 'kb_structured',
+          name: '哈利资料库',
+          rootPath: 'D:/Projects/hp_kb',
+          projectType: 'knowledge_base',
+          projectBranchId: KnowledgeBaseBranchCatalogService.structuredBranchId,
+        ),
+        readAvailableProjectAgents: () => const <JsonMap>[],
+        syncWorkbenchResources: () async {},
+        onBackRequested: () {},
+        referenceExtractionExecutionService: _noopReferenceExtractionService(),
+      );
+
+      await controller.refresh();
+
+      expect(controller.viewData.useDedicatedRagWorkspace, isFalse);
+      expect(controller.viewData.title, '资料库');
+      expect(
+        controller.viewData.activeTabId,
+        ProjectAssetsTabId.referenceExtraction,
+      );
+      expect(controller.viewData.description, contains('结构化资料库'));
+    },
+  );
 }
 
 ProjectReferenceExtractionExecutionService _noopReferenceExtractionService() {
@@ -475,6 +573,19 @@ class _FakeProgressRagExtractionExecutionService
       ok: true,
       didMutateProject: false,
       statusMessage: 'txt 语料构建完成。',
+      analysisSummary: ProjectRagAnalysisSummary(
+        storyOutlineSummary: '镜潮回扣在学院钟声里反复出现，推动主角意识到循环异样。',
+        premiseSummary: '主角在异样钟声和回扣线索中逐步确认异常。',
+        styleSummary: '章节推进明确，对话与场景线索较集中。',
+        chapterTitles: <String>['第一章', '第二章'],
+        characterNames: <String>['林砚'],
+        organizationNames: <String>['黑潮议会'],
+        worldRuleTitles: <String>['原文推断世界规则'],
+        relationshipPairs: <String>['林砚 / 黑潮议会'],
+        timelineLabels: <String>['第一章'],
+        foreshadowTitles: <String>['第一章 的潜在线索'],
+      ),
+      normalizationNote: '已先整理源文为可提取纯文本，再继续构建语料。',
     );
   }
 }

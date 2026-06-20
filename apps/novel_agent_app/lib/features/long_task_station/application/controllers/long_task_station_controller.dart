@@ -4,11 +4,15 @@ import 'package:flutter/foundation.dart';
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../../../../app/diagnostics/navigation_trace_service.dart';
+import '../../../../app/routing/app_destination.dart';
 import '../../../workbench/presentation/contracts/pending_research_action_handler.dart';
 import '../../presentation/contracts/long_task_station_action_handler.dart';
 import '../../presentation/models/long_task_station_view_data.dart';
+import '../models/long_task_station_session.dart';
 import '../models/long_task_station_snapshot.dart';
 import '../services/long_task_station_runtime_refresh_policy_service.dart';
+import '../services/long_task_station_visibility_refresh_service.dart';
 import '../services/long_task_station_view_data_service.dart';
 
 typedef LongTaskStationDetailLoader =
@@ -22,7 +26,9 @@ class LongTaskStationController extends ChangeNotifier
     ProjectPendingResearchActionService? pendingResearchActionService,
     LongTaskStationViewDataService? viewDataService,
     LongTaskStationRuntimeRefreshPolicyService? runtimeRefreshPolicyService,
+    LongTaskStationVisibilityRefreshService? visibilityRefreshService,
     LongTaskStationDetailLoader? detailLoader,
+    NavigationTraceService? navigationTraceService,
   }) : _longTaskSupervisor = longTaskSupervisor,
        _detailService = detailService,
        _pendingResearchActionService = pendingResearchActionService,
@@ -31,16 +37,23 @@ class LongTaskStationController extends ChangeNotifier
        _runtimeRefreshPolicyService =
            runtimeRefreshPolicyService ??
            const LongTaskStationRuntimeRefreshPolicyService(),
+       _visibilityRefreshService =
+           visibilityRefreshService ??
+           const LongTaskStationVisibilityRefreshService(),
        _detailLoader = detailLoader,
+       _navigationTraceService = navigationTraceService,
        _snapshot = LongTaskStationSnapshot.initial(),
-       _viewData = LongTaskStationViewData.initial();
+       _viewData = LongTaskStationViewData.initial(),
+       _session = LongTaskStationSession.initial();
 
   final LongTaskSupervisor _longTaskSupervisor;
   final ProjectLongTaskStationDetailService _detailService;
   final ProjectPendingResearchActionService? _pendingResearchActionService;
   final LongTaskStationViewDataService _viewDataService;
   final LongTaskStationRuntimeRefreshPolicyService _runtimeRefreshPolicyService;
+  final LongTaskStationVisibilityRefreshService _visibilityRefreshService;
   final LongTaskStationDetailLoader? _detailLoader;
+  final NavigationTraceService? _navigationTraceService;
   Future<void> Function(RunInstance run)? _openProjectRequested;
   Future<void> Function(RunInstance run, String relativePath)?
   _openResourceRequested;
@@ -50,6 +63,7 @@ class LongTaskStationController extends ChangeNotifier
 
   LongTaskStationSnapshot _snapshot;
   LongTaskStationViewData _viewData;
+  LongTaskStationSession _session;
   bool _initialized = false;
   bool _disposed = false;
   bool _autoRefreshEnabled = false;
@@ -58,6 +72,8 @@ class LongTaskStationController extends ChangeNotifier
 
   LongTaskStationViewData get viewData => _viewData;
   bool get isInitialized => _initialized;
+
+  bool get isVisible => _session.isVisible;
 
   Future<ProjectLongTaskStationDetail> loadDetailForRun(RunInstance run) {
     return (_detailLoader?.call(run) ?? _detailService.loadForRun(run));
@@ -90,8 +106,30 @@ class LongTaskStationController extends ChangeNotifier
     if (_initialized) {
       return;
     }
+    _navigationTraceService?.markPageInitialized(
+      AppDestination.longTaskStation,
+      label: 'long_task_station_initialize',
+    );
     _initialized = true;
+    _session = _session.copyWith(isInitialized: true, isVisible: true);
     await refresh();
+  }
+
+  Future<void> onVisibilityRequested() async {
+    // 中文注释: 可见性进入只交给控制器判断“首次初始化”还是“恢复刷新”，页面和壳层不再直接碰初始化细节。
+    _session = _session.copyWith(
+      isVisible: true,
+      isInitialized: _initialized,
+      autoRefreshEnabled: _autoRefreshEnabled,
+    );
+    final decision = _visibilityRefreshService.decide(_session);
+    if (decision.shouldInitialize) {
+      await initialize();
+      return;
+    }
+    if (decision.shouldRefresh) {
+      await refresh();
+    }
   }
 
   void setAutoRefreshEnabled(bool enabled) {
@@ -99,6 +137,7 @@ class LongTaskStationController extends ChangeNotifier
       return;
     }
     _autoRefreshEnabled = enabled;
+    _session = _session.copyWith(autoRefreshEnabled: enabled);
     if (!_autoRefreshEnabled) {
       _cancelAutoRefreshTimer();
       return;
@@ -110,6 +149,11 @@ class LongTaskStationController extends ChangeNotifier
 
   Future<void> refresh() async {
     _cancelAutoRefreshTimer();
+    _session = _session.copyWith(
+      isVisible: true,
+      isInitialized: _initialized,
+      autoRefreshEnabled: _autoRefreshEnabled,
+    );
     final currentProjectPath = _currentProjectPath();
     final filterToCurrentProject =
         _snapshot.isCurrentProjectFilterActive && currentProjectPath.isNotEmpty;
@@ -152,6 +196,11 @@ class LongTaskStationController extends ChangeNotifier
       await _loadSelectedRunDetail();
       await _notifyRefreshCompleted();
       _scheduleAutoRefreshIfNeeded();
+      _session = _session.copyWith(isInitialized: true);
+      _navigationTraceService?.markPageRefreshCompleted(
+        AppDestination.longTaskStation,
+        label: 'long_task_station_refresh',
+      );
     } catch (error) {
       _snapshot = _snapshot.copyWith(
         isLoading: false,
@@ -159,7 +208,13 @@ class LongTaskStationController extends ChangeNotifier
         isSupervisorRunning: _longTaskSupervisor.isRunning,
         statusMessage: '加载全局长任务运行实例失败：$error',
       );
+      _session = _session.copyWith(isInitialized: true);
       _rebuildView();
+      _navigationTraceService?.markPageRefreshFailed(
+        AppDestination.longTaskStation,
+        error: error,
+        label: 'long_task_station_refresh',
+      );
     }
   }
 

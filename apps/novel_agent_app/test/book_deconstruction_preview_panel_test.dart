@@ -18,7 +18,7 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 
 void main() {
   testWidgets(
-    'preview panel shows follow-up routes and shared information bridge',
+    'preview panel shows follow-up routes and structured deconstruction preview',
     (WidgetTester tester) async {
       final draftBuilder = BookDeconstructionDraftBuilderService();
       final viewDataService = BookDeconstructionViewDataService();
@@ -62,7 +62,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
 
       final fanficOptionFinder = find.byKey(
         const ValueKey(
@@ -72,33 +72,73 @@ void main() {
       expect(fanficOptionFinder, findsOneWidget);
 
       await tester.tap(fanficOptionFinder);
-      await tester.pumpAndSettle();
+      await tester.pump();
 
       expect(actionHandler.lastFollowupOptionId, 'fanfic_seed_autopilot_novel');
 
-      await tester.scrollUntilVisible(
-        find.text('后续用途与共享资料'),
-        200,
-        scrollable: find.byType(Scrollable),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.text('后续用途与共享资料'), findsOneWidget);
-      expect(find.text('共享资料沉淀'), findsOneWidget);
-      expect(find.text('解说与分析'), findsOneWidget);
-      expect(find.text('本次已生成的可复用资料'), findsOneWidget);
-      expect(find.textContaining('information 资料 · 5'), findsOneWidget);
-      expect(find.textContaining('design 巧思 · 2'), findsOneWidget);
-      expect(find.textContaining('资料与设定'), findsAtLeastNWidgets(1));
-      await tester.scrollUntilVisible(
-        find.widgetWithText(OutlinedButton, '派生并打开项目'),
-        200,
-        scrollable: find.byType(Scrollable),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('派生并打开项目'), findsOneWidget);
+      expect(find.text('续写基座与后续方案'), findsOneWidget);
+      expect(find.text('章节骨架'), findsOneWidget);
+      expect(find.text('角色资产'), findsOneWidget);
+      expect(find.text('关系资产'), findsOneWidget);
+      expect(find.text('知识沉淀'), findsNothing);
+      expect(find.text('巧思与设计'), findsNothing);
+      expect(find.widgetWithText(OutlinedButton, '派生并打开项目'), findsOneWidget);
     },
   );
+
+  testWidgets('preview panel shows dedicated loading state during extraction', (
+    WidgetTester tester,
+  ) async {
+    final actionHandler = _FakeBookDeconstructionActionHandler();
+    const loadingViewData = BookDeconstructionViewData(
+      projectTitle: '拆书测试项目',
+      status: '正在生成结构化预览...',
+      isLoading: true,
+      operationKind: 'building_preview',
+      activeStepId: 'preview_structure',
+      steps: <BookDeconstructionStepViewData>[],
+      sourceAbsolutePath: '',
+      sourceTitle: '',
+      sourceContent: '',
+      operatorNotes: '',
+      styleSummary: '',
+      worldRulesText: '',
+      characterLinesText: '',
+      organizationLinesText: '',
+      previewSections: <BookDeconstructionPreviewSectionViewData>[],
+      planGroups: <BookDeconstructionPlanGroupViewData>[],
+      selectedItemCount: 0,
+      totalItemCount: 0,
+      selectedFollowupOptionId: '',
+      confirmedPreviewPath: '',
+      canBuildPreview: false,
+      canConfirmSelection: false,
+      canCreateDerivedProject: false,
+      importActionLabel: '导入文件',
+      buildPreviewActionLabel: '正在拆书',
+      continuity: null,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: SizedBox(
+            width: 480,
+            height: 840,
+            child: BookDeconstructionPreviewPanel(
+              viewData: loadingViewData,
+              actionHandler: actionHandler,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('正在提取拆书结构资产...'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+  });
 
   testWidgets('preview panel uses a natural note for empty follow-up groups', (
     WidgetTester tester,
@@ -145,7 +185,6 @@ void main() {
                 canCreateDerivedProject: false,
                 importActionLabel: '导入文件',
                 buildPreviewActionLabel: '生成结构化预览',
-                informationBridge: null,
                 continuity: const BookDeconstructionContinuityViewData(
                   preferredDirectionLabel: '偏向长任务',
                   highlightedBuildTierLabel: '默认高亮',
@@ -173,7 +212,7 @@ void main() {
       ),
     );
 
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     expect(find.text('当前暂无可用路线。'), findsOneWidget);
     expect(find.text('当前保留为空分组，后续新增路线会继续挂到这里。'), findsNothing);

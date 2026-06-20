@@ -25,18 +25,12 @@ import 'book_deconstruction_hint_source_kind.dart';
 import 'book_deconstruction_identity_mapping_hint.dart';
 import 'book_deconstruction_input.dart';
 import 'book_deconstruction_mechanic_hint.dart';
-import 'book_deconstruction_information_bridge_service.dart';
 import 'book_deconstruction_narrative_artifact_bundle.dart';
 import 'book_deconstruction_narrative_bridge_constants.dart';
 import 'book_deconstruction_scope_hint.dart';
 
 class BookDeconstructionNarrativeBridgeService {
-  const BookDeconstructionNarrativeBridgeService({
-    BookDeconstructionInformationBridgeService informationBridgeService =
-        const BookDeconstructionInformationBridgeService(),
-  }) : _informationBridgeService = informationBridgeService;
-
-  final BookDeconstructionInformationBridgeService _informationBridgeService;
+  const BookDeconstructionNarrativeBridgeService();
 
   BookDeconstructionNarrativeArtifactBundle build({
     required BookDeconstructionInput input,
@@ -141,11 +135,6 @@ class BookDeconstructionNarrativeBridgeService {
       source: interpretedSource,
       primaryDocumentRef: primaryDocumentRef,
     );
-    final informationArtifacts = _informationBridgeService.build(
-      input: input,
-      extractionResult: extractionResult,
-    );
-
     return BookDeconstructionNarrativeArtifactBundle(
       claims: List<NarrativeStateClaim>.unmodifiable(claims),
       profileProposals: List<NarrativeProfileProposal>.unmodifiable(
@@ -154,12 +143,7 @@ class BookDeconstructionNarrativeBridgeService {
       semanticReviews: List<NarrativeSemanticReview>.unmodifiable(
         <NarrativeSemanticReview>[review],
       ),
-      knowledgeCards: informationArtifacts.knowledgeCards,
-      designElements: informationArtifacts.designElements,
-      researchNotes: informationArtifacts.researchNotes,
-      referenceWorks: informationArtifacts.referenceWorks,
       metadata: <String, Object?>{
-        ...informationArtifacts.metadata,
         'analysis_namespace_roots': <String>[
           'analysis.deconstruction',
           'analysis.explainer',

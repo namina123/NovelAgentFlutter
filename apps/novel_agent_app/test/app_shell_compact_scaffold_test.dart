@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novel_agent_app/app/navigation/app_shell_navigation_action_handler.dart';
+import 'package:novel_agent_app/app/navigation/app_shell_navigation_catalog.dart';
 import 'package:novel_agent_app/app/routing/app_destination.dart';
 import 'package:novel_agent_app/app/theme/app_theme.dart';
 import 'package:novel_agent_app/shared/widgets/app_shell_compact_scaffold.dart';
@@ -24,6 +25,7 @@ void main() {
       MaterialApp(
         theme: AppTheme.light(),
         home: AppShellCompactScaffold(
+          navigationSections: AppShellNavigationCatalog.sections(),
           selectedDestination: AppDestination.workbench,
           actionHandler: handler,
           onSystemBackRequested: () async {},
@@ -69,11 +71,12 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          theme: AppTheme.light(),
-          home: AppShellCompactScaffold(
-            selectedDestination: AppDestination.workbench,
-            actionHandler: handler,
-            onSystemBackRequested: () async {
+        theme: AppTheme.light(),
+        home: AppShellCompactScaffold(
+          navigationSections: AppShellNavigationCatalog.sections(),
+          selectedDestination: AppDestination.workbench,
+          actionHandler: handler,
+          onSystemBackRequested: () async {
               backRequestCount += 1;
             },
             page: const ColoredBox(
@@ -115,6 +118,7 @@ void main() {
       MaterialApp(
         theme: AppTheme.light(),
         home: AppShellCompactScaffold(
+          navigationSections: AppShellNavigationCatalog.sections(),
           selectedDestination: AppDestination.workbench,
           actionHandler: _FakeNavigationActionHandler(),
           onSystemBackRequested: () async {},
@@ -164,6 +168,7 @@ void main() {
               viewInsets: EdgeInsets.only(bottom: keyboardInset),
             ),
             child: AppShellCompactScaffold(
+              navigationSections: AppShellNavigationCatalog.sections(),
               selectedDestination: AppDestination.workbench,
               actionHandler: _FakeNavigationActionHandler(),
               onSystemBackRequested: () async {},

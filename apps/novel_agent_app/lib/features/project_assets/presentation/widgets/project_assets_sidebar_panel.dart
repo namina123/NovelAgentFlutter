@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../shared/widgets/horizontal_overflow_scrollbar.dart';
 import '../contracts/project_assets_action_handler.dart';
 import '../models/project_assets_view_data.dart';
 import '../models/project_rag_extraction_view_data.dart';
@@ -20,12 +21,16 @@ class ProjectAssetsSidebarPanel extends StatelessWidget {
       length: 3,
       child: Column(
         children: [
-          const TabBar(
-            tabs: <Tab>[
-              Tab(text: '图谱'),
-              Tab(text: '时间线'),
-              Tab(text: '语料'),
-            ],
+          HorizontalOverflowScrollbar(
+            builder: (context, controller) => TabBar(
+              controller: DefaultTabController.of(context),
+              isScrollable: true,
+              tabs: const <Tab>[
+                Tab(text: '图谱'),
+                Tab(text: '时间线'),
+                Tab(text: '语料'),
+              ],
+            ),
           ),
           Expanded(
             child: TabBarView(

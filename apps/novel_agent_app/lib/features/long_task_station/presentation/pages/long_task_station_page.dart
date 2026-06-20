@@ -25,16 +25,6 @@ class LongTaskStationPage extends StatefulWidget {
 
 class _LongTaskStationPageState extends State<LongTaskStationPage> {
   @override
-  void initState() {
-    super.initState();
-    if (!widget.controller.isInitialized) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        widget.controller.initialize();
-      });
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: widget.controller,

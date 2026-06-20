@@ -2,6 +2,7 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 
 import 'book_deconstruction_application_plan_materialization_service.dart';
 import 'book_deconstruction_derived_project_runtime_baseline_resolver_service.dart';
+import 'book_deconstruction_derived_project_storage_strategy_service.dart';
 import 'book_deconstruction_followup_persistence_service.dart';
 import 'book_deconstruction_narrative_persistence_service.dart';
 
@@ -16,8 +17,9 @@ class BookDeconstructionDerivedProjectCreationService {
     BookDeconstructionFollowupPersistenceService? followupPersistenceService,
     BookDeconstructionDerivedProjectRuntimeBaselineResolverService?
     runtimeBaselineResolverService,
+    BookDeconstructionDerivedProjectStorageStrategyService?
+    storageStrategyService,
     BookDeconstructionNarrativePromotionService? narrativePromotionService,
-    ProjectTypeCatalogService? projectTypeCatalogService,
   }) : _createProjectWorkspaceUseCase = createProjectWorkspaceUseCase,
        _writeProjectTextFileUseCase = writeProjectTextFileUseCase,
        _narrativePersistenceService = narrativePersistenceService,
@@ -34,11 +36,12 @@ class BookDeconstructionDerivedProjectCreationService {
        _runtimeBaselineResolverService =
            runtimeBaselineResolverService ??
            const BookDeconstructionDerivedProjectRuntimeBaselineResolverService(),
+       _storageStrategyService =
+           storageStrategyService ??
+           const BookDeconstructionDerivedProjectStorageStrategyService(),
        _narrativePromotionService =
            narrativePromotionService ??
-           const BookDeconstructionNarrativePromotionService(),
-       _projectTypeCatalogService =
-           projectTypeCatalogService ?? const ProjectTypeCatalogService();
+           const BookDeconstructionNarrativePromotionService();
 
   final CreateProjectWorkspaceUseCase _createProjectWorkspaceUseCase;
   final WriteProjectTextFileUseCase _writeProjectTextFileUseCase;
@@ -50,9 +53,9 @@ class BookDeconstructionDerivedProjectCreationService {
   _followupPersistenceService;
   final BookDeconstructionDerivedProjectRuntimeBaselineResolverService
   _runtimeBaselineResolverService;
-  final BookDeconstructionNarrativePromotionService
-  _narrativePromotionService;
-  final ProjectTypeCatalogService _projectTypeCatalogService;
+  final BookDeconstructionDerivedProjectStorageStrategyService
+  _storageStrategyService;
+  final BookDeconstructionNarrativePromotionService _narrativePromotionService;
 
   Future<BookDeconstructionDerivedProjectCreationResult> execute({
     required String projectsRootPath,
@@ -61,8 +64,8 @@ class BookDeconstructionDerivedProjectCreationService {
     required Set<String> selectedItemIds,
     required String selectedFollowupOptionId,
   }) async {
-    final derivedPlan = const BookDeconstructionDerivedProjectPlanBuilderService()
-        .build(
+    final derivedPlan =
+        const BookDeconstructionDerivedProjectPlanBuilderService().build(
           input: buildResult.input,
           followupMenu: buildResult.followupMenu,
           followupOptionId: selectedFollowupOptionId,
@@ -76,8 +79,9 @@ class BookDeconstructionDerivedProjectCreationService {
       ProjectCreateRequest(
         title: derivedPlan.suggestedProjectTitle,
         projectTypeId: derivedPlan.targetProjectTypeId,
-        storageStrategy: _preferredStorageStrategyFor(
-          derivedPlan.targetProjectTypeId,
+        storageStrategy: _storageStrategyService.resolve(
+          targetProjectTypeId: derivedPlan.targetProjectTypeId,
+          preferredStrategy: sourceProject.storageStrategy,
         ),
         runtimeBaselineId: runtimeBaselineId,
       ),
@@ -128,24 +132,16 @@ class BookDeconstructionDerivedProjectCreationService {
     );
   }
 
-  ProjectStorageStrategy _preferredStorageStrategyFor(String projectTypeId) {
-    final definition = _projectTypeCatalogService.definitionOf(projectTypeId);
-    if (definition.supportedStorageStrategies.contains(
-      ProjectStorageStrategy.markdownProjectStore,
-    )) {
-      return ProjectStorageStrategy.markdownProjectStore;
-    }
-    return definition.supportedStorageStrategies.isEmpty
-        ? ProjectStorageStrategy.markdownProjectStore
-        : definition.supportedStorageStrategies.first;
-  }
-
   Future<List<String>> _persistSourceDocuments({
     required ProjectDescriptor project,
     required BookDeconstructionDraftBuildResult buildResult,
   }) async {
     final changedPaths = <String>[];
-    for (var index = 0; index < buildResult.input.sourceDocuments.length; index++) {
+    for (
+      var index = 0;
+      index < buildResult.input.sourceDocuments.length;
+      index++
+    ) {
       final document = buildResult.input.sourceDocuments[index];
       final content = document.content.trim();
       if (content.isEmpty) {
@@ -155,7 +151,10 @@ class BookDeconstructionDerivedProjectCreationService {
       final title = document.title.trim().isEmpty
           ? '原作资料 ${index + 1}'
           : document.title.trim();
-      final buffer = StringBuffer()..writeln(title)..writeln()..write(content);
+      final buffer = StringBuffer()
+        ..writeln(title)
+        ..writeln()
+        ..write(content);
       await _writeProjectTextFileUseCase.execute(
         project: project,
         relativePath: relativePath,

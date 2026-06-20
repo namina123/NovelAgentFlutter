@@ -530,6 +530,7 @@ class HfvvAppShellHarness {
       ),
       importProjectFilesUseCase: ImportProjectFilesUseCase(
         projectToolHostPort: bundle.projectToolHostPort,
+        sourceImportDiscoveryPort: const SourceImportDiscoveryService(),
       ),
       updateProjectManifestUseCase: UpdateProjectManifestUseCase(
         writeProjectTextFileUseCase: writeProjectTextFileUseCase,

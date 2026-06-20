@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/layout/app_layout_scope.dart';
+import 'horizontal_overflow_scrollbar.dart';
 import 'section_heading.dart';
 
 class WorkspacePageHeader extends StatelessWidget {
@@ -23,11 +24,12 @@ class WorkspacePageHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final metrics = AppLayoutScope.of(context);
     final showBack = metrics.isCompact && onBackRequested != null;
+    final actionItems = _buildActionItems();
     return Row(
       children: [
         if (showBack) ...[
           IconButton(
-            tooltip: '返回工作台',
+            tooltip: '返回',
             onPressed: onBackRequested,
             icon: const Icon(Icons.arrow_back_rounded),
           ),
@@ -40,11 +42,40 @@ class WorkspacePageHeader extends StatelessWidget {
             trailing: trailing,
           ),
         ),
-        if (actions.isNotEmpty) ...[
+        if (actionItems.isNotEmpty) ...[
           const SizedBox(width: 12),
-          Wrap(spacing: 8, runSpacing: 8, children: actions),
+          Flexible(
+            child: SizedBox(
+              height: 40,
+              child: HorizontalOverflowScrollbar(
+                builder: (context, controller) => SingleChildScrollView(
+                  controller: controller,
+                  scrollDirection: Axis.horizontal,
+                  primary: false,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: actionItems,
+                  ),
+                ),
+              ),
+            ),
+          ),
         ],
       ],
     );
+  }
+
+  List<Widget> _buildActionItems() {
+    if (actions.isEmpty) {
+      return const <Widget>[];
+    }
+    final items = <Widget>[];
+    for (var index = 0; index < actions.length; index++) {
+      if (index > 0) {
+        items.add(const SizedBox(width: 8));
+      }
+      items.add(actions[index]);
+    }
+    return items;
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../app/theme/app_palette.dart';
+import '../../../../../shared/widgets/horizontal_overflow_scrollbar.dart';
 import '../../../../../shared/widgets/panel_surface.dart';
 import '../../../../../shared/widgets/section_heading.dart';
 import '../models/task_center_view_data.dart';
@@ -36,13 +37,16 @@ class TaskCenterDiagnosticsPanel extends StatelessWidget {
           children: [
             const SectionHeading(title: '链路与运行记录'),
             const SizedBox(height: 8),
-            const TabBar(
-              isScrollable: true,
-              tabs: [
-                Tab(text: '链路树'),
-                Tab(text: '长任务运行'),
-                Tab(text: '队列日志'),
-              ],
+            HorizontalOverflowScrollbar(
+              builder: (context, controller) => TabBar(
+                controller: DefaultTabController.of(context),
+                isScrollable: true,
+                tabs: const [
+                  Tab(text: '链路树'),
+                  Tab(text: '长任务运行'),
+                  Tab(text: '队列日志'),
+                ],
+              ),
             ),
             const SizedBox(height: 10),
             Expanded(

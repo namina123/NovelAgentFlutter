@@ -29,12 +29,16 @@ class ProjectRagExtractionPanel extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          '使用顺序：先提取语料，再点击“挂载语料”，挂载后当前项目才能实际使用这份语料。',
+          '使用顺序：先整理源文并提取语料，再点击“挂载语料”，挂载后当前项目才能实际使用这份语料。',
           style: Theme.of(context).textTheme.bodySmall,
         ),
         if (viewData.status.trim().isNotEmpty) ...[
           const SizedBox(height: 10),
           Text(viewData.status, style: Theme.of(context).textTheme.bodySmall),
+        ],
+        if (viewData.isLoading) ...[
+          const SizedBox(height: 10),
+          const LinearProgressIndicator(minHeight: 3),
         ],
         const SizedBox(height: 14),
         Wrap(
@@ -69,6 +73,8 @@ class ProjectRagExtractionPanel extends StatelessWidget {
             '章数：${viewData.corpusSummary.chapterCountLabel}',
             '分片数：${viewData.corpusSummary.chunkCountLabel}',
             '模型辅助：${viewData.corpusSummary.modelAssistedLabel}',
+            if (viewData.normalizationNote.trim().isNotEmpty)
+              '整理说明：${viewData.normalizationNote}',
             if (viewData.corpusSummary.indexBackendLabel.trim().isNotEmpty)
               '索引后端：${viewData.corpusSummary.indexBackendLabel}',
             if (viewData.corpusSummary.updatedAt.trim().isNotEmpty)
@@ -99,6 +105,36 @@ class ProjectRagExtractionPanel extends StatelessWidget {
               viewData.mountSummary.emptyMessage,
           ],
         ),
+        if (!viewData.analysisSummary.isEmpty) ...[
+          const SizedBox(height: 12),
+          _SummaryCard(
+            title: '分析摘要',
+            lines: <String>[
+              if (viewData.analysisSummary.premiseSummary.trim().isNotEmpty)
+                '前提：${viewData.analysisSummary.premiseSummary}',
+              if (viewData.analysisSummary.storyOutlineSummary
+                  .trim()
+                  .isNotEmpty)
+                '总纲：${viewData.analysisSummary.storyOutlineSummary}',
+              if (viewData.analysisSummary.styleSummary.trim().isNotEmpty)
+                '风格：${viewData.analysisSummary.styleSummary}',
+              if (viewData.analysisSummary.chapterTitles.isNotEmpty)
+                '章节：${viewData.analysisSummary.chapterTitles.join('、')}',
+              if (viewData.analysisSummary.characterNames.isNotEmpty)
+                '角色：${viewData.analysisSummary.characterNames.join('、')}',
+              if (viewData.analysisSummary.organizationNames.isNotEmpty)
+                '组织：${viewData.analysisSummary.organizationNames.join('、')}',
+              if (viewData.analysisSummary.worldRuleTitles.isNotEmpty)
+                '规则：${viewData.analysisSummary.worldRuleTitles.join('、')}',
+              if (viewData.analysisSummary.relationshipPairs.isNotEmpty)
+                '关系：${viewData.analysisSummary.relationshipPairs.join('、')}',
+              if (viewData.analysisSummary.timelineLabels.isNotEmpty)
+                '时间线：${viewData.analysisSummary.timelineLabels.join('、')}',
+              if (viewData.analysisSummary.foreshadowTitles.isNotEmpty)
+                '线索：${viewData.analysisSummary.foreshadowTitles.join('、')}',
+            ],
+          ),
+        ],
         const SizedBox(height: 12),
         _SummaryCard(
           title: '最近源文件',
@@ -115,17 +151,17 @@ class ProjectRagExtractionPanel extends StatelessWidget {
             FilledButton(
               onPressed: viewData.canBuildTxt && !viewData.isLoading
                   ? () => actionHandler.onProjectAssetsExtractRagRequested(
-                        modeId: viewData.activeModeId,
-                      )
+                      modeId: viewData.activeModeId,
+                    )
                   : null,
-              child: const Text('提取 txt 语料'),
+              child: Text(viewData.isLoading ? '正在整理并提取...' : '整理并提取语料'),
             ),
             const SizedBox(width: 8),
             OutlinedButton(
               onPressed: viewData.canMountCorpus && !viewData.isLoading
                   ? actionHandler.onProjectAssetsMountRagCorpusRequested
                   : null,
-              child: const Text('挂载语料'),
+              child: Text(viewData.isLoading ? '等待完成' : '挂载语料'),
             ),
           ],
         ),
@@ -157,7 +193,10 @@ class _SummaryCard extends StatelessWidget {
               .map(
                 (line) => Padding(
                   padding: const EdgeInsets.only(bottom: 4),
-                  child: Text(line, style: Theme.of(context).textTheme.bodySmall),
+                  child: Text(
+                    line,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                 ),
               ),
         ],

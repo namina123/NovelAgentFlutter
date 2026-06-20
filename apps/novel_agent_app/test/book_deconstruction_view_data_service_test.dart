@@ -41,30 +41,15 @@ void main() {
       viewData.continuity!.followupGroups.map((item) => item.id),
       containsAll(<String>['continuation', 'fanfic']),
     );
-    expect(viewData.informationBridge, isNotNull);
+    expect(viewData.continuity!.selectedRouteTitle, '尚未选择');
     expect(
-      viewData.informationBridge!.followupRoutes.map((item) => item.title),
-      containsAll(<String>['continuation', 'fanfic', '共享资料沉淀', '解说与分析']),
+      viewData.previewSections.map((item) => item.title),
+      containsAll(<String>[
+        '伏笔资产',
+        '时间线资产',
+        '关系资产',
+      ]),
     );
-    expect(
-      viewData.informationBridge!.summary,
-      isNot(contains('information GUI')),
-    );
-    expect(
-      viewData.informationBridge!.assetStatuses.map((item) => item.title),
-      containsAll(<String>['设定与章纲', '角色与组织', 'information 资料', 'design 巧思']),
-    );
-    final informationStatus = viewData.informationBridge!.assetStatuses
-        .firstWhere((item) => item.id == 'information_assets');
-    expect(informationStatus.count, 5);
-    expect(informationStatus.statusLabel, '确认后出现在知识 / 研究 / 引用边界');
-    final designStatus = viewData.informationBridge!.assetStatuses.firstWhere(
-      (item) => item.id == 'design_assets',
-    );
-    expect(designStatus.count, 2);
-    expect(designStatus.statusLabel, '确认后出现在巧思与设计');
-    expect(designStatus.summary, isNot(contains('information GUI')));
-    expect(viewData.informationBridge!.reuseSummary, contains('continuation'));
   });
 
   test('拆书 view data 会按运行阶段切换按钮文案', () {

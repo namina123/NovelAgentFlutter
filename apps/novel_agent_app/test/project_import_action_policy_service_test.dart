@@ -13,6 +13,7 @@ void main() {
 
         final policy = service.build(
           projectType: BookDeconstructionConstants.projectTypeId,
+          storageStrategy: ProjectStorageStrategy.markdownProjectStore,
           sourcePaths: const <String>['C:/imports/reference_book.md'],
         );
 
@@ -29,7 +30,7 @@ void main() {
             projectType: BookDeconstructionConstants.projectTypeId,
             sourcePath: 'C:/imports/reference_book.md',
           ),
-          'chapters/book_deconstruction_reference_book.md',
+          'analysis/deconstruction/book_deconstruction_reference_book.md',
         );
         expect(policy.canSmartAnalyze, isFalse);
         expect(policy.smartAnalysis, isFalse);
@@ -43,12 +44,19 @@ void main() {
 
         final policy = service.build(
           projectType: BookDeconstructionConstants.projectTypeId,
+          storageStrategy: ProjectStorageStrategy.markdownProjectStore,
           sourcePaths: const <String>['C:/imports/reference_book.epub'],
         );
 
         expect(policy.canAutoDeconstruct, isTrue);
         expect(policy.autoDeconstruct, isTrue);
-        expect(policy.outputHint, contains('.epub'));
+        expect(
+          policy.outputHint,
+          contains(
+            'analysis/deconstruction/book_deconstruction_reference_book.md',
+          ),
+        );
+        expect(policy.outputHint, contains('拆书专用模型'));
       },
     );
 
@@ -59,13 +67,15 @@ void main() {
 
         final policy = service.build(
           projectType: 'novel',
+          storageStrategy: ProjectStorageStrategy.markdownProjectStore,
           sourcePaths: const <String>[],
         );
 
         expect(policy.resolvedTargetDirectory, 'assets');
         expect(policy.canAutoDeconstruct, isFalse);
         expect(policy.autoDeconstruct, isFalse);
-        expect(policy.outputHint, contains('.txt / .md / .markdown'));
+        expect(policy.outputHint, contains('导入文件或文件夹后'));
+        expect(policy.outputHint, contains('智能分析'));
         expect(policy.canSmartAnalyze, isTrue);
         expect(policy.smartAnalysis, isFalse);
       },
@@ -78,6 +88,7 @@ void main() {
 
         final policy = service.build(
           projectType: 'novel',
+          storageStrategy: ProjectStorageStrategy.markdownProjectStore,
           sourcePaths: const <String>[
             'C:/imports/book_a.md',
             'C:/imports/book_b.md',
@@ -87,8 +98,23 @@ void main() {
 
         expect(policy.canAutoDeconstruct, isFalse);
         expect(policy.autoDeconstruct, isFalse);
-        expect(policy.fileSelectionHint, contains('自动拆书仅支持单个文本或 Markdown 文件'));
-        expect(policy.outputHint, contains('当前选择不支持自动拆书'));
+        expect(policy.fileSelectionHint, contains('已选择 2 个来源'));
+        expect(policy.outputHint, contains('智能分析'));
+      },
+    );
+
+    test(
+      'sqlite novel defaults imports into imports root instead of assets',
+      () {
+        final service = ProjectImportActionPolicyService();
+
+        final policy = service.build(
+          projectType: 'novel',
+          storageStrategy: ProjectStorageStrategy.sqliteProjectStore,
+          sourcePaths: const <String>[],
+        );
+
+        expect(policy.resolvedTargetDirectory, 'imports');
       },
     );
   });

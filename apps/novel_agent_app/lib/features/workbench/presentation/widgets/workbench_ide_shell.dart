@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../../app/layout/app_layout_metrics.dart';
 import '../../../../../shared/theme/novel_theme_context.dart';
+import '../../../../../shared/widgets/horizontal_overflow_scrollbar.dart';
 import '../models/workbench_workspace_shell_view_data.dart';
 import 'workbench_visual_style.dart';
 
@@ -303,37 +304,13 @@ class _WorkbenchStatusBar extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (var index = 0; index < leftItems.length; index++) ...[
-                    if (index > 0)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: Container(
-                          width: 1,
-                          height: 12,
-                          color: colors.lineColor.withValues(alpha: 0.28),
-                        ),
-                      ),
-                    _StatusTag(item: leftItems[index]),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Flexible(
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: SingleChildScrollView(
+            child: HorizontalOverflowScrollbar(
+              builder: (context, controller) => SingleChildScrollView(
+                controller: controller,
                 scrollDirection: Axis.horizontal,
-                reverse: true,
                 child: Row(
-                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    for (var index = 0; index < rightItems.length; index++) ...[
+                    for (var index = 0; index < leftItems.length; index++) ...[
                       if (index > 0)
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -343,9 +320,39 @@ class _WorkbenchStatusBar extends StatelessWidget {
                             color: colors.lineColor.withValues(alpha: 0.28),
                           ),
                         ),
-                      _StatusTag(item: rightItems[index], emphasized: true),
+                      _StatusTag(item: leftItems[index]),
                     ],
                   ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: HorizontalOverflowScrollbar(
+                builder: (context, controller) => SingleChildScrollView(
+                  controller: controller,
+                  scrollDirection: Axis.horizontal,
+                  reverse: true,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (var index = 0; index < rightItems.length; index++) ...[
+                        if (index > 0)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Container(
+                              width: 1,
+                              height: 12,
+                              color: colors.lineColor.withValues(alpha: 0.28),
+                            ),
+                          ),
+                        _StatusTag(item: rightItems[index], emphasized: true),
+                      ],
+                    ],
+                  ),
                 ),
               ),
             ),

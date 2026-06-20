@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../../shared/theme/novel_theme_context.dart';
 import '../../../../../shared/widgets/action_button.dart';
+import '../../../../../shared/widgets/horizontal_overflow_scrollbar.dart';
 import '../../../../../shared/widgets/panel_surface.dart';
 import '../models/agent_ecosystem_view_data.dart';
 
@@ -73,23 +74,26 @@ class EcosystemBrowserPanel extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 14),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: SegmentedButton<String>(
-              segments: tabs
-                  .map(
-                    (tab) => ButtonSegment<String>(
-                      value: tab.id,
-                      label: Text(tab.label),
-                    ),
-                  )
-                  .toList(),
-              selected: {activeTabId},
-              showSelectedIcon: false,
-              onSelectionChanged: (selection) {
-                // 中文注释: tab 切换只回传 id，由外层控制器维护整个生态页的视图状态。
-                onTabSelected(selection.first);
-              },
+          HorizontalOverflowScrollbar(
+            builder: (context, controller) => SingleChildScrollView(
+              controller: controller,
+              scrollDirection: Axis.horizontal,
+              child: SegmentedButton<String>(
+                segments: tabs
+                    .map(
+                      (tab) => ButtonSegment<String>(
+                        value: tab.id,
+                        label: Text(tab.label),
+                      ),
+                    )
+                    .toList(),
+                selected: {activeTabId},
+                showSelectedIcon: false,
+                onSelectionChanged: (selection) {
+                  // 中文注释: tab 切换只回传 id，由外层控制器维护整个生态页的视图状态。
+                  onTabSelected(selection.first);
+                },
+              ),
             ),
           ),
           const SizedBox(height: 14),

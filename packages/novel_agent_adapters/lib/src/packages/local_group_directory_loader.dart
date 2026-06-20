@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:novel_agent_core/novel_agent_core.dart';
 
@@ -10,13 +11,20 @@ class LocalGroupDirectoryLoader {
   }) : _agentGroupNormalizerService =
            agentGroupNormalizerService ?? AgentGroupNormalizerService(),
        _skillGroupNormalizerService =
-           skillGroupNormalizerService ?? SkillGroupNormalizerService();
+           skillGroupNormalizerService ?? SkillGroupNormalizerService(),
+       _canUseBackgroundIsolate =
+           agentGroupNormalizerService == null &&
+           skillGroupNormalizerService == null;
 
   final AgentGroupNormalizerService _agentGroupNormalizerService;
   final SkillGroupNormalizerService _skillGroupNormalizerService;
+  final bool _canUseBackgroundIsolate;
 
   Future<List<JsonMap>> loadAgentGroups(String rootDirectoryPath) {
     // 中文注释: 智能体组目录扫描只负责发现与读取 JSON 文件，结构解释仍交给 core normalizer。
+    if (_canUseBackgroundIsolate) {
+      return Isolate.run(() => _loadAgentGroupsSync(rootDirectoryPath));
+    }
     return _loadGroups(
       rootDirectoryPath,
       entryFileName: 'agent_group.json',
@@ -26,6 +34,9 @@ class LocalGroupDirectoryLoader {
 
   Future<List<JsonMap>> loadSkillGroups(String rootDirectoryPath) {
     // 中文注释: 技能组目录扫描和智能体组保持同一策略，避免项目级分组结构再出现特例。
+    if (_canUseBackgroundIsolate) {
+      return Isolate.run(() => _loadSkillGroupsSync(rootDirectoryPath));
+    }
     return _loadGroups(
       rootDirectoryPath,
       entryFileName: 'skill_group.json',
@@ -74,4 +85,62 @@ class LocalGroupDirectoryLoader {
     }
     return result;
   }
+}
+
+List<JsonMap> _loadAgentGroupsSync(String rootDirectoryPath) {
+  final normalizer = AgentGroupNormalizerService();
+  return _loadGroupsSync(
+    rootDirectoryPath,
+    entryFileName: 'agent_group.json',
+    normalize: normalizer.normalizeAgentGroup,
+  );
+}
+
+List<JsonMap> _loadSkillGroupsSync(String rootDirectoryPath) {
+  final normalizer = SkillGroupNormalizerService();
+  return _loadGroupsSync(
+    rootDirectoryPath,
+    entryFileName: 'skill_group.json',
+    normalize: normalizer.normalizeSkillGroup,
+  );
+}
+
+List<JsonMap> _loadGroupsSync(
+  String rootDirectoryPath, {
+  required String entryFileName,
+  required JsonMap Function(JsonMap value) normalize,
+}) {
+  final root = Directory(rootDirectoryPath);
+  if (!root.existsSync()) {
+    return const <JsonMap>[];
+  }
+  final result = <JsonMap>[];
+  for (final entity in root.listSync(followLinks: false)) {
+    if (entity is! Directory) {
+      continue;
+    }
+    final entryFile = File(
+      '${entity.path}${Platform.pathSeparator}$entryFileName',
+    );
+    if (!entryFile.existsSync()) {
+      continue;
+    }
+    JsonMap parsed;
+    try {
+      parsed = ValueReaders.mapValue(jsonDecode(entryFile.readAsStringSync()));
+    } catch (_) {
+      continue;
+    }
+    final normalized = normalize(parsed);
+    if (normalized.isEmpty) {
+      continue;
+    }
+    result.add(<String, Object?>{
+      ...normalized,
+      'package_root_path': root.path,
+      'package_directory_path': entity.path,
+      'entry_file_path': entryFile.path,
+    });
+  }
+  return result;
 }

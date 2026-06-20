@@ -9,6 +9,7 @@ class OpenNarrativeStateProjectionWriterService {
     required SemanticReviewRepository reviewRepository,
     required ConstraintBindingRepository bindingRepository,
     NarrativeStateMarkdownProjectionService? projectionService,
+    ProjectStructuredContentWritePolicy? structuredContentWritePolicy,
   }) : _workspacePort = workspacePort,
        _profileRepository = profileRepository,
        _claimRepository = claimRepository,
@@ -16,7 +17,10 @@ class OpenNarrativeStateProjectionWriterService {
        _reviewRepository = reviewRepository,
        _bindingRepository = bindingRepository,
        _projectionService =
-           projectionService ?? NarrativeStateMarkdownProjectionService();
+           projectionService ?? NarrativeStateMarkdownProjectionService(),
+       _structuredContentWritePolicy =
+           structuredContentWritePolicy ??
+           const ProjectStructuredContentWritePolicy();
 
   final ProjectWorkspacePort _workspacePort;
   final NarrativeProfileRepository _profileRepository;
@@ -25,10 +29,17 @@ class OpenNarrativeStateProjectionWriterService {
   final SemanticReviewRepository _reviewRepository;
   final ConstraintBindingRepository _bindingRepository;
   final NarrativeStateMarkdownProjectionService _projectionService;
+  final ProjectStructuredContentWritePolicy _structuredContentWritePolicy;
 
   Future<List<NarrativeStateProjectionDocument>> writeProjection(
     ProjectDescriptor project,
   ) async {
+    if (!_structuredContentWritePolicy.shouldWriteToFilesystemPrimarySource(
+      storageStrategy: project.storageStrategy,
+      documentKind: 'summary',
+    )) {
+      return const <NarrativeStateProjectionDocument>[];
+    }
     final source = NarrativeStateProjectionSource(
       profiles: await _profileRepository.listProfiles(project),
       claims: await _claimRepository.listClaims(project),

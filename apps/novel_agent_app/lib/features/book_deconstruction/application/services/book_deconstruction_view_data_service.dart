@@ -1,11 +1,8 @@
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../../presentation/models/book_deconstruction_continuity_view_data.dart';
-import '../../presentation/models/book_deconstruction_asset_status_view_data.dart';
 import '../../presentation/models/book_deconstruction_followup_group_view_data.dart';
 import '../../presentation/models/book_deconstruction_followup_option_view_data.dart';
-import '../../presentation/models/book_deconstruction_followup_route_view_data.dart';
-import '../../presentation/models/book_deconstruction_information_bridge_view_data.dart';
 import '../../presentation/models/book_deconstruction_plan_group_view_data.dart';
 import '../../presentation/models/book_deconstruction_plan_item_view_data.dart';
 import '../../presentation/models/book_deconstruction_preview_item_view_data.dart';
@@ -28,7 +25,7 @@ class BookDeconstructionViewDataService {
     final buildResult = snapshot.buildResult;
     final previewSections = buildResult == null
         ? const <BookDeconstructionPreviewSectionViewData>[]
-        : _previewSectionsOf(buildResult.extractionResult);
+        : _previewSectionsOf(buildResult);
     final planGroups = buildResult == null
         ? const <BookDeconstructionPlanGroupViewData>[]
         : _planGroupsOf(buildResult.applicationPlan, snapshot.selectedItemIds);
@@ -39,9 +36,6 @@ class BookDeconstructionViewDataService {
             buildResult.followupMenu,
             snapshot.selectedFollowupOptionId,
           );
-    final informationBridge = buildResult == null
-        ? null
-        : _informationBridgeOf(buildResult);
     final totalItemCount = buildResult?.applicationPlan.items.length ?? 0;
     return BookDeconstructionViewData(
       projectTitle: projectTitle,
@@ -79,7 +73,6 @@ class BookDeconstructionViewDataService {
           canCreateDerivedProject,
       importActionLabel: _importActionLabel(snapshot.operationKind),
       buildPreviewActionLabel: _buildPreviewActionLabel(snapshot.operationKind),
-      informationBridge: informationBridge,
       continuity: continuity,
     );
   }
@@ -100,119 +93,6 @@ class BookDeconstructionViewDataService {
       default:
         return '生成结构化预览';
     }
-  }
-
-  BookDeconstructionInformationBridgeViewData _informationBridgeOf(
-    BookDeconstructionDraftBuildResult buildResult,
-  ) {
-    final extraction = buildResult.extractionResult;
-    final followupMenu = buildResult.followupMenu;
-    final narrativeArtifacts = buildResult.narrativeArtifacts;
-    final knowledgeCount = narrativeArtifacts.knowledgeCards.length;
-    final designCount = narrativeArtifacts.designElements.length;
-    final researchCount = narrativeArtifacts.researchNotes.length;
-    final referenceCount = narrativeArtifacts.referenceWorks.length;
-    final routes = <BookDeconstructionFollowupRouteViewData>[
-      ...followupMenu.groups
-          .where((group) => group.id != 'future_extensions')
-          .map(
-            (group) => BookDeconstructionFollowupRouteViewData(
-              id: group.id,
-              title: group.title,
-              summary: group.description,
-              statusLabel: _routeStatusLabel(
-                followupMenu.highlightedGroupId == group.id,
-              ),
-            ),
-          ),
-      BookDeconstructionFollowupRouteViewData(
-        id: 'shared_information',
-        title: '共享资料沉淀',
-        summary: '知识、巧思、研究和引用边界会进入共享资料与设定视图，不留在私有拆书层。',
-        statusLabel:
-            (knowledgeCount + designCount + researchCount + referenceCount) > 0
-            ? '确认后可进入资料与设定'
-            : '当前还没形成可沉淀资料',
-      ),
-      BookDeconstructionFollowupRouteViewData(
-        id: 'analysis_explainer',
-        title: '解说与分析',
-        summary: '故事总纲、章纲和研究草稿可继续用于解说、复盘与分析型输出。',
-        statusLabel: extraction.storyOutlineSummary.trim().isNotEmpty
-            ? '当前已有可用分析素材'
-            : '需先生成结构摘要',
-      ),
-    ];
-    final routeTitles = routes.take(2).map((route) => route.title).join(' / ');
-    final assetStatuses = <BookDeconstructionAssetStatusViewData>[
-      BookDeconstructionAssetStatusViewData(
-        id: 'setting_assets',
-        title: '设定与章纲',
-        count:
-            extraction.premises.length +
-            (extraction.storyOutlineSummary.trim().isEmpty ? 0 : 1) +
-            extraction.chapterOutlines.length +
-            extraction.worldRuleSets.length,
-        statusLabel: _assetStatusLabel(
-          extraction.premises.length +
-              (extraction.storyOutlineSummary.trim().isEmpty ? 0 : 1) +
-              extraction.chapterOutlines.length +
-              extraction.worldRuleSets.length,
-        ),
-        summary: '可承接普通续写与长任务续写的剧情前提、章纲和世界规则。',
-      ),
-      BookDeconstructionAssetStatusViewData(
-        id: 'character_assets',
-        title: '角色与组织',
-        count:
-            extraction.characterProfiles.length +
-            extraction.organizationProfiles.length,
-        statusLabel: _assetStatusLabel(
-          extraction.characterProfiles.length +
-              extraction.organizationProfiles.length,
-        ),
-        summary: '可复用的角色、组织与势力信息。',
-      ),
-      BookDeconstructionAssetStatusViewData(
-        id: 'foreshadow_assets',
-        title: '伏笔 / 时间线 / 关系',
-        count:
-            extraction.foreshadowRecords.length +
-            extraction.timelineRecords.length +
-            extraction.relationshipRecords.length,
-        statusLabel: _assetStatusLabel(
-          extraction.foreshadowRecords.length +
-              extraction.timelineRecords.length +
-              extraction.relationshipRecords.length,
-        ),
-        summary: '可进一步接入连续性资产，支撑后续剧情追踪。',
-      ),
-      BookDeconstructionAssetStatusViewData(
-        id: 'information_assets',
-        title: 'information 资料',
-        count: knowledgeCount + researchCount + referenceCount,
-        statusLabel: (knowledgeCount + researchCount + referenceCount) > 0
-            ? '确认后出现在知识 / 研究 / 引用边界'
-            : '当前还没形成共享资料',
-        summary: '会并入共享资料与设定面板，供后续写作与资料回看复用。',
-      ),
-      BookDeconstructionAssetStatusViewData(
-        id: 'design_assets',
-        title: 'design 巧思',
-        count: designCount,
-        statusLabel: designCount > 0 ? '确认后出现在巧思与设计' : '当前还没形成巧思资产',
-        summary: '会并入共享资料与设定里的巧思与设计视图。',
-      ),
-    ];
-    return BookDeconstructionInformationBridgeViewData(
-      summary: routeTitles.isEmpty
-          ? '这次拆书结果不只是一次性预览。确认后可以继续派生，并沉淀到共享资料与分析路径。'
-          : '这次拆书结果不只是一次性预览。确认后既能走 $routeTitles 等后续方案，也能沉淀到共享资料与分析路径。',
-      followupRoutes: routes,
-      assetStatuses: assetStatuses,
-      reuseSummary:
-          '确认后，相关资料会进入共享资料与设定；${routeTitles.isEmpty ? '后续方案' : routeTitles} 会继续承接正式派生，可在“资料与设定”里继续回看知识、巧思、研究和引用边界。',
-    );
   }
 
   List<BookDeconstructionStepViewData> _stepsOf(
@@ -249,8 +129,9 @@ class BookDeconstructionViewDataService {
   }
 
   List<BookDeconstructionPreviewSectionViewData> _previewSectionsOf(
-    BookDeconstructionExtractionResult extraction,
+    BookDeconstructionDraftBuildResult buildResult,
   ) {
+    final extraction = buildResult.extractionResult;
     final sections = <BookDeconstructionPreviewSectionViewData>[];
     if (extraction.premises.isNotEmpty) {
       sections.add(
@@ -361,6 +242,54 @@ class BookDeconstructionViewDataService {
               id: item.id,
               title: item.displayName,
               summary: item.summary,
+            ),
+          )
+          .toList(growable: false),
+    );
+    _addAssetSection(
+      sections,
+      id: 'foreshadows',
+      title: '伏笔资产',
+      description: '从原文结构中识别出的潜在线索与未回收钩子。',
+      entries: extraction.foreshadowRecords
+          .map(
+            (item) => BookDeconstructionPreviewItemViewData(
+              id: item.id,
+              title: item.title,
+              summary: item.summary,
+              caption: item.status,
+            ),
+          )
+          .toList(growable: false),
+    );
+    _addAssetSection(
+      sections,
+      id: 'timeline',
+      title: '时间线资产',
+      description: '按章节演进收束出的阶段事件与时间推进骨架。',
+      entries: extraction.timelineRecords
+          .map(
+            (item) => BookDeconstructionPreviewItemViewData(
+              id: item.id,
+              title: item.displayName,
+              summary: item.summary,
+              caption: item.phaseLabel,
+            ),
+          )
+          .toList(growable: false),
+    );
+    _addAssetSection(
+      sections,
+      id: 'relationships',
+      title: '关系资产',
+      description: '角色共同出现与互动关系的初步结构。',
+      entries: extraction.relationshipRecords
+          .map(
+            (item) => BookDeconstructionPreviewItemViewData(
+              id: item.id,
+              title: item.displayName,
+              summary: item.summary,
+              caption: item.relationshipType,
             ),
           )
           .toList(growable: false),
@@ -616,14 +545,6 @@ class BookDeconstructionViewDataService {
       return '$base 目前仍以结构化资产与后续方案为主。';
     }
     return '$base 已识别：${hintParts.join('，')}。';
-  }
-
-  String _routeStatusLabel(bool isPreferred) {
-    return isPreferred ? '当前默认路线' : '确认后可用';
-  }
-
-  String _assetStatusLabel(int count) {
-    return count > 0 ? '已生成，可复用' : '当前未生成';
   }
 
   String _followupGroupTitle(String groupId, String fallbackTitle) {

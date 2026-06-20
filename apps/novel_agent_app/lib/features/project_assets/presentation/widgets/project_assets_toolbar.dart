@@ -25,13 +25,7 @@ class ProjectAssetsToolbar extends StatelessWidget {
       onBackRequested: controller.onProjectAssetsBackRequested,
       actions: [
         ActionButton(
-          label: '新建',
-          icon: Icons.add_rounded,
-          compact: true,
-          onPressed: controller.onProjectAssetsNewRequested,
-        ),
-        ActionButton(
-          label: '提取参考资料',
+          label: '知识提取',
           icon: Icons.auto_stories_outlined,
           compact: true,
           tone: ActionButtonTone.neutral,
@@ -47,6 +41,12 @@ class ProjectAssetsToolbar extends StatelessWidget {
           compact: true,
           tone: ActionButtonTone.neutral,
           onPressed: () => showProjectRagExtractionDialog(context, controller, viewData.ragExtraction),
+        ),
+        ActionButton(
+          label: '新建',
+          icon: Icons.add_rounded,
+          compact: true,
+          onPressed: controller.onProjectAssetsNewRequested,
         ),
         ActionButton(
           label: '导入资产包',

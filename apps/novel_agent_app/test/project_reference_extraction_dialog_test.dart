@@ -31,7 +31,9 @@ void main() {
           const ProjectReferenceExtractionStrategyPickerViewData(
             selectedProfileId:
                 ReferenceExtractionBuiltinStrategyProfileIds.standard,
-            summary: '当前默认使用标准提取；提取前可以切换策略。',
+            summary: '这是手动触发的知识提取流程。当前默认使用标准提取；开始前可以切换策略。',
+            sourceHint: '当前项目会在开始后要求选择源资料文件；提取结果会沉淀为正式知识资产，而不是停留在临时摘要里。',
+            confirmButtonLabel: '选择资料并开始提取',
             options: <ProjectReferenceExtractionStrategyOptionViewData>[
               ProjectReferenceExtractionStrategyOptionViewData(
                 profileId:
@@ -86,13 +88,14 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('提取参考资料'));
+    await tester.tap(find.text('知识提取'));
     await tester.pumpAndSettle();
 
-    expect(find.text('提取参考资料'), findsNWidgets(2));
+    expect(find.text('知识提取'), findsNWidgets(2));
+    expect(find.text('选择资料并开始提取'), findsOneWidget);
     await tester.tap(find.text('事实优先').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('开始提取'));
+    await tester.tap(find.text('选择资料并开始提取'));
     await tester.pumpAndSettle();
 
     expect(
@@ -300,6 +303,7 @@ extension on ProjectAssetsViewData {
       title: title,
       description: description,
       status: status,
+      useDedicatedRagWorkspace: useDedicatedRagWorkspace,
       activeTabId: activeTabId,
       entryAgentContextId: entryAgentContextId,
       tabs: tabs,

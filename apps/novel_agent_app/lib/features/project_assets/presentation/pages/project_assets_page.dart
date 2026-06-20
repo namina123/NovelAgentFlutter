@@ -4,6 +4,7 @@ import '../../../../shared/widgets/panel_surface.dart';
 import '../../../../shared/widgets/workspace_page_scaffold.dart';
 import '../../../../shared/widgets/workspace_pane_layout.dart';
 import '../../application/controllers/project_assets_controller.dart';
+import '../widgets/project_assets_knowledge_base_rag_workspace.dart';
 import '../widgets/project_assets_detail_panel.dart';
 import '../widgets/project_assets_entry_list_panel.dart';
 import '../widgets/project_assets_sidebar_panel.dart';
@@ -20,6 +21,12 @@ class ProjectAssetsPage extends StatelessWidget {
       animation: controller,
       builder: (context, _) {
         final viewData = controller.viewData;
+        if (viewData.useDedicatedRagWorkspace) {
+          return ProjectAssetsKnowledgeBaseRagWorkspace(
+            controller: controller,
+            viewData: viewData,
+          );
+        }
         return WorkspacePageScaffold(
           header: ProjectAssetsToolbar(
             controller: controller,

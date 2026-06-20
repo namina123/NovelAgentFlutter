@@ -199,7 +199,6 @@ void main() {
                       canBuildPreview: false,
                       canConfirmSelection: false,
                       canCreateDerivedProject: false,
-                      informationBridge: null,
                       continuity: BookDeconstructionContinuityViewData(
                         preferredDirectionLabel: '偏向长任务',
                         highlightedBuildTierLabel: '默认高亮',

@@ -68,6 +68,9 @@ void main() {
             storageStrategyOptions: viewData.storageStrategyOptions,
             selectedStorageStrategyId: viewData.selectedStorageStrategyId,
             creationPhase: viewData.creationPhase,
+            knowledgeBaseBranchOptions: viewData.knowledgeBaseBranchOptions,
+            selectedKnowledgeBaseBranchId:
+                viewData.selectedKnowledgeBaseBranchId,
             bookDeconstructionFollowupOptions:
                 viewData.bookDeconstructionFollowupOptions,
             selectedBookDeconstructionFollowupRouteId:
@@ -140,7 +143,7 @@ void main() {
       selectedBookDeconstructionFollowupRouteId: 'fanfic',
     );
 
-    expect(viewData.title, '第二步：选择拆书承接路线');
+    expect(viewData.title, '第2步：选择拆书承接路线');
     expect(viewData.bookDeconstructionFollowupOptions, hasLength(2));
     expect(
       viewData.bookDeconstructionFollowupOptions.map((option) => option.id),

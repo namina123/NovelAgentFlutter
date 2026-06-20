@@ -6,6 +6,26 @@ import 'package:test/test.dart';
 
 void main() {
   group('LocalProjectRepository', () {
+    test('openByPath ignores directory without manifest', () async {
+      final tempRoot = await Directory.systemTemp.createTemp(
+        'novel-agent-local-project-no-manifest-',
+      );
+      try {
+        final projectRoot = Directory(
+          '${tempRoot.path}${Platform.pathSeparator}plain-folder',
+        )..createSync(recursive: true);
+
+        final repository = LocalProjectRepository();
+        final descriptor = await repository.openByPath(projectRoot.path);
+
+        expect(descriptor, isNull);
+      } finally {
+        if (tempRoot.existsSync()) {
+          await tempRoot.delete(recursive: true);
+        }
+      }
+    });
+
     test('openByPath reads runtime baseline from manifest', () async {
       // 中文注释: 这里验证项目重新打开时会把创建阶段选定的运行基准一并识别回来，而不是只读标题和类型。
       final tempRoot = await Directory.systemTemp.createTemp(

@@ -42,7 +42,7 @@ class ProjectAssetsSnapshot {
 
   factory ProjectAssetsSnapshot.initial() {
     return ProjectAssetsSnapshot(
-      activeTabId: ProjectAssetsTabId.styles,
+      activeTabId: ProjectAssetsTabId.referenceExtraction,
       selectedStyleId: '',
       selectedExpressionConstraintId: '',
       selectedForeshadowId: '',

@@ -4,12 +4,16 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../../presentation/contracts/project_assets_action_handler.dart';
 import '../../presentation/models/project_assets_view_data.dart';
-import '../models/project_assets_catalog.dart';
 import '../models/project_rag_extraction_execution_result.dart';
 import '../models/project_reference_extraction_execution_result.dart';
 import '../models/project_assets_snapshot.dart';
 import '../models/project_assets_tab_id.dart';
+import '../services/project_assets_catalog_refresh_service.dart';
 import '../services/project_assets_loader_service.dart';
+import '../services/project_assets_rag_refresh_service.dart';
+import '../services/project_assets_refresh_coordinator.dart';
+import '../services/project_assets_refresh_status_projection_service.dart';
+import '../services/project_assets_selection_reconciler.dart';
 import '../services/project_expression_constraint_binding_action_service.dart';
 import '../services/project_expression_constraint_workspace_service.dart';
 import '../services/project_assets_view_data_service.dart';
@@ -31,6 +35,7 @@ class ProjectAssetsController extends ChangeNotifier
     required Future<void> Function() syncWorkbenchResources,
     required VoidCallback onBackRequested,
     ProjectRagExtractionExecutionService? ragExtractionExecutionService,
+    ProjectAssetsRefreshCoordinator? refreshCoordinator,
     required ProjectReferenceExtractionExecutionService
     referenceExtractionExecutionService,
     ProjectAssetsViewDataService? viewDataService,
@@ -42,9 +47,7 @@ class ProjectAssetsController extends ChangeNotifier
   }) : _projectAssetLibraryService = projectAssetLibraryService,
        _expressionConstraintWorkspaceService =
            expressionConstraintWorkspaceService,
-       _loaderService = loaderService,
        _readCurrentProject = readCurrentProject,
-       _readAvailableProjectAgents = readAvailableProjectAgents,
        _syncWorkbenchResources = syncWorkbenchResources,
        _onBackRequested = onBackRequested,
        _ragExtractionExecutionService =
@@ -57,6 +60,24 @@ class ProjectAssetsController extends ChangeNotifier
        _referenceExtractionStrategyPickerViewDataService =
            referenceExtractionStrategyPickerViewDataService ??
            const ProjectReferenceExtractionStrategyPickerViewDataService(),
+       _refreshCoordinator =
+           refreshCoordinator ??
+           ProjectAssetsRefreshCoordinator(
+             catalogRefreshService: ProjectAssetsCatalogRefreshService(
+               loaderService: loaderService,
+               viewDataService:
+                   viewDataService ?? const ProjectAssetsViewDataService(),
+               readAvailableProjectAgents: readAvailableProjectAgents,
+             ),
+             ragRefreshService: ProjectAssetsRagRefreshService(
+               ragExtractionExecutionService:
+                   ragExtractionExecutionService ??
+                   ProjectRagExtractionExecutionService(),
+             ),
+             selectionReconciler: const ProjectAssetsSelectionReconciler(),
+             statusProjectionService:
+                 const ProjectAssetsRefreshStatusProjectionService(),
+           ),
        _expressionConstraintBindingActionService =
            expressionConstraintBindingActionService ??
            const ProjectExpressionConstraintBindingActionService(),
@@ -69,16 +90,14 @@ class ProjectAssetsController extends ChangeNotifier
   final ProjectAssetLibraryService _projectAssetLibraryService;
   final ProjectExpressionConstraintWorkspaceService
   _expressionConstraintWorkspaceService;
-  final ProjectAssetsLoaderService _loaderService;
   final ProjectDescriptor? Function() _readCurrentProject;
-  final ReadAvailableProjectAgents _readAvailableProjectAgents;
   final Future<void> Function() _syncWorkbenchResources;
   final VoidCallback _onBackRequested;
-  final ProjectRagExtractionExecutionService
-  _ragExtractionExecutionService;
+  final ProjectRagExtractionExecutionService _ragExtractionExecutionService;
   final ProjectReferenceExtractionExecutionService
   _referenceExtractionExecutionService;
   final ProjectAssetsViewDataService _viewDataService;
+  final ProjectAssetsRefreshCoordinator _refreshCoordinator;
   final ProjectReferenceExtractionStrategyPickerViewDataService
   _referenceExtractionStrategyPickerViewDataService;
   final ProjectExpressionConstraintBindingActionService
@@ -100,70 +119,78 @@ class ProjectAssetsController extends ChangeNotifier
       _rebuildView();
       return;
     }
-    if (_shouldPreferRagTab(project, _snapshot.activeTabId)) {
-      _snapshot = _snapshot.copyWith(activeTabId: ProjectAssetsTabId.ragExtraction);
-    }
+    final initialSnapshot = _snapshot;
     _snapshot = _snapshot.copyWith(isLoading: true);
-    _statusMessage = status ?? '正在加载项目资产...';
+    _statusMessage = '正在加载项目资产...';
     _rebuildView();
     try {
-      final catalog = await _loaderService.load(project);
-      final availableAgentOptions = _viewDataService
-          .buildExpressionConstraintAgentOptions(_readAvailableProjectAgents());
-      final availableModeOptions = _viewDataService
-          .buildExpressionConstraintModeOptions();
-      final availableStageOptions = _viewDataService
-          .buildExpressionConstraintStageOptions();
-      final ragSnapshot = await _ragExtractionExecutionService.loadSnapshot(
-        project: project,
-        selectedCorpusId: _snapshot.ragExtraction.selectedCorpusId,
+      final outcome = await _refreshCoordinator.refreshAll(
+        currentProject: project,
+        previousSnapshot: initialSnapshot,
+        status: status,
       );
-      _snapshot = _snapshot.copyWith(
-        catalog: catalog,
-        availableAgentOptions: availableAgentOptions,
-        availableModeOptions: availableModeOptions,
-        availableStageOptions: availableStageOptions,
-        ragExtraction: _snapshot.ragExtraction.copyWith(
-          selectedCorpusId:
-              ragSnapshot.corpusPackage?.corpusId ?? _snapshot.ragExtraction.selectedCorpusId,
-          selectedCorpus: ragSnapshot.corpusPackage ?? _snapshot.ragExtraction.selectedCorpus,
-          mountSummary: ragSnapshot.mountSummary ??
-              _snapshot.ragExtraction.mountSummary,
-          statusMessage: ragSnapshot.statusMessage,
-          recentSourcePath:
-              ragSnapshot.corpusPackage?.metadata['source_file_path']?.toString() ??
-              _snapshot.ragExtraction.recentSourcePath,
-        ),
-        selectedStyleId: _selectedStyleId(catalog, _snapshot.selectedStyleId),
-        selectedExpressionConstraintId: _selectedExpressionConstraintId(
-          catalog,
-          _snapshot.selectedExpressionConstraintId,
-        ),
-        selectedForeshadowId: _selectedForeshadowId(
-          catalog,
-          _snapshot.selectedForeshadowId,
-        ),
-        selectedTimelineId: _selectedTimelineId(
-          catalog,
-          _snapshot.selectedTimelineId,
-        ),
-        selectedRelationshipId: _selectedRelationshipId(
-          catalog,
-          _snapshot.selectedRelationshipId,
-        ),
-        selectedGraphReferenceKey: _selectedGraphReferenceKey(
-          catalog,
-          _snapshot.selectedGraphReferenceKey,
-        ),
-        isLoading: false,
-      );
-      _statusMessage =
-          status ??
-          '已加载 ${catalog.styles.length} 个风格、${catalog.expressionConstraints.length} 个表达限制方案、${catalog.foreshadows.length} 个伏笔、${catalog.timelines.length} 条时间线、${catalog.relationships.length} 条关系。';
+      _snapshot = outcome.snapshot.copyWith(isLoading: false);
+      _statusMessage = outcome.statusMessage;
       _rebuildView();
     } catch (error) {
       _snapshot = _snapshot.copyWith(isLoading: false);
       _statusMessage = '加载项目资产失败：$error';
+      _rebuildView();
+    }
+  }
+
+  Future<void> _refreshCatalog({String? status}) async {
+    final project = _readCurrentProject();
+    if (project == null) {
+      _snapshot = ProjectAssetsSnapshot.initial();
+      _statusMessage = status ?? '请先创建或打开项目。';
+      _rebuildView();
+      return;
+    }
+    final initialSnapshot = _snapshot;
+    _snapshot = _snapshot.copyWith(isLoading: true);
+    _statusMessage = status ?? '正在加载项目资产目录...';
+    _rebuildView();
+    try {
+      final outcome = await _refreshCoordinator.refreshCatalog(
+        currentProject: project,
+        previousSnapshot: initialSnapshot,
+        status: status,
+      );
+      _snapshot = outcome.snapshot.copyWith(isLoading: false);
+      _statusMessage = outcome.statusMessage;
+      _rebuildView();
+    } catch (error) {
+      _snapshot = _snapshot.copyWith(isLoading: false);
+      _statusMessage = '加载项目资产目录失败：$error';
+      _rebuildView();
+    }
+  }
+
+  Future<void> _refreshRag({String? status}) async {
+    final project = _readCurrentProject();
+    if (project == null) {
+      _snapshot = ProjectAssetsSnapshot.initial();
+      _statusMessage = status ?? '请先创建或打开项目。';
+      _rebuildView();
+      return;
+    }
+    final initialSnapshot = _snapshot;
+    _snapshot = _snapshot.copyWith(isLoading: true);
+    _statusMessage = status ?? '正在加载语料状态...';
+    _rebuildView();
+    try {
+      final outcome = await _refreshCoordinator.refreshRag(
+        currentProject: project,
+        previousSnapshot: initialSnapshot,
+        status: status,
+      );
+      _snapshot = outcome.snapshot.copyWith(isLoading: false);
+      _statusMessage = outcome.statusMessage;
+      _rebuildView();
+    } catch (error) {
+      _snapshot = _snapshot.copyWith(isLoading: false);
+      _statusMessage = '加载语料状态失败：$error';
       _rebuildView();
     }
   }
@@ -182,7 +209,7 @@ class ProjectAssetsController extends ChangeNotifier
   }) async {
     final project = _readCurrentProject();
     if (project == null) {
-      await refresh(status: '请先创建或打开项目。');
+      await _refreshCatalog(status: '请先创建或打开项目。');
       return;
     }
     final normalizedStrategyProfileId =
@@ -194,12 +221,17 @@ class ProjectAssetsController extends ChangeNotifier
             );
     _snapshot = _snapshot.copyWith(
       selectedReferenceExtractionStrategyId: normalizedStrategyProfileId,
+      activeTabId: ProjectAssetsTabId.referenceExtraction,
     );
     _snapshot = _snapshot.copyWith(isLoading: true);
     final strategyName = _referenceExtractionStrategyLabel(
       normalizedStrategyProfileId,
     );
-    _statusMessage = '正在提取参考资料... 当前策略：$strategyName';
+    final sourceHint =
+        project.projectType.trim() == BookDeconstructionConstants.projectTypeId
+        ? '正在使用拆书产物执行知识提取... 当前策略：$strategyName'
+        : '正在执行知识提取... 当前策略：$strategyName';
+    _statusMessage = sourceHint;
     _rebuildView();
     final result = await _referenceExtractionExecutionService.pickAndExecute(
       project: project,
@@ -209,12 +241,10 @@ class ProjectAssetsController extends ChangeNotifier
   }
 
   @override
-  Future<void> onProjectAssetsExtractRagRequested({
-    String modeId = '',
-  }) async {
+  Future<void> onProjectAssetsExtractRagRequested({String modeId = ''}) async {
     final project = _readCurrentProject();
     if (project == null) {
-      await refresh(status: '请先创建或打开项目。');
+      await _refreshRag(status: '请先创建或打开项目。');
       return;
     }
     final selectedModeId = modeId.trim().isEmpty
@@ -241,7 +271,7 @@ class ProjectAssetsController extends ChangeNotifier
   Future<void> onProjectAssetsMountRagCorpusRequested() async {
     final project = _readCurrentProject();
     if (project == null) {
-      await refresh(status: '请先创建或打开项目。');
+      await _refreshRag(status: '请先创建或打开项目。');
       return;
     }
     final corpus = _snapshot.ragExtraction.selectedCorpus;
@@ -280,7 +310,7 @@ class ProjectAssetsController extends ChangeNotifier
   ) async {
     if (result.didMutateProject) {
       await _syncWorkbenchResources();
-      await refresh(status: result.statusMessage);
+      await _refreshCatalog(status: result.statusMessage);
       return;
     }
     _snapshot = _snapshot.copyWith(isLoading: false);
@@ -300,6 +330,14 @@ class ProjectAssetsController extends ChangeNotifier
   void openRagExtractionWorkspace() {
     _snapshot = _snapshot.copyWith(
       activeTabId: ProjectAssetsTabId.ragExtraction,
+      entryAgentContextId: '',
+    );
+    _rebuildView();
+  }
+
+  void openReferenceExtractionWorkspace() {
+    _snapshot = _snapshot.copyWith(
+      activeTabId: ProjectAssetsTabId.referenceExtraction,
       entryAgentContextId: '',
     );
     _rebuildView();
@@ -352,20 +390,25 @@ class ProjectAssetsController extends ChangeNotifier
     }
     _snapshot = _snapshot.copyWith(
       ragExtraction: _snapshot.ragExtraction.copyWith(
-        selectedCorpusId: updatedCorpus?.corpusId ??
-            _snapshot.ragExtraction.selectedCorpusId,
+        selectedCorpusId:
+            updatedCorpus?.corpusId ?? _snapshot.ragExtraction.selectedCorpusId,
         selectedCorpus: updatedCorpus ?? _snapshot.ragExtraction.selectedCorpus,
-        mountSummary: updatedMountSummary ??
-            _snapshot.ragExtraction.mountSummary,
+        mountSummary:
+            updatedMountSummary ?? _snapshot.ragExtraction.mountSummary,
+        analysisSummary:
+            result.analysisSummary ?? _snapshot.ragExtraction.analysisSummary,
+        normalizationNote: result.normalizationNote.trim().isNotEmpty
+            ? result.normalizationNote
+            : _snapshot.ragExtraction.normalizationNote,
         isLoading: false,
         statusMessage: result.statusMessage,
-        recentSourcePath: updatedCorpus?.metadata['source_file_path']
-                ?.toString() ??
+        recentSourcePath:
+            updatedCorpus?.metadata['source_file_path']?.toString() ??
             _snapshot.ragExtraction.recentSourcePath,
       ),
     );
     if (result.didMutateProject) {
-      await refresh(status: result.statusMessage);
+      await _refreshRag(status: result.statusMessage);
       return;
     }
     _rebuildView();
@@ -444,7 +487,7 @@ class ProjectAssetsController extends ChangeNotifier
   ) async {
     final project = _readCurrentProject();
     if (project == null) {
-      await refresh(status: '请先创建或打开项目。');
+      await _refreshCatalog(status: '请先创建或打开项目。');
       return;
     }
     final result = await _projectAssetLibraryService
@@ -470,7 +513,7 @@ class ProjectAssetsController extends ChangeNotifier
         ),
       );
     }
-    await refresh(status: _resultMessage(result, success: '风格资产已保存。'));
+    await _refreshCatalog(status: _resultMessage(result, success: '风格资产已保存。'));
   }
 
   @override
@@ -479,14 +522,14 @@ class ProjectAssetsController extends ChangeNotifier
   ) async {
     final project = _readCurrentProject();
     if (project == null) {
-      await refresh(status: '请先创建或打开项目。');
+      await _refreshCatalog(status: '请先创建或打开项目。');
       return;
     }
     final selectedProfiles = _snapshot.catalog.expressionConstraints.where(
       (item) => item.id == request.profileId.trim(),
     );
     if (selectedProfiles.isEmpty) {
-      await refresh(status: '当前表达限制方案不存在或已被移除。');
+      await _refreshCatalog(status: '当前表达限制方案不存在或已被移除。');
       return;
     }
     final nextBindings = _expressionConstraintBindingActionService
@@ -499,7 +542,7 @@ class ProjectAssetsController extends ChangeNotifier
       project,
       nextBindings,
     );
-    await refresh(status: '表达限制绑定已保存。');
+    await _refreshCatalog(status: '表达限制绑定已保存。');
   }
 
   @override
@@ -508,12 +551,12 @@ class ProjectAssetsController extends ChangeNotifier
   ) async {
     final project = _readCurrentProject();
     if (project == null) {
-      await refresh(status: '请先创建或打开项目。');
+      await _refreshCatalog(status: '请先创建或打开项目。');
       return;
     }
     final cleanProfileId = profileId.trim();
     if (cleanProfileId.isEmpty) {
-      await refresh(status: '请先选择一个表达限制方案。');
+      await _refreshCatalog(status: '请先选择一个表达限制方案。');
       return;
     }
     final nextBindings = _expressionConstraintBindingActionService
@@ -525,7 +568,7 @@ class ProjectAssetsController extends ChangeNotifier
       project,
       nextBindings,
     );
-    await refresh(status: '表达限制绑定已移除。');
+    await _refreshCatalog(status: '表达限制绑定已移除。');
   }
 
   @override
@@ -534,7 +577,7 @@ class ProjectAssetsController extends ChangeNotifier
   ) async {
     final project = _readCurrentProject();
     if (project == null) {
-      await refresh(status: '请先创建或打开项目。');
+      await _refreshCatalog(status: '请先创建或打开项目。');
       return;
     }
     final result = await _projectAssetLibraryService
@@ -561,7 +604,7 @@ class ProjectAssetsController extends ChangeNotifier
         ),
       );
     }
-    await refresh(status: _resultMessage(result, success: '伏笔资产已保存。'));
+    await _refreshCatalog(status: _resultMessage(result, success: '伏笔资产已保存。'));
   }
 
   @override
@@ -571,11 +614,11 @@ class ProjectAssetsController extends ChangeNotifier
   }) async {
     final project = _readCurrentProject();
     if (project == null) {
-      await refresh(status: '请先创建或打开项目。');
+      await _refreshCatalog(status: '请先创建或打开项目。');
       return;
     }
     if (id.trim().isEmpty) {
-      await refresh(status: '请先选择一个资产。');
+      await _refreshCatalog(status: '请先选择一个资产。');
       return;
     }
     final result = kind == 'foreshadow'
@@ -589,7 +632,7 @@ class ProjectAssetsController extends ChangeNotifier
         _snapshot = _snapshot.copyWith(selectedStyleId: '');
       }
     }
-    await refresh(status: _resultMessage(result, success: '资产已删除。'));
+    await _refreshCatalog(status: _resultMessage(result, success: '资产已删除。'));
   }
 
   @override
@@ -598,18 +641,18 @@ class ProjectAssetsController extends ChangeNotifier
   ) async {
     final project = _readCurrentProject();
     if (project == null) {
-      await refresh(status: '请先创建或打开项目。');
+      await _refreshCatalog(status: '请先创建或打开项目。');
       return;
     }
     if (request.absolutePath.trim().isEmpty) {
-      await refresh(status: '请提供资产包绝对路径。');
+      await _refreshCatalog(status: '请提供资产包绝对路径。');
       return;
     }
     final bundleContent = await _projectAssetLibraryService.readExternalBundle(
       request.absolutePath.trim(),
     );
     if ((bundleContent ?? '').trim().isEmpty) {
-      await refresh(status: '资产包文件不存在或不可读。');
+      await _refreshCatalog(status: '资产包文件不存在或不可读。');
       return;
     }
     final preview = _projectAssetLibraryService.previewImportBundle(
@@ -622,7 +665,7 @@ class ProjectAssetsController extends ChangeNotifier
       overwrite: request.overwrite,
     );
     if (!ValueReaders.boolValue(preview['ok'])) {
-      await refresh(status: '资产包预检失败。');
+      await _refreshCatalog(status: '资产包预检失败。');
       return;
     }
     final result = await _projectAssetLibraryService.importBundle(
@@ -631,7 +674,7 @@ class ProjectAssetsController extends ChangeNotifier
       overwrite: request.overwrite,
     );
     await _syncWorkbenchResources();
-    await refresh(
+    await _refreshCatalog(
       status:
           '${_resultMessage(result, success: '资产包已导入。')} 预检条目 ${ValueReaders.objectList(preview['items']).length} 个。',
     );
@@ -643,7 +686,7 @@ class ProjectAssetsController extends ChangeNotifier
   ) async {
     final project = _readCurrentProject();
     if (project == null) {
-      await refresh(status: '请先创建或打开项目。');
+      await _refreshCatalog(status: '请先创建或打开项目。');
       return;
     }
     final result = await _projectAssetLibraryService.exportBundle(
@@ -652,7 +695,7 @@ class ProjectAssetsController extends ChangeNotifier
       description: request.description.trim(),
     );
     await _syncWorkbenchResources();
-    await refresh(status: _resultMessage(result, success: '资产包已导出。'));
+    await _refreshCatalog(status: _resultMessage(result, success: '资产包已导出。'));
   }
 
   @override
@@ -665,104 +708,11 @@ class ProjectAssetsController extends ChangeNotifier
     _viewData = _viewDataService.build(
       snapshot: _snapshot,
       status: _statusMessage,
+      project: _readCurrentProject(),
     );
     if (!_disposed) {
       notifyListeners();
     }
-  }
-
-  bool _shouldPreferRagTab(ProjectDescriptor project, String activeTabId) {
-    if (project.projectType.trim() != 'knowledge_base') {
-      return false;
-    }
-    if (!const KnowledgeBaseBranchCatalogService().isRagBranch(
-      project.projectBranchId,
-    )) {
-      return false;
-    }
-    final cleanActiveTabId = activeTabId.trim();
-    return cleanActiveTabId.isEmpty || cleanActiveTabId == ProjectAssetsTabId.styles;
-  }
-
-  String _selectedStyleId(ProjectAssetsCatalog catalog, String currentId) {
-    if (currentId.trim().isNotEmpty &&
-        catalog.styles.any(
-          (item) => ValueReaders.stringValue(item['id']) == currentId,
-        )) {
-      return currentId.trim();
-    }
-    if (catalog.styles.isEmpty) {
-      return '';
-    }
-    return ValueReaders.stringValue(catalog.styles.first['id']);
-  }
-
-  String _selectedExpressionConstraintId(
-    ProjectAssetsCatalog catalog,
-    String currentId,
-  ) {
-    if (currentId.trim().isNotEmpty &&
-        catalog.expressionConstraints.any(
-          (item) => item.id == currentId.trim(),
-        )) {
-      return currentId.trim();
-    }
-    if (catalog.expressionConstraints.isEmpty) {
-      return '';
-    }
-    return catalog.expressionConstraints.first.id;
-  }
-
-  String _selectedForeshadowId(ProjectAssetsCatalog catalog, String currentId) {
-    if (currentId.trim().isNotEmpty &&
-        catalog.foreshadows.any((item) => item.id == currentId.trim())) {
-      return currentId.trim();
-    }
-    if (catalog.foreshadows.isEmpty) {
-      return '';
-    }
-    return catalog.foreshadows.first.id;
-  }
-
-  String _selectedTimelineId(ProjectAssetsCatalog catalog, String currentId) {
-    if (currentId.trim().isNotEmpty &&
-        catalog.timelines.any((item) => item.id == currentId.trim())) {
-      return currentId.trim();
-    }
-    if (catalog.timelines.isEmpty) {
-      return '';
-    }
-    return catalog.timelines.first.id;
-  }
-
-  String _selectedRelationshipId(
-    ProjectAssetsCatalog catalog,
-    String currentId,
-  ) {
-    if (currentId.trim().isNotEmpty &&
-        catalog.relationships.any((item) => item.id == currentId.trim())) {
-      return currentId.trim();
-    }
-    if (catalog.relationships.isEmpty) {
-      return '';
-    }
-    return catalog.relationships.first.id;
-  }
-
-  String _selectedGraphReferenceKey(
-    ProjectAssetsCatalog catalog,
-    String currentKey,
-  ) {
-    if (currentKey.trim().isNotEmpty &&
-        catalog.referenceIndex.references.any(
-          (item) => item.referenceKey == currentKey.trim(),
-        )) {
-      return currentKey.trim();
-    }
-    if (catalog.referenceIndex.references.isEmpty) {
-      return '';
-    }
-    return catalog.referenceIndex.references.first.referenceKey;
   }
 
   List<String> _csvList(String rawText) {

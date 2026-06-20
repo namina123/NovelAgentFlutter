@@ -3,6 +3,7 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 import 'book_deconstruction_followup_persistence_service.dart';
 import 'book_deconstruction_narrative_persistence_service.dart';
 import 'book_deconstruction_preview_markdown_service.dart';
+import 'book_deconstruction_structured_source_projection_service.dart';
 
 class BookDeconstructionConfirmWorkflowService {
   BookDeconstructionConfirmWorkflowService({
@@ -12,6 +13,8 @@ class BookDeconstructionConfirmWorkflowService {
     BookDeconstructionPreviewMarkdownService? previewMarkdownService,
     BookDeconstructionTargetPathService? targetPathService,
     BookDeconstructionFollowupPersistenceService? followupPersistenceService,
+    BookDeconstructionStructuredSourceProjectionService?
+    structuredSourceProjectionService,
   }) : _writeProjectTextFileUseCase = writeProjectTextFileUseCase,
        _narrativePersistenceService = narrativePersistenceService,
        _previewMarkdownService =
@@ -26,7 +29,10 @@ class BookDeconstructionConfirmWorkflowService {
              targetPathService:
                  targetPathService ??
                  const BookDeconstructionTargetPathService(),
-           );
+           ),
+       _structuredSourceProjectionService =
+           structuredSourceProjectionService ??
+           const BookDeconstructionStructuredSourceProjectionService();
 
   final WriteProjectTextFileUseCase _writeProjectTextFileUseCase;
   final BookDeconstructionNarrativePersistenceService
@@ -35,6 +41,8 @@ class BookDeconstructionConfirmWorkflowService {
   final BookDeconstructionTargetPathService _targetPathService;
   final BookDeconstructionFollowupPersistenceService
   _followupPersistenceService;
+  final BookDeconstructionStructuredSourceProjectionService
+  _structuredSourceProjectionService;
 
   Future<BookDeconstructionConfirmWorkflowResult> execute({
     required ProjectDescriptor project,
@@ -43,7 +51,9 @@ class BookDeconstructionConfirmWorkflowService {
     required String selectedFollowupOptionId,
   }) async {
     // 中文注释: 预演确认的正式写入编排集中在这里，controller 只负责状态推进与结果消费。
-    final previewPath = _targetPathService.previewPath();
+    final previewPath = _targetPathService.previewPath(
+      storageStrategy: project.storageStrategy,
+    );
     final markdown = _previewMarkdownService.render(
       buildResult: buildResult,
       selectedItemIds: selectedItemIds,
@@ -52,6 +62,16 @@ class BookDeconstructionConfirmWorkflowService {
       project: project,
       relativePath: previewPath,
       content: markdown,
+    );
+    final structuredSourcePath = _structuredSourceProjectionService.targetPath(
+      storageStrategy: project.storageStrategy,
+    );
+    await _writeProjectTextFileUseCase.execute(
+      project: project,
+      relativePath: structuredSourcePath,
+      content: _structuredSourceProjectionService.render(
+        buildResult: buildResult,
+      ),
     );
     final changedPaths = await _narrativePersistenceService.persist(
       project: project,
@@ -69,6 +89,8 @@ class BookDeconstructionConfirmWorkflowService {
       selectedFollowupOptionTitle: followupResult.option.title,
       inheritedChapterPaths: followupResult.inheritedChapterPaths,
       changedPaths: <String>[
+        previewPath,
+        structuredSourcePath,
         ...changedPaths,
         followupResult.planPath,
         followupResult.guidePath,

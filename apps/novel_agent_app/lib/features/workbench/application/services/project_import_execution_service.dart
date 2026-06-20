@@ -1,8 +1,11 @@
+import 'dart:io';
+
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../../../book_deconstruction/application/services/book_deconstruction_draft_builder_service.dart';
 import '../../../book_deconstruction/application/services/book_deconstruction_smart_import_agent_service.dart';
+import '../../../book_deconstruction/application/services/book_deconstruction_smart_import_contract.dart';
 import '../../../book_deconstruction/application/services/book_deconstruction_smart_import_orchestration_service.dart';
 import '../../../book_deconstruction/application/services/book_deconstruction_narrative_persistence_service.dart';
 import '../../../book_deconstruction/application/services/book_deconstruction_preview_markdown_service.dart';
@@ -91,17 +94,21 @@ class ProjectImportExecutionService {
   }) async {
     final policy = _actionPolicyService.build(
       projectType: project.projectType,
+      storageStrategy: project.storageStrategy,
       sourcePaths: request.sourcePaths,
       requestedTargetDirectory: request.targetDirectory,
       requestedAutoDeconstruct: request.autoDeconstruct,
       requestedSmartAnalysis: request.smartAnalysis,
       smartAnalysisProviderId: request.smartAnalysisProviderId,
       smartAnalysisModelId: request.smartAnalysisModelId,
+      requestedSmartDeconstruction: request.smartDeconstruction,
+      smartDeconstructionProviderId: request.smartDeconstructionProviderId,
+      smartDeconstructionModelId: request.smartDeconstructionModelId,
     );
     final importResult = await _importProjectFilesUseCase.execute(
       project: project,
       sourcePaths: request.sourcePaths,
-      targetDirectory: request.targetDirectory,
+      targetDirectory: policy.resolvedTargetDirectory,
     );
     final importedPaths = ValueReaders.stringList(
       importResult['imported_paths'],
@@ -127,27 +134,36 @@ class ProjectImportExecutionService {
     final summaryParts = <String>[baseSummary];
     var autoDeconstructionApplied = false;
     var autoDeconstructionPreviewPath = '';
-    if (request.autoDeconstruct) {
-      if (!policy.canAutoDeconstruct) {
+    final requestedAnyDeconstruction =
+        request.autoDeconstruct || request.smartDeconstruction;
+    if (requestedAnyDeconstruction) {
+      if (policy.smartDeconstruction) {
+        final autoResult = await _writeSmartDeconstructionPreview(
+          project: project,
+          sourcePaths: request.sourcePaths,
+          providerId: request.smartDeconstructionProviderId,
+          modelId: request.smartDeconstructionModelId,
+        );
+        if (autoResult.previewPath.trim().isNotEmpty) {
+          autoDeconstructionApplied = true;
+          autoDeconstructionPreviewPath = autoResult.previewPath;
+          summaryParts.add('智能拆书预演纪要已写入 ${autoResult.previewPath}。');
+        }
+        if (autoResult.note.isNotEmpty) {
+          summaryParts.add(autoResult.note);
+        }
+      } else if (!policy.canAutoDeconstruct) {
         summaryParts.add(policy.outputHint);
       } else {
-        final autoResult =
-            request.smartDeconstruction &&
-                project.projectType.trim() ==
-                    BookDeconstructionConstants.projectTypeId
-            ? await _writeSmartDeconstructionPreview(
-                project: project,
-                sourcePaths: request.sourcePaths,
-                providerId: request.smartDeconstructionProviderId,
-                modelId: request.smartDeconstructionModelId,
-              )
-            : await _writeAutoDeconstructionPreview(
-                project: project,
-                sourcePath: request.sourcePaths.single.trim(),
-              );
-        autoDeconstructionApplied = true;
-        autoDeconstructionPreviewPath = autoResult.previewPath;
-        summaryParts.add('自动拆书预演纪要已写入 ${autoResult.previewPath}。');
+        final autoResult = await _writeAutoDeconstructionPreview(
+          project: project,
+          sourcePath: request.sourcePaths.single.trim(),
+        );
+        if (autoResult.previewPath.trim().isNotEmpty) {
+          autoDeconstructionApplied = true;
+          autoDeconstructionPreviewPath = autoResult.previewPath;
+          summaryParts.add('自动拆书预演纪要已写入 ${autoResult.previewPath}。');
+        }
         if (autoResult.note.isNotEmpty) {
           summaryParts.add(autoResult.note);
         }
@@ -217,7 +233,10 @@ class ProjectImportExecutionService {
     var note = '';
     if (project.projectType.trim() ==
         BookDeconstructionConstants.projectTypeId) {
-      final archivePath = _targetPathService.sourceArchivePath(sourcePath);
+      final archivePath = _targetPathService.sourceArchivePath(
+        sourcePath,
+        storageStrategy: project.storageStrategy,
+      );
       await _sourceOriginalArchiveStore.persist(
         project: project,
         relativePath: archivePath,
@@ -304,20 +323,35 @@ class ProjectImportExecutionService {
         ? '智能拆书已完成。'
         : smartResult.note.trim();
     if (project.projectType.trim() ==
-        BookDeconstructionConstants.projectTypeId) {
+            BookDeconstructionConstants.projectTypeId &&
+        sourcePaths.length == 1 &&
+        await FileSystemEntity.type(
+              sourcePaths.single.trim(),
+              followLinks: false,
+            ) ==
+            FileSystemEntityType.file) {
       final primarySourcePath = sourcePaths.first.trim();
+      final sourceDocument = await _sourceDocumentReaderService.read(
+        sourceFilePath: primarySourcePath,
+      );
       final archivePath = _targetPathService.sourceArchivePath(
         primarySourcePath,
+        storageStrategy: project.storageStrategy,
       );
       await _sourceOriginalArchiveStore.persist(
         project: project,
         relativePath: archivePath,
         title: _sourceTitleFromPath(primarySourcePath),
-        content: smartResult.normalizedSourceText.trim(),
+        content: sourceDocument.sourceText.trim(),
       );
       note = note.isEmpty
           ? '原文文本归档已写入 $archivePath。'
           : '$note 原文文本归档已写入 $archivePath。';
+    } else if (project.projectType.trim() ==
+        BookDeconstructionConstants.projectTypeId) {
+      note = note.isEmpty
+          ? '原始导入文件已按原路径保留在来源目录中。'
+          : '$note 原始导入文件已按原路径保留在来源目录中。';
     }
     final selectedItemIds = buildResult.applicationPlan.items
         .map((item) => item.id)
@@ -335,7 +369,14 @@ class ProjectImportExecutionService {
       project: project,
       narrativeArtifacts: buildResult.narrativeArtifacts,
     );
-    final reportPath = 'analysis/book_deconstruction_smart_import_report.md';
+    if (smartResult.rulesContent.trim().isNotEmpty) {
+      await _writeProjectTextFileUseCase.execute(
+        project: project,
+        relativePath: _smartDeconstructionRulesProjectPath(),
+        content: smartResult.rulesContent,
+      );
+    }
+    final reportPath = _smartDeconstructionReportProjectPath();
     if (smartResult.reportContent.trim().isNotEmpty) {
       await _writeProjectTextFileUseCase.execute(
         project: project,
@@ -347,6 +388,20 @@ class ProjectImportExecutionService {
       note = '$note 报告已写入 $reportPath。';
     }
     return _AutoDeconstructionOutcome(previewPath: previewPath, note: note);
+  }
+
+  String _smartDeconstructionRulesProjectPath() {
+    return BookDeconstructionSmartImportContract.rulesPath.replaceFirst(
+      'deconstruction_import',
+      'deconstruction',
+    );
+  }
+
+  String _smartDeconstructionReportProjectPath() {
+    return BookDeconstructionSmartImportContract.reportPath.replaceFirst(
+      'deconstruction_import',
+      'deconstruction',
+    );
   }
 
   Future<_SmartAnalysisOutcome> _writeSmartAnalysisReport({

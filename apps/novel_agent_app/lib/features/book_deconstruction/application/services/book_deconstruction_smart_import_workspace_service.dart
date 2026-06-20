@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import 'book_deconstruction_smart_import_contract.dart';
+
 class BookDeconstructionSmartImportWorkspaceService {
   const BookDeconstructionSmartImportWorkspaceService({
     SourceDocumentFormatCatalogService? formatCatalogService,
@@ -70,11 +72,14 @@ class BookDeconstructionSmartImportWorkspaceService {
           );
           await _writeStagedSource(
             tempRoot: tempRoot,
-            relativePath: 'inputs/$relativePath',
+            relativePath:
+                '${BookDeconstructionSmartImportContract.stagedSourcesRoot}/$relativePath',
             sourceText: sourceDocument.sourceText,
           );
-          stagedRelativePaths.add('inputs/$relativePath');
-          stagedSourceTexts['inputs/$relativePath'] = sourceDocument.sourceText;
+          final stagedRelativePath =
+              '${BookDeconstructionSmartImportContract.stagedSourcesRoot}/$relativePath';
+          stagedRelativePaths.add(stagedRelativePath);
+          stagedSourceTexts[stagedRelativePath] = sourceDocument.sourceText;
         }
         continue;
       }
@@ -88,7 +93,8 @@ class BookDeconstructionSmartImportWorkspaceService {
         sourceDocument.sourceFilePath,
         fallback: 'source_${index + 1}.md',
       );
-      final relativePath = 'inputs/$fileName';
+      final relativePath =
+          '${BookDeconstructionSmartImportContract.stagedSourcesRoot}/$fileName';
       await _writeStagedSource(
         tempRoot: tempRoot,
         relativePath: relativePath,
@@ -99,8 +105,9 @@ class BookDeconstructionSmartImportWorkspaceService {
     }
 
     final instructionFile = File(
-      '${tempRoot.path}${Platform.pathSeparator}task.md',
+      '${tempRoot.path}${Platform.pathSeparator}${BookDeconstructionSmartImportContract.taskRelativePath.replaceAll('/', Platform.pathSeparator)}',
     );
+    await instructionFile.parent.create(recursive: true);
     await instructionFile.writeAsString(_taskMarkdown(stagedRelativePaths));
     final tempProject = ProjectDescriptor(
       id: 'internal_book_deconstruction_import_$runId',
@@ -192,12 +199,37 @@ class BookDeconstructionSmartImportWorkspaceService {
       ..writeln()
       ..writeln('目标：')
       ..writeln('- 识别章节划分方式。')
-      ..writeln('- 清理广告、采集站尾注、无关推广、明显乱码噪声。')
-      ..writeln('- 尽量保留原文有效信息，不主动改写内容。')
-      ..writeln('- 最终把清洗后的连续文本写入 `outputs/normalized_source.md`。')
-      ..writeln('- 把你的拆分/清洗说明写入 `outputs/import_report.md`。')
+      ..writeln('- 找出应清理的广告、采集站尾注、无关推广、明显乱码噪声。')
+      ..writeln('- 尽量保留原文有效信息，不主动改写正文。')
+      ..writeln('- 只输出“规则”和“说明”，不要手工重写整份归一化正文。')
+      ..writeln(
+        '- 把结构化规则写入 `${BookDeconstructionSmartImportContract.rulesPath}`。',
+      )
+      ..writeln(
+        '- 把你的拆分/清洗说明写入 `${BookDeconstructionSmartImportContract.reportPath}`。',
+      )
       ..writeln()
+      ..writeln(
+        '程序会在你写出规则后自动执行清洗并生成 `${BookDeconstructionSmartImportContract.normalizedSourcePath}`。',
+      )
       ..writeln('只允许依赖项目工具读取和写入当前工作区文件。')
+      ..writeln()
+      ..writeln('规则 JSON 结构：')
+      ..writeln('```json')
+      ..writeln('{')
+      ..writeln(
+        '  "selected_source_paths": ["analysis/deconstruction_import/source_inputs/..."],',
+      )
+      ..writeln(
+        '  "chapter_heading_patterns": ["^第...章.*\$", "^Chapter\\\\s+\\\\d+.*\$"],',
+      )
+      ..writeln('  "drop_line_contains": ["最新网址", "收藏本站"],')
+      ..writeln('  "drop_line_patterns": ["^\\\\s*广告.*\$"],')
+      ..writeln('  "collapse_blank_lines": true,')
+      ..writeln('  "insert_blank_line_between_sources": true,')
+      ..writeln('  "trim_trailing_whitespace": true')
+      ..writeln('}')
+      ..writeln('```')
       ..writeln()
       ..writeln('导入文件：');
     for (final path in stagedRelativePaths) {
@@ -206,8 +238,12 @@ class BookDeconstructionSmartImportWorkspaceService {
     buffer
       ..writeln()
       ..writeln('完成标准：')
-      ..writeln('1. `outputs/normalized_source.md` 必须存在且非空。')
-      ..writeln('2. `outputs/import_report.md` 应说明识别到的章节规则、清理内容和仍未确定的问题。');
+      ..writeln(
+        '1. `${BookDeconstructionSmartImportContract.rulesPath}` 必须存在且是合法 JSON。',
+      )
+      ..writeln(
+        '2. `${BookDeconstructionSmartImportContract.reportPath}` 应说明识别到的章节规则、清理内容和仍未确定的问题。',
+      );
     return buffer.toString().trimRight();
   }
 }

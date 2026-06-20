@@ -29,8 +29,8 @@ void main() {
       );
     });
 
-    test('sqlite layout exposes user directories as readable projection', () {
-      // 中文注释: SQLite 项目当前阶段不把用户目录当事实来源，而是保留成可读投影视图入口。
+    test('sqlite layout exposes only minimal readable projection surfaces', () {
+      // 中文注释: SQLite 项目不应再物理创建整套 Markdown 工作区目录；只保留最小可见导入入口。
       const service = ProjectDirectoryLayoutService();
 
       final layout = service.layoutFor(
@@ -39,14 +39,11 @@ void main() {
 
       expect(layout.storageStrategy, ProjectStorageStrategy.sqliteProjectStore);
       expect(layout.primaryContentDirectories, isEmpty);
-      expect(
-        layout.readableProjectionDirectories.length,
-        ProjectWorkspaceCatalog.visibleWorkspaceSkeletonDirs.length,
-      );
+      expect(layout.readableProjectionDirectories.length, 1);
       expect(layout.internalDirectories, isNotEmpty);
       expect(
         layout.readableProjectionDirectories.any(
-          (descriptor) => descriptor.path == 'assets/foreshadows/',
+          (descriptor) => descriptor.path == 'imports/',
         ),
         isTrue,
       );

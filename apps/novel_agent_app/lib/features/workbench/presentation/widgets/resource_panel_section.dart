@@ -12,6 +12,7 @@ class ResourcePanelSection extends StatelessWidget {
     this.padding = const EdgeInsets.all(10),
     this.emphasized = false,
     this.showBorder = false,
+    this.expandChild = false,
   });
 
   final String? title;
@@ -20,6 +21,7 @@ class ResourcePanelSection extends StatelessWidget {
   final Widget child;
   final bool emphasized;
   final bool showBorder;
+  final bool expandChild;
 
   @override
   Widget build(BuildContext context) {
@@ -79,7 +81,7 @@ class ResourcePanelSection extends StatelessWidget {
               ),
               SizedBox(height: visual.compactGap + 1),
             ],
-            child,
+            expandChild ? Expanded(child: child) : child,
           ],
         ),
       ),

@@ -526,19 +526,19 @@ class LocalSettingsRepository implements SettingsRepository {
     Map<String, Object?> document, {
     required String basePath,
   }) {
-    // 中文注释: 默认项目路径在这里统一处理环境变量、配置覆盖和移动端固定根目录策略。
+    // 中文注释: 默认项目路径只表示“最近一次明确打开/创建的项目”，不能为空时才解析成绝对路径。
     final environmentProjectPath = _env('NOVEL_AGENT_PROJECT_PATH');
     if (environmentProjectPath.isNotEmpty) {
       return _resolveProjectPath(environmentProjectPath, basePath: basePath);
     }
     if (!_allowConfiguredProjectPathOverride) {
-      return Directory(_defaultProjectRootPath).absolute.path;
+      return '';
     }
     final configuredProjectPath = _stringValue(
       document['default_project_path'],
     );
     if (configuredProjectPath.isEmpty) {
-      return Directory(_defaultProjectRootPath).absolute.path;
+      return '';
     }
     return _resolveProjectPath(configuredProjectPath, basePath: basePath);
   }
@@ -546,7 +546,7 @@ class LocalSettingsRepository implements SettingsRepository {
   String _resolveProjectPath(String rawPath, {required String basePath}) {
     // 中文注释: 相对项目路径总是相对设置基准目录解析，避免再偷偷回到当前目录。
     if (rawPath.trim().isEmpty) {
-      return _normalizedAbsolutePath(_defaultProjectRootPath);
+      return '';
     }
     if (rawPath.startsWith('/') || RegExp(r'^[A-Za-z]:').hasMatch(rawPath)) {
       return _normalizedAbsolutePath(rawPath);

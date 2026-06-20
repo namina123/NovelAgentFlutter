@@ -425,10 +425,7 @@ void main() {
 
         harness.controller.onOptimizeRequested();
 
-        expect(
-          harness.lastAnnouncement,
-          '当前先直接发送自然语言需求；需要优化时可以先走现有会话流程。',
-        );
+        expect(harness.lastAnnouncement, '当前先直接发送自然语言需求；需要优化时可以先走现有会话流程。');
       },
     );
 
@@ -1055,6 +1052,7 @@ class _ConversationControllerHarness {
       ),
       importProjectFilesUseCase: ImportProjectFilesUseCase(
         projectToolHostPort: effectiveToolHostPort,
+        sourceImportDiscoveryPort: const SourceImportDiscoveryService(),
       ),
       updateProjectManifestUseCase: UpdateProjectManifestUseCase(
         writeProjectTextFileUseCase: WriteProjectTextFileUseCase(

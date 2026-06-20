@@ -5,6 +5,7 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../../../../shared/services/desktop_text_file_picker_service.dart';
 import '../models/project_reference_extraction_execution_result.dart';
+import 'project_reference_extraction_source_resolution_service.dart';
 
 typedef ProjectReferenceExtractionGatewayFactory =
     LlmGateway Function(
@@ -28,6 +29,8 @@ class ProjectReferenceExtractionExecutionService {
     ModelExecutionProfileService? modelExecutionProfileService,
     ProjectReferenceExtractionRequestBuilderService? requestBuilderService,
     ReferenceExtractionStrategyProfileCatalogService? strategyCatalogService,
+    ProjectReferenceExtractionSourceResolutionService?
+    sourceResolutionService,
   }) : _readSettings = readSettings,
        _llmGatewayFactory = llmGatewayFactory,
        _executeReferenceExtraction = executeReferenceExtraction,
@@ -41,6 +44,9 @@ class ProjectReferenceExtractionExecutionService {
        _strategyCatalogService =
            strategyCatalogService ??
            const ReferenceExtractionStrategyProfileCatalogService(),
+       _sourceResolutionService =
+           sourceResolutionService ??
+           ProjectReferenceExtractionSourceResolutionService(),
        _runCoordinator = ReferenceExtractionRunCoordinator(
          workspacePort: LocalProjectWorkspacePort(),
        );
@@ -53,26 +59,42 @@ class ProjectReferenceExtractionExecutionService {
   final ProjectReferenceExtractionRequestBuilderService _requestBuilderService;
   final ReferenceExtractionStrategyProfileCatalogService
   _strategyCatalogService;
+  final ProjectReferenceExtractionSourceResolutionService
+  _sourceResolutionService;
   final ReferenceExtractionRunCoordinator _runCoordinator;
 
   Future<ProjectReferenceExtractionExecutionResult> pickAndExecute({
     required ProjectDescriptor project,
     String strategyProfileId = '',
   }) async {
-    final selectedPath = await _sourcePickerService.pickSingleFile(
-      dialogTitle: '选择参考源文档',
+    final resolution = await _sourceResolutionService.resolve(
+      project: project,
+      pickSourceFile: () => _sourcePickerService.pickSingleFile(
+        dialogTitle: '选择参考源文档',
+      ),
     );
-    if (selectedPath == null) {
-      return const ProjectReferenceExtractionExecutionResult(
+    if (!resolution.ok) {
+      return ProjectReferenceExtractionExecutionResult(
         ok: false,
         didMutateProject: false,
-        statusMessage: '已取消参考资料提取。',
+        statusMessage: resolution.statusMessage,
       );
     }
-    return execute(
+    final result = await execute(
       project: project,
-      sourceFilePath: selectedPath,
+      sourceFilePath: resolution.sourceFilePath,
       strategyProfileId: strategyProfileId,
+    );
+    if (!resolution.usedDeconstructionProjection) {
+      return result;
+    }
+    return ProjectReferenceExtractionExecutionResult(
+      ok: result.ok,
+      didMutateProject: result.didMutateProject,
+      statusMessage: result.ok
+          ? '${resolution.statusMessage} ${result.statusMessage}'.trim()
+          : result.statusMessage,
+      normalizationNote: result.normalizationNote,
     );
   }
 

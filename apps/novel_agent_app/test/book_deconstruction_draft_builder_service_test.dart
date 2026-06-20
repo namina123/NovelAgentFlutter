@@ -27,6 +27,9 @@ void main() {
     expect(result.extractionResult.chapterOutlines, hasLength(2));
     expect(result.extractionResult.characterProfiles, hasLength(2));
     expect(result.extractionResult.organizationProfiles, hasLength(1));
+    expect(result.extractionResult.timelineRecords, hasLength(2));
+    expect(result.extractionResult.foreshadowRecords.length, greaterThanOrEqualTo(1));
+    expect(result.extractionResult.relationshipRecords, isNotEmpty);
     expect(result.narrativeArtifacts.claims, isNotEmpty);
     expect(result.narrativeArtifacts.profileProposals, hasLength(1));
     expect(result.narrativeArtifacts.semanticReviews, hasLength(1));

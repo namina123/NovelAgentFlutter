@@ -22,8 +22,13 @@ class ProjectDirectoryLayoutService {
         return ProjectDirectoryLayout(
           storageStrategy: storageStrategy,
           primaryContentDirectories: const <WorkspaceDirectoryDescriptor>[],
-          readableProjectionDirectories:
-              ProjectWorkspaceCatalog.visibleWorkspaceSkeletonDirs,
+          readableProjectionDirectories: const <WorkspaceDirectoryDescriptor>[
+            WorkspaceDirectoryDescriptor(
+              path: 'imports/',
+              name: '导入',
+              purpose: '导入原文、资料包和待整理素材的稳定入口。',
+            ),
+          ],
           advancedDirectories: ProjectWorkspaceCatalog.advancedWorkspaceDirs,
           internalDirectories: ProjectWorkspaceCatalog.internalWorkspaceDirs,
         );

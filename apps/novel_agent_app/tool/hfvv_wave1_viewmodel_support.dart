@@ -1062,6 +1062,7 @@ class HfvvWave1AppShellHarness {
       ),
       importProjectFilesUseCase: ImportProjectFilesUseCase(
         projectToolHostPort: bundle.projectToolHostPort,
+        sourceImportDiscoveryPort: const SourceImportDiscoveryService(),
       ),
       updateProjectManifestUseCase: UpdateProjectManifestUseCase(
         writeProjectTextFileUseCase: writeProjectTextFileUseCase,

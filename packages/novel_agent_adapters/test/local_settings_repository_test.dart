@@ -48,7 +48,7 @@ void main() {
     );
 
     test('mobile mode ignores configured default project path', () async {
-      // 中文注释: 移动端固定应用沙盒目录时，即使设置文件写了路径也不能覆盖默认项目根。
+      // 中文注释: 移动端固定项目根目录不等于默认打开某个项目；未显式选择项目时默认项目路径应为空。
       final sandboxRoot = await Directory.systemTemp.createTemp(
         'novel_agent_settings_mobile_',
       );
@@ -65,18 +65,16 @@ void main() {
   "default_project_path": "should/not/be/used"
 }
 ''');
-      final fixedProjectRoot = Directory(
-        '${sandboxRoot.path}${Platform.pathSeparator}projects${Platform.pathSeparator}default_project',
-      ).absolute.path;
       final repository = LocalSettingsRepository(
         settingsSearchRoots: <String>[sandboxRoot.path],
-        defaultProjectRootPath: fixedProjectRoot,
+        defaultProjectRootPath:
+            '${sandboxRoot.path}${Platform.pathSeparator}projects${Platform.pathSeparator}default_project',
         allowConfiguredProjectPathOverride: false,
       );
 
       final settings = await repository.load();
 
-      expect(settings.defaultProjectPath, fixedProjectRoot);
+      expect(settings.defaultProjectPath, isEmpty);
     });
 
     test(

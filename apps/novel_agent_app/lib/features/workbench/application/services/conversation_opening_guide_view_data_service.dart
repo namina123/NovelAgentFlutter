@@ -182,7 +182,7 @@ class ConversationOpeningGuideViewDataService {
       if (maturity.isContinueReady || maturity.narrativeFileCount > 0)
         '当前项目已经具备继续分析或承接创作的基础。'
       else
-        '导入后应优先补齐结构化拆书资产，再进入正式创作。',
+        '导入后应优先进入正式分析入口，补齐结构化拆书资产，再进入正式创作。',
     ];
     final guide = ConversationGuideViewData(
       workflowTitle: fallbackGuide.workflowTitle,
@@ -190,7 +190,7 @@ class ConversationOpeningGuideViewDataService {
           '${fallbackGuide.workflowDescription}\n\n${summaryLines.join('\n')}',
       composerHint: isGenerating
           ? '整理中：可以继续补充角色、背景、风格、剧情线、道具或后续路线要求。'
-          : '先导入书籍，或继续分析数据、开始创作。',
+          : '先导入书籍，或进入分析数据、开始创作。',
       primaryActions: fallbackGuide.primaryActions,
     );
     return guide.copyWith(
@@ -200,7 +200,7 @@ class ConversationOpeningGuideViewDataService {
         primaryActions: fallbackGuide.primaryActions,
         projection: projection,
         preferredNextAction: null,
-        firstPromptOverride: '先确认这次是继续导入书籍、补齐分析数据，还是开始承接创作。',
+        firstPromptOverride: '先确认这次是继续导入书籍、进入正式分析入口，还是开始承接创作。',
         nextStepLabelOverride: '导入书籍 / 分析数据 / 开始创作',
         preferSingleAction: false,
       ),

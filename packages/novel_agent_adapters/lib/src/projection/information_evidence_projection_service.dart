@@ -17,6 +17,13 @@ class InformationEvidenceProjectionService {
 
   const InformationEvidenceProjectionService();
 
+  static const List<String> defaultProjectionPaths = <String>[
+    InformationProjectionDocument.knowledgeSummaryRelativePath,
+    InformationProjectionDocument.designSummaryRelativePath,
+    InformationProjectionDocument.researchSummaryRelativePath,
+    InformationProjectionDocument.referenceBoundaryRelativePath,
+  ];
+
   InformationEvidenceProjection fromWritingExecutionInformation(
     JsonMap information, {
     List<JsonMap> permissionRecords = const <JsonMap>[],
@@ -448,12 +455,7 @@ class InformationEvidenceProjectionService {
   }
 
   List<String> _defaultProjectionPaths() {
-    return const <String>[
-      InformationProjectionDocument.knowledgeSummaryRelativePath,
-      InformationProjectionDocument.designSummaryRelativePath,
-      InformationProjectionDocument.researchSummaryRelativePath,
-      InformationProjectionDocument.referenceBoundaryRelativePath,
-    ];
+    return defaultProjectionPaths;
   }
 
   List<String> _projectionPathsForChangedPaths(List<String> changedPaths) {

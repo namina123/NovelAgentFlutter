@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:novel_agent_core/novel_agent_core.dart';
 import 'package:sqlite3/sqlite3.dart';
 
+import 'sqlite_rag_ingestion_bundle_persistence_runtime.dart';
 import 'sqlite_project_database_opener.dart';
 import 'sqlite_rag_metadata_store.dart';
 
@@ -11,11 +12,17 @@ class SqliteRagMetadataRepository {
   SqliteRagMetadataRepository({
     SqliteProjectDatabaseOpener? databaseOpener,
     SqliteRagMetadataStore? metadataStore,
+    SqliteRagIngestionBundlePersistenceRuntime? ingestionBundlePersistenceRuntime,
   }) : _databaseOpener = databaseOpener ?? SqliteProjectDatabaseOpener(),
-       _metadataStore = metadataStore ?? SqliteRagMetadataStore();
+       _metadataStore = metadataStore ?? SqliteRagMetadataStore(),
+       _ingestionBundlePersistenceRuntime =
+           ingestionBundlePersistenceRuntime ??
+           SqliteRagIngestionBundlePersistenceRuntime();
 
   final SqliteProjectDatabaseOpener _databaseOpener;
   final SqliteRagMetadataStore _metadataStore;
+  final SqliteRagIngestionBundlePersistenceRuntime
+  _ingestionBundlePersistenceRuntime;
 
   Future<void> persistIngestionBundle({
     required ProjectDescriptor project,
@@ -28,105 +35,20 @@ class SqliteRagMetadataRepository {
     FutureOr<void> Function(int completedChunks, int totalChunks)?
     onChunkBatchCommitted,
   }) async {
-    // 中文注释: 语料写入打成单次事务，避免每个 chunk 单独开库造成 UI 卡顿和性能浪费。
-    await _runWrite(
-      project,
-      () async {
-        _upsert(
-          tableName: 'rag_corpus',
-          keyColumns: <String>['corpus_id'],
-          values: <String, Object?>{
-            'corpus_id': corpusPackage.corpusId,
-            'title': corpusPackage.title,
-            'source_kind': corpusPackage.sourceKind,
-            'build_mode': corpusPackage.buildMode,
-            'language': corpusPackage.language,
-            'version': corpusPackage.version,
-            'created_at': corpusPackage.createdAt,
-            'updated_at': corpusPackage.updatedAt,
-            'source_count': corpusPackage.sourceCount,
-            'chapter_count': corpusPackage.chapterCount,
-            'chunk_count': corpusPackage.chunkCount,
-            'is_model_assisted': corpusPackage.isModelAssisted ? 1 : 0,
-            'capability_flags_json': jsonEncode(corpusPackage.capabilityFlags),
-            'payload_json': jsonEncode(corpusPackage.toJson()),
-          },
-        );
-        _upsert(
-          tableName: 'rag_source_document',
-          keyColumns: <String>['source_document_id'],
-          values: <String, Object?>{
-            'source_document_id': sourceDocument.sourceDocumentId,
-            'corpus_id': sourceDocument.corpusId,
-            'source_kind': sourceDocument.sourceKind,
-            'display_name': sourceDocument.displayName,
-            'origin_path': sourceDocument.originPath,
-            'origin_format': sourceDocument.originFormat,
-            'language': sourceDocument.language,
-            'content_hash': sourceDocument.contentHash,
-            'payload_json': jsonEncode(sourceDocument.toJson()),
-          },
-        );
-        var completed = 0;
-        for (final chunk in chunks) {
-          _upsert(
-            tableName: 'rag_chunk',
-            keyColumns: <String>['chunk_id'],
-            values: <String, Object?>{
-              'chunk_id': chunk.chunkId,
-              'corpus_id': chunk.corpusId,
-              'source_document_id': chunk.sourceDocumentId,
-              'chapter_index': chunk.chapterIndex,
-              'chapter_title': chunk.chapterTitle,
-              'segment_index': chunk.segmentIndex,
-              'range_start': chunk.rangeStart,
-              'range_end': chunk.rangeEnd,
-              'text_value': chunk.text,
-              'normalized_text': chunk.normalizedText,
-              'token_estimate': chunk.tokenEstimate,
-              'payload_json': jsonEncode(chunk.toJson()),
+    // 中文注释: 大批量 RAG 写入搬到后台 isolate，避免 UI isolate 在 SQLite 事务期间持续卡死。
+    await _ingestionBundlePersistenceRuntime.persist(
+      projectRootPath: project.rootPath,
+      corpusPackage: corpusPackage,
+      sourceDocument: sourceDocument,
+      chunks: chunks,
+      indexHandle: indexHandle,
+      ingestionRun: ingestionRun,
+      chunkBatchSize: chunkBatchSize,
+      onChunkBatchCommitted: onChunkBatchCommitted == null
+          ? null
+          : (completedChunks, totalChunks) async {
+              await onChunkBatchCommitted(completedChunks, totalChunks);
             },
-          );
-          completed += 1;
-          if (completed % chunkBatchSize == 0 || completed == chunks.length) {
-            if (onChunkBatchCommitted != null) {
-              await onChunkBatchCommitted(completed, chunks.length);
-            }
-            await Future<void>.delayed(Duration.zero);
-          }
-        }
-        _upsert(
-          tableName: 'rag_index_handle',
-          keyColumns: <String>['index_handle_id'],
-          values: <String, Object?>{
-            'index_handle_id': indexHandle.indexHandleId,
-            'corpus_id': indexHandle.corpusId,
-            'backend_kind': indexHandle.backendKind,
-            'backend_location': indexHandle.backendLocation,
-            'embedding_dimension': indexHandle.embeddingDimension,
-            'status': indexHandle.status,
-            'version': indexHandle.version,
-            'last_built_at': indexHandle.lastBuiltAt,
-            'payload_json': jsonEncode(indexHandle.toJson()),
-          },
-        );
-        _upsert(
-          tableName: 'rag_ingestion_run',
-          keyColumns: <String>['ingestion_run_id'],
-          values: <String, Object?>{
-            'ingestion_run_id':
-                ingestionRun['ingestion_run_id']?.toString() ?? '',
-            'project_id': ingestionRun['project_id']?.toString() ?? '',
-            'corpus_id': ingestionRun['corpus_id']?.toString() ?? '',
-            'source_document_id':
-                ingestionRun['source_document_id']?.toString() ?? '',
-            'status': ingestionRun['status']?.toString() ?? '',
-            'started_at': ingestionRun['started_at']?.toString() ?? '',
-            'updated_at': ingestionRun['updated_at']?.toString() ?? '',
-            'payload_json': jsonEncode(ingestionRun),
-          },
-        );
-      },
     );
   }
 

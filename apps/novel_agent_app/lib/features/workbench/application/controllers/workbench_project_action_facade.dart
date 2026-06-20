@@ -57,12 +57,13 @@ class WorkbenchProjectActionFacade {
     _controller._showWorkspaceCommand(
       _controller._projectImportWorkspaceCommandViewDataService.build(
         projectType: project.projectType,
+        storageStrategy: project.storageStrategy,
         smartAnalysisModelOptions: _controller._smartAnalysisModelOptions(),
         smartDeconstructionModelOptions: _controller
             ._smartDeconstructionModelOptions(),
         requestedTargetDirectory: _controller
             ._workspaceCommandDefaultTargetService
-            .importTargetDirectory(),
+            .importTargetDirectory(storageStrategy: project.storageStrategy),
       ),
     );
   }
@@ -86,7 +87,7 @@ class WorkbenchProjectActionFacade {
         premise: '',
         notes: '',
         relativePath: _controller._workspaceCommandDefaultTargetService
-            .createFileDirectory(),
+            .createFileDirectory(storageStrategy: project.storageStrategy),
         entryName: '',
         content: '',
         sourcePathsText: '',
@@ -114,7 +115,9 @@ class WorkbenchProjectActionFacade {
         premise: '',
         notes: '',
         relativePath: _controller._workspaceCommandDefaultTargetService
-            .createFolderParentDirectory(),
+            .createFolderParentDirectory(
+              storageStrategy: project.storageStrategy,
+            ),
         entryName: '',
         content: '',
         sourcePathsText: '',
@@ -287,6 +290,8 @@ class WorkbenchProjectActionFacade {
     _controller._mutateWorkbench(
       (current) => _controller.applyWorkbenchState(current),
     );
+    // 中文注释: 正文一旦变脏，就安排一次去抖持久化，确保草稿恢复快照能跟上最新未保存内容。
+    _controller._scheduleWorkbenchSnapshotPersistence();
   }
 
   void onEditProjectInfoRequested() {

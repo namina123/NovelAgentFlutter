@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import 'reference_source_document_file_reader_service.dart';
+import 'rag_source_analysis_summary_builder.dart';
 import 'sqlite_rag_metadata_repository.dart';
 
 class RagTxtCorpusIngestionProgress {
@@ -28,17 +29,24 @@ class RagTxtCorpusIngestionService {
     ReferenceSourceDocumentFileReaderService? fileReaderService,
     ReferenceSourceDocumentStructureService? structureService,
     BundleChecksumService? checksumService,
-  }) : _metadataRepository = metadataRepository ?? SqliteRagMetadataRepository(),
+    RagSourceAnalysisSummaryBuilder? sourceAnalysisSummaryBuilder,
+  }) : _metadataRepository =
+           metadataRepository ?? SqliteRagMetadataRepository(),
        _fileReaderService =
-           fileReaderService ?? const ReferenceSourceDocumentFileReaderService(),
+           fileReaderService ??
+           const ReferenceSourceDocumentFileReaderService(),
        _structureService =
            structureService ?? const ReferenceSourceDocumentStructureService(),
-       _checksumService = checksumService ?? const BundleChecksumService();
+       _checksumService = checksumService ?? const BundleChecksumService(),
+       _sourceAnalysisSummaryBuilder =
+           sourceAnalysisSummaryBuilder ??
+           const RagSourceAnalysisSummaryBuilder();
 
   final SqliteRagMetadataRepository _metadataRepository;
   final ReferenceSourceDocumentFileReaderService _fileReaderService;
   final ReferenceSourceDocumentStructureService _structureService;
   final BundleChecksumService _checksumService;
+  final RagSourceAnalysisSummaryBuilder _sourceAnalysisSummaryBuilder;
 
   Future<RagCorpusPackage> ingestFile({
     required ProjectDescriptor project,
@@ -104,6 +112,11 @@ class RagTxtCorpusIngestionService {
       preferredLanguage: normalizedCorpus.language,
       sourceText: normalizedText,
     );
+    final sourceAnalysisSummary = _sourceAnalysisSummaryBuilder.build(
+      normalizedText: normalizedText,
+      sections: structure.sections,
+      targetLanguage: sourceLanguage,
+    );
     final contentHash = _checksumService.checksumOf(<String, Object?>{
       'source_file_path': sourceDocumentFile.sourceFilePath,
       'source_title': sourceDocumentFile.sourceTitle,
@@ -126,6 +139,7 @@ class RagTxtCorpusIngestionService {
       metadata: <String, Object?>{
         'source_text_length': normalizedText.length,
         'structure_kind': structure.structureKind,
+        'source_analysis_summary': sourceAnalysisSummary,
       },
     );
     await _emitProgress(
@@ -176,6 +190,7 @@ class RagTxtCorpusIngestionService {
         'section_count': structure.sections.length,
         'chunk_count': chunks.length,
         'ingestion_mode': 'txt_basic',
+        'source_analysis_summary': sourceAnalysisSummary,
       },
     );
     final indexHandle = _buildIndexHandle(
@@ -189,8 +204,195 @@ class RagTxtCorpusIngestionService {
       sectionCount: structure.sections.length,
       chunkCount: chunks.length,
       timestamp: timestamp,
+      sourceAnalysisSummary: sourceAnalysisSummary,
     );
 
+    await _emitProgress(
+      onProgress,
+      RagTxtCorpusIngestionProgress(
+        phaseId: 'persisting',
+        message: '正在写入语料元数据...',
+        completedChunks: 0,
+        totalChunks: chunks.length,
+      ),
+    );
+    await _metadataRepository.persistIngestionBundle(
+      project: project,
+      corpusPackage: updatedCorpus,
+      sourceDocument: sourceDocument,
+      chunks: chunks,
+      indexHandle: indexHandle,
+      ingestionRun: ingestionRun,
+      onChunkBatchCommitted: (completed, total) async {
+        await _emitProgress(
+          onProgress,
+          RagTxtCorpusIngestionProgress(
+            phaseId: 'persisting',
+            message: '正在写入语料元数据... $completed / $total 分片',
+            completedChunks: completed,
+            totalChunks: total,
+          ),
+        );
+      },
+    );
+    await _emitProgress(
+      onProgress,
+      RagTxtCorpusIngestionProgress(
+        phaseId: 'completed',
+        message: '语料构建完成：${updatedCorpus.chunkCount} 个分片。',
+        completedChunks: updatedCorpus.chunkCount,
+        totalChunks: updatedCorpus.chunkCount,
+      ),
+    );
+    return updatedCorpus;
+  }
+
+  Future<RagCorpusPackage> ingestNormalizedText({
+    required ProjectDescriptor project,
+    required String sourceDisplayName,
+    required String sourceIdentityPath,
+    required String normalizedText,
+    required RagCorpusPackage corpusPackage,
+    String? ingestedAt,
+    int maxChunkChars = 2400,
+    int minChunkChars = 600,
+    RagTxtCorpusIngestionProgressCallback? onProgress,
+  }) async {
+    final normalizedPath = sourceIdentityPath.trim();
+    final cleanText = _normalizeText(normalizedText);
+    if (cleanText.isEmpty) {
+      throw StateError('语料提取源文本为空：$sourceIdentityPath');
+    }
+    final timestamp = _resolveTimestamp(ingestedAt);
+    final normalizedCorpus = _normalizeCorpusPackage(
+      corpusPackage,
+      sourceText: cleanText,
+      timestamp: timestamp,
+    );
+    await _emitProgress(
+      onProgress,
+      const RagTxtCorpusIngestionProgress(
+        phaseId: 'analyzing_structure',
+        message: '正在分析整理后的纯文本结构...',
+      ),
+    );
+    final structure = _structureService.analyze(cleanText);
+    await _yieldToUi();
+    await _emitProgress(
+      onProgress,
+      const RagTxtCorpusIngestionProgress(
+        phaseId: 'splitting_sections',
+        message: '正在切分整理后的章节片段...',
+      ),
+    );
+    final sections = await _splitSections(
+      structure.sections,
+      maxChunkChars: maxChunkChars,
+      minChunkChars: minChunkChars,
+    );
+    if (sections.isEmpty) {
+      throw StateError('语料提取未生成任何分段：$sourceIdentityPath');
+    }
+    final sourceLanguage = _inferLanguage(
+      preferredLanguage: normalizedCorpus.language,
+      sourceText: cleanText,
+    );
+    final sourceAnalysisSummary = _sourceAnalysisSummaryBuilder.build(
+      normalizedText: cleanText,
+      sections: structure.sections,
+      targetLanguage: sourceLanguage,
+    );
+    final contentHash = _checksumService.checksumOf(<String, Object?>{
+      'source_file_path': normalizedPath,
+      'source_title': sourceDisplayName,
+      'source_text': cleanText,
+    });
+    final sourceDocumentId = _buildSourceDocumentId(
+      corpusId: normalizedCorpus.corpusId,
+      sourceTitle: sourceDisplayName,
+      contentHash: contentHash,
+    );
+    final sourceDocument = RagSourceDocument(
+      sourceDocumentId: sourceDocumentId,
+      corpusId: normalizedCorpus.corpusId,
+      sourceKind: 'txt',
+      displayName: sourceDisplayName,
+      originPath: normalizedPath,
+      originFormat: 'txt',
+      language: sourceLanguage,
+      contentHash: contentHash,
+      metadata: <String, Object?>{
+        'source_text_length': cleanText.length,
+        'structure_kind': structure.structureKind,
+        'source_analysis_summary': sourceAnalysisSummary,
+        'normalization_stage': 'book_deconstruction_preprocessed',
+      },
+    );
+    await _emitProgress(
+      onProgress,
+      const RagTxtCorpusIngestionProgress(
+        phaseId: 'building_chunks',
+        message: '正在构建语料分片...',
+      ),
+    );
+    final chunks = await _buildChunks(
+      sourceDocument: sourceDocument,
+      sections: sections,
+      onProgress: onProgress,
+    );
+    final updatedCorpus = normalizedCorpus.copyWith(
+      sourceKind: 'txt',
+      language: sourceLanguage,
+      buildMode: normalizedCorpus.buildMode.trim().isEmpty
+          ? 'basic'
+          : normalizedCorpus.buildMode.trim(),
+      segmentationStrategy: normalizedCorpus.segmentationStrategy.trim().isEmpty
+          ? _defaultSegmentationStrategyId(structure.structureKind)
+          : normalizedCorpus.segmentationStrategy.trim(),
+      chunkStrategy: normalizedCorpus.chunkStrategy.trim().isEmpty
+          ? 'section_split'
+          : normalizedCorpus.chunkStrategy.trim(),
+      embeddingBackend: normalizedCorpus.embeddingBackend.trim().isEmpty
+          ? 'none'
+          : normalizedCorpus.embeddingBackend.trim(),
+      indexBackend: normalizedCorpus.indexBackend.trim().isEmpty
+          ? 'sqlite-meta'
+          : normalizedCorpus.indexBackend.trim(),
+      createdAt: normalizedCorpus.createdAt.trim().isEmpty
+          ? timestamp
+          : normalizedCorpus.createdAt,
+      updatedAt: timestamp,
+      sourceCount: 1,
+      chapterCount: structure.sections.length,
+      chunkCount: chunks.length,
+      isModelAssisted: false,
+      capabilityFlags: _mergeCapabilityFlags(normalizedCorpus.capabilityFlags),
+      metadata: <String, Object?>{
+        ...normalizedCorpus.metadata,
+        'source_document_id': sourceDocumentId,
+        'source_file_path': sourceDocument.originPath,
+        'content_hash': contentHash,
+        'structure_kind': structure.structureKind,
+        'section_count': structure.sections.length,
+        'chunk_count': chunks.length,
+        'ingestion_mode': 'preprocessed_text',
+        'source_analysis_summary': sourceAnalysisSummary,
+        'normalization_stage': 'book_deconstruction_preprocessed',
+      },
+    );
+    final indexHandle = _buildIndexHandle(
+      corpusPackage: updatedCorpus,
+      timestamp: timestamp,
+    );
+    final ingestionRun = _buildIngestionRun(
+      project: project,
+      corpusPackage: updatedCorpus,
+      sourceDocument: sourceDocument,
+      sectionCount: structure.sections.length,
+      chunkCount: chunks.length,
+      timestamp: timestamp,
+      sourceAnalysisSummary: sourceAnalysisSummary,
+    );
     await _emitProgress(
       onProgress,
       RagTxtCorpusIngestionProgress(
@@ -276,9 +478,7 @@ class RagTxtCorpusIngestionService {
     );
     final validationIssues = normalizedCorpus.validateBasics();
     if (validationIssues.isNotEmpty) {
-      throw StateError(
-        '无效的语料包：${validationIssues.join(', ')}',
-      );
+      throw StateError('无效的语料包：${validationIssues.join(', ')}');
     }
     return normalizedCorpus;
   }
@@ -354,12 +554,12 @@ class RagTxtCorpusIngestionService {
       if ((index + 1) % 16 == 0 || index == sections.length - 1) {
         await _emitProgress(
           onProgress,
-        RagTxtCorpusIngestionProgress(
-          phaseId: 'building_chunks',
-          message: '正在构建语料分片... ${index + 1} / ${sections.length}',
-          completedChunks: index + 1,
-          totalChunks: sections.length,
-        ),
+          RagTxtCorpusIngestionProgress(
+            phaseId: 'building_chunks',
+            message: '正在构建语料分片... ${index + 1} / ${sections.length}',
+            completedChunks: index + 1,
+            totalChunks: sections.length,
+          ),
         );
         await _yieldToUi();
       }
@@ -379,7 +579,9 @@ class RagTxtCorpusIngestionService {
       backendLocation: '.novel_agent/sqlite/novel_agent.db',
       embeddingDimension: 0,
       status: 'ready',
-      version: corpusPackage.version.trim().isEmpty ? 'v1' : corpusPackage.version,
+      version: corpusPackage.version.trim().isEmpty
+          ? 'v1'
+          : corpusPackage.version,
       lastBuiltAt: timestamp,
       metadata: <String, Object?>{
         'backend_policy': 'metadata_only',
@@ -396,6 +598,7 @@ class RagTxtCorpusIngestionService {
     required int sectionCount,
     required int chunkCount,
     required String timestamp,
+    required JsonMap sourceAnalysisSummary,
   }) {
     // 中文注释: ingestion run 记录只保存运行摘要与稳定 id，方便后续诊断和回放，不承载业务规则。
     return <String, Object?>{
@@ -418,6 +621,7 @@ class RagTxtCorpusIngestionService {
         'build_mode': corpusPackage.buildMode,
         'segmentation_strategy': corpusPackage.segmentationStrategy,
         'chunk_strategy': corpusPackage.chunkStrategy,
+        'source_analysis_summary': sourceAnalysisSummary,
       },
     };
   }
@@ -428,7 +632,9 @@ class RagTxtCorpusIngestionService {
       'txt',
       'rule_based',
       'metadata_only',
-      ...capabilityFlags.map((entry) => entry.trim()).where((entry) => entry.isNotEmpty),
+      ...capabilityFlags
+          .map((entry) => entry.trim())
+          .where((entry) => entry.isNotEmpty),
     };
     return result.toList(growable: false);
   }
@@ -457,7 +663,8 @@ class RagTxtCorpusIngestionService {
 
   String _defaultSegmentationStrategyId(String structureKind) {
     // 中文注释: 第一阶段的分段策略先保留为可读描述，后续有更细策略时再替换成正式策略 id。
-    return structureKind == ReferenceSourceDocumentStructureKinds.explicitChapter
+    return structureKind ==
+            ReferenceSourceDocumentStructureKinds.explicitChapter
         ? 'rule_chapter'
         : 'rule_paragraph';
   }

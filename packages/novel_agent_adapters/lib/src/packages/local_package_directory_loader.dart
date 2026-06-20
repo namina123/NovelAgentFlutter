@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:novel_agent_core/novel_agent_core.dart';
 
@@ -12,14 +13,22 @@ class LocalPackageDirectoryLoader {
        _agentParserService =
            agentParserService ?? AgentMarkdownPackageParserService(),
        _skillParserService =
-           skillParserService ?? SkillMarkdownPackageParserService();
+           skillParserService ?? SkillMarkdownPackageParserService(),
+       _canUseBackgroundIsolate =
+           entryFileNameService == null &&
+           agentParserService == null &&
+           skillParserService == null;
 
   final PackageEntryFileNameService _entryFileNameService;
   final AgentMarkdownPackageParserService _agentParserService;
   final SkillMarkdownPackageParserService _skillParserService;
+  final bool _canUseBackgroundIsolate;
 
   Future<List<JsonMap>> loadAgentPackages(String rootDirectoryPath) async {
     // 中文注释: 智能体目录加载器按包文件夹扫描，并以 AGENT.md / agent.md / agent.json 为入口。
+    if (_canUseBackgroundIsolate) {
+      return Isolate.run(() => _loadAgentPackagesSync(rootDirectoryPath));
+    }
     return _loadPackages(
       rootDirectoryPath,
       isEntryFile: _entryFileNameService.isAgentEntryFile,
@@ -30,6 +39,9 @@ class LocalPackageDirectoryLoader {
 
   Future<List<JsonMap>> loadSkillPackages(String rootDirectoryPath) async {
     // 中文注释: 技能目录加载器和智能体保持同一规范，只是入口文件和解析器不同。
+    if (_canUseBackgroundIsolate) {
+      return Isolate.run(() => _loadSkillPackagesSync(rootDirectoryPath));
+    }
     return _loadPackages(
       rootDirectoryPath,
       isEntryFile: _entryFileNameService.isSkillEntryFile,
@@ -89,4 +101,77 @@ class LocalPackageDirectoryLoader {
     }
     return null;
   }
+}
+
+List<JsonMap> _loadAgentPackagesSync(String rootDirectoryPath) {
+  final entryFileNameService = PackageEntryFileNameService();
+  final agentParserService = AgentMarkdownPackageParserService();
+  return _loadPackagesSync(
+    rootDirectoryPath,
+    isEntryFile: entryFileNameService.isAgentEntryFile,
+    parse: (content, fallbackId) =>
+        agentParserService.parsePackage(content, fallbackId: fallbackId),
+  );
+}
+
+List<JsonMap> _loadSkillPackagesSync(String rootDirectoryPath) {
+  final entryFileNameService = PackageEntryFileNameService();
+  final skillParserService = SkillMarkdownPackageParserService();
+  return _loadPackagesSync(
+    rootDirectoryPath,
+    isEntryFile: entryFileNameService.isSkillEntryFile,
+    parse: (content, fallbackId) =>
+        skillParserService.parsePackage(content, fallbackId: fallbackId),
+  );
+}
+
+List<JsonMap> _loadPackagesSync(
+  String rootDirectoryPath, {
+  required bool Function(String fileName) isEntryFile,
+  required JsonMap Function(String content, String fallbackId) parse,
+}) {
+  final root = Directory(rootDirectoryPath);
+  if (!root.existsSync()) {
+    return const <JsonMap>[];
+  }
+  final result = <JsonMap>[];
+  for (final entity in root.listSync(followLinks: false)) {
+    if (entity is! Directory) {
+      continue;
+    }
+    final entryFile = _findEntryFileSync(entity, isEntryFile);
+    if (entryFile == null) {
+      continue;
+    }
+    final content = entryFile.readAsStringSync();
+    final packageId = entity.uri.pathSegments
+        .where((segment) => segment.trim().isNotEmpty)
+        .last;
+    final parsed = parse(content, packageId);
+    if (parsed.isEmpty) {
+      continue;
+    }
+    result.add(<String, Object?>{
+      ...parsed,
+      'package_root_path': root.path,
+      'package_directory_path': entity.path,
+      'entry_file_path': entryFile.path,
+    });
+  }
+  return result;
+}
+
+File? _findEntryFileSync(
+  Directory packageDirectory,
+  bool Function(String fileName) isEntryFile,
+) {
+  for (final entity in packageDirectory.listSync(followLinks: false)) {
+    if (entity is! File) {
+      continue;
+    }
+    if (isEntryFile(entity.uri.pathSegments.last)) {
+      return entity;
+    }
+  }
+  return null;
 }

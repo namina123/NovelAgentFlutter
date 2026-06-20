@@ -1,6 +1,7 @@
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../../../../app/state/project_lifecycle_coordinator.dart';
 import '../../../workbench/application/services/desktop_project_directory_picker_service.dart';
 import '../../../workbench/application/services/project_creation_phase_resolver_service.dart';
 import '../../../workbench/application/services/project_launcher_view_data_service.dart';
@@ -18,13 +19,13 @@ class ProjectCreationController {
     required DesktopProjectDirectoryPickerService
     desktopProjectDirectoryPickerService,
     required ProjectLauncherViewDataService projectLauncherViewDataService,
+    required ProjectLifecycleCoordinator projectLifecycleCoordinator,
     required WorkbenchViewData Function() readWorkbench,
     required void Function(
       WorkbenchViewData Function(WorkbenchViewData current),
     )
     mutateWorkbench,
     required ProjectDescriptor? Function() readCurrentProject,
-    required Future<bool> Function(String rootPath) loadProject,
     Future<void> Function(ProjectDescriptor project)? onProjectCreatedAndOpened,
     required void Function({required String status})
     resetToProjectlessWorkbench,
@@ -47,10 +48,10 @@ class ProjectCreationController {
        _desktopProjectDirectoryPickerService =
            desktopProjectDirectoryPickerService,
        _projectLauncherViewDataService = projectLauncherViewDataService,
+       _projectLifecycleCoordinator = projectLifecycleCoordinator,
        _readWorkbench = readWorkbench,
        _mutateWorkbench = mutateWorkbench,
        _readCurrentProject = readCurrentProject,
-       _loadProject = loadProject,
        _onProjectCreatedAndOpened = onProjectCreatedAndOpened,
        _resetToProjectlessWorkbench = resetToProjectlessWorkbench,
        _announce = announce,
@@ -77,11 +78,11 @@ class ProjectCreationController {
   final DesktopProjectDirectoryPickerService
   _desktopProjectDirectoryPickerService;
   final ProjectLauncherViewDataService _projectLauncherViewDataService;
+  final ProjectLifecycleCoordinator _projectLifecycleCoordinator;
   final WorkbenchViewData Function() _readWorkbench;
   final void Function(WorkbenchViewData Function(WorkbenchViewData current))
   _mutateWorkbench;
   final ProjectDescriptor? Function() _readCurrentProject;
-  final Future<bool> Function(String rootPath) _loadProject;
   final Future<void> Function(ProjectDescriptor project)? _onProjectCreatedAndOpened;
   final void Function({required String status}) _resetToProjectlessWorkbench;
   final void Function(String message) _announce;
@@ -101,33 +102,13 @@ class ProjectCreationController {
 
   Future<void> loadDefaultProject() async {
     // 中文注释: 默认项目恢复属于项目创建域入口，避免壳层自己理解“无项目时该怎么办”。
-    final settings = _readSettings();
-    if (settings == null) {
-      _resetToProjectlessWorkbench(status: '请先创建项目，或在桌面端打开一个已有项目。');
+    final result = await _projectLifecycleCoordinator.loadDefaultProject();
+    if (!result.isLoaded) {
+      _resetToProjectlessWorkbench(status: result.statusMessage);
       await showLauncher(
-        ProjectLauncherMode.create,
-        status: '当前还没有可恢复的有效项目。先创建一部新作品，或打开已有项目。',
-        canDismiss: false,
-      );
-      return;
-    }
-    final defaultPath = settings.defaultProjectPath.trim();
-    if (defaultPath.isEmpty) {
-      _resetToProjectlessWorkbench(status: '请先创建项目，或在桌面端打开一个已有项目。');
-      await showLauncher(
-        ProjectLauncherMode.create,
-        status: '当前还没有有效项目。先创建一部新作品，或打开已有项目。',
-        canDismiss: false,
-      );
-      return;
-    }
-    final loaded = await _loadProject(defaultPath);
-    if (!loaded) {
-      _resetToProjectlessWorkbench(status: '当前没有有效项目。请先创建项目，或打开已有项目。');
-      await showLauncher(
-        ProjectLauncherMode.create,
-        status: '上次打开的项目不可用：$defaultPath。请创建新作品，或重新打开已有项目。',
-        canDismiss: false,
+        result.launcherMode ?? ProjectLauncherMode.create,
+        status: result.launcherStatus,
+        canDismiss: result.canDismiss,
       );
     }
   }
@@ -178,7 +159,20 @@ class ProjectCreationController {
         generationStatus: '正在打开项目...',
       ),
     );
-    await _loadProject(snapshot.project.rootPath);
+    final result = await _projectLifecycleCoordinator.openProjectFromPath(
+      snapshot.project.rootPath,
+      failureLauncherMode: _readCurrentProject() == null
+          ? ProjectLauncherMode.guard
+          : null,
+      failureLauncherStatus: '所选目录不是有效项目。请选择项目根目录，或直接创建新项目。',
+    );
+    if (!result.isLoaded && result.shouldShowLauncher) {
+      await showLauncher(
+        result.launcherMode ?? ProjectLauncherMode.guard,
+        status: result.launcherStatus,
+        canDismiss: result.canDismiss,
+      );
+    }
   }
 
   void onProjectLauncherDismissed() {
@@ -230,7 +224,20 @@ class ProjectCreationController {
         generationStatus: '正在打开项目...',
       ),
     );
-    await _loadProject(projectPath);
+    final result = await _projectLifecycleCoordinator.openProjectFromPath(
+      projectPath,
+      failureLauncherMode: _readCurrentProject() == null
+          ? ProjectLauncherMode.guard
+          : null,
+      failureLauncherStatus: '所选目录不是有效项目。请选择项目根目录，或直接创建新项目。',
+    );
+    if (!result.isLoaded && result.shouldShowLauncher) {
+      await showLauncher(
+        result.launcherMode ?? ProjectLauncherMode.guard,
+        status: result.launcherStatus,
+        canDismiss: result.canDismiss,
+      );
+    }
   }
 
   Future<void> onProjectCreationSubmitted(
@@ -247,6 +254,15 @@ class ProjectCreationController {
     final requiresRuntimeBaseline = _requiresRuntimeBaseline(projectTypeId);
     final storageStrategy = ProjectStorageStrategy.fromId(
       request.storageStrategyId,
+    );
+    final creationPlan = _createProjectWorkspaceUseCase.prepare(
+      ProjectCreateRequest(
+        title: cleanTitle,
+        projectTypeId: projectTypeId,
+        storageStrategy: storageStrategy,
+        projectBranchId: request.knowledgeBaseBranchId.trim(),
+        runtimeBaselineId: request.runtimeBaselineId.trim(),
+      ),
     );
     final nextPhase = _projectCreationPhaseResolverService.nextPhaseAfter(
       currentPhase: currentPhase,
@@ -265,19 +281,12 @@ class ProjectCreationController {
             request.bookDeconstructionFollowupRouteId,
         continuityInput: request.continuityInput,
         creationPhase: nextPhase,
+        runtimeBaselineOptions: creationPlan.runtimeBaselineOptions,
+        selectedRuntimeBaselineId: creationPlan.request.runtimeBaselineId,
         canDismiss: _readCurrentProject() != null,
       );
       return;
     }
-    final creationPlan = _createProjectWorkspaceUseCase.prepare(
-      ProjectCreateRequest(
-        title: cleanTitle,
-        projectTypeId: projectTypeId,
-        storageStrategy: storageStrategy,
-        projectBranchId: request.knowledgeBaseBranchId.trim(),
-        runtimeBaselineId: request.runtimeBaselineId.trim(),
-      ),
-    );
     if (!creationPlan.canCreate) {
       await showLauncher(
         ProjectLauncherMode.create,
@@ -336,11 +345,16 @@ class ProjectCreationController {
             ?.applyDefaults(project, settings);
       }
       _mutateWorkbench((current) => current.copyWith(projectLauncher: null));
-      final loaded = await _loadProject(project.rootPath);
-      if (!loaded) {
+      final result = await _projectLifecycleCoordinator.openProjectFromPath(
+        project.rootPath,
+        failureLauncherMode: ProjectLauncherMode.create,
+        failureLauncherStatus: '项目已创建，但自动打开失败：${project.rootPath}',
+      );
+      if (!result.isLoaded) {
         await showLauncher(
-          ProjectLauncherMode.create,
-          status: '项目已创建，但自动打开失败：${project.rootPath}',
+          result.launcherMode ?? ProjectLauncherMode.create,
+          status: result.launcherStatus,
+          canDismiss: result.canDismiss,
           draftTitle: creationPlan.request.title,
           selectedProjectTypeId: creationPlan.request.projectTypeId,
           selectedStorageStrategy: creationPlan.request.storageStrategy,
@@ -354,7 +368,6 @@ class ProjectCreationController {
           ),
           runtimeBaselineOptions: creationPlan.runtimeBaselineOptions,
           selectedRuntimeBaselineId: creationPlan.request.runtimeBaselineId,
-          canDismiss: _readCurrentProject() != null,
         );
         _announce('项目已创建，但自动打开失败：${project.rootPath}');
         return;

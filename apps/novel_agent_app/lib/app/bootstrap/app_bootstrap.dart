@@ -4,6 +4,10 @@ import 'package:flutter/widgets.dart';
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../diagnostics/controller_notify_trace_service.dart';
+import '../diagnostics/navigation_trace_service.dart';
+import '../diagnostics/project_hydration_trace_service.dart';
+import '../diagnostics/ui_stall_probe.dart';
 import '../../features/book_deconstruction/application/services/book_deconstruction_narrative_persistence_service.dart';
 import '../../features/project_assets/application/services/project_expression_constraint_workspace_service.dart';
 import '../../features/long_task_station/application/controllers/long_task_station_controller.dart';
@@ -15,6 +19,10 @@ class AppBootstrap {
   Future<void> run() async {
     // 中文注释: bootstrap 负责 GUI 组合根依赖，确保适配器实例化只发生在这一层。
     WidgetsFlutterBinding.ensureInitialized();
+    UiStallProbe().start();
+    final controllerNotifyTraceService = ControllerNotifyTraceService();
+    final navigationTraceService = NavigationTraceService();
+    final projectHydrationTraceService = ProjectHydrationTraceService();
     final bundle = await _createAdapterBundle();
     final hostPlatform = _currentHostPlatform();
     final contextAssemblerService = ContextAssemblerService(
@@ -215,6 +223,7 @@ class AppBootstrap {
       longTaskSupervisor: bundle.longTaskSupervisor,
       detailService: longTaskStationDetailService,
       pendingResearchActionService: pendingResearchActionService,
+      navigationTraceService: navigationTraceService,
     );
     final controller = AppShellController(
       settingsRepository: bundle.settingsRepository,
@@ -380,6 +389,9 @@ class AppBootstrap {
               bundle.agentGroupCatalog.loadAgentGroups(project),
         );
       },
+      controllerNotifyTraceService: controllerNotifyTraceService,
+      navigationTraceService: navigationTraceService,
+      projectHydrationTraceService: projectHydrationTraceService,
     );
     runApp(NovelAgentApp(controller: controller));
   }
