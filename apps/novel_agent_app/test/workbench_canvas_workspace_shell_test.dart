@@ -60,19 +60,24 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('辅助视图'), findsOneWidget);
+      // The auxiliary panel is collapsed by default (no peek bar rendered
+      // initially), so neither the host title nor its panel blocks are visible.
       expect(find.text('即将参与的协作基线'), findsNothing);
+      expect(find.text('当前审稿锚点'), findsNothing);
 
       await tester.tap(find.byTooltip('审稿'));
       await tester.pumpAndSettle();
 
+      // Tapping 审稿 reveals the auxiliary host with the review-analysis panel.
+      // The `审稿锚点` label appears twice (section title + auxiliary chip).
+      expect(find.text('审稿锚点'), findsNWidgets(2));
       expect(find.text('当前审稿锚点'), findsOneWidget);
 
       await tester.tap(find.text('收起').last);
       await tester.pumpAndSettle();
 
       expect(find.text('当前审稿锚点'), findsNothing);
-      expect(find.textContaining('辅助视图'), findsOneWidget);
+      expect(find.text('审稿锚点'), findsNothing);
     },
   );
 }

@@ -75,11 +75,44 @@ void main() {
       expect(actionHandler.lastFollowupOptionId, 'fanfic_seed_autopilot_novel');
 
       expect(find.text('续写基座与后续方案'), findsOneWidget);
+
+      // The preview sections live in a lazily-rendered ListView, so each
+      // asset heading must be scrolled into view (built) before it can be
+      // asserted. We verify each heading as we reach it.
+      await tester.scrollUntilVisible(
+        find.text('章节骨架'),
+        300.0,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.pumpAndSettle();
       expect(find.text('章节骨架'), findsOneWidget);
+
+      await tester.scrollUntilVisible(
+        find.text('角色资产'),
+        300.0,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.pumpAndSettle();
       expect(find.text('角色资产'), findsOneWidget);
+
+      await tester.scrollUntilVisible(
+        find.text('关系资产'),
+        300.0,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.pumpAndSettle();
       expect(find.text('关系资产'), findsOneWidget);
       expect(find.text('知识沉淀'), findsNothing);
       expect(find.text('巧思与设计'), findsNothing);
+
+      // The trailing action buttons live at the very end of the lazily-rendered
+      // preview ListView and must be scrolled into view before assertion.
+      await tester.scrollUntilVisible(
+        find.widgetWithText(OutlinedButton, '派生并打开项目'),
+        300.0,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.pumpAndSettle();
       expect(find.widgetWithText(OutlinedButton, '派生并打开项目'), findsOneWidget);
     },
   );

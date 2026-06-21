@@ -84,8 +84,12 @@ Future<void> _captureNavigationRail(WidgetTester tester) async {
   );
   await tester.pumpAndSettle();
 
-  expect(find.text('工作'), findsOneWidget);
+  // The rail groups destinations under section labels (项目/创作/运行/系统)
+  // and renders each item's compact label. The agent-ecosystem destination
+  // lives under the 创作 section.
+  expect(find.text('创作'), findsOneWidget);
   expect(find.text('创作台'), findsOneWidget);
+  expect(find.text('拆书分析'), findsOneWidget);
   expect(find.text('智能体生态'), findsOneWidget);
   expect(find.text('长任务'), findsOneWidget);
 
@@ -166,8 +170,10 @@ Future<void> _captureResourcePanel(WidgetTester tester) async {
   );
   await tester.pumpAndSettle();
 
-  expect(find.text('文件'), findsOneWidget);
-  expect(find.text('项目目录'), findsOneWidget);
+  // The resource panel renders the project name header and a 浏览 section
+  // for the file tree; long-task/runtime entries are intentionally absent.
+  expect(find.text('星港档案'), findsOneWidget);
+  expect(find.text('浏览'), findsOneWidget);
   expect(find.text('长任务运行'), findsNothing);
   expect(find.text('工作区入口'), findsNothing);
 
