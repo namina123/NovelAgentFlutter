@@ -51,6 +51,24 @@ class RagChunk {
   final int rangeEnd;
   final JsonMap metadata;
 
+  /// 复制 chunk 并替换部分字段；主要用于 ingestion 写入 embedding 时附加 metadata。
+  RagChunk copyWith({JsonMap? metadata}) {
+    return RagChunk(
+      chunkId: chunkId,
+      corpusId: corpusId,
+      sourceDocumentId: sourceDocumentId,
+      text: text,
+      chapterIndex: chapterIndex,
+      chapterTitle: chapterTitle,
+      segmentIndex: segmentIndex,
+      normalizedText: normalizedText,
+      tokenEstimate: tokenEstimate,
+      rangeStart: rangeStart,
+      rangeEnd: rangeEnd,
+      metadata: metadata ?? this.metadata,
+    );
+  }
+
   factory RagChunk.fromJson(JsonMap json) {
     // 中文注释: chunk 是检索最小单元，所以保持纯数据映射，不在这里引入任何索引后端语义。
     return RagChunk(

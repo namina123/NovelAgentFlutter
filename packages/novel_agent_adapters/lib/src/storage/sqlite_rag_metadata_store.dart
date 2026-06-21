@@ -1,7 +1,7 @@
 import 'package:sqlite3/sqlite3.dart';
 
 class SqliteRagMetadataStore {
-  static const String schemaVersion = '1';
+  static const String schemaVersion = '2';
 
   void ensureSchema(Database database) {
     // 中文注释: RAG 元数据基座只负责建表和稳定索引，不承担向量索引或检索计算。
@@ -133,6 +133,33 @@ class SqliteRagMetadataStore {
       CREATE INDEX IF NOT EXISTS idx_rag_ingestion_run_project
       ON rag_ingestion_run(project_id, corpus_id, source_document_id, updated_at)
       ''');
+    // 中文注释: 向量列以幂等迁移补齐，旧库平滑升级到本地向量检索；不依赖 user_version。
+    _ensureColumn(database, 'rag_chunk', 'embedding_blob', 'BLOB');
+    _ensureColumn(
+      database,
+      'rag_chunk',
+      'embedding_dim',
+      'INTEGER NOT NULL DEFAULT 0',
+    );
+    _ensureColumn(
+      database,
+      'rag_chunk',
+      'embedding_model',
+      "TEXT NOT NULL DEFAULT ''",
+    );
+  }
+
+  void _ensureColumn(
+    Database database,
+    String table,
+    String column,
+    String definition,
+  ) {
+    final columns = database.select('PRAGMA table_info($table)');
+    final exists = columns.any((row) => row['name'] == column);
+    if (!exists) {
+      database.execute('ALTER TABLE $table ADD COLUMN $column $definition');
+    }
   }
 
   void saveBootstrapMetadata(Database database) {

@@ -3,6 +3,12 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 abstract final class RagRetrievalProviderKinds {
   static const String localPlaceholder = 'local_placeholder';
   static const String remotePlaceholder = 'remote_placeholder';
+  // 中文注释: 本地暴力 SQLite cosine 向量库（纯 Dart，跨端）。
+  static const String localSqliteVector = 'local_sqlite_vector';
+  // 中文注释: 远程 OpenAI 兼容 /v1/embeddings。
+  static const String remoteOpenAiCompatible = 'remote_openai_compatible';
+  // 中文注释: 本地 ONNX 量化模型（推理后端待接入，模型拉取已就绪）。
+  static const String localOnnx = 'local_onnx';
 }
 
 final class RagRetrievalProviderProfile {

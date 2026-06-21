@@ -288,3 +288,5 @@ export 'src/workflow/project_workflow_review_runtime_service.dart';
 export 'src/workflow/project_workflow_task_selection_service.dart';
 export 'src/workflow/project_workflow_runtime_service.dart';
 export 'src/workflow/task_center_runtime_query_port.dart';
+export 'src/storage/sqlite_vector_retrieval_port.dart';
+export 'src/providers/rag/remote_openai_compatible_embedding_provider.dart';

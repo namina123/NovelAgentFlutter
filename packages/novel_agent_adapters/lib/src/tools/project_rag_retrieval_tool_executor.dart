@@ -43,9 +43,11 @@ class ProjectRagRetrievalToolExecutor {
       'query_mode': ValueReaders.stringValue(arguments['query_mode']).trim(),
       'rerank_policy': ValueReaders.stringValue(arguments['rerank_policy']).trim(),
       'evidence_budget': ValueReaders.intValue(arguments['evidence_budget']),
-      'metadata': ValueReaders.deepCopyMap(
-        ValueReaders.mapValue(arguments['metadata']),
-      ),
+      'metadata': <String, Object?>{
+        ...ValueReaders.mapValue(arguments['metadata']),
+        // 中文注释: 把项目根路径随查询带下去，向量检索端口据此打开对应项目的 SQLite 库。
+        'project_root_path': project.rootPath,
+      },
     });
     final validationErrors = query.validateBasics();
     if (validationErrors.isNotEmpty) {
