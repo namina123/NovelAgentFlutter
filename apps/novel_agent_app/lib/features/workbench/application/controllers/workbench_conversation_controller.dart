@@ -1219,6 +1219,18 @@ class WorkbenchConversationController implements ConversationActionHandler {
           _announce('只有长任务相关项目才会显示这个入口。');
           return true;
         }
+        // 中文注释: 先消费开局投影里由正式开局合同派生的建议动作；能委派就委派
+        // （就绪 -> start_long_task_run，未就绪 -> choose_long_task_mode），
+        // 只有在没有可委派建议时才落到 agent-led 启动提示词，避免开局已就绪却只发一句话。
+        final suggestedAction = _openingLaunchBridgeService
+            .resolveLongTaskLaunchTarget(projection);
+        if (suggestedAction != null &&
+            suggestedAction.commandId.trim() != 'opening.launch_long_task') {
+          final delegated = await _handleGuideNavigationAction(suggestedAction);
+          if (delegated) {
+            return true;
+          }
+        }
         final prompt = _openingLaunchBridgeService.buildLongTaskEntryPrompt(
           project: project,
           projection: projection,
@@ -1437,13 +1449,18 @@ class WorkbenchConversationController implements ConversationActionHandler {
       ),
     );
     try {
-      final result = await _openingLaunchBridgeService
-          .launchLongTaskFromModeGuidance(
-            project,
-            modeId: _stringValue(
-              action.payload['mode_id'] ?? action.payload['mode'],
-            ),
-          );
+      final settings = _readSettings();
+      if (settings == null) {
+        _announce('尚未读取到应用设置，无法启动长任务。');
+        return;
+      }
+      // 中文注释: opening 正式启动走"先确保 workflow 就位再统一进入受控队列运行"的桥入口，
+      // 这样开局即进入真正的队列执行，而不是只生成任务链就停下。
+      final result = await _openingLaunchBridgeService.startLongTaskRun(
+        project,
+        settings,
+        arguments: ValueReaders.deepCopyMap(action.payload),
+      );
       if (!ValueReaders.boolValue(result['ok'], true)) {
         _announce(_resultMessage(result, success: '启动长任务失败。'));
         return;

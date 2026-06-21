@@ -63,7 +63,7 @@ class GatewayHttpTransport {
           httpRequest.abort();
           return onCancelled();
         }
-        await writeRequest(httpRequest);
+        await Future.value(writeRequest(httpRequest)).timeout(_timeout);
         final response = await httpRequest.close().timeout(_timeout);
         if (cancellationScope.isCancellationRequested) {
           return onCancelled();

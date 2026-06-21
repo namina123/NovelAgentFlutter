@@ -86,3 +86,42 @@
 - 修复 1 个陈旧核心测试（`agent_services_test`），解封 4 个此前无法编译的 app 测试文件。
 - 6 处用户可见工程语改成产品语言，并同步更新断言测试。
 - 全项目 `flutter analyze` 0 error。
+
+---
+
+## 第 2 轮（逻辑错误 + 既有失败测试）
+
+### 8. 修复 opening→长任务启动的真正回归（PROD-BUG）
+
+`workbench_conversation_controller.dart` 的 `case 'opening.launch_long_task':` 此前硬编码 `_sendPrompt`，**从不消费开局投影里的建议动作**，导致开局已就绪时点"启动长任务"只发一句话、既不建链也不跑队列（正是审计里 P0"开局真相源分裂"的一个真实回归点）。
+
+- 改为先 `_openingLaunchBridgeService.resolveLongTaskLaunchTarget(projection)` 取正式开局合同派生的建议动作：就绪→委派到 `opening.start_long_task_run`；未就绪→委派到 `opening.choose_long_task_mode`；都没有可委派建议时才落到 agent-led 启动提示词。
+- `_startLongTaskRunFromOpening` 从只建链的 `launchLongTaskFromModeGuidance` 改为"先确保 workflow 就位再统一进入受控队列运行"的 `startLongTaskRun`，开局即真正进入队列执行。
+- 参照 `responsibility-boundary-freeze-map-2026-06-17.md` §3.1 与 commit `626f0ec` 的原始合同确认这是回归而非新需求。
+- 解封并修复了 `workbench_conversation_controller_agent_selection_test.dart` 里的两条 `launch long task` 测试（此前被编译错误掩盖）。
+
+### 9. 修复 CLI `approval show` 既有失败（STALE-TEST）
+
+`approval show` 渲染经 `CliProjectArtifactLabelService` 给 `.novel_agent/information/...` 路径加 `（信息资料）` 短标签，是既有正确合同；旧测试断言写的是裸路径。`approval_command_test.dart` 期望行补上 `（信息资料）` 后缀。
+
+### 10. 引擎层逻辑错误修复
+
+| 文件 | 问题 | 修复 |
+| --- | --- | --- |
+| `creative_rule_stack.dart` `isEmpty` | 忽略 `expressionConstraintBindings` / `styleBindings`，导致"只配了绑定、profile 还空"的规则栈被 resolver 当作空丢弃 | `isEmpty` 加上两个 binding 列表为空的条件 |
+| `agent_group_normalizer_service.dart` | `metadata` 用 `mapValue`（浅拷贝），下游改归一化结果会污染调用方源 map；其余同级 normalizer 都用 `deepCopyMap` | 改成 `deepCopyMap(mapValue(...))` |
+| `task_definition_service.dart` `_shouldTreatAsSummaryTask` | 末尾 return 重复要求 `touchesSummaryPath && !touchesChapterOutputPath`，而满足该条件已在上文 early-return；导致 summary 关键字 / 相对路径启发式永远失效 | 去掉重复条件，关键字或 `summary` 相对路径命中且不触章节正文即按摘要任务识别 |
+| `context_budget_service.dart` `projectFileCandidatePlan` | `.where((_) => false)` 永远返回空、且 0 调用点，方法名是谎言 | 删除该死方法 |
+| `gateway_content_extractor.dart` `reasoningFromContentParts` | 过滤接受 `reasoning` 类型 part，但读取键硬编码 `thinking`，部分 OpenAI 兼容网关把推理文本放在 `part['reasoning']` 下被静默丢弃 | 读取链补 `reasoning` 键兜底（`thinking`→`reasoning`→`text`） |
+| `gateway_http_transport.dart` `execute` | `writeRequest`（请求体写入）没有 `_timeout` 守护，大附件/慢上传会拖到 OS socket 超时，破坏每次尝试的超时纪律 | `Future.value(writeRequest(...)).timeout(_timeout)` |
+
+### 11. 本轮发现但**暂未改**（继续跟进）
+
+- `long_task_chapter_gate_policy_service.dart` 的 `blocks_next_chapter_until_gate_passed` 策略字段仍是死字段（调度器从不读它），`blocks_auto_advance` 也只写进任务 metadata 当标签、没人据此停队列——这是审计里"审核/repair 闸门只是建议"的真实落点。完整接通需要定义"被闸门挡住后该 pause 还是建 repair task"，属设计决策，单独开。
+- core 有 **11 条既有失败**的集成测试（`git stash` 比对确认与本轮无关）：book_deconstruction×2、draft_generation×2、long_task checkpoint/factory×2、review_report×1、writing_continuity×3、writing_execution_result×1。下一轮逐条诊断。
+
+### 12. 第 2 轮验证
+
+- 全项目 `flutter analyze` 0 error。
+- `workbench_conversation_controller_agent_selection_test` 两条 launch 测试 + `approval_command_test` show 测试转为通过。
+- core 全量测试：本轮前后都是同样的 11 条既有失败（`git stash` 比对），即本轮 0 新增回归。

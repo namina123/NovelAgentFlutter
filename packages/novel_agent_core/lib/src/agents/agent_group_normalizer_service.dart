@@ -39,7 +39,7 @@ class AgentGroupNormalizerService {
         ValueReaders.stringValue(group['orchestration'], 'supervised'),
       ),
       'agents': _stringListService.normalize(group['agents']),
-      'metadata': ValueReaders.mapValue(group['metadata']),
+      'metadata': ValueReaders.deepCopyMap(ValueReaders.mapValue(group['metadata'])),
       'updated_at': ValueReaders.stringValue(group['updated_at']),
     };
   }

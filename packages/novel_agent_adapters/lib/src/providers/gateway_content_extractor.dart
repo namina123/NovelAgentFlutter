@@ -41,7 +41,10 @@ class GatewayContentExtractor {
       }
       final text = ValueReaders.stringValue(
         part[textKey],
-        ValueReaders.stringValue(part['text']),
+        ValueReaders.stringValue(
+          part['reasoning'],
+          ValueReaders.stringValue(part['text']),
+        ),
       );
       if (text.isEmpty) {
         continue;

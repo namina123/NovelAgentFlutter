@@ -125,8 +125,9 @@ class TaskDefinitionService {
     if (touchesSummaryPath && !touchesChapterOutputPath) {
       return true;
     }
+    // 中文注释: 关键字或 summary 相对路径命中、且不触碰章节正文时，也按摘要任务识别；
+    // 此前这里重复要求 touchesSummaryPath（已被上面 early-return 覆盖），导致关键字启发式永远失效。
     return (summaryRelativePath || hasSummaryKeyword) &&
-        touchesSummaryPath &&
         !touchesChapterOutputPath;
   }
 

@@ -101,7 +101,7 @@ void main() {
                 '请求：北海航线资料\n'
                 '原因：请先补充年代范围\n'
                 '最近动作：mark_needs_user_info\n'
-                '记录路径：.novel_agent/information/research_requests/research_request_9.json',
+                '记录路径：.novel_agent/information/research_requests/research_request_9.json（信息资料）',
           ),
         ),
       );

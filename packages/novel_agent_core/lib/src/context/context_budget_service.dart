@@ -235,19 +235,6 @@ class ContextBudgetService {
     return lines.join('\n');
   }
 
-  List<JsonMap> projectFileCandidatePlan(
-    List<Object?> projectFiles, {
-    JsonMap contextSettings = const <String, Object?>{},
-  }) {
-    // 中文注释: 旧项目这里优先走 native 桥；纯 Dart 阶段先保留稳定空实现，后续再迁文件候选规则。
-    final _ = contextSettings;
-    return projectFiles
-        .whereType<Object?>()
-        .map(ValueReaders.mapValue)
-        .where((_) => false)
-        .toList();
-  }
-
   List<JsonMap> _normalizeSections(List<Object?> sections) {
     // 中文注释: 片段规范化负责补齐排序与显示字段，保证预算器面对脏输入也能稳定工作。
     final result = <JsonMap>[];
