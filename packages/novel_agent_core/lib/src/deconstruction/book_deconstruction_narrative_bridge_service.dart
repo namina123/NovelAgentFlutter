@@ -23,6 +23,7 @@ import 'book_deconstruction_coverage_hint.dart';
 import 'book_deconstruction_extraction_result.dart';
 import 'book_deconstruction_hint_source_kind.dart';
 import 'book_deconstruction_identity_mapping_hint.dart';
+import 'book_deconstruction_information_bridge_service.dart';
 import 'book_deconstruction_input.dart';
 import 'book_deconstruction_mechanic_hint.dart';
 import 'book_deconstruction_narrative_artifact_bundle.dart';
@@ -30,7 +31,11 @@ import 'book_deconstruction_narrative_bridge_constants.dart';
 import 'book_deconstruction_scope_hint.dart';
 
 class BookDeconstructionNarrativeBridgeService {
-  const BookDeconstructionNarrativeBridgeService();
+  const BookDeconstructionNarrativeBridgeService([
+    this._informationBridgeService = const BookDeconstructionInformationBridgeService(),
+  ]);
+
+  final BookDeconstructionInformationBridgeService _informationBridgeService;
 
   BookDeconstructionNarrativeArtifactBundle build({
     required BookDeconstructionInput input,
@@ -135,6 +140,12 @@ class BookDeconstructionNarrativeBridgeService {
       source: interpretedSource,
       primaryDocumentRef: primaryDocumentRef,
     );
+    // 中文注释: 信息底座（知识卡 / 设计要素 / 研究注记 / 参考著作）由独立的信息桥产出，
+    // 叙事桥负责把它和 claims / proposals / reviews 合并到同一份 artifact bundle。
+    final informationArtifacts = _informationBridgeService.build(
+      input: input,
+      extractionResult: extractionResult,
+    );
     return BookDeconstructionNarrativeArtifactBundle(
       claims: List<NarrativeStateClaim>.unmodifiable(claims),
       profileProposals: List<NarrativeProfileProposal>.unmodifiable(
@@ -143,7 +154,12 @@ class BookDeconstructionNarrativeBridgeService {
       semanticReviews: List<NarrativeSemanticReview>.unmodifiable(
         <NarrativeSemanticReview>[review],
       ),
+      knowledgeCards: informationArtifacts.knowledgeCards,
+      designElements: informationArtifacts.designElements,
+      researchNotes: informationArtifacts.researchNotes,
+      referenceWorks: informationArtifacts.referenceWorks,
       metadata: <String, Object?>{
+        ...informationArtifacts.metadata,
         'analysis_namespace_roots': <String>[
           'analysis.deconstruction',
           'analysis.explainer',

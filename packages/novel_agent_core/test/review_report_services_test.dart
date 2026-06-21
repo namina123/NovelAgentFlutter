@@ -52,7 +52,7 @@ void main() {
       expect(summary.reportSummary(report)['issue_count'], 1);
       expect(repairTask['task_type'], 'revision');
       expect(vars['review_goal'], contains('文风一致性'));
-      expect(vars['authenticity_pass_level'], 'aggressive');
+      expect(vars['authenticity_pass_level'], 'medium');
       expect(
         ValueReaders.stringValue(vars['review_focuses']),
         contains('人物声音'),

@@ -125,3 +125,32 @@
 - 全项目 `flutter analyze` 0 error。
 - `workbench_conversation_controller_agent_selection_test` 两条 launch 测试 + `approval_command_test` show 测试转为通过。
 - core 全量测试：本轮前后都是同样的 11 条既有失败（`git stash` 比对），即本轮 0 新增回归。
+
+---
+
+## 第 3 轮（清零 core 既有失败）
+
+core 全量测试从 11 条既有失败清零（950 条全过）。
+
+### 13. 修复拆书叙事桥丢掉信息底座的回归（PROD-BUG）
+
+`BookDeconstructionNarrativeBridgeService.build()` 此前只填 claims/proposals/reviews，**不再调用 `BookDeconstructionInformationBridgeService`**，导致 artifact bundle 的 `knowledgeCards / designElements / researchNotes / referenceWorks` 永远空（拆书后没有知识卡 / 设计要素 / 研究注记 / 参考著作产出）。这是 commit `03f4c2d` 之后丢掉的接线。修复：叙事桥构造期注入 `BookDeconstructionInformationBridgeService`（const 默认），`build()` 里调用它并把 4 个信息字段 + metadata 合并进同一个 bundle。
+
+### 14. 10 条陈旧测试断言更新（生产合同演进后没跟上）
+
+| 测试 | 旧 → 新 |
+| --- | --- |
+| `book_deconstruction_application_plan_builder_service_test` | premise 路径 `…premise_1.md` → `…premise_1_核心前提.md`（`ea05473` 给 premise 加了 readable stem） |
+| `long_task_checkpoint_action_contract_service_test` | 样章 input 补一个真实 `questioned_claim_count: 1`，使样章 severity 不被 advisory cap 降到 medium，正路测 high + followup 闸门（cap 本身是有意设计，见 service 注释） |
+| `long_task_task_factory_runtime_baseline_test` | 风格路径 `styles/…` → `assets/styles/…`（`9b8f5a1` 起 style 统一在 `assets/styles`） |
+| `review_report_services_test` | `authenticity_pass_level` `aggressive` → `medium`（`9b8f5a1` 把 naturalExpression 分从 3 降到 2，单独一条不再够 aggressive） |
+| `draft_generation_use_case_test`（×2） | `必须调用 present_user_options` → `优先调用…`；`当前按单主智能体运行` → `当前协作合同表明本轮按单主智能体运行`（`ea05473` 起 collaboration 合同常驻） |
+| `writing_continuity_validation_matrix_test`（×3） | 后续路线 option id 改名空间后更新：`general_novel`→`continuation_novel`、`seed_autopilot_novel`→`fanfic_seed_autopilot_novel`、两个 deep-reconstruction 选项加 `fanfic_` 前缀；`highlightedGroupId` `long_task_writing`→`fanfic`（`e7ac7be` 重命名分组） |
+| `writing_execution_result_contracts_test` | "adjust-next" 用例的 bridge fixture 把 violation disposition 从 `repair` 改成 `remind`，否则 `repair` disposition 会强制 `repairRequired`，与"非阻断 adjust-next"用意自相矛盾 |
+
+### 15. 第 3 轮验证
+
+- core 全量 `dart test`：**950 全过（0 失败）**，从 11 条既有失败清零。
+- `dart analyze packages/novel_agent_core/lib` 0 error。
+- 修复全部为"测试期望对齐当前生产合同"或"恢复一条丢掉的接线"，未改动除叙事桥以外的生产行为。
+

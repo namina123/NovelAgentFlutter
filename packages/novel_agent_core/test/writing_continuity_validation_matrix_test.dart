@@ -308,7 +308,7 @@ void main() {
         final plan = derivedPlanBuilder.build(
           input: input,
           followupMenu: menu,
-          followupOptionId: 'general_novel',
+          followupOptionId: 'continuation_novel',
         );
 
         expect(menu.highlightedBuildTier, ContinuityBuildTier.quickBridge);
@@ -341,10 +341,10 @@ void main() {
         final plan = derivedPlanBuilder.build(
           input: input,
           followupMenu: menu,
-          followupOptionId: 'seed_autopilot_novel',
+          followupOptionId: 'fanfic_seed_autopilot_novel',
         );
 
-        expect(menu.highlightedGroupId, 'long_task_writing');
+        expect(menu.highlightedGroupId, 'fanfic');
         expect(
           menu.highlightedBuildTier,
           ContinuityBuildTier.standardFoundation,
@@ -382,12 +382,12 @@ void main() {
         final deepPlan = derivedPlanBuilder.build(
           input: input,
           followupMenu: menu,
-          followupOptionId: 'full_outline_consensus',
+          followupOptionId: 'fanfic_full_outline_consensus',
         );
         final siblingPlan = derivedPlanBuilder.build(
           input: input,
           followupMenu: menu,
-          followupOptionId: 'chapter_brief_supervised',
+          followupOptionId: 'fanfic_chapter_brief_supervised',
         );
 
         expect(deepPlan.sourceExtractionId, siblingPlan.sourceExtractionId);
