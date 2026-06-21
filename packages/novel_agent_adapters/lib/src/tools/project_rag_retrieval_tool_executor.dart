@@ -132,22 +132,22 @@ class ProjectRagRetrievalToolExecutor {
     ProjectDescriptor project,
     RetrievalQuery query,
     List<RetrievalMountBinding> bindings,
-  ) {
+  ) async {
     final searchPort = _searchPort;
     if (searchPort == null) {
       return _lexicalSearch(project, query, bindings);
     }
     if (bindings.isNotEmpty) {
-      return Future.value(searchPort.searchWithinMounts(query, bindings));
+      return searchPort.searchWithinMounts(query, bindings);
     }
     if (query.corpusFilters.isNotEmpty) {
       final hits = <RetrievalHit>[];
       for (final corpusId in query.corpusFilters) {
-        hits.addAll(searchPort.searchByCorpus(query, corpusId));
+        hits.addAll(await searchPort.searchByCorpus(query, corpusId));
       }
-      return Future.value(hits);
+      return hits;
     }
-    return Future.value(searchPort.search(query));
+    return searchPort.search(query);
   }
 
   Future<List<RetrievalHit>> _lexicalSearch(

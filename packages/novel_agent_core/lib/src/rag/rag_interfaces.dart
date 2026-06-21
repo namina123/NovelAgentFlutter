@@ -37,32 +37,37 @@ abstract interface class EmbeddingProviderPort {
 
   bool get isRemote;
 
-  List<List<num>> embedTexts(List<String> texts);
+  // 中文注释: embedding 取向量通常要走网络或本地模型推理，统一为异步合同，
+  // 避免实现被迫在 UI 线程上做同步阻塞调用。
+  Future<List<List<num>>> embedTexts(List<String> texts);
 
   JsonMap describeCapabilities();
 }
 
 /// 检索索引端口。
 abstract interface class RetrievalIndexPort {
-  RagIndexHandle createIndex(RagCorpusPackage corpusPackage);
+  Future<RagIndexHandle> createIndex(RagCorpusPackage corpusPackage);
 
-  RagIndexHandle rebuildIndex(RagIndexHandle handle, List<RagChunk> chunks);
+  Future<RagIndexHandle> rebuildIndex(RagIndexHandle handle, List<RagChunk> chunks);
 
-  RagIndexHandle upsertChunks(RagIndexHandle handle, List<RagChunk> chunks);
+  Future<RagIndexHandle> upsertChunks(RagIndexHandle handle, List<RagChunk> chunks);
 
-  RagIndexHandle removeChunks(RagIndexHandle handle, List<RagChunkId> chunkIds);
+  Future<RagIndexHandle> removeChunks(
+    RagIndexHandle handle,
+    List<RagChunkId> chunkIds,
+  );
 }
 
 /// 检索查询端口。
 abstract interface class RetrievalSearchPort {
-  List<RetrievalHit> search(RetrievalQuery query);
+  Future<List<RetrievalHit>> search(RetrievalQuery query);
 
-  List<RetrievalHit> searchWithinMounts(
+  Future<List<RetrievalHit>> searchWithinMounts(
     RetrievalQuery query,
     List<RetrievalMountBinding> bindings,
   );
 
-  List<RetrievalHit> searchByCorpus(
+  Future<List<RetrievalHit>> searchByCorpus(
     RetrievalQuery query,
     RagCorpusId corpusId,
   );
@@ -79,12 +84,12 @@ abstract interface class RetrievalHealthPort {
 
 /// RAG 提取运行端口。
 abstract interface class RetrievalIngestionPort {
-  RagIngestionResult ingestRagCorpus(
+  Future<RagIngestionResult> ingestRagCorpus(
     RagCorpusPackage corpusPackage,
     List<RagSourceDocument> sourceDocuments,
   );
 
-  RagIngestionResult rebuildRagCorpus(RagCorpusPackage corpusPackage);
+  Future<RagIngestionResult> rebuildRagCorpus(RagCorpusPackage corpusPackage);
 
-  RagIngestionResult resumeIngestion(RagCorpusPackage corpusPackage);
+  Future<RagIngestionResult> resumeIngestion(RagCorpusPackage corpusPackage);
 }
