@@ -154,3 +154,29 @@ core 全量测试从 11 条既有失败清零（950 条全过）。
 - `dart analyze packages/novel_agent_core/lib` 0 error。
 - 修复全部为"测试期望对齐当前生产合同"或"恢复一条丢掉的接线"，未改动除叙事桥以外的生产行为。
 
+---
+
+## 第 4 轮（清零 adapters 既有失败 + 撤销一条过宽修复）
+
+core + adapters 全量测试双双全绿（core 950 / adapters 454，0 失败）。
+
+### 16. 撤销第 2 轮里过宽的 `_shouldTreatAsSummaryTask` 修复
+
+第 2 轮（§10）把 summary 关键字启发式激活了，结果误伤：描述里顺带提到"摘要/总结"的 revision/normal 任务被误判成 summary，破坏了 `project_long_task_chapter_gate_service_test` 与 `project_workflow_runtime_service_test`（`Expected 'revision' Actual 'summary'`）。核查后确认摘要任务识别**只应按路径判定**（输出/来源落在 summary 区且不触章节正文），关键字启发式不该启用。已改回等价于原行为的清晰 `return false;`，并删掉随之失效的 `searchText / hasSummaryKeyword / summaryRelativePath / relativePath` 局部变量。这是对 §10 那一条的更正。
+
+### 17. 修复 legacy continuity 迁移不幂等（PROD-BUG）
+
+`ProjectLegacyContinuityMechanicMigrationService` 二次迁移本应判 `up_to_date`，实际判 `migrated`（`project_legacy_continuity_mechanic_migration_service_test`）。根因：`LegacyContinuityMechanicImporterService._legacySource()` 构造的 `NarrativeSourceRef` 没填 `sourceAssetId / displayName / sourceKind`，`toJson` 写空值，`fromJson` 读回时 `SourceAssetIdentity` 重新推导出非空值（display_name 从 label 推、source_kind 从 sourceType 推、source_asset_id 从 sourceId 推），二次 `toJson` 写出非空值 → JSON 不一致 → 被判为"变化"重写。修复：importer 显式 stamp 这三个稳定值，使往返严格幂等。
+
+### 18. 修复 checkpoint action 既有失败（STALE-TEST）
+
+`project_long_task_checkpoint_action_service_test` 的"continue action unlocks immediate manual checkpoint dependents"：测试造的 `checkpoint_outline` 手动检查点缺少 `sample_readiness_checkpoint: true`，不满足样章就绪闸门合同，故后续样章任务取不到。补上该 metadata 标志。
+
+### 19. 第 4 轮验证
+
+- core 全量 `dart test`：**950 全过**。
+- adapters 全量 `dart test`：**454 全过**（含之前在 Windows 偶发 errno 32 teardown 抖动的 `rag_parallel_branch_regression_suite`，本次稳过）。
+- `flutter analyze packages apps`：**0 error**。
+- 第 2 轮 §10 中过宽的 summary 启发式已撤销，相关回归消除。
+
+

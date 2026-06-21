@@ -101,34 +101,15 @@ class TaskDefinitionService {
   bool _shouldTreatAsSummaryTask(JsonMap task) {
     final outputPaths = ValueReaders.stringList(task['output_paths']);
     final sourcePaths = ValueReaders.stringList(task['source_paths']);
-    final relativePath = ValueReaders.stringValue(
-      task['relative_path'],
-    ).trim().toLowerCase();
-    final searchText = <String>[
-      ValueReaders.stringValue(task['id']),
-      ValueReaders.stringValue(task['title']),
-      ValueReaders.stringValue(task['goal']),
-      ValueReaders.stringValue(task['description']),
-      ValueReaders.stringValue(task['brief']),
-      ValueReaders.stringValue(task['tool_hint']),
-    ].join(' ').toLowerCase();
     final touchesSummaryPath =
         outputPaths.any(_isSummaryPath) || sourcePaths.any(_isSummaryPath);
     final touchesChapterOutputPath = outputPaths.any(_isChapterLikePath);
-    final hasSummaryKeyword =
-        searchText.contains('save_summary') ||
-        searchText.contains('summarize') ||
-        searchText.contains('summary') ||
-        searchText.contains('摘要') ||
-        searchText.contains('总结');
-    final summaryRelativePath = relativePath.contains('summary');
     if (touchesSummaryPath && !touchesChapterOutputPath) {
       return true;
     }
-    // 中文注释: 关键字或 summary 相对路径命中、且不触碰章节正文时，也按摘要任务识别；
-    // 此前这里重复要求 touchesSummaryPath（已被上面 early-return 覆盖），导致关键字启发式永远失效。
-    return (summaryRelativePath || hasSummaryKeyword) &&
-        !touchesChapterOutputPath;
+    // 中文注释: 摘要任务识别只按"输出/来源路径落在 summary 区、且不触碰章节正文"判定。
+    // 关键字启发式会误伤描述里顺带提到 摘要/总结 的 revision/normal 任务，故不启用。
+    return false;
   }
 
   bool _isSummaryPath(String path) {

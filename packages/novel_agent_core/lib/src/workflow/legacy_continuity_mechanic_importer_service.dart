@@ -195,6 +195,11 @@ class LegacyContinuityMechanicImporterService {
     return const NarrativeSourceRef(
       sourceType: NarrativeSourceTypes.system,
       sourceId: 'legacy_continuity_mechanic_importer',
+      // 中文注释: 显式 stamp 稳定 sourceAssetId / displayName / sourceKind，避免 toJson/fromJson
+      // 往返时 resolver 重新推导出不同的值（首次写空、读回填派生值），导致二次迁移被判定为"发生变化"而不幂等。
+      sourceAssetId: 'legacy_continuity_mechanic_importer',
+      displayName: 'Legacy continuity bridge importer',
+      sourceKind: NarrativeSourceTypes.system,
       label: 'Legacy continuity bridge importer',
       description:
           'Deprecated bridge-only importer for pre-ONS continuity state and historical special-mechanic aliases.',

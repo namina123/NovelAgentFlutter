@@ -940,6 +940,7 @@ void main() {
             'plan_id': 'plan_001',
             'stage': 'checkpoint',
             'manual_checkpoint': true,
+            'sample_readiness_checkpoint': true,
           },
           'relative_path': 'tasks/checkpoint_outline.json',
         });
