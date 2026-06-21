@@ -179,4 +179,40 @@ core + adapters 全量测试双双全绿（core 950 / adapters 454，0 失败）
 - `flutter analyze packages apps`：**0 error**。
 - 第 2 轮 §10 中过宽的 summary 启发式已撤销，相关回归消除。
 
+---
+
+## 第 5 轮（清零 app 测试既有失败，第一批）
+
+app 测试套件基线 31 条既有失败（`git checkout 691eddb` 比对确认全部既有的、非本轮回归）。本轮收掉其中"测试期望落后于生产合同"的一批（13 条转绿），均只改测试、不动生产行为。
+
+### 20. 对齐当前生产合同的陈旧 app 测试
+
+- `app_theme_control_style_test`：默认控件风格 `builtin.linear`→`builtin.studio`，半径 0→8。
+- `document_workspace_display_mode_bar_test`：文档模式标签 `正文/预览`→`编辑/渲染`。
+- `project_agent_group_panel_view_data_service_test`（×3）：协作组面板文案收短（`先打开项目。`/`先补上默认协作组。`/`查看或调整默认协作组。`）。
+- `project_agent_group_workspace_view_data_service_test`：选择提示 → `这里用于设置当前项目的默认协作组。`。
+- `workbench_workspace_shell_view_data_service_test`：动作描述 → `查看或调整默认协作组。`。
+- `resource_manager_panel_test`（×2）、`workbench_left_sidebar_compact_height_test`：`FileToolGroup` 工具行包进横向 `SingleChildScrollView`，断言 `findsNothing`→`findsOneWidget`。
+- `workbench_agent_panel_test`：区块标题 → `协作概览/当前分工/工作入口`；动作卡描述不展示。
+- `workbench_page_desktop_layout_test`：左栏目标 216（clamp 204–252）、会话栏 316（clamp 304–356）。
+- `long_task_run_detail_panel_test`：fixture subtitle `资料摘要`→`知识卡片`，避免与新区块标题撞名。
+- `settings_labeled_search_dropdown_field_test`：控件依赖 `NovelThemeExtension`，测试补 `AppTheme.light()`。
+- `book_deconstruction_confirm_workflow_service_test`：继承章节路径嵌套化。
+- `conversation_guide_view_data_service_test`：拆书 guide 动作 `分析书籍`→`分析数据`。
+- `book_deconstruction_preview_panel_test`：`BookDeconstructionDraftBuilderService` 改 `Isolate.run` 在假异步下挂起，测试改为直接调 `BuildBookDeconstructionDraftUseCase().execute(...)`（2/3 转绿）。
+- `inspiration_workbench_controller_test`：测试 `_bridge()` helper 绕过了种子 mode guidance；让启动调用点传入种子 statePort，启动才能成功。
+
+### 21. 本轮发现但**暂未改**（继续跟进）
+
+- **app_theme 暗色对比度**：暗色 `mutedTextColor` 对比 6.756 < 7。颜色不满足合同 vs >7 对 muted 文本过严，需产品决断，未动主题色。
+- **app_shell `_isTaskCenterRefreshStale`（task_center workflow create / long_task_refresh_regression）**：HFVV 链路里 `_currentProject` 在刷新完成时为 null，结果被丢弃；改守卫语义有副作用，待定。
+- **book_deconstruction_preview_panel 剩余 1 条**：`章节骨架/角色资产/关系资产` 对极简 fixture 不再产出（抽取合同漂移）。
+- **6 条截图/视觉回归 + workbench_rc13 golden**：依赖 golden / 渲染环境，需 `--update-goldens`。
+- **app_shell_reference_extraction_refresh_regression**：单跑绿，疑似 Windows teardown 抖动。
+
+### 22. 第 5 轮验证
+
+- 改动 15 个 app 测试文件，13 条失败转绿；`flutter analyze apps/novel_agent_app/test` 0 error。
+- 仅对齐测试期望，未改任何生产 `lib/` 行为。
+
 

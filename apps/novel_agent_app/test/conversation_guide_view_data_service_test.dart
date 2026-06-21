@@ -140,7 +140,7 @@ void main() {
     expect(guide.workflowTitle, '拆书工作台');
     expect(guide.primaryActions.map((action) => action.title), <String>[
       '导入书籍',
-      '分析书籍',
+      '分析数据',
       '开始创作',
     ]);
     expect(guide.workflowDescription, contains('先导入书籍原文'));

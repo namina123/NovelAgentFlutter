@@ -80,7 +80,7 @@ void main() {
     );
     expect(find.byType(CustomScrollView), findsNothing);
     expect(find.byType(ListView), findsOneWidget);
-    expect(find.byType(SingleChildScrollView), findsNothing);
+    expect(find.byType(SingleChildScrollView), findsOneWidget);
 
     await tester.tap(find.text('项目'));
     await tester.pumpAndSettle();

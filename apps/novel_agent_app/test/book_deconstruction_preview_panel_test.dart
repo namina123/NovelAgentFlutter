@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novel_agent_app/app/theme/app_theme.dart';
 import 'package:novel_agent_app/features/book_deconstruction/application/models/book_deconstruction_snapshot.dart';
-import 'package:novel_agent_app/features/book_deconstruction/application/services/book_deconstruction_draft_builder_service.dart';
 import 'package:novel_agent_app/features/book_deconstruction/application/services/book_deconstruction_view_data_service.dart';
 import 'package:novel_agent_app/features/book_deconstruction/presentation/contracts/book_deconstruction_action_handler.dart';
 import 'package:novel_agent_app/features/book_deconstruction/presentation/models/book_deconstruction_continuity_view_data.dart';
@@ -20,9 +19,8 @@ void main() {
   testWidgets(
     'preview panel shows follow-up routes and structured deconstruction preview',
     (WidgetTester tester) async {
-      final draftBuilder = BookDeconstructionDraftBuilderService();
       final viewDataService = BookDeconstructionViewDataService();
-      final buildResult = await draftBuilder.build(
+      final buildResult = BuildBookDeconstructionDraftUseCase().execute(
         sourceTitle: '海上城邦',
         sourceContent: '第一章 港口风暴\n主角在港口被迫卷入一场追捕。\n\n第二章 议会阴影\n城邦议会开始浮出水面。',
         sourceAbsolutePath: 'D:/books/harbor_story.txt',
@@ -72,7 +70,7 @@ void main() {
       expect(fanficOptionFinder, findsOneWidget);
 
       await tester.tap(fanficOptionFinder);
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       expect(actionHandler.lastFollowupOptionId, 'fanfic_seed_autopilot_novel');
 

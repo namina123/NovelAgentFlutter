@@ -32,8 +32,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('正文'), findsOneWidget);
-    expect(find.text('预览'), findsOneWidget);
+    expect(find.text('编辑'), findsOneWidget);
+    expect(find.text('渲染'), findsOneWidget);
     expect(find.text('结构'), findsOneWidget);
 
     await tester.tap(find.text('结构'));

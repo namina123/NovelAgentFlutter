@@ -66,7 +66,7 @@ void main() {
     expect(
       workspacePort.readStoredTextFile(
         project.rootPath,
-        'chapters/inherited/continuation_novel/001_第一章_港口风暴.md',
+        'chapters/inherited/continuation/continuation_novel/001_第一章_港口风暴.md',
       ),
       contains('主角在港口被迫卷入一场追捕'),
     );

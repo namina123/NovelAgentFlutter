@@ -68,7 +68,7 @@ void main() {
       expect(viewData.title, '项目智能体组');
       expect(viewData.currentGroupLabel, '长篇总控组');
       expect(viewData.primaryAgentLabel, '综合创作智能体');
-      expect(viewData.selectionHint, '这里负责当前项目的默认智能体组配置；当前会话实际使用的智能体由会话层单独决定。');
+      expect(viewData.selectionHint, '这里用于设置当前项目的默认协作组。');
       expect(viewData.supportedGroups, hasLength(1));
       expect(viewData.supportedGroups.single.groupId, 'starter_long_task');
       expect(viewData.unsupportedGroups, hasLength(1));

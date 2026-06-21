@@ -47,7 +47,7 @@ void main() {
       expect(find.byTooltip('新文件夹'), findsNothing);
       expect(find.byTooltip('模型与接口设置'), findsNothing);
       expect(find.byType(CustomScrollView), findsNothing);
-      expect(find.byType(SingleChildScrollView), findsNothing);
+      expect(find.byType(SingleChildScrollView), findsOneWidget);
     },
   );
 
@@ -92,7 +92,7 @@ void main() {
 
       expect(find.byType(ListView), findsOneWidget);
       expect(find.byType(CustomScrollView), findsNothing);
-      expect(find.byType(SingleChildScrollView), findsNothing);
+      expect(find.byType(SingleChildScrollView), findsOneWidget);
       expect(find.text('项目 A'), findsOneWidget);
     },
   );
