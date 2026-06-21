@@ -5,7 +5,6 @@ export 'src/bootstrap/workspace_root_locator.dart';
 export 'src/config/local_settings_repository.dart';
 export 'src/config/project_information_permission_settings_resolver_service.dart';
 export 'src/config/project_tool_permission_settings_resolver_service.dart';
-export 'src/host/default_host_capability_port.dart';
 export 'src/host/desktop_process_runner.dart';
 export 'src/packages/agent_catalog_overlay_document_codec_service.dart';
 export 'src/packages/agent_catalog_overlay_repository.dart';

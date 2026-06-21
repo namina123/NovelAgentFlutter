@@ -1,6 +1,4 @@
 import '../../common/json_types.dart';
-import '../../common/value_readers.dart';
-import '../catalog/provider_connection_contract.dart';
 import '../../settings/provider_endpoint_settings.dart';
 import 'capability_exposure_view.dart';
 import 'provider_route_contract.dart';

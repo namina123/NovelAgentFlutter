@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:novel_agent_core/novel_agent_core.dart';
 
-import 'gateway_content_extractor.dart';
 import 'gateway_http_transport.dart';
 import 'gateway_json_response_parser.dart';
 import 'gateway_sse_event_pump.dart';

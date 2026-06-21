@@ -748,8 +748,8 @@ class WorkbenchConversationController implements ConversationActionHandler {
 
   @override
   void onOptimizeRequested() {
-    // 中文注释: 提示词优化链路尚未独立落地前，这里只给出明确引导，不制造空按钮。
-    _announce('当前先直接发送自然语言需求；需要优化时可以先走现有会话流程。');
+    // 中文注释: 提示词优化尚未独立成链，这里只给出明确的当前能力引导，不制造空按钮。
+    _announce('直接发送自然语言需求即可；需要优化时可以在当前会话里继续调整。');
   }
 
   @override

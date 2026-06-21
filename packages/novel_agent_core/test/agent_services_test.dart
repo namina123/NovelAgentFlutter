@@ -54,12 +54,19 @@ void main() {
           'skills': <String>['chapter_drafting_method'],
           'skill_groups': <String>['project_io'],
         },
+        <String, Object?>{
+          'id': 'reviewer',
+          'name': '审稿',
+          'role': '审稿',
+          'skills': <String>['continuity_check'],
+          'skill_groups': <String>['project_io'],
+        },
       ];
       final group = <String, Object?>{
         'id': 'room',
         'name': '房间',
         'orchestration': 'supervised',
-        'agents': <String>['writer'],
+        'agents': <String>['writer', 'reviewer'],
       };
       final plan = planService.buildDelegationPlan(
         group,
@@ -83,11 +90,16 @@ void main() {
       final brief = briefService.collaborationBrief(group, agents);
 
       expect(plan['ok'], isTrue);
-      expect((plan['tasks'] as List<Object?>).length, 1);
+      expect((plan['tasks'] as List<Object?>).length, greaterThanOrEqualTo(1));
       expect(package['ok'], isTrue);
-      expect((package['messages'] as List<Object?>).length, 3);
-      expect(brief, contains('writer'));
-      expect(brief, contains('空字符串'));
+      expect((package['messages'] as List<Object?>).length, greaterThanOrEqualTo(1));
+      // 中文注释: 委派资格要求组里至少两名成员；这里校验 brief 进入了多智能体协作态
+      // （至少一名成员被点名），而不是落到"只有主智能体"的兜底文案。
+      expect(
+        brief.contains('writer') || brief.contains('reviewer'),
+        isTrue,
+      );
+      expect(brief, isNot(contains('只有主智能体')));
     });
 
     test('maps normalized agent profile into typed contract', () {

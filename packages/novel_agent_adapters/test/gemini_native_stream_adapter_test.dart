@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
-import 'package:novel_agent_core/novel_agent_core.dart';
 import 'package:test/test.dart';
 
 void main() {

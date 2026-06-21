@@ -2,10 +2,8 @@ import 'dart:async';
 
 import 'package:novel_agent_core/novel_agent_core.dart';
 
-import '../runtime/long_task_supervisor.dart';
 import '../runtime/long_task_watchdog.dart';
 import '../runtime/project_long_task_run_registry_sync_service.dart';
-import '../runtime/project_tool_permission_approval_record_service.dart';
 import '../storage/project_task_repository.dart';
 import 'project_long_task_chapter_queue_runtime_service.dart';
 import 'project_long_task_checkpoint_action_service.dart';

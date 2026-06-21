@@ -69,7 +69,7 @@ void main() {
       await tester.tap(find.byType(Switch).first);
       await tester.pumpAndSettle();
       await tester.dragUntilVisible(
-        find.text('优先精确计数'),
+        find.text('优先使用精确计数'),
         find.byType(ListView),
         const Offset(0, -200),
       );

@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import 'gateway_content_extractor.dart';
-import 'gateway_http_transport.dart';
 import 'gateway_sse_event_pump.dart';
 import 'gateway_stream_result_aggregator.dart';
 import 'gateway_tool_call_builder.dart';

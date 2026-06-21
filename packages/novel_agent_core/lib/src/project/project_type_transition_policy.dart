@@ -1,5 +1,4 @@
 import 'project_runtime_baseline_catalog_service.dart';
-import 'project_storage_strategy.dart';
 import 'project_type_catalog_service.dart';
 import 'project_type_definition.dart';
 import 'project_type_transition_blocker.dart';

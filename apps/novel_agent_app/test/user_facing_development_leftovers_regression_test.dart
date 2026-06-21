@@ -170,6 +170,9 @@ void main() {
                   child: BookDeconstructionPreviewPanel(
                     viewData: const BookDeconstructionViewData(
                       projectTitle: '空分组测试',
+                      operationKind: 'preview',
+                      importActionLabel: '导入',
+                      buildPreviewActionLabel: '生成预览',
                       status: '已生成结构化预览。',
                       isLoading: false,
                       activeStepId: '',

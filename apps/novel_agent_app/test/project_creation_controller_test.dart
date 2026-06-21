@@ -415,7 +415,7 @@ class _ProjectCreationHarness {
       projectLauncherViewDataService: ProjectLauncherViewDataService(),
       projectLifecycleCoordinator: ProjectLifecycleCoordinator(
         readSettings: () => settings,
-        loadProject: (rootPath, {bool deferHydration = false}) async {
+        loadProject: (rootPath, {bool deferHydration = false, bool openDefaultDocument = false}) async {
           loadedProjectPaths.add(rootPath);
           currentProject = await projectRepository.openByPath(rootPath);
           if (!loadProjectResult) {

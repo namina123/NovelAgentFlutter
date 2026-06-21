@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novel_agent_app/app/theme/app_theme.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/project_create_request_view_data.dart';
+import 'package:novel_agent_app/features/workbench/presentation/models/project_knowledge_base_branch_option_view_data.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/project_creation_phase.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/project_runtime_baseline_option_view_data.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/project_storage_strategy_option_view_data.dart';
@@ -26,6 +27,9 @@ void main() {
             title: '第一步：选择项目类型',
             description: '测试用创建面板',
             projectsRootPath: 'D:/Projects',
+            knowledgeBaseBranchOptions:
+                const <ProjectKnowledgeBaseBranchOptionViewData>[],
+            selectedKnowledgeBaseBranchId: '',
             status: '',
             draftTitle: '海城续写',
             projectTypeOptions: const <ProjectTypeOptionViewData>[
