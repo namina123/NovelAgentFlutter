@@ -5,6 +5,7 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 import '../config/project_information_permission_settings_resolver_service.dart';
 import '../config/project_tool_permission_settings_resolver_service.dart';
 import '../runtime/long_task_supervisor.dart';
+import '../runtime/long_task_watchdog.dart';
 import '../runtime/project_long_task_run_registry_sync_service.dart';
 import '../runtime/project_tool_permission_approval_record_service.dart';
 import '../storage/project_mode_guidance_repository.dart';
@@ -126,6 +127,7 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
     ProjectToolPermissionApprovalRecordService?
     toolPermissionApprovalRecordService,
     LongTaskSupervisor? longTaskSupervisor,
+    LongTaskWatchdog? longTaskWatchdog,
     ProjectLongTaskRunRegistrySyncService? longTaskRunRegistrySyncService,
   }) : _taskRepository = taskRepository,
        _promptTemplateService = promptTemplateService,
@@ -426,7 +428,8 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
                : ProjectLongTaskRunRegistrySyncService(
                    supervisor: longTaskSupervisor,
                    taskRepository: taskRepository,
-                 )) {
+                 )),
+       _longTaskWatchdog = longTaskWatchdog {
     _workflowQueueRuntimeService =
         workflowQueueRuntimeService ??
         ProjectWorkflowQueueRuntimeService(
@@ -524,6 +527,7 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
                     ),
               ),
           longTaskRunRegistrySyncService: _longTaskRunRegistrySyncService,
+          longTaskWatchdog: _longTaskWatchdog,
         );
     _workflowQueueRuntimeService.bindWorkflowTaskOnceRunner(
       runWorkflowTaskOnce,
@@ -605,6 +609,7 @@ class ProjectWorkflowRuntimeService implements TaskCenterRuntimeQueryPort {
   final ProjectToolPermissionApprovalRecordService
   _toolPermissionApprovalRecordService;
   final ProjectLongTaskRunRegistrySyncService? _longTaskRunRegistrySyncService;
+  final LongTaskWatchdog? _longTaskWatchdog;
 
   List<JsonMap> listTaskRuntimeModes() {
     // 中文注释: 模式定义直接来自 core，确保任务中心和 CLI 的枚举完全同源。
