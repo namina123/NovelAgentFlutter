@@ -68,7 +68,7 @@ void main() {
       informationProjectionItems: const <LongTaskRunRelatedItemViewData>[
         LongTaskRunRelatedItemViewData(
           title: '项目知识摘要',
-          subtitle: '资料摘要',
+          subtitle: '知识卡片',
           summary: '打开当前 knowledge 卡片的可读摘要。',
           relativePath: 'knowledge/项目知识摘要.md',
           actionLabel: '打开摘要',

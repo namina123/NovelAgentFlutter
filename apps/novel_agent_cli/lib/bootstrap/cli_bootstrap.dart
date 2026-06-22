@@ -152,6 +152,7 @@ class CliBootstrap {
     final workflowRuntimeService = ProjectWorkflowRuntimeService(
       taskRepository: projectTaskRepository,
       promptTemplateService: promptTemplateService,
+      longTaskWatchdog: bundle.longTaskWatchdog,
       loadProjectAgentGroupSelections: (project) =>
           bundle.projectAgentGroupBindingRepository.loadSelections(project),
       hostAwareGenerateDraftUseCaseFactory:

@@ -143,7 +143,7 @@ void main() {
       expect(
         plan.items.map((item) => item.relativePathHint),
         containsAll(<String>[
-          'premise/book_deconstruction_premise_1.md',
+          'premise/book_deconstruction_premise_1_核心前提.md',
           'outlines/story/book_deconstruction_story_outline.md',
           'outlines/chapters/book_deconstruction_chapter_1.md',
           'assets/styles/commercial_clean.md',

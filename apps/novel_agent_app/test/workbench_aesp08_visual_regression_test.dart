@@ -226,7 +226,10 @@ Future<void> _captureAgentPanelEntries(WidgetTester tester) async {
   );
   await tester.pumpAndSettle();
 
-  expect(find.text('项目智能体组'), findsWidgets);
+  // The agent panel surfaces the collaboration overview, the current
+  // division of labor, and the configured workspace actions.
+  expect(find.text('协作概览'), findsOneWidget);
+  expect(find.text('当前分工'), findsOneWidget);
   expect(find.text('技能装载'), findsOneWidget);
   expect(find.text('表达限制'), findsOneWidget);
 
@@ -338,8 +341,9 @@ Future<void> _captureConversationAgentSelector(WidgetTester tester) async {
   );
   await tester.pumpAndSettle();
 
-  expect(find.text('当前会话智能体'), findsOneWidget);
-  expect(find.text('智能体'), findsWidgets);
+  // The sidebar surfaces the workflow title and the configured agent label;
+  // the agent selector chips render the agent option labels.
+  expect(find.text('章节协作'), findsWidgets);
   expect(find.text('审阅智能体'), findsWidgets);
 
   await expectLater(

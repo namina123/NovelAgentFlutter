@@ -110,7 +110,7 @@ void main() {
         ValueReaders.stringList(checkpoint['source_paths']),
         containsAll(<String>[
           'specs/project_spec.md',
-          'styles/全书风格指南.md',
+          'assets/styles/全书风格指南.md',
           'outlines/story/总纲.md',
           'outlines/chapters/章节任务清单.md',
           'outlines/volumes',
@@ -120,7 +120,7 @@ void main() {
         ValueReaders.stringList(sampleTask['source_paths']),
         containsAll(<String>[
           'specs/project_spec.md',
-          'styles/全书风格指南.md',
+          'assets/styles/全书风格指南.md',
           'outlines/story/总纲.md',
           'outlines/chapters/章节任务清单.md',
         ]),

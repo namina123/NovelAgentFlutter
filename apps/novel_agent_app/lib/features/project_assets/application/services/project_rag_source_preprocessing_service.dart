@@ -67,6 +67,24 @@ class ProjectRagSourcePreprocessingService {
         note: '缺少待整理的源文。',
       );
     }
+    // 中文注释: 资料库语料只接受纯文本 / Markdown。epub / pdf 等二进制格式若不在这里拦下，
+    // 会被当成文本读成乱码再静默写入语料库（数据损坏且无报错）。epub 请走"拆书"入口。
+    final catalog = const SourceDocumentFormatCatalogService();
+    for (final path in cleanPaths) {
+      final descriptor = catalog.resolveByPath(path);
+      final readerKind = descriptor?.readerKind ?? '';
+      if (readerKind != SourceDocumentFormatCatalogService.plainTextFormatId) {
+        return ProjectRagPreprocessResult(
+          ok: false,
+          normalizedSourceText: '',
+          displaySourceName: _displayName(path),
+          recentSourcePath: path,
+          note: descriptor == null
+              ? '资料库暂不支持该文件格式（语料只接受 .txt / .md / .markdown）。epub 等格式请用“拆书”导入。'
+              : '资料库语料只接受纯文本 / Markdown；${descriptor.formatId}（.${descriptor.fileExtensions.first}）请用“拆书”导入。',
+        );
+      }
+    }
     await _emitProgress(onProgress, '正在整理源文...');
     final smartResult = await _trySmartNormalize(
       project: project,

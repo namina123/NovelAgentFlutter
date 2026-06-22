@@ -29,6 +29,8 @@ class BookDeconstructionViewData {
     required this.canConfirmSelection,
     required this.canCreateDerivedProject,
     required this.importActionLabel,
+    required this.canSmartImport,
+    required this.smartImportActionLabel,
     required this.buildPreviewActionLabel,
     this.continuity,
   });
@@ -59,6 +61,8 @@ class BookDeconstructionViewData {
       canConfirmSelection: false,
       canCreateDerivedProject: false,
       importActionLabel: '导入文件',
+      canSmartImport: false,
+      smartImportActionLabel: '智能拆书',
       buildPreviewActionLabel: '生成结构化预览',
       continuity: null,
     );
@@ -88,6 +92,8 @@ class BookDeconstructionViewData {
   final bool canConfirmSelection;
   final bool canCreateDerivedProject;
   final String importActionLabel;
+  final bool canSmartImport;
+  final String smartImportActionLabel;
   final String buildPreviewActionLabel;
   final BookDeconstructionContinuityViewData? continuity;
 }

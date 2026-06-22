@@ -101,7 +101,7 @@ void main() {
                 '请求：北海航线资料\n'
                 '原因：请先补充年代范围\n'
                 '最近动作：mark_needs_user_info\n'
-                '记录路径：.novel_agent/information/research_requests/research_request_9.json',
+                '记录路径：.novel_agent/information/research_requests/research_request_9.json（信息资料）',
           ),
         ),
       );
@@ -201,7 +201,7 @@ void main() {
           _PrintedBlock(
             'approval policy',
             '正式主入口：approval list/show/approve/reject\n'
-                '研究审批真相源：ProjectPendingResearchActionService\n'
+                '研究审批的数据来源：项目待办研究动作服务\n'
                 '工具权限审批真相：保留在 adapters/runtime 的审批记录服务中，后续可再接独立命令族。\n'
                 'workflow pending-research：仅作为兼容薄转发入口。',
           ),

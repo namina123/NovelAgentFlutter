@@ -13,8 +13,12 @@ import '../services/book_deconstruction_draft_builder_service.dart';
 import '../services/book_deconstruction_followup_option_selection_service.dart';
 import '../services/book_deconstruction_narrative_persistence_service.dart';
 import '../services/book_deconstruction_preview_markdown_service.dart';
+import '../services/book_deconstruction_smart_import_agent_service.dart';
+import '../services/book_deconstruction_smart_import_orchestration_service.dart';
+import '../services/book_deconstruction_smart_import_result.dart';
 import '../services/book_deconstruction_view_data_service.dart';
 import '../services/desktop_book_deconstruction_source_picker_service.dart';
+import '../../../workbench/application/controllers/generate_draft_use_case_factory.dart';
 
 class BookDeconstructionController extends ChangeNotifier
     implements BookDeconstructionActionHandler {
@@ -42,6 +46,8 @@ class BookDeconstructionController extends ChangeNotifier
     Future<void> Function(ProjectDescriptor project, String preferredOpenPath)?
     openDerivedProjectRequested,
     String projectsRootPath = '',
+    AppSettings? Function()? readSettings,
+    GenerateDraftUseCaseFactory? generateDraftUseCaseFactory,
   }) : _readCurrentProject = readCurrentProject,
        _readProjectFileUseCase = readProjectFileUseCase,
        _syncWorkbenchResources = syncWorkbenchResources,
@@ -76,7 +82,9 @@ class BookDeconstructionController extends ChangeNotifier
              targetPathService: targetPathService,
            ),
        _snapshot = BookDeconstructionSnapshot.initial(),
-       _viewData = BookDeconstructionViewData.initial();
+       _viewData = BookDeconstructionViewData.initial(),
+       _readSettings = readSettings,
+       _generateDraftUseCaseFactory = generateDraftUseCaseFactory;
 
   final ProjectDescriptor? Function() _readCurrentProject;
   final ReadProjectFileUseCase _readProjectFileUseCase;
@@ -85,6 +93,8 @@ class BookDeconstructionController extends ChangeNotifier
   final DesktopBookDeconstructionSourcePickerService _sourcePickerService;
   final BookDeconstructionDraftBuilderService _draftBuilderService;
   final BookDeconstructionViewDataService _viewDataService;
+  final AppSettings? Function()? _readSettings;
+  final GenerateDraftUseCaseFactory? _generateDraftUseCaseFactory;
   final BookDeconstructionFollowupOptionSelectionService
   _followupOptionSelectionService;
   final BookDeconstructionProjectSetupDocumentService
@@ -195,6 +205,139 @@ class BookDeconstructionController extends ChangeNotifier
       _statusMessage = '读取源文件失败：$error';
       _rebuildView();
     }
+  }
+
+  @override
+  Future<void> onBookDeconstructionSmartImportRequested() async {
+    // 中文注释: 智能拆书 = 模型辅助正文标准化（识别正文 / 分章 / 去噪），复用 RAG 也用的同一套
+    // BookDeconstructionSmartImportOrchestrationService。先按普通导入把原文归档到来源层，
+    // 再跑智能拆书，把清洗后的正文填回 sourceContent；模型不可用时如实提示，不静默失败。
+    final project = _readCurrentProject();
+    if (project == null) {
+      _statusMessage = '请先创建或打开拆书项目。';
+      _rebuildView();
+      return;
+    }
+    final readSettings = _readSettings;
+    final generateDraftUseCaseFactory = _generateDraftUseCaseFactory;
+    if (readSettings == null || generateDraftUseCaseFactory == null) {
+      _statusMessage = '尚未接入模型设置，无法使用智能拆书。';
+      _rebuildView();
+      return;
+    }
+    final settings = readSettings();
+    if (settings == null || settings.providers.isEmpty) {
+      _statusMessage = '尚未配置模型提供商，无法使用智能拆书。';
+      _rebuildView();
+      return;
+    }
+    final provider = _resolveProvider(settings);
+    if (provider == null) {
+      _statusMessage = '未解析到可用模型提供商，无法使用智能拆书。';
+      _rebuildView();
+      return;
+    }
+    final modelId = _resolveModelId(settings, provider);
+    if (modelId.isEmpty) {
+      _statusMessage = '未解析到可用模型，无法使用智能拆书。';
+      _rebuildView();
+      return;
+    }
+    final selectedPath = await _sourcePickerService.pickSourceFile();
+    if (selectedPath == null || selectedPath.trim().isEmpty) {
+      _statusMessage = '已取消智能拆书。';
+      _rebuildView();
+      return;
+    }
+    _snapshot = _snapshot.copyWith(
+      isLoading: true,
+      operationKind: BookDeconstructionOperationKind.smartImportingSource,
+    );
+    _statusMessage = '正在用模型辅助智能拆书…';
+    _rebuildView();
+    await Future<void>.delayed(const Duration(milliseconds: 16));
+    try {
+      final archiveResult = await _importArchiveWorkflowService.execute(
+        project: project,
+        sourceFilePath: selectedPath.trim(),
+      );
+      final orchestration = BookDeconstructionSmartImportOrchestrationService(
+        agentService: BookDeconstructionSmartImportAgentService(
+          readSettings: readSettings,
+          generateDraftUseCaseFactory: generateDraftUseCaseFactory,
+        ),
+      );
+      final result = await orchestration.execute(
+        project: project,
+        sourcePaths: <String>[selectedPath.trim()],
+        providerId: provider.id,
+        modelId: modelId,
+      );
+      final normalized = result.normalizedSourceText.trim().isNotEmpty
+          ? result.normalizedSourceText
+          : archiveResult.sourceText;
+      _snapshot = _invalidatePreview(
+        _snapshot.copyWith(
+          isLoading: false,
+          operationKind: BookDeconstructionOperationKind.idle,
+          activeStepId: BookDeconstructionStepId.importSource,
+          sourceAbsolutePath: archiveResult.sourceFilePath,
+          sourceTitle: archiveResult.sourceTitle,
+          sourceContent: normalized,
+        ),
+      );
+      _statusMessage = result.applied
+          ? '智能拆书已完成模型辅助标准化${result.note.trim().isEmpty ? '' : '：${result.note}'}，可继续补充结构说明后生成预览。'
+          : '智能拆书未产出有效正文，已保留原文${result.note.trim().isEmpty ? '' : '（${result.note}）'}。';
+      _rebuildView();
+    } catch (error) {
+      _snapshot = _snapshot.copyWith(
+        isLoading: false,
+        operationKind: BookDeconstructionOperationKind.idle,
+      );
+      _statusMessage = '智能拆书失败：$error';
+      _rebuildView();
+    }
+  }
+
+  ProviderEndpointSettings? _resolveProvider(AppSettings settings) {
+    final defaultProviderId = settings.defaultProviderId.trim();
+    if (defaultProviderId.isNotEmpty) {
+      for (final provider in settings.providers) {
+        if (provider.id == defaultProviderId) {
+          return provider;
+        }
+      }
+    }
+    return settings.providers.isEmpty ? null : settings.providers.first;
+  }
+
+  String _resolveModelId(
+    AppSettings settings,
+    ProviderEndpointSettings provider,
+  ) {
+    final defaultModelId = settings.defaultModelId.trim();
+    if (defaultModelId.isNotEmpty) {
+      return defaultModelId;
+    }
+    return provider.modelId.trim();
+  }
+
+  bool _isSmartImportAvailable() {
+    final readSettings = _readSettings;
+    final generateDraftUseCaseFactory = _generateDraftUseCaseFactory;
+    if (readSettings == null || generateDraftUseCaseFactory == null) {
+      return false;
+    }
+    final settings = readSettings();
+    if (settings == null || settings.providers.isEmpty) {
+      return false;
+    }
+    final provider = _resolveProvider(settings);
+    if (provider == null) {
+      return false;
+    }
+    return _resolveModelId(settings, provider).isNotEmpty;
   }
 
   @override
@@ -561,6 +704,7 @@ class BookDeconstructionController extends ChangeNotifier
       snapshot: _snapshot,
       status: _statusMessage,
       canCreateDerivedProject: _isDerivedProjectCreationAvailable(),
+      canSmartImport: _isSmartImportAvailable(),
     );
     if (!_disposed) {
       notifyListeners();

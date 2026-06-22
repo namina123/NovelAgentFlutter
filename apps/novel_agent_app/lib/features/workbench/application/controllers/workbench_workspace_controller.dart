@@ -310,6 +310,23 @@ class WorkbenchWorkspaceController
   WorkbenchProjectRuntimeState get currentProjectRuntimeState =>
       _readProjectState();
 
+  /// 重读磁盘上的 runtime_profile.json 并刷新内存缓存后返回。
+  ///
+  /// 中文注释: 创建长任务等"会落产物"的关键动作必须以文件为唯一真相，不能依赖 hydration
+  /// 时刻的内存缓存，否则文件被外部改动后会用陈旧配置物化计划。队列运行时另有 resolver
+  /// 再次读取，这里只保证创建入口与文件一致。
+  Future<ProjectRuntimeProfile?> reloadCurrentRuntimeProfile() async {
+    final project = _readProjectState().currentProject;
+    if (project == null) {
+      return _readProjectState().currentRuntimeProfile;
+    }
+    final fresh = await _projectRuntimeProfileRepository.load(project);
+    _writeProjectState(
+      _readProjectState().copyWith(currentRuntimeProfile: fresh),
+    );
+    return fresh;
+  }
+
   bool get isProjectHydrationInProgress => _projectHydrationActive;
 
   JsonMap currentProjectInfo() {
@@ -837,8 +854,10 @@ class WorkbenchWorkspaceController
         ),
       );
     } catch (_) {
+      // 中文注释: 列举失败时连运行列表一起清空，避免 UI 顶着一串旧 run 却没有详情、也不报错。
       _writeProjectState(
         _readProjectState().copyWith(
+          currentProjectLongTaskRuns: const <RunInstance>[],
           currentProjectLongTaskRunDetails:
               const <String, ProjectLongTaskStationDetail>{},
           isProjectLongTaskSummaryLoading: false,

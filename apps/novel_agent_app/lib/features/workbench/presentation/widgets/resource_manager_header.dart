@@ -77,41 +77,50 @@ class ResourceManagerHeader extends StatelessWidget {
               ),
             ),
             SizedBox(width: visual.compactGap),
-            Wrap(
-              spacing: visual.microGap,
-              runSpacing: visual.microGap,
-              alignment: WrapAlignment.end,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 7,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: surface.backgroundColor.withValues(alpha: 0.06),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    '$itemCount 项',
-                    style: TextStyle(
-                      fontSize: visual.metaFontSize - 0.1,
-                      fontWeight: FontWeight.w700,
-                      color: surface.mutedForegroundColor,
+            LayoutBuilder(
+              builder: (context, constraints) {
+                // 中文注释: 侧栏很窄时（如三栏 204px），只留总项数 chip，把空间还给标题，
+                // 目录/文档两个统计 chip 等宽度够再显示。
+                final showStatChips = constraints.maxWidth >= 188;
+                return Wrap(
+                  spacing: visual.microGap,
+                  runSpacing: visual.microGap,
+                  alignment: WrapAlignment.end,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: surface.backgroundColor.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '$itemCount 项',
+                        style: TextStyle(
+                          fontSize: visual.metaFontSize - 0.1,
+                          fontWeight: FontWeight.w700,
+                          color: surface.mutedForegroundColor,
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-                _ExplorerStatChip(
-                  label: '目录',
-                  value: '$directoryCount',
-                  surface: surface,
-                ),
-                _ExplorerStatChip(
-                  label: '文档',
-                  value: '$fileCount',
-                  surface: surface,
-                ),
-              ],
+                    if (showStatChips)
+                      _ExplorerStatChip(
+                        label: '目录',
+                        value: '$directoryCount',
+                        surface: surface,
+                      ),
+                    if (showStatChips)
+                      _ExplorerStatChip(
+                        label: '文档',
+                        value: '$fileCount',
+                        surface: surface,
+                      ),
+                  ],
+                );
+              },
             ),
           ],
         ),

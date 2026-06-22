@@ -63,6 +63,7 @@ import '../../features/settings/application/services/project_creation_expression
 import '../../features/settings/application/services/provider_connection_validation_service.dart'
     as app_settings;
 import '../../features/settings/application/services/provider_settings_directory_service.dart';
+import '../../features/settings/application/services/provider_connection_probe_service.dart';
 import '../../features/settings/application/services/theme_settings_view_data_service.dart';
 import '../../features/settings/presentation/contracts/settings_action_handler.dart';
 import '../../features/settings/presentation/models/model_editor_view_data.dart';
@@ -686,6 +687,8 @@ class AppShellController extends ChangeNotifier
         onBackRequested: showWorkbench,
         sourcePickerService: _desktopBookDeconstructionSourcePickerService,
         projectsRootPath: _defaultProjectsRootPath,
+        readSettings: () => _settings,
+        generateDraftUseCaseFactory: _generateDraftUseCaseFactory,
         derivedProjectCreationService:
             BookDeconstructionDerivedProjectCreationService(
               createProjectWorkspaceUseCase: _createProjectWorkspaceUseCase,
@@ -778,6 +781,9 @@ class AppShellController extends ChangeNotifier
     JsonMap networkSettings,
   )
   _llmGatewayFactory;
+  // 中文注释: 连接探测复用同一套 gateway 装配，不在壳层另起网络实现。
+  late final ProviderConnectionProbeService _providerConnectionProbeService =
+      ProviderConnectionProbeService(gatewayFactory: _llmGatewayFactory);
   final HostAwareGenerateDraftUseCaseFactory?
   _hostAwareGenerateDraftUseCaseFactory;
   final ProjectWorkflowRuntimeService _workflowRuntimeService;
@@ -1252,19 +1258,29 @@ class AppShellController extends ChangeNotifier
     final selectedPath = await _desktopProjectDirectoryPickerService
         .pickProjectDirectory();
     if (selectedPath == null || selectedPath.trim().isEmpty) {
+      // 中文注释: 用户取消选择时不打扰；只有真正失败才在下面 try/catch 里给状态。
       return;
     }
-    final snapshot = await _loadProjectWorkspaceUseCase.execute(selectedPath);
-    if (snapshot == null) {
-      await _refreshProjectOpenView(status: '所选目录不是有效项目根目录。');
-      return;
+    try {
+      final snapshot = await _loadProjectWorkspaceUseCase.execute(selectedPath);
+      if (snapshot == null) {
+        await _refreshProjectOpenView(status: '所选目录不是有效项目根目录。');
+        return;
+      }
+      await _openProjectFromProjectOpen(snapshot.project.rootPath);
+    } catch (error) {
+      // 中文注释: 导入/打开期间抛错要如实落到作品库状态，而不是被静默吞掉、用户看到"什么都没发生"。
+      await _refreshProjectOpenView(status: '导入项目失败：$error');
     }
-    await _openProjectFromProjectOpen(snapshot.project.rootPath);
   }
 
   Future<void> _startProjectCreationFromProjectOpen() async {
     // 中文注释: 项目入口页进入新建流程时统一切回工作台并拉起正式创建向导，避免落回旧命令面板。
-    showWorkbench();
+    // 注意：必须用 _destinationController.showWorkbench() 而不是公开的 showWorkbench()——
+    // 后者在当前项目是 knowledge_base 时会重定向到 projectAssets 并 return，
+    // 导致 onCreateProjectRequested 设置的创建向导落在工作台视图上、用户却停在资料库页
+    // （表现为“在资料库项目页点新建项目，一下就跳回去了”）。
+    _destinationController.showWorkbench();
     await _projectCreationController.onCreateProjectRequested();
   }
 
@@ -1488,12 +1504,14 @@ class AppShellController extends ChangeNotifier
 
   @override
   void onProviderConnectionTestRequested(Map<String, Object?> payload) {
-    // 中文注释: 连接测试只更新共享投影缓存，不在 widget 层保存临时验证状态。
+    // 中文注释: 连接测试先做本地自检（快速挡住明显错误），通过后再发起一次真联网探测；
+    // 用共享投影缓存把"本地自检 + 联网结果"统一呈现，不再用本地校验冒充联网成功。
     final settings = _settings;
     if (settings == null) {
       return;
     }
     final providerId = _stringValue(payload['source_id']);
+    final storageKey = providerId.isNotEmpty ? providerId : '__new__';
     final validation = _providerConnectionValidationService.validate(
       title: _stringValue(payload['title']),
       protocol: _stringValue(payload['protocol'], 'openai_compatible'),
@@ -1502,13 +1520,90 @@ class AppShellController extends ChangeNotifier
       modelId: _stringValue(payload['model_id']),
       apiMode: _stringValue(payload['api_mode'], 'chat'),
     );
-    _providerConnectionValidationResults[providerId.isNotEmpty
-        ? providerId
-        : '__new__'] = _toValidationViewData(
-      validation,
+    final lintView = _toValidationViewData(validation);
+    if (!validation.isSuccess) {
+      _providerConnectionValidationResults[storageKey] = lintView;
+      _refreshSettingsViewData(selectedProviderId: storageKey);
+      return;
+    }
+    final baseUrl = _stringValue(payload['base_url']);
+    final modelId = _stringValue(payload['model_id']);
+    // 中文注释: 本地自检通过时先落"正在联网验证"，避免把本地校验当作联网成功。
+    _providerConnectionValidationResults[storageKey] = _validationViewDataWith(
+      base: lintView,
+      isSuccess: false,
+      summary: '正在联网验证…',
+      details: lintView.details,
     );
-    _refreshSettingsViewData(
-      selectedProviderId: providerId.isNotEmpty ? providerId : '__new__',
+    _refreshSettingsViewData(selectedProviderId: storageKey);
+    unawaited(
+      _applyProviderConnectionProbe(
+        payload: payload,
+        storageKey: storageKey,
+        lintView: lintView,
+        baseUrl: baseUrl,
+        modelId: modelId,
+      ),
+    );
+  }
+
+  Future<void> _applyProviderConnectionProbe({
+    required Map<String, Object?> payload,
+    required String storageKey,
+    required ProviderConnectionValidationResultViewData lintView,
+    required String baseUrl,
+    required String modelId,
+  }) async {
+    final provider = ProviderEndpointSettings(
+      id: storageKey == '__new__' ? '' : storageKey,
+      title: _stringValue(payload['title']),
+      protocol: _stringValue(payload['protocol'], 'openai_compatible'),
+      baseUrl: baseUrl,
+      apiKey: _stringValue(payload['api_key']),
+      modelId: modelId,
+      description: '',
+    );
+    final probe = await _providerConnectionProbeService.probe(
+      provider: provider,
+      modelId: modelId,
+    );
+    // 中文注释: 探测期间用户可能已切走或重测；只要缓存键还在就更新，否则丢弃本次结果。
+    if (!_providerConnectionValidationResults.containsKey(storageKey)) {
+      return;
+    }
+    _providerConnectionValidationResults[storageKey] = _validationViewDataWith(
+      base: lintView,
+      isSuccess: probe.success,
+      summary: probe.success ? probe.summary : probe.summary,
+      details: <String>[...lintView.details, probe.detail],
+    );
+    _refreshSettingsViewData(selectedProviderId: storageKey);
+  }
+
+  ProviderConnectionValidationResultViewData _validationViewDataWith({
+    required ProviderConnectionValidationResultViewData base,
+    required bool isSuccess,
+    required String summary,
+    required List<String> details,
+  }) {
+    // 中文注释: 复用本地自检结果的模板/路由等元信息，只覆盖成功状态与文案，避免重复拼字段。
+    return ProviderConnectionValidationResultViewData(
+      isSuccess: isSuccess,
+      summary: summary,
+      details: details,
+      errors: base.errors,
+      templateId: base.templateId,
+      providerId: base.providerId,
+      protocolId: base.protocolId,
+      protocolMode: base.protocolMode,
+      routeFamily: base.routeFamily,
+      selectedRouteFamily: base.selectedRouteFamily,
+      allowedRouteFamilies: base.allowedRouteFamilies,
+      hideOptions: base.hideOptions,
+      fallbackNotAllowed: base.fallbackNotAllowed,
+      warnings: base.warnings,
+      matchedTemplateId: base.matchedTemplateId,
+      matchedTemplateLabel: base.matchedTemplateLabel,
     );
   }
 
@@ -2892,9 +2987,9 @@ class AppShellController extends ChangeNotifier
       environment: _taskCenterCommandEnvironment,
       pendingMessage: '正在生成长任务队列...',
       successMessage: '长任务队列已生成。',
-      operation: (project, settings) {
+      operation: (project, settings) async {
         final runtimeProfile =
-            _workbenchWorkspaceController.currentProjectRuntimeProfile;
+            await _workbenchWorkspaceController.reloadCurrentRuntimeProfile();
         final initialRunOptions = runtimeProfile == null
             ? const <String, Object?>{}
             : ValueReaders.deepCopyMap(runtimeProfile.initialRunOptions);

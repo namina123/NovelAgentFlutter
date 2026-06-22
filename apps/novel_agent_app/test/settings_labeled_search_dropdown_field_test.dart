@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:novel_agent_app/app/theme/app_theme.dart';
 import 'package:novel_agent_app/features/settings/presentation/models/settings_search_option.dart';
 import 'package:novel_agent_app/features/settings/presentation/widgets/settings_labeled_search_dropdown_field.dart';
 
@@ -10,6 +11,7 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
+        theme: AppTheme.light(),
         home: Scaffold(
           body: SettingsLabeledSearchDropdownField<String>(
             label: '模型',

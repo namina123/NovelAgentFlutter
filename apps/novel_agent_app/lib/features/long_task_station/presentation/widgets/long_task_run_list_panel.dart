@@ -56,14 +56,18 @@ class LongTaskRunListPanel extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      entry.statusLabel,
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w700,
-                        color: entry.requiresAttention
-                            ? toolSurface.highlightForegroundColor
-                            : optionSurface.mutedForegroundColor,
+                    Flexible(
+                      child: Text(
+                        entry.statusLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                          color: entry.requiresAttention
+                              ? toolSurface.highlightForegroundColor
+                              : optionSurface.mutedForegroundColor,
+                        ),
                       ),
                     ),
                   ],

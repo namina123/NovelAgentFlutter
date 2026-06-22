@@ -17,11 +17,11 @@ void main() {
     expect(linear.colors.canvasBackground, gentle.colors.canvasBackground);
     expect(linear.colors.accentColor, gentle.colors.accentColor);
 
-    expect(linear.controlStyle.descriptor.id, 'builtin.linear');
+    expect(linear.controlStyle.descriptor.id, 'builtin.studio');
     expect(gentle.controlStyle.descriptor.id, 'builtin.gentle');
-    expect(linear.surfaces.panel.radius, 0);
+    expect(linear.surfaces.panel.radius, 8);
     expect(gentle.surfaces.panel.radius, 8);
-    expect(linear.surfaces.inputDock.radius, 0);
+    expect(linear.surfaces.inputDock.radius, 8);
     expect(gentle.surfaces.inputDock.radius, 8);
   });
 

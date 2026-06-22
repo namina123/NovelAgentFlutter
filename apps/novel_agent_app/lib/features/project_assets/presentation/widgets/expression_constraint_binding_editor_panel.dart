@@ -418,7 +418,7 @@ class _ExpressionConstraintBindingEditorPanelState
           const SizedBox(height: 6),
           Text(
             _selectedModeIds.isEmpty
-                ? '先选择模式可缩小阶段范围；当前先展示全部已知阶段。'
+                ? '先选择模式可缩小阶段范围；当前展示全部已知阶段。'
                 : '阶段会跟随已选模式过滤。',
             style: Theme.of(context).textTheme.bodySmall,
           ),

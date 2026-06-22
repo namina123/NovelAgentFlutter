@@ -146,7 +146,9 @@ class ProjectRagExtractionPanel extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 16),
-        Row(
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
           children: [
             FilledButton(
               onPressed: viewData.canBuildTxt && !viewData.isLoading
@@ -156,7 +158,6 @@ class ProjectRagExtractionPanel extends StatelessWidget {
                   : null,
               child: Text(viewData.isLoading ? '正在整理并提取...' : '整理并提取语料'),
             ),
-            const SizedBox(width: 8),
             OutlinedButton(
               onPressed: viewData.canMountCorpus && !viewData.isLoading
                   ? actionHandler.onProjectAssetsMountRagCorpusRequested

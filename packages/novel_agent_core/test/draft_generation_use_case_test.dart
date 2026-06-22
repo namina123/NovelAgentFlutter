@@ -510,7 +510,7 @@ void main() {
           ),
           'present_user_options',
         );
-        expect(gateway.lastSystemPrompt, contains('必须调用 present_user_options'));
+        expect(gateway.lastSystemPrompt, contains('优先调用 present_user_options'));
         expect(result.waitingForUserChoice, isTrue);
         expect(
           result.executedTools
@@ -1850,7 +1850,7 @@ void main() {
         );
 
         expect(gateway.lastToolNames, isNot(contains('call_sub_agent')));
-        expect(gateway.lastSystemPrompt, contains('当前按单主智能体运行'));
+        expect(gateway.lastSystemPrompt, contains('当前协作合同表明本轮按单主智能体运行'));
         expect(
           gateway.lastSystemPrompt,
           isNot(contains('调用 call_sub_agent 时必须传 agent_id 和 task')),

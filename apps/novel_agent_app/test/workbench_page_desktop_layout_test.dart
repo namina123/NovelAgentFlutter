@@ -126,8 +126,8 @@ void main() {
           conversationWidth -
           WorkbenchPaneLayoutPolicy.dividerWidth * 2;
 
-      expect(leftWidth, inInclusiveRange(252, 312));
-      expect(conversationWidth, inInclusiveRange(360, 456));
+      expect(leftWidth, inInclusiveRange(204, 252));
+      expect(conversationWidth, inInclusiveRange(304, 356));
       expect(documentWidth, greaterThan(560));
       expect(documentWidth, greaterThan(conversationWidth));
     },

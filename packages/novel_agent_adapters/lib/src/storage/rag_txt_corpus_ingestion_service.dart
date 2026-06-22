@@ -23,6 +23,19 @@ class RagTxtCorpusIngestionProgress {
 typedef RagTxtCorpusIngestionProgressCallback =
     FutureOr<void> Function(RagTxtCorpusIngestionProgress progress);
 
+/// ingestion 给 chunk 批量 embedding 的结果：带向量的 chunk + 向量维度 + 后端类型。
+class RagTxtEmbeddingResult {
+  const RagTxtEmbeddingResult({
+    required this.chunks,
+    required this.dimension,
+    required this.backendKind,
+  });
+
+  final List<RagChunk> chunks;
+  final int dimension;
+  final String backendKind;
+}
+
 class RagTxtCorpusIngestionService {
   RagTxtCorpusIngestionService({
     SqliteRagMetadataRepository? metadataRepository,
@@ -30,6 +43,7 @@ class RagTxtCorpusIngestionService {
     ReferenceSourceDocumentStructureService? structureService,
     BundleChecksumService? checksumService,
     RagSourceAnalysisSummaryBuilder? sourceAnalysisSummaryBuilder,
+    EmbeddingProviderPort? embeddingProvider,
   }) : _metadataRepository =
            metadataRepository ?? SqliteRagMetadataRepository(),
        _fileReaderService =
@@ -40,13 +54,15 @@ class RagTxtCorpusIngestionService {
        _checksumService = checksumService ?? const BundleChecksumService(),
        _sourceAnalysisSummaryBuilder =
            sourceAnalysisSummaryBuilder ??
-           const RagSourceAnalysisSummaryBuilder();
+           const RagSourceAnalysisSummaryBuilder(),
+       _embeddingProvider = embeddingProvider;
 
   final SqliteRagMetadataRepository _metadataRepository;
   final ReferenceSourceDocumentFileReaderService _fileReaderService;
   final ReferenceSourceDocumentStructureService _structureService;
   final BundleChecksumService _checksumService;
   final RagSourceAnalysisSummaryBuilder _sourceAnalysisSummaryBuilder;
+  final EmbeddingProviderPort? _embeddingProvider;
 
   Future<RagCorpusPackage> ingestFile({
     required ProjectDescriptor project,
@@ -193,9 +209,12 @@ class RagTxtCorpusIngestionService {
         'source_analysis_summary': sourceAnalysisSummary,
       },
     );
+    final embedded = await _embedChunks(chunks);
     final indexHandle = _buildIndexHandle(
       corpusPackage: updatedCorpus,
       timestamp: timestamp,
+      embeddingDimension: embedded.dimension,
+      backendKind: embedded.backendKind,
     );
     final ingestionRun = _buildIngestionRun(
       project: project,
@@ -220,7 +239,7 @@ class RagTxtCorpusIngestionService {
       project: project,
       corpusPackage: updatedCorpus,
       sourceDocument: sourceDocument,
-      chunks: chunks,
+      chunks: embedded.chunks,
       indexHandle: indexHandle,
       ingestionRun: ingestionRun,
       onChunkBatchCommitted: (completed, total) async {
@@ -380,9 +399,12 @@ class RagTxtCorpusIngestionService {
         'normalization_stage': 'book_deconstruction_preprocessed',
       },
     );
+    final embedded = await _embedChunks(chunks);
     final indexHandle = _buildIndexHandle(
       corpusPackage: updatedCorpus,
       timestamp: timestamp,
+      embeddingDimension: embedded.dimension,
+      backendKind: embedded.backendKind,
     );
     final ingestionRun = _buildIngestionRun(
       project: project,
@@ -406,7 +428,7 @@ class RagTxtCorpusIngestionService {
       project: project,
       corpusPackage: updatedCorpus,
       sourceDocument: sourceDocument,
-      chunks: chunks,
+      chunks: embedded.chunks,
       indexHandle: indexHandle,
       ingestionRun: ingestionRun,
       onChunkBatchCommitted: (completed, total) async {
@@ -570,25 +592,80 @@ class RagTxtCorpusIngestionService {
   RagIndexHandle _buildIndexHandle({
     required RagCorpusPackage corpusPackage,
     required String timestamp,
+    int embeddingDimension = 0,
+    String backendKind = 'sqlite-meta',
   }) {
-    // 中文注释: 索引句柄这里只登记 metadata-only 状态，避免把真实向量后端假装成已经落地。
+    // 中文注释: 索引句柄如实登记后端类型与向量维度：接了 embedding provider 就写真实维度，
+    // 没接就保持 metadata-only，不再把任何状态假装成向量已落地。
+    final vectorBacked = embeddingDimension > 0;
     return RagIndexHandle(
       indexHandleId: '${corpusPackage.corpusId}_index',
       corpusId: corpusPackage.corpusId,
-      backendKind: 'sqlite-meta',
+      backendKind: backendKind,
       backendLocation: '.novel_agent/sqlite/novel_agent.db',
-      embeddingDimension: 0,
+      embeddingDimension: embeddingDimension,
       status: 'ready',
       version: corpusPackage.version.trim().isEmpty
           ? 'v1'
           : corpusPackage.version,
       lastBuiltAt: timestamp,
       metadata: <String, Object?>{
-        'backend_policy': 'metadata_only',
+        'backend_policy': vectorBacked ? 'sqlite_vector' : 'metadata_only',
         'source_kind': corpusPackage.sourceKind,
         'build_mode': corpusPackage.buildMode,
       },
     );
+  }
+
+  /// 用注入的 embedding provider 批量给 chunk 生成向量，写到 chunk.metadata 里，
+  /// 随 chunk 一起在同一事务落库；没有 provider 或失败时如实回退到纯元数据。
+  Future<RagTxtEmbeddingResult> _embedChunks(List<RagChunk> chunks) async {
+    final provider = _embeddingProvider;
+    if (provider == null || chunks.isEmpty) {
+      return RagTxtEmbeddingResult(
+        chunks: chunks,
+        dimension: 0,
+        backendKind: 'sqlite-meta',
+      );
+    }
+    try {
+      final texts = chunks.map((chunk) => chunk.text).toList(growable: false);
+      final vectors = await provider.embedTexts(texts);
+      if (vectors.length != chunks.length ||
+          vectors.isEmpty ||
+          vectors.first.isEmpty) {
+        return RagTxtEmbeddingResult(
+          chunks: chunks,
+          dimension: 0,
+          backendKind: 'sqlite-meta',
+        );
+      }
+      final dimension = vectors.first.length;
+      final embedded = <RagChunk>[];
+      for (var i = 0; i < chunks.length; i++) {
+        embedded.add(
+          chunks[i].copyWith(
+            metadata: <String, Object?>{
+              ...chunks[i].metadata,
+              'embedding': vectors[i],
+              'embedding_model': provider.providerId,
+            },
+          ),
+        );
+      }
+      return RagTxtEmbeddingResult(
+        chunks: embedded,
+        dimension: dimension,
+        backendKind: provider.providerKind,
+      );
+    } catch (_) {
+      // 中文注释: embedding 失败不阻断 ingestion；检索端口仍可走，只是没有向量可用。
+      return RagTxtEmbeddingResult(
+        chunks: chunks,
+        dimension: 0,
+        backendKind: 'sqlite-meta',
+      );
+    }
   }
 
   JsonMap _buildIngestionRun({

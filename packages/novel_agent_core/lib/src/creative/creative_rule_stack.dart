@@ -38,7 +38,9 @@ class CreativeRuleStack {
       (constitution == null || constitution!.isEmpty) &&
       (modeGuidance == null || modeGuidance!.isEmpty) &&
       expressionConstraints.isEmpty &&
-      styles.isEmpty;
+      expressionConstraintBindings.isEmpty &&
+      styles.isEmpty &&
+      styleBindings.isEmpty;
 
   CreativeRuleStack copyWith({
     ProjectConstitution? constitution,

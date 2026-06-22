@@ -18,6 +18,11 @@ void main() {
           'stage': 'sample',
           'result_ok': true,
           'output_paths': <Object?>['chapters/ch01.md'],
+          // 中文注释: 给样章带一个真实的语义质疑信号，使样章 severity 不被 advisory cap 降到 medium，
+          // 这样这条用例测的就是"样章存在真实 repair 信号时判 high 并走 followup 闸门"的正路。
+          'narrative_supervisor_risk': <String, Object?>{
+            'review': <String, Object?>{'questioned_claim_count': 1},
+          },
           'confirmation_focus': <Object?>['样章入口是否成立。', '主角体验是否成立。'],
           'drift_watch_items': <Object?>[
             '检查文风是否漂移。',

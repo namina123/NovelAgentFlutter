@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:typed_data';
 
 import 'package:novel_agent_core/novel_agent_core.dart';
 import 'package:sqlite3/sqlite3.dart';
@@ -135,6 +136,9 @@ void _persistRagIngestionBundleInIsolate(
       );
       var completed = 0;
       for (final chunk in chunks) {
+        final embedding = _embeddingBlob(
+          chunk.metadata['embedding'],
+        );
         _upsert(
           database,
           tableName: 'rag_chunk',
@@ -152,6 +156,11 @@ void _persistRagIngestionBundleInIsolate(
             'normalized_text': chunk.normalizedText,
             'token_estimate': chunk.tokenEstimate,
             'payload_json': jsonEncode(chunk.toJson()),
+            // 中文注释: 向量随 chunk 一起在同一事务写入，避免二次开库与跨批次不一致。
+            'embedding_blob': embedding.blob,
+            'embedding_dim': embedding.dimension,
+            'embedding_model':
+                ValueReaders.stringValue(chunk.metadata['embedding_model']),
           },
         );
         completed += 1;
@@ -240,6 +249,23 @@ int _intValue(Object? value) {
     return value;
   }
   return int.tryParse(value?.toString() ?? '') ?? 0;
+}
+
+/// 把 chunk.metadata['embedding']（JSON 往返后的 List<dynamic>）编码成 Float32 BLOB。
+({Uint8List? blob, int dimension}) _embeddingBlob(Object? raw) {
+  if (raw is! List || raw.isEmpty) {
+    return (blob: null, dimension: 0);
+  }
+  final doubles = <double>[];
+  for (final value in raw) {
+    if (value is num) {
+      doubles.add(value.toDouble());
+    } else {
+      return (blob: null, dimension: 0);
+    }
+  }
+  final float32 = Float32List.fromList(doubles);
+  return (blob: float32.buffer.asUint8List(), dimension: doubles.length);
 }
 
 class _SqliteRagIngestionBundleWriteRequest {

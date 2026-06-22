@@ -188,170 +188,180 @@ class _EcosystemEditorOverlayState extends State<EcosystemEditorOverlay> {
                   ],
                   const SizedBox(height: 12),
                   Expanded(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(
-                          flex: 5,
-                          child: SingleChildScrollView(
-                            child: Column(
-                              children: [
-                                _textField(_idController, 'ID'),
-                                const SizedBox(height: 8),
-                                _textField(_nameController, '名称'),
-                                const SizedBox(height: 8),
-                                _textField(_descriptionController, '说明'),
-                                const SizedBox(height: 8),
-                                if (_isAgent) ...[
-                                  _textField(_roleController, '角色'),
-                                  const SizedBox(height: 8),
-                                  _textField(_objectiveController, '目标'),
-                                  const SizedBox(height: 8),
-                                  _multiField(_canDoController, '能做什么'),
-                                  const SizedBox(height: 8),
-                                  _multiField(_mustNotDoController, '绝不做什么'),
-                                  const SizedBox(height: 8),
-                                  _multiField(
-                                    _knowledgeSourcesController,
-                                    '知识与记忆路径',
-                                  ),
-                                  const SizedBox(height: 8),
-                                  _multiField(_skillsController, '技能'),
-                                  const SizedBox(height: 8),
-                                  _multiField(_skillGroupsController, '技能组'),
-                                  const SizedBox(height: 8),
-                                  _multiField(
-                                    _requiredCapabilitiesController,
-                                    '必需能力',
-                                  ),
-                                  const SizedBox(height: 8),
-                                  _multiField(
-                                    _optionalCapabilitiesController,
-                                    '可选能力',
-                                  ),
-                                  const SizedBox(height: 8),
-                                  _textField(
-                                    _preferredOutputController,
-                                    '偏好输出',
-                                  ),
-                                ],
-                                if (_isSkill) ...[
-                                  _multiField(
-                                    _activationHintsController,
-                                    '触发时机',
-                                  ),
-                                  const SizedBox(height: 8),
-                                  _multiField(_inputsController, '输入'),
-                                  const SizedBox(height: 8),
-                                  _multiField(_outputsController, '输出'),
-                                  const SizedBox(height: 8),
-                                  _multiField(
-                                    _requiredCapabilitiesController,
-                                    '必需能力',
-                                  ),
-                                  const SizedBox(height: 8),
-                                  _multiField(
-                                    _optionalCapabilitiesController,
-                                    '可选能力',
-                                  ),
-                                  const SizedBox(height: 8),
-                                  _textField(
-                                    _preferredOutputController,
-                                    '偏好输出',
-                                  ),
-                                ],
-                                if (_isSkillGroup) ...[
-                                  _multiField(_skillsController, '技能列表'),
-                                ],
-                                if (_isAgentGroup) ...[
-                                  _multiField(_agentsController, '智能体列表'),
-                                  const SizedBox(height: 8),
-                                  _textField(
-                                    _primaryAgentIdController,
-                                    '主智能体 ID',
-                                  ),
-                                  const SizedBox(height: 8),
-                                  _multiField(
-                                    _requiredAgentIdsController,
-                                    '必需成员',
-                                  ),
-                                  const SizedBox(height: 8),
-                                  _multiField(
-                                    _optionalAgentIdsController,
-                                    '可选成员',
-                                  ),
-                                  const SizedBox(height: 8),
-                                  DropdownButtonFormField<String>(
-                                    key: ValueKey<String>(
-                                      'orchestration-$_orchestration',
-                                    ),
-                                    initialValue: _orchestration,
-                                    decoration: const InputDecoration(
-                                      labelText: '编排方式',
-                                    ),
-                                    items: const [
-                                      DropdownMenuItem(
-                                        value: 'supervised',
-                                        child: Text('监督式'),
-                                      ),
-                                      DropdownMenuItem(
-                                        value: 'parallel',
-                                        child: Text('并行'),
-                                      ),
-                                      DropdownMenuItem(
-                                        value: 'round_robin',
-                                        child: Text('轮转'),
-                                      ),
-                                    ],
-                                    onChanged: (value) {
-                                      setState(() {
-                                        _orchestration = value ?? 'supervised';
-                                      });
-                                    },
-                                  ),
-                                  const SizedBox(height: 8),
-                                  SwitchListTile(
-                                    value: _enabled,
-                                    onChanged: (value) {
-                                      setState(() {
-                                        _enabled = value;
-                                      });
-                                    },
-                                    title: const Text('默认启用'),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          flex: 6,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final form = SingleChildScrollView(
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const SectionHeading(
-                                title: '正文 / 操作手册',
-                                subtitle:
-                                    'Markdown 内容会原样写入 AGENT.md 或 SKILL.md',
-                              ),
-                              const SizedBox(height: 10),
-                              Expanded(
-                                child: TextField(
-                                  controller: _bodyController,
-                                  minLines: null,
-                                  maxLines: null,
-                                  expands: true,
-                                  decoration: const InputDecoration(
-                                    alignLabelWithHint: true,
-                                    labelText: 'Markdown 正文',
-                                  ),
+                              _textField(_idController, 'ID'),
+                              const SizedBox(height: 8),
+                              _textField(_nameController, '名称'),
+                              const SizedBox(height: 8),
+                              _textField(_descriptionController, '说明'),
+                              const SizedBox(height: 8),
+                              if (_isAgent) ...[
+                                _textField(_roleController, '角色'),
+                                const SizedBox(height: 8),
+                                _textField(_objectiveController, '目标'),
+                                const SizedBox(height: 8),
+                                _multiField(_canDoController, '能做什么'),
+                                const SizedBox(height: 8),
+                                _multiField(_mustNotDoController, '绝不做什么'),
+                                const SizedBox(height: 8),
+                                _multiField(
+                                  _knowledgeSourcesController,
+                                  '知识与记忆路径',
                                 ),
-                              ),
+                                const SizedBox(height: 8),
+                                _multiField(_skillsController, '技能'),
+                                const SizedBox(height: 8),
+                                _multiField(_skillGroupsController, '技能组'),
+                                const SizedBox(height: 8),
+                                _multiField(
+                                  _requiredCapabilitiesController,
+                                  '必需能力',
+                                ),
+                                const SizedBox(height: 8),
+                                _multiField(
+                                  _optionalCapabilitiesController,
+                                  '可选能力',
+                                ),
+                                const SizedBox(height: 8),
+                                _textField(
+                                  _preferredOutputController,
+                                  '偏好输出',
+                                ),
+                              ],
+                              if (_isSkill) ...[
+                                _multiField(
+                                  _activationHintsController,
+                                  '触发时机',
+                                ),
+                                const SizedBox(height: 8),
+                                _multiField(_inputsController, '输入'),
+                                const SizedBox(height: 8),
+                                _multiField(_outputsController, '输出'),
+                                const SizedBox(height: 8),
+                                _multiField(
+                                  _requiredCapabilitiesController,
+                                  '必需能力',
+                                ),
+                                const SizedBox(height: 8),
+                                _multiField(
+                                  _optionalCapabilitiesController,
+                                  '可选能力',
+                                ),
+                                const SizedBox(height: 8),
+                                _textField(
+                                  _preferredOutputController,
+                                  '偏好输出',
+                                ),
+                              ],
+                              if (_isSkillGroup) ...[
+                                _multiField(_skillsController, '技能列表'),
+                              ],
+                              if (_isAgentGroup) ...[
+                                _multiField(_agentsController, '智能体列表'),
+                                const SizedBox(height: 8),
+                                _textField(
+                                  _primaryAgentIdController,
+                                  '主智能体 ID',
+                                ),
+                                const SizedBox(height: 8),
+                                _multiField(
+                                  _requiredAgentIdsController,
+                                  '必需成员',
+                                ),
+                                const SizedBox(height: 8),
+                                _multiField(
+                                  _optionalAgentIdsController,
+                                  '可选成员',
+                                ),
+                                const SizedBox(height: 8),
+                                DropdownButtonFormField<String>(
+                                  key: ValueKey<String>(
+                                    'orchestration-$_orchestration',
+                                  ),
+                                  initialValue: _orchestration,
+                                  decoration: const InputDecoration(
+                                    labelText: '编排方式',
+                                  ),
+                                  items: const [
+                                    DropdownMenuItem(
+                                      value: 'supervised',
+                                      child: Text('监督式'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'parallel',
+                                      child: Text('并行'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'round_robin',
+                                      child: Text('轮转'),
+                                    ),
+                                  ],
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _orchestration = value ?? 'supervised';
+                                    });
+                                  },
+                                ),
+                                const SizedBox(height: 8),
+                                SwitchListTile(
+                                  value: _enabled,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _enabled = value;
+                                    });
+                                  },
+                                  title: const Text('默认启用'),
+                                ),
+                              ],
                             ],
                           ),
-                        ),
-                      ],
+                        );
+                        final markdown = Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SectionHeading(
+                              title: '正文 / 操作手册',
+                              subtitle:
+                                  'Markdown 内容会原样写入 AGENT.md 或 SKILL.md',
+                            ),
+                            const SizedBox(height: 10),
+                            Expanded(
+                              child: TextField(
+                                controller: _bodyController,
+                                minLines: null,
+                                maxLines: null,
+                                expands: true,
+                                decoration: const InputDecoration(
+                                  alignLabelWithHint: true,
+                                  labelText: 'Markdown 正文',
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                        if (constraints.maxWidth < 760) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              SizedBox(height: 240, child: form),
+                              const SizedBox(height: 16),
+                              Expanded(child: markdown),
+                            ],
+                          );
+                        }
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(flex: 5, child: form),
+                            const SizedBox(width: 16),
+                            Expanded(flex: 6, child: markdown),
+                          ],
+                        );
+                      },
                     ),
                   ),
                   const SizedBox(height: 14),

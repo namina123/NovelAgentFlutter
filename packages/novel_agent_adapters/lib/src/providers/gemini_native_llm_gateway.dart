@@ -9,7 +9,6 @@ import 'gemini_native_request_payload_builder.dart';
 import 'gemini_native_response_parser.dart';
 import 'gemini_native_route_resolver.dart';
 import 'gemini_native_stream_adapter.dart';
-import 'openai_gateway_cancellation_scope.dart';
 import 'system_proxy_resolver.dart';
 
 class GeminiNativeLlmGateway extends LlmGateway {

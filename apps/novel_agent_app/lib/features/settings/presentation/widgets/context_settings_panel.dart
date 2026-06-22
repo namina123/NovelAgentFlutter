@@ -138,7 +138,7 @@ class _ContextSettingsPanelState extends State<ContextSettingsPanel> {
               ),
               const SizedBox(height: 12),
               SettingsLabeledTextField(
-                label: '预留输出额度（token）',
+                label: '为模型回复保留的额度（token）',
                 controller: _reservedOutputTokensController,
                 keyboardType: TextInputType.number,
               ),
@@ -188,7 +188,7 @@ class _ContextSettingsPanelState extends State<ContextSettingsPanel> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: const [
                         Text(
-                          '优先精确计数',
+                          '优先使用精确计数',
                           style: TextStyle(fontWeight: FontWeight.w700),
                         ),
                         SizedBox(height: 4),
@@ -315,7 +315,7 @@ class _ContextSettingsPanelState extends State<ContextSettingsPanel> {
                 ),
                 const SizedBox(height: 12),
                 SettingsLabeledTextField(
-                  label: '预留输出额度（字符）',
+                  label: '为模型回复保留的额度（字符）',
                   controller: _reservedOutputCharsController,
                   keyboardType: TextInputType.number,
                 ),

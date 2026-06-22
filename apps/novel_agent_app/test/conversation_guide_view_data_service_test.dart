@@ -30,7 +30,7 @@ void main() {
     expect(guide.openingState, isNotNull);
     expect(
       guide.openingState!.firstPrompt,
-      '让长篇主智能体先判断当前真正缺什么，再决定是补问、整理开局材料，还是直接继续推进。',
+      '让智能体判断还缺什么并引导你补齐。',
     );
     expect(guide.openingState!.preferSingleAction, isTrue);
   });
@@ -62,7 +62,7 @@ void main() {
     expect(guide.openingState!.hasProjectFoundation, isTrue);
     expect(
       guide.openingState!.firstPrompt,
-      '让长篇主智能体先判断当前真正缺什么，再决定是补问、整理开局材料，还是直接继续推进。',
+      '让智能体判断还缺什么并引导你补齐。',
     );
   });
 
@@ -82,7 +82,7 @@ void main() {
     expect(guide.openingState, isNotNull);
     expect(
       guide.openingState!.firstPrompt,
-      '先说这部作品想写什么、主角和冲突大概是什么，或者你想先整理哪部分设定。',
+      '说说你想写什么。',
     );
     expect(guide.openingState!.nextStepLabel, guide.primaryActions.first.title);
   });
@@ -140,7 +140,7 @@ void main() {
     expect(guide.workflowTitle, '拆书工作台');
     expect(guide.primaryActions.map((action) => action.title), <String>[
       '导入书籍',
-      '分析书籍',
+      '分析数据',
       '开始创作',
     ]);
     expect(guide.workflowDescription, contains('先导入书籍原文'));

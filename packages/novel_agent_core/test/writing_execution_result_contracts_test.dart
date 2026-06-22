@@ -1281,7 +1281,7 @@ WritingExecutionConstraintBridgeResult _runtimeEscalatedConstraintBridge() {
     expressionConstraintReviewRequirement:
         ExpressionConstraintReviewRequirements.alwaysForWriting,
     expressionConstraintViolationDisposition:
-        ExpressionConstraintViolationDispositions.repair,
+        ExpressionConstraintViolationDispositions.remind,
     expressionConstraintApplied: true,
     expressionConstraintRuntimeEscalated: true,
     expressionConstraintInjectionMode: 'brief_and_sections',

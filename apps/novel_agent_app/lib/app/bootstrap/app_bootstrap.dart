@@ -154,6 +154,7 @@ class AppBootstrap {
       taskRepository: projectTaskRepository,
       promptTemplateService: promptTemplateService,
       longTaskSupervisor: bundle.longTaskSupervisor,
+      longTaskWatchdog: bundle.longTaskWatchdog,
       loadProjectAgentGroupSelections: (project) =>
           bundle.projectAgentGroupBindingRepository.loadSelections(project),
       hostAwareGenerateDraftUseCaseFactory:

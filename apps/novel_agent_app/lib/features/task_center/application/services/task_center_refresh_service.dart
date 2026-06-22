@@ -241,8 +241,8 @@ class TaskCenterRefreshService {
         ),
         status: statusMessage,
         supplementalActionGroups: <TaskCenterActionGroupViewData>[
-          if (taskRunControlGroup != null) taskRunControlGroup,
-          if (taskUserOptionGroup != null) taskUserOptionGroup,
+          ?taskRunControlGroup,
+          ?taskUserOptionGroup,
         ],
       ),
     );

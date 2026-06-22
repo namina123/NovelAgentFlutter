@@ -2,9 +2,8 @@ import 'dart:async';
 
 import 'package:novel_agent_core/novel_agent_core.dart';
 
-import '../runtime/long_task_supervisor.dart';
+import '../runtime/long_task_watchdog.dart';
 import '../runtime/project_long_task_run_registry_sync_service.dart';
-import '../runtime/project_tool_permission_approval_record_service.dart';
 import '../storage/project_task_repository.dart';
 import 'project_long_task_chapter_queue_runtime_service.dart';
 import 'project_long_task_checkpoint_action_service.dart';
@@ -46,6 +45,7 @@ class ProjectWorkflowQueueRuntimeService {
     required LongTaskRunStepRecorderService longTaskRunStepRecorderService,
     required ProjectLongTaskCheckpointActionService checkpointActionService,
     WorkflowTaskOnceRunner? workflowTaskOnceRunner,
+    LongTaskWatchdog? longTaskWatchdog,
     ProjectLongTaskRunRegistrySyncService? longTaskRunRegistrySyncService,
     TaskQueuePreflightService? taskQueuePreflightService,
   }) : _taskRepository = taskRepository,
@@ -75,7 +75,8 @@ class ProjectWorkflowQueueRuntimeService {
              taskDefinitionService: taskDefinitionService,
            ),
        _longTaskRunRegistrySyncService = longTaskRunRegistrySyncService,
-       _runWorkflowTaskOnce = workflowTaskOnceRunner;
+       _runWorkflowTaskOnce = workflowTaskOnceRunner,
+       _longTaskWatchdog = longTaskWatchdog;
 
   final ProjectTaskRepository _taskRepository;
   final TaskDefinitionService _taskDefinitionService;
@@ -99,6 +100,9 @@ class ProjectWorkflowQueueRuntimeService {
   final TaskQueuePreflightService _taskQueuePreflightService;
   final ProjectLongTaskRunRegistrySyncService? _longTaskRunRegistrySyncService;
   WorkflowTaskOnceRunner? _runWorkflowTaskOnce;
+  final LongTaskWatchdog? _longTaskWatchdog;
+  // 中文注释: 同一项目同一时刻只允许一条队列在跑，二次进入直接返回 already_running。
+  final Set<String> _inFlightProjects = <String>{};
 
   void bindWorkflowTaskOnceRunner(WorkflowTaskOnceRunner runner) {
     // 中文注释: 单步执行回调用构造后绑定，避免 queue service 反向持有 runtime 的初始化时机。
@@ -489,6 +493,46 @@ class ProjectWorkflowQueueRuntimeService {
     JsonMap options = const <String, Object?>{},
     JsonMap agent = const <String, Object?>{},
   }) async {
+    // 中文注释: 队列入口先收并发守卫与 watchdog 生命周期，真正执行收在 _runWorkflowTaskQueueBody。
+    final projectId = project.id;
+    if (!_inFlightProjects.add(projectId)) {
+      return <String, Object?>{
+        'ok': false,
+        'error': 'already_running',
+        'project_id': projectId,
+        'message': '该项目已有长任务正在运行，请等待当前批次结束或先停止。',
+      };
+    }
+    final watchdog = _longTaskWatchdog;
+    var startedWatchdogHere = false;
+    try {
+      if (watchdog != null && !watchdog.isWatchdogRunning) {
+        watchdog.start();
+        startedWatchdogHere = true;
+      }
+      return await _runWorkflowTaskQueueBody(
+        project,
+        settings,
+        options: options,
+        agent: agent,
+      );
+    } finally {
+      if (startedWatchdogHere) {
+        final activeWatchdog = _longTaskWatchdog;
+        if (activeWatchdog != null) {
+          await activeWatchdog.stop();
+        }
+      }
+      _inFlightProjects.remove(projectId);
+    }
+  }
+
+  Future<JsonMap> _runWorkflowTaskQueueBody(
+    ProjectDescriptor project,
+    AppSettings settings, {
+    JsonMap options = const <String, Object?>{},
+    JsonMap agent = const <String, Object?>{},
+  }) async {
     // 中文注释: 受控连续运行在这里收口，只编排队列，不再把其它调度职责往回塞。
     final resolvedOptions = await _taskQueueRuntimeOptionResolver.resolve(
       project,
@@ -555,22 +599,38 @@ class ProjectWorkflowQueueRuntimeService {
       }
     } else {
       longRunRecord = await _taskRepository.loadRecord(project, longRunPath);
-      if (longRunRecord.isNotEmpty) {
-        longRunRecord = _lifecycleService.resumeRecord(longRunRecord);
-        longRunRecord = await _taskRepository.saveRecord(
-          project,
-          longRunPath,
-          longRunRecord,
-        );
-        await _syncLongTaskRunRecord(project, longRunRecord);
+      if (longRunRecord.isEmpty) {
+        // 中文注释: 显式恢复路径下找不到运行记录时如实返回，不再静默跑空队列。
+        queueRecord = ValueReaders.deepCopyMap(queueRecord)
+          ..['status'] = _taskQueueStopPolicyService.statusForReason(
+            'record_missing',
+          )
+          ..['stop_reason'] = 'record_missing'
+          ..['stop_note'] = '未找到要恢复的长任务运行记录。'
+          ..['updated_at'] = DateTime.now().toIso8601String();
+        await _taskRepository.saveRecord(project, queuePath, queueRecord);
+        return <String, Object?>{
+          'ok': false,
+          'error': 'long_task_run_record_missing',
+          'continue_long_task_run_path': longRunPath,
+          'message': '未找到要恢复的长任务运行记录，可能已被删除或移动。',
+          'relative_path': queuePath,
+          'record': queueRecord,
+          'queue_record': queueRecord,
+          'response': <String, Object?>{},
+          'output_paths': const <Object?>[],
+          'changed_paths': const <Object?>[],
+        };
       }
+      longRunRecord = _lifecycleService.resumeRecord(longRunRecord);
+      longRunRecord = await _taskRepository.saveRecord(
+        project,
+        longRunPath,
+        longRunRecord,
+      );
+      await _syncLongTaskRunRecord(project, longRunRecord);
     }
 
-    var stepsRun = 0;
-    var stopReason = '';
-    var stopNote = '';
-    JsonMap lastResult = const <String, Object?>{};
-    final batchStartedAt = DateTime.now();
     final runner = _runWorkflowTaskOnce;
     if (runner == null) {
       return <String, Object?>{
@@ -579,97 +639,189 @@ class ProjectWorkflowQueueRuntimeService {
         'response': <String, Object?>{},
       };
     }
-    while (stepsRun < ValueReaders.intValue(cleanOptions['max_steps'], 3)) {
-      final maxSeconds = ValueReaders.intValue(cleanOptions['max_seconds'], -1);
-      if (maxSeconds > 0 &&
-          DateTime.now().difference(batchStartedAt).inSeconds >= maxSeconds) {
-        stopReason = 'max_seconds';
-        stopNote = '已达到本次运行的最长时间限制，长任务已暂停，可稍后继续。';
-        break;
-      }
-      final nextTask = await _nextWorkflowQueueTask(project);
-      if (nextTask.isEmpty) {
-        stopReason = 'no_runnable_task';
-        stopNote = '当前没有依赖满足且处于 queued/retrying 的任务。';
-        break;
-      }
-      final remainingDuration = maxSeconds <= 0
-          ? null
-          : Duration(seconds: maxSeconds) -
-                DateTime.now().difference(batchStartedAt);
-      final cancellationToken = remainingDuration == null
-          ? null
-          : DraftGenerationCancellationToken();
-      final safeTimeoutDuration = remainingDuration == null
-          ? null
-          : (remainingDuration <= Duration.zero
-                ? const Duration(milliseconds: 1)
-                : remainingDuration);
-      final stepSelector = <String, Object?>{
-        'relative_path': ValueReaders.stringValue(nextTask['relative_path']),
-      };
-      final stepFuture = runner(
-        project,
-        settings,
-        stepSelector,
-        runRecord: longRunRecord,
-        agent: agent,
-        options: cleanOptions,
-        cancellationToken: cancellationToken,
-      );
-      if (cancellationToken == null || safeTimeoutDuration == null) {
-        lastResult = await stepFuture;
-      } else {
-        final timeoutResult = Completer<JsonMap>();
-        final timeoutTimer = Timer(safeTimeoutDuration, () {
-          cancellationToken.cancel();
-          if (!timeoutResult.isCompleted) {
-            timeoutResult.complete(_workflowTaskTimeoutResult());
+    final maxStepsPerBatch = ValueReaders.intValue(
+      cleanOptions['max_steps'],
+      3,
+    );
+    final maxSecondsPerBatch = ValueReaders.intValue(
+      cleanOptions['max_seconds'],
+      -1,
+    );
+    final unattended = ValueReaders.boolValue(cleanOptions['unattended']);
+    final maxBatches = ValueReaders.intValue(cleanOptions['max_batches'], 50);
+    final maxTotalSeconds = ValueReaders.intValue(
+      cleanOptions['max_total_seconds'],
+      3600,
+    );
+    final runStartedAt = DateTime.now();
+    var stepsRun = 0;
+    var batchesRun = 0;
+    var stopReason = '';
+    var stopNote = '';
+    JsonMap lastResult = const <String, Object?>{};
+    var batchStartedAt = DateTime.now();
+    // 中文注释: 外层 while 承担 unattended 自续，内层 while 仍是每批 max_steps 预算。
+    outer:
+    while (true) {
+      var batchSteps = 0;
+      while (batchSteps < maxStepsPerBatch) {
+        if (maxTotalSeconds > 0 &&
+            DateTime.now().difference(runStartedAt).inSeconds >=
+                maxTotalSeconds) {
+          stopReason = 'max_seconds';
+          stopNote = '已达到本次运行的总时间限制，长任务已暂停，可稍后继续。';
+          break outer;
+        }
+        final maxSeconds = maxSecondsPerBatch;
+        if (maxSeconds > 0 &&
+            DateTime.now().difference(batchStartedAt).inSeconds >= maxSeconds) {
+          stopReason = 'max_seconds';
+          stopNote = '已达到本次运行的最长时间限制，长任务已暂停，可稍后继续。';
+          break;
+        }
+        final nextTask = await _nextWorkflowQueueTask(project);
+        if (nextTask.isEmpty) {
+          stopReason = 'no_runnable_task';
+          stopNote = '当前没有依赖满足且处于 queued/retrying 的任务。';
+          break outer;
+        }
+        final remainingDuration = maxSeconds <= 0
+            ? null
+            : Duration(seconds: maxSeconds) -
+                  DateTime.now().difference(batchStartedAt);
+        final cancellationToken = remainingDuration == null
+            ? null
+            : DraftGenerationCancellationToken();
+        final safeTimeoutDuration = remainingDuration == null
+            ? null
+            : (remainingDuration <= Duration.zero
+                  ? const Duration(milliseconds: 1)
+                  : remainingDuration);
+        final stepSelector = <String, Object?>{
+          'relative_path': ValueReaders.stringValue(nextTask['relative_path']),
+        };
+        final stepFuture = runner(
+          project,
+          settings,
+          stepSelector,
+          runRecord: longRunRecord,
+          agent: agent,
+          options: cleanOptions,
+          cancellationToken: cancellationToken,
+        );
+        if (cancellationToken == null || safeTimeoutDuration == null) {
+          lastResult = await stepFuture;
+        } else {
+          final timeoutResult = Completer<JsonMap>();
+          final timeoutTimer = Timer(safeTimeoutDuration, () {
+            cancellationToken.cancel();
+            if (!timeoutResult.isCompleted) {
+              timeoutResult.complete(_workflowTaskTimeoutResult());
+            }
+          });
+          stepFuture.then(
+            (value) {
+              if (!timeoutResult.isCompleted) {
+                timeoutResult.complete(value);
+              }
+            },
+            onError: (Object error, StackTrace stackTrace) {
+              if (!timeoutResult.isCompleted) {
+                timeoutResult.completeError(error, stackTrace);
+              }
+            },
+          );
+          lastResult = await timeoutResult.future;
+          timeoutTimer.cancel();
+          if (ValueReaders.boolValue(lastResult['timeout'])) {
+            await _taskRepository.transitionTask(
+              project,
+              stepSelector,
+              TaskRuntimeConstants.statusQueued,
+              note: '当前批次已达到最长时间限制，已取消本步，等待后续继续。',
+            );
           }
-        });
-        stepFuture.then(
-          (value) {
-            if (!timeoutResult.isCompleted) {
-              timeoutResult.complete(value);
-            }
-          },
-          onError: (Object error, StackTrace stackTrace) {
-            if (!timeoutResult.isCompleted) {
-              timeoutResult.completeError(error, stackTrace);
-            }
+        }
+        stepsRun += 1;
+        batchSteps += 1;
+        final updatedTask = await _taskRepository.loadTask(
+          project,
+          <String, Object?>{
+            'relative_path': ValueReaders.stringValue(
+              nextTask['relative_path'],
+            ),
           },
         );
-        lastResult = await timeoutResult.future;
-        timeoutTimer.cancel();
-        if (ValueReaders.boolValue(lastResult['timeout'])) {
-          await _taskRepository.transitionTask(
-            project,
-            stepSelector,
-            TaskRuntimeConstants.statusQueued,
-            note: '当前批次已达到最长时间限制，已取消本步，等待后续继续。',
-          );
-        }
-      }
-      stepsRun += 1;
-      final updatedTask = await _taskRepository.loadTask(
-        project,
-        <String, Object?>{
-          'relative_path': ValueReaders.stringValue(nextTask['relative_path']),
-        },
-      );
-      queueRecord = _appendQueueStep(
-        queueRecord,
-        updatedTask,
-        lastResult,
-        index: stepsRun,
-      );
-      await _taskRepository.saveRecord(project, queuePath, queueRecord);
-
-      if (longRunRecord.isNotEmpty) {
-        longRunRecord = _longTaskRunStepRecorderService.recordStep(
-          longRunRecord,
+        queueRecord = _appendQueueStep(
+          queueRecord,
           updatedTask,
           lastResult,
+          index: stepsRun,
+        );
+        await _taskRepository.saveRecord(project, queuePath, queueRecord);
+
+        if (longRunRecord.isNotEmpty) {
+          longRunRecord = _longTaskRunStepRecorderService.recordStep(
+            longRunRecord,
+            updatedTask,
+            lastResult,
+          );
+          longRunRecord = await _taskRepository.saveRecord(
+            project,
+            longRunPath,
+            longRunRecord,
+          );
+          await _syncLongTaskRunRecord(project, longRunRecord);
+        }
+
+        if (ValueReaders.boolValue(lastResult['timeout'])) {
+          stopReason = 'max_seconds';
+          stopNote = '已达到本次运行的最长时间限制，长任务已暂停，可稍后继续。';
+          break;
+        }
+
+        final stopDecision = _taskQueueStopPolicyService.stopAfterStep(
+          lastResult,
+          updatedTask,
+          options: cleanOptions,
+        );
+        if (ValueReaders.boolValue(stopDecision['stop'])) {
+          stopReason = ValueReaders.stringValue(stopDecision['reason']);
+          stopNote = ValueReaders.stringValue(stopDecision['note']);
+          break outer;
+        }
+      }
+      batchesRun += 1;
+      if (stopReason.isEmpty) {
+        stopReason = batchSteps >= maxStepsPerBatch ? 'max_steps' : 'completed';
+        stopNote = stopReason == 'max_steps' ? '已达到本批最大步数。' : '队列已完成。';
+      }
+      // 中文注释: unattended 模式下，仅因每批上限（max_steps / max_seconds）触发的暂停才自续，
+      // 且受总批数与总时长限制；任何需要人工 / repair 介入的停止原因都终止本次调用。
+      final isBatchBoundary =
+          stopReason == 'max_steps' || stopReason == 'max_seconds';
+      final underTotalCap =
+          maxTotalSeconds <= 0 ||
+          DateTime.now().difference(runStartedAt).inSeconds < maxTotalSeconds;
+      final stillRunnable = (await _nextWorkflowQueueTask(project)).isNotEmpty;
+      final shouldContinue =
+          unattended &&
+          isBatchBoundary &&
+          underTotalCap &&
+          stillRunnable &&
+          batchesRun < maxBatches;
+      if (shouldContinue) {
+        final reloaded = await _taskRepository.loadRecord(project, longRunPath);
+        if (reloaded.isNotEmpty &&
+            ValueReaders.stringValue(reloaded['status']) !=
+                TaskRuntimeConstants.statusRunning) {
+          // 中文注释: 批次之间发现运行记录已被外部停止，终止自续，交给 finalize 收尾。
+          stopReason = 'manual_stop';
+          stopNote = '用户请求停止长任务。';
+          break;
+        }
+        longRunRecord = _lifecycleService.resumeRecord(
+          reloaded.isNotEmpty ? reloaded : longRunRecord,
         );
         longRunRecord = await _taskRepository.saveRecord(
           project,
@@ -677,32 +829,12 @@ class ProjectWorkflowQueueRuntimeService {
           longRunRecord,
         );
         await _syncLongTaskRunRecord(project, longRunRecord);
+        stopReason = '';
+        stopNote = '';
+        batchStartedAt = DateTime.now();
+        continue;
       }
-
-      if (ValueReaders.boolValue(lastResult['timeout'])) {
-        stopReason = 'max_seconds';
-        stopNote = '已达到本次运行的最长时间限制，长任务已暂停，可稍后继续。';
-        break;
-      }
-
-      final stopDecision = _taskQueueStopPolicyService.stopAfterStep(
-        lastResult,
-        updatedTask,
-        options: cleanOptions,
-      );
-      if (ValueReaders.boolValue(stopDecision['stop'])) {
-        stopReason = ValueReaders.stringValue(stopDecision['reason']);
-        stopNote = ValueReaders.stringValue(stopDecision['note']);
-        break;
-      }
-    }
-
-    if (stopReason.isEmpty) {
-      stopReason =
-          stepsRun >= ValueReaders.intValue(cleanOptions['max_steps'], 3)
-          ? 'max_steps'
-          : 'completed';
-      stopNote = stopReason == 'max_steps' ? '已达到本批最大步数。' : '队列已完成。';
+      break;
     }
     queueRecord = ValueReaders.deepCopyMap(queueRecord)
       ..['status'] = _taskQueueStopPolicyService.statusForReason(stopReason)

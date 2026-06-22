@@ -73,7 +73,7 @@ Future<int> _runPreflight(WorkflowCommand command, List<String> args) async {
     context.project,
   );
   command._printer.block('队列预检', _prettyJson(result));
-  return ValueReaders.boolValue(result['runnable']) ? 0 : 1;
+  return ValueReaders.boolValue(result['can_run']) ? 0 : 1;
 }
 
 Future<int> _runPlan(WorkflowCommand command, List<String> args) async {

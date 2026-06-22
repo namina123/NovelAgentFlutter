@@ -1,6 +1,5 @@
 import '../../common/json_types.dart';
 import '../../common/value_readers.dart';
-import '../catalog/provider_connection_contract.dart';
 import 'provider_profile_constants.dart';
 
 final class CapabilityExposureView {

@@ -43,9 +43,11 @@ class ProjectRagRetrievalToolExecutor {
       'query_mode': ValueReaders.stringValue(arguments['query_mode']).trim(),
       'rerank_policy': ValueReaders.stringValue(arguments['rerank_policy']).trim(),
       'evidence_budget': ValueReaders.intValue(arguments['evidence_budget']),
-      'metadata': ValueReaders.deepCopyMap(
-        ValueReaders.mapValue(arguments['metadata']),
-      ),
+      'metadata': <String, Object?>{
+        ...ValueReaders.mapValue(arguments['metadata']),
+        // 中文注释: 把项目根路径随查询带下去，向量检索端口据此打开对应项目的 SQLite 库。
+        'project_root_path': project.rootPath,
+      },
     });
     final validationErrors = query.validateBasics();
     if (validationErrors.isNotEmpty) {
@@ -132,22 +134,22 @@ class ProjectRagRetrievalToolExecutor {
     ProjectDescriptor project,
     RetrievalQuery query,
     List<RetrievalMountBinding> bindings,
-  ) {
+  ) async {
     final searchPort = _searchPort;
     if (searchPort == null) {
       return _lexicalSearch(project, query, bindings);
     }
     if (bindings.isNotEmpty) {
-      return Future.value(searchPort.searchWithinMounts(query, bindings));
+      return searchPort.searchWithinMounts(query, bindings);
     }
     if (query.corpusFilters.isNotEmpty) {
       final hits = <RetrievalHit>[];
       for (final corpusId in query.corpusFilters) {
-        hits.addAll(searchPort.searchByCorpus(query, corpusId));
+        hits.addAll(await searchPort.searchByCorpus(query, corpusId));
       }
-      return Future.value(hits);
+      return hits;
     }
-    return Future.value(searchPort.search(query));
+    return searchPort.search(query);
   }
 
   Future<List<RetrievalHit>> _lexicalSearch(

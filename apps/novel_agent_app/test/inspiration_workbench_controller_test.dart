@@ -121,7 +121,7 @@ void main() {
       answerModeGuidanceStageUseCase: AnswerModeGuidanceStageUseCase(
         statePort: port,
       ),
-      openingLaunchBridgeService: _bridge(launchResult: launchResult),
+      openingLaunchBridgeService: _bridge(launchResult: launchResult, statePort: port),
       readCurrentProject: () => project,
       readCurrentProjectTitle: () => project.name,
       syncWorkbenchResources: () async {
@@ -227,10 +227,11 @@ WorkbenchOpeningLaunchBridgeService _bridge({
         ok: false,
         message: 'noop',
       ),
+  ModeGuidanceStatePort? statePort,
 }) {
   return WorkbenchOpeningLaunchBridgeService(
     buildModeGuidancePlanInputUseCase: BuildModeGuidancePlanInputUseCase(
-      statePort: _InMemoryModeGuidanceStatePort(),
+      statePort: statePort ?? _InMemoryModeGuidanceStatePort(),
     ),
     workflowRuntimeService: _UnsupportedWorkflowRuntimeService(
       launchResult: launchResult,

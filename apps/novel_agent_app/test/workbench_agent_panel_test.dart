@@ -65,9 +65,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('当前协作摘要'), findsOneWidget);
+      expect(find.text('协作概览'), findsOneWidget);
       expect(find.text('项目协作基线'), findsNothing);
-      expect(find.text('当前会话分工'), findsOneWidget);
+      expect(find.text('当前分工'), findsOneWidget);
       expect(find.text('当前智能体'), findsOneWidget);
       expect(find.text('审阅智能体'), findsWidgets);
       expect(find.text('项目基线组'), findsOneWidget);
@@ -75,11 +75,11 @@ void main() {
       expect(find.text('组主智能体'), findsOneWidget);
       expect(find.text('综合创作智能体'), findsWidgets);
       expect(find.text('当前项目已接入 2 个可供会话使用的智能体。'), findsOneWidget);
-      expect(find.text('智能体工作入口'), findsOneWidget);
+      expect(find.text('工作入口'), findsOneWidget);
       expect(find.text('协作设置'), findsOneWidget);
       expect(find.text('技能装载'), findsOneWidget);
       expect(find.text('表达限制'), findsOneWidget);
-      expect(find.textContaining('项目级写作约束系统'), findsOneWidget);
+      expect(find.textContaining('项目级写作约束系统'), findsNothing);
       expect(find.text('项目资料'), findsNothing);
       expect(find.text('项目信息'), findsNothing);
 

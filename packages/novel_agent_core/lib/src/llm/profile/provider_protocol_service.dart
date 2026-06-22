@@ -1,5 +1,4 @@
 import '../../common/json_types.dart';
-import 'provider_profile_constants.dart';
 import 'provider_route_contract.dart';
 
 class ProviderProtocolService {
