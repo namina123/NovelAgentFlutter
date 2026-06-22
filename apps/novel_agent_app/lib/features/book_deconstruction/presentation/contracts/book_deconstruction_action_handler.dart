@@ -7,6 +7,8 @@ abstract class BookDeconstructionActionHandler {
 
   Future<void> onBookDeconstructionImportFileRequested();
 
+  Future<void> onBookDeconstructionSmartImportRequested();
+
   void onBookDeconstructionSourceTitleChanged(String value);
 
   void onBookDeconstructionSourceContentChanged(String value);

@@ -4,6 +4,7 @@ import '../../presentation/contracts/book_deconstruction_action_handler.dart';
 import '../models/book_deconstruction_view_data.dart';
 
 const String _importingOperationKind = 'importing_source';
+const String _smartImportingOperationKind = 'smart_importing_source';
 const String _buildingPreviewOperationKind = 'building_preview';
 
 class BookDeconstructionImportPanel extends StatefulWidget {
@@ -92,6 +93,8 @@ class _BookDeconstructionImportPanelState
     final textTheme = Theme.of(context).textTheme;
     final isImporting =
         widget.viewData.operationKind == _importingOperationKind;
+    final isSmartImporting =
+        widget.viewData.operationKind == _smartImportingOperationKind;
     final isBuildingPreview =
         widget.viewData.operationKind == _buildingPreviewOperationKind;
     return ListView(
@@ -114,20 +117,47 @@ class _BookDeconstructionImportPanelState
               ),
             ),
             const SizedBox(width: 12),
-            OutlinedButton.icon(
-              onPressed: widget.viewData.isLoading
-                  ? null
-                  : widget
-                        .actionHandler
-                        .onBookDeconstructionImportFileRequested,
-              icon: isImporting
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.upload_file_outlined),
-              label: Text(widget.viewData.importActionLabel),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: widget.viewData.isLoading
+                      ? null
+                      : widget
+                            .actionHandler
+                            .onBookDeconstructionImportFileRequested,
+                  icon: isImporting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.upload_file_outlined),
+                  label: Text(widget.viewData.importActionLabel),
+                ),
+                const SizedBox(height: 8),
+                Tooltip(
+                  message: widget.viewData.canSmartImport
+                      ? '用已配置的模型做正文识别、分章与去噪'
+                      : '需要先在设置里配置模型提供商',
+                  child: OutlinedButton.icon(
+                    onPressed: widget.viewData.canSmartImport
+                        ? widget
+                              .actionHandler
+                              .onBookDeconstructionSmartImportRequested
+                        : null,
+                    icon: isSmartImporting
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.auto_awesome_outlined),
+                    label: Text(widget.viewData.smartImportActionLabel),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

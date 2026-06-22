@@ -21,6 +21,7 @@ class BookDeconstructionViewDataService {
     required BookDeconstructionSnapshot snapshot,
     required String status,
     bool canCreateDerivedProject = true,
+    bool canSmartImport = false,
   }) {
     final buildResult = snapshot.buildResult;
     final previewSections = buildResult == null
@@ -72,6 +73,8 @@ class BookDeconstructionViewDataService {
           snapshot.selectedFollowupOptionId.trim().isNotEmpty &&
           canCreateDerivedProject,
       importActionLabel: _importActionLabel(snapshot.operationKind),
+      canSmartImport: canSmartImport && !snapshot.isLoading,
+      smartImportActionLabel: _smartImportActionLabel(snapshot.operationKind),
       buildPreviewActionLabel: _buildPreviewActionLabel(snapshot.operationKind),
       continuity: continuity,
     );
@@ -83,6 +86,15 @@ class BookDeconstructionViewDataService {
         return '正在导入';
       default:
         return '导入文件';
+    }
+  }
+
+  String _smartImportActionLabel(String operationKind) {
+    switch (operationKind) {
+      case BookDeconstructionOperationKind.smartImportingSource:
+        return '正在智能拆书';
+      default:
+        return '智能拆书';
     }
   }
 

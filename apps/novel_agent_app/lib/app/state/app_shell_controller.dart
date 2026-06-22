@@ -687,6 +687,8 @@ class AppShellController extends ChangeNotifier
         onBackRequested: showWorkbench,
         sourcePickerService: _desktopBookDeconstructionSourcePickerService,
         projectsRootPath: _defaultProjectsRootPath,
+        readSettings: () => _settings,
+        generateDraftUseCaseFactory: _generateDraftUseCaseFactory,
         derivedProjectCreationService:
             BookDeconstructionDerivedProjectCreationService(
               createProjectWorkspaceUseCase: _createProjectWorkspaceUseCase,

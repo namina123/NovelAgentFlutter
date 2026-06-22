@@ -146,6 +146,8 @@ void main() {
       canConfirmSelection: false,
       canCreateDerivedProject: false,
       importActionLabel: '导入文件',
+      canSmartImport: false,
+      smartImportActionLabel: '智能拆书',
       buildPreviewActionLabel: '正在拆书',
       continuity: null,
     );
@@ -215,6 +217,8 @@ void main() {
                 canConfirmSelection: false,
                 canCreateDerivedProject: false,
                 importActionLabel: '导入文件',
+                canSmartImport: false,
+                smartImportActionLabel: '智能拆书',
                 buildPreviewActionLabel: '生成结构化预览',
                 continuity: const BookDeconstructionContinuityViewData(
                   preferredDirectionLabel: '偏向长任务',
@@ -279,6 +283,9 @@ class _FakeBookDeconstructionActionHandler
 
   @override
   Future<void> onBookDeconstructionImportFileRequested() async {}
+
+  @override
+  Future<void> onBookDeconstructionSmartImportRequested() async {}
 
   @override
   void onBookDeconstructionOperatorNotesChanged(String value) {}

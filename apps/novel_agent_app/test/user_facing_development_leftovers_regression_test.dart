@@ -172,6 +172,8 @@ void main() {
                       projectTitle: '空分组测试',
                       operationKind: 'preview',
                       importActionLabel: '导入',
+                      canSmartImport: false,
+                      smartImportActionLabel: '智能拆书',
                       buildPreviewActionLabel: '生成预览',
                       status: '已生成结构化预览。',
                       isLoading: false,
@@ -355,6 +357,9 @@ class _FakeBookDeconstructionActionHandler
 
   @override
   Future<void> onBookDeconstructionImportFileRequested() async {}
+
+  @override
+  Future<void> onBookDeconstructionSmartImportRequested() async {}
 
   @override
   void onBookDeconstructionOperatorNotesChanged(String value) {}
