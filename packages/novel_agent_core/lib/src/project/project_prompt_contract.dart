@@ -399,11 +399,13 @@ class ProjectPromptContract {
   }
 
   bool _matchesAgent(JsonMap agent, List<String> tokens) {
+    // 中文注释: 角色分类只看权威身份字段（id/name/role）。system_prompt 是长自由文本，
+    // 任意提及关键词（如“审稿”“研究”）都会误命中，导致 agent 被错分类、注入错误的领域
+    // 工具指引；故不纳入匹配 haystack。
     final haystack = <String>[
       ValueReaders.stringValue(agent['id']).toLowerCase(),
       ValueReaders.stringValue(agent['name']).toLowerCase(),
       ValueReaders.stringValue(agent['role']).toLowerCase(),
-      ValueReaders.stringValue(agent['system_prompt']).toLowerCase(),
     ].join('\n');
     for (final token in tokens) {
       if (haystack.contains(token.toLowerCase())) {
