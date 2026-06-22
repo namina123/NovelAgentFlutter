@@ -1345,7 +1345,13 @@ class NarrativeDomainToolCatalog {
     'required': <String>['binding_id'],
     'properties': <String, Object?>{
       'binding_id': <String, Object?>{'type': 'string'},
-      'constraint_type': <String, Object?>{'type': 'string'},
+      'constraint_type': <String, Object?>{
+        'type': 'string',
+        'description': '约束类型。只有以下取值会被系统真正处理：expression_constraint'
+            '（可选 expression_constraint.<preset> 子类型，如 expression_constraint.de_ai）'
+            '对应表达限制注入；chapter_length 或 word_count 对应章节字数。其它取值会被'
+            '接收但不会有任何注入或字数效果。请使用上述规范取值，避免发 expression 等简写。',
+      },
       'constraint_ref': <String, Object?>{'type': 'string'},
       'constraint_id': <String, Object?>{'type': 'string'},
       'constraint_label': <String, Object?>{'type': 'string'},

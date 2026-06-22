@@ -1,6 +1,7 @@
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
 import '../continuity/narrative_state/constraint_binding_applies_to.dart';
+import '../continuity/narrative_state/constraint_type_classifier.dart';
 import '../continuity/narrative_state/narrative_constraint_binding_proposal.dart';
 import '../creative/expression_constraint_execution_policy.dart';
 import '../creative/expression_constraint_execution_policy_resolution_context.dart';
@@ -662,14 +663,14 @@ class WritingExecutionConstraintBridgeService {
   }
 
   bool _isChapterLengthConstraint(String constraintType) {
-    final clean = constraintType.trim();
-    return clean == 'chapter_length' || clean == 'word_count';
+    // 中文注释: 约束类型判定统一委托给 ConstraintTypeClassifier，避免和权限策略各写一套。
+    return const ConstraintTypeClassifier()
+        .isChapterLengthConstraint(constraintType);
   }
 
   bool _isExpressionConstraint(String constraintType) {
-    final clean = constraintType.trim();
-    return clean == 'expression_constraint' ||
-        clean.startsWith('expression_constraint.');
+    return const ConstraintTypeClassifier()
+        .isExpressionConstraint(constraintType);
   }
 
   String _bindingIdentity(ProjectExpressionConstraintBinding binding) {

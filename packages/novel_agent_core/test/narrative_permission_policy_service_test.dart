@@ -73,6 +73,41 @@ void main() {
       );
     });
 
+    test(
+      'malformed expression shorthand is not flagged as high-risk expression constraint',
+      () {
+        // 中文注释: 修复前 permissionPolicy 用 contains('expression') 会把误发的 'expression'
+        // （漏 _constraint）判为高风险需确认，但 bridge 根本不会应用它（"accepted but never
+        // applied"）。现在 expression 判定与 bridge 同源，畸形简写 + 非核心 applies_to 不再
+        // 触发需确认。
+        const service = NarrativePermissionPolicyService();
+        final request = DomainToolRequest.fromJson(<String, Object?>{
+          'call_id': 'tool-call-constraint-malformed',
+          'tool_name': NarrativePermissionPolicyService.proposeConstraintBinding,
+          'source': <String, Object?>{'source_type': NarrativeSourceTypes.system},
+          'request_payload': <String, Object?>{
+            'binding_id': 'binding-malformed',
+            'constraint_type': 'expression',
+            'constraint_label': '误发简写',
+            'binding_scope': <String, Object?>{
+              'applies_to': <Object?>[ConstraintBindingAppliesTo.explanation],
+            },
+            'binding_policy': <String, Object?>{'auto_accept': true},
+            'source': <String, Object?>{
+              'source_type': NarrativeSourceTypes.system,
+            },
+          },
+        });
+
+        final decision = service.decide(request);
+
+        expect(
+          decision.disposition,
+          isNot(DomainToolPermissionDispositions.needsUserConfirmation),
+        );
+      },
+    );
+
     test('chapter-local low-risk claims can auto accept', () {
       const service = NarrativePermissionPolicyService();
       final request = DomainToolRequest.fromJson(<String, Object?>{
