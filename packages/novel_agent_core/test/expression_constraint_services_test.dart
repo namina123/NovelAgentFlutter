@@ -82,6 +82,40 @@ void main() {
       expect(sections.single['content'], contains('执行规则：'));
       expect(sections.single['content'], contains('风险信号（交付前自查'));
     });
+
+    test(
+      'context section exposes every risk signal so the scanner and prompt agree',
+      () {
+        // 中文注释: 内置 de_ai 有 11 条 risk_signals，但渲染曾截断到 8，导致模型看不到
+        // 第 9-11 条，却被扫描器按全部 11 条判定违反。这里用 >8 条信号验证全部进入提示词。
+        const service = ExpressionConstraintContextSectionService();
+        final signals = List<String>.generate(11, (i) => '信号${i + 1}');
+        final sections = service.buildSections(const <ExpressionConstraintProfile>[
+          ExpressionConstraintProfile(
+            id: 'many_signals',
+            displayName: '多信号限制',
+            summary: '验证信号不被截断。',
+            riskSignals: <String>[
+              '信号1',
+              '信号2',
+              '信号3',
+              '信号4',
+              '信号5',
+              '信号6',
+              '信号7',
+              '信号8',
+              '信号9',
+              '信号10',
+              '信号11',
+            ],
+          ),
+        ]);
+        final content = ValueReaders.stringValue(sections.single['content']);
+        for (final signal in signals) {
+          expect(content, contains(signal));
+        }
+      },
+    );
   });
 
   group('ExpressionConstraintSurfaceRiskScanService', () {
