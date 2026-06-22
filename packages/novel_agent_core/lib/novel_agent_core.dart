@@ -39,6 +39,7 @@ export 'src/agents/agent_skill_loadout_source.dart';
 export 'src/agents/agent_skill_loadout_resolver_service.dart';
 export 'src/agents/agent_skill_scope_service.dart';
 export 'src/agents/agent_skill_summary_service.dart';
+export 'src/agents/skill_id_normalizer.dart';
 export 'src/agents/builtin_collaborator_catalog_service.dart';
 export 'src/agents/builtin_skill_group_catalog_service.dart';
 export 'src/agents/agent_profile_catalog_service.dart';

@@ -9,6 +9,7 @@ import 'skill_capability_catalog_service.dart';
 import 'skill_capability_requirement_service.dart';
 import 'skill_loadout_conflict_result.dart';
 import 'skill_loadout_expansion.dart';
+import 'skill_id_normalizer.dart';
 import 'tool_permission_profile_service.dart';
 
 class SkillLoadoutConflictPolicyService {
@@ -33,6 +34,8 @@ class SkillLoadoutConflictPolicyService {
   final SkillCapabilityRequirementService _capabilityRequirementService;
   final ToolPermissionProfileService _toolPermissionProfileService;
   final SkillCapabilityCatalogService _capabilityCatalogService;
+  // 中文注释: 技能 id 在包（kebab）与文档/组（snake）之间不一致，所有集合比较前统一归一。
+  final SkillIdNormalizer _skillIdNormalizer = const SkillIdNormalizer();
 
   SkillLoadoutConflictResult apply({
     required ResolvedAgentSkillLoadout loadout,
@@ -47,16 +50,17 @@ class SkillLoadoutConflictPolicyService {
       ...expansion.issues,
     ];
     final availableSet = availableSkillIds
-        .map((id) => id.trim())
+        .map((id) => _skillIdNormalizer.normalize(id))
         .where((id) => id.isNotEmpty)
         .toSet();
     final disabledSet = loadout.disabledSkillIds
-        .map((id) => id.trim())
+        .map((id) => _skillIdNormalizer.normalize(id))
         .where((id) => id.isNotEmpty)
         .toSet();
     final matchedDisabledIds = <String>{};
     final entries = expansion.entries.map((entry) {
       final skillId = entry.skillId;
+      final normalizedEntryId = _skillIdNormalizer.normalize(skillId);
       if (_builtinToolIds.contains(skillId)) {
         issues.add(
           AgentSkillLoadoutIssue(
@@ -66,7 +70,7 @@ class SkillLoadoutConflictPolicyService {
         );
         return entry.copyWith(enabled: false, available: false);
       }
-      if (availableSet.isNotEmpty && !availableSet.contains(skillId)) {
+      if (availableSet.isNotEmpty && !availableSet.contains(normalizedEntryId)) {
         issues.add(
           AgentSkillLoadoutIssue(
             code: AgentSkillLoadoutIssueCode.unavailableSkill,
@@ -75,8 +79,8 @@ class SkillLoadoutConflictPolicyService {
         );
         return entry.copyWith(enabled: false, available: false);
       }
-      if (disabledSet.contains(skillId)) {
-        matchedDisabledIds.add(skillId);
+      if (disabledSet.contains(normalizedEntryId)) {
+        matchedDisabledIds.add(normalizedEntryId);
         return entry.copyWith(enabled: false, disabledByLoadout: true);
       }
       return entry;
