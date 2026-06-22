@@ -26,20 +26,20 @@ class ToolEventPresenterService {
     if (!ok || phase == 'failed') {
       final reason = _errorReason(event);
       if (text.contains('失败')) {
-        return '智能体$text';
+        return text;
       }
-      return '智能体执行失败：$text${reason.isEmpty ? '' : '｜$reason'}';
+      return '执行失败：$text${reason.isEmpty ? '' : '｜$reason'}';
     }
     if (phase == 'started') {
-      return '智能体正在$text';
+      return '正在$text';
     }
     if (phase == 'streaming' || phase == 'progress') {
-      return text.startsWith('正在') ? '智能体$text' : '智能体正在$text';
+      return text.startsWith('正在') ? text : '正在$text';
     }
     if (phase == 'finished') {
-      return text.startsWith('已') ? '智能体$text' : '智能体已完成：$text';
+      return text.startsWith('已') ? text : '已完成：$text';
     }
-    return '智能体$text';
+    return text;
   }
 
   String textForExecutedTool(JsonMap executedTool) {
