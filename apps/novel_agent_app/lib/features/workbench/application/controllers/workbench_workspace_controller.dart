@@ -854,8 +854,10 @@ class WorkbenchWorkspaceController
         ),
       );
     } catch (_) {
+      // 中文注释: 列举失败时连运行列表一起清空，避免 UI 顶着一串旧 run 却没有详情、也不报错。
       _writeProjectState(
         _readProjectState().copyWith(
+          currentProjectLongTaskRuns: const <RunInstance>[],
           currentProjectLongTaskRunDetails:
               const <String, ProjectLongTaskStationDetail>{},
           isProjectLongTaskSummaryLoading: false,
