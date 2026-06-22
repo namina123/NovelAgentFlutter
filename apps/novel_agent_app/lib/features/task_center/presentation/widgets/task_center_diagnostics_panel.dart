@@ -98,111 +98,124 @@ class _RunLogView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 220,
-          child: ListView.builder(
-            itemCount: runs.length,
-            itemBuilder: (context, index) {
-              final item = runs[index];
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: InkWell(
-                  onTap: () => onSelected(item.relativePath),
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: item.isSelected
-                          ? AppPalette.accentSoft
-                          : AppPalette.white,
-                      border: Border.all(
-                        color: item.isSelected
-                            ? AppPalette.lineStrong
-                            : AppPalette.line,
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.statusLabel.trim().isEmpty
-                              ? item.title
-                              : item.statusLabel,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                            color: AppPalette.text,
-                          ),
-                        ),
-                        if (item.phaseLabel.trim().isNotEmpty) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            item.phaseLabel,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: AppPalette.mutedText,
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: 6),
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: [
-                            if (item.progressPercent > 0)
-                              _RunStatChip(label: '${item.progressPercent}%'),
-                            if (item.activeTaskTitle.trim().isNotEmpty)
-                              _RunStatChip(label: item.activeTaskTitle),
-                            if (item.isWaitingUser)
-                              const _RunStatChip(label: '等待确认'),
-                          ],
-                        ),
-                        if (item.updatedAt.trim().isNotEmpty ||
-                            item.controlSummary.trim().isNotEmpty) ...[
-                          const SizedBox(height: 6),
-                          Text(
-                            [
-                              if (item.updatedAt.trim().isNotEmpty)
-                                item.updatedAt.trim(),
-                              if (item.controlSummary.trim().isNotEmpty)
-                                item.controlSummary.trim(),
-                            ].join('｜'),
-                            style: const TextStyle(
-                              fontSize: 10.5,
-                              color: AppPalette.mutedText,
-                              height: 1.35,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
+    final runList = SizedBox(
+      width: 220,
+      child: ListView.builder(
+        itemCount: runs.length,
+        itemBuilder: (context, index) {
+          final item = runs[index];
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: InkWell(
+              onTap: () => onSelected(item.relativePath),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: item.isSelected
+                      ? AppPalette.accentSoft
+                      : AppPalette.white,
+                  border: Border.all(
+                    color: item.isSelected
+                        ? AppPalette.lineStrong
+                        : AppPalette.line,
                   ),
                 ),
-              );
-            },
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _RunSummaryStrip(
-                title: summaryTitle,
-                run: runs.isEmpty
-                    ? null
-                    : runs.firstWhere(
-                        (item) => item.isSelected,
-                        orElse: () => runs.first,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.statusLabel.trim().isEmpty
+                          ? item.title
+                          : item.statusLabel,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: AppPalette.text,
                       ),
+                    ),
+                    if (item.phaseLabel.trim().isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        item.phaseLabel,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppPalette.mutedText,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        if (item.progressPercent > 0)
+                          _RunStatChip(label: '${item.progressPercent}%'),
+                        if (item.activeTaskTitle.trim().isNotEmpty)
+                          _RunStatChip(label: item.activeTaskTitle),
+                        if (item.isWaitingUser)
+                          const _RunStatChip(label: '等待确认'),
+                      ],
+                    ),
+                    if (item.updatedAt.trim().isNotEmpty ||
+                        item.controlSummary.trim().isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        [
+                          if (item.updatedAt.trim().isNotEmpty)
+                            item.updatedAt.trim(),
+                          if (item.controlSummary.trim().isNotEmpty)
+                            item.controlSummary.trim(),
+                        ].join('｜'),
+                        style: const TextStyle(
+                          fontSize: 10.5,
+                          color: AppPalette.mutedText,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-              const SizedBox(height: 10),
-              Expanded(child: _MarkdownBody(content: content)),
-            ],
-          ),
+            ),
+          );
+        },
+      ),
+    );
+    final detail = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _RunSummaryStrip(
+          title: summaryTitle,
+          run: runs.isEmpty
+              ? null
+              : runs.firstWhere(
+                  (item) => item.isSelected,
+                  orElse: () => runs.first,
+                ),
         ),
+        const SizedBox(height: 10),
+        Expanded(child: _MarkdownBody(content: content)),
       ],
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 720) {
+          return Column(
+            children: [
+              SizedBox(height: 200, child: runList),
+              const SizedBox(height: 12),
+              Expanded(child: detail),
+            ],
+          );
+        }
+        return Row(
+          children: [
+            runList,
+            const SizedBox(width: 12),
+            Expanded(child: detail),
+          ],
+        );
+      },
     );
   }
 }

@@ -38,117 +38,133 @@ class ProjectCollectionPage extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              ActionButton(
-                label: '刷新',
-                icon: Icons.refresh_rounded,
-                tone: ActionButtonTone.neutral,
-                compact: true,
-                onPressed: actionHandler.onProjectCollectionRefreshRequested,
-              ),
-              const SizedBox(width: 8),
-              ActionButton(
-                label: '新建',
-                icon: Icons.add_rounded,
-                compact: true,
-                onPressed: actionHandler.onProjectCollectionCreateRequested,
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ActionButton(
+                    label: '刷新',
+                    icon: Icons.refresh_rounded,
+                    tone: ActionButtonTone.neutral,
+                    compact: true,
+                    onPressed:
+                        actionHandler.onProjectCollectionRefreshRequested,
+                  ),
+                  ActionButton(
+                    label: '新建',
+                    icon: Icons.add_rounded,
+                    compact: true,
+                    onPressed:
+                        actionHandler.onProjectCollectionCreateRequested,
+                  ),
+                ],
               ),
             ],
           ),
           const SizedBox(height: 16),
           Expanded(
-            child: Row(
-              children: [
-                Expanded(
-                  flex: 5,
-                  child: PanelSurface(
-                    child: ListView.separated(
-                      itemCount: viewData.entries.length,
-                      separatorBuilder: (context, index) =>
-                          const SizedBox(height: 10),
-                      itemBuilder: (context, index) {
-                        final entry = viewData.entries[index];
-                        return Material(
-                          color: entry.isSelected
-                              ? AppPalette.accentSoft
-                              : AppPalette.panel,
-                          child: ListTile(
-                            title: Text(
-                              entry.title,
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
-                                color: AppPalette.text,
-                              ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final list = PanelSurface(
+                  child: ListView.separated(
+                    itemCount: viewData.entries.length,
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 10),
+                    itemBuilder: (context, index) {
+                      final entry = viewData.entries[index];
+                      return Material(
+                        color: entry.isSelected
+                            ? AppPalette.accentSoft
+                            : AppPalette.panel,
+                        child: ListTile(
+                          title: Text(
+                            entry.title,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: AppPalette.text,
                             ),
-                            subtitle: Text(
-                              '[${entry.badge}] ${entry.subtitle}',
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AppPalette.mutedText,
-                              ),
+                          ),
+                          subtitle: Text(
+                            '[${entry.badge}] ${entry.subtitle}',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppPalette.mutedText,
                             ),
-                            trailing: IconButton(
-                              onPressed: () {
-                                actionHandler.onProjectCollectionOpenRequested(
-                                  entry.id,
-                                );
-                              },
-                              icon: const Icon(Icons.open_in_new_rounded),
-                            ),
-                            onTap: () {
-                              actionHandler.onProjectCollectionEntrySelected(
+                          ),
+                          trailing: IconButton(
+                            onPressed: () {
+                              actionHandler.onProjectCollectionOpenRequested(
                                 entry.id,
                               );
                             },
+                            icon: const Icon(Icons.open_in_new_rounded),
                           ),
-                        );
-                      },
-                    ),
+                          onTap: () {
+                            actionHandler.onProjectCollectionEntrySelected(
+                              entry.id,
+                            );
+                          },
+                        ),
+                      );
+                    },
                   ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  flex: 4,
-                  child: PanelSurface(
-                    child: selected == null
-                        ? const Center(child: Text('暂无条目'))
-                        : Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              SectionHeading(
-                                title: selected.title,
-                                subtitle: selected.description,
+                );
+                final detail = PanelSurface(
+                  child: selected == null
+                      ? const Center(child: Text('暂无条目'))
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SectionHeading(
+                              title: selected.title,
+                              subtitle: selected.description,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              selected.relativePath,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: AppPalette.mutedText,
                               ),
-                              const SizedBox(height: 12),
-                              Text(
-                                selected.relativePath,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppPalette.mutedText,
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              Expanded(
-                                child: SingleChildScrollView(
-                                  child: SelectableText(
-                                    viewData.detailBody.trim().isEmpty
-                                        ? viewData.status
-                                        : viewData.detailBody,
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      height: 1.6,
-                                      color: AppPalette.text,
-                                    ),
+                            ),
+                            const SizedBox(height: 12),
+                            Expanded(
+                              child: SingleChildScrollView(
+                                child: SelectableText(
+                                  viewData.detailBody.trim().isEmpty
+                                      ? viewData.status
+                                      : viewData.detailBody,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    height: 1.6,
+                                    color: AppPalette.text,
                                   ),
                                 ),
                               ),
-                            ],
-                          ),
-                  ),
-                ),
-              ],
+                            ),
+                          ],
+                        ),
+                );
+                if (constraints.maxWidth < 1000) {
+                  return Column(
+                    children: [
+                      SizedBox(height: 280, child: list),
+                      const SizedBox(height: 16),
+                      Expanded(child: detail),
+                    ],
+                  );
+                }
+                return Row(
+                  children: [
+                    Expanded(flex: 5, child: list),
+                    const SizedBox(width: 16),
+                    Expanded(flex: 4, child: detail),
+                  ],
+                );
+              },
             ),
           ),
         ],

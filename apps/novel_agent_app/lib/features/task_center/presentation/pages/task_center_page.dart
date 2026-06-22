@@ -252,60 +252,78 @@ class _TaskCenterPageState extends State<TaskCenterPage> {
                   },
                 ),
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _chapterWordTargetController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: '正文章节目标'),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final fields = [
+                      Expanded(
+                        child: TextField(
+                          controller: _chapterWordTargetController,
+                          keyboardType: TextInputType.number,
+                          decoration:
+                              const InputDecoration(labelText: '正文章节目标'),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: _chapterWordMinController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: '正文最小值'),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: _chapterWordMinController,
+                          keyboardType: TextInputType.number,
+                          decoration:
+                              const InputDecoration(labelText: '正文最小值'),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: _chapterWordMaxController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: '正文最大值'),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: _chapterWordMaxController,
+                          keyboardType: TextInputType.number,
+                          decoration:
+                              const InputDecoration(labelText: '正文最大值'),
+                        ),
                       ),
-                    ),
-                  ],
+                    ];
+                    if (constraints.maxWidth < 520) {
+                      return Column(children: fields);
+                    }
+                    return Row(children: fields);
+                  },
                 ),
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _sampleChapterWordTargetController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: '样章目标'),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final fields = [
+                      Expanded(
+                        child: TextField(
+                          controller: _sampleChapterWordTargetController,
+                          keyboardType: TextInputType.number,
+                          decoration:
+                              const InputDecoration(labelText: '样章目标'),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: _sampleChapterWordMinController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: '样章最小值'),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: _sampleChapterWordMinController,
+                          keyboardType: TextInputType.number,
+                          decoration:
+                              const InputDecoration(labelText: '样章最小值'),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: _sampleChapterWordMaxController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: '样章最大值'),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: _sampleChapterWordMaxController,
+                          keyboardType: TextInputType.number,
+                          decoration:
+                              const InputDecoration(labelText: '样章最大值'),
+                        ),
                       ),
-                    ),
-                  ],
+                    ];
+                    if (constraints.maxWidth < 520) {
+                      return Column(children: fields);
+                    }
+                    return Row(children: fields);
+                  },
                 ),
                 const SizedBox(height: 8),
                 ActionButton(

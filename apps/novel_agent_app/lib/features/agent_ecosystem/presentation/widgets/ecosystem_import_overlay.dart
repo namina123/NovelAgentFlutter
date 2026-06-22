@@ -159,14 +159,16 @@ class _EcosystemImportOverlayState extends State<EcosystemImportOverlay> {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.end,
                     children: [
                       TextButton(
                         onPressed:
                             widget.actionHandler.onEcosystemImportDismissed,
                         child: const Text('取消'),
                       ),
-                      const Spacer(),
                       FilledButton(
                         onPressed: _submit,
                         child: const Text('预检并导入'),

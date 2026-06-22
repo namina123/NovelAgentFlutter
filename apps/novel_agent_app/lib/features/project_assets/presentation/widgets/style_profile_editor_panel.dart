@@ -95,13 +95,14 @@ class _StyleProfileEditorPanelState extends State<StyleProfileEditorPanel> {
           onChanged: (value) => setState(() => _defaultForProject = value),
         ),
         const SizedBox(height: 12),
-        Row(
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
           children: [
             FilledButton(
               onPressed: _submit,
               child: const Text('保存'),
             ),
-            const SizedBox(width: 8),
             OutlinedButton(
               onPressed: widget.viewData.id.trim().isEmpty
                   ? null

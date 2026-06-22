@@ -343,14 +343,15 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
                 FilledButton.tonalIcon(
                   onPressed: widget.viewData.isBusy ? null : _pickImportFiles,
                   icon: const Icon(Icons.upload_file_rounded),
                   label: const Text('选择文件'),
                 ),
-                const SizedBox(width: 8),
                 FilledButton.tonalIcon(
                   onPressed: widget.viewData.isBusy
                       ? null
@@ -358,18 +359,18 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
                   icon: const Icon(Icons.folder_open_rounded),
                   label: const Text('选择文件夹'),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    widget.viewData.importFileSelectionHint,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppPalette.mutedText,
-                    ),
-                  ),
-                ),
               ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              widget.viewData.importFileSelectionHint,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppPalette.mutedText,
+              ),
             ),
             const SizedBox(height: 12),
             _field(

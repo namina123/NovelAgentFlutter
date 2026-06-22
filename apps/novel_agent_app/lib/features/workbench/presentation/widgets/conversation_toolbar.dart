@@ -30,6 +30,8 @@ class ConversationToolbar extends StatelessWidget {
         Expanded(
           child: Text(
             title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: surface.foregroundColor,
               fontSize: minimal

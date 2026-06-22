@@ -98,13 +98,14 @@ class _ForeshadowRecordEditorPanelState
         _field(_tagsController, '标签（逗号分隔）'),
         _field(_notesController, '备注', maxLines: 4),
         const SizedBox(height: 12),
-        Row(
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
           children: [
             FilledButton(
               onPressed: _submit,
               child: const Text('保存'),
             ),
-            const SizedBox(width: 8),
             OutlinedButton(
               onPressed: widget.viewData.id.trim().isEmpty
                   ? null
