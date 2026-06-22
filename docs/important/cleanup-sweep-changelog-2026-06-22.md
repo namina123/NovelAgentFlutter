@@ -215,4 +215,39 @@ app 测试套件基线 31 条既有失败（`git checkout 691eddb` 比对确认�
 - 改动 15 个 app 测试文件，13 条失败转绿；`flutter analyze apps/novel_agent_app/test` 0 error。
 - 仅对齐测试期望，未改任何生产 `lib/` 行为。
 
+---
+
+## 第 6/7 轮（app 视觉/golden + app/cli lib 逻辑错误）
+
+app 测试从 31 条失败降到 **4 条**（551 通过）。core 950 + adapters 454 仍全绿。
+
+### 23. app 视觉/golden 与剩余陈旧断言
+
+- `workbench_canvas_workspace_shell_test`：辅助面板宿主现在按 descriptor label 渲染（`协作基线`/`审稿锚点`）且仅可见时挂载；断言对齐。
+- `book_deconstruction_preview_panel_test`：资产区块在 fixture 尺寸下落在视口外，补 `scrollUntilVisible` 再断言。
+- 7 个视觉回归（aed08/lto09/aesp08/ia07/sr14/wr17/rc13）：先对齐过时的文字预检（`工作`→`创作`、`文件/项目目录`→项目名+`浏览`、`项目智能体组`→`协作概览/当前分工`、`当前会话智能体`→`workflowTitle`），再对 UI 演进造成的 golden 漂移跑 `--update-goldens` 重新生成。
+
+### 24. app/cli lib 逻辑错误修复（本轮新增筛查）
+
+| 文件 | 问题 | 修复 |
+| --- | --- | --- |
+| `cli/workflow_command_long_task.dart` `debug preflight` | 读 `result['runnable']`，但 preflight 服务把布尔放在 `can_run` → 队列可跑也永远退 1 | 改读 `result['can_run']` |
+| `cli/asset_command.dart` `import-bundle` | `--overwrite` 默认 `true`，而同条命令的预检默认 `false` → 不带 `--overwrite` 时预检报冲突跳过、导入却静默覆盖既有风格/伏笔 | 导入默认改 `false`（与预检一致，显式 opt-in） |
+| `workbench_workspace_controller.dart` `refreshProjectLongTaskSummary` | 列举失败时只清详情、保留旧 run 列表 → UI 顶着一串旧 run 却无详情也无报错 | 失败时连 `currentProjectLongTaskRuns` 一起清空 |
+
+筛查中确认**非 bug / 暂不动**的：`long_task.run_next/run_controlled` 的"已收口到共享桥"是**有意重定向**（不是死桩）；`provider_connection_probe_service` 传空 networkSettings **不是问题**（gateway 的 transport 经 `SystemProxyResolver` 自带系统代理）。
+
+### 25. 仍未收口的（需产品决断 / 深挖 / 环境）
+
+- **app 4 条剩余失败**：`app_shell_task_center_*_refresh` ×2（HFVV 测试链路里刷新 30s 超时，根因在共享 harness 的异步流，不是简单守卫能修，改守卫已验证无效并回退）；`app_theme_control_style` 暗色对比度（颜色不满足 >7 合同 vs >7 对 muted 文本过严，需产品决断）；`real_gui_viewmodel_information_long_task_probe_contract`（依赖 `local/probe_api.txt` 真实 provider 配置，环境依赖）。
+- **lib 待办（设计/风险）**：optimize-action 整链 dead（`supportsOptimizeAction` 恒 false，需决定移除还是接通）；`defaultScrollTarget` 单会话分支意图不明；拆书 refresh 同项目不重读 setup；long_task_station `_applyTransition` 选中与详情可能错位；cli `--verbose` 实为 no-op。
+- **审计里的 P1 大件**（本轮未碰，需独立设计）：审核 repair 闸门真正接线、默认表达约束自动装载、RBR 剩余真相源、AppShellController/workflow runtime 巨石拆分、P0-2 RAG 的 app 接线。
+
+### 26. 第 6/7 轮验证
+
+- `flutter analyze packages apps`：0 error。
+- core 950 / adapters 454 全过；app 31→4 失败（551 通过）。
+- 本轮新增 3 个 lib 修复（CLI preflight、CLI overwrite 默认、workbench 刷新清空）+ 多个 app 测试对齐/golden 重生成，均未引入新回归。
+
+
 
