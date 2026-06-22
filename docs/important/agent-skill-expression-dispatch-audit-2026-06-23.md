@@ -25,6 +25,9 @@
 ### 6. constraint_type 闭集分类器统一（消除 "accepted but never applied"）`20c112f`
 - `constraint_type` 是自由字符串，bridge 用严格前缀匹配（`expression_constraint`/`expression_constraint.*`），`NarrativePermissionPolicyService` 用宽松子串 `contains('expression')`。agent 误发 `'expression'`（漏 `_constraint`）会被权限策略判为高风险需确认、却在 bridge 静默丢弃。新增 `ConstraintTypeClassifier` 单一真相源，bridge 与 permission policy 同源判定；schema 补 description 引导规范取值。
 
+### 7. agent 角色分类不再纳入自由文本 system_prompt `6ba891e`
+- `_matchesAgent` 此前把 `system_prompt`（长自由文本）纳入匹配 haystack，导致 agent 在 persona 里任意提及关键词（如「审稿」「研究」）就被错分类，注入错误的领域工具指引。现仅匹配权威身份字段 id/name/role。resolver 路径 no-op（其 agent doc 本无 system_prompt），全 profile 路径消除误匹配。
+
 ## 经实证核实为「非 bug」（仅加回归保护）`8501840`
 
 ### C3：内置协作智能体采样参数被归一化器丢弃 —— 不成立
@@ -41,7 +44,6 @@
 - **表达限制 binding 按 scope 过滤（审计 B）**：bridge 的 `projectExpressionConstraintBindings` 未对 legacy 绑定按 targetAgentIds/targetModeIds/targetStageIds 过滤（仅 narrative 提案派生者经 `_matchesRuntime`）。真正修复点在 bridge/resolver 的 scope 过滤总闸，需设计决策，非 surface scan 一处可独立收口。
 - **内置技能组引用的幽灵技能**（`project_context_research`/`artifact_routing`/`revision_workflow`/`interactive_decision_design`/`task_workflow_planning`/`memory_maintenance`/`skill_blueprint_design`）：被多个内置组引用但无对应 SKILL.md 包，静默被 availableSet 过滤。属内容缺口，需补技能包或裁剪组定义，不能凭空 fabricate。
 - **技能能力词汇表不一致**：`SkillCapabilityCatalogService` 只认 7 个能力，而 SKILL.md 声明的是另一套（`file_read` 等），导致校验恒报「未识别 capability」。需统一词汇表。
-- **`_matchesAgent` 松散子串匹配**（`project_prompt_contract.dart:401-414`）：拼接 id+name+role+system_prompt 后 `contains(token)` 会误分类 agent，影响 domainToolGuidance/informationToolGuidance 注入。需收紧为精确字段匹配。
 
 ## 验证
 
