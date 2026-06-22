@@ -27,5 +27,32 @@ void main() {
       expect(service.supportsChildDelegation(group), isTrue);
       expect(service.childAgentIds(group), <String>['reviewer']);
     });
+
+    test(
+      'returns false for any derived-single-agent flag spelling even with members',
+      () {
+        // 中文注释: 历史上 adapter/controller/candidate-resolver 用三种不同 flag 标记“派生自单智能体”。
+        // 这里复现 controller 路径（derived_from_agent_binding）在 summary 含多成员时仍不应允许委派。
+        const controllerDerived = <String, Object?>{
+          'id': 'derived_current',
+          'agents': <String>['writer', 'reviewer'],
+          'primary_agent_id': 'writer',
+          'metadata': <String, Object?>{'derived_from_agent_binding': true},
+        };
+        expect(service.supportsChildDelegation(controllerDerived), isFalse);
+        expect(service.childAgentIds(controllerDerived), isEmpty);
+
+        const resolverDerived = <String, Object?>{
+          'id': 'derived_binding',
+          'agents': <String>['writer', 'editor_in_chief'],
+          'primary_agent_id': 'writer',
+          'metadata': <String, Object?>{
+            'derived_from_project_agent_binding': true,
+          },
+        };
+        expect(service.supportsChildDelegation(resolverDerived), isFalse);
+        expect(service.childAgentIds(resolverDerived), isEmpty);
+      },
+    );
   });
 }
