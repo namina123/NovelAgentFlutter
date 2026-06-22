@@ -29,18 +29,18 @@ class ConversationOpeningGuideViewDataService {
         ? '还没有确定开局智能体组。'
         : '开局智能体组：${projection.currentGroupDisplayName}';
     final readinessText = readiness.canStartLongTask
-        ? '开局信息已经收束完成，可以直接启动长任务。'
+        ? '可以直接开始了。'
         : orchestration.readiness.missingRequirements.isEmpty
         ? '还需要补充长任务开局信息。'
-        : '还需补齐：${orchestration.readiness.missingRequirements.map((item) => item.title).join('、')}';
+        : '还需：${orchestration.readiness.missingRequirements.map((item) => item.title).join('、')}';
     return ConversationGuideViewData(
       workflowTitle: '长任务开局',
       workflowDescription: '$currentGroupText\n$readinessText',
       composerHint: isGenerating
           ? '生成中：可以继续补充长篇边界、节奏、角色和检查点约束。'
           : readiness.canStartLongTask
-          ? '可以点击“启动长任务”让智能体直接接管开局，也可以直接补充更多长期约束。'
-          : '可以点击“启动长任务”让智能体判断缺口并继续收束，也可以直接输入你希望这部长篇如何开局、推进和收束。',
+          ? '描述你想写什么，或直接启动长任务。'
+          : '描述你想写的故事，或启动长任务让智能体引导。',
       primaryActions: <PrimaryActionViewData>[startAction],
     ).copyWith(
       openingState: _openingStateViewDataService.build(
@@ -50,8 +50,8 @@ class ConversationOpeningGuideViewDataService {
         projection: projection,
         preferredNextAction: startAction,
         firstPromptOverride: readiness.canStartLongTask
-            ? '让长篇主智能体直接接管当前开局；它会判断是继续补一句约束，还是直接启动正式长任务。'
-            : '让长篇主智能体先判断当前真正缺什么，再决定是补问、整理开局材料，还是直接继续推进。',
+            ? '让智能体接管当前开局。'
+            : '让智能体判断还缺什么并引导你补齐。',
         nextStepLabelOverride: startAction.title,
         preferSingleAction: true,
       ),
@@ -81,12 +81,10 @@ class ConversationOpeningGuideViewDataService {
     final summaryLines = <String>[
       if (projection.currentGroupDisplayName.trim().isNotEmpty)
         '开局智能体组：${projection.currentGroupDisplayName}',
-      if (projection.derivedFromAgentBinding) '这个智能体组由旧项目智能体绑定自动推导。',
       if (projection.currentGroupDisplayName.trim().isEmpty &&
           projection.groupSummaries.isEmpty)
-        '当前项目还没有可直接使用的智能体组。',
-      if (missingTitles.trim().isNotEmpty) '还需补齐：$missingTitles',
-      if (orchestration.readiness.canStartInteractiveSession) '已经可以直接进入普通协作会话。',
+        '还没有确定智能体组。',
+      if (missingTitles.trim().isNotEmpty) '还需：$missingTitles',
     ];
     if (summaryLines.isEmpty) {
       return fallbackGuide;
@@ -97,7 +95,7 @@ class ConversationOpeningGuideViewDataService {
           '${fallbackGuide.workflowDescription}\n\n${summaryLines.join('\n')}',
       composerHint: isGenerating
           ? fallbackGuide.composerHint
-          : '可以先描述题材、主线、角色、世界观或想先整理的设定；等开局收束后，再继续正文或续写。',
+          : '描述你想写什么，智能体会引导你补齐开局。',
       primaryActions: fallbackGuide.primaryActions,
     ).copyWith(
       openingState: _openingStateViewDataService.build(
@@ -108,7 +106,7 @@ class ConversationOpeningGuideViewDataService {
         preferredNextAction: fallbackGuide.primaryActions.isEmpty
             ? null
             : fallbackGuide.primaryActions.first,
-        firstPromptOverride: '先说这部作品想写什么、主角和冲突大概是什么，或者你想先整理哪部分设定。',
+        firstPromptOverride: '说说你想写什么。',
         nextStepLabelOverride: fallbackGuide.primaryActions.isEmpty
             ? ''
             : fallbackGuide.primaryActions.first.title,
@@ -135,7 +133,6 @@ class ConversationOpeningGuideViewDataService {
       maturity.summary,
       if (projection.currentGroupDisplayName.trim().isNotEmpty)
         '开局智能体组：${projection.currentGroupDisplayName}',
-      if (projection.derivedFromAgentBinding) '这个智能体组由旧项目智能体绑定自动推导。',
     ];
     if (projection.projectTypeId == 'long_novel' &&
         projection.orchestration.readiness.canStartLongTask) {
@@ -178,7 +175,6 @@ class ConversationOpeningGuideViewDataService {
       '拆书导向：导入书籍 -> 分析数据 -> 开始创作',
       if (projection.currentGroupDisplayName.trim().isNotEmpty)
         '开局智能体组：${projection.currentGroupDisplayName}',
-      if (projection.derivedFromAgentBinding) '这个智能体组由旧项目智能体绑定自动推导。',
       if (maturity.isContinueReady || maturity.narrativeFileCount > 0)
         '当前项目已经具备继续分析或承接创作的基础。'
       else
