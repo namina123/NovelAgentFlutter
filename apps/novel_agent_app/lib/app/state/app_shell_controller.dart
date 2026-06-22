@@ -1268,7 +1268,11 @@ class AppShellController extends ChangeNotifier
 
   Future<void> _startProjectCreationFromProjectOpen() async {
     // 中文注释: 项目入口页进入新建流程时统一切回工作台并拉起正式创建向导，避免落回旧命令面板。
-    showWorkbench();
+    // 注意：必须用 _destinationController.showWorkbench() 而不是公开的 showWorkbench()——
+    // 后者在当前项目是 knowledge_base 时会重定向到 projectAssets 并 return，
+    // 导致 onCreateProjectRequested 设置的创建向导落在工作台视图上、用户却停在资料库页
+    // （表现为“在资料库项目页点新建项目，一下就跳回去了”）。
+    _destinationController.showWorkbench();
     await _projectCreationController.onCreateProjectRequested();
   }
 
