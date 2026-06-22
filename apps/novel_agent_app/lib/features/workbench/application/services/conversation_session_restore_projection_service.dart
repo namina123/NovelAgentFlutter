@@ -113,20 +113,53 @@ class ConversationSessionRestoreProjectionService {
     required int index,
     required JsonMap message,
   }) {
-    // 中文注释: 消息级恢复只关心 role/content，避免把持久化里的临时字段重新带回时间线。
+    // 中文注释: 消息级恢复要把工具调用结果也带回时间线。tool 消息的结果字段可能在
+    // content / display_text / tool_result 里（不同 provider 和工具返回路径写法不一），逐个兜底。
     final role = ValueReaders.stringValue(message['role']).trim();
-    final content = ValueReaders.stringValue(message['content']).trim();
+    final content = ValueReaders.stringValue(
+      message['content'],
+      ValueReaders.stringValue(
+        message['display_text'],
+        ValueReaders.stringValue(message['tool_result']),
+      ),
+    ).trim();
+
+    // 中文注释: assistant 消息可能只有 tool_calls 没有 content；提取工具调用名作为摘要，不丢弃。
+    if (role == 'assistant' && content.isEmpty) {
+      final toolCalls = ValueReaders.objectList(message['tool_calls']);
+      if (toolCalls.isNotEmpty) {
+        final toolNames = toolCalls
+            .map(
+              (tc) =>
+                  ValueReaders.stringValue(ValueReaders.mapValue(tc)['name']),
+            )
+            .where((name) => name.isNotEmpty)
+            .join('、');
+        if (toolNames.isNotEmpty) {
+          return ConversationEntryViewData(
+            id: 'restored_${sessionId}_transcript_$index',
+            kind: ConversationEntryKind.assistant,
+            title: '综合创作智能体',
+            body: '调用工具：$toolNames',
+          );
+        }
+      }
+      return null;
+    }
+
     if (role.isEmpty || content.isEmpty) {
       return null;
     }
     final kind = switch (role) {
       'user' => ConversationEntryKind.user,
       'assistant' => ConversationEntryKind.assistant,
+      'tool' => ConversationEntryKind.tool,
       _ => ConversationEntryKind.system,
     };
     final title = switch (kind) {
       ConversationEntryKind.user => '你',
       ConversationEntryKind.assistant => '综合创作智能体',
+      ConversationEntryKind.tool => '工具结果',
       _ => '系统记录',
     };
     return ConversationEntryViewData(

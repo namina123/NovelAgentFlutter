@@ -154,7 +154,7 @@ class ConversationSessionStateService {
   }
 
   ConversationSessionState restoreSession(JsonMap sessionRecord) {
-    // 中文注释: 项目重载时只从已持久化的 sessionRecord 恢复稳定展示状态，不回放临时工具流或附件草稿。
+    // 中文注释: 项目重载时从已持久化的 sessionRecord 恢复稳定展示状态，包括工具调用结果。
     final normalized = _normalizerService.normalizeSessionRecord(
       sessionRecord,
       defaultThresholdChars: SessionRecordConstants.defaultThresholdChars,
