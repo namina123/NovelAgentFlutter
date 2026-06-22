@@ -55,7 +55,13 @@ ReferenceSourceDocumentFileReadResult _readEpubSourceDocumentInIsolate(
     throw StateError('Source file not found: $sourceFilePath');
   }
   final bytes = sourceFile.readAsBytesSync();
-  final archive = ZipDecoder().decodeBytes(bytes, verify: true);
+  Archive archive;
+  try {
+    archive = ZipDecoder().decodeBytes(bytes, verify: true);
+  } catch (_) {
+    // 中文注释: 部分 epub 有轻微 CRC/校验异常但内容仍可读，降级到不校验重试，而不是整本判导入失败。
+    archive = ZipDecoder().decodeBytes(bytes, verify: false);
+  }
   final sourceTitle = _resolveEpubTitle(archive, sourceFile.path);
   final sourceText = _resolveEpubText(archive);
   return ReferenceSourceDocumentFileReadResult(
@@ -274,11 +280,9 @@ String _decodeArchiveFileContent(ArchiveFile archiveFile) {
     return content;
   }
   if (content is List<int>) {
-    try {
-      return utf8.decode(content);
-    } catch (_) {
-      return latin1.decode(content);
-    }
+    // 中文注释: epub 的 XHTML/HTML 也走和纯文本一致的 utf8 -> gbk -> latin1 解码（带 GBK 偏好判定），
+    // 避免非 UTF-8 的中文 epub 直接落到 latin1 变成乱码。
+    return _decodeSourceText(content).text;
   }
   return content.toString();
 }

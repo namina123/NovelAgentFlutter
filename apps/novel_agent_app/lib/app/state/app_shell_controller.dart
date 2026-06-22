@@ -1256,14 +1256,20 @@ class AppShellController extends ChangeNotifier
     final selectedPath = await _desktopProjectDirectoryPickerService
         .pickProjectDirectory();
     if (selectedPath == null || selectedPath.trim().isEmpty) {
+      // 中文注释: 用户取消选择时不打扰；只有真正失败才在下面 try/catch 里给状态。
       return;
     }
-    final snapshot = await _loadProjectWorkspaceUseCase.execute(selectedPath);
-    if (snapshot == null) {
-      await _refreshProjectOpenView(status: '所选目录不是有效项目根目录。');
-      return;
+    try {
+      final snapshot = await _loadProjectWorkspaceUseCase.execute(selectedPath);
+      if (snapshot == null) {
+        await _refreshProjectOpenView(status: '所选目录不是有效项目根目录。');
+        return;
+      }
+      await _openProjectFromProjectOpen(snapshot.project.rootPath);
+    } catch (error) {
+      // 中文注释: 导入/打开期间抛错要如实落到作品库状态，而不是被静默吞掉、用户看到"什么都没发生"。
+      await _refreshProjectOpenView(status: '导入项目失败：$error');
     }
-    await _openProjectFromProjectOpen(snapshot.project.rootPath);
   }
 
   Future<void> _startProjectCreationFromProjectOpen() async {
