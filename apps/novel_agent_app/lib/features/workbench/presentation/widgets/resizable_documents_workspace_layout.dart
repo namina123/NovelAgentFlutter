@@ -28,6 +28,17 @@ class _ResizableDocumentsWorkspaceLayoutState
     return LayoutBuilder(
       builder: (context, constraints) {
         final totalWidth = constraints.maxWidth;
+        // 中文注释: 总宽不足时改成上下堆叠（文档在上、文件树在下），避免文件树锁死在 220px 吃掉近半窄屏。
+        if (totalWidth < 560) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: widget.documentPane),
+              const Divider(height: 1),
+              SizedBox(height: 240, child: widget.navigationPane),
+            ],
+          );
+        }
         final minWidth = DocumentsWorkspaceLayoutPolicy.minNavigationWidth(
           totalWidth,
         );

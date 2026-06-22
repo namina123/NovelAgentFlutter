@@ -29,6 +29,23 @@ class _WorkbenchTwoPaneLayoutState extends State<WorkbenchTwoPaneLayout> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final totalWidth = constraints.maxWidth;
+        final minConversationWidth =
+            widget.metrics.isTabletLike ? 336.0 : 316.0;
+        // 中文注释: 总宽不足以并排（会话栏最低宽度 × 2）时改成上下堆叠：文档在上、会话在下，
+        // 避免窄屏下会话栏吃掉大半屏、编辑区被挤到无法使用。
+        if (totalWidth < minConversationWidth * 2) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: widget.documentPane),
+              const Divider(height: 1),
+              SizedBox(
+                height: totalWidth < 360 ? 220 : 300,
+                child: widget.conversationPane,
+              ),
+            ],
+          );
+        }
         final conversationWidth =
             WorkbenchTwoPaneLayoutPolicy.conversationWidth(
               widget.metrics,
