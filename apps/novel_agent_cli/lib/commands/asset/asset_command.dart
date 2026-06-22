@@ -259,7 +259,7 @@ class AssetCommand {
     final result = await _assetLibraryService.importBundle(
       context.project,
       bundleContent: bundleContent,
-      overwrite: _boolOption(args, '--overwrite', true),
+      overwrite: _boolOption(args, '--overwrite', false),
     );
     return _printResult(result, success: '资产包已导入。');
   }
