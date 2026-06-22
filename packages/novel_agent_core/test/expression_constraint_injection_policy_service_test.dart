@@ -61,6 +61,21 @@ void main() {
     });
 
     test(
+      'force policy overrides explicit brief strength to strongest injection',
+      () {
+        // 中文注释: force 是用户可见的“强力约束”档，即使同时声明了 brief 注入强度，
+        // 也应产出最强注入（briefAndSections），避免被降级成 briefOnly。
+        final mode = service.resolveMode(
+          policyMode: ExpressionConstraintExecutionPolicyModes.force,
+          policyInjectionStrength: ExpressionConstraintInjectionStrengths.brief,
+          intent: 'review',
+        );
+
+        expect(mode, ExpressionConstraintInjectionMode.briefAndSections);
+      },
+    );
+
+    test(
       'project stacks still clear constraints when policy disables them',
       () {
         final stack = CreativeRuleStack(

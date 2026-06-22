@@ -156,18 +156,19 @@ class ExpressionConstraintInjectionPolicyService {
             ExpressionConstraintInjectionStrengths.none) {
       return ExpressionConstraintInjectionMode.disabled;
     }
-    if (resolvedInjectionStrength ==
-            ExpressionConstraintInjectionStrengths.brief ||
-        resolvedInjectionStrength ==
-            ExpressionConstraintInjectionStrengths.none) {
-      return ExpressionConstraintInjectionMode.briefOnly;
-    }
+    // 中文注释: force 是用户可见的“最强约束”档位，设计上对应强注入（briefAndSections），
+    // 因此必须先于 brief 判定；否则 force+brief 会被降级成 briefOnly，与设计相悖。
+    // 同时移除原第二分支里永不可达的 `|| none`（none 已被上面的 disabled 分支捕获）。
     if (resolvedInjectionStrength ==
             ExpressionConstraintInjectionStrengths.sections ||
         resolvedInjectionStrength ==
             ExpressionConstraintInjectionStrengths.full ||
         resolvedPolicyMode == ExpressionConstraintExecutionPolicyModes.force) {
       return ExpressionConstraintInjectionMode.briefAndSections;
+    }
+    if (resolvedInjectionStrength ==
+        ExpressionConstraintInjectionStrengths.brief) {
+      return ExpressionConstraintInjectionMode.briefOnly;
     }
     return null;
   }
