@@ -186,8 +186,37 @@ class HfvvWave1AppShellHarness {
     required String projectTypeId,
     String storageStrategyId = 'markdown_project_store',
     String runtimeBaselineId = '',
+    String knowledgeBaseBranchId = '',
+    String bookDeconstructionFollowupRouteId = 'continuation',
   }) async {
+    // 中文注释: harness 代理真实用户走完整创建向导——按项目类型对应的阶段树逐阶段提交，
+    // 不再只认 novel 的 projectType→storageStrategy 两步。knowledge_base 会插入
+    // knowledgeBaseBranch、book_deconstruction 会插入 bookDeconstructionFollowup、
+    // long_novel 会到 runtimeBaseline；各类型支持的存储策略也不同（knowledge_base 仅
+    // sqlite），这里按 catalog 把不支持的存储策略收口到首个支持项，避免 lane 误传导致
+    // 创建在中间阶段静默卡死（这是 lane C/D/E 长期 blocked_external 超时的根因）。
     _projectTypeId = projectTypeId.trim();
+    final definition = const ProjectTypeCatalogService().definitionOf(
+      projectTypeId,
+    );
+    final supportedStorageIds = definition.supportedStorageStrategies
+        .map((strategy) => strategy.id)
+        .toSet();
+    final String resolvedStorageStrategyId =
+        (storageStrategyId.isNotEmpty &&
+            supportedStorageIds.contains(storageStrategyId))
+        ? storageStrategyId
+        : (supportedStorageIds.isNotEmpty
+              ? supportedStorageIds.first
+              : (storageStrategyId.isEmpty
+                    ? 'markdown_project_store'
+                    : storageStrategyId));
+    final String resolvedKnowledgeBaseBranchId = knowledgeBaseBranchId
+        .trim()
+        .isEmpty
+        ? KnowledgeBaseBranchCatalogService.structuredBranchId
+        : knowledgeBaseBranchId.trim();
+
     controller.onCreateProjectRequested();
     await waitUntil(
       () =>
@@ -196,31 +225,58 @@ class HfvvWave1AppShellHarness {
       description: 'project type phase',
       timeout: const Duration(seconds: 15),
     );
-    final request = ProjectCreateRequestViewData(
-      title: title,
-      projectTypeId: projectTypeId,
-      storageStrategyId: storageStrategyId,
-      runtimeBaselineId: runtimeBaselineId,
-    );
-    controller.onProjectCreationSubmitted(request);
-    await waitUntil(
-      () {
-        final phase = workbench.projectLauncher?.creationPhase;
-        return phase == ProjectCreationPhase.storageStrategy ||
-            phase == ProjectCreationPhase.runtimeBaseline ||
-            workbench.projectPath.trim().isNotEmpty;
-      },
-      description: 'project creation next phase',
-      timeout: const Duration(seconds: 15),
-    );
-    if (workbench.projectLauncher?.creationPhase ==
-        ProjectCreationPhase.storageStrategy) {
+
+    // 逐阶段提交直到创建真正落地（projectPath 出现或 launcher 清空）。
+    while (true) {
+      final launcher = workbench.projectLauncher;
+      if (launcher == null || workbench.projectPath.trim().isNotEmpty) {
+        break;
+      }
+      final phase = launcher.creationPhase;
+      String resolvedRuntimeBaselineId = runtimeBaselineId;
+      if (phase == ProjectCreationPhase.runtimeBaseline) {
+        // 中文注释: runtimeBaseline 是终止阶段，必须带有效基准 id 才会触发实际创建。
+        final options = launcher.runtimeBaselineOptions;
+        final preferredValid = runtimeBaselineId.isNotEmpty &&
+            options.any((option) => option.id == runtimeBaselineId);
+        if (!preferredValid && options.isNotEmpty) {
+          resolvedRuntimeBaselineId = options.first.id;
+        }
+      }
+      final request = ProjectCreateRequestViewData(
+        title: title,
+        projectTypeId: projectTypeId,
+        storageStrategyId: resolvedStorageStrategyId,
+        runtimeBaselineId: resolvedRuntimeBaselineId,
+        knowledgeBaseBranchId: resolvedKnowledgeBaseBranchId,
+        bookDeconstructionFollowupRouteId: bookDeconstructionFollowupRouteId,
+      );
       controller.onProjectCreationSubmitted(request);
+      await waitUntil(
+        () {
+          final current = workbench.projectLauncher;
+          if (current == null) {
+            return true;
+          }
+          if (workbench.projectPath.trim().isNotEmpty) {
+            return true;
+          }
+          return current.creationPhase != phase;
+        },
+        description: 'project creation advance from $phase',
+        timeout: const Duration(seconds: 20),
+      );
+      final currentLauncher = workbench.projectLauncher;
+      if (currentLauncher == null ||
+          workbench.projectPath.trim().isNotEmpty) {
+        break;
+      }
+      if (currentLauncher.creationPhase == phase) {
+        // 中文注释: 阶段既没推进也没创建——通常是缺必填选择，交给后面的 projectPath 等待暴露根因，避免空转。
+        break;
+      }
     }
-    if (workbench.projectLauncher?.creationPhase ==
-        ProjectCreationPhase.runtimeBaseline) {
-      controller.onProjectCreationSubmitted(request);
-    }
+
     await waitUntil(
       () => workbench.projectPath.trim().isNotEmpty,
       description: 'project path after creation',
