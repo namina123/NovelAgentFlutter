@@ -44,6 +44,7 @@ class RagTxtCorpusIngestionService {
     BundleChecksumService? checksumService,
     RagSourceAnalysisSummaryBuilder? sourceAnalysisSummaryBuilder,
     EmbeddingProviderPort? embeddingProvider,
+    this.embeddingProviderResolver,
   }) : _metadataRepository =
            metadataRepository ?? SqliteRagMetadataRepository(),
        _fileReaderService =
@@ -63,6 +64,10 @@ class RagTxtCorpusIngestionService {
   final BundleChecksumService _checksumService;
   final RagSourceAnalysisSummaryBuilder _sourceAnalysisSummaryBuilder;
   final EmbeddingProviderPort? _embeddingProvider;
+
+  /// 中文注释: 设置可能运行时变化，embedding provider 不能在装配期写死。这里注入惰性解析闭包：
+  /// 入库时按当前设置解析 provider，解析失败或缺配置返回 null（_embedChunks 如实回退到纯元数据）。
+  final Future<EmbeddingProviderPort?> Function()? embeddingProviderResolver;
 
   Future<RagCorpusPackage> ingestFile({
     required ProjectDescriptor project,
@@ -620,7 +625,7 @@ class RagTxtCorpusIngestionService {
   /// 用注入的 embedding provider 批量给 chunk 生成向量，写到 chunk.metadata 里，
   /// 随 chunk 一起在同一事务落库；没有 provider 或失败时如实回退到纯元数据。
   Future<RagTxtEmbeddingResult> _embedChunks(List<RagChunk> chunks) async {
-    final provider = _embeddingProvider;
+    final provider = _embeddingProvider ?? (await embeddingProviderResolver?.call());
     if (provider == null || chunks.isEmpty) {
       return RagTxtEmbeddingResult(
         chunks: chunks,

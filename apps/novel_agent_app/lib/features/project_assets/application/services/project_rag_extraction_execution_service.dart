@@ -19,8 +19,12 @@ class ProjectRagExtractionExecutionService {
     RagProjectMountSummaryService? mountSummaryService,
     ProjectRagAnalysisSummaryDecoder? analysisSummaryDecoder,
     ProjectRagSourcePreprocessingService? sourcePreprocessingService,
+    Future<EmbeddingProviderPort?> Function()? embeddingProviderResolver,
   }) : _txtCorpusIngestionService =
-           txtCorpusIngestionService ?? RagTxtCorpusIngestionService(),
+           txtCorpusIngestionService ??
+           RagTxtCorpusIngestionService(
+             embeddingProviderResolver: embeddingProviderResolver,
+           ),
        _metadataRepository =
            metadataRepository ?? SqliteRagMetadataRepository(),
        _mountSummaryService =
