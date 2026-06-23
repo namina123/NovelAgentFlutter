@@ -31,6 +31,7 @@ export 'narrative_state/narrative_claim_disposition.dart';
 export 'narrative_state/constraint_binding_applies_to.dart';
 export 'narrative_state/constraint_binding_policy.dart';
 export 'narrative_state/constraint_binding_scope.dart';
+export 'narrative_state/constraint_type_classifier.dart';
 export 'narrative_state/chapter_narrative_submission.dart';
 export 'narrative_state/chapter_narrative_submission_continuity_enricher_service.dart';
 export 'narrative_state/chapter_narrative_submission_validator.dart';

@@ -31,7 +31,7 @@ class AgentGroupDelegationCapabilityService {
       return const <String>[];
     }
     final metadata = ValueReaders.mapValue(group['metadata']);
-    if (ValueReaders.boolValue(metadata['derived_from_single_agent'])) {
+    if (_isDerivedFromSingleAgent(metadata)) {
       return const <String>[];
     }
     final memberIds = memberAgentIds(group, availableAgents: availableAgents);
@@ -75,5 +75,18 @@ class AgentGroupDelegationCapabilityService {
       result.add(agentId);
     }
     return List<String>.unmodifiable(result);
+  }
+
+  bool _isDerivedFromSingleAgent(JsonMap metadata) {
+    // 中文注释: “派生自单智能体”的标记位历史上在三个地方用三种拼写：
+    // adapter 用 derived_from_single_agent、controller 用 derived_from_agent_binding、
+    // candidate resolver 用 derived_from_project_agent_binding。它们语义一致（都是“把单个
+    // 智能体包装成的合成单成员组，不应再向子智能体委派”），这里统一识别，避免某种拼写漂移
+    // 导致合成组被错误允许委派。
+    return ValueReaders.boolValue(metadata['derived_from_single_agent']) ||
+        ValueReaders.boolValue(metadata['derived_from_agent_binding']) ||
+        ValueReaders.boolValue(
+          metadata['derived_from_project_agent_binding'],
+        );
   }
 }

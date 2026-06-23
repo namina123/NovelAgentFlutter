@@ -3,6 +3,7 @@ import '../common/value_readers.dart';
 import 'agent_skill_scope_service.dart';
 import 'builtin_skill_group_catalog_service.dart';
 import 'resolved_agent_skill_loadout.dart';
+import 'skill_id_normalizer.dart';
 
 class AgentSkillSummaryService {
   AgentSkillSummaryService({
@@ -14,6 +15,8 @@ class AgentSkillSummaryService {
 
   final AgentSkillScopeService _skillScopeService;
   final BuiltinSkillGroupCatalogService _skillGroupCatalogService;
+  // 中文注释: 技能 id 在包（kebab）与文档/装载结果（snake）之间不一致，查找前统一归一。
+  final SkillIdNormalizer _skillIdNormalizer = const SkillIdNormalizer();
 
   List<JsonMap> buildAvailableSkillSummaries({
     required JsonMap agent,
@@ -29,7 +32,8 @@ class AgentSkillSummaryService {
       if (id.isEmpty) {
         continue;
       }
-      skillById[id] = skill;
+      // 中文注释: 用归一化后的 id 作为键，使 snake_case 引用也能命中 kebab 包。
+      skillById[_skillIdNormalizer.normalize(id)] = skill;
     }
     final allowedIds =
         resolvedLoadout?.finalSkillIds ??
@@ -42,7 +46,7 @@ class AgentSkillSummaryService {
         );
     final result = <JsonMap>[];
     for (final skillId in allowedIds) {
-      final skill = skillById[skillId];
+      final skill = skillById[_skillIdNormalizer.normalize(skillId)];
       if (skill == null || skill.isEmpty) {
         continue;
       }

@@ -267,7 +267,9 @@ class NarrativePermissionPolicyService {
     );
     final touchesStyleOrExpression =
         normalizedType.contains('style') ||
-        normalizedType.contains('expression');
+        const ConstraintTypeClassifier().isExpressionConstraint(
+          proposal.constraintType,
+        );
     return affectsCoreStrategy || touchesStyleOrExpression;
   }
 

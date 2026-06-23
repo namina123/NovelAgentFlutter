@@ -42,6 +42,8 @@ class ProjectAgentSkillToolExecutor {
   final LocalPackageResourceReader _packageResourceReader;
   final ProjectRelativePathResolver _projectRelativePathResolver;
   final ProjectAgentSkillRuntimeLoadoutService? _runtimeLoadoutService;
+  // 中文注释: 技能 id 在包（kebab）与文档/模型入参（snake）之间历史上不一致，匹配前统一归一。
+  final SkillIdNormalizer _skillIdNormalizer = const SkillIdNormalizer();
 
   Future<JsonMap> loadAgentSkill(
     ProjectDescriptor project,
@@ -92,11 +94,13 @@ class ProjectAgentSkillToolExecutor {
         },
       );
     }
+    // 中文注释: skillId 可能来自模型入参或路由策略，可能是 snake_case；与包的 kebab id 比较前统一归一。
+    final normalizedSkillId = _skillIdNormalizer.normalize(skillId);
     final allowedIds = availableSkills
-        .map((skill) => ValueReaders.stringValue(skill['id']).trim())
+        .map((skill) => _skillIdNormalizer.normalize(ValueReaders.stringValue(skill['id'])))
         .where((id) => id.isNotEmpty)
         .toSet();
-    if (!allowedIds.contains(skillId)) {
+    if (!allowedIds.contains(normalizedSkillId)) {
       return _resultFactory.notExecuted(
         '当前智能体不可读取该技能：$skillId',
         data: <String, Object?>{
@@ -109,7 +113,8 @@ class ProjectAgentSkillToolExecutor {
     JsonMap? skillPackage;
     for (final rawSkill in allSkills) {
       final skill = ValueReaders.mapValue(rawSkill);
-      if (ValueReaders.stringValue(skill['id']).trim() == skillId) {
+      if (_skillIdNormalizer.normalize(ValueReaders.stringValue(skill['id'])) ==
+          normalizedSkillId) {
         skillPackage = skill;
         break;
       }

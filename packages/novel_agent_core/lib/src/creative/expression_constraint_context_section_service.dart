@@ -30,7 +30,10 @@ class ExpressionConstraintContextSectionService {
     }
     if (profile.riskSignals.isNotEmpty) {
       lines.add('风险信号（交付前自查；命中后需要改写或降到明确可接受的极低频率）：');
-      for (final item in profile.riskSignals.take(8)) {
+      // 中文注释: 风险信号与正文表面扫描器（ExpressionConstraintSurfaceRiskScanService）共用同一份
+      // 列表——扫描器会用全部信号检查正文。这里必须把全部信号都展示给模型，否则会出现“模型因未被
+      // 告知的信号被判定为违反约束”的不一致。信号本身是短词，不做截断也不会明显占用预算。
+      for (final item in profile.riskSignals) {
         lines.add('- ${item.trim()}');
       }
     }
