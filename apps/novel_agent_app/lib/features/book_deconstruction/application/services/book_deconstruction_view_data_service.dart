@@ -1,5 +1,6 @@
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../../../workbench/presentation/models/selector_option_view_data.dart';
 import '../../presentation/models/book_deconstruction_continuity_view_data.dart';
 import '../../presentation/models/book_deconstruction_followup_group_view_data.dart';
 import '../../presentation/models/book_deconstruction_followup_option_view_data.dart';
@@ -21,8 +22,8 @@ class BookDeconstructionViewDataService {
     required BookDeconstructionSnapshot snapshot,
     required String status,
     bool canCreateDerivedProject = true,
-    bool canSmartImport = false,
-    bool canExtractKnowledge = false,
+    List<SelectorOptionViewData> splitModelOptions = const <SelectorOptionViewData>[],
+    List<SelectorOptionViewData> analysisModelOptions = const <SelectorOptionViewData>[],
   }) {
     final buildResult = snapshot.buildResult;
     final previewSections = buildResult == null
@@ -39,6 +40,11 @@ class BookDeconstructionViewDataService {
             snapshot.selectedFollowupOptionId,
           );
     final totalItemCount = buildResult?.applicationPlan.items.length ?? 0;
+    final hasSource = snapshot.sourceContent.trim().isNotEmpty;
+    // 中文注释: 拆书"使用模型"仅在用户选了拆书模型时可勾；分析"使用模型"仅在用户选了分析模型时可勾。
+    // 两步模型完全独立不继承。无模型则纯规则分章 / 不分析。
+    final canUseSplitModel = splitModelOptions.isNotEmpty;
+    final canAnalyze = analysisModelOptions.isNotEmpty;
     return BookDeconstructionViewData(
       projectTitle: projectTitle,
       status: status,
@@ -49,19 +55,12 @@ class BookDeconstructionViewDataService {
       sourceAbsolutePath: snapshot.sourceAbsolutePath,
       sourceTitle: snapshot.sourceTitle,
       sourceContent: snapshot.sourceContent,
-      operatorNotes: snapshot.operatorNotes,
-      styleSummary: snapshot.styleSummary,
-      worldRulesText: snapshot.worldRulesText,
-      characterLinesText: snapshot.characterLinesText,
-      organizationLinesText: snapshot.organizationLinesText,
       previewSections: previewSections,
       planGroups: planGroups,
       selectedItemCount: snapshot.selectedItemIds.length,
       totalItemCount: totalItemCount,
       selectedFollowupOptionId: snapshot.selectedFollowupOptionId,
       confirmedPreviewPath: snapshot.confirmedPreviewPath,
-      canBuildPreview:
-          !snapshot.isLoading && snapshot.sourceContent.trim().isNotEmpty,
       canConfirmSelection:
           !snapshot.isLoading &&
           buildResult != null &&
@@ -74,79 +73,66 @@ class BookDeconstructionViewDataService {
           snapshot.selectedFollowupOptionId.trim().isNotEmpty &&
           canCreateDerivedProject,
       importActionLabel: _importActionLabel(snapshot.operationKind),
-      canSmartImport: canSmartImport && !snapshot.isLoading,
-      smartImportActionLabel: _smartImportActionLabel(snapshot.operationKind),
-      buildPreviewActionLabel: _buildPreviewActionLabel(snapshot.operationKind),
-      canExtractKnowledge: canExtractKnowledge && !snapshot.isLoading,
-      extractKnowledgeActionLabel: _extractKnowledgeActionLabel(
-        snapshot.operationKind,
-      ),
+      canSplit: !snapshot.isLoading && hasSource,
+      splitUseModel: snapshot.splitUseModel && canUseSplitModel,
+      splitModelOptionKey: snapshot.splitModelOptionKey,
+      splitModelOptions: splitModelOptions,
+      canUseSplitModel: canUseSplitModel,
+      canAnalyze: canAnalyze && !snapshot.isLoading && buildResult != null,
+      analysisUseModel: snapshot.analysisUseModel && canAnalyze,
+      analysisModelOptionKey: snapshot.analysisModelOptionKey,
+      analysisModelOptions: analysisModelOptions,
+      analysisStatusMessage: snapshot.analysisStatusMessage,
+      analysisCompleted: snapshot.analysisCompleted,
       continuity: continuity,
     );
-  }
-
-  String _extractKnowledgeActionLabel(String operationKind) {
-    switch (operationKind) {
-      case BookDeconstructionOperationKind.extractingKnowledge:
-        return '正在提取知识';
-      default:
-        return '提取知识（可选）';
-    }
   }
 
   String _importActionLabel(String operationKind) {
     switch (operationKind) {
       case BookDeconstructionOperationKind.importingSource:
-        return '正在导入';
+        return '正在导入…';
       default:
-        return '导入文件';
-    }
-  }
-
-  String _smartImportActionLabel(String operationKind) {
-    switch (operationKind) {
-      case BookDeconstructionOperationKind.smartImportingSource:
-        return '正在智能拆书';
-      default:
-        return '智能拆书';
-    }
-  }
-
-  String _buildPreviewActionLabel(String operationKind) {
-    switch (operationKind) {
-      case BookDeconstructionOperationKind.buildingPreview:
-        return '正在拆书';
-      default:
-        return '拆书';
+        return '选择文件…';
     }
   }
 
   List<BookDeconstructionStepViewData> _stepsOf(
     BookDeconstructionSnapshot snapshot,
   ) {
-    final hasPreview = snapshot.buildResult != null;
+    final hasSource = snapshot.sourceContent.trim().isNotEmpty;
+    final hasSplit = snapshot.buildResult != null;
+    final hasAnalysis = snapshot.analysisCompleted;
     final hasConfirmation = snapshot.confirmedPreviewPath.trim().isNotEmpty;
     return <BookDeconstructionStepViewData>[
       BookDeconstructionStepViewData(
         id: BookDeconstructionStepId.importSource,
         title: '导入源文稿',
-        description: '导入文本文件或直接粘贴原文，再补充必要的拆书说明。',
+        description: '选择文本文件，或直接粘贴原文。',
         isActive:
             snapshot.activeStepId == BookDeconstructionStepId.importSource,
-        isComplete: snapshot.sourceContent.trim().isNotEmpty,
+        isComplete: hasSource,
       ),
       BookDeconstructionStepViewData(
-        id: BookDeconstructionStepId.previewStructure,
-        title: '拆书',
-        description: '把原文分章、去噪、清洗；知识提取是可选的下一步，可跳过直接确认。',
+        id: BookDeconstructionStepId.splitChapters,
+        title: '拆书（纯净分章）',
+        description: '把原文分章、去噪、清洗；只产出纯净分章正文，不含其他。',
         isActive:
-            snapshot.activeStepId == BookDeconstructionStepId.previewStructure,
-        isComplete: hasPreview,
+            snapshot.activeStepId == BookDeconstructionStepId.splitChapters,
+        isComplete: hasSplit,
+      ),
+      BookDeconstructionStepViewData(
+        id: BookDeconstructionStepId.analyzeAssets,
+        title: '分析（可选）',
+        description: '可选：用模型读拆书产物提取知识资产；不选模型则跳过。',
+        isActive:
+            snapshot.activeStepId == BookDeconstructionStepId.analyzeAssets,
+        isComplete: hasAnalysis,
       ),
       BookDeconstructionStepViewData(
         id: BookDeconstructionStepId.confirmSelection,
-        title: '应用前确认',
-        description: '确认当前勾选结果，并保留后续续写菜单与预演纪要。',
+        title: '确认进入创作',
+        description: '确认当前结果，进入后续创作。',
         isActive:
             snapshot.activeStepId == BookDeconstructionStepId.confirmSelection,
         isComplete: hasConfirmation,

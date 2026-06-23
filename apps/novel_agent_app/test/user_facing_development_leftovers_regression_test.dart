@@ -3,19 +3,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:novel_agent_app/app/theme/app_theme.dart';
 import 'package:novel_agent_app/features/agent_ecosystem/application/models/project_skill_loadout_workspace_snapshot.dart';
 import 'package:novel_agent_app/features/agent_ecosystem/application/services/project_skill_loadout_view_data_service.dart';
-import 'package:novel_agent_app/features/book_deconstruction/presentation/models/book_deconstruction_continuity_view_data.dart';
-import 'package:novel_agent_app/features/book_deconstruction/presentation/models/book_deconstruction_followup_group_view_data.dart';
-import 'package:novel_agent_app/features/book_deconstruction/presentation/models/book_deconstruction_followup_option_view_data.dart';
 import 'package:novel_agent_app/features/book_deconstruction/presentation/contracts/book_deconstruction_action_handler.dart';
 import 'package:novel_agent_app/features/book_deconstruction/presentation/models/book_deconstruction_plan_group_view_data.dart';
 import 'package:novel_agent_app/features/book_deconstruction/presentation/models/book_deconstruction_plan_item_view_data.dart';
-import 'package:novel_agent_app/features/book_deconstruction/presentation/models/book_deconstruction_preview_section_view_data.dart';
-import 'package:novel_agent_app/features/book_deconstruction/presentation/models/book_deconstruction_step_view_data.dart';
 import 'package:novel_agent_app/features/book_deconstruction/presentation/models/book_deconstruction_view_data.dart';
 import 'package:novel_agent_app/features/book_deconstruction/presentation/widgets/book_deconstruction_preview_panel.dart';
 import 'package:novel_agent_app/features/settings/application/services/theme_settings_view_data_service.dart';
 import 'package:novel_agent_app/features/settings/presentation/models/settings_view_data.dart';
-import 'package:novel_agent_app/features/settings/presentation/widgets/theme_settings_panel.dart';
 import 'package:novel_agent_app/features/workbench/presentation/contracts/conversation_action_handler.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/opening_agent_group_option_view_data.dart';
 import 'package:novel_agent_app/features/workbench/presentation/models/opening_panel_view_data.dart';
@@ -168,27 +162,9 @@ void main() {
                 ),
                 Expanded(
                   child: BookDeconstructionPreviewPanel(
-                    viewData: const BookDeconstructionViewData(
+                    viewData: BookDeconstructionViewData.initial().copyWith(
                       projectTitle: '空分组测试',
-                      operationKind: 'preview',
-                      importActionLabel: '导入',
-                      canSmartImport: false,
-                      smartImportActionLabel: '智能拆书',
-                      buildPreviewActionLabel: '生成预览',
-                      status: '已生成结构化预览。',
-                      isLoading: false,
-                      activeStepId: '',
-                      steps: const <BookDeconstructionStepViewData>[],
-                      sourceAbsolutePath: '',
-                      sourceTitle: '',
-                      sourceContent: '',
-                      operatorNotes: '',
-                      styleSummary: '',
-                      worldRulesText: '',
-                      characterLinesText: '',
-                      organizationLinesText: '',
-                      previewSections:
-                          const <BookDeconstructionPreviewSectionViewData>[],
+                      status: '已完成拆书。',
                       planGroups: <BookDeconstructionPlanGroupViewData>[
                         BookDeconstructionPlanGroupViewData(
                           id: 'plan_group',
@@ -197,32 +173,6 @@ void main() {
                           items: <BookDeconstructionPlanItemViewData>[],
                         ),
                       ],
-                      selectedItemCount: 0,
-                      totalItemCount: 0,
-                      selectedFollowupOptionId: '',
-                      confirmedPreviewPath: '',
-                      canBuildPreview: false,
-                      canConfirmSelection: false,
-                      canCreateDerivedProject: false,
-                      continuity: BookDeconstructionContinuityViewData(
-                        preferredDirectionLabel: '偏向长任务',
-                        highlightedBuildTierLabel: '默认高亮',
-                        highlightedRouteTitle: '默认路线',
-                        selectedRouteOptionId: '',
-                        selectedRouteTitle: '默认路线',
-                        scopeHintCount: 0,
-                        identityMappingCount: 0,
-                        mechanicHintCount: 0,
-                        summary: '空分组测试',
-                        followupGroups: <BookDeconstructionFollowupGroupViewData>[
-                          BookDeconstructionFollowupGroupViewData(
-                            id: 'empty_group',
-                            title: '空分组',
-                            description: '无可用路线',
-                            options: <BookDeconstructionFollowupOptionViewData>[],
-                          ),
-                        ],
-                      ),
                     ),
                     actionHandler: _FakeBookDeconstructionActionHandler(),
                   ),
@@ -235,8 +185,8 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      expect(find.text('暂无更多说明'), findsOneWidget);
-      expect(find.text('当前暂无可用路线。'), findsOneWidget);
+      expect(find.text('拆书结果（分章）'), findsOneWidget);
+      expect(find.text('结构预览'), findsOneWidget);
       for (final fragment in _forbiddenFragments) {
         expect(find.textContaining(fragment), findsNothing);
       }
@@ -338,10 +288,40 @@ class _FakeBookDeconstructionActionHandler
   void onBookDeconstructionBackRequested() {}
 
   @override
-  Future<void> onBookDeconstructionBuildPreviewRequested() async {}
+  void onBookDeconstructionCancelRequested() {}
 
   @override
-  void onBookDeconstructionCharacterLinesChanged(String value) {}
+  Future<void> onBookDeconstructionImportFileRequested() async {}
+
+  @override
+  void onBookDeconstructionSourceTitleChanged(String value) {}
+
+  @override
+  void onBookDeconstructionSourceContentChanged(String value) {}
+
+  @override
+  void onBookDeconstructionSplitUseModelChanged(bool value) {}
+
+  @override
+  void onBookDeconstructionSplitModelSelected(String optionKey) {}
+
+  @override
+  Future<void> onBookDeconstructionSplitRequested() async {}
+
+  @override
+  void onBookDeconstructionAnalysisUseModelChanged(bool value) {}
+
+  @override
+  void onBookDeconstructionAnalysisModelSelected(String optionKey) {}
+
+  @override
+  Future<void> onBookDeconstructionAnalysisRequested() async {}
+
+  @override
+  void onBookDeconstructionPlanItemSelectionChanged({
+    required String itemId,
+    required bool selected,
+  }) {}
 
   @override
   void onBookDeconstructionClearSelectionRequested() {}
@@ -356,41 +336,11 @@ class _FakeBookDeconstructionActionHandler
   Future<void> onBookDeconstructionCreateDerivedProjectRequested() async {}
 
   @override
-  Future<void> onBookDeconstructionImportFileRequested() async {}
-
-  @override
-  Future<void> onBookDeconstructionSmartImportRequested() async {}
-
-  @override
-  void onBookDeconstructionOperatorNotesChanged(String value) {}
-
-  @override
-  void onBookDeconstructionOrganizationLinesChanged(String value) {}
-
-  @override
-  void onBookDeconstructionPlanItemSelectionChanged({
-    required String itemId,
-    required bool selected,
-  }) {}
-
-  @override
   void onBookDeconstructionRefreshRequested() {}
 
   @override
   void onBookDeconstructionSelectAllRequested() {}
 
   @override
-  void onBookDeconstructionSourceContentChanged(String value) {}
-
-  @override
-  void onBookDeconstructionSourceTitleChanged(String value) {}
-
-  @override
   void onBookDeconstructionStepSelected(String stepId) {}
-
-  @override
-  void onBookDeconstructionStyleSummaryChanged(String value) {}
-
-  @override
-  void onBookDeconstructionWorldRulesChanged(String value) {}
 }

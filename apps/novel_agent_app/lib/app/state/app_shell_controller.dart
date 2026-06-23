@@ -28,6 +28,7 @@ import '../../features/agent_ecosystem/presentation/models/project_skill_loadout
 import '../../features/book_deconstruction/application/controllers/book_deconstruction_controller.dart';
 import '../../features/book_deconstruction/application/services/book_deconstruction_application_plan_materialization_service.dart';
 import '../../features/book_deconstruction/application/services/book_deconstruction_derived_project_creation_service.dart';
+import '../../features/workbench/application/services/import_assistant_model_options_service.dart';
 import '../../features/book_deconstruction/application/services/book_deconstruction_narrative_persistence_service.dart';
 import '../../features/book_deconstruction/application/services/desktop_book_deconstruction_source_picker_service.dart';
 import '../../features/inspiration_workbench/application/controllers/inspiration_workbench_controller.dart';
@@ -489,6 +490,8 @@ class AppShellController extends ChangeNotifier
           _workbenchConversationController.applyConversationState(base),
       readSettings: () => _settings,
       saveSettingsSilently: _saveSettingsSilently,
+      // 中文注释: 后台快照保存前重读磁盘设置作 base，避免冲掉外部并发编辑。
+      reloadSettings: () async => _settingsRepository.load(),
       refreshSettingsViewData: _refreshSettingsViewData,
       refreshAgentEcosystem: _refreshAgentEcosystem,
       refreshActiveDestinationAfterProjectLoad:
@@ -696,13 +699,20 @@ class AppShellController extends ChangeNotifier
         readCurrentProject: () => _currentProject,
         syncWorkbenchResources: _syncWorkbenchResources,
         onBackRequested: showWorkbench,
+        readImportAssistantModelOptions: () =>
+            const ImportAssistantModelOptionsService().build(_settings),
         sourcePickerService: _desktopBookDeconstructionSourcePickerService,
         projectsRootPath: _defaultProjectsRootPath,
         readSettings: () => _settings,
         generateDraftUseCaseFactory: _generateDraftUseCaseFactory,
-        extractKnowledgeHandler: (ProjectDescriptor project) async {
+        extractKnowledgeHandler: (
+          ProjectDescriptor project, {
+          required String providerId,
+          required String modelId,
+        }) async {
           // 中文注释: 提取知识（可选）委托给内置隐藏智能体的 LLM reference_extraction：
           // 读拆书产物（结构化正文）分析知识，必须已配置模型；结果如实回给拆书页。
+          // provider/model 由拆书"分析"步的用户选择透传（与 app 默认解耦）。
           final service =
               _injectedProjectReferenceExtractionExecutionService ??
               ProjectReferenceExtractionExecutionService(
@@ -721,7 +731,11 @@ class AppShellController extends ChangeNotifier
                 ),
                 modelExecutionProfileService: _modelExecutionProfileService,
               );
-          final result = await service.pickAndExecute(project: project);
+          final result = await service.pickAndExecute(
+            project: project,
+            overrideProviderId: providerId,
+            overrideModelId: modelId,
+          );
           return (ok: result.ok, message: result.statusMessage);
         },
         derivedProjectCreationService:
@@ -1451,6 +1465,10 @@ class AppShellController extends ChangeNotifier
     final nextId = sourceId.trim().isNotEmpty
         ? sourceId
         : _nextProviderId(settings.providers, nextTitle);
+    // 中文注释: 保留既有 provider 的 isDefault（编辑保存不应把"默认接口"标记悄悄清成 false，
+    // 否则 defaultProviderId 解析失败时退路被切断）；新接口默认 false，UI 将来传 is_default 也照收。
+    final existingIsDefault = sourceId.trim().isNotEmpty &&
+        settings.providers.any((p) => p.id == sourceId && p.isDefault);
     final nextProvider = ProviderEndpointSettings(
       id: nextId,
       title: nextTitle,
@@ -1459,7 +1477,7 @@ class AppShellController extends ChangeNotifier
       apiKey: _stringValue(payload['api_key']),
       modelId: _stringValue(payload['model_id']),
       description: _stringValue(payload['description']),
-      isDefault: false,
+      isDefault: existingIsDefault || _boolValue(payload['is_default']),
     );
     final providers = <ProviderEndpointSettings>[];
     var replaced = false;
@@ -1689,6 +1707,9 @@ class AppShellController extends ChangeNotifier
       extraSettings: <String, Object?>{
         ...settings.extraSettings,
         'model_settings': modelSettings,
+        // 中文注释: RAG 向量化模型 ID——SettingsBackedEmbeddingProviderResolver 读这个键。
+        // 留空则检索走关键词匹配（已诚实标注）；填写则用默认接口的该模型做 embedding。
+        'embedding_model_id': _stringValue(payload['embedding_model_id']),
       },
     );
     _persistSettings(updated, successMessage: '模型设置已保存。');

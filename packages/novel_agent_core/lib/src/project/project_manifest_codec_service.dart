@@ -69,6 +69,8 @@ class ProjectManifestCodecService {
     String fallbackRuntimeBaselineId = '',
   }) {
     // 中文注释: manifest 解析需要对旧文件和坏数据保持宽容，确保项目至少还能以普通小说打开。
+    // jsonDecode 必须包 try/catch：半写入/被编辑器截断/磁盘满等留下的损坏 JSON 会抛
+    // FormatException，若不兜底会直接炸掉项目打开（默认项目在启动时自动恢复，影响最大）。
     final cleanSource = source.trim();
     if (cleanSource.isEmpty) {
       return create(
@@ -79,8 +81,25 @@ class ProjectManifestCodecService {
         runtimeBaselineId: fallbackRuntimeBaselineId,
       );
     }
-    final parsed = jsonDecode(cleanSource);
-    if (parsed is! Map<Object?, Object?>) {
+    try {
+      final parsed = jsonDecode(cleanSource);
+      if (parsed is! Map<Object?, Object?>) {
+        return create(
+          title: fallbackTitle,
+          projectType: fallbackProjectType,
+          storageStrategy: fallbackStorageStrategy,
+          projectBranchId: '',
+          runtimeBaselineId: fallbackRuntimeBaselineId,
+        );
+      }
+      return fromJson(
+        Map<String, Object?>.from(parsed),
+        fallbackTitle: fallbackTitle,
+        fallbackProjectType: fallbackProjectType,
+        fallbackStorageStrategy: fallbackStorageStrategy,
+        fallbackRuntimeBaselineId: fallbackRuntimeBaselineId,
+      );
+    } catch (_) {
       return create(
         title: fallbackTitle,
         projectType: fallbackProjectType,
@@ -89,13 +108,6 @@ class ProjectManifestCodecService {
         runtimeBaselineId: fallbackRuntimeBaselineId,
       );
     }
-    return fromJson(
-      Map<String, Object?>.from(parsed),
-      fallbackTitle: fallbackTitle,
-      fallbackProjectType: fallbackProjectType,
-      fallbackStorageStrategy: fallbackStorageStrategy,
-      fallbackRuntimeBaselineId: fallbackRuntimeBaselineId,
-    );
   }
 
   ProjectManifest fromJson(

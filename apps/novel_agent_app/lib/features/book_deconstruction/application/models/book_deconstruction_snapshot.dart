@@ -9,11 +9,12 @@ class BookDeconstructionSnapshot {
     required this.sourceAbsolutePath,
     required this.sourceTitle,
     required this.sourceContent,
-    required this.operatorNotes,
-    required this.styleSummary,
-    required this.worldRulesText,
-    required this.characterLinesText,
-    required this.organizationLinesText,
+    required this.splitUseModel,
+    required this.splitModelOptionKey,
+    required this.analysisUseModel,
+    required this.analysisModelOptionKey,
+    required this.analysisCompleted,
+    required this.analysisStatusMessage,
     required this.isLoading,
     required this.operationKind,
     required this.buildResult,
@@ -29,11 +30,12 @@ class BookDeconstructionSnapshot {
       sourceAbsolutePath: '',
       sourceTitle: '',
       sourceContent: '',
-      operatorNotes: '',
-      styleSummary: '',
-      worldRulesText: '',
-      characterLinesText: '',
-      organizationLinesText: '',
+      splitUseModel: false,
+      splitModelOptionKey: '',
+      analysisUseModel: false,
+      analysisModelOptionKey: '',
+      analysisCompleted: false,
+      analysisStatusMessage: '',
       isLoading: false,
       operationKind: BookDeconstructionOperationKind.idle,
       buildResult: null,
@@ -48,11 +50,15 @@ class BookDeconstructionSnapshot {
   final String sourceAbsolutePath;
   final String sourceTitle;
   final String sourceContent;
-  final String operatorNotes;
-  final String styleSummary;
-  final String worldRulesText;
-  final String characterLinesText;
-  final String organizationLinesText;
+  // 中文注释: 拆书步的"使用模型"开关与所选模型键（"providerId::modelId"）；与"分析"步独立。
+  final bool splitUseModel;
+  final String splitModelOptionKey;
+  // 中文注释: 分析步的"使用模型"开关与所选模型键；模型不继承自拆书步。未选模型则不分析。
+  final bool analysisUseModel;
+  final String analysisModelOptionKey;
+  final bool analysisCompleted;
+  final String analysisStatusMessage;
+
   final bool isLoading;
   final String operationKind;
   final BookDeconstructionDraftBuildResult? buildResult;
@@ -66,11 +72,12 @@ class BookDeconstructionSnapshot {
     String? sourceAbsolutePath,
     String? sourceTitle,
     String? sourceContent,
-    String? operatorNotes,
-    String? styleSummary,
-    String? worldRulesText,
-    String? characterLinesText,
-    String? organizationLinesText,
+    bool? splitUseModel,
+    String? splitModelOptionKey,
+    bool? analysisUseModel,
+    String? analysisModelOptionKey,
+    bool? analysisCompleted,
+    String? analysisStatusMessage,
     bool? isLoading,
     String? operationKind,
     Object? buildResult = _buildResultSentinel,
@@ -85,12 +92,14 @@ class BookDeconstructionSnapshot {
       sourceAbsolutePath: sourceAbsolutePath ?? this.sourceAbsolutePath,
       sourceTitle: sourceTitle ?? this.sourceTitle,
       sourceContent: sourceContent ?? this.sourceContent,
-      operatorNotes: operatorNotes ?? this.operatorNotes,
-      styleSummary: styleSummary ?? this.styleSummary,
-      worldRulesText: worldRulesText ?? this.worldRulesText,
-      characterLinesText: characterLinesText ?? this.characterLinesText,
-      organizationLinesText:
-          organizationLinesText ?? this.organizationLinesText,
+      splitUseModel: splitUseModel ?? this.splitUseModel,
+      splitModelOptionKey: splitModelOptionKey ?? this.splitModelOptionKey,
+      analysisUseModel: analysisUseModel ?? this.analysisUseModel,
+      analysisModelOptionKey:
+          analysisModelOptionKey ?? this.analysisModelOptionKey,
+      analysisCompleted: analysisCompleted ?? this.analysisCompleted,
+      analysisStatusMessage:
+          analysisStatusMessage ?? this.analysisStatusMessage,
       isLoading: isLoading ?? this.isLoading,
       operationKind: operationKind == null
           ? this.operationKind

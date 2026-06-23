@@ -5,6 +5,7 @@ import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_app/features/book_deconstruction/application/controllers/book_deconstruction_controller.dart';
 import 'package:novel_agent_app/features/book_deconstruction/application/models/book_deconstruction_snapshot.dart';
 import 'package:novel_agent_app/features/book_deconstruction/application/services/book_deconstruction_draft_builder_service.dart';
+import 'package:novel_agent_app/features/workbench/presentation/models/selector_option_view_data.dart';
 import 'package:novel_agent_app/features/book_deconstruction/application/services/book_deconstruction_narrative_persistence_service.dart';
 import 'package:novel_agent_app/features/book_deconstruction/application/services/book_deconstruction_preview_markdown_service.dart';
 import 'package:novel_agent_app/features/book_deconstruction/application/services/book_deconstruction_view_data_service.dart';
@@ -128,6 +129,7 @@ Future<JsonMap> runRealGuiBookDeconstructionImportProbe({
       readCurrentProject: () => bookProject,
       syncWorkbenchResources: () async {},
       onBackRequested: () {},
+      readImportAssistantModelOptions: () => const <SelectorOptionViewData>[],
       sourcePickerService: _FixedBookSourcePickerService(assets.bookSourcePath),
       draftBuilderService: draftBuilderService,
       previewMarkdownService: previewMarkdownService,
@@ -135,20 +137,8 @@ Future<JsonMap> runRealGuiBookDeconstructionImportProbe({
     );
     await bookController.initialize();
     await bookController.onBookDeconstructionImportFileRequested();
-    bookController.onBookDeconstructionOperatorNotesChanged(
-      '保留原文边界，确认后继续验证 continuation / fanfic 分流。',
-    );
-    bookController.onBookDeconstructionStyleSummaryChanged(
-      '保持校园感与来源边界，不把预演混成正文。',
-    );
-    bookController.onBookDeconstructionWorldRulesChanged('拆书来源层、分析层和正文层必须分开。');
-    bookController.onBookDeconstructionCharacterLinesChanged(
-      '哈利、罗恩、赫敏保持核心三人组。',
-    );
-    bookController.onBookDeconstructionOrganizationLinesChanged(
-      '霍格沃茨与原作组织关系保留来源身份。',
-    );
-    await bookController.onBookDeconstructionBuildPreviewRequested();
+    // 中文注释: 拆书=纯净分章；旧的结构补充字段已下线（资产由可选"分析"步产出）。
+    await bookController.onBookDeconstructionSplitRequested();
     final bookBuildResult = await draftBuilderService.build(
       sourceTitle: bookController.viewData.sourceTitle,
       sourceContent: bookController.viewData.sourceContent,
@@ -166,11 +156,6 @@ Future<JsonMap> runRealGuiBookDeconstructionImportProbe({
         sourceAbsolutePath: bookController.viewData.sourceAbsolutePath,
         sourceTitle: bookController.viewData.sourceTitle,
         sourceContent: bookController.viewData.sourceContent,
-        operatorNotes: '保留原文边界，确认后继续验证 continuation / fanfic 分流。',
-        styleSummary: '保持校园感与来源边界，不把预演混成正文。',
-        worldRulesText: '拆书来源层、分析层和正文层必须分开。',
-        characterLinesText: '哈利、罗恩、赫敏保持核心三人组。',
-        organizationLinesText: '霍格沃茨与原作组织关系保留来源身份。',
         buildResult: bookBuildResult,
         selectedItemIds: bookBuildResult.applicationPlan.items
             .map((item) => item.id)

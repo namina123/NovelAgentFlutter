@@ -4,6 +4,7 @@ import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../../../../app/theme/theme_preference_resolver.dart';
+import '../../../../shared/services/user_facing_error_humanizer.dart';
 import '../../presentation/contracts/conversation_action_handler.dart';
 import '../../presentation/models/conversation_agent_selector_view_data.dart';
 import '../../presentation/models/conversation_context_projection_view_data.dart';
@@ -503,6 +504,10 @@ class WorkbenchConversationController implements ConversationActionHandler {
       runtimeState.copyWith(isOpeningProjectionRefreshing: true),
     );
     try {
+      // 中文注释: 开局投影决定给用户看哪些主动作（如 continue_writing），必须以磁盘
+      // runtime_profile.json 为准——重读刷新缓存后再用，避免外部改动文件后投影仍按陈旧
+      // baseline 演算、UI 动作与实际运行漂移（与 P0-5 创建长任务重读同一思路）。
+      await _workspaceController.reloadCurrentRuntimeProfile();
       final modeGuidanceState = await _resolveOpeningModeGuidanceState(
         project,
         currentState: runtimeState.activeModeGuidanceState,
@@ -1957,14 +1962,16 @@ class WorkbenchConversationController implements ConversationActionHandler {
     required JsonMap contextStrategySettings,
     required JsonMap runtimeProfile,
   }) {
+    // 中文注释: 失败提示走人话化，不把底层异常（含 Dart 类型名/堆栈相邻文本）直接抛给用户。
+    final humanMessage = UserFacingErrorHumanizer.humanize(error, action: '生成');
     final failedState = _conversationSessionStateService
         .stateWithAssistantFailure(
           userPromptState,
-          '生成失败：$error',
+          humanMessage,
           retryRequest: ConversationRetryRequest(
             prompt: cleanText,
             visibleText: visibleText,
-            errorMessage: '生成失败：$error',
+            errorMessage: humanMessage,
           ),
           strategySettings: contextStrategySettings,
           modelProfile: runtimeProfile,
@@ -1973,7 +1980,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
     _mutateWorkbench(
       (current) => applyConversationState(
         current.copyWith(
-          generationStatus: '生成失败：$error',
+          generationStatus: humanMessage,
           toolCoreStatus: '',
           isGenerating: false,
         ),

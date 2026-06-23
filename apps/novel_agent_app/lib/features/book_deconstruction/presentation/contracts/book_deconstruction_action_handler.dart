@@ -5,28 +5,31 @@ abstract class BookDeconstructionActionHandler {
 
   void onBookDeconstructionStepSelected(String stepId);
 
-  Future<void> onBookDeconstructionImportFileRequested();
+  void onBookDeconstructionCancelRequested();
 
-  Future<void> onBookDeconstructionSmartImportRequested();
+  // 步骤①：导入（单一入口：文件选择；移动端走粘贴框兜底）。
+  Future<void> onBookDeconstructionImportFileRequested();
 
   void onBookDeconstructionSourceTitleChanged(String value);
 
   void onBookDeconstructionSourceContentChanged(String value);
 
-  void onBookDeconstructionOperatorNotesChanged(String value);
+  // 步骤②：拆书（纯净分章）。可选勾"使用模型"并选模型（未选模型不能勾）；
+  // 无论是否用模型，都只产出纯净分章正文。
+  void onBookDeconstructionSplitUseModelChanged(bool value);
 
-  void onBookDeconstructionStyleSummaryChanged(String value);
+  void onBookDeconstructionSplitModelSelected(String optionKey);
 
-  void onBookDeconstructionWorldRulesChanged(String value);
+  Future<void> onBookDeconstructionSplitRequested();
 
-  void onBookDeconstructionCharacterLinesChanged(String value);
+  // 步骤③：分析（可选·需选模型；模型与拆书独立不继承；不选模型则不分析）。
+  void onBookDeconstructionAnalysisUseModelChanged(bool value);
 
-  void onBookDeconstructionOrganizationLinesChanged(String value);
+  void onBookDeconstructionAnalysisModelSelected(String optionKey);
 
-  Future<void> onBookDeconstructionBuildPreviewRequested();
+  Future<void> onBookDeconstructionAnalysisRequested();
 
-  Future<void> onBookDeconstructionExtractKnowledgeRequested();
-
+  // 步骤④：确认。
   void onBookDeconstructionPlanItemSelectionChanged({
     required String itemId,
     required bool selected,

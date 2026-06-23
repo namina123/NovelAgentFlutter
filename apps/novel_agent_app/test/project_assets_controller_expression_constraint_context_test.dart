@@ -545,6 +545,8 @@ class _FakeSuccessfulReferenceExtractionService
   Future<ProjectReferenceExtractionExecutionResult> pickAndExecute({
     required ProjectDescriptor project,
     String strategyProfileId = '',
+    String overrideProviderId = '',
+    String overrideModelId = '',
   }) async {
     lastStrategyProfileId = strategyProfileId;
     return const ProjectReferenceExtractionExecutionResult(

@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../application/models/book_deconstruction_operation_kind.dart' show BookDeconstructionOperationKind;
 import '../../presentation/contracts/book_deconstruction_action_handler.dart';
 import '../models/book_deconstruction_view_data.dart';
 
-const String _importingOperationKind = 'importing_source';
-const String _smartImportingOperationKind = 'smart_importing_source';
-const String _buildingPreviewOperationKind = 'building_preview';
-
+/// 步骤①：导入源文稿（单一入口）——一个文件选择按钮 + 来源标题 + 粘贴框。
+/// 模型辅助拆书的能力在步骤②（拆书）里以"使用模型"勾选体现，这里不再有独立的"智能拆书"按钮。
 class BookDeconstructionImportPanel extends StatefulWidget {
   const BookDeconstructionImportPanel({
     super.key,
@@ -55,101 +54,32 @@ class _BookDeconstructionImportPanelState
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    final isImporting =
-        widget.viewData.operationKind == _importingOperationKind;
-    final isSmartImporting =
-        widget.viewData.operationKind == _smartImportingOperationKind;
-    final isBuildingPreview =
-        widget.viewData.operationKind == _buildingPreviewOperationKind;
-    return ListView(
-      padding: const EdgeInsets.all(16),
+    final isImporting = widget.viewData.operationKind ==
+        BookDeconstructionOperationKind.importingSource;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('导入拆书源文稿', style: textTheme.titleSmall),
-                  const SizedBox(height: 4),
-                  Text(
-                    '导入书籍原文（文本 / Markdown / EPUB，或直接粘贴），点"拆书"分章、去噪、清洗。'
-                    '拆书只做这件事；知识提取是下一步，可选可跳过。',
-                    style: textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: widget.viewData.isLoading
-                      ? null
-                      : widget
-                            .actionHandler
-                            .onBookDeconstructionImportFileRequested,
-                  icon: isImporting
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.upload_file_outlined),
-                  label: Text(widget.viewData.importActionLabel),
-                ),
-                const SizedBox(height: 8),
-                Tooltip(
-                  message: widget.viewData.canSmartImport
-                      ? '用已配置的模型做正文识别、分章与去噪'
-                      : '需要先在设置里配置模型提供商',
-                  child: OutlinedButton.icon(
-                    onPressed: widget.viewData.canSmartImport
-                        ? widget
-                              .actionHandler
-                              .onBookDeconstructionSmartImportRequested
-                        : null,
-                    icon: isSmartImporting
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.auto_awesome_outlined),
-                    label: Text(widget.viewData.smartImportActionLabel),
-                  ),
-                ),
-              ],
-            ),
-          ],
+        OutlinedButton.icon(
+          onPressed: widget.viewData.isLoading
+              ? null
+              : widget.actionHandler.onBookDeconstructionImportFileRequested,
+          icon: isImporting
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.upload_file_outlined),
+          label: Text(widget.viewData.importActionLabel),
         ),
         if (widget.viewData.sourceAbsolutePath.trim().isNotEmpty) ...[
-          const SizedBox(height: 12),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('已导入来源', style: textTheme.labelMedium),
-                  const SizedBox(height: 4),
-                  Text(
-                    widget.viewData.sourceAbsolutePath,
-                    style: textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ),
+          const SizedBox(height: 8),
+          Text(
+            '已导入来源：${widget.viewData.sourceAbsolutePath}',
+            style: textTheme.bodySmall,
           ),
         ],
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         TextField(
           controller: _sourceTitleController,
           enabled: !widget.viewData.isLoading,
@@ -164,29 +94,15 @@ class _BookDeconstructionImportPanelState
         TextField(
           controller: _sourceContentController,
           enabled: !widget.viewData.isLoading,
-          maxLines: 14,
-          minLines: 14,
+          maxLines: 12,
+          minLines: 6,
           decoration: const InputDecoration(
             labelText: '源文稿',
-            hintText: '粘贴原文，或先从桌面端选择文本 / Markdown / EPUB 导入。',
+            hintText: '粘贴原文，或点上方按钮选择文本 / Markdown / EPUB 文件。',
             alignLabelWithHint: true,
           ),
           onChanged:
               widget.actionHandler.onBookDeconstructionSourceContentChanged,
-        ),
-        const SizedBox(height: 16),
-        FilledButton.icon(
-          onPressed: widget.viewData.canBuildPreview
-              ? widget.actionHandler.onBookDeconstructionBuildPreviewRequested
-              : null,
-          icon: isBuildingPreview
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.auto_fix_high_outlined),
-          label: Text(widget.viewData.buildPreviewActionLabel),
         ),
       ],
     );

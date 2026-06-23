@@ -8,6 +8,7 @@ class ProjectOpenViewData {
     required this.entries,
     required this.selectedEntryId,
     required this.status,
+    this.hasLoaded = true,
   });
 
   final String title;
@@ -19,6 +20,9 @@ class ProjectOpenViewData {
   final String selectedEntryId;
   final String status;
 
+  /// 是否已完成过至少一次刷新。区分"正在加载（还没数据）"与"加载完了确实没有作品"。
+  final bool hasLoaded;
+
   factory ProjectOpenViewData.initial() {
     return const ProjectOpenViewData(
       title: '作品库',
@@ -29,6 +33,7 @@ class ProjectOpenViewData {
       entries: <ProjectOpenEntryViewData>[],
       selectedEntryId: '',
       status: '',
+      hasLoaded: false,
     );
   }
 
@@ -41,6 +46,7 @@ class ProjectOpenViewData {
     List<ProjectOpenEntryViewData>? entries,
     String? selectedEntryId,
     String? status,
+    bool? hasLoaded,
   }) {
     return ProjectOpenViewData(
       title: title ?? this.title,
@@ -51,6 +57,7 @@ class ProjectOpenViewData {
       entries: entries ?? this.entries,
       selectedEntryId: selectedEntryId ?? this.selectedEntryId,
       status: status ?? this.status,
+      hasLoaded: hasLoaded ?? this.hasLoaded,
     );
   }
 }

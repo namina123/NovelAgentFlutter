@@ -1,5 +1,6 @@
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../../../../shared/services/user_facing_error_humanizer.dart';
 import '../../presentation/models/task_center_contract_action_view_data.dart';
 import 'task_center_action_execution_outcome_service.dart';
 
@@ -210,6 +211,12 @@ class TaskCenterCommandOrchestrationService {
       await environment.adoptTaskCenterRunSelectionsFromResult(result);
       await environment.refreshLongTaskStationAfterTaskCenterMutation();
       await environment.refreshTaskCenter(status: outcome.statusMessage);
+    } catch (error) {
+      // 中文注释: operation 抛错（坏 runtime profile / 文件权限 / malformed 选项等）不能任由它
+      // 逃出 void async 到 zone——在状态栏给用户一句人话，并把 in-flight 标志复位（finally 已做）。
+      await environment.refreshTaskCenter(
+        status: UserFacingErrorHumanizer.humanize(error, action: '任务操作'),
+      );
     } finally {
       environment.setTaskCenterCommandInFlight(false);
     }
@@ -320,6 +327,12 @@ class TaskCenterCommandOrchestrationService {
       }
       await environment.refreshTaskCenter(
         status: _resultMessage(result, success: successMessage),
+      );
+    } catch (error) {
+      // 中文注释: operation 抛错不能逃出 void async 到 zone（坏 runtime profile / 文件权限 / malformed 选项）。
+      // 在状态栏给一句人话，in-flight 标志由 finally 复位。
+      await environment.refreshTaskCenter(
+        status: UserFacingErrorHumanizer.humanize(error, action: '任务操作'),
       );
     } finally {
       environment.setTaskCenterCommandInFlight(false);

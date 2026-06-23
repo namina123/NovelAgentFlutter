@@ -6,6 +6,7 @@ import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../../../../app/diagnostics/project_hydration_trace_service.dart';
+import '../../../../shared/services/user_facing_error_humanizer.dart';
 import '../../../book_deconstruction/application/services/book_deconstruction_narrative_persistence_service.dart';
 import '../../../project_creation/application/controllers/project_creation_controller.dart';
 import '../../presentation/contracts/document_workspace_action_handler.dart';
@@ -28,6 +29,7 @@ import '../models/project_import_action_policy.dart';
 import '../models/project_import_request.dart';
 import '../models/workbench_project_runtime_state.dart';
 import '../services/desktop_project_import_file_picker_service.dart';
+import '../services/import_assistant_model_options_service.dart';
 import '../services/project_import_execution_service.dart';
 import '../services/project_import_workspace_command_view_data_service.dart';
 import '../services/project_long_task_summary_view_data_service.dart';
@@ -85,6 +87,7 @@ class WorkbenchWorkspaceController
     required AppSettings? Function() readSettings,
     required Future<void> Function(AppSettings nextSettings)
     saveSettingsSilently,
+    Future<AppSettings?> Function()? reloadSettings,
     required void Function() refreshSettingsViewData,
     required Future<void> Function() refreshAgentEcosystem,
     required Future<void> Function() refreshActiveDestinationAfterProjectLoad,
@@ -145,6 +148,7 @@ class WorkbenchWorkspaceController
        _applyConversationState = applyConversationState,
        _readSettings = readSettings,
        _saveSettingsSilently = saveSettingsSilently,
+       _reloadSettings = reloadSettings,
        _refreshSettingsViewData = refreshSettingsViewData,
        _refreshAgentEcosystem = refreshAgentEcosystem,
        _refreshActiveDestinationAfterProjectLoad =
@@ -232,6 +236,7 @@ class WorkbenchWorkspaceController
   _applyConversationState;
   final AppSettings? Function() _readSettings;
   final Future<void> Function(AppSettings nextSettings) _saveSettingsSilently;
+  final Future<AppSettings?> Function()? _reloadSettings;
   final void Function() _refreshSettingsViewData;
   final Future<void> Function() _refreshAgentEcosystem;
   final Future<void> Function() _refreshActiveDestinationAfterProjectLoad;
@@ -509,7 +514,7 @@ class WorkbenchWorkspaceController
         try {
           await action();
         } catch (error) {
-          loadWarnings.add('$stageLabel失败：$error');
+          loadWarnings.add(UserFacingErrorHumanizer.humanize(error, action: stageLabel));
           _traceProjectLoad(rootPath, '$stageLabel:error:$error');
         } finally {
           stageWatch.stop();
@@ -794,7 +799,7 @@ class WorkbenchWorkspaceController
     try {
       return _applyConversationState(base);
     } catch (error) {
-      warnings.add('会话面板初始化失败：$error');
+      warnings.add(UserFacingErrorHumanizer.humanize(error, action: '会话面板初始化'));
       return _buildConversationFallbackWorkbench(base);
     }
   }
@@ -1500,7 +1505,7 @@ class WorkbenchWorkspaceController
       );
       _scheduleWorkbenchSnapshotPersistence();
     } catch (error) {
-      _announce('保存失败：$error');
+      _announce(UserFacingErrorHumanizer.humanize(error, action: '保存'));
     }
   }
 
@@ -1528,7 +1533,7 @@ class WorkbenchWorkspaceController
       await loadProject(project.rootPath);
       _announce('已更新项目信息。');
     } catch (error) {
-      _announce('保存项目信息失败：$error');
+      _announce(UserFacingErrorHumanizer.humanize(error, action: '保存项目信息'));
     }
   }
 
@@ -1586,7 +1591,7 @@ class WorkbenchWorkspaceController
           project: project,
           plan: plan,
           runtimeBaselineId: runtimeBaselineId,
-          status: '项目类型转换失败：$error',
+          status: UserFacingErrorHumanizer.humanize(error, action: '项目类型转换'),
           confirmLabel: '重新检查',
         ),
       );
@@ -1647,7 +1652,7 @@ class WorkbenchWorkspaceController
         ),
       );
     } catch (error) {
-      _announce('创建文件失败：$error');
+      _announce(UserFacingErrorHumanizer.humanize(error, action: '创建文件'));
     }
   }
 
@@ -1690,7 +1695,7 @@ class WorkbenchWorkspaceController
         ),
       );
     } catch (error) {
-      _announce('创建目录失败：$error');
+      _announce(UserFacingErrorHumanizer.humanize(error, action: '创建目录'));
     }
   }
 
@@ -1768,7 +1773,7 @@ class WorkbenchWorkspaceController
       );
       _announce(result.summary);
     } catch (error) {
-      final message = '导入文件失败：$error';
+      final message = UserFacingErrorHumanizer.humanize(error, action: '导入文件');
       _showImportWorkspaceCommand(request, status: message);
       _announce(message);
     }
@@ -2008,6 +2013,20 @@ class WorkbenchWorkspaceController
     );
   }
 
+  /// 后台保存前尽量取最新磁盘设置作为 base，避免用陈旧内存快照整体覆写、把外部并发编辑
+  /// （providers/theme/network 等）冲掉。没有 reload 注入或读取失败时退回内存快照（保持原行为）。
+  Future<AppSettings?> _freshSettingsForBackgroundSave() async {
+    final reloader = _reloadSettings;
+    if (reloader == null) {
+      return _readSettings();
+    }
+    try {
+      return (await reloader()) ?? _readSettings();
+    } catch (_) {
+      return _readSettings();
+    }
+  }
+
   Future<void> _persistLastProjectPath(String rootPath) async {
     // 中文注释: 最近项目路径属于用户级偏好，但由工作区层在成功切换项目后统一落盘。
     final settings = _readSettings();
@@ -2019,9 +2038,11 @@ class WorkbenchWorkspaceController
       await _persistWorkbenchSnapshot();
       return;
     }
-    await _saveSettingsSilently(
-      settings.copyWith(defaultProjectPath: rootPath),
-    );
+    final pathBase = await _freshSettingsForBackgroundSave();
+    if (pathBase == null) {
+      return;
+    }
+    await _saveSettingsSilently(pathBase.copyWith(defaultProjectPath: rootPath));
     await _persistWorkbenchSnapshot();
   }
 
@@ -2096,10 +2117,16 @@ class WorkbenchWorkspaceController
           return;
         }
       }
+      // 中文注释: 用最新磁盘设置作 base 再覆盖 workbench_state，避免陈旧内存快照整体覆写、
+      // 把外部对 providers/theme/network 等的并发编辑冲掉（后台高频保存是主要冲刷来源）。
+      final snapshotBase = await _freshSettingsForBackgroundSave();
+      if (snapshotBase == null) {
+        return;
+      }
       await _saveSettingsSilently(
-        settings.copyWith(
+        snapshotBase.copyWith(
           extraSettings: <String, Object?>{
-            ...settings.extraSettings,
+            ...snapshotBase.extraSettings,
             'workbench_state': payload,
           },
         ),
@@ -2120,34 +2147,7 @@ class WorkbenchWorkspaceController
   }
 
   List<SelectorOptionViewData> _importAssistantModelOptions() {
-    final settings = _readSettings();
-    if (settings == null) {
-      return const <SelectorOptionViewData>[];
-    }
-    final options = <SelectorOptionViewData>[];
-    final seen = <String>{};
-    for (final provider in settings.providers) {
-      final providerId = provider.id.trim();
-      final modelId = provider.modelId.trim();
-      if (providerId.isEmpty || modelId.isEmpty) {
-        continue;
-      }
-      final key = '$providerId::$modelId';
-      if (!seen.add(key)) {
-        continue;
-      }
-      final providerLabel = provider.title.trim().isEmpty
-          ? providerId
-          : provider.title.trim();
-      options.add(
-        SelectorOptionViewData(
-          id: key,
-          label: '$providerLabel · $modelId',
-          note: providerId,
-        ),
-      );
-    }
-    return List<SelectorOptionViewData>.unmodifiable(options);
+    return const ImportAssistantModelOptionsService().build(_readSettings());
   }
 
   void _toggleResourceDirectory(String relativePath) {
@@ -2418,7 +2418,12 @@ class WorkbenchWorkspaceController
     } catch (error) {
       _mutateWorkbench(
         (current) => applyWorkbenchState(
-          current.copyWith(generationStatus: '资料请求更新失败：$error'),
+          current.copyWith(
+            generationStatus: UserFacingErrorHumanizer.humanize(
+              error,
+              action: '资料请求更新',
+            ),
+          ),
         ),
       );
     }

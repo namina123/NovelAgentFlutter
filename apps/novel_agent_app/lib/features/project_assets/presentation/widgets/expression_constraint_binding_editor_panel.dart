@@ -45,6 +45,18 @@ class _ExpressionConstraintBindingEditorPanelState
     // 中文注释: 当用户切换规则方案或外层刷新保存结果时，编辑器需要整体替换成本轮草稿。
     super.didUpdateWidget(oldWidget);
     if (_viewSignature(oldWidget.viewData) != _viewSignature(widget.viewData)) {
+      final oldProfileId = oldWidget.viewData.profileId;
+      // 切换规则方案前，若当前 binding 有未保存修改，先落盘旧方案，避免被 _apply 静默覆盖丢失。
+      if (oldProfileId != widget.viewData.profileId &&
+          oldProfileId.trim().isNotEmpty &&
+          _isDirtyAgainst(oldWidget.viewData)) {
+        final pending = _buildSaveRequest(profileId: oldProfileId);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            widget.onSaveRequested(pending);
+          }
+        });
+      }
       _apply(widget.viewData);
     }
   }
@@ -521,20 +533,43 @@ class _ExpressionConstraintBindingEditorPanelState
   void _submit() {
     // 中文注释: 提交时只把编辑器关心的 binding 字段回传出去，保存与写盘继续留给控制器和工作区服务。
     widget.onSaveRequested(
-      ExpressionConstraintBindingEditorRequestViewData(
-        profileId: widget.viewData.profileId,
-        selectedPolicyMode: _selectedPolicyMode,
-        enabled: _enabled,
-        defaultForProject: _defaultForProject,
-        selectedAgentIds: _selectedAgentIds.toList(growable: false),
-        selectedModeIds: _selectedModeIds.toList(growable: false),
-        selectedStageIds: _selectedStageIds.toList(growable: false),
-        targetAgentIdsText: _selectedAgentIds.join(', '),
-        targetModeIdsText: _selectedModeIds.join(', '),
-        targetStageIdsText: _selectedStageIds.join(', '),
-        weightText: _weightController.text,
-      ),
+      _buildSaveRequest(profileId: widget.viewData.profileId),
     );
+  }
+
+  /// 当前 binding 是否有别于 [viewData]（即存在未保存的修改）。
+  bool _isDirtyAgainst(ExpressionConstraintBindingEditorViewData viewData) {
+    if (_enabled != viewData.enabled) return true;
+    if (_defaultForProject != viewData.defaultForProject) return true;
+    if (_selectedPolicyMode != viewData.selectedPolicyMode) return true;
+    if (!_setEquals(_selectedAgentIds, viewData.selectedAgentIds)) return true;
+    if (!_setEquals(_selectedModeIds, viewData.selectedModeIds)) return true;
+    if (!_setEquals(_selectedStageIds, viewData.selectedStageIds)) return true;
+    if (_weightController.text != viewData.weightText) return true;
+    return false;
+  }
+
+  ExpressionConstraintBindingEditorRequestViewData _buildSaveRequest({
+    required String profileId,
+  }) {
+    return ExpressionConstraintBindingEditorRequestViewData(
+      profileId: profileId,
+      selectedPolicyMode: _selectedPolicyMode,
+      enabled: _enabled,
+      defaultForProject: _defaultForProject,
+      selectedAgentIds: _selectedAgentIds.toList(growable: false),
+      selectedModeIds: _selectedModeIds.toList(growable: false),
+      selectedStageIds: _selectedStageIds.toList(growable: false),
+      targetAgentIdsText: _selectedAgentIds.join(', '),
+      targetModeIdsText: _selectedModeIds.join(', '),
+      targetStageIdsText: _selectedStageIds.join(', '),
+      weightText: _weightController.text,
+    );
+  }
+
+  bool _setEquals(Set<String> a, Iterable<String> b) {
+    final other = b.toSet();
+    return a.length == other.length && a.containsAll(other);
   }
 
   List<ExpressionConstraintSelectableOptionViewData> get _visibleStageOptions {

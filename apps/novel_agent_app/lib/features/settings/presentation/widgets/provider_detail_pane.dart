@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../../../../../shared/widgets/action_button.dart';
+import '../../../../../shared/widgets/confirmation_dialog.dart';
 import '../../../../../shared/widgets/section_heading.dart';
 import '../models/model_editor_view_data.dart';
 import '../models/settings_view_data.dart';
@@ -276,9 +277,27 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
                 icon: Icons.delete_outline_rounded,
                 tone: ActionButtonTone.danger,
                 compact: true,
-                onPressed: provider == null
-                    ? () {}
-                    : () => widget.onProviderDeleted(provider.id),
+                disabled: provider == null,
+                onPressed: () async {
+                  if (provider == null) {
+                    return;
+                  }
+                  // 中文注释: 删除接口不可恢复，且若删的是当前默认接口会直接断掉生成，
+                  // 二次确认避免误删。
+                  final confirmed = await showConfirmationDialog(
+                    context,
+                    title: '删除该接口？',
+                    message: '删除后不可恢复。若这是当前默认接口，生成将无法继续，'
+                        '需要重新配置其他接口。',
+                    confirmLabel: '删除',
+                  );
+                  if (!mounted) {
+                    return;
+                  }
+                  if (confirmed) {
+                    widget.onProviderDeleted(provider.id);
+                  }
+                },
               ),
             ),
           ],

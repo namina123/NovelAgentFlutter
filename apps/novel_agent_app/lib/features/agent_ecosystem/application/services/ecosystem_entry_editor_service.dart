@@ -277,7 +277,7 @@ class EcosystemEntryEditorService {
         : sourceContent.trim().isEmpty
         ? _skillGroupNormalizerService.normalizeSkillGroup(entry)
         : _skillGroupNormalizerService.normalizeSkillGroup(
-            ValueReaders.mapValue(jsonDecode(sourceContent)),
+            _decodedSourceMap(sourceContent),
           );
     return EcosystemEditorViewData(
       kind: 'skill-groups',
@@ -323,7 +323,7 @@ class EcosystemEntryEditorService {
         : sourceContent.trim().isEmpty
         ? _agentGroupNormalizerService.normalizeAgentGroup(entry)
         : _agentGroupNormalizerService.normalizeAgentGroup(
-            ValueReaders.mapValue(jsonDecode(sourceContent)),
+            _decodedSourceMap(sourceContent),
           );
     final agentIds = _readAgentIdsFromGroup(parsed);
     return EcosystemEditorViewData(
@@ -643,6 +643,16 @@ class EcosystemEntryEditorService {
       }
       final proposal = EcosystemAssetProposal.fromJson(decoded);
       return proposal.assetPayload;
+    } catch (_) {
+      return const <String, Object?>{};
+    }
+  }
+
+  JsonMap _decodedSourceMap(String sourceContent) {
+    // 中文注释: 技能组/智能体组源文件可能被先前 buggy 保存、手工编辑或 LLM 辅助导入弄成非 JSON。
+    // 解析失败兜底空表，交给 normalizer 走"空输入"分支，避免打开编辑器直接抛 FormatException 红屏。
+    try {
+      return ValueReaders.mapValue(jsonDecode(sourceContent));
     } catch (_) {
       return const <String, Object?>{};
     }

@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../../../../shared/services/user_facing_error_humanizer.dart';
+
 /// 一次 provider 联网探测的结果。
 class ProviderConnectionProbeResult {
   const ProviderConnectionProbeResult({
@@ -63,6 +65,9 @@ class ProviderConnectionProbeService {
   }
 
   /// 把底层异常映射成用户能理解的人话原因。
+  ///
+  /// 连接场景有专属措辞（超时/socket/401/403/404），其余走通用 [UserFacingErrorHumanizer]，
+  /// 不再把原始 `error.toString()` 抛给用户。
   static String describeConnectionError(Object error) {
     if (error is TimeoutException) {
       return '连接超时（未在时限内响应），请检查网络或 baseUrl 是否可达。';
@@ -81,6 +86,6 @@ class ProviderConnectionProbeService {
     if (lower.contains('404') || lower.contains('not found')) {
       return '接口路径不存在（404），请检查 baseUrl 与协议路由。';
     }
-    return '联网验证失败：$text';
+    return UserFacingErrorHumanizer.humanize(error, action: '联网验证');
   }
 }
