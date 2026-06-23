@@ -4,6 +4,7 @@ import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../../../../shared/services/desktop_text_file_picker_service.dart';
+import '../../../../shared/services/user_facing_error_humanizer.dart';
 import '../models/project_rag_preprocess_result.dart';
 import '../models/project_rag_extraction_execution_result.dart';
 import '../models/project_rag_extraction_mode_id.dart';
@@ -177,7 +178,8 @@ class ProjectRagExtractionExecutionService {
         ok: true,
         didMutateProject: true,
         statusMessage:
-            '语料已从整理后的纯文本构建：${builtCorpus.title}，${builtCorpus.chapterCount} 章，${builtCorpus.chunkCount} 个分片。',
+            '语料已从整理后的纯文本构建：${builtCorpus.title}，${builtCorpus.chapterCount} 章，${builtCorpus.chunkCount} 个分片。'
+            '${_embeddingDegradationNote(builtCorpus.metadata)}',
         corpusPackage: builtCorpus,
         mountSummary: _toProjectMountSummary(mountSummary),
         analysisSummary: _analysisSummaryDecoder.decode(builtCorpus),
@@ -187,9 +189,27 @@ class ProjectRagExtractionExecutionService {
       return ProjectRagExtractionExecutionResult(
         ok: false,
         didMutateProject: false,
-        statusMessage: '语料构建失败：$error',
+        statusMessage: UserFacingErrorHumanizer.humanize(error, action: '语料构建'),
         normalizationNote: preprocessed.note,
       );
+    }
+  }
+
+  /// 把入库时记录的 embedding 降级原因翻译成给用户的诚实提示（拼接在成功消息后）。
+  /// 空 = 向量正常生成，不附加任何说明。
+  String _embeddingDegradationNote(JsonMap metadata) {
+    final reason = ValueReaders.stringValue(
+      metadata['embedding_degraded_reason'],
+    );
+    switch (reason) {
+      case 'embedding_failed':
+        return '（向量化失败，已退回关键词检索；如已配置 embedding 模型，请检查其 Key 与可用性后重新入库。）';
+      case 'embedding_empty':
+        return '（embedding 模型未返回有效向量，已退回关键词检索。）';
+      case 'no_provider':
+        return '（未配置 embedding 模型，本次仅写入元数据，检索将走关键词匹配。）';
+      default:
+        return '';
     }
   }
 

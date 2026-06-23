@@ -9,6 +9,7 @@ class ModelEditorViewData {
     required this.protocolMode,
     required this.baseUrl,
     required this.modelId,
+    this.embeddingModelId = '',
     required this.supportsReasoning,
     required this.reasoningCanToggle,
     required this.reasoningDefaultEnabled,
@@ -48,6 +49,8 @@ class ModelEditorViewData {
   final String protocolMode;
   final String baseUrl;
   final String modelId;
+  /// RAG 向量化使用的模型 ID（写 extraSettings['embedding_model_id']，留空则检索走关键词匹配）。
+  final String embeddingModelId;
   final bool supportsReasoning;
   final bool reasoningCanToggle;
   final bool reasoningDefaultEnabled;

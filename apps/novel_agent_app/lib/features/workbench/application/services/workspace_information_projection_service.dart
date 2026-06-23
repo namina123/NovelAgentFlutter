@@ -466,8 +466,14 @@ class WorkspaceInformationProjectionService {
     if ((raw ?? '').trim().isEmpty) {
       return const <String, Object?>{};
     }
-    final decoded = jsonDecode(raw!);
-    return _map(decoded);
+    // 中文注释: 这里解的是 activation_report.json 等"智能体/LLM 写出"的文件，
+    // 内容天然不可靠（截断、非 JSON 都可能）。解析失败兜底空表，避免整个资料/信息刷新被一个坏文件打断。
+    try {
+      final decoded = jsonDecode(raw!);
+      return _map(decoded);
+    } catch (_) {
+      return const <String, Object?>{};
+    }
   }
 
   JsonMap _map(Object? value) {

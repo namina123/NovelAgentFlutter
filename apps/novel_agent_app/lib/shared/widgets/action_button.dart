@@ -14,6 +14,7 @@ class ActionButton extends StatelessWidget {
     this.compact = false,
     this.labelMaxLines = 1,
     this.emphasized = false,
+    this.disabled = false,
   });
 
   final String label;
@@ -24,6 +25,7 @@ class ActionButton extends StatelessWidget {
   final bool compact;
   final int labelMaxLines;
   final bool emphasized;
+  final bool disabled;
 
   @override
   Widget build(BuildContext context) {
@@ -32,8 +34,10 @@ class ActionButton extends StatelessWidget {
     final foreground = _foregroundColor(colors);
     final border = _borderColor(colors);
     final background = _backgroundColor(colors);
+    // 中文注释: disabled 时把 onPressed 置空，走 Material 标准禁用态（灰、无 hover/splash），
+    // 不再用 IgnorePointer+Opacity 假装禁用——那种写法看着可点但点了没反应。
     final button = TextButton(
-      onPressed: onPressed,
+      onPressed: disabled ? null : onPressed,
       style: TextButton.styleFrom(
         minimumSize: Size(
           0,

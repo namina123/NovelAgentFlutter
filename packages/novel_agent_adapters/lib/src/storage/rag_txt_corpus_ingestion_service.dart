@@ -29,11 +29,18 @@ class RagTxtEmbeddingResult {
     required this.chunks,
     required this.dimension,
     required this.backendKind,
+    this.degradedReason = '',
   });
 
   final List<RagChunk> chunks;
   final int dimension;
   final String backendKind;
+
+  /// 为空表示成功生成了向量；否则给出降级原因，供调用方诚实提示，避免
+  /// "embedding 失败/未配置却照常报成功"（与检索侧 lexical_fallback 标注同源）。
+  /// 取值：`no_provider`（未配置 provider，预期降级）/ `embedding_empty`（provider 返回空或数量不匹配）/
+  /// `embedding_failed`（provider 抛错——bad key / 404 / 网络等，属静默失败，必须提示）。
+  final String degradedReason;
 }
 
 class RagTxtCorpusIngestionService {
@@ -175,7 +182,7 @@ class RagTxtCorpusIngestionService {
       sections: sections,
       onProgress: onProgress,
     );
-    final updatedCorpus = normalizedCorpus.copyWith(
+    var updatedCorpus = normalizedCorpus.copyWith(
       sourceKind: 'txt',
       language: sourceLanguage,
       buildMode: normalizedCorpus.buildMode.trim().isEmpty
@@ -215,6 +222,17 @@ class RagTxtCorpusIngestionService {
       },
     );
     final embedded = await _embedChunks(chunks);
+    // 中文注释: 把 embedding 实际结果（backend/dimension/降级原因）写回 corpus 元数据，
+    // 让上层能据实提示用户向量是否真的生成，避免"provider 抛错却照常报成功"。
+    updatedCorpus = updatedCorpus.copyWith(
+      metadata: <String, Object?>{
+        ...updatedCorpus.metadata,
+        'embedding_backend': embedded.backendKind,
+        'embedding_dimension': embedded.dimension,
+        if (embedded.degradedReason.isNotEmpty)
+          'embedding_degraded_reason': embedded.degradedReason,
+      },
+    );
     final indexHandle = _buildIndexHandle(
       corpusPackage: updatedCorpus,
       timestamp: timestamp,
@@ -364,7 +382,7 @@ class RagTxtCorpusIngestionService {
       sections: sections,
       onProgress: onProgress,
     );
-    final updatedCorpus = normalizedCorpus.copyWith(
+    var updatedCorpus = normalizedCorpus.copyWith(
       sourceKind: 'txt',
       language: sourceLanguage,
       buildMode: normalizedCorpus.buildMode.trim().isEmpty
@@ -405,6 +423,17 @@ class RagTxtCorpusIngestionService {
       },
     );
     final embedded = await _embedChunks(chunks);
+    // 中文注释: 把 embedding 实际结果（backend/dimension/降级原因）写回 corpus 元数据，
+    // 让上层能据实提示用户向量是否真的生成，避免"provider 抛错却照常报成功"。
+    updatedCorpus = updatedCorpus.copyWith(
+      metadata: <String, Object?>{
+        ...updatedCorpus.metadata,
+        'embedding_backend': embedded.backendKind,
+        'embedding_dimension': embedded.dimension,
+        if (embedded.degradedReason.isNotEmpty)
+          'embedding_degraded_reason': embedded.degradedReason,
+      },
+    );
     final indexHandle = _buildIndexHandle(
       corpusPackage: updatedCorpus,
       timestamp: timestamp,
@@ -631,6 +660,7 @@ class RagTxtCorpusIngestionService {
         chunks: chunks,
         dimension: 0,
         backendKind: 'sqlite-meta',
+        degradedReason: provider == null ? 'no_provider' : '',
       );
     }
     try {
@@ -643,6 +673,7 @@ class RagTxtCorpusIngestionService {
           chunks: chunks,
           dimension: 0,
           backendKind: 'sqlite-meta',
+          degradedReason: 'embedding_empty',
         );
       }
       final dimension = vectors.first.length;
@@ -665,10 +696,12 @@ class RagTxtCorpusIngestionService {
       );
     } catch (_) {
       // 中文注释: embedding 失败不阻断 ingestion；检索端口仍可走，只是没有向量可用。
+      // 但必须如实记录降级原因（embedding_failed），让调用方能给用户诚实提示，而非静默成功。
       return RagTxtEmbeddingResult(
         chunks: chunks,
         dimension: 0,
         backendKind: 'sqlite-meta',
+        degradedReason: 'embedding_failed',
       );
     }
   }

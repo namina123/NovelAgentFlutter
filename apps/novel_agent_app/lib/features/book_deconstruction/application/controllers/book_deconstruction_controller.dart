@@ -2,6 +2,10 @@ import 'package:flutter/foundation.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 
+import '../../../../shared/services/user_facing_error_humanizer.dart';
+import '../../../workbench/application/services/import_assistant_model_options_service.dart';
+import '../../../workbench/presentation/models/selector_option_view_data.dart';
+
 import '../../presentation/contracts/book_deconstruction_action_handler.dart';
 import '../../presentation/models/book_deconstruction_view_data.dart';
 import '../models/book_deconstruction_operation_kind.dart';
@@ -15,15 +19,19 @@ import '../services/book_deconstruction_narrative_persistence_service.dart';
 import '../services/book_deconstruction_preview_markdown_service.dart';
 import '../services/book_deconstruction_smart_import_agent_service.dart';
 import '../services/book_deconstruction_smart_import_orchestration_service.dart';
-import '../services/book_deconstruction_smart_import_result.dart';
 import '../services/book_deconstruction_view_data_service.dart';
 import '../services/desktop_book_deconstruction_source_picker_service.dart';
 import '../../../workbench/application/controllers/generate_draft_use_case_factory.dart';
 
-/// 中文注释: 提取知识（可选阶段）的执行回调。由 app_shell 注入，委托给内置隐藏智能体的
-/// LLM 参考资料 extraction（读拆书产物、必须已配置模型）。返回 (ok, message) 给 UI 如实呈现。
+/// 中文注释: 分析（可选阶段）的执行回调。由 app_shell 注入，委托给内置隐藏智能体的
+/// LLM reference_extraction（读拆书产物、必须已配置模型）。provider/model 由拆书"分析"步
+/// 用户选择透传（与 app 默认解耦、与"拆书"步模型独立不继承）。返回 (ok, message) 给 UI。
 typedef BookDeconstructionExtractKnowledgeHandler =
-    Future<({bool ok, String message})> Function(ProjectDescriptor project);
+    Future<({bool ok, String message})> Function(
+      ProjectDescriptor project, {
+      required String providerId,
+      required String modelId,
+    });
 
 class BookDeconstructionController extends ChangeNotifier
     implements BookDeconstructionActionHandler {
@@ -35,6 +43,7 @@ class BookDeconstructionController extends ChangeNotifier
     required ProjectDescriptor? Function() readCurrentProject,
     required Future<void> Function() syncWorkbenchResources,
     required VoidCallback onBackRequested,
+    required List<SelectorOptionViewData> Function() readImportAssistantModelOptions,
     DesktopBookDeconstructionSourcePickerService? sourcePickerService,
     BookDeconstructionDraftBuilderService? draftBuilderService,
     BookDeconstructionPreviewMarkdownService? previewMarkdownService,
@@ -58,6 +67,7 @@ class BookDeconstructionController extends ChangeNotifier
        _readProjectFileUseCase = readProjectFileUseCase,
        _syncWorkbenchResources = syncWorkbenchResources,
        _onBackRequested = onBackRequested,
+       _readImportAssistantModelOptions = readImportAssistantModelOptions,
        _sourcePickerService =
            sourcePickerService ??
            const DesktopBookDeconstructionSourcePickerService(),
@@ -97,6 +107,7 @@ class BookDeconstructionController extends ChangeNotifier
   final ReadProjectFileUseCase _readProjectFileUseCase;
   final Future<void> Function() _syncWorkbenchResources;
   final VoidCallback _onBackRequested;
+  final List<SelectorOptionViewData> Function() _readImportAssistantModelOptions;
   final DesktopBookDeconstructionSourcePickerService _sourcePickerService;
   final BookDeconstructionDraftBuilderService _draftBuilderService;
   final BookDeconstructionViewDataService _viewDataService;
@@ -123,6 +134,15 @@ class BookDeconstructionController extends ChangeNotifier
   BookDeconstructionViewData _viewData;
   String _statusMessage = '';
   bool _disposed = false;
+  // 中文注释: 操作代际。每次"取消"自增；在途的长操作结束后若发现代际已变，说明用户已取消
+  // 或发起了新操作，丢弃本次结果（软取消——LLM 调用无法真正中断，但不再写回/覆盖 UI）。
+  int _operationGeneration = 0;
+
+  /// 长 LLM 操作（拆书去噪 / 分析）的超时兜底，避免模型挂起时 UI 永久卡在"正在…"。
+  static const Duration _longOperationTimeout = Duration(minutes: 8);
+
+  static const ImportAssistantModelOptionsService _modelOptionsService =
+      ImportAssistantModelOptionsService();
 
   BookDeconstructionViewData get viewData => _viewData;
 
@@ -159,6 +179,19 @@ class BookDeconstructionController extends ChangeNotifier
   @override
   void onBookDeconstructionRefreshRequested() {
     refresh();
+  }
+
+  @override
+  void onBookDeconstructionCancelRequested() {
+    // 中文注释: 软取消。LLM 调用本身无法真正中断，但自增代际让在途操作的结果被丢弃，
+    // 并立即把界面恢复到 idle——用户不再被"正在…"卡住（与超时兜底配合，最坏情况有界）。
+    _operationGeneration += 1;
+    _snapshot = _snapshot.copyWith(
+      isLoading: false,
+      operationKind: BookDeconstructionOperationKind.idle,
+    );
+    _statusMessage = '已取消当前操作。';
+    _rebuildView();
   }
 
   @override
@@ -203,149 +236,16 @@ class BookDeconstructionController extends ChangeNotifier
           sourceContent: archiveResult.sourceText,
         ),
       );
-      _statusMessage = '原文已归档到 ${archiveResult.archivePath}，可继续补充结构说明后生成预览。';
+      _statusMessage = '原文已导入，可进行拆书。';
       _rebuildView();
     } catch (error) {
       _snapshot = _snapshot.copyWith(
         isLoading: false,
         operationKind: BookDeconstructionOperationKind.idle,
       );
-      _statusMessage = '读取源文件失败：$error';
+      _statusMessage = UserFacingErrorHumanizer.humanize(error, action: '读取源文件');
       _rebuildView();
     }
-  }
-
-  @override
-  Future<void> onBookDeconstructionSmartImportRequested() async {
-    // 中文注释: 智能拆书 = 模型辅助正文标准化（识别正文 / 分章 / 去噪），复用 RAG 也用的同一套
-    // BookDeconstructionSmartImportOrchestrationService。先按普通导入把原文归档到来源层，
-    // 再跑智能拆书，把清洗后的正文填回 sourceContent；模型不可用时如实提示，不静默失败。
-    final project = _readCurrentProject();
-    if (project == null) {
-      _statusMessage = '请先创建或打开拆书项目。';
-      _rebuildView();
-      return;
-    }
-    final readSettings = _readSettings;
-    final generateDraftUseCaseFactory = _generateDraftUseCaseFactory;
-    if (readSettings == null || generateDraftUseCaseFactory == null) {
-      _statusMessage = '尚未接入模型设置，无法使用智能拆书。';
-      _rebuildView();
-      return;
-    }
-    final settings = readSettings();
-    if (settings == null || settings.providers.isEmpty) {
-      _statusMessage = '尚未配置模型提供商，无法使用智能拆书。';
-      _rebuildView();
-      return;
-    }
-    final provider = _resolveProvider(settings);
-    if (provider == null) {
-      _statusMessage = '未解析到可用模型提供商，无法使用智能拆书。';
-      _rebuildView();
-      return;
-    }
-    final modelId = _resolveModelId(settings, provider);
-    if (modelId.isEmpty) {
-      _statusMessage = '未解析到可用模型，无法使用智能拆书。';
-      _rebuildView();
-      return;
-    }
-    final selectedPath = await _sourcePickerService.pickSourceFile();
-    if (selectedPath == null || selectedPath.trim().isEmpty) {
-      _statusMessage = '已取消智能拆书。';
-      _rebuildView();
-      return;
-    }
-    _snapshot = _snapshot.copyWith(
-      isLoading: true,
-      operationKind: BookDeconstructionOperationKind.smartImportingSource,
-    );
-    _statusMessage = '正在用模型辅助智能拆书…';
-    _rebuildView();
-    await Future<void>.delayed(const Duration(milliseconds: 16));
-    try {
-      final archiveResult = await _importArchiveWorkflowService.execute(
-        project: project,
-        sourceFilePath: selectedPath.trim(),
-      );
-      final orchestration = BookDeconstructionSmartImportOrchestrationService(
-        agentService: BookDeconstructionSmartImportAgentService(
-          readSettings: readSettings,
-          generateDraftUseCaseFactory: generateDraftUseCaseFactory,
-        ),
-      );
-      final result = await orchestration.execute(
-        project: project,
-        sourcePaths: <String>[selectedPath.trim()],
-        providerId: provider.id,
-        modelId: modelId,
-      );
-      final normalized = result.normalizedSourceText.trim().isNotEmpty
-          ? result.normalizedSourceText
-          : archiveResult.sourceText;
-      _snapshot = _invalidatePreview(
-        _snapshot.copyWith(
-          isLoading: false,
-          operationKind: BookDeconstructionOperationKind.idle,
-          activeStepId: BookDeconstructionStepId.importSource,
-          sourceAbsolutePath: archiveResult.sourceFilePath,
-          sourceTitle: archiveResult.sourceTitle,
-          sourceContent: normalized,
-        ),
-      );
-      _statusMessage = result.applied
-          ? '智能拆书已完成模型辅助标准化${result.note.trim().isEmpty ? '' : '：${result.note}'}，可继续补充结构说明后生成预览。'
-          : '智能拆书未产出有效正文，已保留原文${result.note.trim().isEmpty ? '' : '（${result.note}）'}。';
-      _rebuildView();
-    } catch (error) {
-      _snapshot = _snapshot.copyWith(
-        isLoading: false,
-        operationKind: BookDeconstructionOperationKind.idle,
-      );
-      _statusMessage = '智能拆书失败：$error';
-      _rebuildView();
-    }
-  }
-
-  ProviderEndpointSettings? _resolveProvider(AppSettings settings) {
-    final defaultProviderId = settings.defaultProviderId.trim();
-    if (defaultProviderId.isNotEmpty) {
-      for (final provider in settings.providers) {
-        if (provider.id == defaultProviderId) {
-          return provider;
-        }
-      }
-    }
-    return settings.providers.isEmpty ? null : settings.providers.first;
-  }
-
-  String _resolveModelId(
-    AppSettings settings,
-    ProviderEndpointSettings provider,
-  ) {
-    final defaultModelId = settings.defaultModelId.trim();
-    if (defaultModelId.isNotEmpty) {
-      return defaultModelId;
-    }
-    return provider.modelId.trim();
-  }
-
-  bool _isSmartImportAvailable() {
-    final readSettings = _readSettings;
-    final generateDraftUseCaseFactory = _generateDraftUseCaseFactory;
-    if (readSettings == null || generateDraftUseCaseFactory == null) {
-      return false;
-    }
-    final settings = readSettings();
-    if (settings == null || settings.providers.isEmpty) {
-      return false;
-    }
-    final provider = _resolveProvider(settings);
-    if (provider == null) {
-      return false;
-    }
-    return _resolveModelId(settings, provider).isNotEmpty;
   }
 
   @override
@@ -360,42 +260,28 @@ class BookDeconstructionController extends ChangeNotifier
     _rebuildView();
   }
 
-  @override
-  void onBookDeconstructionOperatorNotesChanged(String value) {
-    _snapshot = _invalidatePreview(_snapshot.copyWith(operatorNotes: value));
-    _rebuildView();
-  }
+  // === 步骤②：拆书（纯净分章）=============================================
 
   @override
-  void onBookDeconstructionStyleSummaryChanged(String value) {
-    _snapshot = _invalidatePreview(_snapshot.copyWith(styleSummary: value));
-    _rebuildView();
-  }
-
-  @override
-  void onBookDeconstructionWorldRulesChanged(String value) {
-    _snapshot = _invalidatePreview(_snapshot.copyWith(worldRulesText: value));
-    _rebuildView();
-  }
-
-  @override
-  void onBookDeconstructionCharacterLinesChanged(String value) {
-    _snapshot = _invalidatePreview(
-      _snapshot.copyWith(characterLinesText: value),
+  void onBookDeconstructionSplitUseModelChanged(bool value) {
+    // 中文注释: 只有选了拆书模型才允许勾"使用模型"；取消勾选时清掉模型键更直观。
+    final canUse = _readImportAssistantModelOptions().isNotEmpty;
+    final next = value && canUse;
+    _snapshot = _snapshot.copyWith(
+      splitUseModel: next,
+      splitModelOptionKey: next ? _snapshot.splitModelOptionKey : '',
     );
     _rebuildView();
   }
 
   @override
-  void onBookDeconstructionOrganizationLinesChanged(String value) {
-    _snapshot = _invalidatePreview(
-      _snapshot.copyWith(organizationLinesText: value),
-    );
+  void onBookDeconstructionSplitModelSelected(String optionKey) {
+    _snapshot = _snapshot.copyWith(splitModelOptionKey: optionKey);
     _rebuildView();
   }
 
   @override
-  Future<void> onBookDeconstructionBuildPreviewRequested() async {
+  Future<void> onBookDeconstructionSplitRequested() async {
     final project = _readCurrentProject();
     if (project == null) {
       await refresh(status: '请先创建或打开拆书项目。');
@@ -406,35 +292,79 @@ class BookDeconstructionController extends ChangeNotifier
       _rebuildView();
       return;
     }
+    final useModel = _snapshot.splitUseModel &&
+        _snapshot.splitModelOptionKey.trim().isNotEmpty;
+    final generation = _operationGeneration;
     _snapshot = _snapshot.copyWith(
       isLoading: true,
-      operationKind: BookDeconstructionOperationKind.buildingPreview,
+      operationKind: BookDeconstructionOperationKind.splittingChapters,
     );
-    _statusMessage = '正在拆书（分章 + 清洗）...';
+    _statusMessage = useModel ? '正在用模型辅助拆书（分章 + 去噪）…' : '正在拆书（分章 + 去噪）…';
     _rebuildView();
     await Future<void>.delayed(const Duration(milliseconds: 16));
     try {
-      // 中文注释: 拆书按钮 = 纯拆书（extractKnowledge:false）：只分章 + 章节骨架，不做知识抽取。
-      // 知识抽取是可选的"提取知识"阶段，用户可跳过直接进入确认/创作。
-      final buildResult = await _draftBuilderService.build(
-        sourceTitle: _snapshot.sourceTitle,
-        sourceContent: _snapshot.sourceContent,
-        sourceAbsolutePath: _snapshot.sourceAbsolutePath,
-        operatorNotes: _snapshot.operatorNotes,
-        styleSummary: _snapshot.styleSummary,
-        worldRulesText: _snapshot.worldRulesText,
-        characterLinesText: _snapshot.characterLinesText,
-        organizationLinesText: _snapshot.organizationLinesText,
-        preferredContinuationDirection: _preferredContinuationDirection(),
-        extractKnowledge: false,
-      );
+      // 中文注释: 拆书永远只产出纯净分章（extractKnowledge:false）。勾了模型时，先用所选
+      // 模型跑智能导入去噪（需源文件；粘贴内容无文件则跳过去噪、走规则分章，如实提示），
+      // 再把（可能的）去噪正文喂给分章 use case。模型与分析步独立不继承。
+      var splitSource = _snapshot.sourceContent;
+      var modelNote = '';
+      if (useModel) {
+        final sourcePath = _snapshot.sourceAbsolutePath.trim();
+        final readSettings = _readSettings;
+        final factory = _generateDraftUseCaseFactory;
+        final key = _modelOptionsService.splitKey(_snapshot.splitModelOptionKey);
+        if (sourcePath.isEmpty) {
+          modelNote = '（粘贴内容未走模型去噪：模型去噪需先选择文件；已按规则分章）';
+        } else if (readSettings == null || factory == null) {
+          modelNote = '（模型未接入，已按规则分章）';
+        } else if (key.providerId.isEmpty || key.modelId.isEmpty) {
+          modelNote = '（所选模型无效，已按规则分章）';
+        } else {
+          final orchestration = BookDeconstructionSmartImportOrchestrationService(
+            agentService: BookDeconstructionSmartImportAgentService(
+              readSettings: readSettings,
+              generateDraftUseCaseFactory: factory,
+            ),
+          );
+          final result = await orchestration
+              .execute(
+                project: project,
+                sourcePaths: <String>[sourcePath],
+                providerId: key.providerId,
+                modelId: key.modelId,
+              )
+              .timeout(_longOperationTimeout);
+          if (generation != _operationGeneration) {
+            return;
+          }
+          if (result.applied && result.normalizedSourceText.trim().isNotEmpty) {
+            splitSource = result.normalizedSourceText;
+          } else {
+            modelNote = result.note.trim().isEmpty
+                ? '（模型未产出有效去噪正文，已按规则分章）'
+                : '（${result.note}；已按规则分章）';
+          }
+        }
+      }
+      final buildResult = await _draftBuilderService
+          .build(
+            sourceTitle: _snapshot.sourceTitle,
+            sourceContent: splitSource,
+            sourceAbsolutePath: _snapshot.sourceAbsolutePath,
+            preferredContinuationDirection: _preferredContinuationDirection(),
+            extractKnowledge: false,
+          )
+          .timeout(_longOperationTimeout);
+      if (generation != _operationGeneration) {
+        return;
+      }
       final selectedIds = buildResult.applicationPlan.items
           .map((item) => item.id)
           .toSet();
       _snapshot = _snapshot.copyWith(
         isLoading: false,
         operationKind: BookDeconstructionOperationKind.idle,
-        activeStepId: BookDeconstructionStepId.previewStructure,
+        activeStepId: BookDeconstructionStepId.splitChapters,
         buildResult: buildResult,
         selectedItemIds: selectedIds,
         selectedFollowupOptionId: _followupOptionSelectionService
@@ -443,78 +373,106 @@ class BookDeconstructionController extends ChangeNotifier
               preferredOptionId: _snapshot.selectedFollowupOptionId,
             ),
         confirmedPreviewPath: '',
+        analysisCompleted: false,
+        analysisStatusMessage: '',
       );
       _statusMessage =
-          '已完成拆书，共分出 ${buildResult.extractionResult.chapterOutlines.length} 章；可继续提取知识（可选）或直接确认进入创作。';
+          '已完成拆书，共分出 ${buildResult.extractionResult.chapterOutlines.length} 章$modelNote。';
       _rebuildView();
     } catch (error) {
       _snapshot = _snapshot.copyWith(
         isLoading: false,
         operationKind: BookDeconstructionOperationKind.idle,
       );
-      _statusMessage = '生成结构化预览失败：$error';
+      _statusMessage = UserFacingErrorHumanizer.humanize(error, action: '拆书');
       _rebuildView();
     }
+  }
+
+  // === 步骤③：分析（可选·需选模型）=========================================
+
+  @override
+  void onBookDeconstructionAnalysisUseModelChanged(bool value) {
+    final canUse = _readImportAssistantModelOptions().isNotEmpty;
+    final next = value && canUse;
+    _snapshot = _snapshot.copyWith(
+      analysisUseModel: next,
+      analysisModelOptionKey: next ? _snapshot.analysisModelOptionKey : '',
+    );
+    _rebuildView();
   }
 
   @override
-  Future<void> onBookDeconstructionExtractKnowledgeRequested() async {
-    // 中文注释: 提取知识是可选阶段：委托 app_shell 注入的隐藏内置智能体 LLM extraction，
-    // 读拆书产物分析知识。必须已配置模型（否则 service 如实拒绝）。可跳过——不点就不提取。
+  void onBookDeconstructionAnalysisModelSelected(String optionKey) {
+    _snapshot = _snapshot.copyWith(analysisModelOptionKey: optionKey);
+    _rebuildView();
+  }
+
+  @override
+  Future<void> onBookDeconstructionAnalysisRequested() async {
+    // 中文注释: 分析是可选阶段，且必须选了模型才能跑（本地/无模型分析质量过低，不提供）。
+    // 模型与"拆书"步独立不继承。委托 app_shell 注入的隐藏内置智能体 reference_extraction。
     final project = _readCurrentProject();
     final handler = _extractKnowledgeHandler;
     if (project == null || handler == null) {
-      _statusMessage = '提取知识尚未接入，可跳过此步直接确认进入创作。';
+      _statusMessage = '分析尚未接入，可跳过此步直接确认进入创作。';
       _rebuildView();
       return;
     }
-    if (!_isModelConfigured()) {
-      _statusMessage = '提取知识需要先在设置里配置模型；也可跳过此步直接确认进入创作。';
+    if (!_snapshot.analysisUseModel ||
+        _snapshot.analysisModelOptionKey.trim().isEmpty) {
+      _statusMessage = '请先勾选"使用模型"并选择一个模型，再进行分析；或跳过此步直接确认。';
       _rebuildView();
       return;
     }
+    final key = _modelOptionsService.splitKey(_snapshot.analysisModelOptionKey);
+    if (key.providerId.isEmpty || key.modelId.isEmpty) {
+      _statusMessage = '所选分析模型无效，请重新选择。';
+      _rebuildView();
+      return;
+    }
+    final generation = _operationGeneration;
     _snapshot = _snapshot.copyWith(
       isLoading: true,
-      operationKind: BookDeconstructionOperationKind.extractingKnowledge,
+      operationKind: BookDeconstructionOperationKind.analyzingAssets,
     );
-    _statusMessage = '正在用内置智能体提取知识（读取拆书产物）…';
+    _statusMessage = '正在用内置智能体分析拆书产物（读取分章正文）…';
     _rebuildView();
     await Future<void>.delayed(const Duration(milliseconds: 16));
     try {
-      final result = await handler(project);
+      final result = await handler(
+        project,
+        providerId: key.providerId,
+        modelId: key.modelId,
+      ).timeout(_longOperationTimeout);
+      if (generation != _operationGeneration) {
+        return;
+      }
       _snapshot = _snapshot.copyWith(
         isLoading: false,
         operationKind: BookDeconstructionOperationKind.idle,
+        activeStepId: BookDeconstructionStepId.analyzeAssets,
+        analysisCompleted: result.ok,
+        analysisStatusMessage: result.ok
+            ? '已用所选模型分析并写入项目资产：${result.message}'
+            : '分析未完成：${result.message}（可跳过此步直接确认进入创作）',
       );
-      _statusMessage = result.ok
-          ? '已提取知识并写入项目资产：${result.message}'
-          : '提取知识未完成：${result.message}（可跳过此步直接确认进入创作）';
+      _statusMessage = _snapshot.analysisStatusMessage;
       _rebuildView();
     } catch (error) {
       _snapshot = _snapshot.copyWith(
         isLoading: false,
         operationKind: BookDeconstructionOperationKind.idle,
+        analysisCompleted: false,
+        analysisStatusMessage:
+            '${UserFacingErrorHumanizer.humanize(error, action: '分析')}（可跳过此步直接确认进入创作）',
       );
-      _statusMessage = '提取知识失败：$error（可跳过此步直接确认进入创作）';
+      _statusMessage = _snapshot.analysisStatusMessage;
       _rebuildView();
     }
   }
 
-  bool _isModelConfigured() {
-    final settings = _readSettings?.call();
-    if (settings == null || settings.providers.isEmpty) {
-      return false;
-    }
-    final provider = _resolveProvider(settings);
-    if (provider == null) {
-      return false;
-    }
-    return _resolveModelId(settings, provider).isNotEmpty;
-  }
-
-  bool _isExtractKnowledgeAvailable() {
-    return _extractKnowledgeHandler != null && _isModelConfigured();
-  }
+  // === 步骤④：确认 ========================================================
 
   @override
   void onBookDeconstructionPlanItemSelectionChanged({
@@ -593,7 +551,7 @@ class BookDeconstructionController extends ChangeNotifier
         isLoading: false,
         operationKind: BookDeconstructionOperationKind.idle,
       );
-      _statusMessage = '写入拆书预演纪要失败：$error';
+      _statusMessage = UserFacingErrorHumanizer.humanize(error, action: '写入拆书预演纪要');
       _rebuildView();
     }
   }
@@ -658,7 +616,7 @@ class BookDeconstructionController extends ChangeNotifier
         isLoading: false,
         operationKind: BookDeconstructionOperationKind.idle,
       );
-      _statusMessage = '派生项目失败：$error';
+      _statusMessage = UserFacingErrorHumanizer.humanize(error, action: '派生项目');
       _rebuildView();
     }
   }
@@ -674,16 +632,19 @@ class BookDeconstructionController extends ChangeNotifier
   ) {
     if (snapshot.buildResult == null &&
         snapshot.selectedItemIds.isEmpty &&
-        snapshot.confirmedPreviewPath.trim().isEmpty) {
+        snapshot.confirmedPreviewPath.trim().isEmpty &&
+        !snapshot.analysisCompleted) {
       return snapshot;
     }
-    // 中文注释: 一旦源文稿或结构补充发生变化，旧的结构化预览必须失效，避免用户误把旧计划当成新结果。
+    // 中文注释: 源文稿一旦变化，旧的分章结果与分析结果都必须失效，避免误把旧结果当成新结果。
     return snapshot.copyWith(
       buildResult: null,
       selectedItemIds: <String>{},
       selectedFollowupOptionId: '',
       confirmedPreviewPath: '',
       activeStepId: BookDeconstructionStepId.importSource,
+      analysisCompleted: false,
+      analysisStatusMessage: '',
     );
   }
 
@@ -695,7 +656,7 @@ class BookDeconstructionController extends ChangeNotifier
     }
     final buildResult = _snapshot.buildResult;
     if (buildResult == null) {
-      _statusMessage = '请先生成结构化预览。';
+      _statusMessage = '请先完成拆书。';
       _rebuildView();
       return const _BookDeconstructionConfirmationValidation.invalid();
     }
@@ -769,13 +730,14 @@ class BookDeconstructionController extends ChangeNotifier
   }
 
   void _rebuildView() {
+    final modelOptions = _readImportAssistantModelOptions();
     _viewData = _viewDataService.build(
       projectTitle: _readCurrentProject()?.name ?? '',
       snapshot: _snapshot,
       status: _statusMessage,
       canCreateDerivedProject: _isDerivedProjectCreationAvailable(),
-      canSmartImport: _isSmartImportAvailable(),
-      canExtractKnowledge: _isExtractKnowledgeAvailable(),
+      splitModelOptions: modelOptions,
+      analysisModelOptions: modelOptions,
     );
     if (!_disposed) {
       notifyListeners();

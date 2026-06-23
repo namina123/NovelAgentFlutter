@@ -24,8 +24,19 @@ void main() {
     });
 
     tearDown(() async {
-      if (await tempDirectory.exists()) {
-        await tempDirectory.delete(recursive: true);
+      if (!await tempDirectory.exists()) {
+        return;
+      }
+      // 中文注释: Windows 上 sqlite 句柄释放有延迟，递归删除常瞬时命中 errno=32
+      // （"另一个程序正在使用此文件"）。重试几次等句柄释放，避免把这个与用例逻辑无关的
+      // 清理失败计入用例结果（pre-existing flake）。
+      for (var attempt = 0; attempt < 6; attempt += 1) {
+        try {
+          await tempDirectory.delete(recursive: true);
+          return;
+        } on FileSystemException {
+          await Future<void>.delayed(const Duration(milliseconds: 80));
+        }
       }
     });
 
@@ -190,5 +201,66 @@ void main() {
       expect(phases.last, 'completed');
       expect(messages.last, contains('语料构建完成'));
     });
+
+    test(
+      'records embedding failure honestly in corpus metadata instead of silent success',
+      () async {
+        final sourceFile = File(
+          '${tempDirectory.path}${Platform.pathSeparator}sample_fail.txt',
+        );
+        await sourceFile.writeAsString(
+          '第一章 内容一。\n\n第二章 内容二，稍长用于 chunk 构建。',
+        );
+        final failingService = RagTxtCorpusIngestionService(
+          embeddingProvider: _ThrowingEmbeddingProvider(),
+        );
+        final corpusPackage = RagCorpusPackage(
+          corpusId: 'corpus-rag-txt-fail',
+          title: '向量化失败语料',
+          sourceKind: 'txt',
+          buildMode: 'basic',
+          language: 'zh-CN',
+          version: 'v1',
+        );
+        final result = await failingService.ingestFile(
+          project: project,
+          sourceFilePath: sourceFile.path,
+          corpusPackage: corpusPackage,
+          ingestedAt: '2026-06-23T10:00:00Z',
+        );
+        // 中文注释: provider 抛错时不得静默报成功——元数据如实记 embedding_failed、
+        // backend 退回 sqlite-meta，供上层给用户诚实提示（与检索侧 lexical_fallback 同源）。
+        expect(
+          ValueReaders.stringValue(result.metadata['embedding_degraded_reason']),
+          'embedding_failed',
+        );
+        expect(
+          ValueReaders.stringValue(result.metadata['embedding_backend']),
+          'sqlite-meta',
+        );
+      },
+    );
   });
+}
+
+class _ThrowingEmbeddingProvider implements EmbeddingProviderPort {
+  @override
+  String get providerId => 'throwing_provider';
+
+  @override
+  String get providerKind => 'remote_test';
+
+  @override
+  bool get isLocal => false;
+
+  @override
+  bool get isRemote => true;
+
+  @override
+  Future<List<List<num>>> embedTexts(List<String> texts) async {
+    throw StateError('embedding service unavailable');
+  }
+
+  @override
+  JsonMap describeCapabilities() => const <String, Object?>{};
 }

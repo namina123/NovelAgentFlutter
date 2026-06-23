@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_app/features/book_deconstruction/application/controllers/book_deconstruction_controller.dart';
 import 'package:novel_agent_app/features/book_deconstruction/application/services/book_deconstruction_narrative_persistence_service.dart';
+import 'package:novel_agent_app/features/workbench/presentation/models/selector_option_view_data.dart';
 import 'package:novel_agent_app/features/book_deconstruction/application/services/desktop_book_deconstruction_source_picker_service.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
@@ -44,12 +45,13 @@ Future<void> main() async {
     readCurrentProject: () => project,
     syncWorkbenchResources: () async {},
     onBackRequested: () {},
+    readImportAssistantModelOptions: () => const <SelectorOptionViewData>[],
     sourcePickerService: _FixedPicker(sourceFile.path),
   );
 
   await controller.initialize();
   await controller.onBookDeconstructionImportFileRequested();
-  await controller.onBookDeconstructionBuildPreviewRequested();
+  await controller.onBookDeconstructionSplitRequested();
 
   final viewData = controller.viewData;
   final previewTitles = viewData.previewSections.map((item) => item.title).toList(growable: false);

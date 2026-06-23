@@ -156,24 +156,17 @@ class ConversationInputActionRow extends StatelessWidget {
   }
 
   Widget _buildSendButton() {
-    final button = ActionButton(
-      label: capabilities.showStopAction ? '停止' : capabilities.submitLabel,
-      icon: capabilities.showStopAction
-          ? Icons.stop_circle_outlined
-          : Icons.send_rounded,
-      tone: capabilities.showStopAction
-          ? ActionButtonTone.danger
-          : ActionButtonTone.accent,
+    final isStop = capabilities.showStopAction;
+    final canSend = isStop || capabilities.canSendAction;
+    return ActionButton(
+      label: isStop ? '停止' : capabilities.submitLabel,
+      icon: isStop ? Icons.stop_circle_outlined : Icons.send_rounded,
+      tone: isStop ? ActionButtonTone.danger : ActionButtonTone.accent,
       compact: true,
       expanded: true,
-      emphasized: !capabilities.showStopAction,
-      onPressed: capabilities.showStopAction
-          ? actionHandler.onStopRequested
-          : onSendRequested,
+      emphasized: !isStop,
+      disabled: !canSend,
+      onPressed: isStop ? actionHandler.onStopRequested : onSendRequested,
     );
-    if (capabilities.showStopAction || capabilities.canSendAction) {
-      return button;
-    }
-    return IgnorePointer(child: Opacity(opacity: 0.52, child: button));
   }
 }

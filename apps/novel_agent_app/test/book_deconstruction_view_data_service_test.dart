@@ -63,19 +63,19 @@ void main() {
       ),
       status: '正在读取拆书源文件...',
     );
-    final buildingViewData = viewDataService.build(
+    final splittingViewData = viewDataService.build(
       projectTitle: '拆书测试项目',
       snapshot: BookDeconstructionSnapshot.initial().copyWith(
         isLoading: true,
         sourceContent: '第一章 港口风暴',
-        operationKind: BookDeconstructionOperationKind.buildingPreview,
+        operationKind: BookDeconstructionOperationKind.splittingChapters,
       ),
-      status: '正在生成结构化预览...',
+      status: '正在拆书…',
     );
 
-    expect(importingViewData.importActionLabel, '正在导入');
-    expect(importingViewData.canBuildPreview, isFalse);
-    expect(buildingViewData.buildPreviewActionLabel, '正在拆书');
-    expect(buildingViewData.canBuildPreview, isFalse);
+    expect(importingViewData.importActionLabel, '正在导入…');
+    expect(importingViewData.canSplit, isFalse);
+    // 拆书进行中（isLoading）时 canSplit 为 false。
+    expect(splittingViewData.canSplit, isFalse);
   });
 }

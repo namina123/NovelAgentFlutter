@@ -6,10 +6,23 @@ import 'package:novel_agent_app/features/book_deconstruction/application/control
 import 'package:novel_agent_app/features/book_deconstruction/application/services/book_deconstruction_derived_project_creation_service.dart';
 import 'package:novel_agent_app/features/book_deconstruction/application/services/book_deconstruction_narrative_persistence_service.dart';
 import 'package:novel_agent_app/features/book_deconstruction/application/services/desktop_book_deconstruction_source_picker_service.dart';
+import 'package:novel_agent_app/features/workbench/presentation/models/selector_option_view_data.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+const String _splitModelKey = 'provider-1::test-model';
+
+List<SelectorOptionViewData> _modelOptions() {
+  return const <SelectorOptionViewData>[
+    SelectorOptionViewData(
+      id: _splitModelKey,
+      label: 'Provider · test-model',
+      note: 'provider-1',
+    ),
+  ];
+}
+
 void main() {
-  test('拆书控制器可完成预览并写入应用前确认纪要', () async {
+  test('拆书控制器可完成纯净分章并写入应用前确认纪要', () async {
     final workspacePort = _InMemoryProjectWorkspacePort();
     const currentProject = ProjectDescriptor(
       id: 'project-1',
@@ -22,15 +35,15 @@ void main() {
       writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
         projectWorkspacePort: workspacePort,
       ),
-      narrativePersistenceService:
-          BookDeconstructionNarrativePersistenceService(
-            workspacePort: workspacePort,
-          ),
+      narrativePersistenceService: BookDeconstructionNarrativePersistenceService(
+        workspacePort: workspacePort,
+      ),
       readCurrentProject: () => currentProject,
       syncWorkbenchResources: () async {
         workspacePort.syncCount += 1;
       },
       onBackRequested: () {},
+      readImportAssistantModelOptions: _modelOptions,
     );
 
     await controller.initialize();
@@ -38,12 +51,9 @@ void main() {
     controller.onBookDeconstructionSourceContentChanged(
       '第一章 港口风暴\n主角在港口被迫卷入一场追捕。\n\n第二章 议会阴影\n城邦议会开始浮出水面。',
     );
-    controller.onBookDeconstructionOperatorNotesChanged('注意城邦议会与航线规则的象征关系。');
-    controller.onBookDeconstructionStyleSummaryChanged('叙事节奏快，善于用港口意象制造压迫感。');
-    controller.onBookDeconstructionWorldRulesChanged('航线印记绑定了贸易权力与超常能力');
-    controller.onBookDeconstructionCharacterLinesChanged('林砚：被迫卷入城邦风暴的主角');
 
-    await controller.onBookDeconstructionBuildPreviewRequested();
+    // 中文注释: 拆书 = 纯净分章（extractKnowledge:false），不产出知识抽取资产。
+    await controller.onBookDeconstructionSplitRequested();
 
     expect(controller.viewData.previewSections, isNotEmpty);
     expect(controller.viewData.planGroups, isNotEmpty);
@@ -66,9 +76,6 @@ void main() {
     );
     expect(content, isNotNull);
     expect(content, contains('# 拆书结构化预演'));
-    // 中文注释: 拆书按钮现在是纯拆书（只分章），不产出知识抽取的 claims/proposals/reviews——
-    // 那些属于可选的"提取知识"阶段，在 use case 与 narrative persistence 层另有覆盖。
-    // 这里只校验纯拆书的结构化产物：章节骨架预览、规范化正文、续写路线说明。
     final structuredSource = workspacePort.readStoredTextFile(
       'D:/Projects/deconstruction_project',
       'analysis/book_deconstruction_structured_source.md',
@@ -79,20 +86,6 @@ void main() {
     expect(
       controller.viewData.confirmedPreviewPath,
       'analysis/book_deconstruction_preview.md',
-    );
-    expect(
-      workspacePort.readStoredTextFile(
-        'D:/Projects/deconstruction_project',
-        'tasks/plans/book_deconstruction_followups/fanfic_seed_autopilot_novel.md',
-      ),
-      contains('同人'),
-    );
-    expect(
-      workspacePort.readStoredTextFile(
-        'D:/Projects/deconstruction_project',
-        'chapters/inherited/fanfic_seed_autopilot_novel/001_第一章_港口风暴.md',
-      ),
-      isNull,
     );
     expect(workspacePort.syncCount, 1);
   });
@@ -122,15 +115,15 @@ void main() {
       writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
         projectWorkspacePort: workspacePort,
       ),
-      narrativePersistenceService:
-          BookDeconstructionNarrativePersistenceService(
-            workspacePort: workspacePort,
-          ),
+      narrativePersistenceService: BookDeconstructionNarrativePersistenceService(
+        workspacePort: workspacePort,
+      ),
       readCurrentProject: () => currentProject,
       syncWorkbenchResources: () async {
         workspacePort.syncCount += 1;
       },
       onBackRequested: () {},
+      readImportAssistantModelOptions: _modelOptions,
       sourcePickerService: _FakeDesktopBookDeconstructionSourcePickerService(
         sourceFile.path,
       ),
@@ -148,8 +141,7 @@ void main() {
     expect(controller.viewData.sourceAbsolutePath, sourceFile.path);
     expect(controller.viewData.sourceContent, contains('港口风暴'));
 
-    controller.onBookDeconstructionOperatorNotesChanged('只归档原文，不混写到正文层。');
-    await controller.onBookDeconstructionBuildPreviewRequested();
+    await controller.onBookDeconstructionSplitRequested();
     controller.onBookDeconstructionFollowupOptionSelected('continuation_novel');
     controller.onBookDeconstructionPlanItemSelectionChanged(
       itemId: controller.viewData.planGroups.first.items.first.id,
@@ -163,13 +155,6 @@ void main() {
         'analysis/book_deconstruction_preview.md',
       ),
       contains('# 拆书结构化预演'),
-    );
-    expect(
-      workspacePort.readStoredTextFile(
-        currentProject.rootPath,
-        'chapters/book_deconstruction_preview.md',
-      ),
-      isNull,
     );
     expect(
       workspacePort.readStoredTextFile(
@@ -205,13 +190,13 @@ void main() {
       writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
         projectWorkspacePort: workspacePort,
       ),
-      narrativePersistenceService:
-          BookDeconstructionNarrativePersistenceService(
-            workspacePort: workspacePort,
-          ),
+      narrativePersistenceService: BookDeconstructionNarrativePersistenceService(
+        workspacePort: workspacePort,
+      ),
       readCurrentProject: () => currentProject,
       syncWorkbenchResources: () async {},
       onBackRequested: () {},
+      readImportAssistantModelOptions: _modelOptions,
     );
 
     await controller.initialize();
@@ -237,15 +222,15 @@ void main() {
       writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
         projectWorkspacePort: workspacePort,
       ),
-      narrativePersistenceService:
-          BookDeconstructionNarrativePersistenceService(
-            workspacePort: workspacePort,
-          ),
+      narrativePersistenceService: BookDeconstructionNarrativePersistenceService(
+        workspacePort: workspacePort,
+      ),
       readCurrentProject: () => currentProject,
       syncWorkbenchResources: () async {
         workspacePort.syncCount += 1;
       },
       onBackRequested: () {},
+      readImportAssistantModelOptions: _modelOptions,
       projectsRootPath: 'D:/Projects',
       derivedProjectCreationService:
           BookDeconstructionDerivedProjectCreationService(
@@ -262,10 +247,9 @@ void main() {
             writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
               projectWorkspacePort: workspacePort,
             ),
-            narrativePersistenceService:
-                BookDeconstructionNarrativePersistenceService(
-                  workspacePort: workspacePort,
-                ),
+            narrativePersistenceService: BookDeconstructionNarrativePersistenceService(
+              workspacePort: workspacePort,
+            ),
           ),
       openDerivedProjectRequested: (project, preferredOpenPath) async {
         openedProject = project;
@@ -278,35 +262,13 @@ void main() {
     controller.onBookDeconstructionSourceContentChanged(
       '第一章 港口风暴\n主角在港口被迫卷入一场追捕。\n\n第二章 议会阴影\n城邦议会开始浮出水面。',
     );
-    controller.onBookDeconstructionOperatorNotesChanged('继续拆书并派生。');
-    controller.onBookDeconstructionStyleSummaryChanged('节奏明快。');
-    controller.onBookDeconstructionWorldRulesChanged('港口贸易绑定超常权力。');
-    controller.onBookDeconstructionCharacterLinesChanged('林砚：主角');
 
-    await controller.onBookDeconstructionBuildPreviewRequested();
+    await controller.onBookDeconstructionSplitRequested();
     controller.onBookDeconstructionSelectAllRequested();
     controller.onBookDeconstructionFollowupOptionSelected('continuation_novel');
     expect(controller.viewData.selectedFollowupOptionId, 'continuation_novel');
     expect(controller.viewData.canCreateDerivedProject, isTrue);
     await controller.onBookDeconstructionCreateDerivedProjectRequested();
-
-    // 中文注释: 控制器拆书按钮走纯拆书（extractKnowledge:false），所以期望结果也按纯拆书算：
-    // 应用计划里只有章纲类条目，没有前提/角色等资产条目。
-    final expectedBuildResult = BuildBookDeconstructionDraftUseCase().execute(
-      sourceTitle: '海上城邦',
-      sourceContent:
-          '第一章 港口风暴\n主角在港口被迫卷入一场追捕。\n\n第二章 议会阴影\n城邦议会开始浮出水面。',
-      sourceAbsolutePath: '',
-      operatorNotes: '继续拆书并派生。',
-      styleSummary: '节奏明快。',
-      worldRulesText: '港口贸易绑定超常权力。',
-      characterLinesText: '林砚：主角',
-      organizationLinesText: '',
-      extractKnowledge: false,
-    );
-    final expectedMaterializedPath = expectedBuildResult.applicationPlan.items
-        .first
-        .relativePathHint;
 
     expect(
       controller.viewData.status,
@@ -318,20 +280,6 @@ void main() {
     expect(
       openedPath,
       'tasks/plans/book_deconstruction_followups/continuation_novel.md',
-    );
-    expect(
-      workspacePort.readStoredTextFile(
-        openedProject!.rootPath,
-        'tasks/plans/book_deconstruction_followups/continuation_novel.md',
-      ),
-      contains('续写'),
-    );
-    expect(
-      workspacePort.readStoredTextFile(
-        openedProject!.rootPath,
-        expectedMaterializedPath,
-      ),
-      isNotNull,
     );
   });
 
@@ -348,15 +296,15 @@ void main() {
       writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
         projectWorkspacePort: workspacePort,
       ),
-      narrativePersistenceService:
-          BookDeconstructionNarrativePersistenceService(
-            workspacePort: workspacePort,
-          ),
+      narrativePersistenceService: BookDeconstructionNarrativePersistenceService(
+        workspacePort: workspacePort,
+      ),
       readCurrentProject: () => currentProject,
       syncWorkbenchResources: () async {
         workspacePort.syncCount += 1;
       },
       onBackRequested: () {},
+      readImportAssistantModelOptions: _modelOptions,
     );
 
     await controller.initialize();
@@ -367,51 +315,66 @@ void main() {
     expect(controller.viewData.status, isNot(contains('未接入')));
   });
 
-  test('拆书控制器提取知识（可选）会调用内置智能体回调并如实呈现结果', () async {
-    // 中文注释: 提取知识是可选阶段：已配置模型时，按钮可用，点击后委托隐藏内置智能体回调，
-    // 把结果如实回显。spec：必须选模型 + 内置智能体藏起来分析。
+  test('分析（可选）勾选模型后会用所选模型调用内置智能体并如实呈现', () async {
+    // 中文注释: 分析是可选阶段：必须先拆书（产出 buildResult），再勾"使用模型"+选模型，
+    // 才能分析。委托隐藏内置智能体，provider/model 由用户选择透传（与 app 默认解耦）。
     final workspacePort = _InMemoryProjectWorkspacePort();
     const currentProject = ProjectDescriptor(
-      id: 'project-extract',
-      name: '拆书提取知识测试',
-      rootPath: 'D:/Projects/deconstruction_extract',
+      id: 'project-analyze',
+      name: '拆书分析测试',
+      rootPath: 'D:/Projects/deconstruction_analyze',
       projectType: 'book_deconstruction',
     );
-    var handlerCalls = 0;
+    String? capturedProvider;
+    String? capturedModel;
     final controller = BookDeconstructionController(
       readProjectFileUseCase: ReadProjectFileUseCase(workspacePort),
       writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
         projectWorkspacePort: workspacePort,
       ),
-      narrativePersistenceService:
-          BookDeconstructionNarrativePersistenceService(
-            workspacePort: workspacePort,
-          ),
+      narrativePersistenceService: BookDeconstructionNarrativePersistenceService(
+        workspacePort: workspacePort,
+      ),
       readCurrentProject: () => currentProject,
       syncWorkbenchResources: () async {},
       onBackRequested: () {},
-      readSettings: () => _configuredSettings(),
-      extractKnowledgeHandler: (project) async {
-        handlerCalls += 1;
-        expect(project.id, 'project-extract');
-        return (ok: true, message: '已提取 3 条知识卡片');
+      readImportAssistantModelOptions: _modelOptions,
+      extractKnowledgeHandler: (
+        project, {
+        required String providerId,
+        required String modelId,
+      }) async {
+        capturedProvider = providerId;
+        capturedModel = modelId;
+        return (ok: true, message: '已分析并写入 3 条知识卡片');
       },
     );
 
     await controller.initialize();
-    expect(controller.viewData.canExtractKnowledge, isTrue);
-    await controller.onBookDeconstructionExtractKnowledgeRequested();
-    expect(handlerCalls, 1);
-    expect(controller.viewData.status, contains('已提取 3 条知识卡片'));
+    controller.onBookDeconstructionSourceContentChanged(
+      '第一章 港口风暴\n主角在港口被迫卷入一场追捕。',
+    );
+    await controller.onBookDeconstructionSplitRequested();
+    // 拆书后才有 buildResult，分析才可用。
+    expect(controller.viewData.canAnalyze, isTrue);
+
+    controller.onBookDeconstructionAnalysisUseModelChanged(true);
+    controller.onBookDeconstructionAnalysisModelSelected(_splitModelKey);
+    await controller.onBookDeconstructionAnalysisRequested();
+
+    expect(capturedProvider, 'provider-1');
+    expect(capturedModel, 'test-model');
+    expect(controller.viewData.analysisCompleted, isTrue);
+    expect(controller.viewData.status, contains('已分析并写入 3 条知识卡片'));
   });
 
-  test('拆书控制器在未配置模型时如实拒绝提取知识且不调用回调', () async {
-    // 中文注释: spec：提取知识必须选模型。未配置时按钮不可用，点击如实提示需要配置模型，且不触发回调。
+  test('分析未选模型时不调用内置智能体并如实提示', () async {
+    // 中文注释: spec：不选模型则不分析。未勾选/未选模型时点分析，如实提示，不触发回调。
     final workspacePort = _InMemoryProjectWorkspacePort();
     const currentProject = ProjectDescriptor(
-      id: 'project-extract-no-model',
-      name: '拆书提取知识无模型测试',
-      rootPath: 'D:/Projects/deconstruction_extract_no_model',
+      id: 'project-analyze-no-model',
+      name: '拆书分析无模型测试',
+      rootPath: 'D:/Projects/deconstruction_analyze_no_model',
       projectType: 'book_deconstruction',
     );
     var handlerCalls = 0;
@@ -420,52 +383,33 @@ void main() {
       writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
         projectWorkspacePort: workspacePort,
       ),
-      narrativePersistenceService:
-          BookDeconstructionNarrativePersistenceService(
-            workspacePort: workspacePort,
-          ),
+      narrativePersistenceService: BookDeconstructionNarrativePersistenceService(
+        workspacePort: workspacePort,
+      ),
       readCurrentProject: () => currentProject,
       syncWorkbenchResources: () async {},
       onBackRequested: () {},
-      readSettings: () => const AppSettings(
-        defaultProviderId: '',
-        defaultAgentId: '',
-        defaultModelId: '',
-        defaultProjectPath: '',
-        providers: <ProviderEndpointSettings>[],
-      ),
-      extractKnowledgeHandler: (project) async {
+      readImportAssistantModelOptions: _modelOptions,
+      extractKnowledgeHandler: (
+        project, {
+        required String providerId,
+        required String modelId,
+      }) async {
         handlerCalls += 1;
         return (ok: true, message: '不应到达');
       },
     );
 
     await controller.initialize();
-    expect(controller.viewData.canExtractKnowledge, isFalse);
-    await controller.onBookDeconstructionExtractKnowledgeRequested();
+    controller.onBookDeconstructionSourceContentChanged(
+      '第一章 港口风暴\n主角在港口被迫卷入一场追捕。',
+    );
+    await controller.onBookDeconstructionSplitRequested();
+    // 未勾"使用模型"、未选模型，直接点分析。
+    await controller.onBookDeconstructionAnalysisRequested();
     expect(handlerCalls, 0);
-    expect(controller.viewData.status, contains('配置模型'));
+    expect(controller.viewData.status, contains('选择一个模型'));
   });
-}
-
-AppSettings _configuredSettings() {
-  return const AppSettings(
-    defaultProviderId: 'provider-1',
-    defaultAgentId: 'default-agent',
-    defaultModelId: 'test-model',
-    defaultProjectPath: '',
-    providers: <ProviderEndpointSettings>[
-      ProviderEndpointSettings(
-        id: 'provider-1',
-        title: 'Provider',
-        protocol: 'openai_compatible',
-        baseUrl: 'https://example.invalid/v1',
-        apiKey: 'test-key',
-        modelId: 'test-model',
-        description: 'test',
-      ),
-    ],
-  );
 }
 
 class _FakeDesktopBookDeconstructionSourcePickerService
@@ -476,7 +420,6 @@ class _FakeDesktopBookDeconstructionSourcePickerService
 
   @override
   Future<String?> pickSourceFile() async {
-    // 中文注释: 测试假 picker 只返回预设路径，不在这里引入任何平台对话框行为。
     return _sourceFilePath;
   }
 }

@@ -11,6 +11,7 @@ import '../models/model_parameter_entry_view_data.dart';
 import '../models/settings_search_option.dart';
 import 'model_settings_advanced_panel.dart';
 import 'model_settings_primary_panel.dart';
+import 'settings_labeled_text_field.dart';
 
 class ModelSettingsPanel extends StatefulWidget {
   const ModelSettingsPanel({
@@ -29,6 +30,7 @@ class ModelSettingsPanel extends StatefulWidget {
 class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
   late String _providerId;
   late final TextEditingController _modelIdController;
+  late final TextEditingController _embeddingModelIdController;
   late final TextEditingController _providerSearchController;
   late final TextEditingController _compatibleContextWindowController;
   late final TextEditingController _appContextWindowController;
@@ -57,6 +59,7 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
     super.initState();
     _providerSearchController = TextEditingController();
     _modelIdController = TextEditingController();
+    _embeddingModelIdController = TextEditingController();
     _compatibleContextWindowController = TextEditingController();
     _appContextWindowController = TextEditingController();
     _temperatureController = TextEditingController();
@@ -82,6 +85,7 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
   void dispose() {
     _providerSearchController.dispose();
     _modelIdController.dispose();
+    _embeddingModelIdController.dispose();
     _compatibleContextWindowController.dispose();
     _appContextWindowController.dispose();
     _temperatureController.dispose();
@@ -137,6 +141,12 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
             height: 1.5,
             fontWeight: FontWeight.w600,
           ),
+        ),
+        const SizedBox(height: 16),
+        SettingsLabeledTextField(
+          label: 'RAG 向量化模型 ID（可选）',
+          controller: _embeddingModelIdController,
+          hintText: '留空则知识库检索走关键词匹配；填写则用默认接口的该模型做向量化召回',
         ),
         const SizedBox(height: 16),
         ModelSettingsPrimaryPanel(
@@ -273,6 +283,7 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
       modelSettings['model_id'],
       widget.viewData.defaultModelId,
     );
+    _embeddingModelIdController.text = editor.embeddingModelId;
     _compatibleContextWindowController.text =
         (modelSettings['compatible_context_window'] ?? '').toString();
     _appContextWindowController.text =
@@ -326,6 +337,7 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
       'provider_id': _providerId,
       'default_model_id': _modelIdController.text.trim(),
       'model_id': _modelIdController.text.trim(),
+      'embedding_model_id': _embeddingModelIdController.text.trim(),
       'compatible_context_window': _compatibleContextWindowController.text
           .trim(),
       'app_context_window': _appContextWindowController.text.trim(),

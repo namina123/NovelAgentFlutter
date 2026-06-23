@@ -69,6 +69,9 @@ class ModelSettingsViewDataService {
         metadata['model_id'],
         ValueReaders.stringValue(execution['resolved_model_id']),
       ),
+      embeddingModelId: ValueReaders.stringValue(
+        settings.extraSettings['embedding_model_id'],
+      ),
       supportsReasoning: ValueReaders.boolValue(metadata['supports_reasoning']),
       reasoningCanToggle: ValueReaders.boolValue(
         metadata['reasoning_can_toggle'],

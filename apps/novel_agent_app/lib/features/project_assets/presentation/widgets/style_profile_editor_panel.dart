@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../shared/widgets/confirmation_dialog.dart';
 import '../models/project_assets_view_data.dart';
 
 class StyleProfileEditorPanel extends StatefulWidget {
@@ -50,8 +51,18 @@ class _StyleProfileEditorPanelState extends State<StyleProfileEditorPanel> {
   @override
   void didUpdateWidget(covariant StyleProfileEditorPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.viewData.id != widget.viewData.id ||
+    final oldId = oldWidget.viewData.id;
+    if (oldId != widget.viewData.id ||
         oldWidget.viewData.relativePath != widget.viewData.relativePath) {
+      // 中文注释: 切换记录前，若当前有未保存修改，先落盘旧记录，避免被 _apply 静默覆盖丢失。
+      if (oldId.trim().isNotEmpty && _isDirtyAgainst(oldWidget.viewData)) {
+        final pending = _buildSaveRequest(id: oldId);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            widget.onSaveRequested(pending);
+          }
+        });
+      }
       _apply(widget.viewData);
     }
   }
@@ -106,7 +117,20 @@ class _StyleProfileEditorPanelState extends State<StyleProfileEditorPanel> {
             OutlinedButton(
               onPressed: widget.viewData.id.trim().isEmpty
                   ? null
-                  : () => widget.onDeleteRequested(widget.viewData.id),
+                  : () async {
+                      final confirmed = await showConfirmationDialog(
+                        context,
+                        title: '删除该风格记录？',
+                        message: '删除后不可恢复，确认删除？',
+                        confirmLabel: '删除',
+                      );
+                      if (!mounted) {
+                        return;
+                      }
+                      if (confirmed) {
+                        widget.onDeleteRequested(widget.viewData.id);
+                      }
+                    },
               child: const Text('删除'),
             ),
           ],
@@ -145,20 +169,37 @@ class _StyleProfileEditorPanelState extends State<StyleProfileEditorPanel> {
   }
 
   void _submit() {
-    widget.onSaveRequested(
-      StyleProfileEditorRequestViewData(
-        id: _idController.text,
-        displayName: _nameController.text,
-        summary: _summaryController.text,
-        genre: _genreController.text,
-        tone: _toneController.text,
-        audience: _audienceController.text,
-        tagsText: _tagsController.text,
-        guardrailsText: _guardrailsController.text,
-        examplePathsText: _examplesController.text,
-        inheritedIdsText: _inheritedController.text,
-        defaultForProject: _defaultForProject,
-      ),
+    widget.onSaveRequested(_buildSaveRequest(id: _idController.text));
+  }
+
+  /// 当前编辑器是否有别于 [viewData]（即存在未保存的修改）。
+  bool _isDirtyAgainst(StyleProfileEditorViewData viewData) {
+    if (_nameController.text != viewData.displayName) return true;
+    if (_summaryController.text != viewData.summary) return true;
+    if (_genreController.text != viewData.genre) return true;
+    if (_toneController.text != viewData.tone) return true;
+    if (_audienceController.text != viewData.audience) return true;
+    if (_tagsController.text != viewData.tagsText) return true;
+    if (_guardrailsController.text != viewData.guardrailsText) return true;
+    if (_examplesController.text != viewData.examplePathsText) return true;
+    if (_inheritedController.text != viewData.inheritedIdsText) return true;
+    if (_defaultForProject != viewData.defaultForProject) return true;
+    return false;
+  }
+
+  StyleProfileEditorRequestViewData _buildSaveRequest({required String id}) {
+    return StyleProfileEditorRequestViewData(
+      id: id,
+      displayName: _nameController.text,
+      summary: _summaryController.text,
+      genre: _genreController.text,
+      tone: _toneController.text,
+      audience: _audienceController.text,
+      tagsText: _tagsController.text,
+      guardrailsText: _guardrailsController.text,
+      examplePathsText: _examplesController.text,
+      inheritedIdsText: _inheritedController.text,
+      defaultForProject: _defaultForProject,
     );
   }
 }

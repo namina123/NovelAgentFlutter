@@ -127,6 +127,65 @@ void main() {
     );
 
     test(
+      'background snapshot save reloads disk settings so concurrent external edits are preserved',
+      () async {
+        // 中文注释: 模拟"运行期间外部并发改了 defaultModelId"：reloadSettings 返回带新 model 的设置，
+        // 内存里仍是旧的 'model'。后台快照保存必须以磁盘为准，不能把外部编辑冲掉。
+        final externalDiskSettings = _baseSettings().copyWith(
+          defaultModelId: 'externally-edited-model',
+        );
+        final harness = _ControllerHarness(
+          settings: _baseSettings(),
+          workbench: WorkbenchViewData.initial().copyWith(
+            projectPath: 'D:/Projects/novel_project',
+            activeDocumentPath: 'chapters/chapter_01.md',
+            agentSelector: const ConversationAgentSelectorViewData(
+              currentAgentLabel: '审阅智能体',
+              currentAgentId: 'reviewer',
+              currentAgentDescription: '质量审阅',
+              agentOptions: <SelectorOptionViewData>[],
+              canSwitchAgent: false,
+            ),
+          ),
+          projectState: WorkbenchProjectRuntimeState(
+            currentProject: _project('D:/Projects/novel_project'),
+            openDocuments: const <OpenDocumentState>[
+              OpenDocumentState(
+                id: 'doc-1',
+                title: 'Chapter 1',
+                relativePath: 'chapters/chapter_01.md',
+                content: 'body',
+              ),
+              OpenDocumentState(
+                id: 'doc-2',
+                title: 'Chapter 2',
+                relativePath: 'chapters/chapter_02.md',
+                content: 'body 2',
+              ),
+            ],
+            activeOpenDocumentId: 'doc-1',
+            expandedResourceDirectories: const <String>{'chapters'},
+          ),
+          reloadSettings: () async => externalDiskSettings,
+        );
+
+        harness.controller.onDocumentSelected('doc-2');
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+
+        expect(harness.savedSettings, isNotEmpty);
+        // 关键：外部并发改的 defaultModelId 必须保留，不能被陈旧内存('model')整体覆写。
+        expect(
+          harness.savedSettings.last.defaultModelId,
+          'externally-edited-model',
+        );
+        final snapshot = _mapValue(
+          harness.savedSettings.last.extraSettings['workbench_state'],
+        );
+        expect(snapshot['active_document_path'], 'chapters/chapter_02.md');
+      },
+    );
+
+    test(
       'persisted snapshot keeps dirty content documents as draft recovery',
       () async {
         final harness = _ControllerHarness(
@@ -800,6 +859,7 @@ class _ControllerHarness {
     WorkbenchViewData Function(WorkbenchViewData base)? applyConversationState,
     Future<void> Function()? refreshActiveDestinationAfterProjectLoad,
     void Function(String message)? announce,
+    Future<AppSettings?> Function()? reloadSettings,
   }) : _settings = settings,
        _workbench = workbench,
        _projectState = projectState {
@@ -814,6 +874,7 @@ class _ControllerHarness {
         _savedSettings.add(next);
         _settings = next;
       },
+      reloadSettings: reloadSettings,
       readWorkbench: () => _workbench,
       mutateWorkbench: (updater) {
         _workbench = updater(_workbench);
@@ -864,6 +925,7 @@ WorkbenchWorkspaceController _createController({
   ProjectToolHostPort? toolHostPort,
   required AppSettings? Function() readSettings,
   required Future<void> Function(AppSettings nextSettings) saveSettingsSilently,
+  Future<AppSettings?> Function()? reloadSettings,
   required WorkbenchViewData Function() readWorkbench,
   required void Function(WorkbenchViewData Function(WorkbenchViewData current))
   mutateWorkbench,
@@ -922,6 +984,7 @@ WorkbenchWorkspaceController _createController({
     applyConversationState: applyConversationState ?? (base) => base,
     readSettings: readSettings,
     saveSettingsSilently: saveSettingsSilently,
+    reloadSettings: reloadSettings,
     refreshSettingsViewData: () {},
     refreshAgentEcosystem: () async {},
     refreshActiveDestinationAfterProjectLoad:

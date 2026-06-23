@@ -109,6 +109,8 @@ class _SeededProjectionReferenceExtractionService
   Future<ProjectReferenceExtractionExecutionResult> pickAndExecute({
     required ProjectDescriptor project,
     String strategyProfileId = '',
+    String overrideProviderId = '',
+    String overrideModelId = '',
   }) async {
     await _seedProjectionFiles(project.rootPath);
     return const ProjectReferenceExtractionExecutionResult(

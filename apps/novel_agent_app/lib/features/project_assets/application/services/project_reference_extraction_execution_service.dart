@@ -66,6 +66,8 @@ class ProjectReferenceExtractionExecutionService {
   Future<ProjectReferenceExtractionExecutionResult> pickAndExecute({
     required ProjectDescriptor project,
     String strategyProfileId = '',
+    String overrideProviderId = '',
+    String overrideModelId = '',
   }) async {
     final resolution = await _sourceResolutionService.resolve(
       project: project,
@@ -84,6 +86,8 @@ class ProjectReferenceExtractionExecutionService {
       project: project,
       sourceFilePath: resolution.sourceFilePath,
       strategyProfileId: strategyProfileId,
+      overrideProviderId: overrideProviderId,
+      overrideModelId: overrideModelId,
     );
     if (!resolution.usedDeconstructionProjection) {
       return result;
@@ -102,6 +106,8 @@ class ProjectReferenceExtractionExecutionService {
     required ProjectDescriptor project,
     required String sourceFilePath,
     String strategyProfileId = '',
+    String overrideProviderId = '',
+    String overrideModelId = '',
   }) async {
     final cleanSourcePath = sourceFilePath.trim();
     if (cleanSourcePath.isEmpty) {
@@ -127,7 +133,21 @@ class ProjectReferenceExtractionExecutionService {
         statusMessage: '当前还没有可用的应用设置，请先完成模型配置。',
       );
     }
-    final provider = settings.defaultProvider();
+    // 中文注释: 支持调用方（拆书"分析"步）显式指定 provider+model；未指定则回退 app 默认。
+    // 两个都透传：下拉键是 "providerId::modelId"，但这里原来只按 defaultProvider() 取 provider，
+    // 用户在非默认 provider 下选模型会错配——同时按 overrideProviderId 解析 provider 才正确。
+    final cleanOverrideProviderId = overrideProviderId.trim();
+    ProviderEndpointSettings? provider;
+    if (cleanOverrideProviderId.isNotEmpty) {
+      for (final candidate in settings.providers) {
+        if (candidate.id == cleanOverrideProviderId) {
+          provider = candidate;
+          break;
+        }
+      }
+    } else {
+      provider = settings.defaultProvider();
+    }
     if (provider == null) {
       return const ProjectReferenceExtractionExecutionResult(
         ok: false,
@@ -138,7 +158,7 @@ class ProjectReferenceExtractionExecutionService {
     final executionProfile = _modelExecutionProfileService.resolve(
       settings: settings,
       provider: provider,
-      overrideModelId: '',
+      overrideModelId: overrideModelId.trim(),
     );
     final runtimeProfile = ValueReaders.mapValue(
       executionProfile['runtime_profile'],

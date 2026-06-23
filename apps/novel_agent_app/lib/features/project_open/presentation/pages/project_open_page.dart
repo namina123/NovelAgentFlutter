@@ -32,7 +32,11 @@ class ProjectOpenPage extends StatelessWidget {
             child: viewData.entries.isEmpty
                 ? Center(
                     child: Text(
-                      '还没有作品。先新建一部，或导入已有项目。',
+                      // 中文注释: 区分"正在加载"（首次刷新还没回来）与"确实没有作品"，
+                      // 避免冷启动瞬间闪"还没有作品"误导用户以为库是空的。
+                      viewData.hasLoaded
+                          ? '还没有作品。先新建一部，或导入已有项目。'
+                          : '正在加载作品列表…',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: panel.mutedForegroundColor,
