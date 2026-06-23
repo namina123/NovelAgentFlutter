@@ -35,7 +35,37 @@
 - 旁证：lane C 在 **6月10日** 的残留 artifacts 显示该路径曾经成功（7 条会话条目、含完整知识库回答"主角是林烬…"）——路径架构上可达，今日因 kb 水合会话恢复未完成而断。
 - 结论：真实、3 lane 一致复现，但根因在注入式会话水合架构 + kb 工作区路由，**非本次能安全收口的容器化 bug**。需设计决策（kb 是否支持 workbench 会话查询；若支持，修 `_restoreConversationRuntimeState` 对 kb 的水合）。记录，不强行修改。
 
-## 待补（后台跑完后追加）
+## 其他路径实测结果（real_gui 探针家族）
 
-- Wave2（长任务多章路径：lane F/G/H/I/J1-J4）实测结果。
-- real_gui 探针家族（reference_extraction / chaptered_continuation / book_deconstruction_import）实测结果。
+| 路径 | 结果 | 说明 |
+|------|------|------|
+| book_deconstruction_import | ✅ 通过 | 拆书导入路径端到端可用 |
+| reference_extraction | ❌ 失败 | `Bad state: 结构化信息索引未完整落盘。`——引用抽取的结构化信息索引未完整持久化，内容/持久化缺口 |
+| chaptered_continuation | ❌ 失败 | `TimeoutException: Timed out waiting for conversation activity.`——与 kb lane 同症状的会话活动超时（该 lane 走 novel 类型，但 lane A 又正常，差异在前置操作留下的会话状态） |
+
+## Wave2（长任务多章路径）
+
+- lane_g_general_long_task_stability：**挂死**。跑到 step_006 `queue_batch_1_active`（task_center 状态停在 `正在启动受控连续运行...`）后 **1 小时+ 无推进**，进程空耗，已手动终止。
+- 这确认了综合审计 P0-1 记录的**长任务运行时健壮性缺口**真实可复现：长任务队列/受控连续运行启动后挂起（对应 P0-1：watchdog 生产不启动、无并发守卫、unattended 不自续）。属多部分 P0 工作，非本次可独立收口的容器化 bug。
+
+## kb 会话水合卡死——根因确认（无 LLM 可复现）
+
+新增 `test/hfvv_wave1_createproject_phase_fix_test.dart` 的诊断（已留 skip 锚点）：
+
+- novel：`listEntries=35ms / readSessionIndex=4ms`，会话状态轨迹 `['正在恢复会话...', '', '', ...]`——秒级完成。
+- knowledge_base：`listEntries=40ms / readSessionIndex=80ms`（**同样有界快速**），轨迹 `['正在恢复会话...' ×20]`——**10s 不完成**。
+
+二分结论：sqlite 会话扫描（`listEntries`/`readTextFile`/`listPending` 全部有界，40-80ms）**不是**根因。卡点在 kb 的**延迟水合**（`openProjectFromPath` 用 `deferHydration:true` → `unawaited(hydration)`）——kb 创建后 `_handleProjectCreatedAndOpened` 走 `projectAssetsController.refresh()+showProjectAssets()` 重定向，与 novel 的 `showWorkbench()` 不同；延迟水合的会话恢复阶段后，后续阶段（会覆盖状态）未执行，状态卡在"正在恢复会话..."。精确的 token 失效/阶段中断触发点需运行时追踪定位，非本次可安全盲修（风险波及 novel 正常水合）。
+
+## 测试覆盖与修复小结
+
+**端到端可用（绿灯）**：novel 信息先行（Wave1 lane A）、book_deconstruction 导入。
+
+**已修复**：createProject 阶段树缺口（kb/book 创建被静默卡死→现已通过）。
+
+**真实缺陷、需进一步工作（按性质分组）**：
+- 长任务运行时健壮性（Wave2 lane_g 挂死）——综合审计 P0-1。
+- kb 会话水合卡死（lane C/D/E 查询）——延迟水合 + kb 路由交互，需运行时追踪。
+- 引用抽取"结构化信息索引未完整落盘"（reference_extraction）——持久化缺口。
+- 会话活动超时（chaptered_continuation）——会话就绪态时序敏感。
+- 多智能体派发不被推理模型采用（lane B）——模型行为，工具链已确认启用。
