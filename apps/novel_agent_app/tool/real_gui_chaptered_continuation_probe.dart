@@ -94,6 +94,18 @@ Future<JsonMap> runRealGuiChapteredContinuationProbe({
     await _openContinuationSourceChapter(harness);
     await capture('continuation_source_opened');
 
+    // 中文注释: 续写主动作依赖项目被判定为 continue-ready（maturity 看到 chapters/ 正文）。
+    // guide 投影读 resourceSnapshotEntries，可能滞后于资源树——先等 continue_writing 出现在
+    // primaryActions 再调用；若一直不出现则快速失败并给出诊断，而不是 2 分钟神秘超时。
+    await harness.waitUntil(
+      () => harness.conversation.primaryActions.any(
+        (action) => action.id == 'session.goal.continue_writing',
+      ),
+      description:
+          'continue_writing 可用（种入章节后 maturity 达到 continue-ready）'
+          '；若不出现说明 resourceSnapshotEntries 未随资源树刷新',
+      timeout: const Duration(seconds: 20),
+    );
     await harness.invokePrimaryAction('session.goal.continue_writing');
     await harness.waitForConversationActivity(
       timeout: const Duration(minutes: 2),

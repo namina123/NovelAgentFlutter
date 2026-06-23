@@ -37,6 +37,48 @@ void main() {
 
     state.dispose();
   });
+
+  test('kb 等非 workbench 目的地也会实时同步会话面板，不冻结在"正在..."中间态', () {
+    // 中文注释: kb 项目主落在 projectAssets，水合会写 generationStatus="正在恢复会话..."再清空。
+    // 修复前：离开 workbench 后会话 notifier 不再同步，永久冻结在"正在恢复会话..."。
+    // 修复后：会话面板无条件同步，状态能正常演进到空（就绪）。
+    final state = AppShellListenableState(
+      viewModel: AppShellViewModel.initial(),
+      activeThemeId: 'theme',
+      paneViewDataMapperService: WorkbenchPaneViewDataMapperService(),
+    );
+
+    final restoringViewModel = AppShellViewModel.initial().copyWith(
+      destination: AppDestination.projectAssets,
+      workbench: WorkbenchViewData.initial().copyWith(
+        projectName: '知识库项目',
+        projectPath: 'D:/Projects/kb',
+        generationStatus: '正在恢复会话...',
+      ),
+    );
+    state.syncFrom(viewModel: restoringViewModel, activeThemeId: 'theme');
+    expect(
+      state.workbenchConversationListenable.value.generationStatus,
+      '正在恢复会话...',
+    );
+
+    // 水合完成，generationStatus 清空——即便仍停在 projectAssets，会话 notifier 也应跟上。
+    final readyViewModel = AppShellViewModel.initial().copyWith(
+      destination: AppDestination.projectAssets,
+      workbench: WorkbenchViewData.initial().copyWith(
+        projectName: '知识库项目',
+        projectPath: 'D:/Projects/kb',
+        generationStatus: '',
+      ),
+    );
+    state.syncFrom(viewModel: readyViewModel, activeThemeId: 'theme');
+    expect(
+      state.workbenchConversationListenable.value.generationStatus,
+      '',
+    );
+
+    state.dispose();
+  });
 }
 
 class _OverflowConversationMapper extends WorkbenchPaneViewDataMapperService {

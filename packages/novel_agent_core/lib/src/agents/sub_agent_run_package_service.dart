@@ -520,8 +520,15 @@ class SubAgentRunPackageService {
       'target_agent_id',
       'targetAgentId',
     ]);
-    if (requestedId.isNotEmpty && byId.containsKey(requestedId)) {
-      return ValueReaders.mapValue(byId[requestedId]);
+    if (requestedId.isNotEmpty) {
+      // 中文注释: 模型 emit 的 agent_id 可能与存储形式差大小写或 -/_；归一化比对，
+      // 避免显式指定的子智能体因命名漂移而解析失败、退回规则选人（同类 snake/kebab bug）。
+      final canonicalRequested = _canonicalAgentId(requestedId);
+      for (final entry in byId.entries) {
+        if (_canonicalAgentId(entry.key) == canonicalRequested) {
+          return ValueReaders.mapValue(entry.value);
+        }
+      }
     }
     final task = _argumentText(arguments, const <String>['task', 'query']);
     final selectedId = _selectionService.selectAgentIdForTask(task, candidates);
@@ -531,6 +538,10 @@ class SubAgentRunPackageService {
     return candidates.isEmpty
         ? <String, Object?>{}
         : ValueReaders.deepCopyMap(candidates.first);
+  }
+
+  String _canonicalAgentId(String id) {
+    return id.trim().toLowerCase().replaceAll('-', '_');
   }
 
   String _argumentText(

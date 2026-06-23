@@ -127,6 +127,14 @@ class AppShellListenableState {
       _workbench.value = nextWorkbench;
     }
 
+    // 中文注释: 会话面板的运行态（生成状态/就绪信号）必须始终实时——即便当前不在 workbench
+    // （如 kb 项目主落在 projectAssets），否则会冻结在某个"正在..."中间态。
+    // 这正是 kb 水合卡在"正在恢复会话..."的根因：离开 workbench 后会话 notifier 不再同步。
+    _syncConversationPane(
+      previousWorkbench: previousWorkbench,
+      nextWorkbench: nextWorkbench,
+      force: destinationChanged,
+    );
     if (nextDestination == AppDestination.workbench) {
       _syncWorkbenchPanes(
         previousWorkbench: previousWorkbench,
@@ -179,6 +187,22 @@ class AppShellListenableState {
     }
 
     if (forceRefreshAll ||
+        _shouldRefreshOverlayPane(previousWorkbench, nextWorkbench)) {
+      final nextOverlay = _paneViewDataMapperService.toOverlayViewData(
+        nextWorkbench,
+      );
+      if (_workbenchOverlay.value != nextOverlay) {
+        _workbenchOverlay.value = nextOverlay;
+      }
+    }
+  }
+
+  void _syncConversationPane({
+    required WorkbenchViewData previousWorkbench,
+    required WorkbenchViewData nextWorkbench,
+    required bool force,
+  }) {
+    if (force ||
         _shouldRefreshConversationPane(previousWorkbench, nextWorkbench)) {
       final nextConversation = _safeConversationViewData(
         _paneViewDataMapperService,
@@ -186,16 +210,6 @@ class AppShellListenableState {
       );
       if (_workbenchConversation.value != nextConversation) {
         _workbenchConversation.value = nextConversation;
-      }
-    }
-
-    if (forceRefreshAll ||
-        _shouldRefreshOverlayPane(previousWorkbench, nextWorkbench)) {
-      final nextOverlay = _paneViewDataMapperService.toOverlayViewData(
-        nextWorkbench,
-      );
-      if (_workbenchOverlay.value != nextOverlay) {
-        _workbenchOverlay.value = nextOverlay;
       }
     }
   }
