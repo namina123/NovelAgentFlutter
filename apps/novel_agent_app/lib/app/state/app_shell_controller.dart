@@ -700,6 +700,30 @@ class AppShellController extends ChangeNotifier
         projectsRootPath: _defaultProjectsRootPath,
         readSettings: () => _settings,
         generateDraftUseCaseFactory: _generateDraftUseCaseFactory,
+        extractKnowledgeHandler: (ProjectDescriptor project) async {
+          // 中文注释: 提取知识（可选）委托给内置隐藏智能体的 LLM reference_extraction：
+          // 读拆书产物（结构化正文）分析知识，必须已配置模型；结果如实回给拆书页。
+          final service =
+              _injectedProjectReferenceExtractionExecutionService ??
+              ProjectReferenceExtractionExecutionService(
+                readSettings: () => _settings,
+                llmGatewayFactory: _llmGatewayFactory,
+                executeReferenceExtraction: ({
+                  required project,
+                  required llmGateway,
+                  required modelId,
+                  required request,
+                }) => _referenceExtractionRuntimeService.execute(
+                  project: project,
+                  llmGateway: llmGateway,
+                  modelId: modelId,
+                  request: request,
+                ),
+                modelExecutionProfileService: _modelExecutionProfileService,
+              );
+          final result = await service.pickAndExecute(project: project);
+          return (ok: result.ok, message: result.statusMessage);
+        },
         derivedProjectCreationService:
             BookDeconstructionDerivedProjectCreationService(
               createProjectWorkspaceUseCase: _createProjectWorkspaceUseCase,

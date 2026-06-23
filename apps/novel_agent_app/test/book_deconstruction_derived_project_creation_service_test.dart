@@ -68,15 +68,31 @@ void main() {
       workspacePort.readStoredTextFile(result.project.rootPath, premisePath),
       allOf(contains('# 核心前提'), contains('第一章 港口风暴')),
     );
-    final inheritedPath = const BookDeconstructionTargetPathService()
+    // 中文注释: 续写路线把分好的正文写进正文区域 chapters/（而非 inherited/ 镜像），
+    // 文件名带可解析的"第N章"，续写在其后接写。
+    final liveChapterPath = const BookDeconstructionTargetPathService()
+        .liveChapterPath(
+          sequence: 1,
+          title: '第一章 港口风暴',
+        );
+    expect(liveChapterPath, startsWith('chapters/'));
+    expect(
+      workspacePort.readStoredTextFile(
+        result.project.rootPath,
+        liveChapterPath,
+      ),
+      contains('主角在港口被迫卷入一场追捕'),
+    );
+    // inherited/ 镜像目录不应再出现续写正文（正文已落到正文区域）。
+    final mirroredPath = const BookDeconstructionTargetPathService()
         .inheritedChapterPath(
           followupOptionId: 'continuation_novel',
           sequence: 1,
           title: '第一章 港口风暴',
         );
     expect(
-      workspacePort.readStoredTextFile(result.project.rootPath, inheritedPath),
-      contains('主角在港口被迫卷入一场追捕'),
+      workspacePort.readStoredTextFile(result.project.rootPath, mirroredPath),
+      isNull,
     );
     expect(
       workspacePort.readStoredTextFile(

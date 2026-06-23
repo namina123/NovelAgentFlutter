@@ -16,8 +16,10 @@ class BookDeconstructionDraftBuilderService {
     required String organizationLinesText,
     BookDeconstructionContinuationDirection preferredContinuationDirection =
         BookDeconstructionContinuationDirection.analysisFirst,
+    bool extractKnowledge = true,
   }) {
     // 中文注释: 预演构建会扫描整份源文稿并生成大量结构对象，放到 isolate 里避免 UI 卡死。
+    // extractKnowledge=false = 纯拆书（默认 GUI 拆书按钮走这条）；true = 可选的知识抽取。
     final request = _BookDeconstructionDraftBuildRequest(
       sourceTitle: sourceTitle,
       sourceContent: sourceContent,
@@ -28,6 +30,7 @@ class BookDeconstructionDraftBuilderService {
       characterLinesText: characterLinesText,
       organizationLinesText: organizationLinesText,
       preferredContinuationDirection: preferredContinuationDirection,
+      extractKnowledge: extractKnowledge,
     );
     return Isolate.run(() => _buildDraftInIsolate(request));
   }
@@ -46,6 +49,7 @@ BookDeconstructionDraftBuildResult _buildDraftInIsolate(
     characterLinesText: request.characterLinesText,
     organizationLinesText: request.organizationLinesText,
     preferredContinuationDirection: request.preferredContinuationDirection,
+    extractKnowledge: request.extractKnowledge,
   );
 }
 
@@ -60,6 +64,7 @@ class _BookDeconstructionDraftBuildRequest {
     required this.characterLinesText,
     required this.organizationLinesText,
     required this.preferredContinuationDirection,
+    required this.extractKnowledge,
   });
 
   final String sourceTitle;
@@ -71,4 +76,5 @@ class _BookDeconstructionDraftBuildRequest {
   final String characterLinesText;
   final String organizationLinesText;
   final BookDeconstructionContinuationDirection preferredContinuationDirection;
+  final bool extractKnowledge;
 }

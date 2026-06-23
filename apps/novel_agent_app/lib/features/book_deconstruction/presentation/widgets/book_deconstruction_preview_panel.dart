@@ -157,6 +157,27 @@ class BookDeconstructionPreviewPanel extends StatelessWidget {
                 ),
               ],
               const SizedBox(height: 12),
+              // 中文注释: 提取知识是可选阶段：在拆书之后、确认之前，用内置隐藏智能体按已配置模型
+              // 读拆书产物分析知识。可跳过——不点就直接确认进入创作。
+              Tooltip(
+                message: viewData.canExtractKnowledge
+                    ? '用内置智能体按当前模型读拆书产物提取知识（可选，可跳过）'
+                    : '需要先在设置里配置模型；也可跳过此步',
+                child: OutlinedButton.icon(
+                  onPressed: viewData.canExtractKnowledge
+                      ? actionHandler.onBookDeconstructionExtractKnowledgeRequested
+                      : null,
+                  icon: viewData.operationKind == 'extracting_knowledge'
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.psychology_outlined),
+                  label: Text(viewData.extractKnowledgeActionLabel),
+                ),
+              ),
+              const SizedBox(height: 8),
               FilledButton.icon(
                 onPressed: viewData.canConfirmSelection
                     ? actionHandler.onBookDeconstructionConfirmRequested

@@ -20,6 +20,11 @@ import '../services/book_deconstruction_view_data_service.dart';
 import '../services/desktop_book_deconstruction_source_picker_service.dart';
 import '../../../workbench/application/controllers/generate_draft_use_case_factory.dart';
 
+/// 中文注释: 提取知识（可选阶段）的执行回调。由 app_shell 注入，委托给内置隐藏智能体的
+/// LLM 参考资料 extraction（读拆书产物、必须已配置模型）。返回 (ok, message) 给 UI 如实呈现。
+typedef BookDeconstructionExtractKnowledgeHandler =
+    Future<({bool ok, String message})> Function(ProjectDescriptor project);
+
 class BookDeconstructionController extends ChangeNotifier
     implements BookDeconstructionActionHandler {
   BookDeconstructionController({
@@ -48,6 +53,7 @@ class BookDeconstructionController extends ChangeNotifier
     String projectsRootPath = '',
     AppSettings? Function()? readSettings,
     GenerateDraftUseCaseFactory? generateDraftUseCaseFactory,
+    BookDeconstructionExtractKnowledgeHandler? extractKnowledgeHandler,
   }) : _readCurrentProject = readCurrentProject,
        _readProjectFileUseCase = readProjectFileUseCase,
        _syncWorkbenchResources = syncWorkbenchResources,
@@ -84,7 +90,8 @@ class BookDeconstructionController extends ChangeNotifier
        _snapshot = BookDeconstructionSnapshot.initial(),
        _viewData = BookDeconstructionViewData.initial(),
        _readSettings = readSettings,
-       _generateDraftUseCaseFactory = generateDraftUseCaseFactory;
+       _generateDraftUseCaseFactory = generateDraftUseCaseFactory,
+       _extractKnowledgeHandler = extractKnowledgeHandler;
 
   final ProjectDescriptor? Function() _readCurrentProject;
   final ReadProjectFileUseCase _readProjectFileUseCase;
@@ -95,6 +102,7 @@ class BookDeconstructionController extends ChangeNotifier
   final BookDeconstructionViewDataService _viewDataService;
   final AppSettings? Function()? _readSettings;
   final GenerateDraftUseCaseFactory? _generateDraftUseCaseFactory;
+  final BookDeconstructionExtractKnowledgeHandler? _extractKnowledgeHandler;
   final BookDeconstructionFollowupOptionSelectionService
   _followupOptionSelectionService;
   final BookDeconstructionProjectSetupDocumentService
@@ -402,10 +410,12 @@ class BookDeconstructionController extends ChangeNotifier
       isLoading: true,
       operationKind: BookDeconstructionOperationKind.buildingPreview,
     );
-    _statusMessage = '正在生成结构化预览...';
+    _statusMessage = '正在拆书（分章 + 清洗）...';
     _rebuildView();
     await Future<void>.delayed(const Duration(milliseconds: 16));
     try {
+      // 中文注释: 拆书按钮 = 纯拆书（extractKnowledge:false）：只分章 + 章节骨架，不做知识抽取。
+      // 知识抽取是可选的"提取知识"阶段，用户可跳过直接进入确认/创作。
       final buildResult = await _draftBuilderService.build(
         sourceTitle: _snapshot.sourceTitle,
         sourceContent: _snapshot.sourceContent,
@@ -416,6 +426,7 @@ class BookDeconstructionController extends ChangeNotifier
         characterLinesText: _snapshot.characterLinesText,
         organizationLinesText: _snapshot.organizationLinesText,
         preferredContinuationDirection: _preferredContinuationDirection(),
+        extractKnowledge: false,
       );
       final selectedIds = buildResult.applicationPlan.items
           .map((item) => item.id)
@@ -434,7 +445,7 @@ class BookDeconstructionController extends ChangeNotifier
         confirmedPreviewPath: '',
       );
       _statusMessage =
-          '已生成结构化预览，共 ${buildResult.applicationPlan.items.length} 项可应用。';
+          '已完成拆书，共分出 ${buildResult.extractionResult.chapterOutlines.length} 章；可继续提取知识（可选）或直接确认进入创作。';
       _rebuildView();
     } catch (error) {
       _snapshot = _snapshot.copyWith(
@@ -444,6 +455,65 @@ class BookDeconstructionController extends ChangeNotifier
       _statusMessage = '生成结构化预览失败：$error';
       _rebuildView();
     }
+  }
+
+  @override
+  Future<void> onBookDeconstructionExtractKnowledgeRequested() async {
+    // 中文注释: 提取知识是可选阶段：委托 app_shell 注入的隐藏内置智能体 LLM extraction，
+    // 读拆书产物分析知识。必须已配置模型（否则 service 如实拒绝）。可跳过——不点就不提取。
+    final project = _readCurrentProject();
+    final handler = _extractKnowledgeHandler;
+    if (project == null || handler == null) {
+      _statusMessage = '提取知识尚未接入，可跳过此步直接确认进入创作。';
+      _rebuildView();
+      return;
+    }
+    if (!_isModelConfigured()) {
+      _statusMessage = '提取知识需要先在设置里配置模型；也可跳过此步直接确认进入创作。';
+      _rebuildView();
+      return;
+    }
+    _snapshot = _snapshot.copyWith(
+      isLoading: true,
+      operationKind: BookDeconstructionOperationKind.extractingKnowledge,
+    );
+    _statusMessage = '正在用内置智能体提取知识（读取拆书产物）…';
+    _rebuildView();
+    await Future<void>.delayed(const Duration(milliseconds: 16));
+    try {
+      final result = await handler(project);
+      _snapshot = _snapshot.copyWith(
+        isLoading: false,
+        operationKind: BookDeconstructionOperationKind.idle,
+      );
+      _statusMessage = result.ok
+          ? '已提取知识并写入项目资产：${result.message}'
+          : '提取知识未完成：${result.message}（可跳过此步直接确认进入创作）';
+      _rebuildView();
+    } catch (error) {
+      _snapshot = _snapshot.copyWith(
+        isLoading: false,
+        operationKind: BookDeconstructionOperationKind.idle,
+      );
+      _statusMessage = '提取知识失败：$error（可跳过此步直接确认进入创作）';
+      _rebuildView();
+    }
+  }
+
+  bool _isModelConfigured() {
+    final settings = _readSettings?.call();
+    if (settings == null || settings.providers.isEmpty) {
+      return false;
+    }
+    final provider = _resolveProvider(settings);
+    if (provider == null) {
+      return false;
+    }
+    return _resolveModelId(settings, provider).isNotEmpty;
+  }
+
+  bool _isExtractKnowledgeAvailable() {
+    return _extractKnowledgeHandler != null && _isModelConfigured();
   }
 
   @override
@@ -705,6 +775,7 @@ class BookDeconstructionController extends ChangeNotifier
       status: _statusMessage,
       canCreateDerivedProject: _isDerivedProjectCreationAvailable(),
       canSmartImport: _isSmartImportAvailable(),
+      canExtractKnowledge: _isExtractKnowledgeAvailable(),
     );
     if (!_disposed) {
       notifyListeners();

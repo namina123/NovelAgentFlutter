@@ -110,7 +110,7 @@ class _BookDeconstructionImportPanelState
                   Text('源文稿与结构补充', style: textTheme.titleSmall),
                   const SizedBox(height: 4),
                   Text(
-                    '先导入书籍原文，再补充风格、规则或角色清单，随后生成结构化预览。',
+                    '先导入书籍原文，再点"拆书"分章去噪；下面的结构补充仅用于可选的知识提取，可留空。',
                     style: textTheme.bodySmall,
                   ),
                 ],

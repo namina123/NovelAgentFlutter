@@ -53,4 +53,24 @@ void main() {
       'assets/styles/style-1.md',
     );
   });
+
+  test('liveChapterPath 把续写正文落到正文区域 chapters/ 且文件名带可解析"第N章"', () {
+    // 中文注释: 规格要求续写把分好的正文放进正文区域。liveChapterPath 必须落在 chapters/ 根
+    // （而非 inherited/），并且文件名带"第N章"，让续写优先级服务能解析出章节号。
+    // 标题已含"第N章"时直接用标题。
+    expect(
+      service.liveChapterPath(sequence: 1, title: '第一章 港口风暴'),
+      'chapters/第一章_港口风暴.md',
+    );
+    // 标题没有章节标记时，用序号合成"第N章"前缀，保证可解析。
+    expect(
+      service.liveChapterPath(sequence: 3, title: '港口风暴'),
+      'chapters/第3章_港口风暴.md',
+    );
+    // sequence<=0 兜底为第 1 章。
+    expect(
+      service.liveChapterPath(sequence: 0, title: '序'),
+      'chapters/第1章_序.md',
+    );
+  });
 }

@@ -78,6 +78,34 @@ class BookDeconstructionTargetPathService {
     return '$derivedRoot/$safeRoute/${chapterNumber.toString().padLeft(3, '0')}_$normalizedTitle.md';
   }
 
+  String liveChapterPath({
+    required int sequence,
+    required String title,
+    ProjectStorageStrategy storageStrategy =
+        ProjectStorageStrategy.markdownProjectStore,
+  }) {
+    // 中文注释: 续写路线把分好的正文写进正文区域（chapters/，对应 document_kind='chapter'），
+    // 而不是 inherited/ 镜像目录。文件名带可解析的"第N章"，让续写上下文优先级服务
+    // （ProjectChapterContinuityPriorityService）能把它识别为已存在的前情正文并给高权重。
+    final chapterNumber = sequence <= 0 ? 1 : sequence;
+    final root = _storageStrategyPathPolicyService.directoryForContentType(
+      storageStrategy: storageStrategy,
+      contentType: 'chapter',
+    );
+    final safeTitle = _safeId(title);
+    final hasChapterMarker = RegExp(
+      r'第\s*([0-9０-９零〇一二三四五六七八九十百千万两]+)\s*章',
+    ).hasMatch(title);
+    if (hasChapterMarker) {
+      // 标题本身已含"第N章"（如"第一章 港口风暴"），直接用作文件名，可被优先级解析。
+      return safeTitle.isEmpty ? '$root/第$chapterNumber章.md' : '$root/$safeTitle.md';
+    }
+    // 标题没有章节标记时，用序号合成可解析的"第N章"前缀。
+    return safeTitle.isEmpty
+        ? '$root/第$chapterNumber章.md'
+        : '$root/第${chapterNumber}章_$safeTitle.md';
+  }
+
   String premisePath(InspirationPremise premise, int index) {
     // 中文注释: 拆书前提默认回到现有 premise/ 目录，后续 UI/adapter 只需消费稳定路径提示即可。
     final suffix = index <= 0 ? 1 : index;

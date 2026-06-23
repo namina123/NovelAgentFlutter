@@ -66,21 +66,9 @@ void main() {
     );
     expect(content, isNotNull);
     expect(content, contains('# 拆书结构化预演'));
-    final claimsLog = workspacePort.readStoredTextFile(
-      'D:/Projects/deconstruction_project',
-      '.novel_agent/continuity/claims/claims.jsonl',
-    );
-    final proposalIndex = workspacePort.readStoredTextFile(
-      'D:/Projects/deconstruction_project',
-      '.novel_agent/continuity/profile_proposals/index.json',
-    );
-    final reviewIndex = workspacePort.readStoredTextFile(
-      'D:/Projects/deconstruction_project',
-      '.novel_agent/continuity/reviews/index.json',
-    );
-    expect(claimsLog, contains('analysis.deconstruction.story_outline'));
-    expect(proposalIndex, contains('proposal_'));
-    expect(reviewIndex, contains('review_'));
+    // 中文注释: 拆书按钮现在是纯拆书（只分章），不产出知识抽取的 claims/proposals/reviews——
+    // 那些属于可选的"提取知识"阶段，在 use case 与 narrative persistence 层另有覆盖。
+    // 这里只校验纯拆书的结构化产物：章节骨架预览、规范化正文、续写路线说明。
     final structuredSource = workspacePort.readStoredTextFile(
       'D:/Projects/deconstruction_project',
       'analysis/book_deconstruction_structured_source.md',
@@ -107,23 +95,6 @@ void main() {
       isNull,
     );
     expect(workspacePort.syncCount, 1);
-
-    final activationService = ProjectContextActivationService(
-      workspacePort: workspacePort,
-    );
-    final activationReport = await activationService.buildReport(
-      project: currentProject,
-      taskType: 'chapter',
-    );
-    final selectedSections = ValueReaders.mapList(
-      activationReport.metadata['selected_context_sections'],
-    );
-    final selectedKinds = selectedSections
-        .map((item) => ValueReaders.stringValue(item['source_kind']))
-        .toSet();
-    expect(selectedKinds, isNotEmpty);
-    expect(selectedKinds, contains('narrative_claim_submission'));
-    expect(ValueReaders.stringValue(activationReport.summary), isNotEmpty);
   });
 
   test('拆书控制器导入时会把原文归档到来源层并把预演留在 analysis 层', () async {
@@ -319,6 +290,8 @@ void main() {
     expect(controller.viewData.canCreateDerivedProject, isTrue);
     await controller.onBookDeconstructionCreateDerivedProjectRequested();
 
+    // 中文注释: 控制器拆书按钮走纯拆书（extractKnowledge:false），所以期望结果也按纯拆书算：
+    // 应用计划里只有章纲类条目，没有前提/角色等资产条目。
     final expectedBuildResult = BuildBookDeconstructionDraftUseCase().execute(
       sourceTitle: '海上城邦',
       sourceContent:
@@ -329,11 +302,10 @@ void main() {
       worldRulesText: '港口贸易绑定超常权力。',
       characterLinesText: '林砚：主角',
       organizationLinesText: '',
+      extractKnowledge: false,
     );
-    final expectedPremisePath = expectedBuildResult.applicationPlan.items
-        .firstWhere(
-          (item) => item.sourceKind == BookDeconstructionArtifactKind.premise,
-        )
+    final expectedMaterializedPath = expectedBuildResult.applicationPlan.items
+        .first
         .relativePathHint;
 
     expect(
@@ -357,7 +329,7 @@ void main() {
     expect(
       workspacePort.readStoredTextFile(
         openedProject!.rootPath,
-        expectedPremisePath,
+        expectedMaterializedPath,
       ),
       isNotNull,
     );
@@ -394,6 +366,106 @@ void main() {
     expect(controller.viewData.status, '当前派生项目创建暂不可用。');
     expect(controller.viewData.status, isNot(contains('未接入')));
   });
+
+  test('拆书控制器提取知识（可选）会调用内置智能体回调并如实呈现结果', () async {
+    // 中文注释: 提取知识是可选阶段：已配置模型时，按钮可用，点击后委托隐藏内置智能体回调，
+    // 把结果如实回显。spec：必须选模型 + 内置智能体藏起来分析。
+    final workspacePort = _InMemoryProjectWorkspacePort();
+    const currentProject = ProjectDescriptor(
+      id: 'project-extract',
+      name: '拆书提取知识测试',
+      rootPath: 'D:/Projects/deconstruction_extract',
+      projectType: 'book_deconstruction',
+    );
+    var handlerCalls = 0;
+    final controller = BookDeconstructionController(
+      readProjectFileUseCase: ReadProjectFileUseCase(workspacePort),
+      writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
+        projectWorkspacePort: workspacePort,
+      ),
+      narrativePersistenceService:
+          BookDeconstructionNarrativePersistenceService(
+            workspacePort: workspacePort,
+          ),
+      readCurrentProject: () => currentProject,
+      syncWorkbenchResources: () async {},
+      onBackRequested: () {},
+      readSettings: () => _configuredSettings(),
+      extractKnowledgeHandler: (project) async {
+        handlerCalls += 1;
+        expect(project.id, 'project-extract');
+        return (ok: true, message: '已提取 3 条知识卡片');
+      },
+    );
+
+    await controller.initialize();
+    expect(controller.viewData.canExtractKnowledge, isTrue);
+    await controller.onBookDeconstructionExtractKnowledgeRequested();
+    expect(handlerCalls, 1);
+    expect(controller.viewData.status, contains('已提取 3 条知识卡片'));
+  });
+
+  test('拆书控制器在未配置模型时如实拒绝提取知识且不调用回调', () async {
+    // 中文注释: spec：提取知识必须选模型。未配置时按钮不可用，点击如实提示需要配置模型，且不触发回调。
+    final workspacePort = _InMemoryProjectWorkspacePort();
+    const currentProject = ProjectDescriptor(
+      id: 'project-extract-no-model',
+      name: '拆书提取知识无模型测试',
+      rootPath: 'D:/Projects/deconstruction_extract_no_model',
+      projectType: 'book_deconstruction',
+    );
+    var handlerCalls = 0;
+    final controller = BookDeconstructionController(
+      readProjectFileUseCase: ReadProjectFileUseCase(workspacePort),
+      writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
+        projectWorkspacePort: workspacePort,
+      ),
+      narrativePersistenceService:
+          BookDeconstructionNarrativePersistenceService(
+            workspacePort: workspacePort,
+          ),
+      readCurrentProject: () => currentProject,
+      syncWorkbenchResources: () async {},
+      onBackRequested: () {},
+      readSettings: () => const AppSettings(
+        defaultProviderId: '',
+        defaultAgentId: '',
+        defaultModelId: '',
+        defaultProjectPath: '',
+        providers: <ProviderEndpointSettings>[],
+      ),
+      extractKnowledgeHandler: (project) async {
+        handlerCalls += 1;
+        return (ok: true, message: '不应到达');
+      },
+    );
+
+    await controller.initialize();
+    expect(controller.viewData.canExtractKnowledge, isFalse);
+    await controller.onBookDeconstructionExtractKnowledgeRequested();
+    expect(handlerCalls, 0);
+    expect(controller.viewData.status, contains('配置模型'));
+  });
+}
+
+AppSettings _configuredSettings() {
+  return const AppSettings(
+    defaultProviderId: 'provider-1',
+    defaultAgentId: 'default-agent',
+    defaultModelId: 'test-model',
+    defaultProjectPath: '',
+    providers: <ProviderEndpointSettings>[
+      ProviderEndpointSettings(
+        id: 'provider-1',
+        title: 'Provider',
+        protocol: 'openai_compatible',
+        baseUrl: 'https://example.invalid/v1',
+        apiKey: 'test-key',
+        modelId: 'test-model',
+        description: 'test',
+      ),
+    ],
+  );
 }
 
 class _FakeDesktopBookDeconstructionSourcePickerService
