@@ -171,7 +171,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('正在提取拆书结构资产...'), findsOneWidget);
+    expect(find.text('正在拆书（分章 + 去噪 + 清洗）...'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
 
