@@ -10,6 +10,7 @@ class ProjectRagRetrievalToolExecutor {
     RagProjectMountSummaryService? mountSummaryService,
     RetrievalSearchPort? searchPort,
     ProjectRagRetrievalActivationBridgeService? activationBridgeService,
+    this.searchPortResolver,
   }) : _metadataRepository =
            metadataRepository ?? SqliteRagMetadataRepository(),
        _mountSummaryService =
@@ -26,6 +27,12 @@ class ProjectRagRetrievalToolExecutor {
   final RetrievalSearchPort? _searchPort;
   final ProjectRagRetrievalActivationBridgeService
   _activationBridgeService;
+
+  /// 中文注释: 设置可能运行时变化（用户改 provider/embedding 模型），向量端口不能在装配期写死。
+  /// 这里注入一个惰性解析闭包：每次检索时按当前设置解析出向量端口，解析失败或缺配置返回 null
+  /// （由 _searchHits 如实降级到 lexical / lexical_fallback，不再造假）。异步以匹配
+  /// SettingsRepository.load() 的异步读取。
+  final Future<RetrievalSearchPort?> Function()? searchPortResolver;
 
   Future<JsonMap> retrievePassages(
     ProjectDescriptor project,
@@ -145,7 +152,18 @@ class ProjectRagRetrievalToolExecutor {
     RetrievalQuery query,
     List<RetrievalMountBinding> bindings,
   ) async {
-    final searchPort = _searchPort;
+    RetrievalSearchPort? searchPort;
+    try {
+      // 中文注释: 优先用装配期注入的静态端口，否则惰性解析（读当前设置）。
+      searchPort = _searchPort ?? (await searchPortResolver?.call());
+    } catch (error) {
+      // 中文注释: 解析闭包自身抛错（如读取设置失败）也如实降级，不让检索工具整体报错。
+      return _SearchOutcome(
+        hits: await _lexicalSearch(project, query, bindings),
+        mode: 'lexical_fallback',
+        fallbackReason: error.toString(),
+      );
+    }
     if (searchPort == null) {
       return _SearchOutcome(
         hits: await _lexicalSearch(project, query, bindings),

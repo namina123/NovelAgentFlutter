@@ -239,6 +239,58 @@ void main() {
         );
       },
     );
+
+    test(
+      'resolves the search port lazily via searchPortResolver when no static port is wired',
+      () async {
+        // 中文注释: 生产装配里向量端口是惰性解析的（设置每次可能变）。验证：只给 resolver、
+        // 不给静态端口时，executor 会调用 resolver 并走 vector 路径；resolver 返回 null 时
+        // 如实落到 lexical。
+        var resolverCalls = 0;
+        final executorWithResolver = ProjectRagRetrievalToolExecutor(
+          searchPortResolver: () async {
+            resolverCalls += 1;
+            return _StubRetrievalSearchPort();
+          },
+        );
+        final result = await executorWithResolver.retrievePassages(
+          project,
+          <String, Object?>{
+            'query_id': 'query-lazy',
+            'query_text': '镜潮回扣',
+            'project_id': project.id,
+            'corpus_filters': <Object?>['corpus-001'],
+            'top_k': 5,
+          },
+        );
+
+        expect(resolverCalls, 1);
+        expect(
+          ValueReaders.stringValue(result['retrieval_mode']),
+          'vector',
+        );
+        expect(result['retrieval_hits'], isNotEmpty);
+
+        // resolver 返回 null（未配置 embedding）时如实降级到 lexical，不冒充。
+        final executorWithNullResolver = ProjectRagRetrievalToolExecutor(
+          searchPortResolver: () async => null,
+        );
+        final lexicalResult = await executorWithNullResolver.retrievePassages(
+          project,
+          <String, Object?>{
+            'query_id': 'query-lazy-null',
+            'query_text': '镜潮回扣',
+            'project_id': project.id,
+            'corpus_filters': <Object?>['corpus-001'],
+            'top_k': 5,
+          },
+        );
+        expect(
+          ValueReaders.stringValue(lexicalResult['retrieval_mode']),
+          'lexical',
+        );
+      },
+    );
   });
 }
 

@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../config/local_settings_repository.dart';
+import '../providers/rag/settings_backed_embedding_provider_resolver.dart';
+import '../storage/sqlite_vector_retrieval_port.dart';
 import '../packages/agent_catalog_overlay_repository.dart';
 import '../packages/agent_group_catalog_overlay_repository.dart';
 import '../packages/builtin_starter_agent_group_registration_service.dart';
@@ -183,16 +185,27 @@ class AdapterBundle {
       ...desktopAppPaths.settingsSearchRoots,
       ...settingsSearchRoots,
     ].where((path) => path.trim().isNotEmpty).toSet().toList(growable: false);
+    final settingsRepository = LocalSettingsRepository(
+      settingsSearchRoots: resolvedSettingsSearchRoots,
+      defaultProjectRootPath: resolvedDefaultProjectRootPath,
+      allowConfiguredProjectPathOverride: allowConfiguredProjectPathOverride,
+      environment: environment,
+    );
+    // 中文注释: RAG 向量检索的惰性解析：每次检索时读当前设置，按默认 provider + embedding
+    // 模型构造向量端口；未配置 embedding 模型或无凭据时返回 null（executor 如实降级到词法）。
+    Future<RetrievalSearchPort?> ragSearchPortResolver() async {
+      final embeddingProvider = const SettingsBackedEmbeddingProviderResolver()
+          .resolve(await settingsRepository.load());
+      if (embeddingProvider == null) {
+        return null;
+      }
+      return SqliteVectorRetrievalPort(embeddingProvider: embeddingProvider);
+    }
     return AdapterBundle(
       settingsRootPath: resolvedSettingsRootPath,
       settingsSearchRoots: resolvedSettingsSearchRoots,
       defaultProjectRootPath: resolvedDefaultProjectRootPath,
-      settingsRepository: LocalSettingsRepository(
-        settingsSearchRoots: resolvedSettingsSearchRoots,
-        defaultProjectRootPath: resolvedDefaultProjectRootPath,
-        allowConfiguredProjectPathOverride: allowConfiguredProjectPathOverride,
-        environment: environment,
-      ),
+      settingsRepository: settingsRepository,
       projectRepository: LocalProjectRepository(),
       projectContentRepository: projectContentRepository,
       projectReadableProjectionService: projectReadableProjectionService,
@@ -215,6 +228,7 @@ class AdapterBundle {
         treeOrderService: treeOrderService,
         buildModeGuidancePlanInputUseCase: buildModeGuidancePlanInputUseCase,
         workflowRuntimeService: workflowRuntimeService,
+        ragSearchPortResolver: ragSearchPortResolver,
         agentSkillRuntimeLoadoutService: ProjectAgentSkillRuntimeLoadoutService(
           loadoutRepository: projectAgentSkillLoadoutRepository,
         ),

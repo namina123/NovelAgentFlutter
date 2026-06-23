@@ -40,6 +40,7 @@ class ProjectToolDispatcher implements ToolExecutionPort {
     ProjectWorkflowRuntimeService? workflowRuntimeService,
     ProjectLongTaskToolExecutor? longTaskToolExecutor,
     ProjectRagRetrievalToolExecutor? ragRetrievalToolExecutor,
+    Future<RetrievalSearchPort?> Function()? ragSearchPortResolver,
     ProjectAgentSkillRuntimeLoadoutService? agentSkillRuntimeLoadoutService,
     ProjectStorageAwareToolCapabilityMatrix? toolCapabilityMatrix,
   }) : _toolCallNormalizerService =
@@ -115,7 +116,9 @@ class ProjectToolDispatcher implements ToolExecutionPort {
                : null),
        _ragRetrievalToolExecutor =
            ragRetrievalToolExecutor ??
-           ProjectRagRetrievalToolExecutor(),
+           ProjectRagRetrievalToolExecutor(
+             searchPortResolver: ragSearchPortResolver,
+           ),
        _agentSkillToolExecutor = ProjectAgentSkillToolExecutor(
          skillPackageCatalog: skillPackageCatalog,
          skillGroupCatalog: skillGroupCatalog,

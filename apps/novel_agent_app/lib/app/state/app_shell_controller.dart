@@ -656,7 +656,18 @@ class AppShellController extends ChangeNotifier
             List<JsonMap>.from(_agentEcosystemSnapshot.agents.map(_mapValue)),
         syncWorkbenchResources: _syncWorkbenchResources,
         onBackRequested: _handleProjectAssetsBackRequested,
-        ragExtractionExecutionService: ProjectRagExtractionExecutionService(),
+        ragExtractionExecutionService: ProjectRagExtractionExecutionService(
+          // 中文注释: 入库时按当前设置解析 embedding provider；未配置 embedding 模型或缺凭据时
+          // 返回 null，ingestion 如实回退到纯元数据（检索端也会诚实标注词法模式）。
+          embeddingProviderResolver: () async {
+            final settings = _settings;
+            if (settings == null) {
+              return null;
+            }
+            return const SettingsBackedEmbeddingProviderResolver()
+                .resolve(settings);
+          },
+        ),
         referenceExtractionExecutionService:
             _injectedProjectReferenceExtractionExecutionService ??
             ProjectReferenceExtractionExecutionService(
