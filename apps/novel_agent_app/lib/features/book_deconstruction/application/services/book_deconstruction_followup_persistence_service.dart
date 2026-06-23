@@ -38,6 +38,7 @@ class BookDeconstructionFollowupPersistenceService {
     required ProjectDescriptor project,
     required BookDeconstructionDraftBuildResult buildResult,
     required String followupOptionId,
+    bool writeBodyAsLiveNarrative = false,
   }) async {
     final option = _optionSelectionService.optionById(
       followupMenu: buildResult.followupMenu,
@@ -77,13 +78,19 @@ class BookDeconstructionFollowupPersistenceService {
       content: guideMarkdown,
     );
 
-    final inheritedChapterPaths =
+    // 中文注释: 续写路线（sourceInheritanceMode==continuation）下：
+    // - 派生项目创建（writeBodyAsLiveNarrative=true）：把分好的正文写进正文区域 chapters/，续写在其后接写。
+    // - 拆书项目确认（默认 false）：仍写 inherited/ 镜像（分析产物），不打扰正文层。
+    // 同人路线（fanfic）按设计不继承正文，保持原行为。
+    final inheritsBody =
         option.sourceInheritanceMode ==
-            BookDeconstructionSourceInheritanceMode.continuation
+            BookDeconstructionSourceInheritanceMode.continuation;
+    final inheritedChapterPaths = inheritsBody
         ? await _persistInheritedChapters(
             project: project,
             followupOptionId: option.id,
             buildResult: buildResult,
+            asLiveNarrative: writeBodyAsLiveNarrative,
           )
         : const <String>[];
     return BookDeconstructionFollowupPersistenceResult(
@@ -99,6 +106,7 @@ class BookDeconstructionFollowupPersistenceService {
     required ProjectDescriptor project,
     required String followupOptionId,
     required BookDeconstructionDraftBuildResult buildResult,
+    required bool asLiveNarrative,
   }) async {
     final sourceContent = buildResult.input.sourceDocuments.isEmpty
         ? ''
@@ -116,12 +124,19 @@ class BookDeconstructionFollowupPersistenceService {
       final title = section.heading.trim().isEmpty
           ? '原作片段 ${section.sectionIndex}'
           : section.heading.trim();
-      final relativePath = _targetPathService.inheritedChapterPath(
-        followupOptionId: followupOptionId,
-        sequence: section.sectionIndex,
-        title: title,
-        storageStrategy: project.storageStrategy,
-      );
+      // 中文注释: asLiveNarrative=true 走正文区域（chapters/第N章），否则走 inherited/ 镜像。
+      final relativePath = asLiveNarrative
+          ? _targetPathService.liveChapterPath(
+              sequence: section.sectionIndex,
+              title: title,
+              storageStrategy: project.storageStrategy,
+            )
+          : _targetPathService.inheritedChapterPath(
+              followupOptionId: followupOptionId,
+              sequence: section.sectionIndex,
+              title: title,
+              storageStrategy: project.storageStrategy,
+            );
       final buffer = StringBuffer()..writeln(title);
       if (section.content.trim().isNotEmpty) {
         buffer

@@ -22,6 +22,7 @@ class BookDeconstructionViewDataService {
     required String status,
     bool canCreateDerivedProject = true,
     bool canSmartImport = false,
+    bool canExtractKnowledge = false,
   }) {
     final buildResult = snapshot.buildResult;
     final previewSections = buildResult == null
@@ -76,8 +77,21 @@ class BookDeconstructionViewDataService {
       canSmartImport: canSmartImport && !snapshot.isLoading,
       smartImportActionLabel: _smartImportActionLabel(snapshot.operationKind),
       buildPreviewActionLabel: _buildPreviewActionLabel(snapshot.operationKind),
+      canExtractKnowledge: canExtractKnowledge && !snapshot.isLoading,
+      extractKnowledgeActionLabel: _extractKnowledgeActionLabel(
+        snapshot.operationKind,
+      ),
       continuity: continuity,
     );
+  }
+
+  String _extractKnowledgeActionLabel(String operationKind) {
+    switch (operationKind) {
+      case BookDeconstructionOperationKind.extractingKnowledge:
+        return '正在提取知识';
+      default:
+        return '提取知识（可选）';
+    }
   }
 
   String _importActionLabel(String operationKind) {
@@ -103,7 +117,7 @@ class BookDeconstructionViewDataService {
       case BookDeconstructionOperationKind.buildingPreview:
         return '正在拆书';
       default:
-        return '生成结构化预览';
+        return '拆书';
     }
   }
 
@@ -123,8 +137,8 @@ class BookDeconstructionViewDataService {
       ),
       BookDeconstructionStepViewData(
         id: BookDeconstructionStepId.previewStructure,
-        title: '结构化预览',
-        description: '查看自动整理出的前提、章节、连续性关键信息与拟应用条目。',
+        title: '拆书',
+        description: '把原文分章、去噪、清洗；知识提取是可选的下一步，可跳过直接确认。',
         isActive:
             snapshot.activeStepId == BookDeconstructionStepId.previewStructure,
         isComplete: hasPreview,

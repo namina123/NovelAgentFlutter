@@ -25,6 +25,8 @@ abstract class BookDeconstructionActionHandler {
 
   Future<void> onBookDeconstructionBuildPreviewRequested();
 
+  Future<void> onBookDeconstructionExtractKnowledgeRequested();
+
   void onBookDeconstructionPlanItemSelectionChanged({
     required String itemId,
     required bool selected,

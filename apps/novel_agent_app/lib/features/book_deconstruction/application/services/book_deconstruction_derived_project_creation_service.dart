@@ -113,6 +113,9 @@ class BookDeconstructionDerivedProjectCreationService {
       project: derivedProject,
       buildResult: buildResult,
       followupOptionId: selectedFollowupOptionId,
+      // 中文注释: 派生的是创作项目（续写=小说项目），把分好的正文直接写进它的正文区域 chapters/，
+      // 续写在其后接写；同人路线不继承正文，此标志对其无影响。
+      writeBodyAsLiveNarrative: true,
     );
     changedPaths.addAll(<String>[
       followupResult.planPath,

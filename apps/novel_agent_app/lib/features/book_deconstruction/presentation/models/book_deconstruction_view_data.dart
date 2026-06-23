@@ -32,6 +32,8 @@ class BookDeconstructionViewData {
     required this.canSmartImport,
     required this.smartImportActionLabel,
     required this.buildPreviewActionLabel,
+    required this.canExtractKnowledge,
+    required this.extractKnowledgeActionLabel,
     this.continuity,
   });
 
@@ -64,6 +66,8 @@ class BookDeconstructionViewData {
       canSmartImport: false,
       smartImportActionLabel: '智能拆书',
       buildPreviewActionLabel: '生成结构化预览',
+      canExtractKnowledge: false,
+      extractKnowledgeActionLabel: '提取知识（可选）',
       continuity: null,
     );
   }
@@ -95,5 +99,7 @@ class BookDeconstructionViewData {
   final bool canSmartImport;
   final String smartImportActionLabel;
   final String buildPreviewActionLabel;
+  final bool canExtractKnowledge;
+  final String extractKnowledgeActionLabel;
   final BookDeconstructionContinuityViewData? continuity;
 }

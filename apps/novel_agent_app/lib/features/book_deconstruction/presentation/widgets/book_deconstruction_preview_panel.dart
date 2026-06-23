@@ -37,10 +37,10 @@ class BookDeconstructionPreviewPanel extends StatelessWidget {
                 child: CircularProgressIndicator(strokeWidth: 2.5),
               ),
               const SizedBox(height: 16),
-              Text('正在提取拆书结构资产...', style: textTheme.titleSmall),
+              Text('正在拆书（分章 + 去噪 + 清洗）...', style: textTheme.titleSmall),
               const SizedBox(height: 6),
               Text(
-                '会话面板会在这里持续展示分析进度与结构结果，不进入正式创作会话。',
+                '拆书只做分章与清洗；知识提取是可选的下一步，可跳过直接确认进入创作。',
                 style: textTheme.bodySmall,
                 textAlign: TextAlign.center,
               ),
@@ -54,7 +54,7 @@ class BookDeconstructionPreviewPanel extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Text(
-            '导入源文稿后，先生成结构化预览。这里会展示前提、章节骨架和拟应用条目。',
+            '导入源文稿后点"拆书"。这里会展示分章结果与拟应用的章纲条目；知识提取是可选的下一步。',
             style: textTheme.bodyMedium,
           ),
         ),
@@ -67,7 +67,7 @@ class BookDeconstructionPreviewPanel extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
           child: Row(
             children: [
-              Expanded(child: Text('结构化预览与拟应用条目', style: textTheme.titleSmall)),
+              Expanded(child: Text('拆书结果与拟应用条目', style: textTheme.titleSmall)),
               TextButton(
                 onPressed: actionHandler.onBookDeconstructionSelectAllRequested,
                 child: const Text('全选'),
@@ -157,6 +157,27 @@ class BookDeconstructionPreviewPanel extends StatelessWidget {
                 ),
               ],
               const SizedBox(height: 12),
+              // 中文注释: 提取知识是可选阶段：在拆书之后、确认之前，用内置隐藏智能体按已配置模型
+              // 读拆书产物分析知识。可跳过——不点就直接确认进入创作。
+              Tooltip(
+                message: viewData.canExtractKnowledge
+                    ? '用内置智能体按当前模型读拆书产物提取知识（可选，可跳过）'
+                    : '需要先在设置里配置模型；也可跳过此步',
+                child: OutlinedButton.icon(
+                  onPressed: viewData.canExtractKnowledge
+                      ? actionHandler.onBookDeconstructionExtractKnowledgeRequested
+                      : null,
+                  icon: viewData.operationKind == 'extracting_knowledge'
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.psychology_outlined),
+                  label: Text(viewData.extractKnowledgeActionLabel),
+                ),
+              ),
+              const SizedBox(height: 8),
               FilledButton.icon(
                 onPressed: viewData.canConfirmSelection
                     ? actionHandler.onBookDeconstructionConfirmRequested

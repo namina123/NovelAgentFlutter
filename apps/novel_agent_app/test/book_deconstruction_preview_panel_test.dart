@@ -149,6 +149,8 @@ void main() {
       canSmartImport: false,
       smartImportActionLabel: '智能拆书',
       buildPreviewActionLabel: '正在拆书',
+      canExtractKnowledge: false,
+      extractKnowledgeActionLabel: '提取知识（可选）',
       continuity: null,
     );
 
@@ -169,7 +171,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('正在提取拆书结构资产...'), findsOneWidget);
+    expect(find.text('正在拆书（分章 + 去噪 + 清洗）...'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
 
@@ -220,6 +222,8 @@ void main() {
                 canSmartImport: false,
                 smartImportActionLabel: '智能拆书',
                 buildPreviewActionLabel: '生成结构化预览',
+                canExtractKnowledge: false,
+                extractKnowledgeActionLabel: '提取知识（可选）',
                 continuity: const BookDeconstructionContinuityViewData(
                   preferredDirectionLabel: '偏向长任务',
                   highlightedBuildTierLabel: '默认高亮',
@@ -263,6 +267,9 @@ class _FakeBookDeconstructionActionHandler
 
   @override
   Future<void> onBookDeconstructionBuildPreviewRequested() async {}
+
+  @override
+  Future<void> onBookDeconstructionExtractKnowledgeRequested() async {}
 
   @override
   void onBookDeconstructionCharacterLinesChanged(String value) {}

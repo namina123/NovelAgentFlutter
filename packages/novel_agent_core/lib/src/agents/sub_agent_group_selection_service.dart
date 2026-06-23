@@ -65,7 +65,16 @@ class SubAgentGroupSelectionService {
     if (requestedAgentId.isEmpty) {
       return true;
     }
-    return ValueReaders.stringList(group['agents']).contains(requestedAgentId);
+    // 中文注释: 匹配时归一化（小写 + 把 -/_ 视作等价），避免模型 emit 的 agent_id 与存储形式
+    // （kebab vs snake、大小写漂移）不一致而静默匹配失败——这与技能 ID snake/kebab 不匹配同类。
+    // 不改存储/路径用的 safeAgentId（那会动到既有索引路径），只在比对层归一化。
+    final canonicalRequested = _canonicalAgentId(requestedAgentId);
+    return ValueReaders.stringList(group['agents'])
+        .any((agentId) => _canonicalAgentId(agentId) == canonicalRequested);
+  }
+
+  String _canonicalAgentId(String id) {
+    return id.trim().toLowerCase().replaceAll('-', '_');
   }
 
   bool _looksLikeReviewTask(String task) {
