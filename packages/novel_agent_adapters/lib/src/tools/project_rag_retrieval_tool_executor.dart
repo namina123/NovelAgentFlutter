@@ -66,13 +66,22 @@ class ProjectRagRetrievalToolExecutor {
       projectId: project.id,
     );
     final usableBindings = _filterBindings(mountBindings, query);
-    final hits = await _searchHits(project, query, usableBindings);
+    final searchOutcome = await _searchHits(project, query, usableBindings);
+    final hits = searchOutcome.hits;
+    // 中文注释: retrieval_mode 如实反映本次召回走的代码路径——vector=向量语义检索，
+    // lexical=未注入向量端口时的关键词回退，lexical_fallback=注入了端口但嵌入不可用而降级。
+    // 不再把关键词回退的结果冒充成语义检索，避免误导下游与用户。
+    final retrievalMode = searchOutcome.mode;
+    final isLexical = retrievalMode != 'vector';
     final selectedHits = hits.take(query.topK).toList(growable: false);
+    final hitCountLabel = isLexical
+        ? '已召回语料证据片段（关键词匹配）：${selectedHits.length} 条'
+        : '已召回语料证据片段：${selectedHits.length} 条';
     final retrievalActivationPackage = _activationBridgeService.buildPackage(
       project,
       <String, Object?>{
         'ok': true,
-        'display_text': '已召回语料证据片段：${selectedHits.length} 条',
+        'display_text': hitCountLabel,
         'retrieval_query': query.toJson(),
         'mount_summary': mountSummary.toJson(),
         'retrieval_hits': selectedHits.map((entry) => entry.toJson()).toList(
@@ -85,16 +94,17 @@ class ProjectRagRetrievalToolExecutor {
         'source_summaries': selectedHits
             .map((entry) => '${entry.corpusId}:${entry.sourceDocumentId}')
             .toList(growable: false),
-        'warning_notes': <String>[
-          if (mountSummary.hasBindings == false)
-            '当前项目没有挂载语料，结果可能为空。',
-          if (selectedHits.isEmpty) '未召回任何检索命中。',
-        ],
+        'warning_notes': _warningNotesFor(
+          mountSummary: mountSummary,
+          selectedHits: selectedHits,
+          retrievalMode: retrievalMode,
+        ),
       },
     );
     return <String, Object?>{
       'ok': true,
-      'display_text': '已召回语料证据片段：${selectedHits.length} 条',
+      'display_text': hitCountLabel,
+      'retrieval_mode': retrievalMode,
       'changed_paths': const <String>[],
       'retrieval_query': query.toJson(),
       'mount_summary': mountSummary.toJson(),
@@ -108,11 +118,11 @@ class ProjectRagRetrievalToolExecutor {
       'source_summaries': selectedHits
           .map((entry) => '${entry.corpusId}:${entry.sourceDocumentId}')
           .toList(growable: false),
-      'warning_notes': <String>[
-        if (mountSummary.hasBindings == false)
-          '当前项目没有挂载语料，结果可能为空。',
-        if (selectedHits.isEmpty) '未召回任何检索命中。',
-      ],
+      'warning_notes': _warningNotesFor(
+        mountSummary: mountSummary,
+        selectedHits: selectedHits,
+        retrievalMode: retrievalMode,
+      ),
       'retrieval_activation_package': retrievalActivationPackage.toJson(),
     };
   }
@@ -130,26 +140,46 @@ class ProjectRagRetrievalToolExecutor {
         .toList(growable: false);
   }
 
-  Future<List<RetrievalHit>> _searchHits(
+  Future<_SearchOutcome> _searchHits(
     ProjectDescriptor project,
     RetrievalQuery query,
     List<RetrievalMountBinding> bindings,
   ) async {
     final searchPort = _searchPort;
     if (searchPort == null) {
-      return _lexicalSearch(project, query, bindings);
+      return _SearchOutcome(
+        hits: await _lexicalSearch(project, query, bindings),
+        mode: 'lexical',
+      );
     }
-    if (bindings.isNotEmpty) {
-      return searchPort.searchWithinMounts(query, bindings);
-    }
-    if (query.corpusFilters.isNotEmpty) {
-      final hits = <RetrievalHit>[];
-      for (final corpusId in query.corpusFilters) {
-        hits.addAll(await searchPort.searchByCorpus(query, corpusId));
+    try {
+      if (bindings.isNotEmpty) {
+        return _SearchOutcome(
+          hits: await searchPort.searchWithinMounts(query, bindings),
+          mode: 'vector',
+        );
       }
-      return hits;
+      if (query.corpusFilters.isNotEmpty) {
+        final hits = <RetrievalHit>[];
+        for (final corpusId in query.corpusFilters) {
+          hits.addAll(await searchPort.searchByCorpus(query, corpusId));
+        }
+        return _SearchOutcome(hits: hits, mode: 'vector');
+      }
+      return _SearchOutcome(
+        hits: await searchPort.search(query),
+        mode: 'vector',
+      );
+    } catch (error) {
+      // 中文注释: 向量端口已注入但本次嵌入/检索失败（嵌入模型不可用、网络错误等），
+      // 如实降级到关键词匹配并标记 lexical_fallback——既不让整个检索工具报错，
+      // 也不把降级结果冒充成语义检索。
+      return _SearchOutcome(
+        hits: await _lexicalSearch(project, query, bindings),
+        mode: 'lexical_fallback',
+        fallbackReason: error.toString(),
+      );
     }
-    return searchPort.search(query);
   }
 
   Future<List<RetrievalHit>> _lexicalSearch(
@@ -271,4 +301,37 @@ class ProjectRagRetrievalToolExecutor {
         : normalized.length;
     return normalized.substring(start, end);
   }
+
+  List<String> _warningNotesFor({
+    required RagProjectMountSummary mountSummary,
+    required List<RetrievalHit> selectedHits,
+    required String retrievalMode,
+  }) {
+    // 中文注释: 把与召回模式相关的诚实提示集中在一处，避免词法回退被冒充语义。
+    final notes = <String>[
+      if (mountSummary.hasBindings == false) '当前项目没有挂载语料，结果可能为空。',
+      if (selectedHits.isEmpty) '未召回任何检索命中。',
+    ];
+    if (retrievalMode == 'lexical') {
+      notes.add('当前未注入向量检索端口，结果为关键词匹配（非语义检索）。');
+    } else if (retrievalMode == 'lexical_fallback') {
+      notes.add('向量检索不可用，已降级为关键词匹配（非语义检索）。');
+    } else if (retrievalMode == 'vector' && selectedHits.isEmpty) {
+      notes.add('已启用向量检索但未召回命中，可能语料尚未生成嵌入。');
+    }
+    return notes;
+  }
+}
+
+/// 一次检索的命中与实际走通的代码路径。
+class _SearchOutcome {
+  const _SearchOutcome({
+    required this.hits,
+    required this.mode,
+    this.fallbackReason,
+  });
+
+  final List<RetrievalHit> hits;
+  final String mode;
+  final String? fallbackReason;
 }

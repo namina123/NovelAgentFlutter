@@ -140,5 +140,155 @@ void main() {
         isNotEmpty,
       );
     });
+
+    test(
+      'surfaces retrieval_mode=lexical and honest keyword label when no vector port is wired',
+      () async {
+        // 中文注释: 无向量端口时必须如实标 lexical，并把"关键词匹配"亮给下游，不再冒充语义检索。
+        final result = await executor.retrievePassages(
+          project,
+          <String, Object?>{
+            'query_id': 'query-lexical',
+            'query_text': '镜潮回扣',
+            'project_id': project.id,
+            'corpus_filters': <Object?>['corpus-001'],
+            'top_k': 5,
+          },
+        );
+
+        expect(ValueReaders.boolValue(result['ok']), isTrue);
+        expect(
+          ValueReaders.stringValue(result['retrieval_mode']),
+          'lexical',
+        );
+        expect(
+          ValueReaders.stringValue(result['display_text']),
+          contains('关键词匹配'),
+        );
+        expect(
+          ValueReaders.stringList(result['warning_notes']).any(
+            (note) => note.contains('关键词匹配'),
+          ),
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'falls back to lexical_fallback with honest note when the vector port throws',
+      () async {
+        // 中文注释: 注入了向量端口但本次嵌入/检索失败时，既不让工具报错，也不静默冒充语义——
+        // 降级到关键词匹配并标 lexical_fallback。
+        final executorWithFailingPort = ProjectRagRetrievalToolExecutor(
+          searchPort: _ThrowingRetrievalSearchPort(),
+        );
+        final result = await executorWithFailingPort.retrievePassages(
+          project,
+          <String, Object?>{
+            'query_id': 'query-fallback',
+            'query_text': '镜潮回扣',
+            'project_id': project.id,
+            'corpus_filters': <Object?>['corpus-001'],
+            'top_k': 5,
+          },
+        );
+
+        expect(ValueReaders.boolValue(result['ok']), isTrue);
+        expect(
+          ValueReaders.stringValue(result['retrieval_mode']),
+          'lexical_fallback',
+        );
+        // 降级后仍能从元数据召回真实命中，而不是空结果。
+        expect(result['retrieval_hits'], isNotEmpty);
+        expect(
+          ValueReaders.stringList(result['warning_notes']).any(
+            (note) => note.contains('向量检索不可用'),
+          ),
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'uses retrieval_mode=vector when the search port returns hits',
+      () async {
+        // 中文注释: 向量端口正常返回时走 vector 路径，不再附加词法降级提示。
+        final executorWithVectorPort = ProjectRagRetrievalToolExecutor(
+          searchPort: _StubRetrievalSearchPort(),
+        );
+        final result = await executorWithVectorPort.retrievePassages(
+          project,
+          <String, Object?>{
+            'query_id': 'query-vector',
+            'query_text': '镜潮回扣',
+            'project_id': project.id,
+            'corpus_filters': <Object?>['corpus-001'],
+            'top_k': 5,
+          },
+        );
+
+        expect(ValueReaders.boolValue(result['ok']), isTrue);
+        expect(
+          ValueReaders.stringValue(result['retrieval_mode']),
+          'vector',
+        );
+        expect(result['retrieval_hits'], isNotEmpty);
+        expect(
+          ValueReaders.stringValue(result['display_text']),
+          isNot(contains('关键词匹配')),
+        );
+      },
+    );
   });
+}
+
+class _ThrowingRetrievalSearchPort implements RetrievalSearchPort {
+  @override
+  Future<List<RetrievalHit>> search(RetrievalQuery query) async =>
+      throw StateError('embedding provider unavailable');
+
+  @override
+  Future<List<RetrievalHit>> searchWithinMounts(
+    RetrievalQuery query,
+    List<RetrievalMountBinding> bindings,
+  ) async =>
+      throw StateError('embedding provider unavailable');
+
+  @override
+  Future<List<RetrievalHit>> searchByCorpus(
+    RetrievalQuery query,
+    RagCorpusId corpusId,
+  ) async =>
+      throw StateError('embedding provider unavailable');
+}
+
+class _StubRetrievalSearchPort implements RetrievalSearchPort {
+  @override
+  Future<List<RetrievalHit>> search(RetrievalQuery query) async => _hit();
+
+  @override
+  Future<List<RetrievalHit>> searchWithinMounts(
+    RetrievalQuery query,
+    List<RetrievalMountBinding> bindings,
+  ) async =>
+      _hit();
+
+  @override
+  Future<List<RetrievalHit>> searchByCorpus(
+    RetrievalQuery query,
+    RagCorpusId corpusId,
+  ) async =>
+      _hit();
+
+  List<RetrievalHit> _hit() => <RetrievalHit>[
+        const RetrievalHit(
+          hitId: 'vector-hit-001',
+          corpusId: 'corpus-001',
+          sourceDocumentId: 'source-001',
+          score: 0.92,
+          rerankScore: 0.92,
+          excerpt: '镜潮回扣语义近邻片段。',
+          chapterTitle: '第一章',
+        ),
+      ];
 }
