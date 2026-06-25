@@ -5,8 +5,10 @@ import '../../application/services/ecosystem_entry_editor_service.dart';
 import '../../../../../shared/widgets/action_button.dart';
 import '../../../../../shared/widgets/panel_surface.dart';
 import '../../../../../shared/widgets/section_heading.dart';
+import '../../../workbench/presentation/models/selector_option_view_data.dart';
 import '../contracts/ecosystem_editor_action_handler.dart';
 import '../models/ecosystem_editor_view_data.dart';
+import 'ecosystem_member_select_dialog.dart';
 
 class EcosystemEditorOverlay extends StatefulWidget {
   const EcosystemEditorOverlay({
@@ -213,9 +215,19 @@ class _EcosystemEditorOverlayState extends State<EcosystemEditorOverlay> {
                                   '知识与记忆路径',
                                 ),
                                 const SizedBox(height: 8),
-                                _multiField(_skillsController, '技能'),
+                                _memberSelectField(
+                                  _skillsController,
+                                  '技能',
+                                  widget.viewData.availableSkills,
+                                  '还没有可用的技能，先到"技能"页新建。',
+                                ),
                                 const SizedBox(height: 8),
-                                _multiField(_skillGroupsController, '技能组'),
+                                _memberSelectField(
+                                  _skillGroupsController,
+                                  '技能组',
+                                  widget.viewData.availableSkillGroups,
+                                  '还没有可用的技能组，先新建一个。',
+                                ),
                                 const SizedBox(height: 8),
                                 _multiField(
                                   _requiredCapabilitiesController,
@@ -258,24 +270,39 @@ class _EcosystemEditorOverlayState extends State<EcosystemEditorOverlay> {
                                 ),
                               ],
                               if (_isSkillGroup) ...[
-                                _multiField(_skillsController, '技能列表'),
+                                _memberSelectField(
+                                  _skillsController,
+                                  '技能列表',
+                                  widget.viewData.availableSkills,
+                                  '还没有可用的技能，先到"技能"页新建。',
+                                ),
                               ],
                               if (_isAgentGroup) ...[
-                                _multiField(_agentsController, '智能体列表'),
-                                const SizedBox(height: 8),
-                                _textField(
-                                  _primaryAgentIdController,
-                                  '主智能体 ID',
+                                _memberSelectField(
+                                  _agentsController,
+                                  '智能体列表',
+                                  widget.viewData.availableAgents,
+                                  '还没有可用的智能体，先到"智能体"页新建。',
                                 ),
                                 const SizedBox(height: 8),
-                                _multiField(
+                                _PrimaryAgentField(
+                                  agentsController: _agentsController,
+                                  primaryController: _primaryAgentIdController,
+                                  options: widget.viewData.availableAgents,
+                                ),
+                                const SizedBox(height: 8),
+                                _memberSelectField(
                                   _requiredAgentIdsController,
                                   '必需成员',
+                                  widget.viewData.availableAgents,
+                                  '从智能体里勾选必需成员（可空）。',
                                 ),
                                 const SizedBox(height: 8),
-                                _multiField(
+                                _memberSelectField(
                                   _optionalAgentIdsController,
                                   '可选成员',
+                                  widget.viewData.availableAgents,
+                                  '从智能体里勾选可选成员（可空）。',
                                 ),
                                 const SizedBox(height: 8),
                                 DropdownButtonFormField<String>(
@@ -427,6 +454,20 @@ class _EcosystemEditorOverlayState extends State<EcosystemEditorOverlay> {
         alignLabelWithHint: true,
         labelText: '$label（每行一项）',
       ),
+    );
+  }
+
+  Widget _memberSelectField(
+    TextEditingController controller,
+    String label,
+    List<SelectorOptionViewData> options,
+    String emptyHint,
+  ) {
+    return _MemberSelectField(
+      controller: controller,
+      label: label,
+      options: options,
+      emptyHint: emptyHint,
     );
   }
 
@@ -588,3 +629,142 @@ class _EcosystemEditorOverlayState extends State<EcosystemEditorOverlay> {
     );
   }
 }
+
+Set<String> _parseMemberIds(String text) {
+  return text
+      .split(RegExp(r'[\n,]'))
+      .map((part) => part.trim())
+      .where((part) => part.isNotEmpty)
+      .toSet();
+}
+
+/// 多成员选择字段：显示已选摘要，点击弹窗勾选。controller 仍是真相源（保存/回填走它）。
+class _MemberSelectField extends StatelessWidget {
+  const _MemberSelectField({
+    required this.controller,
+    required this.label,
+    required this.options,
+    required this.emptyHint,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final List<SelectorOptionViewData> options;
+  final String emptyHint;
+
+  String _labelOf(String id) {
+    for (final option in options) {
+      if (option.id == id) {
+        return option.label;
+      }
+    }
+    return id;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: controller,
+      builder: (context, value, _) {
+        final ids = _parseMemberIds(value.text);
+        final preview = ids.isEmpty
+            ? '点此选择'
+            : '已选 ${ids.length} 项：${ids.map(_labelOf).take(3).join('、')}'
+                  '${ids.length > 3 ? ' 等' : ''}';
+        return InputDecorator(
+          decoration: InputDecoration(labelText: label),
+          child: InkWell(
+            onTap: () async {
+              final selected = await showEcosystemMemberSelectDialog(
+                context: context,
+                title: label,
+                options: options,
+                initiallySelected: ids,
+                emptyHint: emptyHint,
+              );
+              controller.text = selected.join('\n');
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      preview,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: ids.isEmpty ? AppPalette.mutedText : AppPalette.text,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Icon(
+                    Icons.unfold_more_rounded,
+                    size: 16,
+                    color: AppPalette.mutedText,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// 主智能体字段：单选下拉，候选项 = 当前已选成员（智能体列表）。候选项变化时自动剔除失效值。
+class _PrimaryAgentField extends StatelessWidget {
+  const _PrimaryAgentField({
+    required this.agentsController,
+    required this.primaryController,
+    required this.options,
+  });
+
+  final TextEditingController agentsController;
+  final TextEditingController primaryController;
+  final List<SelectorOptionViewData> options;
+
+  String _labelOf(String id) {
+    for (final option in options) {
+      if (option.id == id) {
+        return option.label;
+      }
+    }
+    return id;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: agentsController,
+      builder: (context, agentsValue, _) {
+        final members = _parseMemberIds(agentsValue.text).toList();
+        final current = primaryController.text.trim();
+        final effective = members.contains(current) ? current : '';
+        return InputDecorator(
+          decoration: const InputDecoration(labelText: '主智能体'),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: effective.isEmpty ? null : effective,
+              hint: const Text('从已选成员里指定一个'),
+              isExpanded: true,
+              items: [
+                for (final id in members)
+                  DropdownMenuItem<String>(value: id, child: Text(_labelOf(id))),
+              ],
+              onChanged: members.isEmpty
+                  ? null
+                  : (value) {
+                      primaryController.text = value ?? '';
+                    },
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+

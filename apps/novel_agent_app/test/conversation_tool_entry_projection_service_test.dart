@@ -284,5 +284,31 @@ void main() {
         ConversationToolLifecycleStatus.failed,
       );
     });
+
+    test(
+      'surfaces failure reason in body and summary when result carries error',
+      () {
+        final service = ConversationToolEntryProjectionService();
+
+        final entries = service.build(<Object?>[
+          <String, Object?>{
+            'id': 'tool_failed_2',
+            'name': 'read_project_file',
+            'ok': false,
+            'arguments': <String, Object?>{'relative_path': 'chapters/缺失.md'},
+            'result': <String, Object?>{'error': '文件不存在：chapters/缺失.md'},
+          },
+        ]);
+
+        expect(entries, hasLength(1));
+        expect(entries.first.body, '文件不存在：chapters/缺失.md');
+        expect(entries.first.detailSummary, '文件不存在：chapters/缺失.md');
+        expect(entries.first.isError, isTrue);
+        expect(
+          entries.first.toolLifecycleStatus,
+          ConversationToolLifecycleStatus.failed,
+        );
+      },
+    );
   });
 }

@@ -1,3 +1,5 @@
+import '../../../workbench/presentation/models/selector_option_view_data.dart';
+
 class EcosystemEditorViewData {
   const EcosystemEditorViewData({
     required this.kind,
@@ -35,6 +37,9 @@ class EcosystemEditorViewData {
     this.optionalAgentIdsText = '',
     this.saveActionLabel = '保存',
     this.deleteActionLabel = '删除项目覆盖',
+    this.availableAgents = const <SelectorOptionViewData>[],
+    this.availableSkills = const <SelectorOptionViewData>[],
+    this.availableSkillGroups = const <SelectorOptionViewData>[],
   });
 
   final String kind;
@@ -73,6 +78,11 @@ class EcosystemEditorViewData {
   final String saveActionLabel;
   final String deleteActionLabel;
 
+  /// 中文注释: 可选成员目录（id+label），供"弹窗多选"取代手填 ID。按编辑 kind 注入对应的几个。
+  final List<SelectorOptionViewData> availableAgents;
+  final List<SelectorOptionViewData> availableSkills;
+  final List<SelectorOptionViewData> availableSkillGroups;
+
   EcosystemEditorViewData copyWith({
     String? kind,
     String? title,
@@ -109,6 +119,9 @@ class EcosystemEditorViewData {
     String? optionalAgentIdsText,
     String? saveActionLabel,
     String? deleteActionLabel,
+    List<SelectorOptionViewData>? availableAgents,
+    List<SelectorOptionViewData>? availableSkills,
+    List<SelectorOptionViewData>? availableSkillGroups,
   }) {
     // 中文注释: 编辑器状态允许只替换局部字段，避免每次提交前都整体重建表单默认值。
     return EcosystemEditorViewData(
@@ -150,6 +163,9 @@ class EcosystemEditorViewData {
       optionalAgentIdsText: optionalAgentIdsText ?? this.optionalAgentIdsText,
       saveActionLabel: saveActionLabel ?? this.saveActionLabel,
       deleteActionLabel: deleteActionLabel ?? this.deleteActionLabel,
+      availableAgents: availableAgents ?? this.availableAgents,
+      availableSkills: availableSkills ?? this.availableSkills,
+      availableSkillGroups: availableSkillGroups ?? this.availableSkillGroups,
     );
   }
 }

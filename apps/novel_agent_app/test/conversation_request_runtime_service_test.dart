@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novel_agent_app/features/workbench/application/models/conversation_request_handle.dart';
 import 'package:novel_agent_app/features/workbench/application/services/conversation_progress_coalescer_service.dart';
@@ -78,6 +80,59 @@ void main() {
 
       await expectLater(handle.completion, throwsA(isA<StateError>()));
       expect(handle.status, ConversationRequestLifecycleStatus.failed);
+    });
+
+    test('idle watchdog cancels a request that stops sending progress', () async {
+      // 中文注释: 模拟网关流静默挂起：execute 永不主动返回，除非被取消。看门狗超时应触发取消，复用和手动停止一样的链路。
+      final service = ConversationRequestRuntimeService(
+        idleWatchdogTimeout: const Duration(milliseconds: 50),
+      );
+      final handle = service.start(
+        onProgress: (_) {},
+        execute: ({required onProgress, required cancellationToken}) {
+          final pending = Completer<DraftGenerationResult>();
+          cancellationToken.addListener(() {
+            if (!pending.isCompleted) {
+              pending.complete(
+                _result(draftMarkdown: '', cancelledByUser: true),
+              );
+            }
+          });
+          return pending.future;
+        },
+      );
+
+      final result = await handle.completion;
+
+      expect(
+        handle.status,
+        ConversationRequestLifecycleStatus.cancelled,
+      );
+      expect(handle.cancellationToken.isCancellationRequested, isTrue);
+      expect(result.cancelledByUser, isTrue);
+    });
+
+    test('idle watchdog does not fire while progress keeps arriving', () async {
+      // 中文注释: 持续以小于看门狗阈值的间隔发 progress，看门狗应被反复重置，请求正常完成而不被误取消。
+      final service = ConversationRequestRuntimeService(
+        idleWatchdogTimeout: const Duration(milliseconds: 80),
+      );
+      final handle = service.start(
+        onProgress: (_) {},
+        execute: ({required onProgress, required cancellationToken}) async {
+          for (var i = 0; i < 6; i += 1) {
+            await Future<void>.delayed(const Duration(milliseconds: 20));
+            onProgress(_progress('chunk $i'));
+          }
+          return _result(draftMarkdown: '完成');
+        },
+      );
+
+      final result = await handle.completion;
+
+      expect(handle.status, ConversationRequestLifecycleStatus.succeeded);
+      expect(handle.cancellationToken.isCancellationRequested, isFalse);
+      expect(result.draftMarkdown, '完成');
     });
   });
 }

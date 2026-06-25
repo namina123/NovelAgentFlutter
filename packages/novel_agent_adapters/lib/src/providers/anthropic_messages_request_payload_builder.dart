@@ -22,9 +22,9 @@ class AnthropicMessagesRequestPayloadBuilder {
       'max_tokens': ValueReaders.intValue(options.remove('max_tokens'), 4096),
       if (request.tools.isNotEmpty) 'tools': _requestTools(request.tools),
     };
-    final systemPrompt = _systemPromptOf(request.messages);
-    if (systemPrompt.isNotEmpty) {
-      payload['system'] = systemPrompt;
+    final systemBlocks = _systemBlocksOf(request.messages);
+    if (systemBlocks.isNotEmpty) {
+      payload['system'] = systemBlocks;
     }
     _copyIfPresent(options, payload, 'temperature');
     _copyIfPresent(options, payload, 'top_p');
@@ -128,9 +128,11 @@ class AnthropicMessagesRequestPayloadBuilder {
     ];
   }
 
-  String _systemPromptOf(List<JsonMap> source) {
-    // 中文注释: system 消息收敛到顶层 system 字段，避免 Anthropic 端重复保留多条 system role 消息。
-    final buffer = StringBuffer();
+  List<Object?> _systemBlocksOf(List<JsonMap> source) {
+    // 中文注释: 把所有 system 消息映射成 Anthropic 的 system content blocks 数组。
+    // 第一个 block（=稳定前缀）加 cache_control: ephemeral，缓存 [tools + 稳定 system]。
+    // 后续 block（=易变后缀：文件树/约束/压力）不加断点——它们在断点之后，每轮重发不缓存。
+    final blocks = <Object?>[];
     for (final rawMessage in source) {
       final message = ValueReaders.mapValue(rawMessage);
       if (ValueReaders.stringValue(message['role']) != 'system') {
@@ -140,12 +142,14 @@ class AnthropicMessagesRequestPayloadBuilder {
       if (text.isEmpty) {
         continue;
       }
-      if (buffer.isNotEmpty) {
-        buffer.writeln();
-      }
-      buffer.write(text);
+      blocks.add(<String, Object?>{
+        'type': 'text',
+        'text': text,
+        if (blocks.isEmpty)
+          'cache_control': <String, Object?>{'type': 'ephemeral'},
+      });
     }
-    return buffer.toString();
+    return blocks;
   }
 
   List<JsonMap> _requestTools(List<JsonMap> source) {

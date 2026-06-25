@@ -15,11 +15,17 @@ typedef ConversationRequestExecution =
 class ConversationRequestRuntimeService {
   ConversationRequestRuntimeService({
     ConversationProgressCoalescerService? progressCoalescerService,
+    Duration idleWatchdogTimeout = const Duration(seconds: 180),
   }) : _progressCoalescerService =
            progressCoalescerService ??
-           const ConversationProgressCoalescerService();
+           const ConversationProgressCoalescerService(),
+       _idleWatchdogTimeout = idleWatchdogTimeout;
 
   final ConversationProgressCoalescerService _progressCoalescerService;
+
+  // 中文注释: 网关流可能建连后静默挂起（不发数据也不关连接），超过这个时长没有任何 progress 就自动取消，
+  // 避免请求永久卡住导致整条会话 isGenerating 一直 true、pending 工具条目一直停在 running。
+  final Duration _idleWatchdogTimeout;
 
   int _requestSequence = 0;
 
@@ -50,12 +56,26 @@ class ConversationRequestRuntimeService {
     required void Function(DraftGenerationProgress progress) onProgress,
   }) async {
     final progressCoalescer = _progressCoalescerService.bind(onProgress);
+    // 中文注释: 每收到一帧 progress 就重置看门狗；超时仍无任何进展则触发取消，复用用户手动停止的同一条链路
+    // （cancellationScope 会 client.close(force:true) 强制中断挂起的 stream），让 useCase 终止、UI 收口。
+    Timer? idleWatchdog;
+    void resetIdleWatchdog() {
+      idleWatchdog?.cancel();
+      if (handle.isTerminal) {
+        return;
+      }
+      idleWatchdog = Timer(_idleWatchdogTimeout, () {
+        handle.requestCancellation();
+      });
+    }
+    resetIdleWatchdog();
     try {
       final result = await execute(
         onProgress: (progress) {
           if (handle.cancellationToken.isCancellationRequested) {
             return;
           }
+          resetIdleWatchdog();
           progressCoalescer.schedule(progress);
         },
         cancellationToken: handle.cancellationToken,
@@ -74,6 +94,7 @@ class ConversationRequestRuntimeService {
       progressCoalescer.dispose();
       handle.markFailed(error, stackTrace);
     } finally {
+      idleWatchdog?.cancel();
       progressCoalescer.dispose();
     }
   }

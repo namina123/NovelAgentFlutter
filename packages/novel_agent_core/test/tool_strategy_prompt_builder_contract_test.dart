@@ -63,9 +63,9 @@ void main() {
         ],
       );
 
-      expect(prompt, contains('当前协作合同允许按需调用子智能体'));
-      expect(prompt, contains('只传任务摘录、约束和期望产物'));
-      expect(prompt, contains('可组装协作视角素材'));
+      expect(prompt.stable, contains('当前协作合同允许按需调用子智能体'));
+      expect(prompt.stable, contains('只传任务摘录、约束和期望产物'));
+      expect(prompt.stable, contains('可组装协作视角素材'));
     });
   });
 }

@@ -1,6 +1,7 @@
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../../../../shared/services/runtime_exposure_policy_service.dart';
+import '../../../workbench/presentation/models/selector_option_view_data.dart';
 import 'ecosystem_display_name_resolver_service.dart';
 import '../../presentation/models/agent_ecosystem_view_data.dart';
 import '../../presentation/models/project_skill_loadout_view_data.dart';
@@ -38,6 +39,29 @@ class AgentEcosystemViewDataService {
   final SkillGroupValidatorService _skillGroupValidatorService;
   final RuntimeExposurePolicyService _runtimeExposurePolicyService;
   final RuntimeExposureTier _exposureTier;
+
+  /// 把某个 tab 的生态条目（智能体/技能/技能组）映射成"弹窗多选"用的选项（id+显示名）。
+  /// 复用 `_entryDisplayName`，确保选项标签与生态页一致；用于取代编辑器里手填 ID。
+  List<SelectorOptionViewData> pickerOptionsFor({
+    required String tabId,
+    required List<JsonMap> entries,
+  }) {
+    final options = <SelectorOptionViewData>[];
+    for (final entry in entries) {
+      final id = ValueReaders.stringValue(entry['id']).trim();
+      if (id.isEmpty) {
+        continue;
+      }
+      options.add(
+        SelectorOptionViewData(
+          id: id,
+          label: _entryDisplayName(tabId, entry, fallbackId: id),
+          note: id,
+        ),
+      );
+    }
+    return List<SelectorOptionViewData>.unmodifiable(options);
+  }
 
   AgentEcosystemViewData build(
     AgentEcosystemSnapshot snapshot, {

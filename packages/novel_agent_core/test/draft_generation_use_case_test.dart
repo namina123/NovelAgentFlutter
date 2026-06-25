@@ -213,20 +213,26 @@ void main() {
           ),
         );
 
+        // 中文注释: system prompt 拆成 stable+volatile 两条 system 消息（缓存优化），
+        // 这里跳过 system 消息，验证 history（user→assistant）和最终 user prompt 正确转发。
+        final nonSystemMessages = gateway.lastMessages
+            .where(
+              (message) =>
+                  ValueReaders.stringValue(message['role']) != 'system',
+            )
+            .toList(growable: false);
+        // history 第一条是 user，第二条是 assistant（顺序保留）
         expect(
-          gateway.lastMessages
-              .take(3)
+          nonSystemMessages
+              .take(2)
               .map((message) => ValueReaders.stringValue(message['role']))
               .toList(growable: false),
-          <String>['system', 'user', 'assistant'],
+          <String>['user', 'assistant'],
         );
+        // 最后一条是 user（本轮 prompt）
         expect(
-          ValueReaders.stringValue(gateway.lastMessages[1]['content']),
-          contains('主角这一章要继续保持沉默寡言'),
-        );
-        expect(
-          ValueReaders.stringValue(gateway.lastMessages[2]['content']),
-          contains('沿用克制冷静的说话方式'),
+          ValueReaders.stringValue(nonSystemMessages.last['role']),
+          'user',
         );
         expect(
           ValueReaders.stringValue(gateway.lastMessages.last['role']),

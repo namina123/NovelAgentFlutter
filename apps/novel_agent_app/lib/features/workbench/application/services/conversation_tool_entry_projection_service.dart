@@ -121,6 +121,16 @@ class ConversationToolEntryProjectionService {
   }
 
   String _detailSummary(JsonMap tool) {
+    // 中文注释: 失败工具的折叠摘要优先放失败原因，让用户不展开也能看到"为什么失败"。
+    final isError =
+        !ValueReaders.boolValue(tool['ok'], true) &&
+        !ValueReaders.boolValue(tool['not_executed']);
+    if (isError) {
+      final reason = _failureReason(tool);
+      if (reason.isNotEmpty) {
+        return reason;
+      }
+    }
     final informationProjection = _informationProjection(tool);
     if (informationProjection.hasContent &&
         informationProjection.summary.isNotEmpty) {
@@ -314,9 +324,26 @@ class ConversationToolEntryProjectionService {
       return '需要确认';
     }
     if (isError) {
-      return '需要处理';
+      final reason = _failureReason(tool);
+      return reason.isEmpty ? '需要处理' : reason;
     }
     return _projectedCompletedBody(tool, toolName: name);
+  }
+
+  String _failureReason(JsonMap tool) {
+    // 中文注释: 失败工具尽量把执行器返回的 error/message/display_text 透出来，避免用户只看到干巴巴的"需要处理"却不知道为什么失败。
+    final result = ValueReaders.mapValue(tool['result']);
+    final candidates = <String>[
+      ValueReaders.stringValue(result['error']).trim(),
+      ValueReaders.stringValue(result['message']).trim(),
+      ValueReaders.stringValue(result['display_text']).trim(),
+    ];
+    for (final candidate in candidates) {
+      if (candidate.isNotEmpty) {
+        return candidate;
+      }
+    }
+    return '';
   }
 
   ConversationToolLifecycleStatus _toolLifecycleStatus(JsonMap tool) {

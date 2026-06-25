@@ -69,7 +69,18 @@ void main() {
       );
 
       expect(payload['model'], 'claude-demo');
-      expect(ValueReaders.stringValue(payload['system']), 'system rule');
+      // 中文注释: system 输出成 content blocks 数组，首个稳定块带 cache_control 启用 prompt caching。
+      final systemBlocks = ValueReaders.objectList(payload['system']);
+      expect(systemBlocks, hasLength(1));
+      final systemBlock = ValueReaders.mapValue(systemBlocks.first);
+      expect(systemBlock['type'], 'text');
+      expect(ValueReaders.stringValue(systemBlock['text']), 'system rule');
+      expect(
+        ValueReaders.stringValue(
+          ValueReaders.mapValue(systemBlock['cache_control'])['type'],
+        ),
+        'ephemeral',
+      );
       final messages = ValueReaders.mapList(payload['messages']);
       expect(messages, hasLength(3));
       expect(messages.first['role'], 'user');

@@ -187,8 +187,16 @@ class ProjectPromptContract {
     if (files.isEmpty) {
       return '${directoryMappingLine()}\n项目目录为空或尚未加载。';
     }
+    // 中文注释: 按 relative_path 排序——listEntries 的返回顺序在 port 契约里不保证，
+    // 排序后保证同一项目树渲染始终一致，减少 system prompt 每轮 diff（缓存友好 + 确定性）。
+    final sortedFiles = List<JsonMap>.from(files)
+      ..sort(
+        (a, b) => ValueReaders.stringValue(a['relative_path']).compareTo(
+          ValueReaders.stringValue(b['relative_path']),
+        ),
+      );
     final lines = <String>[directoryMappingLine(), '项目文件目录结构：'];
-    for (final item in files) {
+    for (final item in sortedFiles) {
       final path = ValueReaders.stringValue(item['relative_path']).trim();
       if (path.isEmpty) {
         continue;

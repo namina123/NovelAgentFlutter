@@ -13,7 +13,12 @@ class ToolStrategyPromptBuilder {
   final ToolStrategyService _toolStrategyService;
   final ProjectPromptContract _projectPromptContract;
 
-  String buildPromptText({
+  /// 构建系统提示词，拆成**稳定前缀（可缓存）** + **易变后缀（不缓存）**两段。
+  ///
+  /// 中文注释: 稳定前缀每会话不变（persona/工具契约/项目设置/智能体边界），放最前、
+  /// 给 Anthropic `cache_control` 断点缓存 [tools + 稳定前缀]。易变后缀（文件树/约束摘要/
+  /// 压力计数）每轮可能变，放断点之后，不缓存——避免每轮 invalidate 整个缓存前缀。
+  ({String stable, String volatile}) buildPromptText({
     required JsonMap settings,
     required String intent,
     required String projectNote,
@@ -68,7 +73,7 @@ class ToolStrategyPromptBuilder {
         ? '你具备项目工具调用能力，优先使用提供商原生 tool/function calling。'
         : '当前工具调用策略关闭。不要声称已经读取、写入、修改或删除项目文件；只能给出文本建议。';
 
-    return '''你是 NOVEL Agent 的综合创作智能体，服务中文小说创作。
+    final stable = '''你是 NOVEL Agent 的综合创作智能体，服务中文小说创作。
 你需要区分自己正在创作的是：大纲 outline、卷纲 volume_outline、章纲 chapter_outline、章节正文 chapter、场景片段 scene、设定 setting、角色 character、风格 style、摘要 summary、信息投影 information_projection。
 $toolIntro
 $fallbackNote
@@ -103,13 +108,15 @@ ${collaboration == null
 
 $projectNote
 
-当前项目文件树：
+可组装协作视角素材：
+$agentNote''';
+
+    final volatile = '''当前项目文件树：
 $projectTreeNote
 
-可组装协作视角素材：
-$agentNote
-
 $styleNote''';
+
+    return (stable: stable, volatile: volatile);
   }
 
   String _toolPromptLines(List<String> toolIds) {

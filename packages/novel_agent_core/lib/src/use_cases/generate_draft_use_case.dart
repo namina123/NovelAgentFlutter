@@ -700,7 +700,7 @@ class GenerateDraftUseCase {
     final skillRoutingNote = _skillRoutingPolicyService
         .buildGuidanceLines(routingPolicy, skillLoadMemory: skillLoadMemory)
         .join('\n');
-    final systemPrompt = _toolStrategyPromptBuilder.buildPromptText(
+    final systemPromptParts = _toolStrategyPromptBuilder.buildPromptText(
       settings: toolSettings,
       intent: intent,
       projectNote: _projectPromptContract.sessionInfo(
@@ -734,7 +734,11 @@ class GenerateDraftUseCase {
       toolIds: filteredToolIds,
     );
     messages = <JsonMap>[
-      <String, Object?>{'role': 'system', 'content': systemPrompt},
+      // 中文注释: 两条 system 消息：stable（稳定前缀，每会话不变，Anthropic 端加 cache_control 缓存 tools+stable）
+      // + volatile（易变后缀，含文件树/约束/压力，每轮可能变，不缓存）。OpenAI 端靠前缀自动命中 stable。
+      <String, Object?>{'role': 'system', 'content': systemPromptParts.stable},
+      if (systemPromptParts.volatile.trim().isNotEmpty)
+        <String, Object?>{'role': 'system', 'content': systemPromptParts.volatile},
       ...effectiveSessionPromptContext.historyMessages,
       ...preloadRound.transcriptMessages,
       <String, Object?>{'role': 'user', 'content': prompt},
@@ -1291,7 +1295,15 @@ class GenerateDraftUseCase {
       }
       byId[id] = entry;
     }
-    return byId.values.toList(growable: false);
+    // 中文注释: 按 id 排序后返回——避免 Map 迭代序漂移导致 system prompt 里的 agentNote
+    // 每轮顺序不同、bust 缓存（确定性）。
+    final sorted = byId.values.toList()
+      ..sort(
+        (a, b) => ValueReaders.stringValue(a['id']).compareTo(
+          ValueReaders.stringValue(b['id']),
+        ),
+      );
+    return sorted.toList(growable: false);
   }
 
   List<String> _mergePaths(List<String> left, List<String> right) {

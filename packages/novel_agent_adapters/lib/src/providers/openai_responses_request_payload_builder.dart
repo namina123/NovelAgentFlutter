@@ -59,6 +59,38 @@ class OpenAiResponsesRequestPayloadBuilder {
         });
         continue;
       }
+      if (role == 'assistant') {
+        final toolCalls = ValueReaders.objectList(message['tool_calls']);
+        if (toolCalls.isNotEmpty) {
+          // 中文注释: Responses 要求工具回合里 assistant 的工具调用以 function_call item 出现（带 call_id），
+          // 否则后续的 function_call_output 找不到前置调用而被服务端拒绝。
+          final text = _textContentOf(message['content']);
+          if (text.trim().isNotEmpty) {
+            inputItems.add(<String, Object?>{
+              'type': 'message',
+              'role': 'assistant',
+              'content': text,
+            });
+          }
+          for (final rawCall in toolCalls) {
+            final call = ValueReaders.mapValue(rawCall);
+            final functionData = ValueReaders.mapValue(call['function']);
+            inputItems.add(<String, Object?>{
+              'type': 'function_call',
+              'call_id': ValueReaders.stringValue(call['id']),
+              'name': ValueReaders.stringValue(
+                functionData['name'],
+                ValueReaders.stringValue(call['name']),
+              ),
+              'arguments': ValueReaders.stringValue(
+                functionData['arguments'],
+                ValueReaders.stringValue(call['arguments']),
+              ),
+            });
+          }
+          continue;
+        }
+      }
       final entry = <String, Object?>{
         'type': 'message',
         'role': role == 'assistant' ? 'assistant' : 'user',

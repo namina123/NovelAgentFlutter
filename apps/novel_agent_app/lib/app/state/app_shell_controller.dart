@@ -2672,9 +2672,30 @@ class AppShellController extends ChangeNotifier
         selectedTabId: plan.kind,
         selectedEntryId: plan.entryId,
       );
-      showWorkbench();
-      await _openResource(plan.relativePath);
-      _announce('已创建 ${_ecosystemKindLabel(plan.kind)}：${plan.title}');
+      // 中文注释: 新建后直接打开"表单编辑器"（带成员弹窗多选），而不是跳到工作台裸编 JSON。
+      // 不走 _showEcosystemEditor(entryId)（它在快照里按 id 反查 proposal，新建的 proposal
+      // 快照 id/落点常与 plan.entryId 不一致，会查不到、表单不弹）。这里直接用 plan 构造条目
+      // + 刚写入的文件内容构建表单，与"编辑"共用 _buildEcosystemEditorForEntry。
+      final sourceContent =
+          await _projectToolHostPort.readTextFile(
+                project.rootPath,
+                plan.relativePath,
+              ) ??
+              plan.content;
+      _updateEcosystemEditorViewData(
+        _buildEcosystemEditorForEntry(
+          entry: <String, Object?>{
+            'id': plan.entryId,
+            'name': plan.title,
+            'project_relative_path': plan.relativePath,
+            'entry_file_path': plan.relativePath,
+            'source': 'project_package',
+          },
+          kind: plan.kind,
+          sourceContent: sourceContent,
+        ),
+      );
+      _announce('已创建 ${_ecosystemKindLabel(plan.kind)}：${plan.title}，请在表单里填写。');
     } catch (error) {
       _announce('创建生态条目失败：$error');
     }
@@ -2723,12 +2744,42 @@ class AppShellController extends ChangeNotifier
                 relativePath,
               ) ??
               '';
-    final editorViewData = _ecosystemEntryEditorService.buildForEntry(
+    _updateEcosystemEditorViewData(
+      _buildEcosystemEditorForEntry(
+        entry: entry,
+        kind: kind,
+        sourceContent: sourceContent,
+      ),
+    );
+  }
+
+  /// 由生态条目（快照条目或新建计划构造的条目）+ 源文件内容构建编辑器视图，并注入可选成员目录。
+  /// 中文注释: 抽出来给"编辑"和"新建"两条入口共用，避免新建时依赖快照里按 id 反查 proposal
+  /// （proposal 的快照 id/落点可能与 plan.entryId 不一致，会导致查不到、表单不弹）。
+  EcosystemEditorViewData _buildEcosystemEditorForEntry({
+    required JsonMap entry,
+    required String kind,
+    required String sourceContent,
+  }) {
+    return _ecosystemEntryEditorService.buildForEntry(
       entry,
       kind: kind,
       sourceContent: sourceContent,
+    ).copyWith(
+      // 注入可选成员目录，供编辑器"弹窗多选"取代手填 ID（按 kind 用对应的几个）。
+      availableAgents: _agentEcosystemViewDataService.pickerOptionsFor(
+        tabId: 'agents',
+        entries: _agentEcosystemSnapshot.agents,
+      ),
+      availableSkills: _agentEcosystemViewDataService.pickerOptionsFor(
+        tabId: 'skills',
+        entries: _agentEcosystemSnapshot.skills,
+      ),
+      availableSkillGroups: _agentEcosystemViewDataService.pickerOptionsFor(
+        tabId: 'skill-groups',
+        entries: _agentEcosystemSnapshot.skillGroups,
+      ),
     );
-    _updateEcosystemEditorViewData(editorViewData);
   }
 
   Future<void> _saveEcosystemEditorRequest(

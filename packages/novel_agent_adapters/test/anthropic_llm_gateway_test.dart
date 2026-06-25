@@ -19,7 +19,14 @@ void main() {
             final body = await utf8.decoder.bind(request).join();
             final payload = ValueReaders.mapValue(jsonDecode(body));
             expect(payload['model'], 'deepseek-v4-flash');
-            expect(ValueReaders.stringValue(payload['system']), 'system rule');
+            final systemBlocks = ValueReaders.objectList(payload['system']);
+            expect(systemBlocks, hasLength(1));
+            expect(
+              ValueReaders.stringValue(
+                ValueReaders.mapValue(systemBlocks.first)['text'],
+              ),
+              'system rule',
+            );
             final messages = ValueReaders.mapList(payload['messages']);
             expect(messages, hasLength(1));
             expect(messages.first['role'], 'user');
