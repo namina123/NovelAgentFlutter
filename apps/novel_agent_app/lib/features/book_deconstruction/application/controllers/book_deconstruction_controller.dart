@@ -19,6 +19,7 @@ import '../services/book_deconstruction_narrative_persistence_service.dart';
 import '../services/book_deconstruction_preview_markdown_service.dart';
 import '../services/book_deconstruction_smart_import_agent_service.dart';
 import '../services/book_deconstruction_smart_import_orchestration_service.dart';
+import '../services/book_deconstruction_structured_source_projection_service.dart';
 import '../services/book_deconstruction_view_data_service.dart';
 import '../services/desktop_book_deconstruction_source_picker_service.dart';
 import '../../../workbench/application/controllers/generate_draft_use_case_factory.dart';
@@ -63,8 +64,11 @@ class BookDeconstructionController extends ChangeNotifier
     AppSettings? Function()? readSettings,
     GenerateDraftUseCaseFactory? generateDraftUseCaseFactory,
     BookDeconstructionExtractKnowledgeHandler? extractKnowledgeHandler,
+    BookDeconstructionStructuredSourceProjectionService?
+    structuredSourceProjectionService,
   }) : _readCurrentProject = readCurrentProject,
        _readProjectFileUseCase = readProjectFileUseCase,
+       _writeProjectTextFileUseCase = writeProjectTextFileUseCase,
        _syncWorkbenchResources = syncWorkbenchResources,
        _onBackRequested = onBackRequested,
        _readImportAssistantModelOptions = readImportAssistantModelOptions,
@@ -97,6 +101,9 @@ class BookDeconstructionController extends ChangeNotifier
              previewMarkdownService: previewMarkdownService,
              targetPathService: targetPathService,
            ),
+       _structuredSourceProjectionService =
+           structuredSourceProjectionService ??
+           const BookDeconstructionStructuredSourceProjectionService(),
        _snapshot = BookDeconstructionSnapshot.initial(),
        _viewData = BookDeconstructionViewData.initial(),
        _readSettings = readSettings,
@@ -105,6 +112,7 @@ class BookDeconstructionController extends ChangeNotifier
 
   final ProjectDescriptor? Function() _readCurrentProject;
   final ReadProjectFileUseCase _readProjectFileUseCase;
+  final WriteProjectTextFileUseCase _writeProjectTextFileUseCase;
   final Future<void> Function() _syncWorkbenchResources;
   final VoidCallback _onBackRequested;
   final List<SelectorOptionViewData> Function() _readImportAssistantModelOptions;
@@ -121,6 +129,8 @@ class BookDeconstructionController extends ChangeNotifier
   final BookDeconstructionImportArchiveWorkflowService
   _importArchiveWorkflowService;
   final BookDeconstructionConfirmWorkflowService _confirmWorkflowService;
+  final BookDeconstructionStructuredSourceProjectionService
+  _structuredSourceProjectionService;
   final BookDeconstructionDerivedProjectCreationService?
   _derivedProjectCreationService;
   final Future<void> Function(
@@ -376,6 +386,7 @@ class BookDeconstructionController extends ChangeNotifier
         analysisCompleted: false,
         analysisStatusMessage: '',
       );
+      await _persistStructuredSourceProjection(project, buildResult);
       _statusMessage =
           '已完成拆书，共分出 ${buildResult.extractionResult.chapterOutlines.length} 章$modelNote。';
       _rebuildView();
@@ -386,6 +397,28 @@ class BookDeconstructionController extends ChangeNotifier
       );
       _statusMessage = UserFacingErrorHumanizer.humanize(error, action: '拆书');
       _rebuildView();
+    }
+  }
+
+  Future<void> _persistStructuredSourceProjection(
+    ProjectDescriptor project,
+    BookDeconstructionDraftBuildResult buildResult,
+  ) async {
+    // 中文注释: 拆书一完成就落盘结构化源文投影，让步骤③"分析"立刻有产物可读，不再依赖步骤④确认。
+    // 与 confirm_workflow_service 用同一份 render 逻辑，保证分析与确认读取/写入的产物一致。
+    try {
+      final path = _structuredSourceProjectionService.targetPath(
+        storageStrategy: project.storageStrategy,
+      );
+      await _writeProjectTextFileUseCase.execute(
+        project: project,
+        relativePath: path,
+        content: _structuredSourceProjectionService.render(
+          buildResult: buildResult,
+        ),
+      );
+    } catch (_) {
+      // 中文注释: 投影落盘失败不阻断拆书主流程（结构化源文仅在分析步需要，分析会再次提示）。
     }
   }
 

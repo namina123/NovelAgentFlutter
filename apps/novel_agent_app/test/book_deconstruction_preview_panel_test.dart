@@ -57,8 +57,8 @@ void main() {
 
       expect(find.text('拆书结果（分章）'), findsOneWidget);
       expect(find.text('全选'), findsOneWidget);
-      // 纯分章下，资产类章纲分组（章纲）应当出现。
-      expect(find.text('章纲'), findsWidgets);
+      // 纯分章下，资产类章纲分组（章纲）应当出现（折叠态标题含条目数，如"章纲（2）"）。
+      expect(find.textContaining('章纲'), findsWidgets);
     },
   );
 

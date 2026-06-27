@@ -95,15 +95,22 @@ class _PreviewSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    // 中文注释: 每类成果默认折叠，标题带条目数（如"章节骨架（47 章）"），点开才展开全部，避免面板过长。
+    return ExpansionTile(
+      initiallyExpanded: false,
+      dense: true,
+      tilePadding: EdgeInsets.zero,
+      childrenPadding: const EdgeInsets.only(top: 4, bottom: 4),
+      title: Text(
+        '${section.title}（${section.items.length}）',
+        style: textTheme.titleSmall,
+      ),
+      subtitle: section.description.trim().isEmpty
+          ? null
+          : Text(section.description, style: textTheme.bodySmall),
       children: [
-        Text(section.title, style: textTheme.titleSmall),
-        const SizedBox(height: 4),
-        Text(section.description, style: textTheme.bodySmall),
-        const SizedBox(height: 8),
-        ...section.items.map((item) {
-          return Padding(
+        for (final item in section.items)
+          Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Container(
               width: double.infinity,
@@ -126,8 +133,7 @@ class _PreviewSection extends StatelessWidget {
                 ],
               ),
             ),
-          );
-        }),
+          ),
       ],
     );
   }
@@ -142,20 +148,23 @@ class _PlanGroupSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(group.title, style: textTheme.titleSmall),
-          const SizedBox(height: 4),
-          Text(group.description, style: textTheme.bodySmall),
-          const SizedBox(height: 8),
-          ...group.items.map(
-            (item) => _PlanItemTile(item: item, actionHandler: actionHandler),
-          ),
-        ],
+    // 中文注释: 应用计划分组同样默认折叠，标题带条目数，点开才显示可勾选项。
+    return ExpansionTile(
+      initiallyExpanded: false,
+      dense: true,
+      tilePadding: EdgeInsets.zero,
+      childrenPadding: const EdgeInsets.only(top: 4, bottom: 4),
+      title: Text(
+        '${group.title}（${group.items.length}）',
+        style: textTheme.titleSmall,
       ),
+      subtitle: group.description.trim().isEmpty
+          ? null
+          : Text(group.description, style: textTheme.bodySmall),
+      children: [
+        for (final item in group.items)
+          _PlanItemTile(item: item, actionHandler: actionHandler),
+      ],
     );
   }
 }

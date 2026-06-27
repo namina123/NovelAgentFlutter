@@ -337,20 +337,12 @@ class _ConfirmStep extends StatelessWidget {
               ? actionHandler.onBookDeconstructionConfirmRequested
               : null,
           icon: const Icon(Icons.assignment_turned_in_outlined),
-          label: const Text('确认并写入'),
-        ),
-        const SizedBox(height: 8),
-        OutlinedButton.icon(
-          onPressed: viewData.canCreateDerivedProject
-              ? actionHandler.onBookDeconstructionCreateDerivedProjectRequested
-              : null,
-          icon: const Icon(Icons.fork_right_outlined),
-          label: const Text('派生并打开项目'),
+          label: const Text('保存拆书结果'),
         ),
         if (viewData.confirmedPreviewPath.trim().isNotEmpty) ...[
           const SizedBox(height: 8),
           Text(
-            '预演纪要：${viewData.confirmedPreviewPath}',
+            '拆书结果已保存到当前项目。',
             style: textTheme.bodySmall,
           ),
         ],
