@@ -25,6 +25,7 @@ class ToolStrategyPromptBuilder {
     required String projectTreeNote,
     required String agentNote,
     required String styleNote,
+    String conversationGoal = '',
     AgentCollaborationContract? collaborationContract,
     List<String>? toolIds,
   }) {
@@ -105,6 +106,7 @@ ${collaboration == null
                 ? '当前协作合同允许按需调用子智能体，但仍需只传任务摘录、约束和期望产物，不传完整主会话。调用 call_sub_agent 时以合同内 child_agent_ids 与 review/选项结果为准。'
                 : '当前协作合同表明本轮按单主智能体运行，不要假设还存在可委派的子智能体，也不要伪造内部协作回合。')}
 当前判断内容类型：$intent
+${conversationGoal.trim().isEmpty ? '' : '\n本次会话目标：$conversationGoal'}
 
 $projectNote
 

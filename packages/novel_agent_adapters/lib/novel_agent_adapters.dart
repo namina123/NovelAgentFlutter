@@ -144,6 +144,7 @@ export 'src/storage/project_foreshadow_feedback_update_service.dart';
 export 'src/storage/project_session_workspace_service.dart';
 export 'src/storage/project_session_compaction_service.dart';
 export 'src/storage/project_session_shell_service.dart';
+export 'src/storage/project_session_shell_command_backend.dart';
 export 'src/storage/project_foreshadow_path_policy.dart';
 export 'src/storage/project_foreshadow_repository.dart';
 export 'src/storage/project_foreshadow_state_update_service.dart';

@@ -51,6 +51,7 @@ class SessionRecordNormalizerService {
       'working_context_chars': 0,
       'compaction_archive_chars': 0,
       'total_context_chars': 0,
+      SessionRecordConstants.conversationGoalField: '',
       'created_at': createdAt,
       'updated_at': createdAt,
     };
@@ -130,6 +131,9 @@ class SessionRecordNormalizerService {
       'working_context_chars': workingChars,
       'compaction_archive_chars': archiveChars,
       'total_context_chars': workingChars + archiveChars,
+      SessionRecordConstants.conversationGoalField: ValueReaders.stringValue(
+        session[SessionRecordConstants.conversationGoalField],
+      ),
       'created_at': ValueReaders.stringValue(session['created_at'], timestamp),
       'updated_at': ValueReaders.stringValue(session['updated_at'], timestamp),
     };

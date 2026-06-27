@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import 'cli_session_view_commands.dart';
 import '../shared/cli_help_contract.dart';
 import '../../output/terminal_printer.dart';
 
@@ -17,18 +18,43 @@ class SessionInteractiveShell {
     SessionGuideProfileService? guideProfileService,
     SessionLineReader? readLine,
     SessionPromptWriter? writePrompt,
+    ConversationCommandRegistry? registry,
   }) : _sessionShellService = sessionShellService,
        _printer = printer,
        _guideProfileService =
            guideProfileService ?? const SessionGuideProfileService(),
        _readLine = readLine ?? _defaultReadLine,
-       _writePrompt = writePrompt ?? _defaultWritePrompt;
+       _writePrompt = writePrompt ?? _defaultWritePrompt,
+       _registry = registry;
 
   final ProjectSessionShellService _sessionShellService;
   final TerminalPrinter _printer;
   final SessionGuideProfileService _guideProfileService;
   final SessionLineReader _readLine;
   final SessionPromptWriter _writePrompt;
+  final ConversationCommandRegistry? _registry;
+
+  late final ConversationCommandRegistry registry = _buildRegistry();
+
+  ConversationCommandRegistry _buildRegistry() {
+    // 中文注释: registry 允许测试注入；默认注册 core 内置指令 + CLI 专属的退出/视图指令。
+    final built = _registry ?? ConversationCommandRegistry();
+    if (_registry != null) {
+      return built;
+    }
+    registerBuiltinConversationCommands(built);
+    built.register(const ExitConversationCommand());
+    built.register(
+      ModelViewConversationCommand(guideProfileService: _guideProfileService),
+    );
+    built.register(
+      GroupViewConversationCommand(guideProfileService: _guideProfileService),
+    );
+    built.register(
+      ApprovalViewConversationCommand(guideProfileService: _guideProfileService),
+    );
+    return built;
+  }
 
   Future<int> start(ProjectDescriptor project, {String sessionId = ''}) async {
     // 中文注释: 交互会话只负责把用户输入串成一轮轮 session send，不在这里重建新的运行语义。
@@ -43,6 +69,21 @@ class SessionInteractiveShell {
     var currentSessionId = ValueReaders.stringValue(resumed['session_id']);
     var sessionRecord = ValueReaders.mapValue(resumed['session_record']);
     _printIntro(project, resumed);
+    // 中文注释: dispatcher 的 contextFactory 闭包捕获上面的 currentSessionId / sessionRecord，
+    // 循环里更新这两个变量后，下一轮 dispatch 能读到最新会话状态。
+    final dispatcher = ConversationCommandDispatcher(
+      registry: registry,
+      contextFactory: (rawArgs) => ConversationCommandContext(
+        project: project,
+        sessionRecord: sessionRecord,
+        rawArgs: rawArgs,
+        backend: ProjectSessionShellCommandBackend(
+          shellService: _sessionShellService,
+          project: project,
+          sessionId: currentSessionId,
+        ),
+      ),
+    );
     while (true) {
       _writePrompt('session> ');
       final raw = _readLine();
@@ -54,14 +95,15 @@ class SessionInteractiveShell {
         continue;
       }
       final handled = await _handleSlashCommand(
-        project,
+        dispatcher,
         input,
-        currentSessionId: currentSessionId,
-        sessionRecord: sessionRecord,
-        updateSessionRecord: (updatedRecord, updatedSessionId) {
-          sessionRecord = updatedRecord;
-          if (updatedSessionId.trim().isNotEmpty) {
-            currentSessionId = updatedSessionId.trim();
+        onRecordUpdated: (updatedRecord) {
+          if (updatedRecord.isNotEmpty) {
+            sessionRecord = updatedRecord;
+          }
+          final newId = ValueReaders.stringValue(updatedRecord['id']).trim();
+          if (newId.isNotEmpty) {
+            currentSessionId = newId;
           }
         },
       );
@@ -117,155 +159,49 @@ class SessionInteractiveShell {
   }
 
   Future<_SlashCommandOutcome> _handleSlashCommand(
-    ProjectDescriptor project,
+    ConversationCommandDispatcher dispatcher,
     String input, {
-    required String currentSessionId,
-    required JsonMap sessionRecord,
-    required void Function(JsonMap updatedRecord, String updatedSessionId)
-    updateSessionRecord,
+    required void Function(JsonMap updatedRecord) onRecordUpdated,
   }) async {
-    // 中文注释: slash commands 只负责壳层动作与状态投影，不承载新的审批或调度规则。
-    if (!input.startsWith('/')) {
-      return _SlashCommandOutcome.passThrough;
-    }
-    final command = input.substring(1).trim();
-    if (command.isEmpty) {
-      _printer.error(
-        '请输入 /help、/model、/group、/approval、/compact、/stats 或 /exit。',
-      );
-      return _SlashCommandOutcome.handled;
-    }
-    switch (command.split(RegExp(r'\s+')).first) {
-      case 'help':
-        _printHelp(_buildGuideProfile(project, sessionRecord));
-        return _SlashCommandOutcome.handled;
-      case 'model':
-        _printModelState(project, sessionRecord);
-        return _SlashCommandOutcome.handled;
-      case 'group':
-        _printGroupState(project, sessionRecord);
-        return _SlashCommandOutcome.handled;
-      case 'approval':
-        _printApprovalState(project, sessionRecord);
-        return _SlashCommandOutcome.handled;
-      case 'compact':
-        final compactResult = await _sessionShellService.compactSession(
-          project,
-          currentSessionId,
-        );
-        if (!ValueReaders.boolValue(compactResult['ok'], true)) {
-          _printer.error(
-            ValueReaders.stringValue(compactResult['error'], '压缩会话失败。'),
-          );
-          return _SlashCommandOutcome.handled;
+    // 中文注释: slash command 统一走 core dispatcher，壳层只负责把结果渲染成终端输出并回写会话状态。
+    final result = await dispatcher.dispatch(input);
+    switch (result.kind) {
+      case ConversationCommandOutcomeKind.exit:
+        if (result.shouldRender) {
+          _printer.info(result.message);
         }
-        updateSessionRecord(
-          ValueReaders.mapValue(compactResult['session_record']),
-          ValueReaders.stringValue(
-            compactResult['session_id'],
-            currentSessionId,
-          ),
-        );
-        _printCompactResult(compactResult);
-        return _SlashCommandOutcome.handled;
-      case 'stats':
-        final statsResult = await _sessionShellService.statsSession(
-          project,
-          currentSessionId,
-        );
-        if (!ValueReaders.boolValue(statsResult['ok'], true)) {
-          _printer.error(
-            ValueReaders.stringValue(statsResult['error'], '读取会话统计失败。'),
-          );
-          return _SlashCommandOutcome.handled;
-        }
-        _printStatsResult(statsResult);
-        return _SlashCommandOutcome.handled;
-      case 'exit':
-        _printer.info('结束交互会话。');
         return _SlashCommandOutcome.exit;
-      default:
-        _printer.error('未知 slash command: /$command');
-        _printHelp(_buildGuideProfile(project, sessionRecord));
+      case ConversationCommandOutcomeKind.passThrough:
+        return _SlashCommandOutcome.passThrough;
+      case ConversationCommandOutcomeKind.handled:
+      case ConversationCommandOutcomeKind.unknown:
+        if (result.shouldRender) {
+          _printer.block('session command', result.message);
+        }
+        if (result.updatedSessionRecord != null) {
+          onRecordUpdated(result.updatedSessionRecord!);
+        }
+        if (result.payload != null && result.payload!.isNotEmpty) {
+          _printer.block('session command payload', _prettyJson(result.payload!));
+        }
         return _SlashCommandOutcome.handled;
     }
   }
 
   void _printHelp(SessionGuideProfile guideProfile) {
-    // 中文注释: 帮助只展示当前 REPL 真正接通的控制面，避免把未来 session 能力伪装成现在可用。
-    CliHelpContract.printHelpBlock(
-      _printer,
-      'session interactive help',
-      [
-        '/help',
-        '/model',
-        '/group',
-        '/approval',
-        '/compact',
-        '/stats',
-        '/exit',
-        if (guideProfile.primaryActions.isNotEmpty) '',
-        for (final action in guideProfile.primaryActions)
-          '${action.title} - ${action.description}',
-      ].where((line) => line.trim().isNotEmpty).toList(growable: false),
-    );
-  }
-
-  void _printModelState(ProjectDescriptor project, JsonMap sessionRecord) {
-    // 中文注释: model slash command 先投影当前会话模式与引导文案，暂不在 REPL 里偷偷改 provider。
-    final guideProfile = _buildGuideProfile(project, sessionRecord);
-    _printer.block(
-      'session model',
-      [
-        '当前模式：${ValueReaders.stringValue(sessionRecord['mode'])}',
-        '会话标题：${ValueReaders.stringValue(sessionRecord['title'], '未命名会话')}',
-        'composerHint：${guideProfile.composerHint}',
-      ].join('\n'),
-    );
-  }
-
-  void _printGroupState(ProjectDescriptor project, JsonMap sessionRecord) {
-    // 中文注释: group slash command 只展示当前项目类型和相关引导，不把智能体组切换做成第二套业务主链。
-    final guideProfile = _buildGuideProfile(project, sessionRecord);
-    _printer.block(
-      'session group',
-      [
-        '项目类型：${project.projectType}',
-        '引导标题：${guideProfile.title}',
-        '引导说明：${guideProfile.description}',
-      ].join('\n'),
-    );
-  }
-
-  void _printApprovalState(ProjectDescriptor project, JsonMap sessionRecord) {
-    // 中文注释: approval slash command 先作为壳层信息入口，正式审批真相仍在后续 approval session 接通。
-    final guideProfile = _buildGuideProfile(project, sessionRecord);
-    _printer.block(
-      'session approval',
-      [
-        '当前会话的审批入口请使用 approval list/show/approve/reject。',
-        '会话状态：${ValueReaders.stringValue(sessionRecord['public_status'], '准备中')}',
-        '状态提示：${guideProfile.statusHint.isEmpty ? '暂无补充提示。' : guideProfile.statusHint}',
-      ].join('\n'),
-    );
-  }
-
-  void _printCompactResult(JsonMap result) {
-    // 中文注释: compact 的 REPL 输出沿用共享压缩合同，不额外生成一套本地摘要。
-    _printer.success('会话压缩已完成。');
-    _printer.block(
-      'session compact',
-      _prettyJson(ValueReaders.mapValue(result['compaction_decision'])),
-    );
-  }
-
-  void _printStatsResult(JsonMap result) {
-    // 中文注释: stats 的 REPL 输出与非交互命令保持同一份压力快照合同。
-    _printer.info(ValueReaders.stringValue(result['public_summary']));
-    _printer.block(
-      'session stats',
-      _prettyJson(ValueReaders.mapValue(result['pressure_snapshot'])),
-    );
+    // 中文注释: 帮助只展示 registry 里真正注册的指令，外加当前会话的引导动作，避免把未来能力伪装成现在可用。
+    final lines = <String>[];
+    for (final command in registry.all()) {
+      final tail = command.argHint.isEmpty ? '' : ' ${command.argHint}';
+      lines.add('/${command.name}$tail — ${command.summary}');
+    }
+    if (guideProfile.primaryActions.isNotEmpty) {
+      lines.add('');
+      for (final action in guideProfile.primaryActions) {
+        lines.add('${action.title} - ${action.description}');
+      }
+    }
+    CliHelpContract.printHelpBlock(_printer, 'session interactive help', lines);
   }
 
   void _printSendResult(JsonMap result) {

@@ -141,34 +141,50 @@ void main() {
         expect(
           bundle.printer.blocks,
           contains(
-            predicate<_PrintedBlock>((block) => block.title == 'session model'),
-          ),
-        );
-        expect(
-          bundle.printer.blocks,
-          contains(
-            predicate<_PrintedBlock>((block) => block.title == 'session group'),
-          ),
-        );
-        expect(
-          bundle.printer.blocks,
-          contains(
             predicate<_PrintedBlock>(
-              (block) => block.title == 'session approval',
+              (block) =>
+                  block.title == 'session command' &&
+                  block.content.contains('当前模式'),
             ),
           ),
         );
         expect(
           bundle.printer.blocks,
           contains(
-            predicate<_PrintedBlock>((block) => block.title == 'session stats'),
+            predicate<_PrintedBlock>(
+              (block) =>
+                  block.title == 'session command' &&
+                  block.content.contains('项目类型：novel'),
+            ),
           ),
         );
         expect(
           bundle.printer.blocks,
           contains(
             predicate<_PrintedBlock>(
-              (block) => block.title == 'session compact',
+              (block) =>
+                  block.title == 'session command' &&
+                  block.content.contains('approval list/show/approve/reject'),
+            ),
+          ),
+        );
+        expect(
+          bundle.printer.blocks,
+          contains(
+            predicate<_PrintedBlock>(
+              (block) =>
+                  block.title == 'session command' &&
+                  block.content.contains('压力'),
+            ),
+          ),
+        );
+        expect(
+          bundle.printer.blocks,
+          contains(
+            predicate<_PrintedBlock>(
+              (block) =>
+                  block.title == 'session command' &&
+                  block.content.contains('会话上下文已压缩'),
             ),
           ),
         );
@@ -179,16 +195,6 @@ void main() {
               (block) =>
                   block.title == 'session send' &&
                   block.content.contains('继续推进剧情。'),
-            ),
-          ),
-        );
-        expect(
-          bundle.printer.blocks,
-          contains(
-            predicate<_PrintedBlock>(
-              (block) =>
-                  block.title == 'session approval' &&
-                  block.content.contains('approval list/show/approve/reject'),
             ),
           ),
         );

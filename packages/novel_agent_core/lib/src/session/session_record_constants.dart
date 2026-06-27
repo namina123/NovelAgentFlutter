@@ -20,4 +20,7 @@ final class SessionRecordConstants {
   static const String modeImportArticle = 'import_article';
   static const String modeContinueWriting = 'continue_writing';
   static const String modeUnselected = 'new_session';
+
+  /// 自由文本会话目标（/goal <文字> 设置），注入 system prompt stable 段。
+  static const String conversationGoalField = 'conversation_goal';
 }

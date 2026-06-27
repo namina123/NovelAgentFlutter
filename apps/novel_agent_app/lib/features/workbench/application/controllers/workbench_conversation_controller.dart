@@ -26,6 +26,7 @@ import '../services/conversation_input_capability_service.dart';
 import '../services/conversation_agent_selector_view_data_service.dart';
 import '../services/conversation_request_agent_resolver_service.dart';
 import '../services/desktop_conversation_attachment_picker_service.dart';
+import '../services/gui_conversation_command_backend.dart';
 import 'generate_draft_use_case_factory.dart';
 import '../../presentation/models/conversation_group_selector_view_data.dart';
 import '../services/conversation_guide_view_data_service.dart';
@@ -817,8 +818,67 @@ class WorkbenchConversationController implements ConversationActionHandler {
 
   @override
   Future<void> onSendRequested(String text) async {
-    // 中文注释: 所有发送动作统一复用同一条请求链，避免按钮发送和选项发送行为分叉。
+    // 中文注释: 斜杠指令优先拦截并交由 core 命令分发器处理；普通文本才走正式发送链。
+    final trimmed = text.trim();
+    if (trimmed.startsWith('/')) {
+      await _handleConversationCommand(trimmed);
+      return;
+    }
     await _sendPrompt(text);
+  }
+
+  late final GuiConversationCommandBackend _guiConversationBackend =
+      GuiConversationCommandBackend();
+
+  late final ConversationCommandDispatcher _conversationCommandDispatcher =
+      _buildConversationDispatcher();
+
+  ConversationCommandDispatcher _buildConversationDispatcher() {
+    // 中文注释: GUI 只注册用户第一期选定的内置指令（不含 /exit）；contextFactory 闭包每次调用
+    // 读取当前 project 与活跃会话记录，保证多轮对话中读到最新状态。
+    final registry = ConversationCommandRegistry();
+    registerBuiltinConversationCommands(registry);
+    return ConversationCommandDispatcher(
+      registry: registry,
+      contextFactory: (rawArgs) => ConversationCommandContext(
+        project:
+            _workspaceController.currentProject ??
+            const ProjectDescriptor(id: '', name: '', rootPath: ''),
+        sessionRecord:
+            _activeConversationState()?.sessionRecord ??
+            const <String, Object?>{},
+        rawArgs: rawArgs,
+        backend: _guiConversationBackend,
+      ),
+    );
+  }
+
+  Future<void> _handleConversationCommand(String input) async {
+    // 中文注释: 命令结果只回写会话状态并 announce；不进入模型生成链。passThrough 兜底走发送。
+    final project = _workspaceController.currentProject;
+    final activeState = _activeConversationState();
+    if (project == null || activeState == null) {
+      _announce('请先开始会话后再使用指令。');
+      return;
+    }
+    final result = await _conversationCommandDispatcher.dispatch(input);
+    if (result.kind == ConversationCommandOutcomeKind.passThrough) {
+      await _sendPrompt(input);
+      return;
+    }
+    if (result.shouldRender) {
+      _announce(result.message);
+    }
+    if (result.updatedSessionRecord != null) {
+      final nextState = activeState.copyWith(
+        sessionRecord: result.updatedSessionRecord!,
+      );
+      _replaceConversationSession(
+        nextState,
+        activate: true,
+        persist: result.persist,
+      );
+    }
   }
 
   Future<void> _sendPrompt(
@@ -1014,6 +1074,9 @@ class WorkbenchConversationController implements ConversationActionHandler {
               modelId: resolvedModelId,
               title: title,
               intent: taskProfile.intent,
+              conversationGoal: _stringValue(
+                preflight.sessionState.sessionRecord[SessionRecordConstants.conversationGoalField],
+              ),
               agent: requestAgent.agent,
               selectedCollaborationGroup: selectedCollaborationGroup,
               sessionContext: mergedSessionPromptContext.contextMarkdown,

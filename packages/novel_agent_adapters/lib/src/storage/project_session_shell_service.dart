@@ -370,6 +370,91 @@ class ProjectSessionShellService {
     return <String, Object?>{'ok': true, ..._sessionPayload(stopped)};
   }
 
+  Future<JsonMap> setMode(
+    ProjectDescriptor project,
+    String sessionId,
+    String mode, {
+    String now = '',
+  }) async {
+    // 中文注释: setMode 复用正式的 sessionWithGoal mutation，保证 CLI 切模式与 GUI 走同一条语义。
+    final record = await _sessionWorkspaceService.loadSession(project, sessionId);
+    if (record.isEmpty) {
+      return <String, Object?>{
+        'ok': false,
+        'error': 'Session not found.',
+        'session_id': sessionId.trim(),
+      };
+    }
+    final timestamp = now.trim().isEmpty
+        ? DateTime.now().toIso8601String()
+        : now.trim();
+    final updated = _mutationService.sessionWithGoal(record, mode, now: timestamp);
+    await _sessionWorkspaceService.saveSession(
+      project,
+      updated,
+      activeSessionId: sessionId.trim(),
+    );
+    return <String, Object?>{'ok': true, ..._sessionPayload(updated)};
+  }
+
+  Future<JsonMap> setGoalText(
+    ProjectDescriptor project,
+    String sessionId,
+    String text, {
+    String now = '',
+  }) async {
+    // 中文注释: setGoalText 只写自由文本目标字段，不改模式与阶段，供 /goal <文字> 使用。
+    final record = await _sessionWorkspaceService.loadSession(project, sessionId);
+    if (record.isEmpty) {
+      return <String, Object?>{
+        'ok': false,
+        'error': 'Session not found.',
+        'session_id': sessionId.trim(),
+      };
+    }
+    final timestamp = now.trim().isEmpty
+        ? DateTime.now().toIso8601String()
+        : now.trim();
+    final updated = ValueReaders.deepCopyMap(record)
+      ..[SessionRecordConstants.conversationGoalField] = text.trim()
+      ..['updated_at'] = timestamp;
+    await _sessionWorkspaceService.saveSession(
+      project,
+      updated,
+      activeSessionId: sessionId.trim(),
+    );
+    return <String, Object?>{'ok': true, ..._sessionPayload(updated)};
+  }
+
+  Future<JsonMap> clearWorkingContext(
+    ProjectDescriptor project,
+    String sessionId, {
+    String now = '',
+  }) async {
+    // 中文注释: clear 只清空当前工作上下文（送入模型的窗口），保留 transcript 与压缩归档，不删除会话。
+    final record = await _sessionWorkspaceService.loadSession(project, sessionId);
+    if (record.isEmpty) {
+      return <String, Object?>{
+        'ok': false,
+        'error': 'Session not found.',
+        'session_id': sessionId.trim(),
+      };
+    }
+    final timestamp = now.trim().isEmpty
+        ? DateTime.now().toIso8601String()
+        : now.trim();
+    final cleared = ValueReaders.deepCopyMap(record)
+      ..[SessionRecordConstants.workingContextMessagesField] = <Object?>[]
+      ..[SessionRecordConstants.legacyContextMessagesField] = <Object?>[]
+      ..['updated_at'] = timestamp;
+    await _sessionWorkspaceService.saveSession(
+      project,
+      cleared,
+      activeSessionId: sessionId.trim(),
+    );
+    return <String, Object?>{'ok': true, ..._sessionPayload(cleared)};
+  }
+
   JsonMap _sessionPayload(JsonMap record) {
     // 中文注释: 会话通用 payload 只做一层稳定投影，CLI/测试都能直接消费。
     final normalized = ValueReaders.deepCopyMap(record);

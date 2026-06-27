@@ -67,5 +67,34 @@ void main() {
       expect(prompt.stable, contains('只传任务摘录、约束和期望产物'));
       expect(prompt.stable, contains('可组装协作视角素材'));
     });
+
+    test('injects conversation goal into stable prefix when provided', () {
+      final builder = ToolStrategyPromptBuilder(
+        toolStrategyService: const ToolStrategyService(),
+        projectPromptContract: ProjectPromptContract(),
+      );
+      final withGoal = builder.buildPromptText(
+        settings: const <String, Object?>{},
+        intent: 'draft',
+        projectNote: 'project-note',
+        projectTreeNote: 'tree-note',
+        agentNote: 'agent-note',
+        styleNote: 'style-note',
+        conversationGoal: '收束第三章伏笔',
+        toolIds: const <String>[],
+      );
+      expect(withGoal.stable, contains('本次会话目标：收束第三章伏笔'));
+
+      final withoutGoal = builder.buildPromptText(
+        settings: const <String, Object?>{},
+        intent: 'draft',
+        projectNote: 'project-note',
+        projectTreeNote: 'tree-note',
+        agentNote: 'agent-note',
+        styleNote: 'style-note',
+        toolIds: const <String>[],
+      );
+      expect(withoutGoal.stable, isNot(contains('本次会话目标')));
+    });
   });
 }

@@ -718,6 +718,7 @@ class ScriptedGenerateDraftUseCase extends GenerateDraftUseCase {
     required String modelId,
     String title = '',
     String intent = 'draft',
+    String conversationGoal = '',
     JsonMap agent = const <String, Object?>{},
     JsonMap selectedCollaborationGroup = const <String, Object?>{},
     String sessionContext = '',
