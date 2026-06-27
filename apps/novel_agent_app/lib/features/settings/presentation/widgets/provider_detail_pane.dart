@@ -43,7 +43,6 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
   late final TextEditingController _baseUrlController;
   late final TextEditingController _apiKeyController;
   late final TextEditingController _descriptionController;
-  late final TextEditingController _modelIdController;
   late String _protocol;
   String? _selectedDirectoryProviderId;
   bool _revealApiKey = false;
@@ -57,7 +56,6 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
     _baseUrlController = TextEditingController();
     _apiKeyController = TextEditingController();
     _descriptionController = TextEditingController();
-    _modelIdController = TextEditingController();
     _syncFromProvider(widget.provider);
   }
 
@@ -80,7 +78,6 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
     _baseUrlController.dispose();
     _apiKeyController.dispose();
     _descriptionController.dispose();
-    _modelIdController.dispose();
     super.dispose();
   }
 
@@ -103,21 +100,6 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
             value: option.id,
             label: option.label,
           ),
-        )
-        .toList(growable: false);
-    final modelOptions = widget.modelOptions
-        .map(
-          (option) => SettingsSearchOption<String>(
-            value: option.value,
-            label: option.label,
-            note: option.note,
-            providerId: option.providerId,
-          ),
-        )
-        .where(
-          (option) =>
-              option.providerId.trim().isEmpty ||
-              option.providerId.trim() == _selectedDirectoryProviderId?.trim(),
         )
         .toList(growable: false);
     return ListView(
@@ -154,20 +136,14 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
                 hintText: '输入厂商名称筛选，例如 OpenAI / DeepSeek',
                 onSelected: _onProviderDirectorySelected,
               ),
-              const SizedBox(height: 12),
-              SettingsLabeledSearchDropdownField<String>(
-                key: const ValueKey('provider-model-field'),
-                label: '模型 ID',
-                controller: _modelIdController,
-                selectedValue: null,
-                options: modelOptions,
-                hintText: '输入模型 ID 筛选，也可从全部模型里选择',
-                onSelected: (value) {
-                  if (value == null) {
-                    return;
-                  }
-                  _modelIdController.text = value;
-                },
+              const SizedBox(height: 8),
+              Text(
+                '模型请在「模型」页选择：先在此保存接口，再到「模型」页选厂商后挑选模型。',
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.5,
+                  color: Theme.of(context).hintColor,
+                ),
               ),
             ],
           ),
@@ -318,7 +294,6 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
     _baseUrlController.text = provider?.baseUrl ?? '';
     _apiKeyController.text = provider?.rawApiKey ?? '';
     _descriptionController.text = provider?.description ?? '';
-    _modelIdController.text = '';
     _selectedDirectoryProviderId = _directoryProviderIdFor(provider);
     _revealApiKey = false;
   }
@@ -331,7 +306,6 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
       'protocol': _protocol,
       'base_url': _baseUrlController.text.trim(),
       'api_key': _apiKeyController.text,
-      'model_id': _modelIdController.text.trim(),
       'description': _descriptionController.text.trim(),
       'is_new': false,
     });
@@ -382,7 +356,6 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
       'protocol': _protocol,
       'base_url': _baseUrlController.text.trim(),
       'api_key': _apiKeyController.text,
-      'model_id': _modelIdController.text.trim(),
       'api_mode': widget.provider?.connectionValidationResult.selectedRouteFamily,
     });
   }

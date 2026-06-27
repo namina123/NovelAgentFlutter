@@ -4792,7 +4792,7 @@ class AppShellController extends ChangeNotifier
                 connectionValidationResult: provider.connectionValidationResult,
                 isSelected: false,
               ),
-            const ProviderEndpointViewData(
+            ProviderEndpointViewData(
               id: '__new__',
               title: '',
               protocol: 'openai_compatible',
@@ -4801,6 +4801,7 @@ class AppShellController extends ChangeNotifier
               apiKeyState: '未配置密钥',
               description: '',
               connectionValidationResult:
+                  _providerConnectionValidationResults['__new__'] ??
                   ProviderConnectionValidationResultViewData.initial,
               isSelected: true,
             ),
@@ -4874,7 +4875,12 @@ class AppShellController extends ChangeNotifier
     ProviderEndpointSettings provider,
     Map<String, Object?> modelSettings,
   ) {
-    // 中文注释: 接口条目的连接状态直接来自共享验证服务和当前模型设置，不在详情 pane 里再自算一遍。
+    // 中文注释: 优先回放联网探测缓存（"测试连接"的真实结果）；没有缓存才回落到本地静态校验。
+    // 否则用户点完测试连接后，详情页一直显示本地静态结果，联网探测结果永远不浮现。
+    final cached = _providerConnectionValidationResults[provider.id];
+    if (cached != null) {
+      return cached;
+    }
     final validation = _providerConnectionValidationService.validate(
       title: provider.title,
       protocol: provider.protocol,

@@ -1,3 +1,5 @@
+import 'dart:isolate';
+
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
@@ -58,7 +60,7 @@ class BookDeconstructionSmartImportOrchestrationService {
       workspace: workspace,
       parsedRules: parsedRules,
     );
-    final normalizedSourceText = _ruleApplicationService.apply(
+    final normalizedSourceText = await _applyRulesInBackground(
       workspace: workspace,
       rules: rules,
     );
@@ -71,6 +73,21 @@ class BookDeconstructionSmartImportOrchestrationService {
         normalizedSourceText: normalizedSourceText,
       ),
     );
+  }
+
+  Future<String> _applyRulesInBackground({
+    required BookDeconstructionSmartImportWorkspace workspace,
+    required BookDeconstructionSmartImportRules rules,
+  }) async {
+    // 中文注释: 规则去噪对整本书逐行跑多个正则，是 CPU 密集同步操作；放进 isolate 跑，
+    // 避免拆书时卡死主线程。service 是 const 无状态纯函数，workspace/rules 是纯值对象，
+    // 可安全跨 isolate 传递。
+    return Isolate.run(() {
+      return const BookDeconstructionSmartImportRuleApplicationService().apply(
+        workspace: workspace,
+        rules: rules,
+      );
+    });
   }
 
   BookDeconstructionSmartImportRules _resolvedRules({
