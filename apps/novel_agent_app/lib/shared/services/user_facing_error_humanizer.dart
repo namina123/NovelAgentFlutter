@@ -28,7 +28,9 @@ class UserFacingErrorHumanizer {
       return '网络连接失败，请检查网络后重试。';
     }
     if (error is HttpException) {
-      return '网络请求失败，请稍后重试。';
+      // 中文注释: HttpException 多来自网关对非 2xx 的统一抛出（消息形如 "模型请求失败(401): ..."）。
+      // 按 HTTP 状态码归类，避免把 401/403/429/上下文超限/5xx 都误报成"网络请求失败"——网络其实是通的。
+      return _humanizeHttpException(error);
     }
     if (error is FileSystemException) {
       return '文件读写失败，请检查路径与读写权限。';
@@ -84,5 +86,41 @@ class UserFacingErrorHumanizer {
     }
     // 3. 通用兜底：不向用户泄露内部细节。
     return '$action失败，请稍后重试。';
+  }
+
+  static String _humanizeHttpException(HttpException error) {
+    final message = error.toString();
+    final codeMatch = RegExp(r'\((\d{3})\)').firstMatch(message);
+    final code = codeMatch?.group(1) ?? '';
+    if (code == '401') {
+      return '鉴权失败，请检查 API Key 是否正确。';
+    }
+    if (code == '403') {
+      return '当前账号没有访问权限（403），请检查 Key 权限。';
+    }
+    if (code == '404') {
+      return '请求的资源不存在（404），请检查 baseUrl 与模型配置。';
+    }
+    if (code == '429') {
+      return '请求过于频繁或额度用尽（429），请稍后重试。';
+    }
+    if (code.startsWith('5')) {
+      return '服务端暂时异常（$code），请稍后重试。';
+    }
+    if (code.startsWith('4')) {
+      return '请求被服务方拒绝（$code），请检查请求参数或模型配置。';
+    }
+    // 中文注释: 上下文超限常以 400 + "context length" 出现，先于通用网络失败判断。
+    final lower = message.toLowerCase();
+    if (lower.contains('context length') ||
+        lower.contains('maximum context') ||
+        lower.contains('context window') ||
+        lower.contains('too long')) {
+      return '输入内容超过模型上下文上限，请精简后重试。';
+    }
+    if (code.isEmpty) {
+      return '网络请求失败，请稍后重试。';
+    }
+    return '网络请求失败（HTTP $code），请稍后重试。';
   }
 }

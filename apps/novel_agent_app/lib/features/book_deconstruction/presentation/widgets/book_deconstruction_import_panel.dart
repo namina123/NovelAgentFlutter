@@ -91,19 +91,22 @@ class _BookDeconstructionImportPanelState
               widget.actionHandler.onBookDeconstructionSourceTitleChanged,
         ),
         const SizedBox(height: 12),
-        TextField(
-          controller: _sourceContentController,
-          enabled: !widget.viewData.isLoading,
-          maxLines: 12,
-          minLines: 6,
-          decoration: const InputDecoration(
-            labelText: '源文稿',
-            hintText: '粘贴原文，或点上方按钮选择文本 / Markdown / EPUB 文件。',
-            alignLabelWithHint: true,
-          ),
-          onChanged:
-              widget.actionHandler.onBookDeconstructionSourceContentChanged,
-        ),
+        if (widget.viewData.sourceAbsolutePath.trim().isEmpty)
+          TextField(
+            controller: _sourceContentController,
+            enabled: !widget.viewData.isLoading,
+            maxLines: 12,
+            minLines: 6,
+            decoration: const InputDecoration(
+              labelText: '源文稿',
+              hintText: '粘贴原文，或点上方按钮选择文本 / Markdown / EPUB 文件。',
+              alignLabelWithHint: true,
+            ),
+            onChanged:
+                widget.actionHandler.onBookDeconstructionSourceContentChanged,
+          )
+        else
+          _ImportedSourcePreview(sourceContent: widget.viewData.sourceContent),
       ],
     );
   }
@@ -115,6 +118,37 @@ class _BookDeconstructionImportPanelState
     controller.value = TextEditingValue(
       text: nextText,
       selection: TextSelection.collapsed(offset: nextText.length),
+    );
+  }
+}
+
+/// 选文件导入后只渲染截断预览——把整本书灌进 TextField 会同步布局卡死 UI。
+/// 完整正文已存盘，拆书会读取完整内容（snapshot.sourceContent 不截断）。
+class _ImportedSourcePreview extends StatelessWidget {
+  const _ImportedSourcePreview({required this.sourceContent});
+
+  final String sourceContent;
+
+  @override
+  Widget build(BuildContext context) {
+    const maxPreviewChars = 4000;
+    final truncated = sourceContent.length <= maxPreviewChars
+        ? sourceContent
+        : '${sourceContent.substring(0, maxPreviewChars)}\n\n…（仅显示前 $maxPreviewChars 字预览，完整正文已存盘，拆书将读取完整内容）';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: Theme.of(context).dividerColor),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      constraints: const BoxConstraints(maxHeight: 280),
+      child: SingleChildScrollView(
+        child: SelectableText(
+          truncated,
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ),
     );
   }
 }
