@@ -122,7 +122,7 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
         .where(
           (option) =>
               option.providerId.trim().isEmpty ||
-              option.providerId.trim() == editor.providerId.trim(),
+              option.providerId.trim() == _providerId.trim(),
         )
         .toList(growable: false);
     final suggestedModelOptions = editor.modelSuggestions;

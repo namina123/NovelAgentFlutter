@@ -13,33 +13,33 @@ class ImportAssistantModelOptionsService {
   const ImportAssistantModelOptionsService();
 
   List<SelectorOptionViewData> build(AppSettings? settings) {
+    // 中文注释: 拆书/分析用的"可用模型"取当前生效的默认接口 + 默认模型（在「模型」页选定），
+    // 而不是遍历每个 provider 的 modelId——provider 详情只承载厂商凭据，模型由「模型」页统一管理。
+    // 否则用户在「模型」页保存模型后，拆书面板仍读 provider.modelId（空），显示"尚未配置可用模型"。
     if (settings == null) {
       return const <SelectorOptionViewData>[];
     }
-    final options = <SelectorOptionViewData>[];
-    final seen = <String>{};
-    for (final provider in settings.providers) {
-      final providerId = provider.id.trim();
-      final modelId = provider.modelId.trim();
-      if (providerId.isEmpty || modelId.isEmpty) {
-        continue;
-      }
-      final key = '$providerId::$modelId';
-      if (!seen.add(key)) {
-        continue;
-      }
-      final providerLabel = provider.title.trim().isEmpty
-          ? providerId
-          : provider.title.trim();
-      options.add(
-        SelectorOptionViewData(
-          id: key,
-          label: '$providerLabel · $modelId',
-          note: providerId,
-        ),
-      );
+    final providerId = settings.defaultProviderId.trim();
+    final modelId = settings.defaultModelId.trim();
+    if (providerId.isEmpty || modelId.isEmpty) {
+      return const <SelectorOptionViewData>[];
     }
-    return List<SelectorOptionViewData>.unmodifiable(options);
+    var providerLabel = providerId;
+    for (final provider in settings.providers) {
+      if (provider.id.trim() == providerId) {
+        providerLabel = provider.title.trim().isEmpty
+            ? providerId
+            : provider.title.trim();
+        break;
+      }
+    }
+    return <SelectorOptionViewData>[
+      SelectorOptionViewData(
+        id: '$providerId::$modelId',
+        label: '$providerLabel · $modelId',
+        note: providerId,
+      ),
+    ];
   }
 
   /// 把复合键 `"$providerId::$modelId"` 拆成 (providerId, modelId)；非法键返回空串。
