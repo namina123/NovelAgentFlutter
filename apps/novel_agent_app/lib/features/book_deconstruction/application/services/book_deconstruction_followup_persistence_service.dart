@@ -1,3 +1,4 @@
+import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import 'book_deconstruction_followup_documents_service.dart';
@@ -11,6 +12,7 @@ class BookDeconstructionFollowupPersistenceService {
     BookDeconstructionFollowupDocumentsService? documentsService,
     BookDeconstructionFollowupOptionSelectionService? optionSelectionService,
     ReferenceSourceDocumentStructureService? structureService,
+    ProjectStructuredContentBridgeService? structuredContentBridgeService,
   }) : _writeProjectTextFileUseCase = writeProjectTextFileUseCase,
        _planBuilderService =
            planBuilderService ??
@@ -24,7 +26,10 @@ class BookDeconstructionFollowupPersistenceService {
            optionSelectionService ??
            const BookDeconstructionFollowupOptionSelectionService(),
        _structureService =
-           structureService ?? const ReferenceSourceDocumentStructureService();
+           structureService ?? const ReferenceSourceDocumentStructureService(),
+       _structuredContentBridgeService =
+           structuredContentBridgeService ??
+           ProjectStructuredContentBridgeService();
 
   final WriteProjectTextFileUseCase _writeProjectTextFileUseCase;
   final BookDeconstructionDerivedProjectPlanBuilderService _planBuilderService;
@@ -33,12 +38,14 @@ class BookDeconstructionFollowupPersistenceService {
   final BookDeconstructionFollowupOptionSelectionService
   _optionSelectionService;
   final ReferenceSourceDocumentStructureService _structureService;
+  final ProjectStructuredContentBridgeService _structuredContentBridgeService;
 
   Future<BookDeconstructionFollowupPersistenceResult> persist({
     required ProjectDescriptor project,
     required BookDeconstructionDraftBuildResult buildResult,
     required String followupOptionId,
     bool writeBodyAsLiveNarrative = false,
+    Set<String>? selectedItemIds,
   }) async {
     final option = _optionSelectionService.optionById(
       followupMenu: buildResult.followupMenu,
@@ -84,13 +91,14 @@ class BookDeconstructionFollowupPersistenceService {
     // 同人路线（fanfic）按设计不继承正文，保持原行为。
     final inheritsBody =
         option.sourceInheritanceMode ==
-            BookDeconstructionSourceInheritanceMode.continuation;
+        BookDeconstructionSourceInheritanceMode.continuation;
     final inheritedChapterPaths = inheritsBody
         ? await _persistInheritedChapters(
             project: project,
             followupOptionId: option.id,
             buildResult: buildResult,
             asLiveNarrative: writeBodyAsLiveNarrative,
+            selectedItemIds: selectedItemIds,
           )
         : const <String>[];
     return BookDeconstructionFollowupPersistenceResult(
@@ -102,11 +110,13 @@ class BookDeconstructionFollowupPersistenceService {
     );
   }
 
-  Future<List<String>> _persistInheritedChapters({
+  /// 第④步保存分章：asLiveNarrative=true 写正文 chapters/（续写基础），
+  /// false 写资源目录 analysis/（参考资料）。两者都不再写 inherited/ 镜像（那是派生项目场景）。
+  Future<List<String>> persistChapters({
     required ProjectDescriptor project,
-    required String followupOptionId,
     required BookDeconstructionDraftBuildResult buildResult,
     required bool asLiveNarrative,
+    Set<String>? selectedItemIds,
   }) async {
     final sourceContent = buildResult.input.sourceDocuments.isEmpty
         ? ''
@@ -119,8 +129,89 @@ class BookDeconstructionFollowupPersistenceService {
     if (sections.isEmpty) {
       return const <String>[];
     }
+    final selectedChapterOutlineIds = _selectedChapterOutlineIds(
+      buildResult: buildResult,
+      selectedItemIds: selectedItemIds,
+    );
     final changedPaths = <String>[];
     for (final section in sections) {
+      if (!_isSelectedSection(
+        sectionIndex: section.sectionIndex,
+        buildResult: buildResult,
+        selectedChapterOutlineIds: selectedChapterOutlineIds,
+      )) {
+        continue;
+      }
+      final title = section.heading.trim().isEmpty
+          ? '原作片段 ${section.sectionIndex}'
+          : section.heading.trim();
+      final relativePath = asLiveNarrative
+          ? _targetPathService.liveChapterPath(
+              sequence: section.sectionIndex,
+              title: title,
+              storageStrategy: project.storageStrategy,
+            )
+          : _targetPathService.resourceChapterPath(
+              sequence: section.sectionIndex,
+              title: title,
+              storageStrategy: project.storageStrategy,
+            );
+      final buffer = StringBuffer()..writeln(title);
+      if (section.content.trim().isNotEmpty) {
+        buffer
+          ..writeln()
+          ..write(section.content.trim());
+      }
+      final chapterContent = buffer.toString().trimRight();
+      await _structuredContentBridgeService.persistChapterDelivery(
+        project: project,
+        chapterPath: relativePath,
+        chapterTitle: title,
+        chapterContent: chapterContent,
+        recordPath: '',
+        status: asLiveNarrative ? 'delivered' : 'archived',
+      );
+      await _writeProjectTextFileUseCase.execute(
+        project: project,
+        relativePath: relativePath,
+        content: chapterContent,
+      );
+      changedPaths.add(relativePath);
+    }
+    return changedPaths;
+  }
+
+  Future<List<String>> _persistInheritedChapters({
+    required ProjectDescriptor project,
+    required String followupOptionId,
+    required BookDeconstructionDraftBuildResult buildResult,
+    required bool asLiveNarrative,
+    Set<String>? selectedItemIds,
+  }) async {
+    final sourceContent = buildResult.input.sourceDocuments.isEmpty
+        ? ''
+        : buildResult.input.sourceDocuments.first.content;
+    if (sourceContent.trim().isEmpty) {
+      return const <String>[];
+    }
+    final structure = _structureService.analyze(sourceContent);
+    final sections = structure.sections;
+    if (sections.isEmpty) {
+      return const <String>[];
+    }
+    final selectedChapterOutlineIds = _selectedChapterOutlineIds(
+      buildResult: buildResult,
+      selectedItemIds: selectedItemIds,
+    );
+    final changedPaths = <String>[];
+    for (final section in sections) {
+      if (!_isSelectedSection(
+        sectionIndex: section.sectionIndex,
+        buildResult: buildResult,
+        selectedChapterOutlineIds: selectedChapterOutlineIds,
+      )) {
+        continue;
+      }
       final title = section.heading.trim().isEmpty
           ? '原作片段 ${section.sectionIndex}'
           : section.heading.trim();
@@ -143,14 +234,60 @@ class BookDeconstructionFollowupPersistenceService {
           ..writeln()
           ..write(section.content.trim());
       }
+      final chapterContent = buffer.toString().trimRight();
+      await _structuredContentBridgeService.persistChapterDelivery(
+        project: project,
+        chapterPath: relativePath,
+        chapterTitle: title,
+        chapterContent: chapterContent,
+        recordPath: '',
+        status: asLiveNarrative ? 'delivered' : 'archived',
+      );
       await _writeProjectTextFileUseCase.execute(
         project: project,
         relativePath: relativePath,
-        content: buffer.toString().trimRight(),
+        content: chapterContent,
       );
       changedPaths.add(relativePath);
     }
     return changedPaths;
+  }
+
+  Set<String>? _selectedChapterOutlineIds({
+    required BookDeconstructionDraftBuildResult buildResult,
+    required Set<String>? selectedItemIds,
+  }) {
+    if (selectedItemIds == null) {
+      return null;
+    }
+    return buildResult.applicationPlan.items
+        .where(
+          (item) =>
+              item.sourceKind ==
+                  BookDeconstructionArtifactKind.chapterOutline &&
+              selectedItemIds.contains(item.id),
+        )
+        .map((item) => item.sourceId)
+        .toSet();
+  }
+
+  bool _isSelectedSection({
+    required int sectionIndex,
+    required BookDeconstructionDraftBuildResult buildResult,
+    required Set<String>? selectedChapterOutlineIds,
+  }) {
+    if (selectedChapterOutlineIds == null) {
+      return true;
+    }
+    final outlines = buildResult.extractionResult.chapterOutlines;
+    for (var index = 0; index < outlines.length; index++) {
+      final outline = outlines[index];
+      final sequence = outline.sequence > 0 ? outline.sequence : index + 1;
+      if (sequence == sectionIndex) {
+        return selectedChapterOutlineIds.contains(outline.id);
+      }
+    }
+    return false;
   }
 
   String _safeId(String value) {

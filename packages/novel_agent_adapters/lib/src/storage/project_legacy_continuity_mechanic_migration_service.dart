@@ -110,7 +110,9 @@ class ProjectLegacyContinuityMechanicMigrationService {
       }
     }
     if (changedPaths.isNotEmpty) {
-      final projections = await _projectionWriterService.writeProjection(project);
+      final projections = await _projectionWriterService.writeProjection(
+        project,
+      );
       changedPaths.addAll(projections.map((entry) => entry.relativePath));
     }
     return <String, Object?>{

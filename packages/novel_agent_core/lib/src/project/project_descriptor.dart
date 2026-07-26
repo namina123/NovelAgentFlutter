@@ -9,6 +9,7 @@ class ProjectDescriptor {
     this.storageStrategy = ProjectStorageStrategy.markdownProjectStore,
     this.projectBranchId = '',
     this.runtimeBaselineId = '',
+    this.additionalTraitIds = const <String>[],
   });
 
   final String id;
@@ -18,4 +19,5 @@ class ProjectDescriptor {
   final ProjectStorageStrategy storageStrategy;
   final String projectBranchId;
   final String runtimeBaselineId;
+  final List<String> additionalTraitIds;
 }

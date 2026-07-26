@@ -29,7 +29,8 @@ class ProjectReferenceProjectionService
        _referenceWorkRepository = referenceWorkRepository,
        _projectionWriterService = projectionWriterService,
        _alignmentSummaryService =
-           alignmentSummaryService ?? const ProjectReferenceAlignmentSummaryService(),
+           alignmentSummaryService ??
+           const ProjectReferenceAlignmentSummaryService(),
        _compatibilityExporter = compatibilityExporter,
        _accessPolicyService =
            accessPolicyService ?? const ProjectReferenceAccessPolicyService(),

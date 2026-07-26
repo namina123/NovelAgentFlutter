@@ -57,21 +57,44 @@ class ProjectManagementToolExecutor {
           ProjectManifestCodecService.manifestRelativePath,
         ) ??
         '';
-    final currentManifest = _projectManifestCodecService.parse(
-      manifestSource,
-      fallbackTitle: project.name,
-      fallbackProjectType: project.projectType,
-    );
-    final nextManifest = _projectManifestCodecService.create(
+    final currentManifest = manifestSource.trim().isEmpty
+        ? ProjectManifest(
+            title: project.name,
+            projectType: project.projectType,
+            storageStrategy: project.storageStrategy,
+            projectBranchId: project.projectBranchId,
+            runtimeBaselineId: project.runtimeBaselineId,
+            additionalTraitIds: project.additionalTraitIds,
+          )
+        : _projectManifestCodecService.parse(
+            manifestSource,
+            fallbackTitle: project.name,
+            fallbackProjectType: project.projectType,
+            fallbackStorageStrategy: project.storageStrategy,
+            fallbackProjectBranchId: project.projectBranchId,
+            fallbackRuntimeBaselineId: project.runtimeBaselineId,
+            fallbackAdditionalTraitIds: project.additionalTraitIds,
+          );
+    // Renaming is presentation metadata only. Keep the existing project
+    // contract intact: resetting these fields would silently demote a SQLite
+    // long novel, discard its runtime baseline, or remove composite traits.
+    final nextManifest = ProjectManifest(
       title: newName,
       projectType: currentManifest.projectType,
+      storageStrategy: currentManifest.storageStrategy,
+      projectBranchId: currentManifest.projectBranchId,
+      runtimeBaselineId: currentManifest.runtimeBaselineId,
+      schemaVersion: currentManifest.schemaVersion,
+      additionalTraitIds: currentManifest.additionalTraitIds,
     );
-    await _hostPort.writeTextFile(
+    final typeLabel = _projectTypeLabel(
+      nextManifest.projectType,
+      projectBranchId: nextManifest.projectBranchId,
+    );
+    final previousOverviewContent = await _hostPort.readTextFile(
       project.rootPath,
-      ProjectManifestCodecService.manifestRelativePath,
-      _projectManifestCodecService.encode(nextManifest),
+      ProjectSupportDocumentCatalog.projectOverviewRelativePath,
     );
-    final typeLabel = _projectTypeLabel(nextManifest.projectType);
     await _hostPort.writeTextFile(
       project.rootPath,
       ProjectSupportDocumentCatalog.projectOverviewRelativePath,
@@ -83,6 +106,34 @@ class ProjectManagementToolExecutor {
       '- 当前已知核心设定：\n'
       '- 备注：\n',
     );
+    try {
+      await _hostPort.writeTextFile(
+        project.rootPath,
+        ProjectManifestCodecService.manifestRelativePath,
+        _projectManifestCodecService.encode(nextManifest),
+      );
+    } catch (error, stackTrace) {
+      // The manifest is the reopen-time commit marker. If it fails, undo the
+      // derived overview write so the visible project description remains on
+      // the source contract as well.
+      try {
+        if (previousOverviewContent == null) {
+          await _hostPort.deleteEntry(
+            project.rootPath,
+            ProjectSupportDocumentCatalog.projectOverviewRelativePath,
+          );
+        } else {
+          await _hostPort.writeTextFile(
+            project.rootPath,
+            ProjectSupportDocumentCatalog.projectOverviewRelativePath,
+            previousOverviewContent,
+          );
+        }
+      } catch (_) {
+        // Preserve the original manifest write failure for the caller.
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
     return _resultFactory.success(
       '项目已重命名：${nextManifest.title}',
       data: <String, Object?>{
@@ -153,12 +204,22 @@ class ProjectManagementToolExecutor {
     return _gatewayToolExecutor.execute(project, arguments);
   }
 
-  String _projectTypeLabel(String projectType) {
+  String _projectTypeLabel(String projectType, {String projectBranchId = ''}) {
     // 中文注释: 项目简介文档里的类型标签与共享创建 / 更新用例保持一致，避免这里出现第三套文案。
     final normalized = _projectTypeCatalogService.normalize(projectType);
     switch (normalized) {
-      case 'long_task':
-        return '长任务';
+      case 'long_novel':
+        return '长任务长篇';
+      case 'knowledge_base':
+        return const KnowledgeBaseBranchCatalogService().isRagBranch(
+              projectBranchId,
+            )
+            ? '语料库'
+            : '结构化资料知识库';
+      case 'short_collection':
+        return '短文集';
+      case 'book_deconstruction':
+        return '拆书项目';
       case 'novel':
       default:
         return '小说';

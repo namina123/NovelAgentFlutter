@@ -4,6 +4,9 @@ import '../../output/terminal_printer.dart';
 import 'cli_command_context.dart';
 
 class CliProjectContextLoader {
+  static const String projectManifestCorruptionMessage =
+      '项目清单损坏或包含当前版本无法识别的合同字段，系统未改写项目。请从备份恢复 .novel_agent/project_manifest.json 后重试。';
+
   CliProjectContextLoader({
     required CliCommandContext commandContext,
     required ProjectRepository projectRepository,
@@ -28,7 +31,13 @@ class CliProjectContextLoader {
       _printer.error('请通过 --project 指定项目路径。');
       return null;
     }
-    final project = await _projectRepository.openByPath(projectPath);
+    ProjectDescriptor? project;
+    try {
+      project = await _projectRepository.openByPath(projectPath);
+    } on ProjectManifestCorruptionException {
+      _printer.error(projectManifestCorruptionMessage);
+      return null;
+    }
     if (project == null) {
       _printer.error('项目不存在: $projectPath');
       return null;

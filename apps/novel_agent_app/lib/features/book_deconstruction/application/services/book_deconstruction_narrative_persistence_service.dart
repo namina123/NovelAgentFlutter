@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
@@ -88,10 +90,19 @@ class BookDeconstructionNarrativePersistenceService {
   }) async {
     final changedPaths = <String>[];
     final informationPersistence = _resolveInformationPersistence(project);
+    var wroteClaim = false;
     for (final claim in narrativeArtifacts.claims) {
+      final existing = await _claimRepository.readClaim(
+        project,
+        claimId: claim.claimId,
+      );
+      if (existing != null && _claimsAreEquivalent(existing, claim)) {
+        continue;
+      }
       await _claimRepository.appendClaim(project, claim);
+      wroteClaim = true;
     }
-    if (narrativeArtifacts.claims.isNotEmpty) {
+    if (wroteClaim) {
       changedPaths.add(_pathService.claimsLogPath());
     }
     for (final proposal in narrativeArtifacts.profileProposals) {
@@ -204,5 +215,14 @@ class BookDeconstructionNarrativePersistenceService {
         narrativeArtifacts.designElements.isNotEmpty ||
         narrativeArtifacts.researchNotes.isNotEmpty ||
         narrativeArtifacts.referenceWorks.isNotEmpty;
+  }
+
+  bool _claimsAreEquivalent(
+    NarrativeStateClaim left,
+    NarrativeStateClaim right,
+  ) {
+    // The JSON contract includes open metadata fields, so compare the encoded
+    // records rather than maintaining a fragile field-by-field comparator.
+    return jsonEncode(left.toJson()) == jsonEncode(right.toJson());
   }
 }

@@ -11,7 +11,9 @@ class ProjectAgentSkillLoadoutDocumentCodecService {
   List<AgentSkillLoadout> parseDocument(JsonMap document) {
     // 中文注释: 当前项目 loadout 文档只恢复项目内的实际装载，不负责历史和 preset。
     return ValueReaders.objectList(document['loadouts'])
-        .map((item) => _normalizerService.normalize(ValueReaders.mapValue(item)))
+        .map(
+          (item) => _normalizerService.normalize(ValueReaders.mapValue(item)),
+        )
         .where((item) => item.agentId.trim().isNotEmpty)
         .toList(growable: false);
   }

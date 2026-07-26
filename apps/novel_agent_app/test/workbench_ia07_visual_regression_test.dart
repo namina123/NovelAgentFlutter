@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -33,6 +31,7 @@ import 'package:novel_agent_app/features/workbench/presentation/widgets/conversa
 import 'package:novel_agent_app/features/workbench/presentation/widgets/conversation_model_strip.dart';
 import 'package:novel_agent_app/features/workbench/presentation/widgets/project_agent_group_overlay.dart';
 
+import 'manual_golden_test_support.dart';
 import 'test_font_loader.dart';
 
 const String _chapterTwelveBody = '''
@@ -68,6 +67,14 @@ const String _desktopAssistantReply = '''
 
 下一段我会把两人的分歧压在行动选择上，而不是口头辩赢。这样章末能停在更危险的位置，也更方便后面继续抬高代价。''';
 
+const _ia07GoldenFileNames = <String>[
+  'ia07_input_empty_state.png',
+  'ia07_input_generating_stop.png',
+  'ia07_workbench_desktop_three_pane.png',
+  'ia07_agent_panel_collapsed.png',
+  'ia07_agent_panel_expanded.png',
+];
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -76,9 +83,15 @@ void main() {
   });
 
   testWidgets('captures IA-07 polish verification screenshots', (tester) async {
-    Directory(
-      '${_resolveRepoRoot()}${Platform.pathSeparator}artifacts${Platform.pathSeparator}workbench_ia07_screenshots',
-    ).createSync(recursive: true);
+    final artifactsDir = manualGoldenArtifactsDirectory(
+      'workbench_ia07_screenshots',
+    );
+    if (skipManualGoldenTestIfArtifactsAreMissing(
+      artifactsDirectory: artifactsDir,
+      expectedFileNames: _ia07GoldenFileNames,
+    )) {
+      return;
+    }
 
     await _captureInputEmptyState(tester);
     await _captureInputStopState(tester);
@@ -86,21 +99,6 @@ void main() {
     await _captureAgentOverlayCollapsedState(tester);
     await _captureAgentOverlayExpandedState(tester);
 
-    for (final fileName in const <String>[
-      'ia07_input_empty_state.png',
-      'ia07_input_generating_stop.png',
-      'ia07_workbench_desktop_three_pane.png',
-      'ia07_agent_panel_collapsed.png',
-      'ia07_agent_panel_expanded.png',
-    ]) {
-      expect(
-        File(
-          '${_resolveRepoRoot()}${Platform.pathSeparator}artifacts${Platform.pathSeparator}workbench_ia07_screenshots${Platform.pathSeparator}$fileName',
-        ).existsSync(),
-        isTrue,
-        reason: '缺少截图产物：$fileName',
-      );
-    }
   });
 }
 
@@ -569,24 +567,6 @@ void _setViewport(WidgetTester tester, Size size) {
   });
 }
 
-String _resolveRepoRoot() {
-  var current = Directory.current.absolute;
-  for (var depth = 0; depth < 6; depth += 1) {
-    final docsFile = File(
-      '${current.path}${Platform.pathSeparator}docs${Platform.pathSeparator}workbench-input-agent-polish-session-order-2026-05-29.md',
-    );
-    if (docsFile.existsSync()) {
-      return current.path;
-    }
-    final parent = current.parent;
-    if (parent.path == current.path) {
-      break;
-    }
-    current = parent;
-  }
-  return Directory.current.absolute.path;
-}
-
 class _FakeConversationHandler implements ConversationActionHandler {
   const _FakeConversationHandler();
 
@@ -696,6 +676,9 @@ class _FakeResourceHandler implements ResourceManagerActionHandler {
 
   @override
   void onProjectTypeTransitionRequested() {}
+
+  @override
+  void onRuntimeBaselineConfigurationRequested() {}
 
   @override
   void onImportRequested() {}

@@ -42,6 +42,7 @@ void main() {
         name: '工作流测试项目',
         rootPath: tempDirectory.path,
         projectType: 'long_novel',
+        runtimeBaselineId: 'chapter_collaboration_autorun',
       );
       final modeRepository = ProjectModeGuidanceRepository(
         workspacePort: workspacePort,
@@ -170,6 +171,46 @@ void main() {
     });
 
     test(
+      'long task create and queue reject an ineligible project before writing',
+      () async {
+        const ordinaryProject = ProjectDescriptor(
+          id: 'ordinary_project',
+          name: '普通小说',
+          rootPath: '/tmp/ordinary_project',
+          projectType: 'novel',
+        );
+
+        final created = await workflowRuntimeService.createLongTaskWorkflow(
+          ordinaryProject,
+          TaskRuntimeConstants.modeSeedToFullNovel,
+        );
+        final queued = await workflowRuntimeService.runWorkflowTaskQueue(
+          ordinaryProject,
+          _testSettings(),
+        );
+
+        expect(created['ok'], isFalse);
+        expect(created['error'], 'long_task_unsupported_project_type');
+        expect(queued['ok'], isFalse);
+        expect(queued['error'], 'long_task_unsupported_project_type');
+      },
+    );
+
+    test('long task create rejects a caller baseline override', () async {
+      final created = await workflowRuntimeService.createLongTaskWorkflow(
+        project,
+        TaskRuntimeConstants.modeSeedToFullNovel,
+        options: const <String, Object?>{
+          'runtime_baseline_id': 'continuous_autonomous',
+        },
+      );
+
+      expect(created['ok'], isFalse);
+      expect(created['error'], 'long_task_runtime_baseline_mismatch');
+      expect(await workflowRuntimeService.listWorkflowTasks(project), isEmpty);
+    });
+
+    test(
       'createLongTaskWorkflow materializes only initial seed window for seed_to_full_novel',
       () async {
         final queueProject = ProjectDescriptor(
@@ -178,6 +219,7 @@ void main() {
           rootPath:
               '${tempDirectory.path}${Platform.pathSeparator}seed_queue_initial_window',
           projectType: 'long_novel',
+          runtimeBaselineId: 'chapter_collaboration_autorun',
         );
 
         final created = await workflowRuntimeService.createLongTaskWorkflow(
@@ -236,6 +278,7 @@ void main() {
           rootPath:
               '${tempDirectory.path}${Platform.pathSeparator}seed_queue_next_window',
           projectType: 'long_novel',
+          runtimeBaselineId: 'chapter_collaboration_autorun',
         );
         await workflowRuntimeService.createLongTaskWorkflow(
           queueProject,
@@ -304,6 +347,7 @@ void main() {
           rootPath:
               '${tempDirectory.path}${Platform.pathSeparator}seed_queue_ignores_planning_sidecar_waiting_user',
           projectType: 'long_novel',
+          runtimeBaselineId: 'chapter_collaboration_autorun',
         );
         await workflowRuntimeService.createLongTaskWorkflow(
           queueProject,
@@ -391,6 +435,7 @@ void main() {
           rootPath:
               '${tempDirectory.path}${Platform.pathSeparator}seed_queue_prefers_primary_over_followup_reviews',
           projectType: 'long_novel',
+          runtimeBaselineId: 'chapter_collaboration_autorun',
         );
         await workflowRuntimeService.createLongTaskWorkflow(
           queueProject,
@@ -477,6 +522,7 @@ void main() {
           rootPath:
               '${tempDirectory.path}${Platform.pathSeparator}seed_queue_ignores_non_plan_running',
           projectType: 'long_novel',
+          runtimeBaselineId: 'chapter_collaboration_autorun',
         );
         await workflowRuntimeService.createLongTaskWorkflow(
           queueProject,
@@ -534,6 +580,7 @@ void main() {
           rootPath:
               '${tempDirectory.path}${Platform.pathSeparator}seed_queue_ignores_pseudo_plan_task_file',
           projectType: 'long_novel',
+          runtimeBaselineId: 'chapter_collaboration_autorun',
         );
         await workflowRuntimeService.createLongTaskWorkflow(
           queueProject,
@@ -629,6 +676,7 @@ void main() {
           rootPath:
               '${tempDirectory.path}${Platform.pathSeparator}seed_queue_checkpoint_covered_waiting_user',
           projectType: 'long_novel',
+          runtimeBaselineId: 'chapter_collaboration_autorun',
         );
         await workflowRuntimeService.createLongTaskWorkflow(
           queueProject,
@@ -739,6 +787,7 @@ void main() {
           rootPath:
               '${tempDirectory.path}${Platform.pathSeparator}seed_queue_deferred_checkpoint_followup',
           projectType: 'long_novel',
+          runtimeBaselineId: 'chapter_collaboration_autorun',
         );
         await workflowRuntimeService.createLongTaskWorkflow(
           queueProject,
@@ -881,6 +930,7 @@ void main() {
           rootPath:
               '${tempDirectory.path}${Platform.pathSeparator}seed_queue_zero_checkpoint',
           projectType: 'long_novel',
+          runtimeBaselineId: 'chapter_collaboration_autorun',
         );
         await workflowRuntimeService.createLongTaskWorkflow(
           queueProject,
@@ -952,6 +1002,7 @@ void main() {
           rootPath:
               '${tempDirectory.path}${Platform.pathSeparator}seed_queue_canonical_outline_paths',
           projectType: 'long_novel',
+          runtimeBaselineId: 'chapter_collaboration_autorun',
         );
 
         await workflowRuntimeService.createLongTaskWorkflow(
@@ -1801,6 +1852,7 @@ void main() {
           name: '运行画像读取测试',
           rootPath: emptyRoot.path,
           projectType: 'long_novel',
+          runtimeBaselineId: 'chapter_collaboration_autorun',
         );
         await workspacePort.writeTextFile(
           emptyProject.rootPath,
@@ -1895,6 +1947,7 @@ void main() {
           rootPath:
               '${tempDirectory.path}${Platform.pathSeparator}resume_inferred_long_run_case',
           projectType: 'long_novel',
+          runtimeBaselineId: 'chapter_collaboration_autorun',
         );
         await workflowRuntimeService.createLongTaskWorkflow(
           queueProject,
@@ -2040,6 +2093,7 @@ void main() {
           rootPath:
               '${tempDirectory.path}${Platform.pathSeparator}resume_checkpoint_before_queue_case',
           projectType: 'long_novel',
+          runtimeBaselineId: 'chapter_collaboration_autorun',
         );
         await taskRepository.saveTasks(queueProject, <JsonMap>[
           <String, Object?>{
@@ -2507,6 +2561,7 @@ void main() {
           rootPath:
               '${tempDirectory.path}${Platform.pathSeparator}queue_deferred_followup_summary_case',
           projectType: 'long_novel',
+          runtimeBaselineId: 'chapter_collaboration_autorun',
         );
         await workspacePort.writeTextFile(
           queueProject.rootPath,
@@ -2622,6 +2677,7 @@ void main() {
           rootPath:
               '${tempDirectory.path}${Platform.pathSeparator}queue_deferred_followup_blocks_primary',
           projectType: 'long_novel',
+          runtimeBaselineId: 'chapter_collaboration_autorun',
         );
         await workspacePort.writeTextFile(
           queueProject.rootPath,
@@ -2774,6 +2830,7 @@ void main() {
           rootPath:
               '${tempDirectory.path}${Platform.pathSeparator}queue_primary_revision_depends_on_succeeded_followup',
           projectType: 'long_novel',
+          runtimeBaselineId: 'chapter_collaboration_autorun',
         );
         await workspacePort.writeTextFile(
           queueProject.rootPath,
@@ -4591,6 +4648,7 @@ void main() {
           rootPath:
               '${tempDirectory.path}${Platform.pathSeparator}planning_profile_wait_user_queue_case',
           projectType: 'long_novel',
+          runtimeBaselineId: 'chapter_collaboration_autorun',
         );
         await workspacePort.writeTextFile(
           queueProject.rootPath,
@@ -4838,6 +4896,7 @@ void main() {
           rootPath:
               '${tempDirectory.path}${Platform.pathSeparator}planning_existing_output_queue_case',
           projectType: 'long_novel',
+          runtimeBaselineId: 'chapter_collaboration_autorun',
         );
         await workspacePort.writeTextFile(
           queueProject.rootPath,
@@ -5449,6 +5508,7 @@ void main() {
           rootPath:
               '${tempDirectory.path}${Platform.pathSeparator}set_agent_tasks_workflow_scope',
           projectType: 'long_novel',
+          runtimeBaselineId: 'chapter_collaboration_autorun',
         );
         await taskRepository.saveTasks(queueProject, <JsonMap>[
           <String, Object?>{

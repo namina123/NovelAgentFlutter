@@ -220,10 +220,7 @@ class OpenAiResponsesStreamAdapter {
     }
   }
 
-  void _seedToolCallBuilder(
-    _ResponsesStreamAggregate aggregate,
-    JsonMap item,
-  ) {
+  void _seedToolCallBuilder(_ResponsesStreamAggregate aggregate, JsonMap item) {
     // 中文注释: function_call item 先建立占位，再由 arguments.delta / done 填满，避免依赖单一事件顺序。
     final type = ValueReaders.stringValue(item['type']);
     if (type != 'function_call') {
@@ -368,10 +365,7 @@ class _ResponsesStreamAggregate {
     if (!createIfMissing) {
       return GatewayToolCallBuilder(id: callId, name: '');
     }
-    final builder = GatewayToolCallBuilder(
-      id: callId.trim(),
-      name: '',
-    );
+    final builder = GatewayToolCallBuilder(id: callId.trim(), name: '');
     for (final key in keys) {
       _toolCallBuilders[key] = builder;
     }

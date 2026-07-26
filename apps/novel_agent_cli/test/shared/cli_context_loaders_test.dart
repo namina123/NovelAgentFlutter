@@ -83,6 +83,31 @@ void main() {
       expect(missingProject, isNull);
       expect(printer.errors.last, contains('项目不存在: D:/Missing'));
     });
+
+    test(
+      'reports a corrupt manifest without exposing the repository exception',
+      () async {
+        final settings = _buildSettings(defaultProjectPath: 'D:/Damaged');
+        final printer = _RecordingTerminalPrinter();
+        final loader = CliProjectContextLoader(
+          commandContext: CliCommandContext(
+            settings: settings,
+            defaultProjectPath: settings.defaultProjectPath,
+          ),
+          projectRepository: _CorruptManifestProjectRepository(),
+          printer: printer,
+        );
+
+        final context = await loader.load(const <String>[]);
+
+        expect(context, isNull);
+        expect(printer.errors.single, contains('项目清单损坏'));
+        expect(
+          printer.errors.single,
+          contains('.novel_agent/project_manifest.json'),
+        );
+      },
+    );
   });
 
   test('keeps shared exit code contract stable', () {
@@ -124,6 +149,13 @@ class _FakeProjectRepository implements ProjectRepository {
   @override
   Future<ProjectDescriptor?> openByPath(String rootPath) async {
     return _projects[rootPath];
+  }
+}
+
+class _CorruptManifestProjectRepository implements ProjectRepository {
+  @override
+  Future<ProjectDescriptor?> openByPath(String rootPath) async {
+    throw ProjectManifestCorruptionException(rootPath: rootPath);
   }
 }
 

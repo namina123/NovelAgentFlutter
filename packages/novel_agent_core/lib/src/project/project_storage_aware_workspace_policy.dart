@@ -74,6 +74,7 @@ class ProjectStorageAwareWorkspacePolicy {
     switch (_projectContentPathPolicyService.normalizeContentType(
       contentType,
     )) {
+      case 'premise':
       case 'chapter':
       case 'scene':
       case 'outline':
@@ -85,6 +86,12 @@ class ProjectStorageAwareWorkspacePolicy {
       case 'summary':
       case 'knowledge':
       case 'source_original':
+      case 'derived_continuation_narrative':
+      case 'derived_fanfic_narrative':
+      case 'organization_profile':
+      case 'foreshadow_record':
+      case 'timeline_record':
+      case 'relationship_record':
         return true;
       default:
         return false;

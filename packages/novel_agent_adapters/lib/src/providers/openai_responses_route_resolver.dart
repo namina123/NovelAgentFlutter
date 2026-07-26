@@ -3,9 +3,7 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 class OpenAiResponsesRouteResolver {
   const OpenAiResponsesRouteResolver();
 
-  GatewayRouteResolution resolve({
-    String apiMode = '',
-  }) {
+  GatewayRouteResolution resolve({String apiMode = ''}) {
     // 中文注释: Responses 链只承接 responses route family，避免再次回落到 Chat 语义。
     return GatewayRouteResolution.resolve(
       protocolKind: ProtocolKind.openAiCompatible,

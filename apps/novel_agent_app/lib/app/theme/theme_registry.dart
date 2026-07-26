@@ -61,7 +61,7 @@ class ThemeRegistry {
       dangerSoftColor: const Color(0xFF3D1F28),
       dangerStrongColor: const Color(0xFFFF8EA1),
       textColor: const Color(0xFFF3F7FF),
-      mutedTextColor: const Color(0xFF92A0BC),
+      mutedTextColor: const Color(0xFF9EACC7),
       inverseTextColor: const Color(0xFF050810),
     );
 

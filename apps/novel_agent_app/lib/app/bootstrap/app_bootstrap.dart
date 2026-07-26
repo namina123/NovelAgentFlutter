@@ -35,6 +35,9 @@ class AppBootstrap {
     final writeProjectTextFileUseCase = WriteProjectTextFileUseCase(
       projectWorkspacePort: bundle.projectWorkspacePort,
     );
+    final readProjectFileUseCase = ReadProjectFileUseCase(
+      bundle.projectWorkspacePort,
+    );
     final bookDeconstructionNarrativePersistenceService =
         BookDeconstructionNarrativePersistenceService(
           workspacePort: bundle.projectWorkspacePort,
@@ -72,13 +75,18 @@ class AppBootstrap {
         );
     final updateProjectManifestUseCase = UpdateProjectManifestUseCase(
       writeProjectTextFileUseCase: writeProjectTextFileUseCase,
+      readProjectFileUseCase: readProjectFileUseCase,
     );
     final executeProjectTypeTransitionUseCase =
         ExecuteProjectTypeTransitionUseCase(
           projectTypeTransitionPreparationService:
               const ProjectTypeTransitionPreparationService(),
-          updateProjectManifestUseCase: updateProjectManifestUseCase,
           writeProjectTextFileUseCase: writeProjectTextFileUseCase,
+          readHasActiveLongTaskRun: (project) async =>
+              (await bundle.longTaskSupervisor.listProjectRuns(
+                project.rootPath,
+              )).any((run) => run.isActive),
+          readProjectFileUseCase: readProjectFileUseCase,
         );
     final projectAgentSkillLoadoutRepository =
         ProjectAgentSkillLoadoutRepository(
@@ -241,9 +249,7 @@ class AppBootstrap {
       buildModeGuidancePlanInputUseCase: BuildModeGuidancePlanInputUseCase(
         statePort: modeGuidanceRepository,
       ),
-      readProjectFileUseCase: ReadProjectFileUseCase(
-        bundle.projectWorkspacePort,
-      ),
+      readProjectFileUseCase: readProjectFileUseCase,
       saveDraftUseCase: SaveDraftUseCase(
         projectWorkspacePort: bundle.projectWorkspacePort,
       ),

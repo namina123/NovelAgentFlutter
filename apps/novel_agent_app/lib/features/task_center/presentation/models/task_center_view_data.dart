@@ -31,6 +31,7 @@ class TaskCenterViewData {
     required this.defaultChapterLength,
     required this.actionGroups,
     required this.guidanceRevisitBody,
+    this.longTaskCreationAvailable = false,
   });
 
   final String title;
@@ -62,6 +63,7 @@ class TaskCenterViewData {
   final TaskCenterChapterLengthConfigViewData defaultChapterLength;
   final List<TaskCenterActionGroupViewData> actionGroups;
   final String guidanceRevisitBody;
+  final bool longTaskCreationAvailable;
 
   factory TaskCenterViewData.initial() {
     return const TaskCenterViewData(
@@ -94,6 +96,7 @@ class TaskCenterViewData {
       defaultChapterLength: TaskCenterChapterLengthConfigViewData.fallback(),
       actionGroups: <TaskCenterActionGroupViewData>[],
       guidanceRevisitBody: '',
+      longTaskCreationAvailable: false,
     );
   }
 }

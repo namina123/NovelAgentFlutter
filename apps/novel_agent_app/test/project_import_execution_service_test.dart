@@ -62,6 +62,247 @@ void main() {
   );
 
   test(
+    'project import writes knowledge-base source text to SQLite before its projection',
+    () async {
+      final events = <String>[];
+      final hostPort = _FakeProjectToolHostPort(
+        externalFiles: <String, String>{
+          'C:/imports/research.md': '# 世界观资料\n\n城邦拥有三层议会。',
+        },
+        onCopy: (relativePath) => events.add('projection:$relativePath'),
+      );
+      final workspacePort = _InMemoryProjectWorkspacePort();
+      final reader = _StubSourceDocumentReaderService(
+        const ReferenceSourceDocumentFileReadResult(
+          sourceFilePath: 'C:/imports/research.md',
+          sourceTitle: '世界观资料',
+          sourceText: '# 世界观资料\n\n城邦拥有三层议会。',
+          decodeMode: 'plain_text',
+        ),
+      );
+      final structuredBridge = _RecordingStructuredContentBridgeService(events);
+      final service = ProjectImportExecutionService(
+        importProjectFilesUseCase: ImportProjectFilesUseCase(
+          projectToolHostPort: hostPort,
+        ),
+        projectToolHostPort: hostPort,
+        writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
+          projectWorkspacePort: workspacePort,
+        ),
+        narrativePersistenceService:
+            BookDeconstructionNarrativePersistenceService(
+              workspacePort: workspacePort,
+            ),
+        sourceDocumentReaderService: reader,
+        structuredContentBridgeService: structuredBridge,
+      );
+
+      final result = await service.execute(
+        project: const ProjectDescriptor(
+          id: 'knowledge-project',
+          name: '知识库',
+          rootPath: 'D:/Projects/knowledge_project',
+          projectType: 'knowledge_base',
+          storageStrategy: ProjectStorageStrategy.sqliteProjectStore,
+        ),
+        request: const ProjectImportRequest(
+          sourcePaths: <String>['C:/imports/research.md'],
+          targetDirectory: 'imports',
+          autoDeconstruct: false,
+        ),
+      );
+
+      expect(result.ok, isTrue);
+      expect(reader.readCalls, 1);
+      expect(structuredBridge.documentPath, 'imports/research.md');
+      expect(structuredBridge.documentKind, 'knowledge');
+      expect(structuredBridge.content, contains('三层议会'));
+      expect(events, <String>[
+        'sqlite:knowledge:imports/research.md',
+        'projection:imports/research.md',
+      ]);
+    },
+  );
+
+  test(
+    'project import keeps unsupported binary files as attachments',
+    () async {
+      final events = <String>[];
+      final hostPort = _FakeProjectToolHostPort(
+        onCopy: (relativePath) => events.add('projection:$relativePath'),
+      );
+      final workspacePort = _InMemoryProjectWorkspacePort();
+      final reader = _StubSourceDocumentReaderService(
+        const ReferenceSourceDocumentFileReadResult(
+          sourceFilePath: 'C:/imports/cover.png',
+          sourceTitle: 'cover',
+          sourceText: 'should not be read',
+          decodeMode: 'plain_text',
+        ),
+      );
+      final structuredBridge = _RecordingStructuredContentBridgeService(events);
+      final service = ProjectImportExecutionService(
+        importProjectFilesUseCase: ImportProjectFilesUseCase(
+          projectToolHostPort: hostPort,
+        ),
+        projectToolHostPort: hostPort,
+        writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
+          projectWorkspacePort: workspacePort,
+        ),
+        narrativePersistenceService:
+            BookDeconstructionNarrativePersistenceService(
+              workspacePort: workspacePort,
+            ),
+        sourceDocumentReaderService: reader,
+        structuredContentBridgeService: structuredBridge,
+      );
+
+      final result = await service.execute(
+        project: const ProjectDescriptor(
+          id: 'sqlite-project',
+          name: 'SQLite 项目',
+          rootPath: 'D:/Projects/sqlite_project',
+          storageStrategy: ProjectStorageStrategy.sqliteProjectStore,
+        ),
+        request: const ProjectImportRequest(
+          sourcePaths: <String>['C:/imports/cover.png'],
+          targetDirectory: 'imports',
+          autoDeconstruct: false,
+        ),
+      );
+
+      expect(result.ok, isTrue);
+      expect(reader.readCalls, 0);
+      expect(structuredBridge.persistedDocumentCount, 0);
+      expect(events, <String>['projection:imports/cover.png']);
+    },
+  );
+
+  test(
+    'SQLite text import stops before projection when the primary structured write fails',
+    () async {
+      // 中文注释: 已可解析的资料必须先进入 SQLite 主事实源，不能在主库失败后静默
+      // 退化成仅复制 Markdown 投影，否则重开时会失去真实资料内容。
+      final events = <String>[];
+      final hostPort = _FakeProjectToolHostPort(
+        onCopy: (relativePath) => events.add('projection:$relativePath'),
+      );
+      final workspacePort = _InMemoryProjectWorkspacePort();
+      final service = ProjectImportExecutionService(
+        importProjectFilesUseCase: ImportProjectFilesUseCase(
+          projectToolHostPort: hostPort,
+        ),
+        projectToolHostPort: hostPort,
+        writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
+          projectWorkspacePort: workspacePort,
+        ),
+        narrativePersistenceService: BookDeconstructionNarrativePersistenceService(
+          workspacePort: workspacePort,
+        ),
+        sourceDocumentReaderService: _StubSourceDocumentReaderService(
+          const ReferenceSourceDocumentFileReadResult(
+            sourceFilePath: 'C:/imports/research.md',
+            sourceTitle: '世界观资料',
+            sourceText: '城邦拥有三层议会。',
+            decodeMode: 'plain_text',
+          ),
+        ),
+        structuredContentBridgeService: _RecordingStructuredContentBridgeService(
+          events,
+          failPersist: true,
+        ),
+      );
+
+      await expectLater(
+        service.execute(
+          project: const ProjectDescriptor(
+            id: 'failed-primary-import',
+            name: '资料知识库',
+            rootPath: 'D:/Projects/failed_primary_import',
+            projectType: 'knowledge_base',
+            storageStrategy: ProjectStorageStrategy.sqliteProjectStore,
+          ),
+          request: const ProjectImportRequest(
+            sourcePaths: <String>['C:/imports/research.md'],
+            targetDirectory: 'imports',
+            autoDeconstruct: false,
+          ),
+        ),
+        throwsA(isA<StateError>()),
+      );
+
+      expect(events, isEmpty);
+      expect(hostPort.copiedFiles, isEmpty);
+    },
+  );
+
+  test(
+    'SQLite text import restores its primary source when the projection copy fails',
+    () async {
+      final projectDirectory = await Directory.systemTemp.createTemp(
+        'novel_agent_import_projection_rollback_test_',
+      );
+      try {
+        final hostPort = _FakeProjectToolHostPort(throwOnCopy: true);
+        final workspacePort = _InMemoryProjectWorkspacePort();
+        final service = ProjectImportExecutionService(
+          importProjectFilesUseCase: ImportProjectFilesUseCase(
+            projectToolHostPort: hostPort,
+          ),
+          projectToolHostPort: hostPort,
+          writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
+            projectWorkspacePort: workspacePort,
+          ),
+          narrativePersistenceService:
+              BookDeconstructionNarrativePersistenceService(
+                workspacePort: workspacePort,
+              ),
+          sourceDocumentReaderService: _StubSourceDocumentReaderService(
+            const ReferenceSourceDocumentFileReadResult(
+              sourceFilePath: 'C:/imports/research.md',
+              sourceTitle: '世界观资料',
+              sourceText: '城邦拥有三层议会。',
+              decodeMode: 'plain_text',
+            ),
+          ),
+        );
+        final project = ProjectDescriptor(
+          id: 'projection-copy-failure-import',
+          name: '资料知识库',
+          rootPath: projectDirectory.path,
+          projectType: 'knowledge_base',
+          storageStrategy: ProjectStorageStrategy.sqliteProjectStore,
+        );
+
+        await expectLater(
+          service.execute(
+            project: project,
+            request: const ProjectImportRequest(
+              sourcePaths: <String>['C:/imports/research.md'],
+              targetDirectory: 'imports',
+              autoDeconstruct: false,
+            ),
+          ),
+          throwsA(isA<StateError>()),
+        );
+
+        expect(
+          await ProjectStructuredContentBridgeService().readProjectedBodyText(
+            project,
+            'imports/research.md',
+          ),
+          isNull,
+        );
+        expect(hostPort.copiedFiles, isEmpty);
+      } finally {
+        if (await projectDirectory.exists()) {
+          await projectDirectory.delete(recursive: true);
+        }
+      }
+    },
+  );
+
+  test(
     'project import execution service writes auto deconstruction preview for book projects',
     () async {
       final tempDirectory = await Directory.systemTemp.createTemp(
@@ -382,9 +623,13 @@ void main() {
 class _FakeProjectToolHostPort implements ProjectToolHostPort {
   _FakeProjectToolHostPort({
     Map<String, String> externalFiles = const <String, String>{},
+    this.onCopy,
+    this.throwOnCopy = false,
   }) : _externalFiles = Map<String, String>.from(externalFiles);
 
   final Map<String, String> _externalFiles;
+  final void Function(String relativePath)? onCopy;
+  final bool throwOnCopy;
   final List<
     ({String absolutePath, String rootPath, String targetRelativePath})
   >
@@ -398,6 +643,9 @@ class _FakeProjectToolHostPort implements ProjectToolHostPort {
     String rootPath,
     String targetRelativePath,
   ) async {
+    if (throwOnCopy) {
+      throw StateError('模拟 Markdown 投影复制失败');
+    }
     copiedFiles.add((
       absolutePath: absolutePath,
       rootPath: rootPath,
@@ -405,6 +653,7 @@ class _FakeProjectToolHostPort implements ProjectToolHostPort {
     ));
     _projectFiles[_projectKey(rootPath, targetRelativePath)] =
         _externalFiles[absolutePath] ?? '';
+    onCopy?.call(targetRelativePath);
   }
 
   @override
@@ -471,6 +720,57 @@ class _FakeProjectToolHostPort implements ProjectToolHostPort {
 
   String _projectKey(String rootPath, String relativePath) {
     return '${rootPath.replaceAll('\\', '/')}//${relativePath.replaceAll('\\', '/')}';
+  }
+}
+
+class _StubSourceDocumentReaderService
+    extends ReferenceSourceDocumentFileReaderService {
+  _StubSourceDocumentReaderService(this._result);
+
+  final ReferenceSourceDocumentFileReadResult _result;
+  int readCalls = 0;
+
+  @override
+  Future<ReferenceSourceDocumentFileReadResult> read({
+    required String sourceFilePath,
+  }) async {
+    readCalls += 1;
+    return _result;
+  }
+}
+
+class _RecordingStructuredContentBridgeService
+    extends ProjectStructuredContentBridgeService {
+  _RecordingStructuredContentBridgeService(
+    this._events, {
+    this.failPersist = false,
+  });
+
+  final List<String> _events;
+  final bool failPersist;
+  int persistedDocumentCount = 0;
+  String documentPath = '';
+  String documentKind = '';
+  String content = '';
+
+  @override
+  Future<void> persistStructuredDocument({
+    required ProjectDescriptor project,
+    required String documentPath,
+    required String documentKind,
+    required String title,
+    required String content,
+    String statePath = '',
+    String status = 'applied',
+  }) async {
+    if (failPersist) {
+      throw StateError('模拟 SQLite 主库写入失败');
+    }
+    persistedDocumentCount += 1;
+    this.documentPath = documentPath;
+    this.documentKind = documentKind;
+    this.content = content;
+    _events.add('sqlite:$documentKind:$documentPath');
   }
 }
 

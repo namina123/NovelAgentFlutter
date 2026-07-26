@@ -200,4 +200,24 @@ void main() {
       );
     },
   );
+
+  test('复合写作项目仍使用拆书结构化投影作为资料提取源', () {
+    const service = ProjectAssetsViewDataService();
+    final viewData = service.build(
+      snapshot: ProjectAssetsSnapshot.initial(),
+      status: 'ok',
+      project: const ProjectDescriptor(
+        id: 'composite-project',
+        name: '已确认拆书项目',
+        rootPath: 'D:/Projects/composite-project',
+        projectType: 'novel',
+        additionalTraitIds: <String>['book_deconstruction'],
+      ),
+    );
+
+    expect(
+      viewData.referenceExtractionStrategyPicker.sourceHint,
+      contains('拆书能力'),
+    );
+  });
 }

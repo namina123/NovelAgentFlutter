@@ -9,12 +9,12 @@ void main() {
       () {
         final report = _runContinuousTaskControlPlaneRegressionSuite();
         final summary = ValueReaders.mapValue(report['summary']);
-        final scenarios = ValueReaders.mapList(report['scenarios'])
-            .map(ValueReaders.mapValue)
-            .toList(growable: false);
-        final requiredCoverage = ValueReaders.mapList(summary['required_coverage'])
-            .map(ValueReaders.mapValue)
-            .toList(growable: false);
+        final scenarios = ValueReaders.mapList(
+          report['scenarios'],
+        ).map(ValueReaders.mapValue).toList(growable: false);
+        final requiredCoverage = ValueReaders.mapList(
+          summary['required_coverage'],
+        ).map(ValueReaders.mapValue).toList(growable: false);
 
         expect(ValueReaders.intValue(summary['total_scenarios']), 8);
         expect(ValueReaders.intValue(summary['passed_scenarios']), 8);
@@ -23,7 +23,9 @@ void main() {
           isTrue,
         );
         expect(
-          requiredCoverage.map((item) => ValueReaders.stringValue(item['requirement'])),
+          requiredCoverage.map(
+            (item) => ValueReaders.stringValue(item['requirement']),
+          ),
           containsAll(const <String>[
             'technical_failure',
             'waiting_user',
@@ -203,7 +205,9 @@ JsonMap _runContinuousTaskControlPlaneRegressionSuite() {
     if (!passed) {
       continue;
     }
-    for (final requirement in ValueReaders.stringList(scenario['covered_requirements'])) {
+    for (final requirement in ValueReaders.stringList(
+      scenario['covered_requirements'],
+    )) {
       if (requirements.containsKey(requirement)) {
         requirements[requirement] = true;
       }
@@ -213,7 +217,9 @@ JsonMap _runContinuousTaskControlPlaneRegressionSuite() {
   return <String, Object?>{
     'summary': <String, Object?>{
       'total_scenarios': scenarios.length,
-      'passed_scenarios': scenarios.where((item) => ValueReaders.boolValue(item['passed'])).length,
+      'passed_scenarios': scenarios
+          .where((item) => ValueReaders.boolValue(item['passed']))
+          .length,
       'all_required_coverage_passed': requirements.values.every((item) => item),
       'required_coverage': requirements.entries
           .map(
@@ -259,7 +265,8 @@ JsonMap _longTaskScenario({
   return <String, Object?>{
     'id': id,
     'family': 'long_task',
-    'truth_contract': 'SupervisorDecisionService + ContinuousTaskLifecycleStateResolverService',
+    'truth_contract':
+        'SupervisorDecisionService + ContinuousTaskLifecycleStateResolverService',
     'decision_action': decision.action,
     'decision_reason': decision.reason,
     'run_status': decision.runStatus,
@@ -330,7 +337,8 @@ bool _matchesExpected({
 WritingExecutionResult _longTaskResult({
   required String overallStatus,
   required String summary,
-  WritingExecutionDeliverySummary delivery = const WritingExecutionDeliverySummary(),
+  WritingExecutionDeliverySummary delivery =
+      const WritingExecutionDeliverySummary(),
   WritingExecutionConstraintSummary constraints =
       const WritingExecutionConstraintSummary(),
   WritingExecutionInformationSummary information =

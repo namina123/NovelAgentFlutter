@@ -32,21 +32,16 @@ void main() {
     });
 
     test('persists loadouts inside current project only', () async {
-      await repository.saveLoadouts(
-        project,
-        const <AgentSkillLoadout>[
-          AgentSkillLoadout(
-            agentId: 'default_generalist',
-            source: AgentSkillLoadoutSource.projectSelection,
-            scope: AgentSkillLoadoutScope(
-              projectTypeIds: <String>['long_novel'],
-            ),
-            skillGroupIds: <String>['memory_tools'],
-            extraSkillIds: <String>['chapter_drafting_method'],
-            disabledSkillIds: <String>['generate_outline'],
-          ),
-        ],
-      );
+      await repository.saveLoadouts(project, const <AgentSkillLoadout>[
+        AgentSkillLoadout(
+          agentId: 'default_generalist',
+          source: AgentSkillLoadoutSource.projectSelection,
+          scope: AgentSkillLoadoutScope(projectTypeIds: <String>['long_novel']),
+          skillGroupIds: <String>['memory_tools'],
+          extraSkillIds: <String>['chapter_drafting_method'],
+          disabledSkillIds: <String>['generate_outline'],
+        ),
+      ]);
 
       final loaded = await repository.loadLoadouts(project);
 

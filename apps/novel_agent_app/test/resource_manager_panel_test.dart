@@ -281,6 +281,9 @@ class _FakeResourceManagerActionHandler
   void onProjectTypeTransitionRequested() {}
 
   @override
+  void onRuntimeBaselineConfigurationRequested() {}
+
+  @override
   void onImportRequested() {}
 
   @override

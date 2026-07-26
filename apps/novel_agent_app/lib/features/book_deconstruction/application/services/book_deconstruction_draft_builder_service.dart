@@ -14,8 +14,11 @@ class BookDeconstructionDraftBuilderService {
     String worldRulesText = '',
     String characterLinesText = '',
     String organizationLinesText = '',
+    String extractionId = '',
     BookDeconstructionContinuationDirection preferredContinuationDirection =
         BookDeconstructionContinuationDirection.analysisFirst,
+    ProjectStorageStrategy storageStrategy =
+        ProjectStorageStrategy.markdownProjectStore,
     bool extractKnowledge = true,
   }) {
     // 中文注释: 预演构建会扫描整份源文稿并生成大量结构对象，放到 isolate 里避免 UI 卡死。
@@ -29,7 +32,9 @@ class BookDeconstructionDraftBuilderService {
       worldRulesText: worldRulesText,
       characterLinesText: characterLinesText,
       organizationLinesText: organizationLinesText,
+      extractionId: extractionId,
       preferredContinuationDirection: preferredContinuationDirection,
+      storageStrategy: storageStrategy,
       extractKnowledge: extractKnowledge,
     );
     return Isolate.run(() => _buildDraftInIsolate(request));
@@ -48,7 +53,9 @@ BookDeconstructionDraftBuildResult _buildDraftInIsolate(
     worldRulesText: request.worldRulesText,
     characterLinesText: request.characterLinesText,
     organizationLinesText: request.organizationLinesText,
+    extractionId: request.extractionId,
     preferredContinuationDirection: request.preferredContinuationDirection,
+    storageStrategy: request.storageStrategy,
     extractKnowledge: request.extractKnowledge,
   );
 }
@@ -63,7 +70,9 @@ class _BookDeconstructionDraftBuildRequest {
     required this.worldRulesText,
     required this.characterLinesText,
     required this.organizationLinesText,
+    required this.extractionId,
     required this.preferredContinuationDirection,
+    required this.storageStrategy,
     required this.extractKnowledge,
   });
 
@@ -75,6 +84,8 @@ class _BookDeconstructionDraftBuildRequest {
   final String worldRulesText;
   final String characterLinesText;
   final String organizationLinesText;
+  final String extractionId;
   final BookDeconstructionContinuationDirection preferredContinuationDirection;
+  final ProjectStorageStrategy storageStrategy;
   final bool extractKnowledge;
 }

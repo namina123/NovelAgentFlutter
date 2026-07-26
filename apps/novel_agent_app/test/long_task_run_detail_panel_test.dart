@@ -138,7 +138,7 @@ void main() {
           ],
         ),
       ],
-      resumeActionLabel: '继续推进',
+      resumeActionLabel: '恢复推进',
       attentionCalloutTitle: '当前运行停在待确认节点。',
       attentionCalloutSummary: '当前运行已经停在需要确认的节点。 建议先确认这一项，再决定是否继续自动推进。',
       pendingUserActionLabel: '等待确认',
@@ -286,7 +286,7 @@ void main() {
         canResume: true,
         canStop: true,
         overviewBlocks: const <LongTaskRunOverviewBlockViewData>[],
-        resumeActionLabel: '继续推进',
+        resumeActionLabel: '恢复推进',
         attentionCalloutTitle: '当前运行停在待确认节点。',
         attentionCalloutSummary: '当前运行已经停在需要确认的节点。 建议先确认检查点。',
         pendingUserActionLabel: '等待确认',
@@ -324,8 +324,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.widgetWithText(OutlinedButton, '暂停'), findsOneWidget);
-      expect(find.widgetWithText(OutlinedButton, '继续推进'), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, '继续推进'), findsOneWidget);
+      expect(find.widgetWithText(OutlinedButton, '恢复推进'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, '恢复推进'), findsOneWidget);
       expect(find.widgetWithText(OutlinedButton, '停止'), findsOneWidget);
       expect(find.widgetWithText(OutlinedButton, '查看当前任务'), findsOneWidget);
       expect(find.widgetWithText(OutlinedButton, '等待确认'), findsOneWidget);
@@ -334,9 +334,9 @@ void main() {
 
       await tester.tap(find.widgetWithText(OutlinedButton, '暂停'));
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(OutlinedButton, '继续推进'));
+      await tester.tap(find.widgetWithText(OutlinedButton, '恢复推进'));
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, '继续推进'));
+      await tester.tap(find.widgetWithText(FilledButton, '恢复推进'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(OutlinedButton, '停止'));
       await tester.pumpAndSettle();
@@ -427,7 +427,7 @@ void main() {
             summary: '正在等待处理最近失败结果。',
           ),
         ],
-        resumeActionLabel: '继续推进',
+        resumeActionLabel: '恢复推进',
         attentionCalloutTitle: '当前运行停在待处理节点。',
         attentionCalloutSummary: '',
         pendingUserActionLabel: '等待确认',

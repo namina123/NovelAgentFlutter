@@ -40,9 +40,9 @@ class ProjectChapterContinuityPriorityService {
       if (ValueReaders.boolValue(entry['is_dir'])) {
         continue;
       }
-      final rawPath = ValueReaders.stringValue(entry['relative_path'])
-          .trim()
-          .replaceAll('\\', '/');
+      final rawPath = ValueReaders.stringValue(
+        entry['relative_path'],
+      ).trim().replaceAll('\\', '/');
       if (rawPath.isEmpty) {
         continue;
       }

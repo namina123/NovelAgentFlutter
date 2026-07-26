@@ -279,7 +279,6 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
         return Column(
           children: [
             _field(_projectTitleController, '项目标题'),
-            _field(_projectTypeController, '项目类型'),
             _field(_genreController, '题材'),
             _field(_premiseController, '核心设定'),
             _field(_notesController, '备注', maxLines: 5),
@@ -323,6 +322,19 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
                 },
               ),
           ],
+        );
+      case WorkspaceCommandMode.configureRuntimeBaseline:
+        return _selectorField(
+          label: '运行基准',
+          value: _selectedTransitionRuntimeBaselineId,
+          options: widget.viewData.transitionRuntimeBaselineOptions,
+          enabled: !widget.viewData.isBusy,
+          emptyLabel: '请选择运行基准',
+          onSelected: (value) {
+            setState(() {
+              _selectedTransitionRuntimeBaselineId = value;
+            });
+          },
         );
       case WorkspaceCommandMode.createFile:
         return Column(
@@ -418,7 +430,7 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
                 title: '使用模型辅助拆书',
                 description:
                     _selectedSmartDeconstructionProviderModelKey.trim().isEmpty
-                     ? '先选择模型后才能启用。'
+                    ? '先选择模型后才能启用。'
                     : '启用后会先识别章节规则与清理规则，再交由程序执行拆分与清洗。',
                 value: _smartDeconstruction,
                 enabled:

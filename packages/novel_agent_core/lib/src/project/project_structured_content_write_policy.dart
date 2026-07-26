@@ -12,6 +12,7 @@ class ProjectStructuredContentWritePolicy {
   final ProjectContentPathPolicyService _projectContentPathPolicyService;
 
   static const Set<String> _sqlitePrimaryContentTypes = <String>{
+    'premise',
     'chapter',
     'scene',
     'outline',
@@ -23,6 +24,12 @@ class ProjectStructuredContentWritePolicy {
     'summary',
     'knowledge',
     'source_original',
+    'derived_continuation_narrative',
+    'derived_fanfic_narrative',
+    'organization_profile',
+    'foreshadow_record',
+    'timeline_record',
+    'relationship_record',
   };
 
   ProjectContentStorageDisposition dispositionOfBodyTextDocument({

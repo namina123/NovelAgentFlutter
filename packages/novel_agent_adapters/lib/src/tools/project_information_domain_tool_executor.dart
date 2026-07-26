@@ -96,8 +96,7 @@ class ProjectInformationDomainToolExecutor {
        _researchExecutionBudget = researchExecutionBudget;
 
   final NarrativeDomainToolDispatcher _dispatcher;
-  final HostInformationPermissionResolverService
-  _hostPermissionResolverService;
+  final HostInformationPermissionResolverService _hostPermissionResolverService;
   final KnowledgeCardRepository _knowledgeCardRepository;
   final DesignElementRepository _designElementRepository;
   final ResearchNoteRepository _researchNoteRepository;
@@ -107,14 +106,15 @@ class ProjectInformationDomainToolExecutor {
   final ProjectInformationProjectionWriterService _projectionWriterService;
   final OpenNarrativeStateRecordDocumentService _recordDocumentService;
   final ProjectInformationPathService _pathService;
-  final ProjectInformationResearchCoordinatorService _researchCoordinatorService;
+  final ProjectInformationResearchCoordinatorService
+  _researchCoordinatorService;
   final ProjectInformationResearchExecutionBudget _researchExecutionBudget;
 
   Future<DomainToolOutcome> execute(
     ProjectDescriptor project,
-    DomainToolRequest request,
-    {HostInformationPermissionContext? hostPermissionContext}
-  ) async {
+    DomainToolRequest request, {
+    HostInformationPermissionContext? hostPermissionContext,
+  }) async {
     final effectiveRequest = _resolveEffectiveRequest(
       request,
       hostPermissionContext: hostPermissionContext,
@@ -207,7 +207,9 @@ class ProjectInformationDomainToolExecutor {
       request: InformationCollectionRequest.fromJson(payload),
       hostContext: hostPermissionContext,
     );
-    return request.copyWith(requestPayload: resolution.effectiveRequest.toJson());
+    return request.copyWith(
+      requestPayload: resolution.effectiveRequest.toJson(),
+    );
   }
 
   bool _shouldPersistOutcome(DomainToolOutcome outcome) {
@@ -223,8 +225,7 @@ class ProjectInformationDomainToolExecutor {
     DomainToolOutcome outcome,
     List<String> changedPaths, {
     HostInformationPermissionContext? hostPermissionContext,
-  }
-  ) async {
+  }) async {
     final researchRequest = ValueReaders.mapValue(
       outcome.outcomePayload['research_request'],
     );
@@ -289,12 +290,13 @@ class ProjectInformationDomainToolExecutor {
     if (hostPermissionContext == null) {
       return persistedOutcome;
     }
-    final researchExecution = await _researchCoordinatorService.processPendingRequest(
-      project,
-      requestId: requestId,
-      hostPermissionContext: hostPermissionContext,
-      budget: _researchExecutionBudget,
-    );
+    final researchExecution = await _researchCoordinatorService
+        .processPendingRequest(
+          project,
+          requestId: requestId,
+          hostPermissionContext: hostPermissionContext,
+          budget: _researchExecutionBudget,
+        );
     changedPaths.addAll(researchExecution.changedPaths);
     return _withResearchExecutionOutcome(persistedOutcome, researchExecution);
   }
@@ -561,7 +563,8 @@ class ProjectInformationDomainToolExecutor {
         'import_execution_performed': researchExecution.executedImport,
         'requires_user_confirmation': researchExecution.awaitUserConfirmation,
         'research_execution_summary': researchExecution.summary,
-        'generated_research_note_ids': researchExecution.generatedResearchNoteIds,
+        'generated_research_note_ids':
+            researchExecution.generatedResearchNoteIds,
         'research_execution': <String, Object?>{
           'request_id': researchExecution.requestId,
           'request_state': researchExecution.requestState,

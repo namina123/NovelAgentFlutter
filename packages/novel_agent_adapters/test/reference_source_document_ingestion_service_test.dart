@@ -83,18 +83,20 @@ Hagrid arrived and revealed the truth.
     );
 
     test(
-      'ingests Harry Potter volume sample into multiple entry kinds',
+      'ingests a multi-chapter source fixture into multiple entry kinds',
       () async {
-        final sourceFile = File(_harryPotterVolumeSamplePath());
-        expect(await sourceFile.exists(), isTrue);
+        final sourceFile = File(
+          '${tempDirectory.path}${Platform.pathSeparator}multi_chapter_source.txt',
+        );
+        await sourceFile.writeAsString(_multiChapterSourceFixture);
 
         final result = await ingestionService.ingestFile(
           sourceFilePath: sourceFile.path,
-          packageId: 'pkg_hp_volume_1',
+          packageId: 'pkg_multi_chapter_fixture',
           packageKind: ReferencePackageKinds.referenceWorkPackage,
-          displayName: '哈利波特第一卷参考包',
+          displayName: '多章节来源夹具参考包',
           packageVersionId: 'v1',
-          versionLabel: 'volume-1-sample',
+          versionLabel: 'fixture-v1',
           createdAt: '2026-06-07T13:20:00Z',
           createdBy: 'test',
           maxChapterEntries: 5,
@@ -128,8 +130,24 @@ Hagrid arrived and revealed the truth.
   });
 }
 
-String _harryPotterVolumeSamplePath() {
-  final packageRoot = Directory.current.path;
-  final repoRoot = Directory(packageRoot).parent.parent.path;
-  return '$repoRoot${Platform.pathSeparator}references${Platform.pathSeparator}files${Platform.pathSeparator}Harry Potter - Volume 1 Raw.txt';
-}
+const String _multiChapterSourceFixture = '''
+CHAPTER ONE
+Aster Vale crossed the rain-soaked harbor before dawn. Aster Vale noticed a
+sealed letter marked with the crest of the North Archive.
+
+CHAPTER TWO
+Aster Vale met Rowan Mercer in the old observatory. Rowan Mercer warned that
+the North Archive kept a secret map beneath the brass floor.
+
+CHAPTER THREE
+Rowan Mercer and Aster Vale followed the map into the underground station.
+The locked gate suggested that a hidden danger would return later.
+
+CHAPTER FOUR
+Aster Vale heard the council bell and saw the North Archive guards depart.
+Rowan Mercer chose to protect the letter instead of revealing its secret.
+
+CHAPTER FIVE
+At sunrise, Aster Vale and Rowan Mercer agreed to investigate the missing key.
+The final note promised that the truth would surface after the next storm.
+''';

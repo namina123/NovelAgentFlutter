@@ -56,7 +56,7 @@ void main() {
       expect(
         lines,
         contains(
-          '资料投影：knowledge/项目知识摘要.md | knowledge/设计元素摘要.md | research/资料研究摘要.md | references/引用作品边界.md',
+          '资料摘要：knowledge/项目知识摘要.md | knowledge/设计元素摘要.md | research/资料研究摘要.md | references/引用作品边界.md',
         ),
       );
     });

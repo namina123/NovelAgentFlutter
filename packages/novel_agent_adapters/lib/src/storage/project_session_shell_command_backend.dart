@@ -24,7 +24,9 @@ class ProjectSessionShellCommandBackend implements ConversationCommandBackend {
   final SessionTokenBudgetSettings? _budgetSettings;
 
   @override
-  Future<ConversationCommandBackendOutcome> compact(JsonMap sessionRecord) async {
+  Future<ConversationCommandBackendOutcome> compact(
+    JsonMap sessionRecord,
+  ) async {
     final result = await _shellService.compactSession(
       _project,
       _sessionId,
@@ -65,7 +67,10 @@ class ProjectSessionShellCommandBackend implements ConversationCommandBackend {
   Future<ConversationCommandBackendOutcome> clearContext(
     JsonMap sessionRecord,
   ) async {
-    final result = await _shellService.clearWorkingContext(_project, _sessionId);
+    final result = await _shellService.clearWorkingContext(
+      _project,
+      _sessionId,
+    );
     return _toOutcome(result, fallback: sessionRecord, persist: true);
   }
 
@@ -105,7 +110,9 @@ class ProjectSessionShellCommandBackend implements ConversationCommandBackend {
       detail['compaction_decision'] = shellResult['compaction_decision'];
     }
     return ConversationCommandBackendOutcome(
-      updatedSessionRecord: ValueReaders.mapValue(shellResult['session_record']),
+      updatedSessionRecord: ValueReaders.mapValue(
+        shellResult['session_record'],
+      ),
       persist: persist,
       detail: detail,
       exitSession: exitSession,

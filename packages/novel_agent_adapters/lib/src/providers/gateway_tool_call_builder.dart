@@ -3,10 +3,7 @@ import 'dart:convert';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 class GatewayToolCallBuilder {
-  GatewayToolCallBuilder({
-    required this.id,
-    required this.name,
-  });
+  GatewayToolCallBuilder({required this.id, required this.name});
 
   String id;
   String name;

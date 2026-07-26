@@ -7,7 +7,7 @@ import 'openai_llm_gateway.dart';
 
 class GatewayFactoryResolver {
   GatewayFactoryResolver({GatewayProtocolRegistry? registry})
-      : _registry = registry ?? GatewayProtocolRegistry.standard();
+    : _registry = registry ?? GatewayProtocolRegistry.standard();
 
   final GatewayProtocolRegistry _registry;
 

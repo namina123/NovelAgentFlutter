@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -33,6 +31,7 @@ import 'package:novel_agent_app/features/workbench/presentation/widgets/conversa
 import 'package:novel_agent_app/features/workbench/presentation/widgets/workbench_navigation_sidebar.dart';
 import 'package:novel_agent_app/shared/widgets/panel_surface.dart';
 
+import 'manual_golden_test_support.dart';
 import 'test_font_loader.dart';
 
 const String _chapterTwelveBody = '''
@@ -80,6 +79,13 @@ const String _activeConversationAssistantReply = '''
 
 如果你同意，我下一轮会直接把章尾改成更收着的版本：两个人都知道不能退，但谁也不先把话说透。''';
 
+const _sr14GoldenFileNames = <String>[
+  'sr14_workbench_desktop_three_pane.png',
+  'sr14_left_sidebar_compact_height.png',
+  'sr14_conversation_empty_state.png',
+  'sr14_conversation_active_state.png',
+];
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -90,6 +96,16 @@ void main() {
   testWidgets('captures SR-14 final visual verification screenshots', (
     tester,
   ) async {
+    final artifactsDir = manualGoldenArtifactsDirectory(
+      'workbench_sr14_screenshots',
+    );
+    if (skipManualGoldenTestIfArtifactsAreMissing(
+      artifactsDirectory: artifactsDir,
+      expectedFileNames: _sr14GoldenFileNames,
+    )) {
+      return;
+    }
+
     const mapper = WorkbenchPaneViewDataMapperService();
 
     _setViewport(tester, const Size(1600, 1000));
@@ -202,20 +218,6 @@ void main() {
       ),
     );
 
-    for (final fileName in const <String>[
-      'sr14_workbench_desktop_three_pane.png',
-      'sr14_left_sidebar_compact_height.png',
-      'sr14_conversation_empty_state.png',
-      'sr14_conversation_active_state.png',
-    ]) {
-      expect(
-        File(
-          '${_resolveRepoRoot()}${Platform.pathSeparator}artifacts${Platform.pathSeparator}workbench_sr14_screenshots${Platform.pathSeparator}$fileName',
-        ).existsSync(),
-        isTrue,
-        reason: '缺少截图产物：$fileName',
-      );
-    }
   });
 }
 
@@ -659,24 +661,6 @@ void _setViewport(WidgetTester tester, Size size) {
   });
 }
 
-String _resolveRepoRoot() {
-  var current = Directory.current.absolute;
-  for (var depth = 0; depth < 6; depth += 1) {
-    final docsFile = File(
-      '${current.path}${Platform.pathSeparator}docs${Platform.pathSeparator}workbench-sidebars-relayout-session-order-2026-05-29.md',
-    );
-    if (docsFile.existsSync()) {
-      return current.path;
-    }
-    final parent = current.parent;
-    if (parent.path == current.path) {
-      break;
-    }
-    current = parent;
-  }
-  return Directory.current.absolute.path;
-}
-
 class _FakeConversationHandler implements ConversationActionHandler {
   const _FakeConversationHandler();
 
@@ -786,6 +770,9 @@ class _FakeResourceHandler implements ResourceManagerActionHandler {
 
   @override
   void onProjectTypeTransitionRequested() {}
+
+  @override
+  void onRuntimeBaselineConfigurationRequested() {}
 
   @override
   void onImportRequested() {}

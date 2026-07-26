@@ -65,8 +65,7 @@ class ProjectReferenceContinuityBridgeService {
         'metadata': <String, Object?>{
           'project_id': project.id,
           'project_name': project.name,
-          'substrate_locator':
-              'reference-substrate://${project.id}/continuity',
+          'substrate_locator': 'reference-substrate://${project.id}/continuity',
           'attachment_count': 0,
           'readable_package_count': 0,
           'blocked_package_count': 0,

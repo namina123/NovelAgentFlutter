@@ -27,10 +27,7 @@ void main() {
           messages: const <JsonMap>[
             <String, Object?>{'role': 'system', 'content': 'Keep it short.'},
             <String, Object?>{'role': 'user', 'content': 'Say hi.'},
-            <String, Object?>{
-              'role': 'assistant',
-              'content': 'Hi!',
-            },
+            <String, Object?>{'role': 'assistant', 'content': 'Hi!'},
             <String, Object?>{
               'role': 'tool',
               'tool_call_id': 'call_1',
@@ -43,9 +40,7 @@ void main() {
               'function': <String, Object?>{
                 'name': 'demo_tool',
                 'description': 'demo',
-                'parameters': <String, Object?>{
-                  'type': 'object',
-                },
+                'parameters': <String, Object?>{'type': 'object'},
               },
             },
           ],
@@ -58,9 +53,9 @@ void main() {
 
       expect(payload['model'], 'demo-model');
       expect(payload['instructions'], 'Keep it short.');
-      final input = ValueReaders.objectList(payload['input']).map(ValueReaders.mapValue).toList(
-        growable: false,
-      );
+      final input = ValueReaders.objectList(
+        payload['input'],
+      ).map(ValueReaders.mapValue).toList(growable: false);
       expect(input, hasLength(3));
       expect(input.first['type'], 'message');
       expect(input.first['role'], 'user');
@@ -70,9 +65,9 @@ void main() {
       expect(input[2]['call_id'], 'call_1');
       expect(payload['api_mode'], isNull);
       expect(payload['stream'], isTrue);
-      final tools = ValueReaders.objectList(payload['tools']).map(ValueReaders.mapValue).toList(
-        growable: false,
-      );
+      final tools = ValueReaders.objectList(
+        payload['tools'],
+      ).map(ValueReaders.mapValue).toList(growable: false);
       expect(tools, hasLength(1));
       expect(tools.first['name'], 'demo_tool');
       expect(tools.first['parameters'], isA<Map<String, Object?>>());

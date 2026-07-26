@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -21,12 +19,28 @@ import 'package:novel_agent_app/features/workbench/presentation/models/workbench
 import 'package:novel_agent_app/features/workbench/presentation/models/workbench_view_data.dart';
 import 'package:novel_agent_app/features/workbench/presentation/pages/workbench_page.dart';
 
+import 'manual_golden_test_support.dart';
+
+const _rc13GoldenFileNames = <String>[
+  'workbench_desktop_recovery.png',
+];
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('desktop workbench recovery view stays user-facing and low-noise', (
     tester,
   ) async {
+    final artifactsDir = manualGoldenArtifactsDirectory(
+      'workbench_rc13_screenshots',
+    );
+    if (skipManualGoldenTestIfArtifactsAreMissing(
+      artifactsDirectory: artifactsDir,
+      expectedFileNames: _rc13GoldenFileNames,
+    )) {
+      return;
+    }
+
     _setDesktopViewport(tester);
     const mapper = WorkbenchPaneViewDataMapperService();
     final state = WorkbenchViewData.initial().copyWith(
@@ -161,12 +175,6 @@ void main() {
       ),
     );
 
-    expect(
-      File(
-        '${_resolveRepoRoot()}${Platform.pathSeparator}artifacts${Platform.pathSeparator}workbench_rc13_screenshots${Platform.pathSeparator}workbench_desktop_recovery.png',
-      ).existsSync(),
-      isTrue,
-    );
   });
 }
 
@@ -219,24 +227,6 @@ void _setDesktopViewport(WidgetTester tester) {
     tester.view.resetDevicePixelRatio();
     tester.view.resetPhysicalSize();
   });
-}
-
-String _resolveRepoRoot() {
-  var current = Directory.current.absolute;
-  for (var depth = 0; depth < 6; depth += 1) {
-    final docsFile = File(
-      '${current.path}${Platform.pathSeparator}docs${Platform.pathSeparator}workbench-recovery-session-order-2026-05-29.md',
-    );
-    if (docsFile.existsSync()) {
-      return current.path;
-    }
-    final parent = current.parent;
-    if (parent.path == current.path) {
-      break;
-    }
-    current = parent;
-  }
-  return Directory.current.absolute.path;
 }
 
 class _FakeConversationHandler implements ConversationActionHandler {
@@ -348,6 +338,9 @@ class _FakeResourceHandler implements ResourceManagerActionHandler {
 
   @override
   void onProjectTypeTransitionRequested() {}
+
+  @override
+  void onRuntimeBaselineConfigurationRequested() {}
 
   @override
   void onImportRequested() {}

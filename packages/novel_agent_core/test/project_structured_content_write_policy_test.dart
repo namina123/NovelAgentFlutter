@@ -35,6 +35,20 @@ void main() {
         ),
         isTrue,
       );
+      expect(
+        policy.shouldWriteToSqlitePrimarySource(
+          storageStrategy: ProjectStorageStrategy.sqliteProjectStore,
+          documentKind: 'derived_continuation_narrative',
+        ),
+        isTrue,
+      );
+      expect(
+        policy.shouldWriteToSqlitePrimarySource(
+          storageStrategy: ProjectStorageStrategy.sqliteProjectStore,
+          documentKind: 'derived_fanfic_narrative',
+        ),
+        isTrue,
+      );
     },
   );
 

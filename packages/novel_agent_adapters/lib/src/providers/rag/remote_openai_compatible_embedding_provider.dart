@@ -7,12 +7,13 @@ import '../system_proxy_resolver.dart';
 import 'rag_retrieval_provider_contracts.dart';
 
 /// 远程 embedding POST 的可注入合同，便于单测用假实现替换真实网络。
-typedef EmbeddingHttpPost = Future<JsonMap> Function({
-  required Uri requestUri,
-  required String apiKey,
-  required JsonMap body,
-  required Duration timeout,
-});
+typedef EmbeddingHttpPost =
+    Future<JsonMap> Function({
+      required Uri requestUri,
+      required String apiKey,
+      required JsonMap body,
+      required Duration timeout,
+    });
 
 /// 远程 OpenAI 兼容 embedding provider：POST {baseUrl}/v1/embeddings，解析 data[].embedding。
 ///
@@ -94,7 +95,9 @@ class RemoteOpenAiCompatibleEmbeddingProvider implements EmbeddingProviderPort {
     // 中文注释: 兼容 baseUrl 是否带 /v1 后缀，统一落到 .../v1/embeddings。
     final raw = _baseUrl.trim();
     final root = raw.endsWith('/') ? raw.substring(0, raw.length - 1) : raw;
-    final path = root.endsWith('/v1') ? '$root/embeddings' : '$root/v1/embeddings';
+    final path = root.endsWith('/v1')
+        ? '$root/embeddings'
+        : '$root/v1/embeddings';
     return Uri.parse(path);
   }
 }

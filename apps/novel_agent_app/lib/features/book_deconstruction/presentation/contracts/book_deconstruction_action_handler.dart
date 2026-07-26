@@ -41,6 +41,21 @@ abstract class BookDeconstructionActionHandler {
 
   void onBookDeconstructionFollowupOptionSelected(String optionId);
 
+  // 步骤④：复合项目类型——选目标写作类型 + 续写开关（分章是否作为正文基础写入 chapters/）。
+  void onBookDeconstructionTargetWritingTypeSelected(
+    String targetWritingTypeId,
+  );
+
+  void onBookDeconstructionTargetRuntimeBaselineSelected(
+    String runtimeBaselineId,
+  );
+
+  void onBookDeconstructionInheritAsLiveNarrativeChanged(bool value);
+
+  /// Applies the exact staged package from step ③ only when the user opts in
+  /// during confirmation. The default remains false.
+  void onBookDeconstructionApplyStagedAnalysisResultsChanged(bool value);
+
   Future<void> onBookDeconstructionConfirmRequested();
 
   Future<void> onBookDeconstructionCreateDerivedProjectRequested();

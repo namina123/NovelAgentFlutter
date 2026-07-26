@@ -13,9 +13,9 @@ final class GatewayProtocolProfile {
 }
 
 class GatewayProtocolRegistry {
-  const GatewayProtocolRegistry(
-      {Map<ProtocolKind, GatewayProtocolProfile>? profiles})
-      : _profiles = profiles ?? _defaultProfiles;
+  const GatewayProtocolRegistry({
+    Map<ProtocolKind, GatewayProtocolProfile>? profiles,
+  }) : _profiles = profiles ?? _defaultProfiles;
 
   final Map<ProtocolKind, GatewayProtocolProfile> _profiles;
 
@@ -53,28 +53,28 @@ class GatewayProtocolRegistry {
 
   static const Map<ProtocolKind, GatewayProtocolProfile> _defaultProfiles =
       <ProtocolKind, GatewayProtocolProfile>{
-    ProtocolKind.openAiCompatible: GatewayProtocolProfile(
-      protocolKind: ProtocolKind.openAiCompatible,
-      allowedRouteFamilies: <RequestRouteFamily>[
-        RequestRouteFamily.chatCompletions,
-        RequestRouteFamily.responses,
-      ],
-      fallbackRouteFamily: RequestRouteFamily.chatCompletions,
-    ),
-    ProtocolKind.anthropicCompatible: GatewayProtocolProfile(
-      protocolKind: ProtocolKind.anthropicCompatible,
-      allowedRouteFamilies: <RequestRouteFamily>[
-        RequestRouteFamily.messages,
-      ],
-      fallbackRouteFamily: RequestRouteFamily.messages,
-    ),
-    ProtocolKind.geminiNative: GatewayProtocolProfile(
-      protocolKind: ProtocolKind.geminiNative,
-      allowedRouteFamilies: <RequestRouteFamily>[
-        RequestRouteFamily.generateContent,
-        RequestRouteFamily.streamGenerateContent,
-      ],
-      fallbackRouteFamily: RequestRouteFamily.generateContent,
-    ),
-  };
+        ProtocolKind.openAiCompatible: GatewayProtocolProfile(
+          protocolKind: ProtocolKind.openAiCompatible,
+          allowedRouteFamilies: <RequestRouteFamily>[
+            RequestRouteFamily.chatCompletions,
+            RequestRouteFamily.responses,
+          ],
+          fallbackRouteFamily: RequestRouteFamily.chatCompletions,
+        ),
+        ProtocolKind.anthropicCompatible: GatewayProtocolProfile(
+          protocolKind: ProtocolKind.anthropicCompatible,
+          allowedRouteFamilies: <RequestRouteFamily>[
+            RequestRouteFamily.messages,
+          ],
+          fallbackRouteFamily: RequestRouteFamily.messages,
+        ),
+        ProtocolKind.geminiNative: GatewayProtocolProfile(
+          protocolKind: ProtocolKind.geminiNative,
+          allowedRouteFamilies: <RequestRouteFamily>[
+            RequestRouteFamily.generateContent,
+            RequestRouteFamily.streamGenerateContent,
+          ],
+          fallbackRouteFamily: RequestRouteFamily.generateContent,
+        ),
+      };
 }

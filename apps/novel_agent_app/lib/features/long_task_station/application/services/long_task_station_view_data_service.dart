@@ -373,7 +373,7 @@ class LongTaskStationViewDataService {
       summary: activeTask?.summary.trim().isNotEmpty == true
           ? activeTask!.summary.trim()
           : run.note.trim().isEmpty
-          ? '当前运行会继续沿着已选任务链推进。'
+          ? '当前运行按批次推进任务链；暂停/恢复会写入运行记录，恢复会重新进入队列。'
           : run.note.trim(),
       entries: entries,
     );
@@ -692,13 +692,13 @@ class LongTaskStationViewDataService {
     required bool canResume,
   }) {
     if (!canResume) {
-      return '继续推进';
+      return '恢复推进';
     }
     final blockerCode = blocker?.code ?? run.stopReason;
     if (_isFailureBlocker(blockerCode) || run.requiresManualAttention) {
       return '重试当前步骤';
     }
-    return '继续推进';
+    return '恢复推进';
   }
 
   String _attentionCalloutTitle({
@@ -736,7 +736,7 @@ class LongTaskStationViewDataService {
     if (segments.isEmpty) {
       return run.isActive
           ? '当前运行仍在推进，可以继续查看当前任务与最近结果。'
-          : '可以从这里继续推进，或先查看当前任务与最近的审稿结果。';
+          : '可以从这里恢复推进（会重入任务队列），或先查看当前任务与最近的审稿结果。';
     }
     return segments.join(' ');
   }
@@ -877,10 +877,10 @@ class LongTaskStationViewDataService {
     }
     final badges = <String>[];
     if (baseline.unattended) {
-      badges.add('托管运行');
+      badges.add('少确认批跑');
     }
     if (baseline.autoAdvanceChapters) {
-      badges.add('自动推进');
+      badges.add('自动推进章节');
     }
     if (baseline.keepAliveAcrossProjectSwitch) {
       badges.add('跨项目保活');

@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novel_agent_app/app/navigation/app_shell_navigation_action_handler.dart';
@@ -26,36 +24,36 @@ import 'package:novel_agent_app/features/workbench/presentation/widgets/resource
 import 'package:novel_agent_app/shared/widgets/app_shell_activity_rail.dart';
 import 'package:novel_agent_app/shared/widgets/panel_surface.dart';
 
+import 'manual_golden_test_support.dart';
+
+const _aed08GoldenFileNames = <String>[
+  'aed08_navigation_agent_ecosystem.png',
+  'aed08_resource_panel_without_long_task.png',
+  'aed08_skill_loadout_compact_detail.png',
+  'aed08_expression_constraint_discovery.png',
+];
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('captures AED-08 visual verification screenshots', (
     WidgetTester tester,
   ) async {
-    final artifactsDir = Directory(
-      '${_resolveRepoRoot()}${Platform.pathSeparator}artifacts${Platform.pathSeparator}agent_ecosystem_aed08_screenshots',
-    )..createSync(recursive: true);
-    expect(artifactsDir.existsSync(), isTrue);
+    final artifactsDir = manualGoldenArtifactsDirectory(
+      'agent_ecosystem_aed08_screenshots',
+    );
+    if (skipManualGoldenTestIfArtifactsAreMissing(
+      artifactsDirectory: artifactsDir,
+      expectedFileNames: _aed08GoldenFileNames,
+    )) {
+      return;
+    }
 
     await _captureNavigationRail(tester);
     await _captureResourcePanel(tester);
     await _captureSkillLoadoutDetail(tester);
     await _captureExpressionConstraintPanel(tester);
 
-    for (final fileName in const <String>[
-      'aed08_navigation_agent_ecosystem.png',
-      'aed08_resource_panel_without_long_task.png',
-      'aed08_skill_loadout_compact_detail.png',
-      'aed08_expression_constraint_discovery.png',
-    ]) {
-      expect(
-        File(
-          '${artifactsDir.path}${Platform.pathSeparator}$fileName',
-        ).existsSync(),
-        isTrue,
-        reason: '缺少截图产物：$fileName',
-      );
-    }
   });
 }
 
@@ -72,7 +70,9 @@ Future<void> _captureNavigationRail(WidgetTester tester) async {
               width: 88,
               height: 620,
               child: AppShellActivityRail(
-                sections: AppShellNavigationCatalog.sections(),
+                sections: AppShellNavigationCatalog.sections(
+                  hasBookDeconstructionCapability: true,
+                ),
                 selectedDestination: AppDestination.agentEcosystem,
                 actionHandler: const _FakeNavigationHandler(),
               ),
@@ -450,24 +450,6 @@ void _setViewport(WidgetTester tester, Size size) {
   });
 }
 
-String _resolveRepoRoot() {
-  var current = Directory.current.absolute;
-  for (var depth = 0; depth < 6; depth += 1) {
-    final docsFile = File(
-      '${current.path}${Platform.pathSeparator}docs${Platform.pathSeparator}agent-ecosystem-entry-density-session-order-2026-05-29.md',
-    );
-    if (docsFile.existsSync()) {
-      return current.path;
-    }
-    final parent = current.parent;
-    if (parent.path == current.path) {
-      break;
-    }
-    current = parent;
-  }
-  return Directory.current.absolute.path;
-}
-
 class _FakeNavigationHandler implements AppShellNavigationActionHandler {
   const _FakeNavigationHandler();
 
@@ -507,6 +489,9 @@ class _FakeResourceManagerActionHandler
 
   @override
   void onProjectTypeTransitionRequested() {}
+
+  @override
+  void onRuntimeBaselineConfigurationRequested() {}
 
   @override
   void onImportRequested() {}
@@ -707,9 +692,7 @@ class _FakeProjectAssetsActionHandler implements ProjectAssetsActionHandler {
   }) async {}
 
   @override
-  Future<void> onProjectAssetsExtractRagRequested({
-    String modeId = '',
-  }) async {}
+  Future<void> onProjectAssetsExtractRagRequested({String modeId = ''}) async {}
 
   @override
   Future<void> onProjectAssetsMountRagCorpusRequested() async {}

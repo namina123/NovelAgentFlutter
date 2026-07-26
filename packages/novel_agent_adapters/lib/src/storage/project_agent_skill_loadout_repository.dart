@@ -18,7 +18,9 @@ class ProjectAgentSkillLoadoutRepository {
   final ProjectJsonDocumentService _jsonDocumentService;
   final ProjectAgentSkillLoadoutDocumentCodecService _codecService;
 
-  Future<List<AgentSkillLoadout>> loadLoadouts(ProjectDescriptor project) async {
+  Future<List<AgentSkillLoadout>> loadLoadouts(
+    ProjectDescriptor project,
+  ) async {
     // 中文注释: 当前项目技能装载永远从项目隐藏设置目录读取，确保不会串到别的项目。
     final document = await _jsonDocumentService.readJsonMap(
       project.rootPath,

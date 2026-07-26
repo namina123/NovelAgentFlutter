@@ -66,6 +66,7 @@ import '../../features/settings/application/services/provider_connection_validat
 import '../../features/settings/application/services/provider_settings_directory_service.dart';
 import '../../features/settings/application/services/provider_connection_probe_service.dart';
 import '../../features/settings/application/services/theme_settings_view_data_service.dart';
+import '../../shared/services/user_facing_error_humanizer.dart';
 import '../../features/settings/presentation/contracts/settings_action_handler.dart';
 import '../../features/settings/presentation/models/model_editor_view_data.dart';
 import '../../features/settings/presentation/models/settings_view_data.dart';
@@ -118,6 +119,7 @@ import '../../shared/view_models/app_shell_view_model.dart';
 import '../routing/app_destination.dart';
 import 'app_shell_auxiliary_controllers.dart';
 import 'app_shell_destination_controller.dart';
+import 'book_deconstruction_workspace_policy.dart';
 import 'feature_refresh_intent.dart';
 import 'feature_visibility_state.dart';
 import 'app_shell_listenable_state.dart';
@@ -506,7 +508,7 @@ class AppShellController extends ChangeNotifier
       showInspirationWorkbench: _destinationController.showInspirationWorkbench,
       showPromptTemplates: _destinationController.showPromptTemplates,
       showProjectAssets: () async {
-        if (_currentProject?.projectType.trim() == 'book_deconstruction') {
+        if (_usesBookDeconstructionAsPrimaryWorkspace(_currentProject)) {
           await _showBookDeconstructionAnalysis();
           return;
         }
@@ -608,7 +610,6 @@ class AppShellController extends ChangeNotifier
         projectBoundFeatureRefreshPolicy ??
         const ProjectBoundFeatureRefreshPolicy();
     _projectCreationController = ProjectCreationController(
-      loadProjectWorkspaceUseCase: _loadProjectWorkspaceUseCase,
       createProjectWorkspaceUseCase: _createProjectWorkspaceUseCase,
       writeProjectTextFileUseCase: _writeProjectTextFileUseCase,
       desktopProjectDirectoryPickerService:
@@ -641,6 +642,7 @@ class AppShellController extends ChangeNotifier
       selectProjectOpenEntry: _selectProjectOpenEntry,
       openProjectFromProjectOpen: _openProjectFromProjectOpen,
       importLocalProjectFromProjectOpen: _importLocalProjectFromProjectOpen,
+      deleteProjectFromProjectOpen: _deleteProjectFromProjectOpen,
     );
     _auxiliaryControllers = AppShellAuxiliaryControllers(
       createProjectAssetsController: () => ProjectAssetsController(
@@ -667,8 +669,9 @@ class AppShellController extends ChangeNotifier
             if (settings == null) {
               return null;
             }
-            return const SettingsBackedEmbeddingProviderResolver()
-                .resolve(settings);
+            return const SettingsBackedEmbeddingProviderResolver().resolve(
+              settings,
+            );
           },
         ),
         referenceExtractionExecutionService:
@@ -705,39 +708,42 @@ class AppShellController extends ChangeNotifier
         projectsRootPath: _defaultProjectsRootPath,
         readSettings: () => _settings,
         generateDraftUseCaseFactory: _generateDraftUseCaseFactory,
-        extractKnowledgeHandler: (
-          ProjectDescriptor project, {
-          required String providerId,
-          required String modelId,
-        }) async {
-          // 中文注释: 提取知识（可选）委托给内置隐藏智能体的 LLM reference_extraction：
-          // 读拆书产物（结构化正文）分析知识，必须已配置模型；结果如实回给拆书页。
-          // provider/model 由拆书"分析"步的用户选择透传（与 app 默认解耦）。
-          final service =
-              _injectedProjectReferenceExtractionExecutionService ??
-              ProjectReferenceExtractionExecutionService(
-                readSettings: () => _settings,
-                llmGatewayFactory: _llmGatewayFactory,
-                executeReferenceExtraction: ({
-                  required project,
-                  required llmGateway,
-                  required modelId,
-                  required request,
-                }) => _referenceExtractionRuntimeService.execute(
-                  project: project,
-                  llmGateway: llmGateway,
-                  modelId: modelId,
-                  request: request,
-                ),
-                modelExecutionProfileService: _modelExecutionProfileService,
+        extractKnowledgeHandler:
+            (
+              ProjectDescriptor project, {
+              required String providerId,
+              required String modelId,
+            }) async {
+              // 中文注释: 提取知识（可选）委托给内置隐藏智能体的 LLM reference_extraction：
+              // 读拆书产物（结构化正文）分析知识，必须已配置模型；结果如实回给拆书页。
+              // provider/model 由拆书"分析"步的用户选择透传（与 app 默认解耦）。
+              final service =
+                  _injectedProjectReferenceExtractionExecutionService ??
+                  ProjectReferenceExtractionExecutionService(
+                    readSettings: () => _settings,
+                    llmGatewayFactory: _llmGatewayFactory,
+                    executeReferenceExtraction:
+                        ({
+                          required project,
+                          required llmGateway,
+                          required modelId,
+                          required request,
+                        }) => _referenceExtractionRuntimeService.execute(
+                          project: project,
+                          llmGateway: llmGateway,
+                          modelId: modelId,
+                          request: request,
+                        ),
+                    modelExecutionProfileService: _modelExecutionProfileService,
+                  );
+              final result = await service.pickAndExecute(
+                project: project,
+                overrideProviderId: providerId,
+                overrideModelId: modelId,
+                analysisOnly: true,
               );
-          final result = await service.pickAndExecute(
-            project: project,
-            overrideProviderId: providerId,
-            overrideModelId: modelId,
-          );
-          return (ok: result.ok, message: result.statusMessage);
-        },
+              return result;
+            },
         derivedProjectCreationService:
             BookDeconstructionDerivedProjectCreationService(
               createProjectWorkspaceUseCase: _createProjectWorkspaceUseCase,
@@ -764,6 +770,20 @@ class AppShellController extends ChangeNotifier
                 );
               }
             },
+        projectTypeTransitionUseCase: _executeProjectTypeTransitionUseCase,
+        onProjectTransitioned: () async {
+          // 中文注释: 项目类型已复合成写作类型（manifest 已更新 projectType + book_deconstruction trait），
+          // 重新加载当前项目刷新 descriptor；拆书能力靠 capability 守卫（additionalTraitIds）保留。
+          final project = _currentProject;
+          if (project == null) return;
+          final result = await _projectLifecycleCoordinator.openProjectFromPath(
+            project.rootPath,
+          );
+          if (result.isLoaded) {
+            await _syncWorkbenchResources();
+            showWorkbench();
+          }
+        },
       ),
       createInspirationWorkbenchController: () =>
           InspirationWorkbenchController(
@@ -787,6 +807,12 @@ class AppShellController extends ChangeNotifier
       showTaskCenterRequested: () async => showTaskCenter(),
       readCurrentProjectPathRequested: () => _currentProject?.rootPath ?? '',
     );
+    // 中文注释: 总站暂停/恢复/停止与任务中心共用 workflow 入口，恢复会真正重入队列，而不是只翻 registry 状态。
+    _longTaskStationController.attachQueueControlCallbacks(
+      pauseRunRequested: _pauseLongTaskStationRun,
+      resumeRunRequested: _resumeLongTaskStationRun,
+      stopRunRequested: _stopLongTaskStationRun,
+    );
     _longTaskStationController.attachRefreshCompletedCallback(
       _refreshTaskCenterFromLongTaskStation,
     );
@@ -806,6 +832,8 @@ class AppShellController extends ChangeNotifier
   final ExecuteProjectTypeTransitionUseCase?
   _executeProjectTypeTransitionUseCase;
   final ProjectToolHostPort _projectToolHostPort;
+  final ProjectCapabilityService _projectCapabilityService =
+      ProjectCapabilityService();
   final BookDeconstructionNarrativePersistenceService
   _bookDeconstructionNarrativePersistenceService;
   final PreviewCustomizationBundleImportUseCase
@@ -1048,6 +1076,11 @@ class AppShellController extends ChangeNotifier
   List<AppShellNavigationSection> navigationSections() {
     return AppShellNavigationCatalog.sections(
       projectAssetsPrimaryWorkspace: usesProjectAssetsAsPrimaryWorkspace,
+      bookDeconstructionPrimaryWorkspace:
+          _usesBookDeconstructionAsPrimaryWorkspace(_currentProject),
+      hasBookDeconstructionCapability: _hasBookDeconstructionCapability(
+        _currentProject,
+      ),
     );
   }
 
@@ -1092,15 +1125,12 @@ class AppShellController extends ChangeNotifier
 
   void showWorkbench() {
     // 中文注释: 该方法统一负责切回主工作台，避免页面自己决定全局导航状态。
-    if (usesProjectAssetsAsPrimaryWorkspace) {
-      showProjectAssets();
+    if (_usesBookDeconstructionAsPrimaryWorkspace(_currentProject)) {
+      unawaited(_showBookDeconstructionAnalysis());
       return;
     }
-    if (_currentProject?.projectType.trim() ==
-            BookDeconstructionConstants.projectTypeId &&
-        _viewModel.destination == AppDestination.bookDeconstruction) {
-      _destinationController.showWorkbench();
-      unawaited(_workbenchWorkspaceController.refreshProjectLongTaskSummary());
+    if (usesProjectAssetsAsPrimaryWorkspace) {
+      showProjectAssets();
       return;
     }
     _destinationController.showWorkbench();
@@ -1109,6 +1139,10 @@ class AppShellController extends ChangeNotifier
 
   void showBookDeconstructionWorkbench() {
     // 中文注释: 拆书向导导航统一收口，工作台会话和其他页签只通过壳层入口跳转。
+    if (!_hasBookDeconstructionCapability(_currentProject)) {
+      _showPrimaryWorkspaceForCurrentProject();
+      return;
+    }
     _destinationController.showBookDeconstructionWorkbench();
   }
 
@@ -1161,8 +1195,10 @@ class AppShellController extends ChangeNotifier
         _showPrimaryWorkspaceForCurrentProject();
         return false;
       case AppDestination.bookDeconstruction:
-        if (_currentProject?.projectType.trim() ==
-            BookDeconstructionConstants.projectTypeId) {
+        if (_usesBookDeconstructionAsPrimaryWorkspace(_currentProject)) {
+          return true;
+        }
+        if (_hasBookDeconstructionCapability(_currentProject)) {
           showWorkbench();
           return false;
         }
@@ -1218,8 +1254,7 @@ class AppShellController extends ChangeNotifier
   }
 
   Future<void> _handleProjectCreatedAndOpened(ProjectDescriptor project) async {
-    if (project.projectType.trim() ==
-        BookDeconstructionConstants.projectTypeId) {
+    if (_usesBookDeconstructionAsPrimaryWorkspace(project)) {
       await bookDeconstructionController.refresh();
       await _destinationController.showBookDeconstructionWorkbench();
       return;
@@ -1290,8 +1325,7 @@ class AppShellController extends ChangeNotifier
       showProjectAssets();
       return;
     }
-    if (_currentProject?.projectType.trim() ==
-        BookDeconstructionConstants.projectTypeId) {
+    if (_usesBookDeconstructionAsPrimaryWorkspace(_currentProject)) {
       await bookDeconstructionController.refresh();
       await _destinationController.showBookDeconstructionWorkbench();
       return;
@@ -1320,6 +1354,64 @@ class AppShellController extends ChangeNotifier
     } catch (error) {
       // 中文注释: 导入/打开期间抛错要如实落到作品库状态，而不是被静默吞掉、用户看到"什么都没发生"。
       await _refreshProjectOpenView(status: '导入项目失败：$error');
+    }
+  }
+
+  Future<void> _deleteProjectFromProjectOpen(String projectPath) async {
+    // 中文注释: 作品库删除只允许清理作品根目录下的子项目，避免误删盘外路径；确认弹窗在页面层完成。
+    final normalizedPath = projectPath.trim();
+    if (normalizedPath.isEmpty) {
+      await _refreshProjectOpenView(status: '未识别到有效项目目录。');
+      return;
+    }
+    final projectsRoot = Directory(_defaultProjectsRootPath).absolute.path;
+    final target = Directory(normalizedPath).absolute;
+    final targetPath = target.path;
+    final rootWithSep = projectsRoot.endsWith(Platform.pathSeparator)
+        ? projectsRoot
+        : '$projectsRoot${Platform.pathSeparator}';
+    final isUnderRoot =
+        targetPath == projectsRoot || targetPath.startsWith(rootWithSep);
+    if (!isUnderRoot) {
+      await _refreshProjectOpenView(
+        status: '只能删除作品库根目录下的项目，请到文件管理器处理外部路径。',
+      );
+      return;
+    }
+    if (targetPath == projectsRoot) {
+      await _refreshProjectOpenView(status: '不能删除作品库根目录本身。');
+      return;
+    }
+    try {
+      final currentRoot = _currentProject?.rootPath.trim() ?? '';
+      if (currentRoot.isNotEmpty &&
+          Directory(currentRoot).absolute.path == targetPath) {
+        _workbenchWorkspaceController.resetToProjectlessWorkbench(
+          status: '当前作品已删除，请重新选择或新建。',
+        );
+      }
+      if (await target.exists()) {
+        await target.delete(recursive: true);
+      }
+      final settings = _settings;
+      if (settings != null) {
+        final recent = settings.defaultProjectPath.trim();
+        if (recent.isNotEmpty &&
+            Directory(recent).absolute.path == targetPath) {
+          final updated = settings.copyWith(defaultProjectPath: '');
+          await _settingsRepository.save(updated);
+          _settings = updated;
+        }
+      }
+      _projectOpenLifecycleController.clearCache();
+      await _refreshProjectOpenView(
+        forceRefresh: true,
+        status: '已删除作品：${targetPath.split(Platform.pathSeparator).last}',
+      );
+    } catch (error) {
+      await _refreshProjectOpenView(
+        status: UserFacingErrorHumanizer.humanize(error, action: '删除作品'),
+      );
     }
   }
 
@@ -1366,9 +1458,16 @@ class AppShellController extends ChangeNotifier
   Future<void> onAppShellDestinationRequested(
     AppDestination destination,
   ) async {
-    if (destination == AppDestination.workbench &&
-        usesProjectAssetsAsPrimaryWorkspace) {
-      await _destinationController.showProjectAssets();
+    if (destination == AppDestination.bookDeconstruction) {
+      if (!_hasBookDeconstructionCapability(_currentProject)) {
+        _showPrimaryWorkspaceForCurrentProject();
+        return;
+      }
+      await _showBookDeconstructionAnalysis();
+      return;
+    }
+    if (destination == AppDestination.workbench) {
+      showWorkbench();
       return;
     }
     await _destinationController.showDestination(destination);
@@ -1381,6 +1480,109 @@ class AppShellController extends ChangeNotifier
       return;
     }
     showWorkbench();
+  }
+
+  Future<JsonMap> _pauseLongTaskStationRun(RunInstance run) {
+    return _controlLongTaskStationRun(
+      run,
+      actionLabel: '暂停',
+      operation: (project, settings, relativePath) {
+        return _workflowRuntimeService.pauseLongTaskRun(
+          project,
+          relativePath,
+          note: 'paused_from_long_task_station',
+        );
+      },
+      requireSettings: false,
+    );
+  }
+
+  Future<JsonMap> _resumeLongTaskStationRun(RunInstance run) {
+    return _controlLongTaskStationRun(
+      run,
+      actionLabel: '恢复',
+      operation: (project, settings, relativePath) {
+        if (settings == null) {
+          return Future<JsonMap>.value(<String, Object?>{
+            'ok': false,
+            'error': '设置尚未加载完成，无法恢复长任务。',
+          });
+        }
+        return _workflowRuntimeService.resumeLongTaskRun(
+          project,
+          settings,
+          relativePath,
+          options: const <String, Object?>{
+            'entry_reason': 'long_task_station_resume',
+          },
+        );
+      },
+      requireSettings: true,
+    );
+  }
+
+  Future<JsonMap> _stopLongTaskStationRun(RunInstance run) {
+    return _controlLongTaskStationRun(
+      run,
+      actionLabel: '停止',
+      operation: (project, settings, relativePath) {
+        return _workflowRuntimeService.stopLongTaskRun(
+          project,
+          relativePath,
+          note: 'stopped_from_long_task_station',
+        );
+      },
+      requireSettings: false,
+    );
+  }
+
+  Future<JsonMap> _controlLongTaskStationRun(
+    RunInstance run, {
+    required String actionLabel,
+    required Future<JsonMap> Function(
+      ProjectDescriptor project,
+      AppSettings? settings,
+      String relativePath,
+    )
+    operation,
+    required bool requireSettings,
+  }) async {
+    // 中文注释: 必须用 run.project 还原目标项目，不能误用当前工作台项目，否则会恢复错书。
+    final project = ProjectDescriptor(
+      id: run.project.projectId,
+      name: run.project.title,
+      rootPath: run.project.rootPath,
+      projectType: run.project.projectTypeId,
+      storageStrategy: run.project.storageStrategy,
+      runtimeBaselineId: run.runtimeBaselineId,
+    );
+    final relativePath = ValueReaders.stringValue(
+      run.metadata['record_relative_path'],
+    ).trim();
+    if (relativePath.isEmpty) {
+      return <String, Object?>{
+        'ok': false,
+        'error': '无法定位该运行的任务记录，请从任务中心$actionLabel，或重新启动长任务。',
+      };
+    }
+    final settings = _settings;
+    if (requireSettings && settings == null) {
+      return <String, Object?>{
+        'ok': false,
+        'error': '设置尚未加载完成，无法$actionLabel长任务。',
+      };
+    }
+    try {
+      return await operation(project, settings, relativePath);
+    } catch (error) {
+      return <String, Object?>{
+        'ok': false,
+        'error': UserFacingErrorHumanizer.humanize(
+          error,
+          action: '长任务$actionLabel',
+        ),
+      };
+    }
   }
 
   bool _shouldOpenProjectAssetsByDefault(ProjectDescriptor? project) {
@@ -1399,9 +1601,26 @@ class AppShellController extends ChangeNotifier
         .opensProjectAssetsByDefault;
   }
 
+  bool _hasBookDeconstructionCapability(ProjectDescriptor? project) {
+    if (project == null) {
+      return false;
+    }
+    return _projectCapabilityService.hasBookDeconstruction(
+      projectTypeId: project.projectType,
+      additionalTraitIds: project.additionalTraitIds,
+      runtimeBaselineId: project.runtimeBaselineId,
+    );
+  }
+
+  /// A composite writing project retains the deconstruction capability, but
+  /// its writing workbench remains its primary workspace.
+  bool _usesBookDeconstructionAsPrimaryWorkspace(ProjectDescriptor? project) {
+    return const BookDeconstructionWorkspacePolicy()
+        .usesDeconstructionAsPrimaryWorkspace(project);
+  }
+
   void _showPrimaryWorkspaceForCurrentProject() {
-    if (_currentProject?.projectType.trim() ==
-        BookDeconstructionConstants.projectTypeId) {
+    if (_usesBookDeconstructionAsPrimaryWorkspace(_currentProject)) {
       unawaited(_showBookDeconstructionAnalysis());
       return;
     }
@@ -1461,21 +1680,31 @@ class AppShellController extends ChangeNotifier
       return;
     }
     final sourceId = _stringValue(payload['source_id']);
-    final nextTitle = _stringValue(payload['title'], '新接口');
+    final nextTitle = _stringValue(payload['title']);
+    if (nextTitle.trim().isEmpty) {
+      _announce('请先填写接口/厂商名称再保存。');
+      return;
+    }
+    final nextBaseUrl = _stringValue(payload['base_url']);
+    if (nextBaseUrl.trim().isEmpty) {
+      _announce('请填写 Base URL 后再保存。');
+      return;
+    }
     final nextId = sourceId.trim().isNotEmpty
         ? sourceId
         : _nextProviderId(settings.providers, nextTitle);
     // 中文注释: 保留既有 provider 的 isDefault（编辑保存不应把"默认接口"标记悄悄清成 false，
     // 否则 defaultProviderId 解析失败时退路被切断）；新接口默认 false，UI 将来传 is_default 也照收。
-    final existingIsDefault = sourceId.trim().isNotEmpty &&
+    final existingIsDefault =
+        sourceId.trim().isNotEmpty &&
         settings.providers.any((p) => p.id == sourceId && p.isDefault);
     final nextProvider = ProviderEndpointSettings(
       id: nextId,
       title: nextTitle,
       protocol: _stringValue(payload['protocol'], 'openai_compatible'),
-      baseUrl: _stringValue(payload['base_url']),
+      baseUrl: nextBaseUrl,
       apiKey: _stringValue(payload['api_key']),
-      modelId: _stringValue(payload['model_id']),
+      modelId: '',
       description: _stringValue(payload['description']),
       isDefault: existingIsDefault || _boolValue(payload['is_default']),
     );
@@ -1497,22 +1726,35 @@ class AppShellController extends ChangeNotifier
       modelSettings['provider_id'],
       settings.defaultProviderId,
     );
+    // 中文注释: 首个接口自动成为默认，省掉用户再去「模型」页才能用的空窗。
+    final shouldBecomeDefault =
+        settings.defaultProviderId.trim().isEmpty ||
+        settings.defaultProviderId == sourceId ||
+        settings.providers.isEmpty;
     final updated = settings.copyWith(
       providers: providers,
-      defaultProviderId: settings.defaultProviderId == sourceId
+      defaultProviderId: shouldBecomeDefault
           ? nextProvider.id
           : settings.defaultProviderId,
       extraSettings: <String, Object?>{
         ...settings.extraSettings,
         'model_settings': <String, Object?>{
           ...modelSettings,
-          if (selectedProviderId == sourceId) 'provider_id': nextProvider.id,
+          if (selectedProviderId == sourceId || shouldBecomeDefault)
+            'provider_id': nextProvider.id,
         },
       },
     );
+    // 中文注释: 草稿探测结果从 __new__ 迁到真实 id，避免保存后状态丢失。
+    final draftProbe = _providerConnectionValidationResults.remove('__new__');
+    if (draftProbe != null) {
+      _providerConnectionValidationResults[nextProvider.id] = draftProbe;
+    }
     _persistSettings(
       updated,
-      successMessage: '接口设置已保存。',
+      successMessage: shouldBecomeDefault
+          ? '接口已保存，并设为当前默认接口。请到「模型」页选择默认模型。'
+          : '接口设置已保存。',
       selectedProviderId: nextProvider.id,
     );
   }
@@ -1556,63 +1798,39 @@ class AppShellController extends ChangeNotifier
   }
 
   @override
-  void onProviderConnectionTestRequested(Map<String, Object?> payload) {
-    // 中文注释: 连接测试先做本地自检（快速挡住明显错误），通过后再发起一次真联网探测；
-    // 用共享投影缓存把"本地自检 + 联网结果"统一呈现，不再用本地校验冒充联网成功。
+  Future<ProviderConnectionValidationResultViewData>
+  onModelConnectionTestRequested(Map<String, Object?> payload) async {
+    // 中文注释: 模型页用"当前选中接口 + 模型"真实配对发起探测；先本地自检挡明显错误，
+    // 再做一次真联网探测，合并后直接回传给模型页展示。不再写接口缓存、不再刷新整页设置视图，
+    // 以免把用户正在编辑的接口/模型表单重置。
     final settings = _settings;
     if (settings == null) {
-      return;
+      return ProviderConnectionValidationResultViewData.initial;
     }
-    final providerId = _stringValue(payload['source_id']);
-    final storageKey = providerId.isNotEmpty ? providerId : '__new__';
+    final title = _stringValue(payload['title']);
+    final protocol = _stringValue(payload['protocol'], 'openai_compatible');
+    final baseUrl = _stringValue(payload['base_url']);
+    final apiKey = _stringValue(payload['api_key']);
+    final modelId = _stringValue(payload['model_id']);
+    final apiMode = _stringValue(payload['api_mode'], 'chat');
     final validation = _providerConnectionValidationService.validate(
-      title: _stringValue(payload['title']),
-      protocol: _stringValue(payload['protocol'], 'openai_compatible'),
-      baseUrl: _stringValue(payload['base_url']),
-      apiKey: _stringValue(payload['api_key']),
-      modelId: _stringValue(payload['model_id']),
-      apiMode: _stringValue(payload['api_mode'], 'chat'),
+      title: title,
+      protocol: protocol,
+      baseUrl: baseUrl,
+      apiKey: apiKey,
+      modelId: modelId,
+      apiMode: apiMode,
     );
     final lintView = _toValidationViewData(validation);
     if (!validation.isSuccess) {
-      _providerConnectionValidationResults[storageKey] = lintView;
-      _refreshSettingsViewData(selectedProviderId: storageKey);
-      return;
+      return lintView;
     }
-    final baseUrl = _stringValue(payload['base_url']);
-    final modelId = _stringValue(payload['model_id']);
-    // 中文注释: 本地自检通过时先落"正在联网验证"，避免把本地校验当作联网成功。
-    _providerConnectionValidationResults[storageKey] = _validationViewDataWith(
-      base: lintView,
-      isSuccess: false,
-      summary: '正在联网验证…',
-      details: lintView.details,
-    );
-    _refreshSettingsViewData(selectedProviderId: storageKey);
-    unawaited(
-      _applyProviderConnectionProbe(
-        payload: payload,
-        storageKey: storageKey,
-        lintView: lintView,
-        baseUrl: baseUrl,
-        modelId: modelId,
-      ),
-    );
-  }
-
-  Future<void> _applyProviderConnectionProbe({
-    required Map<String, Object?> payload,
-    required String storageKey,
-    required ProviderConnectionValidationResultViewData lintView,
-    required String baseUrl,
-    required String modelId,
-  }) async {
     final provider = ProviderEndpointSettings(
-      id: storageKey == '__new__' ? '' : storageKey,
-      title: _stringValue(payload['title']),
-      protocol: _stringValue(payload['protocol'], 'openai_compatible'),
+      id: _stringValue(payload['source_id']),
+      title: title,
+      protocol: protocol,
       baseUrl: baseUrl,
-      apiKey: _stringValue(payload['api_key']),
+      apiKey: apiKey,
       modelId: modelId,
       description: '',
     );
@@ -1620,17 +1838,12 @@ class AppShellController extends ChangeNotifier
       provider: provider,
       modelId: modelId,
     );
-    // 中文注释: 探测期间用户可能已切走或重测；只要缓存键还在就更新，否则丢弃本次结果。
-    if (!_providerConnectionValidationResults.containsKey(storageKey)) {
-      return;
-    }
-    _providerConnectionValidationResults[storageKey] = _validationViewDataWith(
+    return _validationViewDataWith(
       base: lintView,
       isSuccess: probe.success,
-      summary: probe.success ? probe.summary : probe.summary,
+      summary: probe.summary,
       details: <String>[...lintView.details, probe.detail],
     );
-    _refreshSettingsViewData(selectedProviderId: storageKey);
   }
 
   ProviderConnectionValidationResultViewData _validationViewDataWith({
@@ -1667,16 +1880,30 @@ class AppShellController extends ChangeNotifier
     if (settings == null) {
       return;
     }
+    final nextProviderId = _stringValue(
+      payload['default_provider_id'],
+      settings.defaultProviderId,
+    );
+    final nextModelId = _stringValue(
+      payload['default_model_id'],
+      _stringValue(payload['model_id'], settings.defaultModelId),
+    );
+    if (settings.providers.isEmpty) {
+      _announce('请先到「接口」页添加并保存接口，再配置默认模型。');
+      return;
+    }
+    if (nextProviderId.trim().isEmpty) {
+      _announce('请选择默认接口后再保存模型设置。');
+      return;
+    }
+    if (nextModelId.trim().isEmpty) {
+      _announce('请填写或选择默认模型后再保存。');
+      return;
+    }
     final modelSettings = <String, Object?>{
       ..._modelSettingsOf(settings),
-      'provider_id': _stringValue(
-        payload['default_provider_id'],
-        settings.defaultProviderId,
-      ),
-      'model_id': _stringValue(
-        payload['model_id'],
-        _stringValue(payload['default_model_id'], settings.defaultModelId),
-      ),
+      'provider_id': nextProviderId,
+      'model_id': nextModelId,
       'compatible_context_window': _stringValue(
         payload['compatible_context_window'],
       ),
@@ -1696,14 +1923,8 @@ class AppShellController extends ChangeNotifier
       ),
     };
     final updated = settings.copyWith(
-      defaultProviderId: _stringValue(
-        payload['default_provider_id'],
-        settings.defaultProviderId,
-      ),
-      defaultModelId: _stringValue(
-        payload['default_model_id'],
-        settings.defaultModelId,
-      ),
+      defaultProviderId: nextProviderId,
+      defaultModelId: nextModelId,
       extraSettings: <String, Object?>{
         ...settings.extraSettings,
         'model_settings': modelSettings,
@@ -1922,6 +2143,10 @@ class AppShellController extends ChangeNotifier
   @override
   void onProjectOpenOpenRequested(String projectPath) =>
       _projectOpenController.onProjectOpenOpenRequested(projectPath);
+
+  @override
+  void onProjectOpenDeleteRequested(String projectPath) =>
+      _projectOpenController.onProjectOpenDeleteRequested(projectPath);
 
   Future<void> openResource(String relativePath) async {
     // 中文注释: 壳层需要一个可等待的资源打开入口时，只能透出工作区现有能力，不在这里重写读盘逻辑。
@@ -2678,10 +2903,10 @@ class AppShellController extends ChangeNotifier
       // + 刚写入的文件内容构建表单，与"编辑"共用 _buildEcosystemEditorForEntry。
       final sourceContent =
           await _projectToolHostPort.readTextFile(
-                project.rootPath,
-                plan.relativePath,
-              ) ??
-              plan.content;
+            project.rootPath,
+            plan.relativePath,
+          ) ??
+          plan.content;
       _updateEcosystemEditorViewData(
         _buildEcosystemEditorForEntry(
           entry: <String, Object?>{
@@ -2761,25 +2986,23 @@ class AppShellController extends ChangeNotifier
     required String kind,
     required String sourceContent,
   }) {
-    return _ecosystemEntryEditorService.buildForEntry(
-      entry,
-      kind: kind,
-      sourceContent: sourceContent,
-    ).copyWith(
-      // 注入可选成员目录，供编辑器"弹窗多选"取代手填 ID（按 kind 用对应的几个）。
-      availableAgents: _agentEcosystemViewDataService.pickerOptionsFor(
-        tabId: 'agents',
-        entries: _agentEcosystemSnapshot.agents,
-      ),
-      availableSkills: _agentEcosystemViewDataService.pickerOptionsFor(
-        tabId: 'skills',
-        entries: _agentEcosystemSnapshot.skills,
-      ),
-      availableSkillGroups: _agentEcosystemViewDataService.pickerOptionsFor(
-        tabId: 'skill-groups',
-        entries: _agentEcosystemSnapshot.skillGroups,
-      ),
-    );
+    return _ecosystemEntryEditorService
+        .buildForEntry(entry, kind: kind, sourceContent: sourceContent)
+        .copyWith(
+          // 注入可选成员目录，供编辑器"弹窗多选"取代手填 ID（按 kind 用对应的几个）。
+          availableAgents: _agentEcosystemViewDataService.pickerOptionsFor(
+            tabId: 'agents',
+            entries: _agentEcosystemSnapshot.agents,
+          ),
+          availableSkills: _agentEcosystemViewDataService.pickerOptionsFor(
+            tabId: 'skills',
+            entries: _agentEcosystemSnapshot.skills,
+          ),
+          availableSkillGroups: _agentEcosystemViewDataService.pickerOptionsFor(
+            tabId: 'skill-groups',
+            entries: _agentEcosystemSnapshot.skillGroups,
+          ),
+        );
   }
 
   Future<void> _saveEcosystemEditorRequest(
@@ -3095,8 +3318,19 @@ class AppShellController extends ChangeNotifier
       pendingMessage: '正在生成长任务队列...',
       successMessage: '长任务队列已生成。',
       operation: (project, settings) async {
-        final runtimeProfile =
-            await _workbenchWorkspaceController.reloadCurrentRuntimeProfile();
+        final runtimeProfile = await _workbenchWorkspaceController
+            .reloadCurrentRuntimeProfile();
+        final contract = const LongTaskProjectContractService().assess(
+          project: project,
+          runtimeProfile: runtimeProfile,
+        );
+        if (!contract.isAllowed) {
+          return <String, Object?>{
+            'ok': false,
+            'error': contract.message,
+            'error_code': contract.errorCode,
+          };
+        }
         final initialRunOptions = runtimeProfile == null
             ? const <String, Object?>{}
             : ValueReaders.deepCopyMap(runtimeProfile.initialRunOptions);
@@ -4734,8 +4968,7 @@ class AppShellController extends ChangeNotifier
         currentDestination != AppDestination.projectOpen) {
       return;
     }
-    if (project.projectType.trim() ==
-        BookDeconstructionConstants.projectTypeId) {
+    if (_usesBookDeconstructionAsPrimaryWorkspace(project)) {
       await bookDeconstructionController.refresh();
       await _destinationController.showBookDeconstructionWorkbench();
       return;
@@ -5186,6 +5419,7 @@ class AppShellController extends ChangeNotifier
       collaborationSupportsAttachments: true,
       collaborationSupportsToolOptions: true,
       productExposesReasoningToggle: true,
+      // 中文注释: 会话附件协议桥尚未完成，产品入口必须保持关闭，避免用户能选附件却发不出去。
       productExposesAttachmentEntry: false,
       productExposesStopAction: true,
       productExposesToolOptionsAction: false,
@@ -5252,19 +5486,27 @@ class AppShellController extends ChangeNotifier
     String title,
   ) {
     // 中文注释: 接口内部 ID 由标题派生并自动去重，用户看不到也不需要手动维护。
+    // 中文标题 slug 会退化成 interface，再叠时间戳避免多个「新接口」撞 id。
     final baseId = _slugFromTitle(title);
     final existingIds = providers
         .map((provider) => provider.id.trim().toLowerCase())
         .where((id) => id.isNotEmpty)
         .toSet();
-    if (!existingIds.contains(baseId.toLowerCase())) {
-      return baseId;
+    var candidate = baseId;
+    if (baseId == 'interface' || existingIds.contains(baseId.toLowerCase())) {
+      final stamp = DateTime.now().millisecondsSinceEpoch
+          .toRadixString(36)
+          .toLowerCase();
+      candidate = baseId == 'interface' ? 'interface_$stamp' : '${baseId}_$stamp';
+    }
+    if (!existingIds.contains(candidate.toLowerCase())) {
+      return candidate;
     }
     var suffix = 1;
-    while (existingIds.contains('${baseId}_$suffix'.toLowerCase())) {
+    while (existingIds.contains('${candidate}_$suffix'.toLowerCase())) {
       suffix += 1;
     }
-    return '${baseId}_$suffix';
+    return '${candidate}_$suffix';
   }
 
   String _slugFromTitle(String title) {

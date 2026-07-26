@@ -47,9 +47,7 @@ class ProjectLongTaskToolExecutor {
     if (normalizedProjectType != 'long_novel') {
       return _resultFactory.notExecuted(
         '只有长任务相关项目才允许启动长任务。',
-        data: <String, Object?>{
-          'project_type': normalizedProjectType,
-        },
+        data: <String, Object?>{'project_type': normalizedProjectType},
       );
     }
     final modeId = _resolveModeId(project, arguments);

@@ -15,8 +15,7 @@ class OpenAiChatStreamAdapter {
     GatewaySseEventPump? sseEventPump,
     GatewayJsonResponseParser? responseParser,
   }) : _sseEventPump = sseEventPump ?? const GatewaySseEventPump(),
-       _responseParser =
-           responseParser ?? const OpenAiChatResponseParser();
+       _responseParser = responseParser ?? const OpenAiChatResponseParser();
 
   final GatewaySseEventPump _sseEventPump;
   final GatewayJsonResponseParser _responseParser;
@@ -144,7 +143,9 @@ class OpenAiChatStreamAdapter {
     }
     final firstChoice = _mapValue(choices.first);
     final delta = _mapValue(firstChoice['delta']);
-    final contentText = GatewayContentExtractor.textFromContent(delta['content']);
+    final contentText = GatewayContentExtractor.textFromContent(
+      delta['content'],
+    );
     if (contentText.isNotEmpty) {
       streamAggregator.appendContent(contentText);
     }
@@ -201,7 +202,9 @@ class OpenAiChatStreamAdapter {
       final functionData = _mapValue(call['function']);
       builder.setId(callId);
       builder.setName(ValueReaders.stringValue(functionData['name']));
-      final argumentsChunk = ValueReaders.stringValue(functionData['arguments']);
+      final argumentsChunk = ValueReaders.stringValue(
+        functionData['arguments'],
+      );
       if (argumentsChunk.isNotEmpty) {
         builder.appendPartialArguments(argumentsChunk);
       }

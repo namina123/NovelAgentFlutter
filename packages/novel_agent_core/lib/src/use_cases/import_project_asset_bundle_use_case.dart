@@ -8,6 +8,15 @@ import '../common/value_readers.dart';
 import '../ports/project_tool_host_port.dart';
 import '../project/project_descriptor.dart';
 
+typedef PrepareProjectAssetBundleDocumentWrite =
+    Future<void> Function({
+      required ProjectDescriptor project,
+      required String relativePath,
+      required String documentKind,
+      required String title,
+      required String content,
+    });
+
 class ImportProjectAssetBundleUseCase {
   ImportProjectAssetBundleUseCase({
     required ProjectToolHostPort projectToolHostPort,
@@ -40,6 +49,7 @@ class ImportProjectAssetBundleUseCase {
     required ProjectDescriptor project,
     required String bundleContent,
     bool overwrite = true,
+    PrepareProjectAssetBundleDocumentWrite? prepareDocumentWrite,
   }) async {
     // 中文注释: 资产包导入统一落成标准项目文件，后续图谱、上下文和任务策略都可直接复用这些路径。
     final bundle = _bundleDocumentService.parseBundle(bundleContent);
@@ -66,14 +76,26 @@ class ImportProjectAssetBundleUseCase {
       if (exists && !overwrite) {
         continue;
       }
+      final content = _styleCodecService.encode(style);
+      // 中文注释: SQLite 等结构化项目先写资产主事实源，再更新 Markdown 兼容投影。
+      await prepareDocumentWrite?.call(
+        project: project,
+        relativePath: relativePath,
+        documentKind: 'style',
+        title: style.displayName,
+        content: content,
+      );
       await _projectToolHostPort.writeTextFile(
         project.rootPath,
         relativePath,
-        _styleCodecService.encode(style),
+        content,
       );
       changedPaths.add(relativePath);
     }
-    await _projectToolHostPort.createDirectory(project.rootPath, 'assets/foreshadows');
+    await _projectToolHostPort.createDirectory(
+      project.rootPath,
+      'assets/foreshadows',
+    );
     for (final rawRecord in ValueReaders.mapList(bundle['foreshadows'])) {
       final record = _foreshadowNormalizerService.normalize(
         ValueReaders.mapValue(rawRecord),
@@ -89,10 +111,19 @@ class ImportProjectAssetBundleUseCase {
       if (exists && !overwrite) {
         continue;
       }
+      final content = _foreshadowCodecService.encode(record);
+      // 中文注释: 伏笔与风格一样先写结构化主事实源，避免包导入绕过项目存储合同。
+      await prepareDocumentWrite?.call(
+        project: project,
+        relativePath: relativePath,
+        documentKind: 'foreshadow_record',
+        title: record.title,
+        content: content,
+      );
       await _projectToolHostPort.writeTextFile(
         project.rootPath,
         relativePath,
-        _foreshadowCodecService.encode(record),
+        content,
       );
       changedPaths.add(relativePath);
     }

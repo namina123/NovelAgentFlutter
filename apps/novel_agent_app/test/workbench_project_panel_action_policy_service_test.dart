@@ -71,6 +71,22 @@ void main() {
           .description,
       contains('普通小说'),
     );
+    expect(
+      longNovelActions.any(
+        (action) =>
+            action.actionId ==
+            WorkbenchProjectPanelActionIds.configureRuntimeBaseline,
+      ),
+      isTrue,
+    );
+    expect(
+      novelActions.any(
+        (action) =>
+            action.actionId ==
+            WorkbenchProjectPanelActionIds.configureRuntimeBaseline,
+      ),
+      isFalse,
+    );
 
     expect(
       knowledgeBaseActions.any(

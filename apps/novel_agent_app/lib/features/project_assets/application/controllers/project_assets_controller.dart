@@ -103,6 +103,8 @@ class ProjectAssetsController extends ChangeNotifier
   final ProjectExpressionConstraintBindingActionService
   _expressionConstraintBindingActionService;
   final ForeshadowRecordNormalizerService _foreshadowNormalizerService;
+  final ProjectCapabilityService _projectCapabilityService =
+      ProjectCapabilityService();
 
   ProjectAssetsSnapshot _snapshot;
   ProjectAssetsViewData _viewData;
@@ -227,8 +229,7 @@ class ProjectAssetsController extends ChangeNotifier
     final strategyName = _referenceExtractionStrategyLabel(
       normalizedStrategyProfileId,
     );
-    final sourceHint =
-        project.projectType.trim() == BookDeconstructionConstants.projectTypeId
+    final sourceHint = _hasBookDeconstructionCapability(project)
         ? '正在使用拆书产物执行知识提取... 当前策略：$strategyName'
         : '正在执行知识提取... 当前策略：$strategyName';
     _statusMessage = sourceHint;
@@ -753,5 +754,13 @@ class ProjectAssetsController extends ChangeNotifier
       }
     }
     return profileId.trim();
+  }
+
+  bool _hasBookDeconstructionCapability(ProjectDescriptor project) {
+    return _projectCapabilityService.hasBookDeconstruction(
+      projectTypeId: project.projectType,
+      additionalTraitIds: project.additionalTraitIds,
+      runtimeBaselineId: project.runtimeBaselineId,
+    );
   }
 }

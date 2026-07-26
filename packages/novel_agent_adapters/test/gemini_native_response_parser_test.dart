@@ -7,8 +7,7 @@ void main() {
     test('normalizes native candidates, thoughts and function calls', () {
       const parser = GeminiNativeResponseParser();
 
-      final result = parser.parseBody(
-        '''
+      final result = parser.parseBody('''
         {
           "candidates": [
             {
@@ -30,8 +29,7 @@ void main() {
             }
           ]
         }
-        ''',
-      );
+        ''');
 
       expect(result['ok'], isTrue);
       expect(result['content'], 'Hello');

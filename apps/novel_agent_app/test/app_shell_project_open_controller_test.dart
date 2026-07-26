@@ -28,6 +28,7 @@ void main() {
       importLocalProjectFromProjectOpen: () async {
         imported = true;
       },
+      deleteProjectFromProjectOpen: (_) async {},
     );
 
     controller.onProjectOpenCreateRequested();
@@ -54,6 +55,7 @@ void main() {
       selectProjectOpenEntry: (_) {},
       openProjectFromProjectOpen: (_) async {},
       importLocalProjectFromProjectOpen: () async {},
+      deleteProjectFromProjectOpen: (_) async {},
     );
 
     controller.onProjectOpenRefreshRequested();

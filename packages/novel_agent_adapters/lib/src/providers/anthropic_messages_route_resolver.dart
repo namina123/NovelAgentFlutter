@@ -3,9 +3,7 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 class AnthropicMessagesRouteResolver {
   const AnthropicMessagesRouteResolver();
 
-  GatewayRouteResolution resolve({
-    String apiMode = '',
-  }) {
+  GatewayRouteResolution resolve({String apiMode = ''}) {
     // 中文注释: Anthropic 这条链只承接 Messages 语义，route contract 固定收口到 messages。
     return GatewayRouteResolution.resolve(
       protocolKind: ProtocolKind.anthropicCompatible,

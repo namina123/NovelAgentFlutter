@@ -1,3 +1,4 @@
+import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 class BookDeconstructionApplicationPlanMaterializationService {
@@ -10,6 +11,8 @@ class BookDeconstructionApplicationPlanMaterializationService {
     TimelineRecordMarkdownCodecService? timelineCodecService,
     RelationshipRecordMarkdownCodecService? relationshipCodecService,
     FrontmatterYamlWriterService? yamlWriterService,
+    BookDeconstructionAssetMappingService? assetMappingService,
+    ProjectStructuredContentBridgeService? structuredContentBridgeService,
   }) : _writeProjectTextFileUseCase = writeProjectTextFileUseCase,
        _styleCodecService =
            styleCodecService ?? StyleProfileMarkdownCodecService(),
@@ -25,7 +28,12 @@ class BookDeconstructionApplicationPlanMaterializationService {
        _relationshipCodecService =
            relationshipCodecService ?? RelationshipRecordMarkdownCodecService(),
        _yamlWriterService =
-           yamlWriterService ?? const FrontmatterYamlWriterService();
+           yamlWriterService ?? const FrontmatterYamlWriterService(),
+       _assetMappingService =
+           assetMappingService ?? const BookDeconstructionAssetMappingService(),
+       _structuredContentBridgeService =
+           structuredContentBridgeService ??
+           ProjectStructuredContentBridgeService();
 
   final WriteProjectTextFileUseCase _writeProjectTextFileUseCase;
   final StyleProfileMarkdownCodecService _styleCodecService;
@@ -35,6 +43,8 @@ class BookDeconstructionApplicationPlanMaterializationService {
   final TimelineRecordMarkdownCodecService _timelineCodecService;
   final RelationshipRecordMarkdownCodecService _relationshipCodecService;
   final FrontmatterYamlWriterService _yamlWriterService;
+  final BookDeconstructionAssetMappingService _assetMappingService;
+  final ProjectStructuredContentBridgeService _structuredContentBridgeService;
 
   Future<List<String>> materialize({
     required ProjectDescriptor project,
@@ -42,17 +52,31 @@ class BookDeconstructionApplicationPlanMaterializationService {
     required Set<String> selectedItemIds,
   }) async {
     final changedPaths = <String>[];
+    // 预演可能在项目类型转换前构建，不能相信它当时默认的 Markdown 路径。
+    // 物化时以当前项目的存储策略重新推导一次，让 SQLite 投影与主事实源使用同一 identity。
+    final storageAwarePaths = <String, String>{
+      for (final item in _assetMappingService.map(
+        buildResult.extractionResult,
+        storageStrategy: project.storageStrategy,
+      ))
+        item.id: item.relativePathHint,
+    };
     for (final item in buildResult.applicationPlan.items) {
       if (!selectedItemIds.contains(item.id)) {
         continue;
       }
-      final relativePath = item.relativePathHint.trim();
+      final relativePath = (storageAwarePaths[item.id] ?? item.relativePathHint)
+          .trim();
       if (relativePath.isEmpty) {
         continue;
       }
-      final content = _contentFor(
-        buildResult: buildResult,
-        item: item,
+      final content = _contentFor(buildResult: buildResult, item: item);
+      await _structuredContentBridgeService.persistStructuredDocument(
+        project: project,
+        documentPath: relativePath,
+        documentKind: _documentKindFor(item.sourceKind),
+        title: item.displayName,
+        content: content,
       );
       await _writeProjectTextFileUseCase.execute(
         project: project,
@@ -62,6 +86,33 @@ class BookDeconstructionApplicationPlanMaterializationService {
       changedPaths.add(relativePath);
     }
     return changedPaths;
+  }
+
+  String _documentKindFor(String sourceKind) {
+    switch (sourceKind) {
+      case BookDeconstructionArtifactKind.premise:
+        return 'premise';
+      case BookDeconstructionArtifactKind.storyOutline:
+        return 'outline';
+      case BookDeconstructionArtifactKind.chapterOutline:
+        return 'chapter_outline';
+      case BookDeconstructionArtifactKind.styleProfile:
+        return 'style';
+      case BookDeconstructionArtifactKind.worldRuleSet:
+        return 'setting';
+      case BookDeconstructionArtifactKind.characterProfile:
+        return 'character';
+      case BookDeconstructionArtifactKind.organizationProfile:
+        return 'organization_profile';
+      case BookDeconstructionArtifactKind.foreshadowRecord:
+        return 'foreshadow_record';
+      case BookDeconstructionArtifactKind.timelineRecord:
+        return 'timeline_record';
+      case BookDeconstructionArtifactKind.relationshipRecord:
+        return 'relationship_record';
+      default:
+        return sourceKind.trim();
+    }
   }
 
   String _contentFor({

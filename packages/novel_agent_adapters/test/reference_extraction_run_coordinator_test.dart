@@ -24,7 +24,8 @@ void main() {
                 ReferenceExtractionRunStatuses.awaitingSemanticContinuation,
             needsContinuation: true,
             publishedSnapshotAvailable: false,
-            projectMountStatus: ProjectReferenceMountStatuses.snapshotUnavailable,
+            projectMountStatus:
+                ProjectReferenceMountStatuses.snapshotUnavailable,
           ),
         ),
         isTrue,

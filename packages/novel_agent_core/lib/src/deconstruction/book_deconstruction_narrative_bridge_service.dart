@@ -1,6 +1,9 @@
 import '../assets/character_profile.dart';
+import '../assets/foreshadow_record.dart';
 import '../assets/organization_profile.dart';
+import '../assets/relationship_record.dart';
 import '../assets/style_profile.dart';
+import '../assets/timeline_record.dart';
 import '../assets/world_rule_set.dart';
 import '../common/json_types.dart';
 import '../common/value_readers.dart';
@@ -32,7 +35,8 @@ import 'book_deconstruction_scope_hint.dart';
 
 class BookDeconstructionNarrativeBridgeService {
   const BookDeconstructionNarrativeBridgeService([
-    this._informationBridgeService = const BookDeconstructionInformationBridgeService(),
+    this._informationBridgeService =
+        const BookDeconstructionInformationBridgeService(),
   ]);
 
   final BookDeconstructionInformationBridgeService _informationBridgeService;
@@ -114,6 +118,30 @@ class BookDeconstructionNarrativeBridgeService {
         (profile) => _organizationProfileClaim(
           extractionId: extractionResult.extractionId,
           profile: profile,
+          source: directSource,
+          primaryDocumentRef: primaryDocumentRef,
+        ),
+      ),
+      ...extractionResult.foreshadowRecords.map(
+        (record) => _foreshadowRecordClaim(
+          extractionId: extractionResult.extractionId,
+          record: record,
+          source: directSource,
+          primaryDocumentRef: primaryDocumentRef,
+        ),
+      ),
+      ...extractionResult.timelineRecords.map(
+        (record) => _timelineRecordClaim(
+          extractionId: extractionResult.extractionId,
+          record: record,
+          source: directSource,
+          primaryDocumentRef: primaryDocumentRef,
+        ),
+      ),
+      ...extractionResult.relationshipRecords.map(
+        (record) => _relationshipRecordClaim(
+          extractionId: extractionResult.extractionId,
+          record: record,
           source: directSource,
           primaryDocumentRef: primaryDocumentRef,
         ),
@@ -353,6 +381,102 @@ class BookDeconstructionNarrativeBridgeService {
       },
       primaryDocumentRef: primaryDocumentRef,
       evidenceSummary: profile.summary,
+    );
+  }
+
+  NarrativeStateClaim _foreshadowRecordClaim({
+    required String extractionId,
+    required ForeshadowRecord record,
+    required NarrativeSourceRef source,
+    required NarrativeRef primaryDocumentRef,
+  }) {
+    return _assetClaim(
+      claimId: 'claim_${extractionId}_foreshadow_${_safeSuffix(record.id)}',
+      claimNamespace: 'analysis.deconstruction.foreshadow_record',
+      claimLabel: record.title,
+      targetNamespace: 'continuity.foundation.foreshadow_record',
+      assetKind: 'foreshadow_record',
+      assetId: record.id,
+      source: source,
+      confidence: 0.8,
+      payload: <String, Object?>{
+        'foreshadow_id': record.id,
+        'title': record.title,
+        'status': record.status,
+        'summary': record.summary,
+        'planted_chapter_path': record.plantedChapterPath,
+        'target_payoff_path': record.targetPayoffPath,
+        'related_entity_ids': record.relatedEntityIds,
+        'related_timeline_ids': record.relatedTimelineIds,
+        'related_relationship_ids': record.relatedRelationshipIds,
+        'trigger_conditions': record.triggerConditions,
+        'payoff_expectations': record.payoffExpectations,
+      },
+      primaryDocumentRef: primaryDocumentRef,
+      evidenceSummary: record.summary.isEmpty ? record.notes : record.summary,
+    );
+  }
+
+  NarrativeStateClaim _timelineRecordClaim({
+    required String extractionId,
+    required TimelineRecord record,
+    required NarrativeSourceRef source,
+    required NarrativeRef primaryDocumentRef,
+  }) {
+    return _assetClaim(
+      claimId: 'claim_${extractionId}_timeline_${_safeSuffix(record.id)}',
+      claimNamespace: 'analysis.deconstruction.timeline_record',
+      claimLabel: record.displayName,
+      targetNamespace: 'continuity.foundation.timeline_record',
+      assetKind: 'timeline_record',
+      assetId: record.id,
+      source: source,
+      confidence: 0.8,
+      payload: <String, Object?>{
+        'timeline_id': record.id,
+        'display_name': record.displayName,
+        'summary': record.summary,
+        'event_type': record.eventType,
+        'status': record.status,
+        'phase_label': record.phaseLabel,
+        'sequence': record.sequence,
+        'related_entity_ids': record.relatedEntityIds,
+        'related_foreshadow_ids': record.relatedForeshadowIds,
+        'related_relationship_ids': record.relatedRelationshipIds,
+      },
+      primaryDocumentRef: primaryDocumentRef,
+      evidenceSummary: record.summary.isEmpty ? record.notes : record.summary,
+    );
+  }
+
+  NarrativeStateClaim _relationshipRecordClaim({
+    required String extractionId,
+    required RelationshipRecord record,
+    required NarrativeSourceRef source,
+    required NarrativeRef primaryDocumentRef,
+  }) {
+    return _assetClaim(
+      claimId: 'claim_${extractionId}_relationship_${_safeSuffix(record.id)}',
+      claimNamespace: 'analysis.deconstruction.relationship_record',
+      claimLabel: record.displayName,
+      targetNamespace: 'continuity.foundation.relationship_record',
+      assetKind: 'relationship_record',
+      assetId: record.id,
+      source: source,
+      confidence: 0.8,
+      payload: <String, Object?>{
+        'relationship_id': record.id,
+        'display_name': record.displayName,
+        'left_entity_id': record.leftEntityId,
+        'right_entity_id': record.rightEntityId,
+        'summary': record.summary,
+        'relationship_type': record.relationshipType,
+        'status': record.status,
+        'related_foreshadow_ids': record.relatedForeshadowIds,
+        'related_timeline_ids': record.relatedTimelineIds,
+      },
+      primaryDocumentRef: primaryDocumentRef,
+      evidenceSummary: record.summary.isEmpty ? record.notes : record.summary,
     );
   }
 

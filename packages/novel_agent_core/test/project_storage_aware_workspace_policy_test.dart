@@ -43,6 +43,14 @@ void main() {
     expect(
       policy.dispositionOfWorkspacePath(
         storageStrategy: ProjectStorageStrategy.sqliteProjectStore,
+        relativePath:
+            'imports/derived/continuation/continuation_novel/001_demo.md',
+      ),
+      ProjectContentStorageDisposition.filesystemProjection,
+    );
+    expect(
+      policy.dispositionOfWorkspacePath(
+        storageStrategy: ProjectStorageStrategy.sqliteProjectStore,
         relativePath: '.novel_agent/project_manifest.json',
       ),
       ProjectContentStorageDisposition.workspaceMetadata,

@@ -58,7 +58,8 @@ class ProjectPackageLibraryService {
        _previewMapperService =
            previewMapperService ?? const ProjectBundlePreviewMapperService(),
        _directoryLayoutService =
-           directoryLayoutService ?? const ProjectBundleDirectoryLayoutService(),
+           directoryLayoutService ??
+           const ProjectBundleDirectoryLayoutService(),
        _documentService = documentService ?? ProjectPackageDocumentService(),
        _previewService = previewService ?? ProjectPackageImportPreviewService(),
        _manifestCodecService =
@@ -81,7 +82,8 @@ class ProjectPackageLibraryService {
        _characterCodecService =
            characterCodecService ?? CharacterProfileMarkdownCodecService(),
        _organizationCodecService =
-           organizationCodecService ?? OrganizationProfileMarkdownCodecService(),
+           organizationCodecService ??
+           OrganizationProfileMarkdownCodecService(),
        _styleCodecService =
            styleCodecService ?? StyleProfileMarkdownCodecService(),
        _foreshadowCodecService =
@@ -200,7 +202,9 @@ class ProjectPackageLibraryService {
     )).map(_foreshadowNormalizerService.normalize).toList(growable: false);
     final relationships = await _relationshipRepository.list(project);
     final timelines = await _timelineRepository.list(project);
-    final templates = await _promptTemplateService.listProjectTemplates(project);
+    final templates = await _promptTemplateService.listProjectTemplates(
+      project,
+    );
     final bundle = _documentService.buildBundle(
       projectId: project.id,
       manifest: manifest,
@@ -221,21 +225,28 @@ class ProjectPackageLibraryService {
     );
     final files = <String, String>{
       'bundle.json': _documentService.encodeBundle(bundle),
-      ProjectManifestCodecService.manifestRelativePath:
-          _manifestCodecService.encode(manifest),
+      ProjectManifestCodecService.manifestRelativePath: _manifestCodecService
+          .encode(manifest),
       ProjectRuntimeProfileDocumentService.profileRelativePath:
           _runtimeProfileDocumentService.encode(runtimeProfile),
       for (final character in characters)
-        'assets/characters/${character.id}.md': _characterCodecService.encode(character),
+        'assets/characters/${character.id}.md': _characterCodecService.encode(
+          character,
+        ),
       for (final organization in organizations)
-        'assets/organizations/${organization.id}.md': _organizationCodecService.encode(organization),
-      for (final style in styles) 'assets/styles/${style.id}.style.md': _styleCodecService.encode(style),
+        'assets/organizations/${organization.id}.md': _organizationCodecService
+            .encode(organization),
+      for (final style in styles)
+        'assets/styles/${style.id}.style.md': _styleCodecService.encode(style),
       for (final foreshadow in foreshadows)
-        'assets/foreshadows/${foreshadow.id}.foreshadow.md': _foreshadowCodecService.encode(foreshadow),
+        'assets/foreshadows/${foreshadow.id}.foreshadow.md':
+            _foreshadowCodecService.encode(foreshadow),
       for (final relationship in relationships)
-        'assets/relationships/${relationship.id}.relationship.md': _relationshipCodecService.encode(relationship),
+        'assets/relationships/${relationship.id}.relationship.md':
+            _relationshipCodecService.encode(relationship),
       for (final timeline in timelines)
-        'assets/timeline/${timeline.id}.timeline.md': _timelineCodecService.encode(timeline),
+        'assets/timeline/${timeline.id}.timeline.md': _timelineCodecService
+            .encode(timeline),
       for (final template in templates)
         'prompts/${ValueReaders.stringValue(template['id'])}.json': _encodeJson(
           _promptTemplateNormalizerService.normalizeTemplate(template),
@@ -264,13 +275,19 @@ class ProjectPackageLibraryService {
   }) async {
     final source = await _fileAccessService.readBundleSource(sourcePath);
     if (source == null) {
-      return <String, Object?>{'ok': false, 'error': 'Bundle 源不存在或缺少 bundle.json。'};
+      return <String, Object?>{
+        'ok': false,
+        'error': 'Bundle 源不存在或缺少 bundle.json。',
+      };
     }
     final preview = _previewService.previewBundle(
       bundleContent: source.bundleContent,
       existingProjectId: project.id,
       existingCharacters: (await _characterRepository.listProfiles(project))
-          .map((item) => const CharacterProfileNormalizerService().toDocument(item))
+          .map(
+            (item) =>
+                const CharacterProfileNormalizerService().toDocument(item),
+          )
           .toList(growable: false),
       existingOrganizations:
           (await _organizationRepository.listProfiles(project))
@@ -281,12 +298,12 @@ class ProjectPackageLibraryService {
               .toList(growable: false),
       existingStyles: await _assetLibraryService.listStyles(project),
       existingForeshadows: await _assetLibraryService.listForeshadows(project),
-      existingRelationships: (await _relationshipRepository.list(project))
-          .map(_relationshipNormalizerService.toDocument)
-          .toList(growable: false),
-      existingTimelines: (await _timelineRepository.list(project))
-          .map(_timelineNormalizerService.toDocument)
-          .toList(growable: false),
+      existingRelationships: (await _relationshipRepository.list(
+        project,
+      )).map(_relationshipNormalizerService.toDocument).toList(growable: false),
+      existingTimelines: (await _timelineRepository.list(
+        project,
+      )).map(_timelineNormalizerService.toDocument).toList(growable: false),
       existingTemplates: await _promptTemplateService.listProjectTemplates(
         project,
       ),
@@ -312,7 +329,9 @@ class ProjectPackageLibraryService {
     final projectTargetPath = ProjectManifestCodecService.manifestRelativePath;
     if (actionByPath[projectTargetPath] == 'skip') {
       skippedPaths.add(projectTargetPath);
-      skippedPaths.add(ProjectRuntimeProfileDocumentService.profileRelativePath);
+      skippedPaths.add(
+        ProjectRuntimeProfileDocumentService.profileRelativePath,
+      );
     } else {
       final manifest = _manifestCodecService.fromJson(
         ValueReaders.mapValue(bundle['project_manifest']),
@@ -390,7 +409,9 @@ class ProjectPackageLibraryService {
     List<ProjectBundleWriteFile> files,
     List<String> skippedPaths,
   ) {
-    for (final rawOrganization in ValueReaders.mapList(bundle['organizations'])) {
+    for (final rawOrganization in ValueReaders.mapList(
+      bundle['organizations'],
+    )) {
       final organization = const OrganizationProfileNormalizerService()
           .normalize(rawOrganization);
       if (organization.id.trim().isEmpty) {
@@ -472,7 +493,9 @@ class ProjectPackageLibraryService {
     List<ProjectBundleWriteFile> files,
     List<String> skippedPaths,
   ) {
-    for (final rawRelationship in ValueReaders.mapList(bundle['relationships'])) {
+    for (final rawRelationship in ValueReaders.mapList(
+      bundle['relationships'],
+    )) {
       final relationship = _relationshipNormalizerService.normalize(
         rawRelationship,
       );
@@ -529,7 +552,9 @@ class ProjectPackageLibraryService {
     List<ProjectBundleWriteFile> files,
     List<String> skippedPaths,
   ) {
-    for (final rawTemplate in ValueReaders.mapList(bundle['prompt_templates'])) {
+    for (final rawTemplate in ValueReaders.mapList(
+      bundle['prompt_templates'],
+    )) {
       final template = _promptTemplateNormalizerService.normalizeTemplate(
         rawTemplate,
       );
@@ -565,15 +590,17 @@ class ProjectPackageLibraryService {
       fallbackTitle: project.name,
       fallbackProjectType: project.projectType,
       fallbackStorageStrategy: project.storageStrategy,
+      fallbackProjectBranchId: project.projectBranchId,
       fallbackRuntimeBaselineId: project.runtimeBaselineId,
+      fallbackAdditionalTraitIds: project.additionalTraitIds,
     );
   }
 
   Map<String, String> _actionByTargetPath(JsonMap preview) {
     final result = <String, String>{};
     for (final item in ValueReaders.mapList(preview['items'])) {
-      result[ValueReaders.stringValue(item['target_path'])] = ValueReaders
-          .stringValue(item['action']);
+      result[ValueReaders.stringValue(item['target_path'])] =
+          ValueReaders.stringValue(item['action']);
     }
     return result;
   }

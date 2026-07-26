@@ -35,6 +35,9 @@ class ProjectImportExecutionService {
     BookDeconstructionPreviewMarkdownService? previewMarkdownService,
     BookDeconstructionTargetPathService? targetPathService,
     ProjectSourceOriginalArchiveStore? sourceOriginalArchiveStore,
+    ProjectStructuredContentBridgeService? structuredContentBridgeService,
+    ProjectContentPathPolicyService? contentPathPolicyService,
+    SourceDocumentFormatCatalogService? sourceDocumentFormatCatalogService,
   }) : _importProjectFilesUseCase = importProjectFilesUseCase,
        _projectToolHostPort = projectToolHostPort,
        _writeProjectTextFileUseCase = writeProjectTextFileUseCase,
@@ -62,6 +65,14 @@ class ProjectImportExecutionService {
            const BookDeconstructionPreviewMarkdownService(),
        _targetPathService =
            targetPathService ?? const BookDeconstructionTargetPathService(),
+       _structuredContentBridgeService =
+           structuredContentBridgeService ??
+           ProjectStructuredContentBridgeService(),
+       _contentPathPolicyService =
+           contentPathPolicyService ?? const ProjectContentPathPolicyService(),
+       _sourceDocumentFormatCatalogService =
+           sourceDocumentFormatCatalogService ??
+           const SourceDocumentFormatCatalogService(),
        _sourceOriginalArchiveStore =
            sourceOriginalArchiveStore ??
            DelegatingProjectSourceOriginalArchiveStore(
@@ -86,6 +97,9 @@ class ProjectImportExecutionService {
   final BookDeconstructionDraftBuilderService _draftBuilderService;
   final BookDeconstructionPreviewMarkdownService _previewMarkdownService;
   final BookDeconstructionTargetPathService _targetPathService;
+  final ProjectStructuredContentBridgeService _structuredContentBridgeService;
+  final ProjectContentPathPolicyService _contentPathPolicyService;
+  final SourceDocumentFormatCatalogService _sourceDocumentFormatCatalogService;
   final ProjectSourceOriginalArchiveStore _sourceOriginalArchiveStore;
 
   Future<ProjectImportExecutionResult> execute({
@@ -105,10 +119,29 @@ class ProjectImportExecutionService {
       smartDeconstructionProviderId: request.smartDeconstructionProviderId,
       smartDeconstructionModelId: request.smartDeconstructionModelId,
     );
+    final primarySourceSnapshots =
+        <String, SqliteProjectBodyTextDocument?>{};
     final importResult = await _importProjectFilesUseCase.execute(
       project: project,
       sourcePaths: request.sourcePaths,
       targetDirectory: policy.resolvedTargetDirectory,
+      prepareImportedFile:
+          ({required project, required sourcePath, required relativePath}) {
+            return _prepareImportedFilePrimarySource(
+              project: project,
+              sourcePath: sourcePath,
+              relativePath: relativePath,
+              snapshots: primarySourceSnapshots,
+            );
+          },
+      rollbackPreparedImportedFile:
+          ({required project, required sourcePath, required relativePath}) {
+            return _restoreImportedFilePrimarySource(
+              project: project,
+              relativePath: relativePath,
+              snapshots: primarySourceSnapshots,
+            );
+          },
     );
     final importedPaths = ValueReaders.stringList(
       importResult['imported_paths'],
@@ -199,6 +232,96 @@ class ProjectImportExecutionService {
       smartAnalysisApplied: smartAnalysisApplied,
       smartAnalysisReportPath: smartAnalysisReportPath,
     );
+  }
+
+  Future<void> _prepareImportedFilePrimarySource({
+    required ProjectDescriptor project,
+    required String sourcePath,
+    required String relativePath,
+    required Map<String, SqliteProjectBodyTextDocument?> snapshots,
+  }) async {
+    final snapshot = await _structuredContentBridgeService.loadStructuredDocument(
+      project: project,
+      documentPath: relativePath,
+    );
+    final persisted = await _persistImportedFilePrimarySource(
+      project: project,
+      sourcePath: sourcePath,
+      relativePath: relativePath,
+    );
+    if (persisted) {
+      snapshots[relativePath] = snapshot;
+    }
+  }
+
+  Future<void> _restoreImportedFilePrimarySource({
+    required ProjectDescriptor project,
+    required String relativePath,
+    required Map<String, SqliteProjectBodyTextDocument?> snapshots,
+  }) async {
+    if (!snapshots.containsKey(relativePath)) {
+      return;
+    }
+    await _structuredContentBridgeService.restoreStructuredDocument(
+      project: project,
+      documentPath: relativePath,
+      snapshot: snapshots.remove(relativePath),
+    );
+  }
+
+  Future<bool> _persistImportedFilePrimarySource({
+    required ProjectDescriptor project,
+    required String sourcePath,
+    required String relativePath,
+  }) async {
+    // 中文注释: SQLite 的导入文本先通过正式 reader 解码并入主库；无法解析的附件保留为纯文件复制。
+    if (project.storageStrategy != ProjectStorageStrategy.sqliteProjectStore ||
+        !_sourceDocumentFormatCatalogService.supportsPath(sourcePath)) {
+      return false;
+    }
+    ReferenceSourceDocumentFileReadResult sourceDocument;
+    try {
+      sourceDocument = await _sourceDocumentReaderService.read(
+        sourceFilePath: sourcePath,
+      );
+    } catch (_) {
+      // Reader failures must not turn an otherwise valid attachment import into a failed operation.
+      return false;
+    }
+    if (sourceDocument.sourceText.trim().isEmpty) {
+      return false;
+    }
+    // 中文注释: 已可解析的文本必须先成功写入 SQLite 主事实源；写入失败时不能
+    // 继续复制 Markdown 投影，否则下次按主库读取会丢失该资料。
+    await _structuredContentBridgeService.persistStructuredDocument(
+      project: project,
+      documentPath: relativePath,
+      documentKind: _importedDocumentKind(project, relativePath),
+      title: sourceDocument.sourceTitle,
+      content: sourceDocument.sourceText,
+    );
+    return true;
+  }
+
+  String _importedDocumentKind(ProjectDescriptor project, String relativePath) {
+    final normalizedPath = relativePath.trim().replaceAll('\\', '/');
+    final inferredKind = _contentPathPolicyService.inferContentTypeFromPath(
+      normalizedPath,
+    );
+    if (project.projectType.trim() ==
+            BookDeconstructionConstants.projectTypeId &&
+        (normalizedPath.startsWith('imports/source_original/') ||
+            normalizedPath.startsWith('sources/original/'))) {
+      return 'source_original';
+    }
+    if (project.projectType.trim() == 'knowledge_base' &&
+        normalizedPath.startsWith('imports/') &&
+        !normalizedPath.startsWith('imports/analysis/') &&
+        !normalizedPath.startsWith('imports/source_original/') &&
+        !normalizedPath.startsWith('imports/derived/')) {
+      return 'knowledge';
+    }
+    return inferredKind;
   }
 
   Future<_AutoDeconstructionOutcome> _writeAutoDeconstructionPreview({

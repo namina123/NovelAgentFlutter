@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novel_agent_app/features/project_assets/application/models/project_reference_extraction_execution_result.dart';
 import 'package:novel_agent_app/features/project_assets/application/services/project_reference_extraction_execution_service.dart';
+import 'package:novel_agent_app/features/workbench/presentation/models/project_create_request_view_data.dart';
+import 'package:novel_agent_app/features/workbench/presentation/models/project_creation_phase.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import 'hfvv_viewmodel_harness_support.dart';
@@ -86,6 +88,103 @@ void main() {
       );
     },
   );
+
+  test(
+    'AppShellController runs book deconstruction analysis in staging-only mode',
+    () async {
+      final referenceExtractionService =
+          _RecordingAnalysisOnlyReferenceExtractionService();
+      final harness = await HfvvAppShellHarness.create(
+        generateDraftUseCase: ScriptedGenerateDraftUseCase(
+          resultBuilder:
+              ({
+                required ProjectDescriptor project,
+                required String userPrompt,
+                required String modelId,
+              }) => DraftGenerationResult(
+                project: project,
+                projectInfo: const <String, Object?>{},
+                userPrompt: userPrompt,
+                prompt: userPrompt,
+                modelId: modelId,
+                draftMarkdown: '',
+                contextPack: const <String, Object?>{},
+                selectedPaths: const <String>[],
+                executedTools: const <Object?>[],
+                writtenPaths: const <String>[],
+                changedPaths: const <String>[],
+                transcriptMessages: const <JsonMap>[],
+                waitingForUserChoice: false,
+                reasoningContent: '',
+                stoppedByToolError: false,
+                toolErrorSummary: '',
+              ),
+        ),
+        projectReferenceExtractionExecutionService: referenceExtractionService,
+      );
+      addTearDown(harness.controller.dispose);
+
+      const request = ProjectCreateRequestViewData(
+        title: 'Book Analysis Staging Regression',
+        projectTypeId: BookDeconstructionConstants.projectTypeId,
+        storageStrategyId: 'markdown_project_store',
+        bookDeconstructionFollowupRouteId: 'continuation',
+      );
+      harness.controller.onCreateProjectRequested();
+      await harness.waitUntil(
+        () =>
+            harness.workbench.projectLauncher?.creationPhase ==
+            ProjectCreationPhase.projectType,
+        description: 'book project type phase',
+      );
+      harness.controller.onProjectCreationSubmitted(request);
+      await harness.waitUntil(
+        () =>
+            harness.workbench.projectLauncher?.creationPhase ==
+            ProjectCreationPhase.bookDeconstructionFollowup,
+        description: 'book deconstruction followup phase',
+      );
+      harness.controller.onProjectCreationSubmitted(request);
+      await harness.waitUntil(
+        () =>
+            harness.workbench.projectLauncher?.creationPhase ==
+            ProjectCreationPhase.storageStrategy,
+        description: 'book storage strategy phase',
+      );
+      harness.controller.onProjectCreationSubmitted(request);
+      await harness.waitUntil(
+        () => harness.workbench.projectPath.trim().isNotEmpty,
+        description: 'book project path after creation',
+        timeout: const Duration(seconds: 15),
+      );
+      await harness.waitUntil(
+        () => !harness.workbench.generationStatus.contains('正在加载项目'),
+        description: 'book project load to settle',
+      );
+      final controller = harness.controller.bookDeconstructionController;
+      controller.onBookDeconstructionSourceContentChanged(
+        '第一章 港口风暴\n主角在港口被迫卷入一场追捕。',
+      );
+      await controller.onBookDeconstructionSplitRequested();
+      expect(
+        controller.viewData.canAnalyze,
+        isTrue,
+        reason: controller.viewData.status,
+      );
+
+      controller.onBookDeconstructionAnalysisUseModelChanged(true);
+      controller.onBookDeconstructionAnalysisModelSelected(
+        'hfvv-provider::hfvv-fake-model',
+      );
+      await controller.onBookDeconstructionAnalysisRequested();
+
+      expect(referenceExtractionService.lastAnalysisOnly, isTrue);
+      expect(referenceExtractionService.lastProviderId, 'hfvv-provider');
+      expect(referenceExtractionService.lastModelId, 'hfvv-fake-model');
+      expect(controller.viewData.analysisCompleted, isTrue);
+      expect(controller.viewData.status, contains('仅暂存、尚未应用到项目资产'));
+    },
+  );
 }
 
 class _SeededProjectionReferenceExtractionService
@@ -111,6 +210,7 @@ class _SeededProjectionReferenceExtractionService
     String strategyProfileId = '',
     String overrideProviderId = '',
     String overrideModelId = '',
+    bool analysisOnly = false,
   }) async {
     await _seedProjectionFiles(project.rootPath);
     return const ProjectReferenceExtractionExecutionResult(
@@ -195,6 +295,49 @@ source_of_truth_paths:
     final file = File('$rootPath${Platform.pathSeparator}$normalized');
     await file.parent.create(recursive: true);
     await file.writeAsString(content);
+  }
+}
+
+class _RecordingAnalysisOnlyReferenceExtractionService
+    extends ProjectReferenceExtractionExecutionService {
+  _RecordingAnalysisOnlyReferenceExtractionService()
+    : super(
+        readSettings: () => null,
+        llmGatewayFactory: (_, networkSettings) => _NoopLlmGateway(),
+        executeReferenceExtraction:
+            ({
+              required project,
+              required llmGateway,
+              required modelId,
+              required request,
+            }) async {
+              throw UnimplementedError();
+            },
+      );
+
+  bool? lastAnalysisOnly;
+  String lastProviderId = '';
+  String lastModelId = '';
+
+  @override
+  Future<ProjectReferenceExtractionExecutionResult> pickAndExecute({
+    required ProjectDescriptor project,
+    String strategyProfileId = '',
+    String overrideProviderId = '',
+    String overrideModelId = '',
+    bool analysisOnly = false,
+  }) async {
+    lastAnalysisOnly = analysisOnly;
+    lastProviderId = overrideProviderId;
+    lastModelId = overrideModelId;
+    return const ProjectReferenceExtractionExecutionResult(
+      ok: true,
+      didMutateProject: false,
+      statusMessage: '参考资料分析完成：结果已暂存，尚未应用到项目资产。',
+      runId: 'reference-analysis-staging-regression',
+      packageId: 'reference-analysis-staging-package',
+      packageVersionId: 'v1',
+    );
   }
 }
 

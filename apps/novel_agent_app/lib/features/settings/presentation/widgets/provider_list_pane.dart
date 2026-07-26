@@ -43,6 +43,13 @@ class ProviderListPane extends StatelessWidget {
             );
           }
           final provider = providers[index];
+          final isDraft = provider.id == '__new__';
+          final title = provider.title.trim().isEmpty
+              ? (isDraft ? '新接口（未保存）' : '未命名接口')
+              : provider.title;
+          final subtitle = isDraft && provider.baseUrl.trim().isEmpty
+              ? '填写厂商名称、密钥与地址后保存'
+              : '${provider.protocol} · ${provider.baseUrl.trim().isEmpty ? '未填写地址' : provider.baseUrl}';
           return Material(
             color: provider.isSelected
                 ? optionTile.highlightBackgroundColor
@@ -66,7 +73,7 @@ class ProviderListPane extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      provider.title,
+                      title,
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
@@ -75,7 +82,7 @@ class ProviderListPane extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      '${provider.protocol} · ${provider.baseUrl}',
+                      subtitle,
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,

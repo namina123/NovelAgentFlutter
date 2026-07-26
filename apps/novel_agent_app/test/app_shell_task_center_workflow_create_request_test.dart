@@ -32,8 +32,11 @@ void main() {
       );
       addTearDown(harness.controller.dispose);
 
-      await harness.createProject(title: 'Task Center Workflow Create Request');
-
+      await harness.createProject(
+        title: 'Task Center Workflow Create Request',
+        projectTypeId: 'long_novel',
+        runtimeBaselineId: 'chapter_collaboration_autorun',
+      );
       harness.controller.onTaskCenterWorkflowCreateSubmitted(
         const TaskWorkflowCreateRequestViewData(
           mode: TaskRuntimeConstants.modeSeedToFullNovel,
@@ -52,7 +55,6 @@ void main() {
           ),
         ),
       );
-
       await harness.waitUntil(
         () => workflowRuntimeService.callCount == 1,
         description: 'workflow create captured',

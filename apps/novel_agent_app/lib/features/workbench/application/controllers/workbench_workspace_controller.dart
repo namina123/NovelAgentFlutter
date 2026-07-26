@@ -35,6 +35,7 @@ import '../services/project_import_workspace_command_view_data_service.dart';
 import '../services/project_long_task_summary_view_data_service.dart';
 import '../services/project_subtitle_view_data_service.dart';
 import '../services/project_type_transition_workspace_command_view_data_service.dart';
+import '../services/project_workspace_document_storage_service.dart';
 import '../services/workbench_resource_tree_projection_service.dart';
 import '../services/workbench_draft_recovery_snapshot_service.dart';
 import '../services/workspace_command_default_target_service.dart';
@@ -63,6 +64,8 @@ class WorkbenchWorkspaceController
     required ImportProjectFilesUseCase importProjectFilesUseCase,
     required UpdateProjectManifestUseCase updateProjectManifestUseCase,
     ExecuteProjectTypeTransitionUseCase? executeProjectTypeTransitionUseCase,
+    ConfigureLongNovelRuntimeBaselineUseCase?
+    configureLongNovelRuntimeBaselineUseCase,
     required ProjectToolHostPort projectToolHostPort,
     required WriteProjectTextFileUseCase writeProjectTextFileUseCase,
     required BookDeconstructionNarrativePersistenceService
@@ -129,13 +132,29 @@ class WorkbenchWorkspaceController
     ProjectPendingResearchActionService? pendingResearchActionService,
     WorkbenchProjectLongTaskDetailLoader? projectLongTaskDetailLoader,
     ProjectHydrationTraceService? projectHydrationTraceService,
+    ProjectWorkspaceDocumentStorageService?
+    projectWorkspaceDocumentStorageService,
   }) : _loadProjectWorkspaceUseCase = loadProjectWorkspaceUseCase,
-       _readProjectFileUseCase = readProjectFileUseCase,
-       _saveDraftUseCase = saveDraftUseCase,
+       _projectWorkspaceDocumentStorageService =
+           projectWorkspaceDocumentStorageService ??
+           ProjectWorkspaceDocumentStorageService(
+             readProjectFileUseCase: readProjectFileUseCase,
+             saveDraftUseCase: saveDraftUseCase,
+           ),
        _createProjectEntryUseCase = createProjectEntryUseCase,
        _updateProjectManifestUseCase = updateProjectManifestUseCase,
        _executeProjectTypeTransitionUseCase =
            executeProjectTypeTransitionUseCase,
+       _configureLongNovelRuntimeBaselineUseCase =
+           configureLongNovelRuntimeBaselineUseCase ??
+           ConfigureLongNovelRuntimeBaselineUseCase(
+             readProjectFileUseCase: readProjectFileUseCase,
+             writeProjectTextFileUseCase: writeProjectTextFileUseCase,
+             readHasActiveLongTaskRun: (project) async =>
+                 (await longTaskSupervisor.listProjectRuns(
+                   project.rootPath,
+                 )).any((run) => run.isActive),
+           ),
        _longTaskSupervisor = longTaskSupervisor,
        _reviewReportService = reviewReportService,
        _projectRuntimeProfileRepository = projectRuntimeProfileRepository,
@@ -215,12 +234,14 @@ class WorkbenchWorkspaceController
   }
 
   final LoadProjectWorkspaceUseCase _loadProjectWorkspaceUseCase;
-  final ReadProjectFileUseCase _readProjectFileUseCase;
-  final SaveDraftUseCase _saveDraftUseCase;
+  final ProjectWorkspaceDocumentStorageService
+  _projectWorkspaceDocumentStorageService;
   final CreateProjectEntryUseCase _createProjectEntryUseCase;
   final UpdateProjectManifestUseCase _updateProjectManifestUseCase;
   final ExecuteProjectTypeTransitionUseCase?
   _executeProjectTypeTransitionUseCase;
+  final ConfigureLongNovelRuntimeBaselineUseCase
+  _configureLongNovelRuntimeBaselineUseCase;
   final LongTaskSupervisor _longTaskSupervisor;
   final ProjectReviewReportService _reviewReportService;
   final ProjectRuntimeProfileRepository _projectRuntimeProfileRepository;
@@ -374,37 +395,20 @@ class WorkbenchWorkspaceController
     bool openDefaultDocument = true,
   }) async {
     // 中文注释: 项目加载拆成“首屏可见”和“后续恢复”两段，避免把会话/资料/快照恢复整串堵在 UI 首帧上。
+    _traceProjectLoad(rootPath, 'workspace_snapshot:start');
+    final snapshot = await _loadProjectWorkspaceUseCase.execute(rootPath);
+    _traceProjectLoad(rootPath, 'workspace_snapshot:done');
+    if (snapshot == null) {
+      // Keep the active project untouched when a candidate path is not a
+      // project. This also avoids cancelling an in-flight hydration for it.
+      return false;
+    }
+
     final hydrationToken = ++_projectHydrationToken;
     _mutateWorkbench(
       (current) =>
           current.copyWith(generationStatus: '正在加载项目...', toolCoreStatus: ''),
     );
-    _traceProjectLoad(rootPath, 'workspace_snapshot:start');
-    final snapshot = await _loadProjectWorkspaceUseCase.execute(rootPath);
-    _traceProjectLoad(rootPath, 'workspace_snapshot:done');
-    if (snapshot == null) {
-      _projectHydrationActive = false;
-      _projectHydrationProjectPath = '';
-      _projectHydrationCurrentStageLabel = '';
-      _writeProjectState(
-        _readProjectState().copyWith(
-          currentProject: null,
-          currentRuntimeProfile: null,
-          resourceSnapshotEntries: const <JsonMap>[],
-          expandedResourceDirectories: <String>{},
-          openDocuments: const <OpenDocumentState>[],
-          activeOpenDocumentId: '',
-          currentProjectLongTaskRuns: const <RunInstance>[],
-          currentProjectLongTaskRunDetails:
-              const <String, ProjectLongTaskStationDetail>{},
-          isProjectLongTaskSummaryLoading: false,
-        ),
-      );
-      _resetConversationRuntimeState();
-      _refreshSettingsViewData();
-      return false;
-    }
-
     _projectHydrationActive = true;
     _projectHydrationToken = hydrationToken;
     _projectHydrationProjectPath = snapshot.project.rootPath;
@@ -514,7 +518,9 @@ class WorkbenchWorkspaceController
         try {
           await action();
         } catch (error) {
-          loadWarnings.add(UserFacingErrorHumanizer.humanize(error, action: stageLabel));
+          loadWarnings.add(
+            UserFacingErrorHumanizer.humanize(error, action: stageLabel),
+          );
           _traceProjectLoad(rootPath, '$stageLabel:error:$error');
         } finally {
           stageWatch.stop();
@@ -613,9 +619,9 @@ class WorkbenchWorkspaceController
         }
         await _setProjectLoadStatus(hydrationToken, rootPath, '正在打开项目文档...');
         _expandResourceAncestors(firstOpenable);
-        final content = await _readProjectFileUseCase.execute(
-          snapshot.project,
-          firstOpenable,
+        final content = await _projectWorkspaceDocumentStorageService.read(
+          project: snapshot.project,
+          relativePath: firstOpenable,
         );
         if (!_isProjectHydrationCurrent(hydrationToken, rootPath) ||
             content == null ||
@@ -1013,9 +1019,9 @@ class WorkbenchWorkspaceController
     if (relativePath.trim().isEmpty) {
       return '';
     }
-    final content = await _readProjectFileUseCase.execute(
-      project,
-      relativePath,
+    final content = await _projectWorkspaceDocumentStorageService.read(
+      project: project,
+      relativePath: relativePath,
     );
     return content ?? '';
   }
@@ -1111,9 +1117,9 @@ class WorkbenchWorkspaceController
       if (activeRecovery != null) {
         _restoreRecoveredDocument(activeRecovery);
       } else {
-        final content = await _readProjectFileUseCase.execute(
-          project,
-          activeDocumentPath,
+        final content = await _projectWorkspaceDocumentStorageService.read(
+          project: project,
+          relativePath: activeDocumentPath,
         );
         if (content == null) {
           return;
@@ -1207,7 +1213,7 @@ class WorkbenchWorkspaceController
       WorkspaceCommandViewData(
         mode: WorkspaceCommandMode.editProjectInfo,
         title: '编辑项目信息',
-        description: '更新项目标题、类型与简介文档。',
+        description: '更新项目标题与简介文档。',
         confirmLabel: '保存项目',
         status: project == null ? '当前还没有打开项目。' : '',
         projectTitle: project?.name ?? '',
@@ -1228,6 +1234,12 @@ class WorkbenchWorkspaceController
   void onProjectTypeTransitionRequested() {
     // 中文注释: 项目类型转换入口先基于 core 计划投影出 blocker，再让用户在同一命令层完成确认。
     _projectActionFacade.onProjectTypeTransitionRequested();
+  }
+
+  @override
+  void onRuntimeBaselineConfigurationRequested() {
+    // 中文注释: 遗留长篇缺少运行基准时，必须经专用配置流程修复，不能借项目信息或类型转换绕过合同。
+    _projectActionFacade.onRuntimeBaselineConfigurationRequested();
   }
 
   @override
@@ -1420,9 +1432,9 @@ class WorkbenchWorkspaceController
       return;
     }
     _expandResourceAncestors(relativePath);
-    final content = await _readProjectFileUseCase.execute(
-      project,
-      relativePath,
+    final content = await _projectWorkspaceDocumentStorageService.read(
+      project: project,
+      relativePath: relativePath,
     );
     if (content == null) {
       _mutateWorkbench(
@@ -1468,7 +1480,7 @@ class WorkbenchWorkspaceController
       return;
     }
     try {
-      final savedPath = await _saveDraftUseCase.execute(
+      final savedPath = await _projectWorkspaceDocumentStorageService.save(
         project: project,
         content: _readWorkbench().activeDocumentBody,
         title: _readWorkbench().activeDocumentTitle,
@@ -1523,9 +1535,6 @@ class WorkbenchWorkspaceController
       await _updateProjectManifestUseCase.execute(
         project: project,
         title: cleanTitle.isEmpty ? project.name : cleanTitle,
-        projectType: request.projectType.trim().isEmpty
-            ? project.projectType
-            : request.projectType.trim(),
         genre: request.genre.trim(),
         premise: request.premise.trim(),
         notes: request.notes.trim(),
@@ -1581,7 +1590,6 @@ class WorkbenchWorkspaceController
         project: project,
         targetProjectTypeId: targetProjectTypeId,
         runtimeBaselineId: runtimeBaselineId,
-        hasActiveLongTaskRun: hasActiveLongTaskRun,
       );
       await loadProject(updatedProject.rootPath);
       _announce('已完成项目类型转换：${updatedProject.name}');
@@ -1595,6 +1603,29 @@ class WorkbenchWorkspaceController
           confirmLabel: '重新检查',
         ),
       );
+    }
+  }
+
+  Future<void> _submitRuntimeBaselineConfigurationCommand(
+    WorkspaceCommandRequestViewData request,
+  ) async {
+    final project = currentProject;
+    if (project == null) {
+      _announce('请先打开长篇长任务项目。');
+      return;
+    }
+    final runtimeBaselineId = request.transitionRuntimeBaselineId.trim();
+    if (runtimeBaselineId.isEmpty) {
+      _announce('请先选择运行基准。');
+      return;
+    }
+    try {
+      final updatedProject = await _configureLongNovelRuntimeBaselineUseCase
+          .execute(project: project, runtimeBaselineId: runtimeBaselineId);
+      await loadProject(updatedProject.rootPath);
+      _announce('已更新长篇运行基准。');
+    } catch (error) {
+      _announce(UserFacingErrorHumanizer.humanize(error, action: '配置运行基准'));
     }
   }
 
@@ -1615,11 +1646,29 @@ class WorkbenchWorkspaceController
     final initialContent = request.content.trim().isEmpty
         ? '# ${_displayNameOf(relativePath)}\n\n'
         : request.content;
+    final primarySourceSnapshots = <String, SqliteProjectBodyTextDocument?>{};
     try {
       final result = await _createProjectEntryUseCase.execute(
         project: project,
         relativePath: relativePath,
         content: initialContent,
+        prepareFileWrite:
+            ({required project, required relativePath, required content}) {
+              return _prepareCreatedFilePrimarySource(
+                project: project,
+                relativePath: relativePath,
+                content: content,
+                snapshots: primarySourceSnapshots,
+              );
+            },
+        rollbackPreparedFileWrite:
+            ({required project, required relativePath, required content}) {
+              return _restoreCreatedFilePrimarySource(
+                project: project,
+                relativePath: relativePath,
+                snapshots: primarySourceSnapshots,
+              );
+            },
       );
       if (_boolValue(result['ok']) != true) {
         _announce(_stringValue(result['error'], '创建文件失败。'));
@@ -1630,9 +1679,9 @@ class WorkbenchWorkspaceController
       final resourceEntries = await reloadResourceEntries(
         selectedId: createdPath,
       );
-      final content = await _readProjectFileUseCase.execute(
-        project,
-        createdPath,
+      final content = await _projectWorkspaceDocumentStorageService.read(
+        project: project,
+        relativePath: createdPath,
       );
       if (content != null) {
         openOrActivateDocument(
@@ -1654,6 +1703,38 @@ class WorkbenchWorkspaceController
     } catch (error) {
       _announce(UserFacingErrorHumanizer.humanize(error, action: '创建文件'));
     }
+  }
+
+  Future<void> _prepareCreatedFilePrimarySource({
+    required ProjectDescriptor project,
+    required String relativePath,
+    required String content,
+    required Map<String, SqliteProjectBodyTextDocument?> snapshots,
+  }) async {
+    final snapshot = await _projectWorkspaceDocumentStorageService
+        .snapshotPrimarySource(project: project, relativePath: relativePath);
+    await _projectWorkspaceDocumentStorageService.persistPrimarySource(
+      project: project,
+      relativePath: relativePath,
+      title: _displayNameOf(relativePath),
+      content: content,
+    );
+    snapshots[relativePath] = snapshot;
+  }
+
+  Future<void> _restoreCreatedFilePrimarySource({
+    required ProjectDescriptor project,
+    required String relativePath,
+    required Map<String, SqliteProjectBodyTextDocument?> snapshots,
+  }) async {
+    if (!snapshots.containsKey(relativePath)) {
+      return;
+    }
+    await _projectWorkspaceDocumentStorageService.restorePrimarySource(
+      project: project,
+      relativePath: relativePath,
+      snapshot: snapshots.remove(relativePath),
+    );
   }
 
   Future<void> _submitCreateFolderCommand(
@@ -1749,9 +1830,9 @@ class WorkbenchWorkspaceController
         selectedId: selectedId,
       );
       if (selectedId.isNotEmpty) {
-        final content = await _readProjectFileUseCase.execute(
-          project,
-          selectedId,
+        final content = await _projectWorkspaceDocumentStorageService.read(
+          project: project,
+          relativePath: selectedId,
         );
         if ((content ?? '').trim().isNotEmpty) {
           openOrActivateDocument(
@@ -1942,7 +2023,8 @@ class WorkbenchWorkspaceController
     _showWorkspaceCommand(
       _projectImportWorkspaceCommandViewDataService.rebuild(
         request: request,
-        storageStrategy: currentProject?.storageStrategy ??
+        storageStrategy:
+            currentProject?.storageStrategy ??
             ProjectStorageStrategy.markdownProjectStore,
         status: status,
         isBusy: isBusy,
@@ -2042,7 +2124,9 @@ class WorkbenchWorkspaceController
     if (pathBase == null) {
       return;
     }
-    await _saveSettingsSilently(pathBase.copyWith(defaultProjectPath: rootPath));
+    await _saveSettingsSilently(
+      pathBase.copyWith(defaultProjectPath: rootPath),
+    );
     await _persistWorkbenchSnapshot();
   }
 

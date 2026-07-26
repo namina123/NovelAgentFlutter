@@ -9,7 +9,8 @@ class ProjectTimelineStateUpdateService {
     TimelineStateUpdatePlannerService? plannerService,
     ProjectTimelineRepository? repository,
   }) : _requestMapperService =
-           requestMapperService ?? const TimelineStateUpdateRequestMapperService(),
+           requestMapperService ??
+           const TimelineStateUpdateRequestMapperService(),
        _plannerService =
            plannerService ?? const TimelineStateUpdatePlannerService(),
        _repository =

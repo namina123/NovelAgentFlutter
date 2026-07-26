@@ -161,6 +161,9 @@ class TaskCenterViewDataService {
           )
           .toList(growable: false),
       guidanceRevisitBody: guidanceRevisitBody,
+      longTaskCreationAvailable:
+          runtimeProfile?.projectType.trim() == 'long_novel' &&
+          baseline != null,
     );
   }
 

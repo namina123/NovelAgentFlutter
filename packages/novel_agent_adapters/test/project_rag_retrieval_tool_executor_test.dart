@@ -86,23 +86,17 @@ void main() {
     });
 
     test('returns retrieval hits from mounted corpus metadata', () async {
-      final result = await executor.retrievePassages(
-        project,
-        <String, Object?>{
-          'query_id': 'query-001',
-          'query_text': '镜潮回扣',
-          'project_id': project.id,
-          'corpus_filters': <Object?>['corpus-001'],
-          'top_k': 5,
-        },
-      );
+      final result = await executor.retrievePassages(project, <String, Object?>{
+        'query_id': 'query-001',
+        'query_text': '镜潮回扣',
+        'project_id': project.id,
+        'corpus_filters': <Object?>['corpus-001'],
+        'top_k': 5,
+      });
 
       expect(result['ok'], isTrue);
       expect(result['retrieval_hits'], isNotEmpty);
-      expect(
-        ValueReaders.stringList(result['citation_paths']),
-        isNotEmpty,
-      );
+      expect(ValueReaders.stringList(result['citation_paths']), isNotEmpty);
       expect(
         ValueReaders.stringValue(result['display_text']),
         contains('已召回语料证据片段'),
@@ -113,32 +107,23 @@ void main() {
       );
       expect(
         ValueReaders.stringValue(
-          ValueReaders.mapValue(result['retrieval_activation_package'])[
-            'activation_package_id'
-          ],
+          ValueReaders.mapValue(
+            result['retrieval_activation_package'],
+          )['activation_package_id'],
         ),
         'rag_activation:project-rag-retrieval-1:query-001',
       );
     });
 
     test('rejects malformed query payloads', () async {
-      final result = await executor.retrievePassages(
-        project,
-        <String, Object?>{
-          'query_id': '',
-          'query_text': '',
-        },
-      );
+      final result = await executor.retrievePassages(project, <String, Object?>{
+        'query_id': '',
+        'query_text': '',
+      });
 
       expect(result['ok'], isFalse);
-      expect(
-        ValueReaders.stringValue(result['error']),
-        contains('参数不合法'),
-      );
-      expect(
-        ValueReaders.stringList(result['validation_errors']),
-        isNotEmpty,
-      );
+      expect(ValueReaders.stringValue(result['error']), contains('参数不合法'));
+      expect(ValueReaders.stringList(result['validation_errors']), isNotEmpty);
     });
 
     test(
@@ -157,18 +142,15 @@ void main() {
         );
 
         expect(ValueReaders.boolValue(result['ok']), isTrue);
-        expect(
-          ValueReaders.stringValue(result['retrieval_mode']),
-          'lexical',
-        );
+        expect(ValueReaders.stringValue(result['retrieval_mode']), 'lexical');
         expect(
           ValueReaders.stringValue(result['display_text']),
           contains('关键词匹配'),
         );
         expect(
-          ValueReaders.stringList(result['warning_notes']).any(
-            (note) => note.contains('关键词匹配'),
-          ),
+          ValueReaders.stringList(
+            result['warning_notes'],
+          ).any((note) => note.contains('关键词匹配')),
           isTrue,
         );
       },
@@ -201,9 +183,9 @@ void main() {
         // 降级后仍能从元数据召回真实命中，而不是空结果。
         expect(result['retrieval_hits'], isNotEmpty);
         expect(
-          ValueReaders.stringList(result['warning_notes']).any(
-            (note) => note.contains('向量检索不可用'),
-          ),
+          ValueReaders.stringList(
+            result['warning_notes'],
+          ).any((note) => note.contains('向量检索不可用')),
           isTrue,
         );
       },
@@ -228,10 +210,7 @@ void main() {
         );
 
         expect(ValueReaders.boolValue(result['ok']), isTrue);
-        expect(
-          ValueReaders.stringValue(result['retrieval_mode']),
-          'vector',
-        );
+        expect(ValueReaders.stringValue(result['retrieval_mode']), 'vector');
         expect(result['retrieval_hits'], isNotEmpty);
         expect(
           ValueReaders.stringValue(result['display_text']),
@@ -265,10 +244,7 @@ void main() {
         );
 
         expect(resolverCalls, 1);
-        expect(
-          ValueReaders.stringValue(result['retrieval_mode']),
-          'vector',
-        );
+        expect(ValueReaders.stringValue(result['retrieval_mode']), 'vector');
         expect(result['retrieval_hits'], isNotEmpty);
 
         // resolver 返回 null（未配置 embedding）时如实降级到 lexical，不冒充。
@@ -303,15 +279,13 @@ class _ThrowingRetrievalSearchPort implements RetrievalSearchPort {
   Future<List<RetrievalHit>> searchWithinMounts(
     RetrievalQuery query,
     List<RetrievalMountBinding> bindings,
-  ) async =>
-      throw StateError('embedding provider unavailable');
+  ) async => throw StateError('embedding provider unavailable');
 
   @override
   Future<List<RetrievalHit>> searchByCorpus(
     RetrievalQuery query,
     RagCorpusId corpusId,
-  ) async =>
-      throw StateError('embedding provider unavailable');
+  ) async => throw StateError('embedding provider unavailable');
 }
 
 class _StubRetrievalSearchPort implements RetrievalSearchPort {
@@ -322,25 +296,23 @@ class _StubRetrievalSearchPort implements RetrievalSearchPort {
   Future<List<RetrievalHit>> searchWithinMounts(
     RetrievalQuery query,
     List<RetrievalMountBinding> bindings,
-  ) async =>
-      _hit();
+  ) async => _hit();
 
   @override
   Future<List<RetrievalHit>> searchByCorpus(
     RetrievalQuery query,
     RagCorpusId corpusId,
-  ) async =>
-      _hit();
+  ) async => _hit();
 
   List<RetrievalHit> _hit() => <RetrievalHit>[
-        const RetrievalHit(
-          hitId: 'vector-hit-001',
-          corpusId: 'corpus-001',
-          sourceDocumentId: 'source-001',
-          score: 0.92,
-          rerankScore: 0.92,
-          excerpt: '镜潮回扣语义近邻片段。',
-          chapterTitle: '第一章',
-        ),
-      ];
+    const RetrievalHit(
+      hitId: 'vector-hit-001',
+      corpusId: 'corpus-001',
+      sourceDocumentId: 'source-001',
+      score: 0.92,
+      rerankScore: 0.92,
+      excerpt: '镜潮回扣语义近邻片段。',
+      chapterTitle: '第一章',
+    ),
+  ];
 }

@@ -4,6 +4,7 @@ import 'package:novel_agent_app/app/layout/app_layout_metrics.dart';
 import 'package:novel_agent_app/app/layout/app_layout_scope.dart';
 import 'package:novel_agent_app/app/theme/app_theme.dart';
 import 'package:novel_agent_app/features/settings/presentation/contracts/settings_action_handler.dart';
+import 'package:novel_agent_app/features/settings/presentation/models/model_editor_view_data.dart';
 import 'package:novel_agent_app/features/settings/presentation/models/settings_view_data.dart';
 import 'package:novel_agent_app/features/settings/presentation/models/theme_settings_view_data.dart';
 import 'package:novel_agent_app/features/settings/presentation/pages/settings_page.dart';
@@ -212,7 +213,10 @@ class _FakeSettingsActionHandler implements SettingsActionHandler {
   void onProviderDetailBackRequested() {}
 
   @override
-  void onProviderConnectionTestRequested(Map<String, Object?> payload) {}
+  Future<ProviderConnectionValidationResultViewData>
+  onModelConnectionTestRequested(Map<String, Object?> payload) async {
+    return ProviderConnectionValidationResultViewData.initial;
+  }
 
   @override
   void onProviderSaved(Map<String, Object?> payload) {}

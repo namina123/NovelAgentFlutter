@@ -195,5 +195,71 @@ void main() {
         BookDeconstructionConstants.workflowInteractiveSession,
       );
     });
+
+    test(
+      'uses SQLite projection paths when the target storage strategy is SQLite',
+      () {
+        final plan = BuildBookDeconstructionApplicationPlanUseCase().execute(
+          input: const BookDeconstructionInput(
+            extractionId: 'extract_sqlite_001',
+            title: 'SQLite 拆书任务',
+            sourceDocuments: <BookDeconstructionSourceDocument>[
+              BookDeconstructionSourceDocument(
+                id: 'source_1',
+                title: '样本小说',
+                content: '外部作品内容',
+              ),
+            ],
+          ),
+          extractionResult: const BookDeconstructionExtractionResult(
+            extractionId: 'extract_sqlite_001',
+            sourceTitle: '样本小说',
+            premises: <InspirationPremise>[
+              InspirationPremise(
+                id: 'premise_1',
+                displayName: '核心前提',
+                summary: '主角必须回收失落的秩序碎片。',
+              ),
+            ],
+            storyOutlineSummary: '主角进入城邦并揭开秩序断裂真相。',
+            chapterOutlines: <BookDeconstructionChapterOutline>[
+              BookDeconstructionChapterOutline(
+                id: 'chapter_1',
+                title: '第一章',
+                summary: '主角离开故乡。',
+                sequence: 1,
+              ),
+            ],
+            characterProfiles: <CharacterProfile>[
+              CharacterProfile(
+                id: 'lead_role',
+                displayName: '主角映射',
+                summary: '背负家族旧债。',
+              ),
+            ],
+            foreshadowRecords: <ForeshadowRecord>[
+              ForeshadowRecord(
+                id: 'first_mark',
+                title: '第一枚印记',
+                status: 'planted',
+                summary: '印记指向最终真相。',
+              ),
+            ],
+          ),
+          storageStrategy: ProjectStorageStrategy.sqliteProjectStore,
+        );
+
+        expect(
+          plan.items.map((item) => item.relativePathHint),
+          containsAll(<String>[
+            'imports/analysis/premise/book_deconstruction_premise_1_核心前提.md',
+            'imports/analysis/outlines/book_deconstruction_story_outline.md',
+            'imports/analysis/chapter_outlines/book_deconstruction_chapter_1.md',
+            'imports/analysis/assets/characters/lead_role.md',
+            'imports/analysis/assets/foreshadows/first_mark.foreshadow.md',
+          ]),
+        );
+      },
+    );
   });
 }

@@ -150,10 +150,13 @@ JsonMap? _tryReadManifestSync(String rootPath) {
   }
   try {
     final codec = ProjectManifestCodecService();
-    final manifest = codec.parse(
+    final manifest = codec.tryParseStrict(
       manifestFile.readAsStringSync(),
       fallbackTitle: _fallbackTitleFromPath(rootPath),
     );
+    if (manifest == null) {
+      return null;
+    }
     return codec.toJson(manifest);
   } catch (_) {
     return null;

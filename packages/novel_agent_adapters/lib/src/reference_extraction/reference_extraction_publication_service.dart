@@ -29,9 +29,7 @@ class ReferenceExtractionPublicationService {
     return '参考资料提取完成：接纳 ${result.acceptedProposalCount} 条，沉淀 ${result.finalizedEntryCount} 条结构化条目。$projectionHint';
   }
 
-  String buildIncompleteStatusMessage(
-    ProjectReferenceExtractionResult result,
-  ) {
+  String buildIncompleteStatusMessage(ProjectReferenceExtractionResult result) {
     final reason = result.deliveryRationale.trim().isEmpty
         ? result.outputCompletionStatus
         : result.deliveryRationale.trim();

@@ -4,7 +4,7 @@ import 'gateway_protocol_registry.dart';
 
 class ProviderRequestRouteResolver {
   const ProviderRequestRouteResolver({GatewayProtocolRegistry? registry})
-      : _registry = registry ?? const GatewayProtocolRegistry();
+    : _registry = registry ?? const GatewayProtocolRegistry();
 
   final GatewayProtocolRegistry _registry;
 

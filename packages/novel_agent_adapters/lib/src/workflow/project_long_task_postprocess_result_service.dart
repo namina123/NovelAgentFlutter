@@ -15,7 +15,9 @@ class ProjectLongTaskPostprocessResultService {
        _checkpointReviewService = checkpointReviewService,
        _chapterLengthEvaluationService =
            chapterLengthEvaluationService ??
-           ProjectChapterLengthEvaluationService(taskRepository: taskRepository),
+           ProjectChapterLengthEvaluationService(
+             taskRepository: taskRepository,
+           ),
        _resultRecorderService =
            resultRecorderService ??
            ChapterAtomicResultRecorderService(
@@ -52,17 +54,12 @@ class ProjectLongTaskPostprocessResultService {
     final updatedExecution = ValueReaders.mapValue(
       executionUpdate['execution'],
     );
-    final evaluationTask = ValueReaders.mapValue(
-      updatedExecution['effective_task'],
-    ).isNotEmpty
+    final evaluationTask =
+        ValueReaders.mapValue(updatedExecution['effective_task']).isNotEmpty
         ? ValueReaders.mapValue(updatedExecution['effective_task'])
         : task;
-    final chapterLengthEvaluation =
-        await _chapterLengthEvaluationService.evaluate(
-          project: project,
-          task: evaluationTask,
-          result: result,
-        );
+    final chapterLengthEvaluation = await _chapterLengthEvaluationService
+        .evaluate(project: project, task: evaluationTask, result: result);
     if (chapterLengthEvaluation.isNotEmpty) {
       updatedExecution['chapter_length_evaluation'] = chapterLengthEvaluation;
     }

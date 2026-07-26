@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../application/models/book_deconstruction_operation_kind.dart' show BookDeconstructionOperationKind;
+import '../../application/models/book_deconstruction_operation_kind.dart'
+    show BookDeconstructionOperationKind;
 import '../../presentation/contracts/book_deconstruction_action_handler.dart';
 import '../models/book_deconstruction_plan_group_view_data.dart';
 import '../models/book_deconstruction_plan_item_view_data.dart';
@@ -22,6 +23,7 @@ class BookDeconstructionPreviewPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final selectionLocked = viewData.isCommitInProgress;
     if (viewData.isLoading &&
         viewData.operationKind ==
             BookDeconstructionOperationKind.splittingChapters &&
@@ -46,7 +48,7 @@ class BookDeconstructionPreviewPanel extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.all(12),
         child: Text(
-          '导入源文稿后点"拆书"，这里展示纯净的分章结果与拟应用的章纲条目。',
+          '导入源文稿后点"拆书"，这里展示可勾选的分章结果（选择要保存的章节）。',
           style: textTheme.bodySmall,
         ),
       );
@@ -58,12 +60,15 @@ class BookDeconstructionPreviewPanel extends StatelessWidget {
           children: [
             Expanded(child: Text('拆书结果（分章）', style: textTheme.titleSmall)),
             TextButton(
-              onPressed: actionHandler.onBookDeconstructionSelectAllRequested,
+              onPressed: selectionLocked
+                  ? null
+                  : actionHandler.onBookDeconstructionSelectAllRequested,
               child: const Text('全选'),
             ),
             TextButton(
-              onPressed:
-                  actionHandler.onBookDeconstructionClearSelectionRequested,
+              onPressed: selectionLocked
+                  ? null
+                  : actionHandler.onBookDeconstructionClearSelectionRequested,
               child: const Text('清空'),
             ),
           ],
@@ -75,7 +80,11 @@ class BookDeconstructionPreviewPanel extends StatelessWidget {
           );
         }),
         ...viewData.planGroups.map(
-          (group) => _PlanGroupSection(group: group, actionHandler: actionHandler),
+          (group) => _PlanGroupSection(
+            group: group,
+            actionHandler: actionHandler,
+            selectionLocked: selectionLocked,
+          ),
         ),
         const SizedBox(height: 8),
         Text(
@@ -95,7 +104,7 @@ class _PreviewSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    // 中文注释: 每类成果默认折叠，标题带条目数（如"章节骨架（47 章）"），点开才展开全部，避免面板过长。
+    // 中文注释: 每类成果默认折叠，标题带条目数（如"分章结果（47 章）"），点开才展开全部，避免面板过长。
     return ExpansionTile(
       initiallyExpanded: false,
       dense: true,
@@ -140,10 +149,15 @@ class _PreviewSection extends StatelessWidget {
 }
 
 class _PlanGroupSection extends StatelessWidget {
-  const _PlanGroupSection({required this.group, required this.actionHandler});
+  const _PlanGroupSection({
+    required this.group,
+    required this.actionHandler,
+    required this.selectionLocked,
+  });
 
   final BookDeconstructionPlanGroupViewData group;
   final BookDeconstructionActionHandler actionHandler;
+  final bool selectionLocked;
 
   @override
   Widget build(BuildContext context) {
@@ -163,17 +177,26 @@ class _PlanGroupSection extends StatelessWidget {
           : Text(group.description, style: textTheme.bodySmall),
       children: [
         for (final item in group.items)
-          _PlanItemTile(item: item, actionHandler: actionHandler),
+          _PlanItemTile(
+            item: item,
+            actionHandler: actionHandler,
+            selectionLocked: selectionLocked,
+          ),
       ],
     );
   }
 }
 
 class _PlanItemTile extends StatelessWidget {
-  const _PlanItemTile({required this.item, required this.actionHandler});
+  const _PlanItemTile({
+    required this.item,
+    required this.actionHandler,
+    required this.selectionLocked,
+  });
 
   final BookDeconstructionPlanItemViewData item;
   final BookDeconstructionActionHandler actionHandler;
+  final bool selectionLocked;
 
   @override
   Widget build(BuildContext context) {
@@ -181,12 +204,14 @@ class _PlanItemTile extends StatelessWidget {
       dense: true,
       contentPadding: EdgeInsets.zero,
       value: item.isSelected,
-      onChanged: (selected) {
-        actionHandler.onBookDeconstructionPlanItemSelectionChanged(
-          itemId: item.id,
-          selected: selected ?? false,
-        );
-      },
+      onChanged: selectionLocked
+          ? null
+          : (selected) {
+              actionHandler.onBookDeconstructionPlanItemSelectionChanged(
+                itemId: item.id,
+                selected: selected ?? false,
+              );
+            },
       title: Text(item.title),
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

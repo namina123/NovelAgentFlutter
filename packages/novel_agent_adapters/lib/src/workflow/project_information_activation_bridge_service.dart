@@ -317,10 +317,7 @@ class ProjectInformationActivationBridgeService {
           : InformationActivationPriorities.reference,
       metadata: note.metadata,
     );
-    final required = _isRequired(
-      priority: priority,
-      metadata: note.metadata,
-    );
+    final required = _isRequired(priority: priority, metadata: note.metadata);
     final pinned = _isPinned(priority: priority, metadata: note.metadata);
     final activationTextDraft = _applyPreferredBudget(
       _researchNoteActivationText(note, priority: priority),
@@ -399,10 +396,7 @@ class ProjectInformationActivationBridgeService {
       fallback: InformationActivationPriorities.reference,
       metadata: record.metadata,
     );
-    final required = _isRequired(
-      priority: priority,
-      metadata: record.metadata,
-    );
+    final required = _isRequired(priority: priority, metadata: record.metadata);
     final pinned = _isPinned(priority: priority, metadata: record.metadata);
     final activationTextDraft = _applyPreferredBudget(
       _referenceWorkActivationText(record, priority: priority),
@@ -665,10 +659,7 @@ class ProjectInformationActivationBridgeService {
     return fallback;
   }
 
-  bool _isRequired({
-    required String priority,
-    required JsonMap metadata,
-  }) {
+  bool _isRequired({required String priority, required JsonMap metadata}) {
     // 中文注释: required 只表达上下文注入优先级，不代替 permission policy 的审批语义。
     return priority == InformationActivationPriorities.required ||
         _boolFlags(

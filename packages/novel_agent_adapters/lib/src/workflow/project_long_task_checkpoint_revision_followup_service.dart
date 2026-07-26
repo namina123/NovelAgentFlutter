@@ -130,14 +130,13 @@ class ProjectLongTaskCheckpointRevisionFollowupService {
       'created_tasks': ValueReaders.boolValue(created['duplicated'])
           ? const <Object?>[]
           : ValueReaders.mapValue(created['task']).isEmpty
-              ? const <Object?>[]
-              : <Object?>[ValueReaders.mapValue(created['task'])],
+          ? const <Object?>[]
+          : <Object?>[ValueReaders.mapValue(created['task'])],
       'rewired_tasks': rewired,
       'changed_paths': _mergePaths(
-        _mergePaths(
-          ValueReaders.stringList(created['changed_paths']),
-          <String>[ValueReaders.stringValue(updatedTask['relative_path'])],
-        ),
+        _mergePaths(ValueReaders.stringList(created['changed_paths']), <String>[
+          ValueReaders.stringValue(updatedTask['relative_path']),
+        ]),
         rewired
             .map((item) => ValueReaders.stringValue(item['relative_path']))
             .where((item) => item.trim().isNotEmpty)

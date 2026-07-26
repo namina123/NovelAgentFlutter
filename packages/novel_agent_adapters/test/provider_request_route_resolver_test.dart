@@ -4,28 +4,31 @@ import 'package:test/test.dart';
 
 void main() {
   group('ProviderRequestRouteResolver', () {
-    test('resolves openai chat and responses routes from one runtime entry', () {
-      const resolver = ProviderRequestRouteResolver();
+    test(
+      'resolves openai chat and responses routes from one runtime entry',
+      () {
+        const resolver = ProviderRequestRouteResolver();
 
-      final chatResolution = resolver.resolve(
-        protocol: ProviderProfileConstants.kindOpenAiCompatible,
-        apiMode: 'chat',
-      );
-      final responsesResolution = resolver.resolve(
-        protocol: ProviderProfileConstants.kindOpenAiCompatible,
-        apiMode: 'responses',
-      );
+        final chatResolution = resolver.resolve(
+          protocol: ProviderProfileConstants.kindOpenAiCompatible,
+          apiMode: 'chat',
+        );
+        final responsesResolution = resolver.resolve(
+          protocol: ProviderProfileConstants.kindOpenAiCompatible,
+          apiMode: 'responses',
+        );
 
-      expect(chatResolution.routeFamily, RequestRouteFamily.chatCompletions);
-      expect(chatResolution.apiMode, ProviderProfileConstants.apiModeChat);
-      expect(chatResolution.isAllowed, isTrue);
-      expect(responsesResolution.routeFamily, RequestRouteFamily.responses);
-      expect(
-        responsesResolution.apiMode,
-        ProviderProfileConstants.apiModeResponses,
-      );
-      expect(responsesResolution.isAllowed, isTrue);
-    });
+        expect(chatResolution.routeFamily, RequestRouteFamily.chatCompletions);
+        expect(chatResolution.apiMode, ProviderProfileConstants.apiModeChat);
+        expect(chatResolution.isAllowed, isTrue);
+        expect(responsesResolution.routeFamily, RequestRouteFamily.responses);
+        expect(
+          responsesResolution.apiMode,
+          ProviderProfileConstants.apiModeResponses,
+        );
+        expect(responsesResolution.isAllowed, isTrue);
+      },
+    );
 
     test('keeps anthropic messages route closed to messages', () {
       const resolver = ProviderRequestRouteResolver();

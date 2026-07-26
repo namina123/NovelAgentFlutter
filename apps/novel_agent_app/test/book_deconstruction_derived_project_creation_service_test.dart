@@ -71,10 +71,7 @@ void main() {
     // 中文注释: 续写路线把分好的正文写进正文区域 chapters/（而非 inherited/ 镜像），
     // 文件名带可解析的"第N章"，续写在其后接写。
     final liveChapterPath = const BookDeconstructionTargetPathService()
-        .liveChapterPath(
-          sequence: 1,
-          title: '第一章 港口风暴',
-        );
+        .liveChapterPath(sequence: 1, title: '第一章 港口风暴');
     expect(liveChapterPath, startsWith('chapters/'));
     expect(
       workspacePort.readStoredTextFile(
@@ -169,12 +166,80 @@ void main() {
     expect(references, isNotEmpty);
 
     expect(
+      await ProjectStructuredContentBridgeService().readProjectedBodyText(
+        result.project,
+        'imports/source_original/book_deconstruction_1_海上城邦.md',
+      ),
+      contains('第一章 港口风暴'),
+    );
+
+    expect(
       workspacePort.readStoredTextFile(
         result.project.rootPath,
         InformationProjectionDocument.knowledgeSummaryRelativePath,
       ),
       isNull,
     );
+  });
+
+  test('SQLite 派生项目先归档原文主事实源，再写来源投影', () async {
+    final events = <String>[];
+    final workspacePort = _InMemoryProjectWorkspacePort(
+      onWrite: (relativePath) => events.add('projection:$relativePath'),
+    );
+    final manifestCodec = ProjectManifestCodecService();
+    final structuredBridge = _RecordingSourceArchiveBridgeService(events);
+    final buildResult = BuildBookDeconstructionDraftUseCase().execute(
+      sourceTitle: '海上城邦',
+      sourceContent: '第一章 港口风暴\n主角在港口被迫卷入一场追捕。',
+      sourceAbsolutePath: 'D:/Books/source_book.md',
+    );
+    final service = BookDeconstructionDerivedProjectCreationService(
+      createProjectWorkspaceUseCase: CreateProjectWorkspaceUseCase(
+        projectRepository: _FakeProjectRepository(
+          workspacePort: workspacePort,
+          manifestCodecService: manifestCodec,
+        ),
+        projectWorkspacePort: workspacePort,
+        projectContentRepository: _FakeProjectContentRepository(),
+        projectReadableProjectionService:
+            _FakeProjectReadableProjectionService(),
+        projectManifestCodecService: manifestCodec,
+      ),
+      writeProjectTextFileUseCase: WriteProjectTextFileUseCase(
+        projectWorkspacePort: workspacePort,
+      ),
+      narrativePersistenceService:
+          BookDeconstructionNarrativePersistenceService(
+            workspacePort: workspacePort,
+          ),
+      structuredContentBridgeService: structuredBridge,
+    );
+
+    final result = await service.execute(
+      projectsRootPath: 'D:/Projects',
+      sourceProject: const ProjectDescriptor(
+        id: 'sqlite-source',
+        name: 'SQLite 拆书源项目',
+        rootPath: 'D:/Projects/sqlite_source',
+        projectType: 'book_deconstruction',
+        storageStrategy: ProjectStorageStrategy.sqliteProjectStore,
+      ),
+      buildResult: buildResult,
+      selectedItemIds: const <String>{},
+      selectedFollowupOptionId: 'continuation_novel',
+    );
+
+    const archivePath = 'imports/source_original/book_deconstruction_1_海上城邦.md';
+    final primaryIndex = events.indexOf('sqlite:$archivePath');
+    final projectionIndex = events.indexOf('projection:$archivePath');
+    expect(
+      result.project.storageStrategy,
+      ProjectStorageStrategy.sqliteProjectStore,
+    );
+    expect(primaryIndex, greaterThanOrEqualTo(0));
+    expect(projectionIndex, greaterThanOrEqualTo(0));
+    expect(primaryIndex, lessThan(projectionIndex));
   });
 
   test('派生服务会为长任务同人路线选择运行基准且不混入原作正文', () async {
@@ -304,6 +369,9 @@ class _FakeProjectReadableProjectionService
 }
 
 class _InMemoryProjectWorkspacePort implements ProjectWorkspacePort {
+  _InMemoryProjectWorkspacePort({this.onWrite});
+
+  final void Function(String relativePath)? onWrite;
   final Map<String, String> _files = <String, String>{};
 
   String? readStoredTextFile(String rootPath, String relativePath) {
@@ -337,5 +405,24 @@ class _InMemoryProjectWorkspacePort implements ProjectWorkspacePort {
     String content,
   ) async {
     _files[_key(rootPath, relativePath)] = content;
+    onWrite?.call(relativePath);
+  }
+}
+
+class _RecordingSourceArchiveBridgeService
+    extends ProjectStructuredContentBridgeService {
+  _RecordingSourceArchiveBridgeService(this._events);
+
+  final List<String> _events;
+
+  @override
+  Future<void> persistSourceOriginalArchive({
+    required ProjectDescriptor project,
+    required String archivePath,
+    required String archiveTitle,
+    required String sourceContent,
+    String statePath = '',
+  }) async {
+    _events.add('sqlite:$archivePath');
   }
 }

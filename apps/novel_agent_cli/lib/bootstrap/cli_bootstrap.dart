@@ -17,6 +17,7 @@ import '../commands/asset/asset_command.dart';
 import '../commands/template/template_command.dart';
 import '../commands/workflow/workflow_command.dart';
 import '../commands/shared/cli_automation_input_service.dart';
+import '../commands/shared/cli_exit_codes.dart';
 import '../output/cli_output_settings.dart';
 import '../output/terminal_printer.dart';
 
@@ -272,6 +273,9 @@ class CliBootstrap {
       ),
       updateProjectManifestUseCase: UpdateProjectManifestUseCase(
         writeProjectTextFileUseCase: writeProjectTextFileUseCase,
+        readProjectFileUseCase: ReadProjectFileUseCase(
+          bundle.projectWorkspacePort,
+        ),
       ),
       projectToolHostPort: bundle.projectToolHostPort,
       previewCustomizationBundleImportUseCase:
@@ -300,6 +304,7 @@ class CliBootstrap {
       projectPackageLibraryService: projectPackageLibraryService,
       projectContextLoader: projectContextLoader,
       printer: printer,
+      structuredContentBridgeService: ProjectStructuredContentBridgeService(),
     );
     final ragCommand = RagCommand(
       projectRepository: bundle.projectRepository,
@@ -335,14 +340,24 @@ class CliBootstrap {
     }
     switch (commandArgs.first) {
       case 'workflow':
-        return workflowCommand.run(commandArgs.skip(1).toList(growable: false));
+        return _runWithProjectManifestRecovery(
+          () =>
+              workflowCommand.run(commandArgs.skip(1).toList(growable: false)),
+          printer,
+        );
       case 'project':
-        return projectCommand.run(
-          commandArgs.skip(1).toList(growable: false),
-          defaultProjectPath: commandContext.defaultProjectPath,
+        return _runWithProjectManifestRecovery(
+          () => projectCommand.run(
+            commandArgs.skip(1).toList(growable: false),
+            defaultProjectPath: commandContext.defaultProjectPath,
+          ),
+          printer,
         );
       case 'rag':
-        return ragCommand.run(commandArgs.skip(1).toList(growable: false));
+        return _runWithProjectManifestRecovery(
+          () => ragCommand.run(commandArgs.skip(1).toList(growable: false)),
+          printer,
+        );
       case 'session':
         return sessionCommand.run(
           commandArgs.skip(1).toList(growable: false),
@@ -359,7 +374,10 @@ class CliBootstrap {
       case 'config':
         return configCommand.run(commandArgs.skip(1).toList(growable: false));
       case 'doctor':
-        return doctorCommand.run(commandArgs.skip(1).toList(growable: false));
+        return _runWithProjectManifestRecovery(
+          () => doctorCommand.run(commandArgs.skip(1).toList(growable: false)),
+          printer,
+        );
       case 'help':
       case '--help':
       case '-h':
@@ -369,6 +387,18 @@ class CliBootstrap {
         printer.error('未知命令: ${commandArgs.first}');
         _printRootHelp(printer);
         return 2;
+    }
+  }
+
+  Future<int> _runWithProjectManifestRecovery(
+    Future<int> Function() command,
+    TerminalPrinter printer,
+  ) async {
+    try {
+      return await command();
+    } on ProjectManifestCorruptionException {
+      printer.error(CliProjectContextLoader.projectManifestCorruptionMessage);
+      return CliExitCodes.invalidInput;
     }
   }
 

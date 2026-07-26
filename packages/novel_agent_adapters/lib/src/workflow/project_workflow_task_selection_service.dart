@@ -4,8 +4,8 @@ class ProjectWorkflowTaskSelectionService {
   ProjectWorkflowTaskSelectionService({
     required TaskSelectionService taskSelectionService,
     required LongTaskPathPolicyService longTaskPathPolicyService,
-  })  : _taskSelectionService = taskSelectionService,
-        _longTaskPathPolicyService = longTaskPathPolicyService;
+  }) : _taskSelectionService = taskSelectionService,
+       _longTaskPathPolicyService = longTaskPathPolicyService;
 
   final TaskSelectionService _taskSelectionService;
   final LongTaskPathPolicyService _longTaskPathPolicyService;

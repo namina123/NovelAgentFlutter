@@ -1,3 +1,4 @@
+import '../../application/models/book_deconstruction_operation_kind.dart';
 import '../../../workbench/presentation/models/selector_option_view_data.dart';
 import 'book_deconstruction_plan_group_view_data.dart';
 import 'book_deconstruction_continuity_view_data.dart';
@@ -20,6 +21,12 @@ class BookDeconstructionViewData {
     required this.selectedItemCount,
     required this.totalItemCount,
     required this.selectedFollowupOptionId,
+    required this.selectedTargetWritingTypeId,
+    required this.targetWritingTypeOptions,
+    required this.selectedTargetRuntimeBaselineId,
+    required this.targetRuntimeBaselineOptions,
+    this.canSelectTargetRuntimeBaseline = true,
+    required this.inheritAsLiveNarrative,
     required this.confirmedPreviewPath,
     required this.canConfirmSelection,
     required this.canCreateDerivedProject,
@@ -35,6 +42,11 @@ class BookDeconstructionViewData {
     required this.analysisModelOptions,
     required this.analysisStatusMessage,
     required this.analysisCompleted,
+    this.analysisStagingRunId = '',
+    this.analysisStagingPackageId = '',
+    this.analysisStagingPackageVersionId = '',
+    this.applyStagedAnalysisResults = false,
+    this.hasStagedAnalysis = false,
     this.continuity,
   });
 
@@ -54,6 +66,11 @@ class BookDeconstructionViewData {
       selectedItemCount: 0,
       totalItemCount: 0,
       selectedFollowupOptionId: '',
+      selectedTargetWritingTypeId: '',
+      targetWritingTypeOptions: <SelectorOptionViewData>[],
+      selectedTargetRuntimeBaselineId: '',
+      targetRuntimeBaselineOptions: <SelectorOptionViewData>[],
+      inheritAsLiveNarrative: false,
       confirmedPreviewPath: '',
       canConfirmSelection: false,
       canCreateDerivedProject: false,
@@ -69,6 +86,11 @@ class BookDeconstructionViewData {
       analysisModelOptions: <SelectorOptionViewData>[],
       analysisStatusMessage: '',
       analysisCompleted: false,
+      analysisStagingRunId: '',
+      analysisStagingPackageId: '',
+      analysisStagingPackageVersionId: '',
+      applyStagedAnalysisResults: false,
+      hasStagedAnalysis: false,
       continuity: null,
     );
   }
@@ -105,14 +127,33 @@ class BookDeconstructionViewData {
   final List<SelectorOptionViewData> analysisModelOptions;
   final String analysisStatusMessage;
   final bool analysisCompleted;
+  final String analysisStagingRunId;
+  final String analysisStagingPackageId;
+  final String analysisStagingPackageVersionId;
+  final bool applyStagedAnalysisResults;
+  final bool hasStagedAnalysis;
 
-  // 步骤④：确认
+  // 步骤④：确认（复合项目类型——选目标写作类型 + 续写开关）。
   final String selectedFollowupOptionId;
+  final String selectedTargetWritingTypeId;
+  final List<SelectorOptionViewData> targetWritingTypeOptions;
+  final String selectedTargetRuntimeBaselineId;
+  final List<SelectorOptionViewData> targetRuntimeBaselineOptions;
+  final bool canSelectTargetRuntimeBaseline;
+  final bool inheritAsLiveNarrative;
   final String confirmedPreviewPath;
   final bool canConfirmSelection;
   final bool canCreateDerivedProject;
 
   final BookDeconstructionContinuityViewData? continuity;
+
+  /// Confirmation and derived-project creation have started durable writes.
+  /// UI controls must not mutate the selected payload or cancel the commit.
+  bool get isCommitInProgress {
+    return operationKind ==
+            BookDeconstructionOperationKind.confirmingSelection ||
+        operationKind == BookDeconstructionOperationKind.creatingDerivedProject;
+  }
 
   BookDeconstructionViewData copyWith({
     String? projectTitle,
@@ -140,7 +181,18 @@ class BookDeconstructionViewData {
     List<SelectorOptionViewData>? analysisModelOptions,
     String? analysisStatusMessage,
     bool? analysisCompleted,
+    String? analysisStagingRunId,
+    String? analysisStagingPackageId,
+    String? analysisStagingPackageVersionId,
+    bool? applyStagedAnalysisResults,
+    bool? hasStagedAnalysis,
     String? selectedFollowupOptionId,
+    String? selectedTargetWritingTypeId,
+    List<SelectorOptionViewData>? targetWritingTypeOptions,
+    String? selectedTargetRuntimeBaselineId,
+    List<SelectorOptionViewData>? targetRuntimeBaselineOptions,
+    bool? canSelectTargetRuntimeBaseline,
+    bool? inheritAsLiveNarrative,
     String? confirmedPreviewPath,
     bool? canConfirmSelection,
     bool? canCreateDerivedProject,
@@ -168,14 +220,40 @@ class BookDeconstructionViewData {
       totalItemCount: totalItemCount ?? this.totalItemCount,
       canAnalyze: canAnalyze ?? this.canAnalyze,
       analysisUseModel: analysisUseModel ?? this.analysisUseModel,
-      analysisModelOptionKey: analysisModelOptionKey ?? this.analysisModelOptionKey,
+      analysisModelOptionKey:
+          analysisModelOptionKey ?? this.analysisModelOptionKey,
       analysisModelOptions: analysisModelOptions ?? this.analysisModelOptions,
-      analysisStatusMessage: analysisStatusMessage ?? this.analysisStatusMessage,
+      analysisStatusMessage:
+          analysisStatusMessage ?? this.analysisStatusMessage,
       analysisCompleted: analysisCompleted ?? this.analysisCompleted,
-      selectedFollowupOptionId: selectedFollowupOptionId ?? this.selectedFollowupOptionId,
+      analysisStagingRunId: analysisStagingRunId ?? this.analysisStagingRunId,
+      analysisStagingPackageId:
+          analysisStagingPackageId ?? this.analysisStagingPackageId,
+      analysisStagingPackageVersionId:
+          analysisStagingPackageVersionId ??
+          this.analysisStagingPackageVersionId,
+      applyStagedAnalysisResults:
+          applyStagedAnalysisResults ?? this.applyStagedAnalysisResults,
+      hasStagedAnalysis: hasStagedAnalysis ?? this.hasStagedAnalysis,
+      selectedFollowupOptionId:
+          selectedFollowupOptionId ?? this.selectedFollowupOptionId,
+      selectedTargetWritingTypeId:
+          selectedTargetWritingTypeId ?? this.selectedTargetWritingTypeId,
+      targetWritingTypeOptions:
+          targetWritingTypeOptions ?? this.targetWritingTypeOptions,
+      selectedTargetRuntimeBaselineId:
+          selectedTargetRuntimeBaselineId ??
+          this.selectedTargetRuntimeBaselineId,
+      targetRuntimeBaselineOptions:
+          targetRuntimeBaselineOptions ?? this.targetRuntimeBaselineOptions,
+      canSelectTargetRuntimeBaseline:
+          canSelectTargetRuntimeBaseline ?? this.canSelectTargetRuntimeBaseline,
+      inheritAsLiveNarrative:
+          inheritAsLiveNarrative ?? this.inheritAsLiveNarrative,
       confirmedPreviewPath: confirmedPreviewPath ?? this.confirmedPreviewPath,
       canConfirmSelection: canConfirmSelection ?? this.canConfirmSelection,
-      canCreateDerivedProject: canCreateDerivedProject ?? this.canCreateDerivedProject,
+      canCreateDerivedProject:
+          canCreateDerivedProject ?? this.canCreateDerivedProject,
       continuity: continuity ?? this.continuity,
     );
   }

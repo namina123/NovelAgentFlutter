@@ -38,14 +38,16 @@ class LocalProjectRepository implements ProjectRepository {
     if (!manifestExists) {
       return null;
     }
-    final manifest = _projectManifestCodecService.parse(
+    final manifest = _projectManifestCodecService.tryParseStrict(
       await manifestFile.readAsString(),
       fallbackTitle: projectName,
     );
-    final storageStrategy =
-        await _projectStorageStrategyResolver.resolveFromRootPath(
-          directory.path,
-        );
+    if (manifest == null) {
+      throw ProjectManifestCorruptionException(rootPath: directory.path);
+    }
+    final storageStrategy = _projectStorageStrategyResolver.resolveManifest(
+      manifest,
+    );
     return ProjectDescriptor(
       id: _projectIdFromName(manifest.title),
       name: manifest.title,
@@ -54,6 +56,7 @@ class LocalProjectRepository implements ProjectRepository {
       storageStrategy: storageStrategy,
       projectBranchId: manifest.projectBranchId,
       runtimeBaselineId: manifest.runtimeBaselineId,
+      additionalTraitIds: manifest.additionalTraitIds,
     );
   }
 

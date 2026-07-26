@@ -63,6 +63,14 @@ class ProjectContentPathPolicyService {
         return 'setting';
       case '角色':
         return 'character';
+      case '组织':
+        return 'organization_profile';
+      case '伏笔':
+        return 'foreshadow_record';
+      case '时间线':
+        return 'timeline_record';
+      case '关系':
+        return 'relationship_record';
       case '风格':
         return 'style';
       case '摘要':
@@ -102,6 +110,8 @@ class ProjectContentPathPolicyService {
   String directoryForContentType(String contentType) {
     // 中文注释: 内容类型到主目录的映射只在这里定一次，避免 adapters/app 各自拼默认归档位置。
     switch (normalizeContentType(contentType)) {
+      case 'premise':
+        return premiseRoot;
       case 'outline':
         return 'outlines/story';
       case 'volume_outline':
@@ -118,6 +128,14 @@ class ProjectContentPathPolicyService {
         return 'assets/world';
       case 'character':
         return 'assets/characters';
+      case 'organization_profile':
+        return 'assets/organizations';
+      case 'foreshadow_record':
+        return 'assets/foreshadows';
+      case 'timeline_record':
+        return 'assets/timeline';
+      case 'relationship_record':
+        return 'assets/relationships';
       case 'style':
         return 'assets/styles';
       case 'summary':
@@ -146,6 +164,8 @@ class ProjectContentPathPolicyService {
     final parts = clean.split('/');
     final root = parts.first;
     switch (root) {
+      case premiseRoot:
+        return 'premise';
       case sourcesRoot:
         if (parts.length > 1 && parts[1] == 'original') {
           return 'source_original';
@@ -171,8 +191,23 @@ class ProjectContentPathPolicyService {
             return 'setting';
           case 'styles':
             return 'style';
+          case 'organizations':
+            return 'organization_profile';
+          case 'foreshadows':
+            return 'foreshadow_record';
+          case 'timeline':
+            return 'timeline_record';
+          case 'relationships':
+            return 'relationship_record';
         }
         return 'chapter';
+      case 'world':
+        if (parts.length > 1 && parts[1] == 'foreshadows') {
+          return 'foreshadow_record';
+        }
+        return 'setting';
+      case 'organizations':
+        return 'organization_profile';
       case knowledgeRoot:
       case researchRoot:
         return 'knowledge';
@@ -197,12 +232,12 @@ class ProjectContentPathPolicyService {
         return 'scene';
       case samplesRoot:
         return 'sample';
-      case 'world':
-        return 'setting';
       case 'characters':
         return 'character';
       case 'styles':
         return 'style';
+      case 'imports':
+        return _inferImportedContentType(parts);
       case 'summaries':
         return 'summary';
       case analysisRoot:
@@ -219,6 +254,71 @@ class ProjectContentPathPolicyService {
           }
         }
         return 'analysis';
+      default:
+        return 'chapter';
+    }
+  }
+
+  String _inferImportedContentType(List<String> parts) {
+    // SQLite readable projections live below imports/. Preserve their source
+    // kind when a user edits them so a write cannot relabel an outline, asset
+    // or knowledge item as a chapter.
+    if (parts.length < 2) {
+      return 'chapter';
+    }
+    switch (parts[1]) {
+      case 'source_original':
+        return 'source_original';
+      case 'derived':
+        if (parts.length > 2) {
+          switch (parts[2]) {
+            case 'continuation':
+              return 'derived_continuation_narrative';
+            case 'fanfic':
+              return 'derived_fanfic_narrative';
+          }
+        }
+        return 'chapter';
+      case 'analysis':
+        if (parts.length < 3) {
+          return 'analysis';
+        }
+        switch (parts[2]) {
+          case 'premise':
+            return 'premise';
+          case 'outlines':
+            return 'outline';
+          case 'chapter_outlines':
+            return 'chapter_outline';
+          case 'volume_outlines':
+            return 'volume_outline';
+          case 'summaries':
+            return 'summary';
+          case 'knowledge':
+            return 'knowledge';
+          case 'assets':
+            if (parts.length > 3) {
+              switch (parts[3]) {
+                case 'world':
+                  return 'setting';
+                case 'characters':
+                  return 'character';
+                case 'styles':
+                  return 'style';
+                case 'organizations':
+                  return 'organization_profile';
+                case 'foreshadows':
+                  return 'foreshadow_record';
+                case 'timeline':
+                  return 'timeline_record';
+                case 'relationships':
+                  return 'relationship_record';
+              }
+            }
+            return 'analysis';
+          default:
+            return 'analysis';
+        }
       default:
         return 'chapter';
     }

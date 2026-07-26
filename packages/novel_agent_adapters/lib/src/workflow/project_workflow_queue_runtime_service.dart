@@ -115,6 +115,12 @@ class ProjectWorkflowQueueRuntimeService {
     JsonMap options = const <String, Object?>{},
   }) async {
     // 中文注释: 长任务开局只负责计划与任务物化，避免 runtime 再吞一层装配策略。
+    final optionResolution = await _taskQueueRuntimeOptionResolver
+        .resolveForLongTask(project, options: options);
+    if (!ValueReaders.boolValue(optionResolution['ok'])) {
+      return _longTaskContractRejectedResult(optionResolution);
+    }
+    final resolvedOptions = ValueReaders.mapValue(optionResolution['options']);
     final createdAt = DateTime.now().toIso8601String();
     final planId =
         'plan_${_longTaskPathPolicyService.safeId(mode)}_${DateTime.now().microsecondsSinceEpoch}';
@@ -123,7 +129,7 @@ class ProjectWorkflowQueueRuntimeService {
     final built = _buildLongTaskPlanUseCase.execute(
       mode,
       planId,
-      options: options,
+      options: resolvedOptions,
       createdAt: createdAt,
       planPath: planPath,
       planMarkdownPath: planMarkdownPath,
@@ -494,6 +500,11 @@ class ProjectWorkflowQueueRuntimeService {
     JsonMap agent = const <String, Object?>{},
   }) async {
     // 中文注释: 队列入口先收并发守卫与 watchdog 生命周期，真正执行收在 _runWorkflowTaskQueueBody。
+    final optionResolution = await _taskQueueRuntimeOptionResolver
+        .resolveForLongTask(project, options: options);
+    if (!ValueReaders.boolValue(optionResolution['ok'])) {
+      return _longTaskContractRejectedResult(optionResolution);
+    }
     final projectId = project.id;
     if (!_inFlightProjects.add(projectId)) {
       return <String, Object?>{
@@ -513,7 +524,7 @@ class ProjectWorkflowQueueRuntimeService {
       return await _runWorkflowTaskQueueBody(
         project,
         settings,
-        options: options,
+        resolvedOptions: ValueReaders.mapValue(optionResolution['options']),
         agent: agent,
       );
     } finally {
@@ -530,14 +541,10 @@ class ProjectWorkflowQueueRuntimeService {
   Future<JsonMap> _runWorkflowTaskQueueBody(
     ProjectDescriptor project,
     AppSettings settings, {
-    JsonMap options = const <String, Object?>{},
+    required JsonMap resolvedOptions,
     JsonMap agent = const <String, Object?>{},
   }) async {
     // 中文注释: 受控连续运行在这里收口，只编排队列，不再把其它调度职责往回塞。
-    final resolvedOptions = await _taskQueueRuntimeOptionResolver.resolve(
-      project,
-      options: options,
-    );
     final cleanOptions = _taskQueueOptionService.normalizeOptions(
       resolvedOptions,
     );
@@ -1100,6 +1107,17 @@ class ProjectWorkflowQueueRuntimeService {
       'executed_tools': <Object?>[],
       'execution': <String, Object?>{},
       'checkpoint_review': <String, Object?>{},
+    };
+  }
+
+  JsonMap _longTaskContractRejectedResult(JsonMap resolution) {
+    return <String, Object?>{
+      'ok': false,
+      'error': ValueReaders.stringValue(resolution['error']),
+      'message': ValueReaders.stringValue(resolution['message']),
+      'response': const <String, Object?>{},
+      'output_paths': const <Object?>[],
+      'changed_paths': const <Object?>[],
     };
   }
 

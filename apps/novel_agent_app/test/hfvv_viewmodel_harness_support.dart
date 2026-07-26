@@ -29,6 +29,7 @@ class HfvvAppShellHarness {
     required this.generateDraftUseCase,
     required this.artifactRoot,
     required this.workspaceRoot,
+    required this.workspaceId,
     required this.repoRoot,
   });
 
@@ -37,6 +38,7 @@ class HfvvAppShellHarness {
   final ScriptedGenerateDraftUseCase generateDraftUseCase;
   final Directory artifactRoot;
   final Directory workspaceRoot;
+  final String workspaceId;
   final Directory repoRoot;
 
   static Future<HfvvAppShellHarness> create({
@@ -50,19 +52,17 @@ class HfvvAppShellHarness {
       required ProjectPromptTemplateService promptTemplateService,
     })?
     workflowRuntimeServiceFactory,
+    String? workspaceId,
   }) async {
     final repoRoot = _resolveRepoRoot();
     final artifactRoot = Directory(
       '${repoRoot.path}${Platform.pathSeparator}artifacts${Platform.pathSeparator}high_fidelity_viewmodel_validation${Platform.pathSeparator}$hfvvRunId${Platform.pathSeparator}hfvv_02',
     );
-    final workspaceRoot = Directory(
-      '${artifactRoot.path}${Platform.pathSeparator}$hfvv02LaneId',
+    final requestedWorkspaceId = _normalizeWorkspaceId(workspaceId);
+    final workspaceRoot = await _createWorkspaceRoot(
+      artifactRoot: artifactRoot,
+      workspaceId: requestedWorkspaceId ?? hfvv02LaneId,
     );
-    if (workspaceRoot.existsSync()) {
-      await _deleteDirectoryWithRetries(workspaceRoot);
-    }
-    workspaceRoot.createSync(recursive: true);
-    artifactRoot.createSync(recursive: true);
 
     final settingsRoot = Directory(
       '${workspaceRoot.path}${Platform.pathSeparator}settings',
@@ -91,6 +91,7 @@ class HfvvAppShellHarness {
       generateDraftUseCase: generateDraftUseCase,
       artifactRoot: artifactRoot,
       workspaceRoot: workspaceRoot,
+      workspaceId: requestedWorkspaceId ?? _directoryName(workspaceRoot),
       repoRoot: repoRoot,
     );
     await harness.initialize();
@@ -112,6 +113,7 @@ class HfvvAppShellHarness {
     required String title,
     String projectTypeId = 'novel',
     String storageStrategyId = 'markdown_project_store',
+    String runtimeBaselineId = '',
   }) async {
     controller.onCreateProjectRequested();
     await waitUntil(
@@ -124,8 +126,18 @@ class HfvvAppShellHarness {
       title: title,
       projectTypeId: projectTypeId,
       storageStrategyId: storageStrategyId,
+      runtimeBaselineId: runtimeBaselineId,
     );
     controller.onProjectCreationSubmitted(request);
+    if (projectTypeId == 'long_novel') {
+      await waitUntil(
+        () =>
+            workbench.projectLauncher?.creationPhase ==
+            ProjectCreationPhase.runtimeBaseline,
+        description: 'runtime baseline phase',
+      );
+      controller.onProjectCreationSubmitted(request);
+    }
     await waitUntil(
       () =>
           workbench.projectLauncher?.creationPhase ==
@@ -319,25 +331,38 @@ class HfvvAppShellHarness {
     return candidate;
   }
 
-  static Future<void> _deleteDirectoryWithRetries(
-    Directory directory, {
-    int attempts = 3,
+  static Future<Directory> _createWorkspaceRoot({
+    required Directory artifactRoot,
+    required String workspaceId,
   }) async {
-    // 中文注释: HFVV 工作区在 Windows 上偶尔会遇到目录残留或短暂占用，这里做有限重试，避免测试支架把环境问题误判成业务失败。
-    var lastError;
-    for (var attempt = 0; attempt < attempts; attempt += 1) {
-      try {
-        directory.deleteSync(recursive: true);
-        return;
-      } catch (error) {
-        lastError = error;
-        if (attempt + 1 < attempts) {
-          await Future<void>.delayed(const Duration(milliseconds: 100));
-        }
-      }
-    }
-    throw lastError;
+    await artifactRoot.create(recursive: true);
+    return artifactRoot.createTemp('$workspaceId-');
   }
+
+  static String? _normalizeWorkspaceId(String? workspaceId) {
+    if (workspaceId == null) {
+      return null;
+    }
+    final normalized = workspaceId.trim();
+    if (!_workspaceIdPattern.hasMatch(normalized)) {
+      throw ArgumentError.value(
+        workspaceId,
+        'workspaceId',
+        'must contain only letters, digits, dots, underscores, and hyphens',
+      );
+    }
+    return normalized;
+  }
+
+  static String _directoryName(Directory directory) {
+    return directory.uri.pathSegments.lastWhere(
+      (segment) => segment.isNotEmpty,
+    );
+  }
+
+  static final RegExp _workspaceIdPattern = RegExp(
+    r'^[A-Za-z0-9][A-Za-z0-9._-]*$',
+  );
 
   static AppSettings _seedSettings() {
     return const AppSettings(
@@ -534,6 +559,9 @@ class HfvvAppShellHarness {
       ),
       updateProjectManifestUseCase: UpdateProjectManifestUseCase(
         writeProjectTextFileUseCase: writeProjectTextFileUseCase,
+        readProjectFileUseCase: ReadProjectFileUseCase(
+          bundle.projectWorkspacePort,
+        ),
       ),
       projectToolHostPort: bundle.projectToolHostPort,
       bookDeconstructionNarrativePersistenceService:

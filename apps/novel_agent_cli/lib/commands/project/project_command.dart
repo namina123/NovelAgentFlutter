@@ -43,6 +43,9 @@ class ProjectCommand {
     required CliProjectContextLoader projectContextLoader,
     required TerminalPrinter printer,
     CliProjectArtifactLabelService? projectArtifactLabelService,
+    ProjectStructuredContentBridgeService? structuredContentBridgeService,
+    ProjectContentPathPolicyService? contentPathPolicyService,
+    SourceDocumentFormatCatalogService? sourceDocumentFormatCatalogService,
   }) : _loadProjectWorkspaceUseCase = loadProjectWorkspaceUseCase,
        _createProjectEntryUseCase = createProjectEntryUseCase,
        _importProjectFilesUseCase = importProjectFilesUseCase,
@@ -64,7 +67,14 @@ class ProjectCommand {
        _projectContextLoader = projectContextLoader,
        _printer = printer,
        _projectArtifactLabelService =
-           projectArtifactLabelService ?? const CliProjectArtifactLabelService();
+           projectArtifactLabelService ??
+           const CliProjectArtifactLabelService(),
+       _structuredContentBridgeService = structuredContentBridgeService,
+       _contentPathPolicyService =
+           contentPathPolicyService ?? const ProjectContentPathPolicyService(),
+       _sourceDocumentFormatCatalogService =
+           sourceDocumentFormatCatalogService ??
+           const SourceDocumentFormatCatalogService();
 
   final LoadProjectWorkspaceUseCase _loadProjectWorkspaceUseCase;
   final CreateProjectEntryUseCase _createProjectEntryUseCase;
@@ -87,6 +97,14 @@ class ProjectCommand {
   final CliProjectContextLoader _projectContextLoader;
   final TerminalPrinter _printer;
   final CliProjectArtifactLabelService _projectArtifactLabelService;
+  final ProjectStructuredContentBridgeService? _structuredContentBridgeService;
+  final ProjectContentPathPolicyService _contentPathPolicyService;
+  final SourceDocumentFormatCatalogService _sourceDocumentFormatCatalogService;
+
+  ProjectStructuredContentBridgeService
+  get _structuredContentBridgeServiceOrDefault =>
+      _structuredContentBridgeService ??
+      ProjectStructuredContentBridgeService();
 
   Future<int> run(
     List<String> args, {
@@ -138,10 +156,16 @@ class ProjectCommand {
   }) async {
     // 中文注释: 项目摘要命令保留为最轻入口，便于快速确认工作区状态。
     final projectPath = _optionValue(args, '--project') ?? defaultProjectPath;
-    final snapshot = await _loadProjectWorkspaceUseCase.execute(projectPath);
+    ProjectWorkspaceSnapshot? snapshot;
+    try {
+      snapshot = await _loadProjectWorkspaceUseCase.execute(projectPath);
+    } on ProjectManifestCorruptionException {
+      _printer.error(CliProjectContextLoader.projectManifestCorruptionMessage);
+      return CliExitCodes.invalidInput;
+    }
     if (snapshot == null) {
       _printer.error('项目不存在: $projectPath');
-      return 2;
+      return CliExitCodes.invalidInput;
     }
     _printer.success('已打开项目: ${snapshot.project.name}');
     _printer.info('根目录: ${snapshot.project.rootPath}');
@@ -168,12 +192,77 @@ class ProjectCommand {
       return 2;
     }
     final content = _optionValue(args, '--content') ?? '';
+    final primarySourceSnapshots = <String, SqliteProjectBodyTextDocument?>{};
     final result = await _createProjectEntryUseCase.execute(
       project: project,
       relativePath: relativePath,
       content: content,
+      prepareFileWrite:
+          ({required project, required relativePath, required content}) {
+            return _prepareCreatedFilePrimarySource(
+              project: project,
+              relativePath: relativePath,
+              content: content,
+              snapshots: primarySourceSnapshots,
+            );
+          },
+      rollbackPreparedFileWrite:
+          ({required project, required relativePath, required content}) {
+            return _restoreCreatedFilePrimarySource(
+              project: project,
+              relativePath: relativePath,
+              snapshots: primarySourceSnapshots,
+            );
+          },
     );
     return _printResult(result);
+  }
+
+  Future<void> _prepareCreatedFilePrimarySource({
+    required ProjectDescriptor project,
+    required String relativePath,
+    required String content,
+    required Map<String, SqliteProjectBodyTextDocument?> snapshots,
+  }) async {
+    final snapshot = await _structuredContentBridgeServiceOrDefault
+        .loadStructuredDocument(project: project, documentPath: relativePath);
+    await _persistCreatedFilePrimarySource(
+      project: project,
+      relativePath: relativePath,
+      content: content,
+    );
+    snapshots[relativePath] = snapshot;
+  }
+
+  Future<void> _restoreCreatedFilePrimarySource({
+    required ProjectDescriptor project,
+    required String relativePath,
+    required Map<String, SqliteProjectBodyTextDocument?> snapshots,
+  }) async {
+    if (!snapshots.containsKey(relativePath)) {
+      return;
+    }
+    await _structuredContentBridgeServiceOrDefault.restoreStructuredDocument(
+      project: project,
+      documentPath: relativePath,
+      snapshot: snapshots.remove(relativePath),
+    );
+  }
+
+  Future<void> _persistCreatedFilePrimarySource({
+    required ProjectDescriptor project,
+    required String relativePath,
+    required String content,
+  }) {
+    // 中文注释: CLI 新建的可编辑文本在 SQLite 项目先进入主库，随后才创建 Markdown 投影。
+    final documentKind = _importedDocumentKind(project, relativePath);
+    return _structuredContentBridgeServiceOrDefault.persistStructuredDocument(
+      project: project,
+      documentPath: relativePath,
+      documentKind: documentKind,
+      title: relativePath,
+      content: content,
+    );
   }
 
   Future<int> _runCreateFolder(
@@ -216,12 +305,108 @@ class ProjectCommand {
       _printer.error('请至少通过 --source 提供一个外部文件路径。');
       return 2;
     }
+    final primarySourceSnapshots = <String, SqliteProjectBodyTextDocument?>{};
     final result = await _importProjectFilesUseCase.execute(
       project: project,
       sourcePaths: sourcePaths,
-      targetDirectory: _optionValue(args, '--target') ?? '',
+      targetDirectory:
+          _optionValue(args, '--target') ??
+          const ProjectStorageStrategyPathPolicyService()
+              .defaultImportTargetDirectory(project.storageStrategy),
+      prepareImportedFile:
+          ({required project, required sourcePath, required relativePath}) {
+            return _prepareImportedFilePrimarySource(
+              project: project,
+              sourcePath: sourcePath,
+              relativePath: relativePath,
+              snapshots: primarySourceSnapshots,
+            );
+          },
+      rollbackPreparedImportedFile:
+          ({required project, required sourcePath, required relativePath}) {
+            return _restoreImportedFilePrimarySource(
+              project: project,
+              relativePath: relativePath,
+              snapshots: primarySourceSnapshots,
+            );
+          },
     );
     return _printResult(result);
+  }
+
+  Future<void> _prepareImportedFilePrimarySource({
+    required ProjectDescriptor project,
+    required String sourcePath,
+    required String relativePath,
+    required Map<String, SqliteProjectBodyTextDocument?> snapshots,
+  }) async {
+    final snapshot = await _structuredContentBridgeServiceOrDefault
+        .loadStructuredDocument(project: project, documentPath: relativePath);
+    final persisted = await _persistImportedFilePrimarySource(
+      project: project,
+      sourcePath: sourcePath,
+      relativePath: relativePath,
+    );
+    if (persisted) {
+      snapshots[relativePath] = snapshot;
+    }
+  }
+
+  Future<void> _restoreImportedFilePrimarySource({
+    required ProjectDescriptor project,
+    required String relativePath,
+    required Map<String, SqliteProjectBodyTextDocument?> snapshots,
+  }) async {
+    if (!snapshots.containsKey(relativePath)) {
+      return;
+    }
+    await _structuredContentBridgeServiceOrDefault.restoreStructuredDocument(
+      project: project,
+      documentPath: relativePath,
+      snapshot: snapshots.remove(relativePath),
+    );
+  }
+
+  Future<bool> _persistImportedFilePrimarySource({
+    required ProjectDescriptor project,
+    required String sourcePath,
+    required String relativePath,
+  }) async {
+    // 中文注释: 导入附件可能是二进制；仅将已有统一 reader 支持的文本格式同步到 SQLite 主事实源。
+    if (project.storageStrategy != ProjectStorageStrategy.sqliteProjectStore) {
+      return false;
+    }
+    if (!_sourceDocumentFormatCatalogService.supportsPath(sourcePath)) {
+      return false;
+    }
+    final content = await _projectToolHostPort.readExternalTextFile(sourcePath);
+    if (content == null) {
+      return false;
+    }
+    final documentKind = _importedDocumentKind(project, relativePath);
+    await _structuredContentBridgeServiceOrDefault.persistStructuredDocument(
+      project: project,
+      documentPath: relativePath,
+      documentKind: documentKind,
+      title: relativePath,
+      content: content,
+    );
+    return true;
+  }
+
+  String _importedDocumentKind(ProjectDescriptor project, String relativePath) {
+    final normalizedPath = relativePath.trim().replaceAll('\\', '/');
+    final inferredKind = _contentPathPolicyService.inferContentTypeFromPath(
+      normalizedPath,
+    );
+    if (project.projectType.trim() == 'knowledge_base' &&
+        normalizedPath.startsWith('imports/') &&
+        !normalizedPath.startsWith('imports/analysis/') &&
+        !normalizedPath.startsWith('imports/source_original/') &&
+        !normalizedPath.startsWith('imports/derived/')) {
+      return 'knowledge';
+    }
+    return inferredKind;
   }
 
   Future<int> _runUpdateInfo(
@@ -235,10 +420,13 @@ class ProjectCommand {
     if (project == null) {
       return 2;
     }
+    if (_optionValue(args, '--type') != null) {
+      _printer.error('项目类型请通过专用转换流程修改，update-info 只更新项目元数据。');
+      return 2;
+    }
     await _updateProjectManifestUseCase.execute(
       project: project,
       title: _optionValue(args, '--title') ?? project.name,
-      projectType: _optionValue(args, '--type') ?? project.projectType,
       genre: _optionValue(args, '--genre') ?? '',
       premise: _optionValue(args, '--premise') ?? '',
       notes: _optionValue(args, '--notes') ?? '',
@@ -570,7 +758,7 @@ class ProjectCommand {
       'project export-package --target C:\\exports [--title 标题] [--description 描述] [--project 路径]',
       'project generate-index [--project 路径]',
       'project save-bundle [--title 标题] [--description 描述] [--project 路径]',
-      'project update-info --title 标题 [--type novel] [--genre 题材] [--premise 设定] [--notes 备注] [--project 路径]',
+      'project update-info --title 标题 [--genre 题材] [--premise 设定] [--notes 备注] [--project 路径]',
     ]);
   }
 

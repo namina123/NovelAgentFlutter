@@ -50,25 +50,24 @@ class SettingsPage extends StatelessWidget {
   Widget _buildBody() {
     // 中文注释: 设置页主体只负责在各个独立设置面板之间分发数据，不把每个子页细节混进一个大 build。
     if (viewData.activeTabId == 'interfaces') {
+      // 中文注释: 接口页只管地址与凭据，不再触碰模型或连接测试。
       return ProviderSettingsPanel(
         providers: viewData.providers,
         providerDirectoryOptions: viewData.providerDirectoryOptions,
-        allModelOptions: viewData.allModelOptions,
-        providerConnectionValidationResult:
-            viewData.providerConnectionValidationResult,
         onProviderSelected: actionHandler.onProviderSelected,
         onProviderCreateRequested: actionHandler.onProviderCreateRequested,
         onProviderDetailBackRequested:
             actionHandler.onProviderDetailBackRequested,
         onProviderSaved: actionHandler.onProviderSaved,
         onProviderDeleted: actionHandler.onProviderDeleted,
-        onConnectionTestRequested: actionHandler.onProviderConnectionTestRequested,
       );
     }
     if (viewData.activeTabId == 'models') {
+      // 中文注释: 模型页接管"接口+模型"的连接测试；接口选好后用真实配对探测。
       return ModelSettingsPanel(
         viewData: viewData,
         onSaved: actionHandler.onModelSettingsSaved,
+        onConnectionTestRequested: actionHandler.onModelConnectionTestRequested,
       );
     }
     if (viewData.activeTabId == 'permissions') {

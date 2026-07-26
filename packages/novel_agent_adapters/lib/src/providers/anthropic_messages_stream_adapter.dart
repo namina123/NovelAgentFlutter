@@ -13,20 +13,20 @@ import 'gateway_tool_call_response_resolver.dart';
 import 'openai_gateway_cancellation_scope.dart';
 import 'anthropic_messages_response_parser.dart';
 
-typedef AnthropicRetryRequest = Future<JsonMap> Function(
-  ChatRequest request, {
-  DraftGenerationCancellationToken? cancellationToken,
-  void Function(LlmStreamUpdate update)? onStreamUpdate,
-});
+typedef AnthropicRetryRequest =
+    Future<JsonMap> Function(
+      ChatRequest request, {
+      DraftGenerationCancellationToken? cancellationToken,
+      void Function(LlmStreamUpdate update)? onStreamUpdate,
+    });
 
 class AnthropicMessagesStreamAdapter {
   AnthropicMessagesStreamAdapter({
     GatewaySseEventPump? sseEventPump,
     GatewayJsonResponseParser? responseParser,
     GatewayToolCallFallbackResolver? toolCallFallbackResolver,
-  }) : _sseEventPump = sseEventPump ?? const GatewaySseEventPump(
-         ignoreEventFields: true,
-       ),
+  }) : _sseEventPump =
+           sseEventPump ?? const GatewaySseEventPump(ignoreEventFields: true),
        _responseParser =
            responseParser ?? const AnthropicMessagesResponseParser(),
        _toolCallFallbackResolver =
@@ -425,7 +425,9 @@ class _AnthropicResponseAccumulator {
     final type = ValueReaders.stringValue(event['type']);
     switch (type) {
       case 'message_start':
-        _streamAggregator.setRawResponse(ValueReaders.mapValue(event['message']));
+        _streamAggregator.setRawResponse(
+          ValueReaders.mapValue(event['message']),
+        );
         return null;
       case 'content_block_start':
         final index = ValueReaders.intValue(event['index'], -1);
@@ -504,7 +506,9 @@ class _AnthropicResponseAccumulator {
           builder.appendPartialJson(
             ValueReaders.stringValue(delta['partial_json']),
           );
-          return _streamAggregator.buildStateOnlyUpdate(toolCalls: _toolCalls());
+          return _streamAggregator.buildStateOnlyUpdate(
+            toolCalls: _toolCalls(),
+          );
         }
         return null;
       case 'content_block_stop':

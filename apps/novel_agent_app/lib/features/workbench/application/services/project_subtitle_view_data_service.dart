@@ -7,8 +7,10 @@ class ProjectSubtitleViewDataService {
     RuntimeBaselineCatalogService? runtimeBaselineCatalogService,
     RuntimeLabelService? runtimeLabelService,
   }) : _runtimeBaselineCatalogService =
-           runtimeBaselineCatalogService ?? const RuntimeBaselineCatalogService(),
-       _runtimeLabelService = runtimeLabelService ?? const RuntimeLabelService();
+           runtimeBaselineCatalogService ??
+           const RuntimeBaselineCatalogService(),
+       _runtimeLabelService =
+           runtimeLabelService ?? const RuntimeLabelService();
 
   final RuntimeBaselineCatalogService _runtimeBaselineCatalogService;
   final RuntimeLabelService _runtimeLabelService;
@@ -22,14 +24,15 @@ class ProjectSubtitleViewDataService {
       _projectTypeLabel(project.projectType),
       _runtimeLabelService.storageStrategyLabel(project.storageStrategy),
     ];
-    final baselineId = (runtimeProfile?.runtimeBaselineId ?? project.runtimeBaselineId)
-        .trim();
+    final baselineId =
+        (runtimeProfile?.runtimeBaselineId ?? project.runtimeBaselineId).trim();
     final runtimeMode = (runtimeProfile?.runtimeMode ?? '').trim();
     final baseline = _runtimeBaselineCatalogService.byId(baselineId);
     if (baseline != null) {
       segments.add(baseline.title);
     }
-    if (runtimeMode.isNotEmpty && _shouldExposeRuntimeMode(project.projectType)) {
+    if (runtimeMode.isNotEmpty &&
+        _shouldExposeRuntimeMode(project.projectType)) {
       segments.add(_runtimeLabelService.runtimeModeLabel(runtimeMode));
     }
     return segments.where((item) => item.trim().isNotEmpty).join(' · ');
@@ -43,6 +46,7 @@ class ProjectSubtitleViewDataService {
         return '长篇项目';
       case 'knowledge_base':
         return '资料知识库';
+      case 'short_collection':
       case 'short_story_collection':
         return '短篇集项目';
       case 'book_analysis':

@@ -14,8 +14,7 @@ class ProjectForeshadowStateUpdateService {
        _plannerService =
            plannerService ?? const ForeshadowStateUpdatePlannerService(),
        _repository =
-           repository ??
-           ProjectForeshadowRepository(hostPort: hostPort);
+           repository ?? ProjectForeshadowRepository(hostPort: hostPort);
 
   final ForeshadowStateUpdateRequestMapperService _requestMapperService;
   final ForeshadowStateUpdatePlannerService _plannerService;

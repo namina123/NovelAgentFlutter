@@ -58,9 +58,11 @@ class ProjectReferenceExtractionStrategyPickerViewDataService {
       selectedProfileId: selectedOption.profileId,
       summary: summary,
       sourceHint: useDeconstructionProjection
-          ? '当前项目是拆书项目。本次不会重新要求你选择原始书稿，而会直接使用已确认的拆书产物作为提取源文。'
+          ? '当前项目具备拆书能力。本次不会重新要求你选择原始书稿，而会直接使用已确认的拆书产物作为提取源文。'
           : '当前项目会在开始后要求选择源资料文件；提取结果会沉淀为正式知识资产，而不是停留在临时摘要里。',
-      confirmButtonLabel: useDeconstructionProjection ? '用拆书产物开始提取' : '选择资料并开始提取',
+      confirmButtonLabel: useDeconstructionProjection
+          ? '用拆书产物开始提取'
+          : '选择资料并开始提取',
       options: options,
     );
   }

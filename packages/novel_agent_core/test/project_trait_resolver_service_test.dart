@@ -35,6 +35,23 @@ void main() {
       expect(traits.ids.where((item) => item == 'custom_scope').length, 1);
     });
 
+    test(
+      'does not grant long-task traits from a baseline foreign to the project type',
+      () {
+        // 中文注释: runtime baseline 是项目合同的派生字段；普通小说即使收到陈旧或手工
+        // 构造的 long_novel 基准，也不能因此获得长任务能力。
+        final resolver = ProjectTraitResolverService();
+
+        final traits = resolver.resolve(
+          projectTypeId: 'novel',
+          runtimeBaselineId: 'continuous_autonomous',
+        );
+
+        expect(traits.contains(ProjectTrait.longTask), isFalse);
+        expect(traits.contains(ProjectTrait.seedDriven), isFalse);
+      },
+    );
+
     test('keeps book deconstruction trait on deconstruction project', () {
       final resolver = ProjectTraitResolverService();
 

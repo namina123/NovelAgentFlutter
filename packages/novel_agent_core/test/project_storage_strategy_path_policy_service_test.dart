@@ -60,6 +60,13 @@ void main() {
         ),
         'imports',
       );
+      expect(
+        service.directoryForContentType(
+          storageStrategy: ProjectStorageStrategy.sqliteProjectStore,
+          contentType: 'timeline_record',
+        ),
+        'imports/analysis/assets/timeline',
+      );
     });
   });
 }

@@ -51,10 +51,7 @@ class ProjectRagRetrievalActivationBridgeService {
     );
   }
 
-  JsonMap buildPackageJson(
-    ProjectDescriptor project,
-    JsonMap retrievalResult,
-  ) {
+  JsonMap buildPackageJson(ProjectDescriptor project, JsonMap retrievalResult) {
     // 中文注释: 上层有时只需要 JSON 结果，因此这里提供一个薄投影，不强迫调用方提前关心对象实例。
     return buildPackage(project, retrievalResult).toJson();
   }
@@ -62,7 +59,9 @@ class ProjectRagRetrievalActivationBridgeService {
   List<RetrievalHit> _selectedHits(JsonMap retrievalResult) {
     // 中文注释: hits 只从检索结果投影，不回读宿主私有结构，也不在桥接层重排底层语义。
     final result = <RetrievalHit>[];
-    for (final rawHit in ValueReaders.mapList(retrievalResult['retrieval_hits'])) {
+    for (final rawHit in ValueReaders.mapList(
+      retrievalResult['retrieval_hits'],
+    )) {
       final hit = RetrievalHit.fromJson(ValueReaders.deepCopyMap(rawHit));
       if (hit.validateBasics().isEmpty) {
         result.add(hit);
@@ -71,10 +70,7 @@ class ProjectRagRetrievalActivationBridgeService {
     return result;
   }
 
-  List<String> _stringListOrFallback(
-    Object? value,
-    Iterable<String> fallback,
-  ) {
+  List<String> _stringListOrFallback(Object? value, Iterable<String> fallback) {
     // 中文注释: 这里优先使用检索结果自带的稳定摘要，缺失时再从 hits 推导，避免桥接层吞掉 traceability。
     final direct = ValueReaders.stringList(value)
         .map((entry) => entry.trim())
@@ -140,7 +136,9 @@ class ProjectRagRetrievalActivationBridgeService {
     if (queryMode.isNotEmpty) {
       parts.add('mode=$queryMode');
     }
-    final rerankPolicy = ValueReaders.stringValue(query['rerank_policy']).trim();
+    final rerankPolicy = ValueReaders.stringValue(
+      query['rerank_policy'],
+    ).trim();
     if (rerankPolicy.isNotEmpty) {
       parts.add('rerank=$rerankPolicy');
     }
@@ -151,8 +149,9 @@ class ProjectRagRetrievalActivationBridgeService {
     if (parts.isNotEmpty) {
       return parts.join('；');
     }
-    final displayText = ValueReaders.stringValue(retrievalResult['display_text'])
-        .trim();
+    final displayText = ValueReaders.stringValue(
+      retrievalResult['display_text'],
+    ).trim();
     if (displayText.isNotEmpty) {
       return displayText;
     }
@@ -163,10 +162,7 @@ class ProjectRagRetrievalActivationBridgeService {
     return 'RAG retrieval activation';
   }
 
-  String _activationPackageId(
-    ProjectDescriptor project,
-    JsonMap query,
-  ) {
+  String _activationPackageId(ProjectDescriptor project, JsonMap query) {
     // 中文注释: activation package id 需要跨宿主稳定且可回指，所以优先组合 project 与 query_id。
     final queryId = ValueReaders.stringValue(query['query_id']).trim();
     final projectId = project.id.trim().isEmpty ? 'project' : project.id.trim();

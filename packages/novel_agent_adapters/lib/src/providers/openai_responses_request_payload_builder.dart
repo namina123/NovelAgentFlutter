@@ -202,7 +202,9 @@ class OpenAiResponsesRequestPayloadBuilder {
       if (role != 'system' && role != 'developer') {
         continue;
       }
-      final text = GatewayContentExtractor.textFromContent(message['content']).trim();
+      final text = GatewayContentExtractor.textFromContent(
+        message['content'],
+      ).trim();
       if (text.isEmpty) {
         continue;
       }

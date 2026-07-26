@@ -7,6 +7,7 @@ class ConversationAttachmentFacade {
 
   Future<void> onAttachmentRequested() async {
     // 中文注释: 附件入口只管 picker、权限门槛与 session 草稿，不把文件探测和发送链塞回 controller 总中心。
+    // 产品层默认关闭附件（桥接未实现）；即便内部 supports 为 true，也不得在 show 为 false 时留下假草稿。
     if (_controller._readRuntimeState().activeModeGuidanceState != null) {
       _controller._announce('当前引导阶段暂不接受会话附件。');
       return;
@@ -17,6 +18,10 @@ class ConversationAttachmentFacade {
         isGenerating: _controller._readWorkbench().isGenerating,
       ),
     );
+    if (!capabilities.showAttachmentEntry) {
+      _controller._announce('会话附件尚未开放：当前不会把附件发给模型。');
+      return;
+    }
     if (!capabilities.supportsAttachmentEntry) {
       _controller._announce('当前模型或本机环境暂不支持会话附件。');
       return;

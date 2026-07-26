@@ -9,10 +9,7 @@ void main() {
 
       final resolution = resolver.resolve(apiMode: 'stream_generate_content');
       expect(resolution.protocolKind, ProtocolKind.geminiNative);
-      expect(
-        resolution.routeFamily,
-        RequestRouteFamily.streamGenerateContent,
-      );
+      expect(resolution.routeFamily, RequestRouteFamily.streamGenerateContent);
       expect(
         resolution.apiMode,
         ProviderProfileConstants.apiModeStreamGenerateContent,
@@ -38,14 +35,8 @@ void main() {
         ChatRequest(
           modelId: 'gemini-3.5',
           messages: const <JsonMap>[
-            <String, Object?>{
-              'role': 'system',
-              'content': 'Stay brief.',
-            },
-            <String, Object?>{
-              'role': 'user',
-              'content': 'Say hello.',
-            },
+            <String, Object?>{'role': 'system', 'content': 'Stay brief.'},
+            <String, Object?>{'role': 'user', 'content': 'Say hello.'},
             <String, Object?>{
               'role': 'assistant',
               'content': 'Hello!',
@@ -53,9 +44,7 @@ void main() {
                 <String, Object?>{
                   'id': 'call_1',
                   'name': 'demo_tool',
-                  'arguments': <String, Object?>{
-                    'value': 'x',
-                  },
+                  'arguments': <String, Object?>{'value': 'x'},
                 },
               ],
             },
@@ -71,9 +60,7 @@ void main() {
               'function': <String, Object?>{
                 'name': 'demo_tool',
                 'description': 'demo',
-                'parameters': <String, Object?>{
-                  'type': 'object',
-                },
+                'parameters': <String, Object?>{'type': 'object'},
               },
             },
           ],
@@ -94,7 +81,9 @@ void main() {
       final tools = ValueReaders.mapList(payload['tools']);
       expect(tools, hasLength(1));
       expect(tools.first['functionDeclarations'], isA<List<Object?>>());
-      final generationConfig = ValueReaders.mapValue(payload['generationConfig']);
+      final generationConfig = ValueReaders.mapValue(
+        payload['generationConfig'],
+      );
       expect(generationConfig['temperature'], isNull);
       expect(generationConfig['thinkingConfig'], isA<Map<String, Object?>>());
     });

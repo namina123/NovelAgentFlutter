@@ -12,7 +12,8 @@ class ReferenceExtractionRunCoordinator {
     ReferenceExtractionPublicationService? publicationService,
     ReferenceExtractionMountCoordinator? mountCoordinator,
     ReferenceExtractionLivenessBridge? livenessBridge,
-  }) : identityService = identityService ?? const ReferenceExtractionIdentityService(),
+  }) : identityService =
+           identityService ?? const ReferenceExtractionIdentityService(),
        publicationService =
            publicationService ?? const ReferenceExtractionPublicationService(),
        mountCoordinator =

@@ -128,21 +128,20 @@ void main() {
         expect(
           projection.projectionItems.map((item) => item.relativePath),
           <String>['research/资料研究摘要.md'],
-      );
-    },
-  );
+        );
+      },
+    );
 
     test(
       'does not fabricate default projection paths when only sqlite-first records changed',
       () {
-        final projection = service.fromWorkflowInformationContract(
-          <String, Object?>{
-            'present': true,
-            'knowledge_count': 1,
-            'summary': '已补充 1 条知识记录。',
-            'projection_paths': const <Object?>[],
-          },
-        );
+        final projection = service
+            .fromWorkflowInformationContract(<String, Object?>{
+              'present': true,
+              'knowledge_count': 1,
+              'summary': '已补充 1 条知识记录。',
+              'projection_paths': const <Object?>[],
+            });
 
         expect(projection.projectionPaths, isEmpty);
         expect(projection.projectionItems, isEmpty);

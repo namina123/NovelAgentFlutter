@@ -9,9 +9,18 @@ class AppShellNavigationCatalog {
 
   static List<AppShellNavigationSection> sections({
     bool projectAssetsPrimaryWorkspace = false,
+    bool bookDeconstructionPrimaryWorkspace = false,
+    bool hasBookDeconstructionCapability = false,
   }) {
     final workspaceItems = <AppShellNavigationItem>[
-      projectAssetsPrimaryWorkspace
+      bookDeconstructionPrimaryWorkspace
+          ? const AppShellNavigationItem(
+              destination: AppDestination.bookDeconstruction,
+              label: '拆书分析',
+              tooltip: '拆书分析',
+              icon: Icons.auto_stories_outlined,
+            )
+          : projectAssetsPrimaryWorkspace
           ? const AppShellNavigationItem(
               destination: AppDestination.projectAssets,
               label: '资料库',
@@ -24,12 +33,14 @@ class AppShellNavigationCatalog {
               tooltip: '创作台',
               icon: Icons.space_dashboard_outlined,
             ),
-      const AppShellNavigationItem(
-        destination: AppDestination.bookDeconstruction,
-        label: '拆书分析',
-        tooltip: '拆书分析',
-        icon: Icons.auto_stories_outlined,
-      ),
+      if (hasBookDeconstructionCapability &&
+          !bookDeconstructionPrimaryWorkspace)
+        const AppShellNavigationItem(
+          destination: AppDestination.bookDeconstruction,
+          label: '拆书分析',
+          tooltip: '拆书分析',
+          icon: Icons.auto_stories_outlined,
+        ),
       const AppShellNavigationItem(
         destination: AppDestination.agentEcosystem,
         label: '智能体生态',
@@ -85,10 +96,14 @@ class AppShellNavigationCatalog {
   static AppShellNavigationItem? findItem(
     AppDestination destination, {
     bool projectAssetsPrimaryWorkspace = false,
+    bool bookDeconstructionPrimaryWorkspace = false,
+    bool hasBookDeconstructionCapability = false,
   }) {
     // 中文注释: 紧凑布局和标题条都要复用同一份导航元数据，避免在多个组件里重复维护映射。
     for (final section in sections(
       projectAssetsPrimaryWorkspace: projectAssetsPrimaryWorkspace,
+      bookDeconstructionPrimaryWorkspace: bookDeconstructionPrimaryWorkspace,
+      hasBookDeconstructionCapability: hasBookDeconstructionCapability,
     )) {
       for (final item in section.items) {
         if (item.destination == destination) {
@@ -102,10 +117,14 @@ class AppShellNavigationCatalog {
   static AppShellNavigationSection? findSection(
     AppDestination destination, {
     bool projectAssetsPrimaryWorkspace = false,
+    bool bookDeconstructionPrimaryWorkspace = false,
+    bool hasBookDeconstructionCapability = false,
   }) {
     // 中文注释: 当前页面所属分组由目录统一提供，避免顶部条和抽拉栏各自猜测分类。
     for (final section in sections(
       projectAssetsPrimaryWorkspace: projectAssetsPrimaryWorkspace,
+      bookDeconstructionPrimaryWorkspace: bookDeconstructionPrimaryWorkspace,
+      hasBookDeconstructionCapability: hasBookDeconstructionCapability,
     )) {
       for (final item in section.items) {
         if (item.destination == destination) {

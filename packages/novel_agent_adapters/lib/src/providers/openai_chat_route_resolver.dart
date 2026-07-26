@@ -3,9 +3,7 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 class OpenAiChatRouteResolver {
   const OpenAiChatRouteResolver();
 
-  GatewayRouteResolution resolve({
-    String apiMode = '',
-  }) {
+  GatewayRouteResolution resolve({String apiMode = ''}) {
     // 中文注释: OpenAI Chat 链在这一轮只保留 chat/completions，Responses 的真实路由留待后续独立 session。
     return GatewayRouteResolution.resolve(
       protocolKind: ProtocolKind.openAiCompatible,
@@ -17,10 +15,7 @@ class OpenAiChatRouteResolver {
     );
   }
 
-  Uri resolveRequestUri(
-    String baseUrl, {
-    String apiMode = '',
-  }) {
+  Uri resolveRequestUri(String baseUrl, {String apiMode = ''}) {
     // 中文注释: 请求 URI 只拼 chat/completions，避免 gateway 自己再发明第二套路由选择逻辑。
     final normalizedBaseUrl = _normalizeBaseUrl(baseUrl);
     resolve(apiMode: apiMode);

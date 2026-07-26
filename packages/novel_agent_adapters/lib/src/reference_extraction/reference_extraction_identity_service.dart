@@ -27,7 +27,9 @@ class ReferenceExtractionIdentityService {
       return staged;
     }
     final dotIndex = sourceTitle.lastIndexOf('.');
-    final baseName = dotIndex > 0 ? sourceTitle.substring(0, dotIndex) : sourceTitle;
+    final baseName = dotIndex > 0
+        ? sourceTitle.substring(0, dotIndex)
+        : sourceTitle;
     final safeBaseName = _safeFileName(baseName, fallback: 'reference_source');
     return 'ref_${safeBaseName}_${now.microsecondsSinceEpoch}';
   }
@@ -72,9 +74,7 @@ class ReferenceExtractionIdentityService {
     return '参考资产提取：$sourceTitle';
   }
 
-  String resolveCreatedBy({
-    String? stagedValue,
-  }) {
+  String resolveCreatedBy({String? stagedValue}) {
     final trimmed = (stagedValue ?? '').trim();
     return trimmed.isEmpty
         ? 'project_reference_extraction_runtime_service'

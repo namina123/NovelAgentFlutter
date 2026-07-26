@@ -3,9 +3,12 @@ import 'dart:io';
 class SystemProxyResolver {
   const SystemProxyResolver({
     Future<String> Function(String name)? registryValueReader,
-  }) : _registryValueReader = registryValueReader;
+    Map<String, String>? environment,
+  }) : _registryValueReader = registryValueReader,
+       _environment = environment;
 
   final Future<String> Function(String name)? _registryValueReader;
+  final Map<String, String>? _environment;
 
   Future<String> resolveFor(Uri uri) async {
     // 中文注释: 代理解析集中在一个适配器里，保证网关层只关心“是否有代理策略”而不关心平台细节。
@@ -17,7 +20,7 @@ class SystemProxyResolver {
     }
     return HttpClient.findProxyFromEnvironment(
       uri,
-      environment: Platform.environment,
+      environment: _environment ?? Platform.environment,
     );
   }
 

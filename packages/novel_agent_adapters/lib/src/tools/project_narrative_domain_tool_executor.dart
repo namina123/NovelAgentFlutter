@@ -35,8 +35,7 @@ class ProjectNarrativeDomainToolExecutor {
     NarrativeStateClaimCodecService? claimCodecService,
     NarrativeProfileCodecService? profileCodecService,
     NarrativeConstraintBindingCodecService? bindingCodecService,
-    ProjectStructuredContentBridgeService?
-    structuredContentBridgeService,
+    ProjectStructuredContentBridgeService? structuredContentBridgeService,
   }) : _hostPort = hostPort,
        _dispatcher =
            dispatcher ??
@@ -347,29 +346,46 @@ class ProjectNarrativeDomainToolExecutor {
     if (rawChapterContent.trim().isEmpty) {
       throw StateError('章节结果声明已交付，但 chapter_content 为空。');
     }
-    await _hostPort.writeTextFile(
-      project.rootPath,
-      chapterPath,
-      chapterContent,
-    );
-    changedPaths.add(chapterPath);
-
     final submissionJson = ValueReaders.mapValue(payload['submission']);
+    final deliveryId = ValueReaders.stringValue(payload['delivery_id']).trim();
+    if (submissionJson.isNotEmpty && deliveryId.isEmpty) {
+      throw StateError('submit_chapter_delivery 结果缺少 delivery_id。');
+    }
+    final previousDocument = await _structuredContentBridgeService
+        .loadStructuredDocument(project: project, documentPath: chapterPath);
+    try {
+      // SQLite chapter delivery is the primary fact source; the Markdown file
+      // is written only after that record has been accepted. A malformed legacy
+      // outcome can omit submission metadata, but it must not omit its body.
+      await _structuredContentBridgeService.persistChapterDelivery(
+        project: project,
+        chapterPath: chapterPath,
+        chapterTitle: ValueReaders.stringValue(payload['title']),
+        chapterContent: chapterContent,
+        recordPath: deliveryId.isEmpty
+            ? ''
+            : _pathService.deliveryPath(deliveryId),
+        status: ValueReaders.stringValue(stateResult['state'], 'delivered'),
+      );
+      await _hostPort.writeTextFile(
+        project.rootPath,
+        chapterPath,
+        chapterContent,
+      );
+    } catch (_) {
+      try {
+        await _structuredContentBridgeService.restoreStructuredDocument(
+          project: project,
+          documentPath: chapterPath,
+          snapshot: previousDocument,
+        );
+      } catch (_) {}
+      rethrow;
+    }
+    changedPaths.add(chapterPath);
     if (submissionJson.isEmpty) {
       return;
     }
-    final deliveryId = ValueReaders.stringValue(payload['delivery_id']).trim();
-    if (deliveryId.isEmpty) {
-      throw StateError('submit_chapter_delivery 结果缺少 delivery_id。');
-    }
-    await _structuredContentBridgeService.persistChapterDelivery(
-      project: project,
-      chapterPath: chapterPath,
-      chapterTitle: ValueReaders.stringValue(payload['title']),
-      chapterContent: chapterContent,
-      recordPath: _pathService.deliveryPath(deliveryId),
-      status: ValueReaders.stringValue(stateResult['state'], 'delivered'),
-    );
     final recordPath = _pathService.deliveryPath(deliveryId);
     await _recordDocumentService.writeIndexedRecord(
       rootPath: project.rootPath,

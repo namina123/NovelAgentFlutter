@@ -29,8 +29,7 @@ class ProjectReferenceExtractionExecutionService {
     ModelExecutionProfileService? modelExecutionProfileService,
     ProjectReferenceExtractionRequestBuilderService? requestBuilderService,
     ReferenceExtractionStrategyProfileCatalogService? strategyCatalogService,
-    ProjectReferenceExtractionSourceResolutionService?
-    sourceResolutionService,
+    ProjectReferenceExtractionSourceResolutionService? sourceResolutionService,
   }) : _readSettings = readSettings,
        _llmGatewayFactory = llmGatewayFactory,
        _executeReferenceExtraction = executeReferenceExtraction,
@@ -68,12 +67,12 @@ class ProjectReferenceExtractionExecutionService {
     String strategyProfileId = '',
     String overrideProviderId = '',
     String overrideModelId = '',
+    bool analysisOnly = false,
   }) async {
     final resolution = await _sourceResolutionService.resolve(
       project: project,
-      pickSourceFile: () => _sourcePickerService.pickSingleFile(
-        dialogTitle: '选择参考源文档',
-      ),
+      pickSourceFile: () =>
+          _sourcePickerService.pickSingleFile(dialogTitle: '选择参考源文档'),
     );
     if (!resolution.ok) {
       return ProjectReferenceExtractionExecutionResult(
@@ -88,17 +87,15 @@ class ProjectReferenceExtractionExecutionService {
       strategyProfileId: strategyProfileId,
       overrideProviderId: overrideProviderId,
       overrideModelId: overrideModelId,
+      analysisOnly: analysisOnly,
     );
     if (!resolution.usedDeconstructionProjection) {
       return result;
     }
-    return ProjectReferenceExtractionExecutionResult(
-      ok: result.ok,
-      didMutateProject: result.didMutateProject,
+    return result.copyWith(
       statusMessage: result.ok
           ? '${resolution.statusMessage} ${result.statusMessage}'.trim()
           : result.statusMessage,
-      normalizationNote: result.normalizationNote,
     );
   }
 
@@ -108,6 +105,7 @@ class ProjectReferenceExtractionExecutionService {
     String strategyProfileId = '',
     String overrideProviderId = '',
     String overrideModelId = '',
+    bool analysisOnly = false,
   }) async {
     final cleanSourcePath = sourceFilePath.trim();
     if (cleanSourcePath.isEmpty) {
@@ -191,9 +189,11 @@ class ProjectReferenceExtractionExecutionService {
           targetLanguage: 'zh-CN',
           maxChapterEntries: 6,
           maxEntityEntries: 6,
-          exportBundle: true,
-          attachToProject: true,
-          projectMountedEntries: true,
+          // 拆书步骤③只允许暂存分析结果，用户在步骤④确认前不得生成项目资产。
+          exportBundle: !analysisOnly,
+          attachToProject: !analysisOnly,
+          projectMountedEntries: !analysisOnly,
+          explicitProjectionConfirmationGranted: !analysisOnly,
           runId: runId,
           strategyProfileId: normalizedStrategyProfileId,
           availableContextChars: ValueReaders.intValue(
@@ -244,14 +244,28 @@ class ProjectReferenceExtractionExecutionService {
           request: request,
         );
       }
-      if (!_runCoordinator.publicationService.isPublishedProjectionResult(
-        result,
-      )) {
+      final completedSuccessfully = analysisOnly
+          ? result.publishedSnapshotAvailable && result.finalizedEntryCount > 0
+          : _runCoordinator.publicationService.isPublishedProjectionResult(
+              result,
+            );
+      if (!completedSuccessfully) {
         return ProjectReferenceExtractionExecutionResult(
           ok: false,
           didMutateProject: false,
           statusMessage: _runCoordinator.publicationService
               .buildIncompleteStatusMessage(result),
+        );
+      }
+      if (analysisOnly) {
+        return ProjectReferenceExtractionExecutionResult(
+          ok: true,
+          didMutateProject: false,
+          statusMessage:
+              '参考资料分析完成：接纳 ${result.acceptedProposalCount} 条，暂存 ${result.finalizedEntryCount} 条结构化条目，尚未应用到项目资产。',
+          runId: result.runId,
+          packageId: result.packageId,
+          packageVersionId: result.packageVersionId,
         );
       }
       return ProjectReferenceExtractionExecutionResult(
@@ -260,6 +274,9 @@ class ProjectReferenceExtractionExecutionService {
         statusMessage: _runCoordinator.publicationService.buildSuccessMessage(
           result,
         ),
+        runId: result.runId,
+        packageId: result.packageId,
+        packageVersionId: result.packageVersionId,
       );
     } catch (error) {
       return ProjectReferenceExtractionExecutionResult(

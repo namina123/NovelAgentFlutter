@@ -32,6 +32,8 @@ class ProjectReferenceExtractionSourceResolutionService {
            structuredSourceProjectionService ??
            const BookDeconstructionStructuredSourceProjectionService();
 
+  final ProjectCapabilityService _projectCapabilityService =
+      ProjectCapabilityService();
   final ProjectRelativePathResolver _relativePathResolver;
   final ProjectWorkspacePort _workspacePort;
   final BookDeconstructionStructuredSourceProjectionService
@@ -41,8 +43,7 @@ class ProjectReferenceExtractionSourceResolutionService {
     required ProjectDescriptor project,
     required Future<String?> Function() pickSourceFile,
   }) async {
-    if (project.projectType.trim() ==
-        BookDeconstructionConstants.projectTypeId) {
+    if (_hasBookDeconstructionCapability(project)) {
       final relativePath = _structuredSourceProjectionService.targetPath(
         storageStrategy: project.storageStrategy,
       );
@@ -85,6 +86,14 @@ class ProjectReferenceExtractionSourceResolutionService {
       ok: true,
       sourceFilePath: selectedPath.trim(),
       statusMessage: '已选择参考源文档。',
+    );
+  }
+
+  bool _hasBookDeconstructionCapability(ProjectDescriptor project) {
+    return _projectCapabilityService.hasBookDeconstruction(
+      projectTypeId: project.projectType,
+      additionalTraitIds: project.additionalTraitIds,
+      runtimeBaselineId: project.runtimeBaselineId,
     );
   }
 }

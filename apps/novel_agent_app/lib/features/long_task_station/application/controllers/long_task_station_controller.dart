@@ -60,6 +60,10 @@ class LongTaskStationController extends ChangeNotifier
   Future<void> Function()? _showTaskCenterRequested;
   String Function()? _readCurrentProjectPathRequested;
   Future<void> Function()? _refreshCompletedCallback;
+  // 中文注释: 队列控制由壳层注入，总站不直接依赖 ProjectWorkflowRuntimeService，避免子域反向依赖巨石。
+  Future<JsonMap> Function(RunInstance run)? _pauseRunRequested;
+  Future<JsonMap> Function(RunInstance run)? _resumeRunRequested;
+  Future<JsonMap> Function(RunInstance run)? _stopRunRequested;
 
   LongTaskStationSnapshot _snapshot;
   LongTaskStationViewData _viewData;
@@ -94,6 +98,18 @@ class LongTaskStationController extends ChangeNotifier
     _openResourceRequested = openResourceRequested;
     _showTaskCenterRequested = showTaskCenterRequested;
     _readCurrentProjectPathRequested = readCurrentProjectPathRequested;
+  }
+
+  void attachQueueControlCallbacks({
+    required Future<JsonMap> Function(RunInstance run) pauseRunRequested,
+    required Future<JsonMap> Function(RunInstance run) resumeRunRequested,
+    required Future<JsonMap> Function(RunInstance run) stopRunRequested,
+  }) {
+    // 中文注释: 暂停/恢复/停止必须落到 workflow 的 run record + 队列入口（与任务中心同语义），
+    // 不能只改全局 registry 状态，否则“恢复”只是假绿。
+    _pauseRunRequested = pauseRunRequested;
+    _resumeRunRequested = resumeRunRequested;
+    _stopRunRequested = stopRunRequested;
   }
 
   void attachRefreshCompletedCallback(Future<void> Function() callback) {
@@ -240,37 +256,37 @@ class LongTaskStationController extends ChangeNotifier
 
   @override
   void onLongTaskStationPauseRequested(String runId) {
-    _applyTransition(
-      runId,
-      actionLabel: '暂停',
-      transition: () => _longTaskSupervisor.pauseRun(
+    unawaited(
+      _applyQueueControl(
         runId,
-        note: 'paused_from_long_task_station',
+        actionLabel: '暂停',
+        operation: _pauseRunRequested,
+        successMessage: (run) => '长任务运行已暂停：${run.project.title}',
       ),
     );
   }
 
   @override
   void onLongTaskStationResumeRequested(String runId) {
-    _applyTransition(
-      runId,
-      actionLabel: '恢复',
-      transition: () => _longTaskSupervisor.resumeRun(
+    unawaited(
+      _applyQueueControl(
         runId,
-        note: 'resumed_from_long_task_station',
+        actionLabel: '恢复',
+        operation: _resumeRunRequested,
+        successMessage: (run) =>
+            '长任务运行已恢复推进：${run.project.title}（按批次推进，可随时再恢复下一批）',
       ),
     );
   }
 
   @override
   void onLongTaskStationStopRequested(String runId) {
-    _applyTransition(
-      runId,
-      actionLabel: '停止',
-      transition: () => _longTaskSupervisor.stopRun(
+    unawaited(
+      _applyQueueControl(
         runId,
-        note: 'stopped_from_long_task_station',
-        stopReason: 'user_requested_from_station',
+        actionLabel: '停止',
+        operation: _stopRunRequested,
+        successMessage: (run) => '长任务运行已停止：${run.project.title}',
       ),
     );
   }
@@ -382,13 +398,32 @@ class LongTaskStationController extends ChangeNotifier
     super.dispose();
   }
 
-  Future<void> _applyTransition(
+  Future<void> _applyQueueControl(
     String runId, {
     required String actionLabel,
-    required Future<RunInstance?> Function() transition,
+    required Future<JsonMap> Function(RunInstance run)? operation,
+    required String Function(RunInstance run) successMessage,
   }) async {
     final targetRunId = runId.trim();
     if (targetRunId.isEmpty) {
+      return;
+    }
+    final run = _findRun(targetRunId);
+    if (run == null) {
+      _snapshot = _snapshot.copyWith(
+        isLoading: false,
+        statusMessage: '未找到目标运行实例，可能已被移除。',
+      );
+      _rebuildView();
+      return;
+    }
+    final callback = operation;
+    if (callback == null) {
+      _snapshot = _snapshot.copyWith(
+        isLoading: false,
+        statusMessage: '长任务队列控制尚未接入，无法$actionLabel。',
+      );
+      _rebuildView();
       return;
     }
     _snapshot = _snapshot.copyWith(
@@ -397,19 +432,32 @@ class LongTaskStationController extends ChangeNotifier
     );
     _rebuildView();
     try {
-      final updated = await transition();
-      if (updated == null) {
+      final result = await callback(run);
+      final ok = ValueReaders.boolValue(result['ok']);
+      if (!ok) {
+        final error = ValueReaders.stringValue(
+          result['message'],
+          ValueReaders.stringValue(
+            result['error'],
+            '$actionLabel失败，请稍后重试或从任务中心操作。',
+          ),
+        );
+        await refresh();
         _snapshot = _snapshot.copyWith(
-          isLoading: false,
-          statusMessage: '未找到目标运行实例，可能已被移除。',
+          selectedRunId: run.id,
+          statusMessage: error,
         );
         _rebuildView();
         return;
       }
       await refresh();
+      final message = ValueReaders.stringValue(
+        result['message'],
+        successMessage(run),
+      );
       _snapshot = _snapshot.copyWith(
-        selectedRunId: updated.id,
-        statusMessage: '已$actionLabel运行实例：${updated.project.title}',
+        selectedRunId: run.id,
+        statusMessage: message,
       );
       _rebuildView();
     } catch (error) {
@@ -420,6 +468,19 @@ class LongTaskStationController extends ChangeNotifier
       );
       _rebuildView();
     }
+  }
+
+  RunInstance? _findRun(String runId) {
+    final targetRunId = runId.trim();
+    if (targetRunId.isEmpty) {
+      return null;
+    }
+    for (final item in _snapshot.runs) {
+      if (item.id == targetRunId) {
+        return item;
+      }
+    }
+    return null;
   }
 
   Future<void> _applyPendingResearchAction(

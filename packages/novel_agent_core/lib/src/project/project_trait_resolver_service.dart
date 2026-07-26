@@ -1,14 +1,21 @@
 import 'project_type_catalog_service.dart';
+import 'project_runtime_baseline_catalog_service.dart';
 import 'project_trait.dart';
 import 'project_trait_set.dart';
 
 class ProjectTraitResolverService {
-  ProjectTraitResolverService({
+  const ProjectTraitResolverService({
     ProjectTypeCatalogService? projectTypeCatalogService,
+    ProjectRuntimeBaselineCatalogService? projectRuntimeBaselineCatalogService,
   }) : _projectTypeCatalogService =
-           projectTypeCatalogService ?? const ProjectTypeCatalogService();
+           projectTypeCatalogService ?? const ProjectTypeCatalogService(),
+       _projectRuntimeBaselineCatalogService =
+           projectRuntimeBaselineCatalogService ??
+           const ProjectRuntimeBaselineCatalogService();
 
   final ProjectTypeCatalogService _projectTypeCatalogService;
+  final ProjectRuntimeBaselineCatalogService
+  _projectRuntimeBaselineCatalogService;
 
   ProjectTraitSet resolve({
     required String projectTypeId,
@@ -18,8 +25,12 @@ class ProjectTraitResolverService {
   }) {
     // 中文注释: 项目 traits 统一从项目类型、运行基线、模式线索和外部附加标签合成，避免上层各自硬编码。
     final definition = _projectTypeCatalogService.definitionOf(projectTypeId);
+    final normalizedRuntimeBaselineId = _projectRuntimeBaselineCatalogService
+        .normalizeForProjectType(definition.id, runtimeBaselineId);
     var traits = ProjectTraitSet(definition.defaultTraits);
-    traits = traits.mergedWith(_traitsForRuntimeBaseline(runtimeBaselineId));
+    traits = traits.mergedWith(
+      _traitsForRuntimeBaseline(normalizedRuntimeBaselineId),
+    );
     traits = traits.mergedWith(_traitsForMode(modeId));
     return traits.mergedWithIds(additionalTraitIds);
   }

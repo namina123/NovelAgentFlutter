@@ -579,6 +579,246 @@ void main() {
         expect(hostPort.fileContent('chapters/target.md'), 'HEAD\nD\n');
       },
     );
+
+    test(
+      'rename_project preserves each project type contract and writes its real label',
+      () async {
+        final codec = ProjectManifestCodecService();
+
+        Future<void> expectRenamed({
+          required ProjectDescriptor project,
+          required ProjectManifest manifest,
+          required String expectedTypeLabel,
+        }) async {
+          final hostPort = _FakeProjectToolHostPort(
+            files: <String, String>{
+              ProjectManifestCodecService.manifestRelativePath: codec.encode(
+                manifest,
+              ),
+            },
+          );
+          final dispatcher = ProjectToolDispatcher(hostPort: hostPort);
+
+          final result = await dispatcher.execute(
+            project: project,
+            toolCall: const <String, Object?>{
+              'name': 'rename_project',
+              'arguments': <String, Object?>{'new_name': '重命名后的项目'},
+            },
+          );
+
+          expect(result['ok'], isTrue);
+          final renamed = codec.parse(
+            hostPort.fileContent(
+              ProjectManifestCodecService.manifestRelativePath,
+            ),
+          );
+          expect(renamed.title, '重命名后的项目');
+          expect(renamed.projectType, manifest.projectType);
+          expect(renamed.storageStrategy, manifest.storageStrategy);
+          expect(renamed.projectBranchId, manifest.projectBranchId);
+          expect(renamed.runtimeBaselineId, manifest.runtimeBaselineId);
+          expect(renamed.additionalTraitIds, manifest.additionalTraitIds);
+          expect(
+            hostPort.fileContent(
+              ProjectSupportDocumentCatalog.projectOverviewRelativePath,
+            ),
+            contains('- 项目类型：$expectedTypeLabel'),
+          );
+        }
+
+        final novel = codec.create(title: '普通小说', projectType: 'novel');
+        await expectRenamed(
+          project: const ProjectDescriptor(
+            id: 'novel',
+            name: '普通小说',
+            rootPath: 'D:/novel',
+          ),
+          manifest: novel,
+          expectedTypeLabel: '小说',
+        );
+
+        final longNovel = codec.create(
+          title: '长篇项目',
+          projectType: 'long_novel',
+          storageStrategy: ProjectStorageStrategy.sqliteProjectStore,
+          runtimeBaselineId: 'continuous_autonomous',
+          additionalTraitIds: const <String>['book_deconstruction'],
+        );
+        await expectRenamed(
+          project: const ProjectDescriptor(
+            id: 'long-novel',
+            name: '长篇项目',
+            rootPath: 'D:/long-novel',
+            projectType: 'long_novel',
+            storageStrategy: ProjectStorageStrategy.sqliteProjectStore,
+            runtimeBaselineId: 'continuous_autonomous',
+            additionalTraitIds: <String>['book_deconstruction'],
+          ),
+          manifest: longNovel,
+          expectedTypeLabel: '长任务长篇',
+        );
+
+        final knowledgeBase = codec.create(
+          title: '语料库',
+          projectType: 'knowledge_base',
+          projectBranchId: KnowledgeBaseBranchCatalogService.ragBranchId,
+        );
+        await expectRenamed(
+          project: const ProjectDescriptor(
+            id: 'knowledge-base',
+            name: '语料库',
+            rootPath: 'D:/knowledge-base',
+            projectType: 'knowledge_base',
+            storageStrategy: ProjectStorageStrategy.sqliteProjectStore,
+            projectBranchId: KnowledgeBaseBranchCatalogService.ragBranchId,
+          ),
+          manifest: knowledgeBase,
+          expectedTypeLabel: '语料库',
+        );
+
+        final deconstruction = codec.create(
+          title: '拆书项目',
+          projectType: 'book_deconstruction',
+          additionalTraitIds: const <String>['custom_scope'],
+        );
+        await expectRenamed(
+          project: const ProjectDescriptor(
+            id: 'book-deconstruction',
+            name: '拆书项目',
+            rootPath: 'D:/book-deconstruction',
+            projectType: 'book_deconstruction',
+            additionalTraitIds: <String>['custom_scope'],
+          ),
+          manifest: deconstruction,
+          expectedTypeLabel: '拆书项目',
+        );
+
+        final shortCollection = codec.create(
+          title: '历史短篇集',
+          projectType: 'short_collection',
+        );
+        await expectRenamed(
+          project: const ProjectDescriptor(
+            id: 'short-collection',
+            name: '历史短篇集',
+            rootPath: 'D:/short-collection',
+            projectType: 'short_collection',
+          ),
+          manifest: shortCollection,
+          expectedTypeLabel: '短文集',
+        );
+      },
+    );
+
+    test(
+      'rename_project restores the overview when the manifest commit fails',
+      () async {
+        final codec = ProjectManifestCodecService();
+        final originalManifest = codec.create(
+          title: '原长篇项目',
+          projectType: 'long_novel',
+          storageStrategy: ProjectStorageStrategy.sqliteProjectStore,
+          runtimeBaselineId: 'continuous_autonomous',
+        );
+        const originalOverview = '# 原项目概览\n';
+        final hostPort = _ManifestCommitFailingProjectToolHostPort(
+          files: <String, String>{
+            ProjectManifestCodecService.manifestRelativePath: codec.encode(
+              originalManifest,
+            ),
+            ProjectSupportDocumentCatalog.projectOverviewRelativePath:
+                originalOverview,
+          },
+        );
+        final dispatcher = ProjectToolDispatcher(hostPort: hostPort);
+        const project = ProjectDescriptor(
+          id: 'rename-failure',
+          name: '原长篇项目',
+          rootPath: 'D:/rename-failure',
+          projectType: 'long_novel',
+          storageStrategy: ProjectStorageStrategy.sqliteProjectStore,
+          runtimeBaselineId: 'continuous_autonomous',
+        );
+
+        await expectLater(
+          dispatcher.execute(
+            project: project,
+            toolCall: const <String, Object?>{
+              'name': 'rename_project',
+              'arguments': <String, Object?>{'new_name': '不应提交的新名称'},
+            },
+          ),
+          throwsA(isA<StateError>()),
+        );
+
+        expect(
+          hostPort.fileContent(
+            ProjectManifestCodecService.manifestRelativePath,
+          ),
+          codec.encode(originalManifest),
+        );
+        expect(
+          hostPort.fileContent(
+            ProjectSupportDocumentCatalog.projectOverviewRelativePath,
+          ),
+          originalOverview,
+        );
+      },
+    );
+
+    test(
+      'rename_project keeps the loaded contract when a valid manifest has unknown enum values',
+      () async {
+        final codec = ProjectManifestCodecService();
+        final hostPort = _FakeProjectToolHostPort(
+          files: <String, String>{
+            ProjectManifestCodecService.manifestRelativePath: '''
+{
+  "title": "被损坏的长篇",
+  "project_type": "future_novel_type",
+  "storage_strategy": "future_store",
+  "runtime_baseline_id": "future_baseline",
+  "additional_trait_ids": "not-a-list"
+}
+''',
+          },
+        );
+        final dispatcher = ProjectToolDispatcher(hostPort: hostPort);
+        const project = ProjectDescriptor(
+          id: 'semantic-damage',
+          name: '原长篇',
+          rootPath: 'D:/semantic-damage',
+          projectType: 'long_novel',
+          storageStrategy: ProjectStorageStrategy.sqliteProjectStore,
+          runtimeBaselineId: 'continuous_autonomous',
+          additionalTraitIds: <String>['book_deconstruction'],
+        );
+
+        final result = await dispatcher.execute(
+          project: project,
+          toolCall: const <String, Object?>{
+            'name': 'rename_project',
+            'arguments': <String, Object?>{'new_name': '安全重命名'},
+          },
+        );
+
+        expect(result['ok'], isTrue);
+        final renamed = codec.parse(
+          hostPort.fileContent(
+            ProjectManifestCodecService.manifestRelativePath,
+          ),
+        );
+        expect(renamed.title, '安全重命名');
+        expect(renamed.projectType, 'long_novel');
+        expect(
+          renamed.storageStrategy,
+          ProjectStorageStrategy.sqliteProjectStore,
+        );
+        expect(renamed.runtimeBaselineId, 'continuous_autonomous');
+        expect(renamed.additionalTraitIds, <String>['book_deconstruction']);
+      },
+    );
   });
 }
 
@@ -661,6 +901,23 @@ class _FakeProjectToolHostPort implements ProjectToolHostPort {
     String content,
   ) async {
     _files[relativePath] = content;
+  }
+}
+
+class _ManifestCommitFailingProjectToolHostPort
+    extends _FakeProjectToolHostPort {
+  _ManifestCommitFailingProjectToolHostPort({required super.files});
+
+  @override
+  Future<void> writeTextFile(
+    String rootPath,
+    String relativePath,
+    String content,
+  ) async {
+    if (relativePath == ProjectManifestCodecService.manifestRelativePath) {
+      throw StateError('manifest write failed');
+    }
+    await super.writeTextFile(rootPath, relativePath, content);
   }
 }
 

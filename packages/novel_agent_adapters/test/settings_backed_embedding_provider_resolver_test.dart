@@ -10,18 +10,19 @@ void main() {
 
     AppSettings settingsWith({
       String defaultProviderId = 'prov-1',
-      List<ProviderEndpointSettings> providers = const <ProviderEndpointSettings>[
-        ProviderEndpointSettings(
-          id: 'prov-1',
-          title: '测试接口',
-          protocol: 'openai_compatible',
-          baseUrl: 'https://embed.example.com/v1',
-          apiKey: 'sk-test',
-          modelId: 'chat-model',
-          description: '',
-          isDefault: true,
-        ),
-      ],
+      List<ProviderEndpointSettings> providers =
+          const <ProviderEndpointSettings>[
+            ProviderEndpointSettings(
+              id: 'prov-1',
+              title: '测试接口',
+              protocol: 'openai_compatible',
+              baseUrl: 'https://embed.example.com/v1',
+              apiKey: 'sk-test',
+              modelId: 'chat-model',
+              description: '',
+              isDefault: true,
+            ),
+          ],
       Object? embeddingModelId,
     }) {
       return AppSettings(
@@ -86,7 +87,10 @@ void main() {
           settingsWith(embeddingModelId: 'text-embedding-3-small'),
         );
         expect(provider, isNotNull);
-        expect(provider!.providerKind, RagRetrievalProviderKinds.remoteOpenAiCompatible);
+        expect(
+          provider!.providerKind,
+          RagRetrievalProviderKinds.remoteOpenAiCompatible,
+        );
         expect(provider.isRemote, isTrue);
         final capabilities = provider.describeCapabilities();
         expect(
@@ -100,32 +104,35 @@ void main() {
       },
     );
 
-    test('falls back to the first provider when defaultProviderId is absent', () {
-      final provider = resolver.resolve(
-        AppSettings(
-          defaultProviderId: '',
-          defaultAgentId: '',
-          defaultModelId: '',
-          defaultProjectPath: '',
-          autoSaveDrafts: false,
-          providers: const <ProviderEndpointSettings>[
-            ProviderEndpointSettings(
-              id: 'only-prov',
-              title: '唯一接口',
-              protocol: 'openai_compatible',
-              baseUrl: 'https://embed.example.com/v1',
-              apiKey: 'sk-only',
-              modelId: 'chat-model',
-              description: '',
-            ),
-          ],
-          extraSettings: const <String, Object?>{
-            'embedding_model_id': 'bge-large-zh',
-          },
-        ),
-      );
-      expect(provider, isNotNull);
-      expect(provider!.providerId, 'only-prov');
-    });
+    test(
+      'falls back to the first provider when defaultProviderId is absent',
+      () {
+        final provider = resolver.resolve(
+          AppSettings(
+            defaultProviderId: '',
+            defaultAgentId: '',
+            defaultModelId: '',
+            defaultProjectPath: '',
+            autoSaveDrafts: false,
+            providers: const <ProviderEndpointSettings>[
+              ProviderEndpointSettings(
+                id: 'only-prov',
+                title: '唯一接口',
+                protocol: 'openai_compatible',
+                baseUrl: 'https://embed.example.com/v1',
+                apiKey: 'sk-only',
+                modelId: 'chat-model',
+                description: '',
+              ),
+            ],
+            extraSettings: const <String, Object?>{
+              'embedding_model_id': 'bge-large-zh',
+            },
+          ),
+        );
+        expect(provider, isNotNull);
+        expect(provider!.providerId, 'only-prov');
+      },
+    );
   });
 }

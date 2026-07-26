@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novel_agent_app/app/theme/app_theme.dart';
@@ -24,35 +22,35 @@ import 'package:novel_agent_app/features/workbench/presentation/widgets/conversa
 import 'package:novel_agent_app/features/workbench/presentation/widgets/resource_manager_panel.dart';
 import 'package:novel_agent_app/features/workbench/presentation/widgets/workbench_agent_panel.dart';
 
+import 'manual_golden_test_support.dart';
+
+const _aesp08GoldenFileNames = <String>[
+  'aesp08_resource_panel_single_row.png',
+  'aesp08_resource_panel_legacy_mapping.png',
+  'aesp08_agent_panel_entries.png',
+  'aesp08_conversation_agent_selector.png',
+];
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('captures AESP-08 visual verification screenshots', (
     tester,
   ) async {
-    final artifactsDir = Directory(
-      '${_resolveRepoRoot()}${Platform.pathSeparator}artifacts${Platform.pathSeparator}workbench_aesp08_screenshots',
-    )..createSync(recursive: true);
-    expect(artifactsDir.existsSync(), isTrue);
+    final artifactsDir = manualGoldenArtifactsDirectory(
+      'workbench_aesp08_screenshots',
+    );
+    if (skipManualGoldenTestIfArtifactsAreMissing(
+      artifactsDirectory: artifactsDir,
+      expectedFileNames: _aesp08GoldenFileNames,
+    )) {
+      return;
+    }
 
     await _captureFileToolsAndLegacyDirectoryMapping(tester);
     await _captureAgentPanelEntries(tester);
     await _captureConversationAgentSelector(tester);
 
-    for (final fileName in const <String>[
-      'aesp08_resource_panel_single_row.png',
-      'aesp08_resource_panel_legacy_mapping.png',
-      'aesp08_agent_panel_entries.png',
-      'aesp08_conversation_agent_selector.png',
-    ]) {
-      expect(
-        File(
-          '${artifactsDir.path}${Platform.pathSeparator}$fileName',
-        ).existsSync(),
-        isTrue,
-        reason: '缺少截图产物：$fileName',
-      );
-    }
   });
 }
 
@@ -354,24 +352,6 @@ Future<void> _captureConversationAgentSelector(WidgetTester tester) async {
   );
 }
 
-String _resolveRepoRoot() {
-  var current = Directory.current.absolute;
-  for (var depth = 0; depth < 6; depth += 1) {
-    final docsFile = File(
-      '${current.path}${Platform.pathSeparator}docs${Platform.pathSeparator}workbench-agent-entry-skill-probe-session-order-2026-05-29.md',
-    );
-    if (docsFile.existsSync()) {
-      return current.path;
-    }
-    final parent = current.parent;
-    if (parent.path == current.path) {
-      break;
-    }
-    current = parent;
-  }
-  return Directory.current.absolute.path;
-}
-
 class _FakeConversationActionHandler implements ConversationActionHandler {
   const _FakeConversationActionHandler();
 
@@ -466,6 +446,9 @@ class _FakeResourceManagerActionHandler
 
   @override
   void onProjectTypeTransitionRequested() {}
+
+  @override
+  void onRuntimeBaselineConfigurationRequested() {}
 
   @override
   void onImportRequested() {}

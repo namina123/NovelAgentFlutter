@@ -396,9 +396,9 @@ void main() {
           contains('哈利的魔杖归属仍需人工确认'),
         );
         expect(
-          ValueReaders.mapValue(continuityReport['metadata']).containsKey(
-            'substrate_root_path',
-          ),
+          ValueReaders.mapValue(
+            continuityReport['metadata'],
+          ).containsKey('substrate_root_path'),
           isFalse,
         );
         expect(
@@ -476,18 +476,9 @@ void main() {
           bridge['activation_context_markdown'],
         );
         expect(markdown, contains('## Chapter Continuity Guard'));
-        expect(
-          markdown,
-          contains('上一章章末原文锚点：# 第02章 门里的人把门栓拨开半寸'),
-        );
-        expect(
-          markdown,
-          contains('如果交付摘要还不完整，就以这段章末原文状态为准直接续写'),
-        );
-        expect(
-          markdown,
-          contains('不要把这段章末原文里已经发生的动作、对话或到达重新写一遍'),
-        );
+        expect(markdown, contains('上一章章末原文锚点：# 第02章 门里的人把门栓拨开半寸'));
+        expect(markdown, contains('如果交付摘要还不完整，就以这段章末原文状态为准直接续写'));
+        expect(markdown, contains('不要把这段章末原文里已经发生的动作、对话或到达重新写一遍'));
       },
     );
 

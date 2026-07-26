@@ -35,7 +35,9 @@ class GeminiNativeResponseParser {
           );
           continue;
         }
-        final functionResponse = ValueReaders.mapValue(part['functionResponse']);
+        final functionResponse = ValueReaders.mapValue(
+          part['functionResponse'],
+        );
         if (functionResponse.isNotEmpty) {
           continue;
         }

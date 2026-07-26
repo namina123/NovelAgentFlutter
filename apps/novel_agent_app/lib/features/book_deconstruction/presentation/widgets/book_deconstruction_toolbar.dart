@@ -22,15 +22,19 @@ class BookDeconstructionToolbar extends StatelessWidget {
       subtitle: viewData.projectTitle.trim().isEmpty
           ? null
           : viewData.projectTitle,
-      onBackRequested: controller.onBookDeconstructionBackRequested,
+      onBackRequested: viewData.isCommitInProgress
+          ? null
+          : controller.onBookDeconstructionBackRequested,
       actions: [
         // 中文注释: 任意长操作进行中（智能拆书/生成预览/提取知识）时露出取消入口，
         // 避免用户被"正在…"卡死且无处可退。
         if (viewData.isLoading)
           ToolbarIconButton(
             icon: Icons.stop_circle_outlined,
-            tooltip: '取消当前操作',
-            onPressed: controller.onBookDeconstructionCancelRequested,
+            tooltip: viewData.isCommitInProgress ? '正在提交，暂不可取消' : '取消当前操作',
+            onPressed: viewData.isCommitInProgress
+                ? null
+                : controller.onBookDeconstructionCancelRequested,
           ),
         ToolbarIconButton(
           icon: Icons.refresh_rounded,

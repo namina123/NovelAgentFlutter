@@ -13,15 +13,23 @@ import 'model_settings_advanced_panel.dart';
 import 'model_settings_primary_panel.dart';
 import 'settings_labeled_text_field.dart';
 
+typedef ModelConnectionTestCallback =
+    Future<ProviderConnectionValidationResultViewData> Function(
+      Map<String, Object?>,
+    );
+
 class ModelSettingsPanel extends StatefulWidget {
   const ModelSettingsPanel({
     super.key,
     required this.viewData,
     required this.onSaved,
+    required this.onConnectionTestRequested,
   });
 
   final SettingsViewData viewData;
   final ValueChanged<Map<String, Object?>> onSaved;
+  /// 中文注释: 连接测试由模型页发起，使用"当前选中接口 + 模型"真实配对；壳层负责联网探测并回传结果。
+  final ModelConnectionTestCallback onConnectionTestRequested;
 
   @override
   State<ModelSettingsPanel> createState() => _ModelSettingsPanelState();
@@ -53,6 +61,11 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
   late final TextEditingController _customEffortKeyController;
   late List<CustomModelReasoningEffortEntryViewData> _customEffortEntries;
   int _customEffortEntrySerial = 0;
+  // 中文注释: 连接测试结果只活在模型页本地：壳层回传后直接展示，不再回灌接口页或全局缓存，
+  // 避免刷新设置视图时把用户正在编辑的接口/模型表单重置。
+  ProviderConnectionValidationResultViewData _connectionResult =
+      ProviderConnectionValidationResultViewData.initial;
+  bool _connectionTesting = false;
 
   @override
   void initState() {
@@ -70,6 +83,7 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
     _customToggleDisabledValueController = TextEditingController();
     _customEffortKeyController = TextEditingController();
     _customEffortEntries = const [];
+    _modelIdController.addListener(_onModelTextChanged);
     _sync();
   }
 
@@ -83,6 +97,7 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
 
   @override
   void dispose() {
+    _modelIdController.removeListener(_onModelTextChanged);
     _providerSearchController.dispose();
     _modelIdController.dispose();
     _embeddingModelIdController.dispose();
@@ -96,6 +111,14 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
     _customToggleDisabledValueController.dispose();
     _customEffortKeyController.dispose();
     super.dispose();
+  }
+
+  void _onModelTextChanged() {
+    if (!mounted) {
+      return;
+    }
+    // 中文注释: 手输模型 ID 时也要刷新保存按钮禁用态。
+    setState(() {});
   }
 
   @override
@@ -135,18 +158,12 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
       padding: const EdgeInsets.all(16),
       children: [
         const Text(
-          '首次配置建议：先到“接口”页填写 API Key 并点击“测试连接”，确认无误后再回来保存默认模型。',
+          '首次配置建议：①「接口」页添加厂商并填 API Key → ②本页选择默认接口与模型 → ③测试连接 → ④保存。',
           style: TextStyle(
             fontSize: 13,
             height: 1.5,
             fontWeight: FontWeight.w600,
           ),
-        ),
-        const SizedBox(height: 16),
-        SettingsLabeledTextField(
-          label: 'RAG 向量化模型 ID（可选）',
-          controller: _embeddingModelIdController,
-          hintText: '留空则知识库检索走关键词匹配；填写则用默认接口的该模型做向量化召回',
         ),
         const SizedBox(height: 16),
         ModelSettingsPrimaryPanel(
@@ -162,14 +179,22 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
           topPController: _topPController,
           onProviderSelected: (value) {
             setState(() {
-              _providerId = value ?? '';
+              final nextProviderId = value ?? '';
+              if (nextProviderId != _providerId) {
+                // 中文注释: 切换接口后清空模型，避免把上一个厂商的模型 ID 误带到新接口。
+                _modelIdController.clear();
+              }
+              _providerId = nextProviderId;
+              _providerSearchController.text = _providerTitleOf(_providerId);
             });
           },
           onModelSelected: (value) {
             if (value == null) {
               return;
             }
-            _modelIdController.text = value;
+            setState(() {
+              _modelIdController.text = value;
+            });
           },
           onThinkingChanged: (value) {
             setState(() {
@@ -184,6 +209,15 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
               _thinkingEffort = value;
             });
           },
+          onTestConnection: _testConnection,
+          connectionResult: _connectionResult,
+          connectionTesting: _connectionTesting,
+        ),
+        const SizedBox(height: 16),
+        SettingsLabeledTextField(
+          label: 'RAG 向量化模型 ID（可选）',
+          controller: _embeddingModelIdController,
+          hintText: '留空则知识库检索走关键词匹配；填写则用默认接口的该模型做向量化召回',
         ),
         const SizedBox(height: 16),
         ModelSettingsAdvancedPanel(
@@ -264,10 +298,89 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
           label: '保存模型设置',
           expanded: true,
           icon: Icons.save_outlined,
+          disabled: widget.viewData.providers.isEmpty ||
+              _providerId.trim().isEmpty ||
+              _modelIdController.text.trim().isEmpty,
           onPressed: _save,
         ),
       ],
     );
+  }
+
+  Future<void> _testConnection() async {
+    // 中文注释: 用表单当前的"接口 + 模型"组合发起探测；壳层做本地自检 + 真联网，回传结果。
+    final providerId = _providerId.trim();
+    final modelId = _modelIdController.text.trim();
+    if (providerId.isEmpty || modelId.isEmpty || _connectionTesting) {
+      return;
+    }
+    final provider = widget.viewData.providers
+        .where((entry) => entry.id == providerId)
+        .firstOrNull;
+    if (provider == null) {
+      return;
+    }
+    final editor = widget.viewData.modelEditor;
+    final payload = <String, Object?>{
+      'source_id': provider.id,
+      'title': provider.title,
+      'protocol': provider.protocol,
+      'base_url': provider.baseUrl,
+      'api_key': provider.rawApiKey,
+      'model_id': modelId,
+      'api_mode': editor.capabilityExposure.apiMode,
+    };
+    setState(() {
+      _connectionTesting = true;
+      _connectionResult = ProviderConnectionValidationResultViewData(
+        isSuccess: false,
+        summary: '正在联网验证…',
+        details: const <String>[],
+        errors: const <String>[],
+        templateId: '',
+        providerId: provider.id,
+        protocolId: '',
+        protocolMode: provider.protocol,
+        routeFamily: '',
+        selectedRouteFamily: '',
+        allowedRouteFamilies: const <String>[],
+        hideOptions: const <String>[],
+        fallbackNotAllowed: false,
+        warnings: const <String>[],
+        matchedTemplateId: '',
+        matchedTemplateLabel: '',
+      );
+    });
+    ProviderConnectionValidationResultViewData result;
+    try {
+      result = await widget.onConnectionTestRequested(payload);
+    } catch (error) {
+      result = ProviderConnectionValidationResultViewData(
+        isSuccess: false,
+        summary: '测试连接失败：$error',
+        details: const <String>[],
+        errors: <String>[error.toString()],
+        templateId: '',
+        providerId: provider.id,
+        protocolId: '',
+        protocolMode: provider.protocol,
+        routeFamily: '',
+        selectedRouteFamily: '',
+        allowedRouteFamilies: const <String>[],
+        hideOptions: const <String>[],
+        fallbackNotAllowed: false,
+        warnings: const <String>[],
+        matchedTemplateId: '',
+        matchedTemplateLabel: '',
+      );
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _connectionTesting = false;
+      _connectionResult = result;
+    });
   }
 
   void _sync() {
@@ -332,11 +445,20 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
   }
 
   void _save() {
+    final providerId = _providerId.trim();
+    final modelId = _modelIdController.text.trim();
+    if (widget.viewData.providers.isEmpty) {
+      // 中文注释: 无接口时不提交空保存，避免把 defaultProviderId 清空。
+      return;
+    }
+    if (providerId.isEmpty || modelId.isEmpty) {
+      return;
+    }
     widget.onSaved(<String, Object?>{
-      'default_provider_id': _providerId,
-      'provider_id': _providerId,
-      'default_model_id': _modelIdController.text.trim(),
-      'model_id': _modelIdController.text.trim(),
+      'default_provider_id': providerId,
+      'provider_id': providerId,
+      'default_model_id': modelId,
+      'model_id': modelId,
       'embedding_model_id': _embeddingModelIdController.text.trim(),
       'compatible_context_window': _compatibleContextWindowController.text
           .trim(),

@@ -168,17 +168,67 @@ void main() {
           allOf(contains('display_name:'), contains('连载风格')),
         );
         expect(
-          hostPort.readStored(
-            'assets/foreshadows/tower-secret.foreshadow.md',
-          ),
+          hostPort.readStored('assets/foreshadows/tower-secret.foreshadow.md'),
           contains('## 备注'),
         );
+      },
+    );
+
+    test(
+      'project asset bundle import prepares structured assets before projections',
+      () async {
+        final events = <String>[];
+        final hostPort = _FakeProjectToolHostPort(
+          onWrite: (relativePath) => events.add('projection:$relativePath'),
+        );
+        final useCase = ImportProjectAssetBundleUseCase(
+          projectToolHostPort: hostPort,
+        );
+
+        await useCase.execute(
+          project: const ProjectDescriptor(
+            id: 'sqlite-demo',
+            name: 'SQLite 资产项目',
+            rootPath: 'D:/sqlite-demo',
+            storageStrategy: ProjectStorageStrategy.sqliteProjectStore,
+          ),
+          bundleContent: jsonEncode(<String, Object?>{
+            'kind': 'novel_agent_project_asset_bundle',
+            'title': '资产包',
+            'styles': <Object?>[
+              <String, Object?>{'id': 'serial-style', 'display_name': '连载风格'},
+            ],
+            'foreshadows': <Object?>[
+              <String, Object?>{'id': 'tower-secret', 'title': '高塔秘密'},
+            ],
+          }),
+          prepareDocumentWrite:
+              ({
+                required project,
+                required relativePath,
+                required documentKind,
+                required title,
+                required content,
+              }) async {
+                events.add('primary:$documentKind:$relativePath:$title');
+              },
+        );
+
+        expect(events, <String>[
+          'primary:style:assets/styles/serial-style.style.md:连载风格',
+          'projection:assets/styles/serial-style.style.md',
+          'primary:foreshadow_record:assets/foreshadows/tower-secret.foreshadow.md:高塔秘密',
+          'projection:assets/foreshadows/tower-secret.foreshadow.md',
+        ]);
       },
     );
   });
 }
 
 class _FakeProjectToolHostPort implements ProjectToolHostPort {
+  _FakeProjectToolHostPort({this.onWrite});
+
+  final void Function(String relativePath)? onWrite;
   final Map<String, String> _files = <String, String>{};
   final Set<String> _directories = <String>{};
 
@@ -242,7 +292,10 @@ class _FakeProjectToolHostPort implements ProjectToolHostPort {
   }
 
   @override
-  Future<void> writeExternalTextFile(String absolutePath, String content) async {}
+  Future<void> writeExternalTextFile(
+    String absolutePath,
+    String content,
+  ) async {}
 
   @override
   Future<String?> readTextFile(String rootPath, String relativePath) async {
@@ -256,5 +309,6 @@ class _FakeProjectToolHostPort implements ProjectToolHostPort {
     String content,
   ) async {
     _files[relativePath] = content;
+    onWrite?.call(relativePath);
   }
 }

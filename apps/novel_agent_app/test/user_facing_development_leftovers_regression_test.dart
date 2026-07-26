@@ -186,7 +186,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('拆书结果（分章）'), findsOneWidget);
-      expect(find.text('结构预览'), findsOneWidget);
+      // 中文注释: 折叠态标题带条目数（如"结构预览（0）"），用 contains 匹配。
+      expect(find.textContaining('结构预览'), findsOneWidget);
       for (final fragment in _forbiddenFragments) {
         expect(find.textContaining(fragment), findsNothing);
       }
@@ -328,6 +329,22 @@ class _FakeBookDeconstructionActionHandler
 
   @override
   void onBookDeconstructionFollowupOptionSelected(String optionId) {}
+
+  @override
+  void onBookDeconstructionTargetWritingTypeSelected(
+    String targetWritingTypeId,
+  ) {}
+
+  @override
+  void onBookDeconstructionTargetRuntimeBaselineSelected(
+    String runtimeBaselineId,
+  ) {}
+
+  @override
+  void onBookDeconstructionInheritAsLiveNarrativeChanged(bool value) {}
+
+  @override
+  void onBookDeconstructionApplyStagedAnalysisResultsChanged(bool value) {}
 
   @override
   Future<void> onBookDeconstructionConfirmRequested() async {}

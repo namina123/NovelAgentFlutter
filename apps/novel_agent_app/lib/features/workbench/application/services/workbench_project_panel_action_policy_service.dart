@@ -38,6 +38,7 @@ class WorkbenchProjectPanelActionPolicyService {
         projectTypeId,
         projectTypeTransitionAvailability,
       ),
+      ..._runtimeBaselineConfigurationAction(projectTypeId),
       const WorkbenchProjectPanelActionViewData(
         icon: Icons.refresh_rounded,
         title: '刷新项目',
@@ -102,6 +103,22 @@ class WorkbenchProjectPanelActionPolicyService {
       ),
     ];
   }
+
+  List<WorkbenchProjectPanelActionViewData>
+  _runtimeBaselineConfigurationAction(String projectTypeId) {
+    if (projectTypeId.trim() != 'long_novel') {
+      return const <WorkbenchProjectPanelActionViewData>[];
+    }
+    return const <WorkbenchProjectPanelActionViewData>[
+      WorkbenchProjectPanelActionViewData(
+        icon: Icons.tune_rounded,
+        title: '运行基准',
+        description: '查看或修复长篇长任务的运行基准，不改变项目类型或存储策略。',
+        actionId:
+            WorkbenchProjectPanelActionIds.configureRuntimeBaseline,
+      ),
+    ];
+  }
 }
 
 class WorkbenchProjectPanelActionIds {
@@ -109,6 +126,7 @@ class WorkbenchProjectPanelActionIds {
   static const String createProject = 'create_project';
   static const String editProjectInfo = 'edit_project_info';
   static const String transitionProjectType = 'transition_project_type';
+  static const String configureRuntimeBaseline = 'configure_runtime_baseline';
   static const String refreshProject = 'refresh_project';
   static const String projectAssets = 'project_assets';
   static const String projectRag = 'project_rag';

@@ -14,8 +14,10 @@ class ProjectRagRetrievalToolExecutor {
   }) : _metadataRepository =
            metadataRepository ?? SqliteRagMetadataRepository(),
        _mountSummaryService =
-           mountSummaryService ?? RagProjectMountSummaryService(
-             metadataRepository: metadataRepository ?? SqliteRagMetadataRepository(),
+           mountSummaryService ??
+           RagProjectMountSummaryService(
+             metadataRepository:
+                 metadataRepository ?? SqliteRagMetadataRepository(),
            ),
        _searchPort = searchPort,
        _activationBridgeService =
@@ -25,8 +27,7 @@ class ProjectRagRetrievalToolExecutor {
   final SqliteRagMetadataRepository _metadataRepository;
   final RagProjectMountSummaryService _mountSummaryService;
   final RetrievalSearchPort? _searchPort;
-  final ProjectRagRetrievalActivationBridgeService
-  _activationBridgeService;
+  final ProjectRagRetrievalActivationBridgeService _activationBridgeService;
 
   /// 中文注释: 设置可能运行时变化（用户改 provider/embedding 模型），向量端口不能在装配期写死。
   /// 这里注入一个惰性解析闭包：每次检索时按当前设置解析出向量端口，解析失败或缺配置返回 null
@@ -48,7 +49,9 @@ class ProjectRagRetrievalToolExecutor {
       'language': ValueReaders.stringValue(arguments['language']).trim(),
       'top_k': ValueReaders.intValue(arguments['top_k'], 12),
       'query_mode': ValueReaders.stringValue(arguments['query_mode']).trim(),
-      'rerank_policy': ValueReaders.stringValue(arguments['rerank_policy']).trim(),
+      'rerank_policy': ValueReaders.stringValue(
+        arguments['rerank_policy'],
+      ).trim(),
       'evidence_budget': ValueReaders.intValue(arguments['evidence_budget']),
       'metadata': <String, Object?>{
         ...ValueReaders.mapValue(arguments['metadata']),
@@ -84,30 +87,28 @@ class ProjectRagRetrievalToolExecutor {
     final hitCountLabel = isLexical
         ? '已召回语料证据片段（关键词匹配）：${selectedHits.length} 条'
         : '已召回语料证据片段：${selectedHits.length} 条';
-    final retrievalActivationPackage = _activationBridgeService.buildPackage(
-      project,
-      <String, Object?>{
-        'ok': true,
-        'display_text': hitCountLabel,
-        'retrieval_query': query.toJson(),
-        'mount_summary': mountSummary.toJson(),
-        'retrieval_hits': selectedHits.map((entry) => entry.toJson()).toList(
-          growable: false,
-        ),
-        'citation_paths': selectedHits
-            .map((entry) => entry.evidencePath)
-            .where((entry) => entry.trim().isNotEmpty)
-            .toList(growable: false),
-        'source_summaries': selectedHits
-            .map((entry) => '${entry.corpusId}:${entry.sourceDocumentId}')
-            .toList(growable: false),
-        'warning_notes': _warningNotesFor(
-          mountSummary: mountSummary,
-          selectedHits: selectedHits,
-          retrievalMode: retrievalMode,
-        ),
-      },
-    );
+    final retrievalActivationPackage = _activationBridgeService
+        .buildPackage(project, <String, Object?>{
+          'ok': true,
+          'display_text': hitCountLabel,
+          'retrieval_query': query.toJson(),
+          'mount_summary': mountSummary.toJson(),
+          'retrieval_hits': selectedHits
+              .map((entry) => entry.toJson())
+              .toList(growable: false),
+          'citation_paths': selectedHits
+              .map((entry) => entry.evidencePath)
+              .where((entry) => entry.trim().isNotEmpty)
+              .toList(growable: false),
+          'source_summaries': selectedHits
+              .map((entry) => '${entry.corpusId}:${entry.sourceDocumentId}')
+              .toList(growable: false),
+          'warning_notes': _warningNotesFor(
+            mountSummary: mountSummary,
+            selectedHits: selectedHits,
+            retrievalMode: retrievalMode,
+          ),
+        });
     return <String, Object?>{
       'ok': true,
       'display_text': hitCountLabel,
@@ -115,9 +116,9 @@ class ProjectRagRetrievalToolExecutor {
       'changed_paths': const <String>[],
       'retrieval_query': query.toJson(),
       'mount_summary': mountSummary.toJson(),
-      'retrieval_hits': selectedHits.map((entry) => entry.toJson()).toList(
-        growable: false,
-      ),
+      'retrieval_hits': selectedHits
+          .map((entry) => entry.toJson())
+          .toList(growable: false),
       'citation_paths': selectedHits
           .map((entry) => entry.evidencePath)
           .where((entry) => entry.trim().isNotEmpty)
@@ -208,22 +209,23 @@ class ProjectRagRetrievalToolExecutor {
     final allowedCorpusIds = bindings.isNotEmpty
         ? bindings.map((entry) => entry.corpusId).toSet()
         : query.corpusFilters.toSet();
-    return _metadataRepository.listChunks(project).then(
-      (items) => _scoreChunks(
-        query,
-        allowedCorpusIds.isEmpty
-            ? items
-            : items
-                .where((chunk) => allowedCorpusIds.contains(chunk.corpusId))
-                .toList(growable: false),
-      ),
-    );
+    return _metadataRepository
+        .listChunks(project)
+        .then(
+          (items) => _scoreChunks(
+            query,
+            allowedCorpusIds.isEmpty
+                ? items
+                : items
+                      .where(
+                        (chunk) => allowedCorpusIds.contains(chunk.corpusId),
+                      )
+                      .toList(growable: false),
+          ),
+        );
   }
 
-  List<RetrievalHit> _scoreChunks(
-    RetrievalQuery query,
-    List<RagChunk> chunks,
-  ) {
+  List<RetrievalHit> _scoreChunks(RetrievalQuery query, List<RagChunk> chunks) {
     final queryTokens = _queryTokens(query.queryText);
     final hits = <RetrievalHit>[];
     for (final chunk in chunks) {
@@ -294,9 +296,10 @@ class ProjectRagRetrievalToolExecutor {
       if (token.isEmpty) {
         continue;
       }
-      final occurrences = RegExp(RegExp.escape(token), caseSensitive: false)
-          .allMatches(chunkText)
-          .length;
+      final occurrences = RegExp(
+        RegExp.escape(token),
+        caseSensitive: false,
+      ).allMatches(chunkText).length;
       if (occurrences > 0) {
         score += 1.0 + occurrences * 0.5;
       }
@@ -311,7 +314,9 @@ class ProjectRagRetrievalToolExecutor {
     }
     final index = normalized.toLowerCase().indexOf(queryText.toLowerCase());
     if (index < 0) {
-      return normalized.length <= 160 ? normalized : normalized.substring(0, 160);
+      return normalized.length <= 160
+          ? normalized
+          : normalized.substring(0, 160);
     }
     final start = index > 40 ? index - 40 : 0;
     final end = (index + queryText.length + 80) < normalized.length

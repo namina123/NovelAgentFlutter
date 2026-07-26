@@ -56,9 +56,9 @@ class SqliteVectorRetrievalPort implements RetrievalSearchPort {
     if (rootPath.isEmpty || query.queryText.trim().isEmpty) {
       return const <RetrievalHit>[];
     }
-    final queryVectors = await _embeddingProvider.embedTexts(
-      <String>[query.queryText],
-    );
+    final queryVectors = await _embeddingProvider.embedTexts(<String>[
+      query.queryText,
+    ]);
     if (queryVectors.isEmpty || queryVectors.first.isEmpty) {
       return const <RetrievalHit>[];
     }
@@ -74,14 +74,12 @@ class SqliteVectorRetrievalPort implements RetrievalSearchPort {
     try {
       SqliteRagMetadataStore().ensureSchema(database);
       final where = _buildWhereClause(corpusIds);
-      final rows = database.select(
-        '''
+      final rows = database.select('''
         SELECT chunk_id, corpus_id, source_document_id, chapter_title,
                range_start, range_end, text_value, embedding_blob, embedding_dim
         FROM rag_chunk
         WHERE embedding_dim > 0 AND embedding_blob IS NOT NULL $where
-        ''',
-      );
+        ''');
       final scored = <_ScoredChunk>[];
       for (final row in rows) {
         final blob = row['embedding_blob'];
@@ -93,17 +91,13 @@ class SqliteVectorRetrievalPort implements RetrievalSearchPort {
         if (!score.isFinite) {
           continue;
         }
-        scored.add(
-          _ScoredChunk(
-            row: row,
-            score: score,
-          ),
-        );
+        scored.add(_ScoredChunk(row: row, score: score));
       }
       scored.sort((a, b) => b.score.compareTo(a.score));
-      return scored.take(topK).map((entry) => entry.toHit(this)).toList(
-        growable: false,
-      );
+      return scored
+          .take(topK)
+          .map((entry) => entry.toHit(this))
+          .toList(growable: false);
     } finally {
       database.dispose();
     }

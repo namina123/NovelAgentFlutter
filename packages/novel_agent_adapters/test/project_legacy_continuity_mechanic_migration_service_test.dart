@@ -92,76 +92,85 @@ void main() {
       }
     });
 
-    test('migrates legacy continuity files into hidden narrative profile and claims', () async {
-      final result = await service.migrate(project);
+    test(
+      'migrates legacy continuity files into hidden narrative profile and claims',
+      () async {
+        final result = await service.migrate(project);
 
-      expect(ValueReaders.boolValue(result['ok']), isTrue);
-      expect(ValueReaders.stringValue(result['action']), 'migrated');
-      expect(
-        ValueReaders.stringValue(result['legacy_namespace_root']),
-        'legacy.special_mechanic',
-      );
-      expect(
-        ValueReaders.stringList(result['compatibility_aliases']),
-        contains('legacy.special_mechanic'),
-      );
+        expect(ValueReaders.boolValue(result['ok']), isTrue);
+        expect(ValueReaders.stringValue(result['action']), 'migrated');
+        expect(
+          ValueReaders.stringValue(result['legacy_namespace_root']),
+          'legacy.special_mechanic',
+        );
+        expect(
+          ValueReaders.stringList(result['compatibility_aliases']),
+          contains('legacy.special_mechanic'),
+        );
 
-      final profile = await profileRepository.readProfile(
-        project,
-        profileId: 'legacy_special_mechanic_profile',
-      );
-      final claims = await claimRepository.listClaims(project);
+        final profile = await profileRepository.readProfile(
+          project,
+          profileId: 'legacy_special_mechanic_profile',
+        );
+        final claims = await claimRepository.listClaims(project);
 
-      expect(profile, isNotNull);
-      expect(profile!.profileNamespace, 'legacy.special_mechanic.profile');
-      expect(profile.lifecycleStatus, NarrativeProfileLifecycleStatus.deprecated);
-      expect(profile.profileLabel, contains('Legacy continuity bridge'));
-      expect(
-        ValueReaders.mapValue(
-          profile.profileExtensions['legacy_special_mechanic_input_profile'],
-        )['uses_replay_resets'],
-        isTrue,
-      );
-      expect(
-        ValueReaders.stringList(
-          profile.profileExtensions['compatibility_aliases'],
-        ),
-        contains('legacy.special_mechanic'),
-      );
-      expect(
-        claims.map((claim) => claim.claimNamespace),
-        containsAll(<String>[
-          'legacy.special_mechanic.bundle',
-          'legacy.special_mechanic.coverage',
-          'legacy.special_mechanic.input_profile',
-          'legacy.special_mechanic.mechanic_profile',
-          'legacy.special_mechanic.frame',
-        ]),
-      );
+        expect(profile, isNotNull);
+        expect(profile!.profileNamespace, 'legacy.special_mechanic.profile');
+        expect(
+          profile.lifecycleStatus,
+          NarrativeProfileLifecycleStatus.deprecated,
+        );
+        expect(profile.profileLabel, contains('Legacy continuity bridge'));
+        expect(
+          ValueReaders.mapValue(
+            profile.profileExtensions['legacy_special_mechanic_input_profile'],
+          )['uses_replay_resets'],
+          isTrue,
+        );
+        expect(
+          ValueReaders.stringList(
+            profile.profileExtensions['compatibility_aliases'],
+          ),
+          contains('legacy.special_mechanic'),
+        );
+        expect(
+          claims.map((claim) => claim.claimNamespace),
+          containsAll(<String>[
+            'legacy.special_mechanic.bundle',
+            'legacy.special_mechanic.coverage',
+            'legacy.special_mechanic.input_profile',
+            'legacy.special_mechanic.mechanic_profile',
+            'legacy.special_mechanic.frame',
+          ]),
+        );
 
-      final projectionFile = File(
-        '${tempDirectory.path}${Platform.pathSeparator}continuity${Platform.pathSeparator}叙事状态规则.md',
-      );
-      expect(await projectionFile.exists(), isTrue);
-      expect(
-        await projectionFile.readAsString(),
-        contains('legacy.special_mechanic.profile'),
-      );
-      expect(
-        ValueReaders.stringValue(result['pressure_probe_note']),
-        contains('Historical special-mechanic labels remain readable'),
-      );
-    });
+        final projectionFile = File(
+          '${tempDirectory.path}${Platform.pathSeparator}continuity${Platform.pathSeparator}叙事状态规则.md',
+        );
+        expect(await projectionFile.exists(), isTrue);
+        expect(
+          await projectionFile.readAsString(),
+          contains('legacy.special_mechanic.profile'),
+        );
+        expect(
+          ValueReaders.stringValue(result['pressure_probe_note']),
+          contains('Historical special-mechanic labels remain readable'),
+        );
+      },
+    );
 
-    test('second migration run stays idempotent when legacy source did not change', () async {
-      await service.migrate(project);
+    test(
+      'second migration run stays idempotent when legacy source did not change',
+      () async {
+        await service.migrate(project);
 
-      final second = await service.migrate(project);
+        final second = await service.migrate(project);
 
-      expect(ValueReaders.boolValue(second['ok']), isTrue);
-      expect(ValueReaders.stringValue(second['action']), 'up_to_date');
-      expect(ValueReaders.stringList(second['changed_paths']), isEmpty);
-      expect(await claimRepository.listClaims(project), isNotEmpty);
-    });
+        expect(ValueReaders.boolValue(second['ok']), isTrue);
+        expect(ValueReaders.stringValue(second['action']), 'up_to_date');
+        expect(ValueReaders.stringList(second['changed_paths']), isEmpty);
+        expect(await claimRepository.listClaims(project), isNotEmpty);
+      },
+    );
   });
 }

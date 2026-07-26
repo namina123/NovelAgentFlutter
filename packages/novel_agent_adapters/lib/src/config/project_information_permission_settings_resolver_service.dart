@@ -7,10 +7,7 @@ class ProjectInformationPermissionSettingsResolverService {
     AppSettings settings, {
     String source = 'app_settings.permission_settings',
   }) {
-    return resolve(
-      settings.permissionSettings,
-      source: source,
-    );
+    return resolve(settings.permissionSettings, source: source);
   }
 
   HostInformationPermissionContext resolve(
@@ -20,7 +17,10 @@ class ProjectInformationPermissionSettingsResolverService {
     // 中文注释: adapter 薄桥只把宿主持久化设置翻译成 core 合同，不在这里读取文件系统或判断研究执行策略。
     final rawMode = _stringValue(
       permissionSettings['information_permission_mode'],
-      _stringValue(permissionSettings['permission_mode'], _stringValue(permissionSettings['mode'])),
+      _stringValue(
+        permissionSettings['permission_mode'],
+        _stringValue(permissionSettings['mode']),
+      ),
     ).toLowerCase();
     final permissionMode = _permissionMode(rawMode);
     final allowNetwork = _allowNetwork(permissionSettings, permissionMode);
@@ -42,14 +42,21 @@ class ProjectInformationPermissionSettingsResolverService {
           ? 'app_settings.permission_settings'
           : source.trim(),
       metadata: <String, Object?>{
-        'raw_permission_settings': Map<String, Object?>.from(permissionSettings),
+        'raw_permission_settings': Map<String, Object?>.from(
+          permissionSettings,
+        ),
         'raw_mode': rawMode,
-        'resolved_from': 'project_information_permission_settings_resolver_service',
-        'settings_allow_network': _boolValue(permissionSettings['allow_network']),
+        'resolved_from':
+            'project_information_permission_settings_resolver_service',
+        'settings_allow_network': _boolValue(
+          permissionSettings['allow_network'],
+        ),
         'settings_allow_read': _boolValue(permissionSettings['allow_read']),
         'settings_allow_write': _boolValue(permissionSettings['allow_write']),
         'settings_allow_delete': _boolValue(permissionSettings['allow_delete']),
-        'settings_allow_process': _boolValue(permissionSettings['allow_process']),
+        'settings_allow_process': _boolValue(
+          permissionSettings['allow_process'],
+        ),
       },
     );
   }

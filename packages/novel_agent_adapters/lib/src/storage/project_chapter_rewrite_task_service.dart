@@ -24,10 +24,7 @@ class ProjectChapterRewriteTaskService {
       analysisPath: analysisPath,
     );
     if (task == null || task.isEmpty) {
-      return <String, Object?>{
-        'ok': false,
-        'error': '当前计划不会直接生成修订任务。',
-      };
+      return <String, Object?>{'ok': false, 'error': '当前计划不会直接生成修订任务。'};
     }
     final saved = await _taskRepository.saveTask(project, task);
     return <String, Object?>{
@@ -51,10 +48,7 @@ class ProjectChapterRewriteTaskService {
       analysisPath: analysisPath,
     );
     if (task == null || task.isEmpty) {
-      return <String, Object?>{
-        'ok': false,
-        'error': '当前建议集合不能直接生成修订任务。',
-      };
+      return <String, Object?>{'ok': false, 'error': '当前建议集合不能直接生成修订任务。'};
     }
     final saved = await _taskRepository.saveTask(project, task);
     return <String, Object?>{

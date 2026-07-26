@@ -12,7 +12,8 @@ class SqliteRagMetadataRepository {
   SqliteRagMetadataRepository({
     SqliteProjectDatabaseOpener? databaseOpener,
     SqliteRagMetadataStore? metadataStore,
-    SqliteRagIngestionBundlePersistenceRuntime? ingestionBundlePersistenceRuntime,
+    SqliteRagIngestionBundlePersistenceRuntime?
+    ingestionBundlePersistenceRuntime,
   }) : _databaseOpener = databaseOpener ?? SqliteProjectDatabaseOpener(),
        _metadataStore = metadataStore ?? SqliteRagMetadataStore(),
        _ingestionBundlePersistenceRuntime =
@@ -57,31 +58,28 @@ class SqliteRagMetadataRepository {
     RagCorpusPackage corpusPackage,
   ) async {
     // 中文注释: 语料包写入只落元数据与稳定索引字段，不在这里接任何检索后端实现。
-    await _runWrite(
-      project,
-      () async {
-        _upsert(
-          tableName: 'rag_corpus',
-          keyColumns: <String>['corpus_id'],
-          values: <String, Object?>{
-            'corpus_id': corpusPackage.corpusId,
-            'title': corpusPackage.title,
-            'source_kind': corpusPackage.sourceKind,
-            'build_mode': corpusPackage.buildMode,
-            'language': corpusPackage.language,
-            'version': corpusPackage.version,
-            'created_at': corpusPackage.createdAt,
-            'updated_at': corpusPackage.updatedAt,
-            'source_count': corpusPackage.sourceCount,
-            'chapter_count': corpusPackage.chapterCount,
-            'chunk_count': corpusPackage.chunkCount,
-            'is_model_assisted': corpusPackage.isModelAssisted ? 1 : 0,
-            'capability_flags_json': jsonEncode(corpusPackage.capabilityFlags),
-            'payload_json': jsonEncode(corpusPackage.toJson()),
-          },
-        );
-      },
-    );
+    await _runWrite(project, () async {
+      _upsert(
+        tableName: 'rag_corpus',
+        keyColumns: <String>['corpus_id'],
+        values: <String, Object?>{
+          'corpus_id': corpusPackage.corpusId,
+          'title': corpusPackage.title,
+          'source_kind': corpusPackage.sourceKind,
+          'build_mode': corpusPackage.buildMode,
+          'language': corpusPackage.language,
+          'version': corpusPackage.version,
+          'created_at': corpusPackage.createdAt,
+          'updated_at': corpusPackage.updatedAt,
+          'source_count': corpusPackage.sourceCount,
+          'chapter_count': corpusPackage.chapterCount,
+          'chunk_count': corpusPackage.chunkCount,
+          'is_model_assisted': corpusPackage.isModelAssisted ? 1 : 0,
+          'capability_flags_json': jsonEncode(corpusPackage.capabilityFlags),
+          'payload_json': jsonEncode(corpusPackage.toJson()),
+        },
+      );
+    });
   }
 
   Future<RagCorpusPackage?> readCorpus(
@@ -127,26 +125,23 @@ class SqliteRagMetadataRepository {
     RagSourceDocument sourceDocument,
   ) async {
     // 中文注释: 源文稿写入保存来源边界与正文来源锚点，不在这里做分章。
-    await _runWrite(
-      project,
-      () async {
-        _upsert(
-          tableName: 'rag_source_document',
-          keyColumns: <String>['source_document_id'],
-          values: <String, Object?>{
-            'source_document_id': sourceDocument.sourceDocumentId,
-            'corpus_id': sourceDocument.corpusId,
-            'source_kind': sourceDocument.sourceKind,
-            'display_name': sourceDocument.displayName,
-            'origin_path': sourceDocument.originPath,
-            'origin_format': sourceDocument.originFormat,
-            'language': sourceDocument.language,
-            'content_hash': sourceDocument.contentHash,
-            'payload_json': jsonEncode(sourceDocument.toJson()),
-          },
-        );
-      },
-    );
+    await _runWrite(project, () async {
+      _upsert(
+        tableName: 'rag_source_document',
+        keyColumns: <String>['source_document_id'],
+        values: <String, Object?>{
+          'source_document_id': sourceDocument.sourceDocumentId,
+          'corpus_id': sourceDocument.corpusId,
+          'source_kind': sourceDocument.sourceKind,
+          'display_name': sourceDocument.displayName,
+          'origin_path': sourceDocument.originPath,
+          'origin_format': sourceDocument.originFormat,
+          'language': sourceDocument.language,
+          'content_hash': sourceDocument.contentHash,
+          'payload_json': jsonEncode(sourceDocument.toJson()),
+        },
+      );
+    });
   }
 
   Future<RagSourceDocument?> readSourceDocument(
@@ -189,29 +184,26 @@ class SqliteRagMetadataRepository {
 
   Future<void> upsertChunk(ProjectDescriptor project, RagChunk chunk) async {
     // 中文注释: chunk 记录只保存可检索文本单元与范围信息，不把向量索引实现写死进表层。
-    await _runWrite(
-      project,
-      () async {
-        _upsert(
-          tableName: 'rag_chunk',
-          keyColumns: <String>['chunk_id'],
-          values: <String, Object?>{
-            'chunk_id': chunk.chunkId,
-            'corpus_id': chunk.corpusId,
-            'source_document_id': chunk.sourceDocumentId,
-            'chapter_index': chunk.chapterIndex,
-            'chapter_title': chunk.chapterTitle,
-            'segment_index': chunk.segmentIndex,
-            'range_start': chunk.rangeStart,
-            'range_end': chunk.rangeEnd,
-            'text_value': chunk.text,
-            'normalized_text': chunk.normalizedText,
-            'token_estimate': chunk.tokenEstimate,
-            'payload_json': jsonEncode(chunk.toJson()),
-          },
-        );
-      },
-    );
+    await _runWrite(project, () async {
+      _upsert(
+        tableName: 'rag_chunk',
+        keyColumns: <String>['chunk_id'],
+        values: <String, Object?>{
+          'chunk_id': chunk.chunkId,
+          'corpus_id': chunk.corpusId,
+          'source_document_id': chunk.sourceDocumentId,
+          'chapter_index': chunk.chapterIndex,
+          'chapter_title': chunk.chapterTitle,
+          'segment_index': chunk.segmentIndex,
+          'range_start': chunk.rangeStart,
+          'range_end': chunk.rangeEnd,
+          'text_value': chunk.text,
+          'normalized_text': chunk.normalizedText,
+          'token_estimate': chunk.tokenEstimate,
+          'payload_json': jsonEncode(chunk.toJson()),
+        },
+      );
+    });
   }
 
   Future<RagChunk?> readChunk(
@@ -252,11 +244,12 @@ class SqliteRagMetadataRepository {
       tableName: 'rag_chunk',
       whereClause: clauses.join(' AND '),
       parameters: parameters,
-      orderBy: 'corpus_id, source_document_id, chapter_index, segment_index, chunk_id',
+      orderBy:
+          'corpus_id, source_document_id, chapter_index, segment_index, chunk_id',
     );
-    return rows.map((row) => RagChunk.fromJson(_payloadFromRow(row))).toList(
-      growable: false,
-    );
+    return rows
+        .map((row) => RagChunk.fromJson(_payloadFromRow(row)))
+        .toList(growable: false);
   }
 
   Future<void> upsertMountBinding(
@@ -264,26 +257,23 @@ class SqliteRagMetadataRepository {
     RetrievalMountBinding binding,
   ) async {
     // 中文注释: 挂载绑定只记录项目与语料之间的正式关系，不在这里决定挂载策略。
-    await _runWrite(
-      project,
-      () async {
-        _upsert(
-          tableName: 'rag_mount_binding',
-          keyColumns: <String>['binding_id'],
-          values: <String, Object?>{
-            'binding_id': binding.bindingId,
-            'project_id': binding.projectId,
-            'corpus_id': binding.corpusId,
-            'mount_scope': binding.mountScope,
-            'priority': binding.priority,
-            'usage_policy': binding.usagePolicy,
-            'activation_policy': binding.activationPolicy,
-            'created_at': binding.createdAt,
-            'payload_json': jsonEncode(binding.toJson()),
-          },
-        );
-      },
-    );
+    await _runWrite(project, () async {
+      _upsert(
+        tableName: 'rag_mount_binding',
+        keyColumns: <String>['binding_id'],
+        values: <String, Object?>{
+          'binding_id': binding.bindingId,
+          'project_id': binding.projectId,
+          'corpus_id': binding.corpusId,
+          'mount_scope': binding.mountScope,
+          'priority': binding.priority,
+          'usage_policy': binding.usagePolicy,
+          'activation_policy': binding.activationPolicy,
+          'created_at': binding.createdAt,
+          'payload_json': jsonEncode(binding.toJson()),
+        },
+      );
+    });
   }
 
   Future<RetrievalMountBinding?> readMountBinding(
@@ -360,26 +350,23 @@ class SqliteRagMetadataRepository {
     RagIndexHandle indexHandle,
   ) async {
     // 中文注释: 索引句柄只描述 backend 身份与构建状态，不把 backend 本体绑死在 SQLite 里。
-    await _runWrite(
-      project,
-      () async {
-        _upsert(
-          tableName: 'rag_index_handle',
-          keyColumns: <String>['index_handle_id'],
-          values: <String, Object?>{
-            'index_handle_id': indexHandle.indexHandleId,
-            'corpus_id': indexHandle.corpusId,
-            'backend_kind': indexHandle.backendKind,
-            'backend_location': indexHandle.backendLocation,
-            'embedding_dimension': indexHandle.embeddingDimension,
-            'status': indexHandle.status,
-            'version': indexHandle.version,
-            'last_built_at': indexHandle.lastBuiltAt,
-            'payload_json': jsonEncode(indexHandle.toJson()),
-          },
-        );
-      },
-    );
+    await _runWrite(project, () async {
+      _upsert(
+        tableName: 'rag_index_handle',
+        keyColumns: <String>['index_handle_id'],
+        values: <String, Object?>{
+          'index_handle_id': indexHandle.indexHandleId,
+          'corpus_id': indexHandle.corpusId,
+          'backend_kind': indexHandle.backendKind,
+          'backend_location': indexHandle.backendLocation,
+          'embedding_dimension': indexHandle.embeddingDimension,
+          'status': indexHandle.status,
+          'version': indexHandle.version,
+          'last_built_at': indexHandle.lastBuiltAt,
+          'payload_json': jsonEncode(indexHandle.toJson()),
+        },
+      );
+    });
   }
 
   Future<RagIndexHandle?> readIndexHandle(
@@ -417,9 +404,9 @@ class SqliteRagMetadataRepository {
       parameters: parameters,
       orderBy: 'corpus_id, status, index_handle_id',
     );
-    return rows.map((row) => RagIndexHandle.fromJson(_payloadFromRow(row))).toList(
-      growable: false,
-    );
+    return rows
+        .map((row) => RagIndexHandle.fromJson(_payloadFromRow(row)))
+        .toList(growable: false);
   }
 
   Future<void> upsertIngestionRun(
@@ -427,27 +414,24 @@ class SqliteRagMetadataRepository {
     JsonMap ingestionRun,
   ) async {
     // 中文注释: ingestion run 先作为 JSON 化的元数据记录落盘，后续再视需要提升为正式 core 模型。
-    await _runWrite(
-      project,
-      () async {
-        _upsert(
-          tableName: 'rag_ingestion_run',
-          keyColumns: <String>['ingestion_run_id'],
-          values: <String, Object?>{
-            'ingestion_run_id':
-                ingestionRun['ingestion_run_id']?.toString() ?? '',
-            'project_id': ingestionRun['project_id']?.toString() ?? '',
-            'corpus_id': ingestionRun['corpus_id']?.toString() ?? '',
-            'source_document_id':
-                ingestionRun['source_document_id']?.toString() ?? '',
-            'status': ingestionRun['status']?.toString() ?? '',
-            'started_at': ingestionRun['started_at']?.toString() ?? '',
-            'updated_at': ingestionRun['updated_at']?.toString() ?? '',
-            'payload_json': jsonEncode(ingestionRun),
-          },
-        );
-      },
-    );
+    await _runWrite(project, () async {
+      _upsert(
+        tableName: 'rag_ingestion_run',
+        keyColumns: <String>['ingestion_run_id'],
+        values: <String, Object?>{
+          'ingestion_run_id':
+              ingestionRun['ingestion_run_id']?.toString() ?? '',
+          'project_id': ingestionRun['project_id']?.toString() ?? '',
+          'corpus_id': ingestionRun['corpus_id']?.toString() ?? '',
+          'source_document_id':
+              ingestionRun['source_document_id']?.toString() ?? '',
+          'status': ingestionRun['status']?.toString() ?? '',
+          'started_at': ingestionRun['started_at']?.toString() ?? '',
+          'updated_at': ingestionRun['updated_at']?.toString() ?? '',
+          'payload_json': jsonEncode(ingestionRun),
+        },
+      );
+    });
   }
 
   Future<JsonMap?> readIngestionRun(
@@ -490,9 +474,7 @@ class SqliteRagMetadataRepository {
       parameters: parameters,
       orderBy: 'updated_at DESC, ingestion_run_id',
     );
-    return rows
-        .map(_payloadFromRow)
-        .toList(growable: false);
+    return rows.map(_payloadFromRow).toList(growable: false);
   }
 
   Future<void> _runWrite(
@@ -590,14 +572,11 @@ class SqliteRagMetadataRepository {
     if (database == null) {
       throw StateError('sqlite rag metadata database is not open');
     }
-    database.execute(
-      '''
+    database.execute('''
       INSERT INTO $tableName (${columns.join(', ')})
       VALUES ($placeholders)
       ON CONFLICT(${keyColumns.join(', ')}) DO UPDATE SET $assignments
-      ''',
-      values.values.toList(growable: false),
-    );
+      ''', values.values.toList(growable: false));
   }
 
   Database? _activeDatabase;

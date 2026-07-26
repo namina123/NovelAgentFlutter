@@ -43,8 +43,8 @@ void main() {
               skillId: 'generate_outline',
               sources: <ResolvedAgentSkillLoadoutEntrySource>[
                 ResolvedAgentSkillLoadoutEntrySource(
-                  kind:
-                      ResolvedAgentSkillLoadoutEntrySourceKind.loadoutDirectSkill,
+                  kind: ResolvedAgentSkillLoadoutEntrySourceKind
+                      .loadoutDirectSkill,
                   referenceId: '',
                 ),
               ],
@@ -53,8 +53,8 @@ void main() {
               skillId: 'memory_maintenance',
               sources: <ResolvedAgentSkillLoadoutEntrySource>[
                 ResolvedAgentSkillLoadoutEntrySource(
-                  kind:
-                      ResolvedAgentSkillLoadoutEntrySourceKind.loadoutSkillGroup,
+                  kind: ResolvedAgentSkillLoadoutEntrySourceKind
+                      .loadoutSkillGroup,
                   referenceId: 'memory_tools',
                 ),
               ],
@@ -77,10 +77,10 @@ void main() {
         (item) => ValueReaders.stringValue(item['id']) == 'long_novel_starter',
       );
       expect(group['name'], '长篇起步组');
-      expect(
-        ValueReaders.stringList(group['skills']),
-        <String>['generate_outline', 'memory_maintenance'],
-      );
+      expect(ValueReaders.stringList(group['skills']), <String>[
+        'generate_outline',
+        'memory_maintenance',
+      ]);
       expect(
         ValueReaders.mapValue(group['metadata'])['generated_from_agent_id'],
         'default_generalist',

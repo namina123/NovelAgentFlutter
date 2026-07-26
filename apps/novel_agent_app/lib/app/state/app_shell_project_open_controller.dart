@@ -8,17 +8,21 @@ class AppShellProjectOpenController {
     required Future<void> Function(String projectPath)
     openProjectFromProjectOpen,
     required Future<void> Function() importLocalProjectFromProjectOpen,
+    required Future<void> Function(String projectPath)
+    deleteProjectFromProjectOpen,
   }) : _startProjectCreationFromProjectOpen = startProjectCreationFromProjectOpen,
        _refreshProjectOpenView = refreshProjectOpenView,
        _selectProjectOpenEntry = selectProjectOpenEntry,
        _openProjectFromProjectOpen = openProjectFromProjectOpen,
-       _importLocalProjectFromProjectOpen = importLocalProjectFromProjectOpen;
+       _importLocalProjectFromProjectOpen = importLocalProjectFromProjectOpen,
+       _deleteProjectFromProjectOpen = deleteProjectFromProjectOpen;
 
   final Future<void> Function() _startProjectCreationFromProjectOpen;
   final Future<void> Function({bool forceRefresh}) _refreshProjectOpenView;
   final void Function(String entryId) _selectProjectOpenEntry;
   final Future<void> Function(String projectPath) _openProjectFromProjectOpen;
   final Future<void> Function() _importLocalProjectFromProjectOpen;
+  final Future<void> Function(String projectPath) _deleteProjectFromProjectOpen;
 
   void onProjectOpenRefreshRequested() {
     // 中文注释: 项目入口页刷新只重建项目发现结果，不切换当前全局目的地。
@@ -43,5 +47,10 @@ class AppShellProjectOpenController {
   void onProjectOpenOpenRequested(String projectPath) {
     // 中文注释: 打开动作只把路径交给统一开项目链路，不在入口页再做第二次判断。
     _openProjectFromProjectOpen(projectPath);
+  }
+
+  void onProjectOpenDeleteRequested(String projectPath) {
+    // 中文注释: 删除必须走壳层统一链路（确认 + 路径安全 + 清理当前项目），页面不直接碰磁盘。
+    unawaited(_deleteProjectFromProjectOpen(projectPath));
   }
 }

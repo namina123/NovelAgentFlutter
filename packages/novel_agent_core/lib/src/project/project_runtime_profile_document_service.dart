@@ -30,7 +30,10 @@ class ProjectRuntimeProfileDocumentService {
   }) {
     // 中文注释: 这里把项目级默认运行配置快照统一固化，后续 GUI/CLI 启动长任务都从同一合同起步。
     final cleanProjectType = projectType.trim();
-    final cleanBaselineId = runtimeBaselineId.trim();
+    final cleanBaselineId = _normalizeRuntimeBaselineId(
+      projectType: cleanProjectType,
+      runtimeBaselineId: runtimeBaselineId,
+    );
     final baseline = _runtimeBaselineCatalogService.byId(cleanBaselineId);
     final runtimeMode = _runtimeBaselineExecutionModeService.resolveRuntimeMode(
       runtimeBaselineId: cleanBaselineId,
@@ -93,13 +96,20 @@ class ProjectRuntimeProfileDocumentService {
       json['project_type'],
       fallbackProjectType,
     ).trim();
-    final runtimeBaselineId = ValueReaders.stringValue(
+    final rawRuntimeBaselineId = ValueReaders.stringValue(
       json['runtime_baseline_id'],
       fallbackRuntimeBaselineId,
     ).trim();
+    final runtimeBaselineId = _normalizeRuntimeBaselineId(
+      projectType: projectType,
+      runtimeBaselineId: rawRuntimeBaselineId,
+    );
+    final baselineWasNormalized = runtimeBaselineId != rawRuntimeBaselineId;
     final runtimeMode = _runtimeBaselineExecutionModeService.resolveRuntimeMode(
       runtimeBaselineId: runtimeBaselineId,
-      runtimeMode: ValueReaders.stringValue(json['runtime_mode']),
+      runtimeMode: baselineWasNormalized
+          ? ''
+          : ValueReaders.stringValue(json['runtime_mode']),
     );
     final initialRunOptions = ValueReaders.mapValue(
       json['initial_run_options'],
@@ -108,7 +118,7 @@ class ProjectRuntimeProfileDocumentService {
       projectType: projectType,
       runtimeBaselineId: runtimeBaselineId,
       runtimeMode: runtimeMode,
-      initialRunOptions: initialRunOptions.isEmpty
+      initialRunOptions: initialRunOptions.isEmpty || baselineWasNormalized
           ? buildProfile(
               projectType: projectType,
               runtimeBaselineId: runtimeBaselineId,
@@ -119,18 +129,46 @@ class ProjectRuntimeProfileDocumentService {
   }
 
   JsonMap toJson(ProjectRuntimeProfile profile) {
+    final projectType = profile.projectType.trim();
+    final rawRuntimeBaselineId = profile.runtimeBaselineId.trim();
+    final runtimeBaselineId = _normalizeRuntimeBaselineId(
+      projectType: projectType,
+      runtimeBaselineId: rawRuntimeBaselineId,
+    );
+    final baselineWasNormalized = runtimeBaselineId != rawRuntimeBaselineId;
+    final runtimeMode = _runtimeBaselineExecutionModeService.resolveRuntimeMode(
+      runtimeBaselineId: runtimeBaselineId,
+      runtimeMode: baselineWasNormalized ? '' : profile.runtimeMode,
+    );
+    final initialRunOptions =
+        profile.initialRunOptions.isEmpty || baselineWasNormalized
+        ? buildProfile(
+            projectType: projectType,
+            runtimeBaselineId: runtimeBaselineId,
+          ).initialRunOptions
+        : profile.initialRunOptions;
     return <String, Object?>{
       'schema_version': profile.schemaVersion,
-      'project_type': profile.projectType,
-      'runtime_baseline_id': profile.runtimeBaselineId,
-      'runtime_mode': profile.runtimeMode,
-      'initial_run_options': ValueReaders.deepCopyMap(
-        profile.initialRunOptions,
-      ),
+      'project_type': projectType,
+      'runtime_baseline_id': runtimeBaselineId,
+      'runtime_mode': runtimeMode,
+      'initial_run_options': ValueReaders.deepCopyMap(initialRunOptions),
     };
   }
 
   String encode(ProjectRuntimeProfile profile) {
     return const JsonEncoder.withIndent('  ').convert(toJson(profile));
+  }
+
+  String _normalizeRuntimeBaselineId({
+    required String projectType,
+    required String runtimeBaselineId,
+  }) {
+    // 中文注释: runtime profile 只是 manifest 的派生执行快照，不能独立保留一个不属于
+    // 当前项目类型的运行基准，否则长任务能力会被半写入或手工编辑重新注入普通项目。
+    return _runtimeBaselineCatalogService.normalizeForProjectType(
+      projectType,
+      runtimeBaselineId,
+    );
   }
 }

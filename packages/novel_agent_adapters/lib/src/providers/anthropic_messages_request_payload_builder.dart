@@ -42,7 +42,7 @@ class AnthropicMessagesRequestPayloadBuilder {
 
   List<JsonMap> _requestMessages(List<JsonMap> source) {
     // 中文注释: 旧式 role/message 消息在这里翻译成 Anthropic Messages 内容块。
-    final result = <JsonMap>[]; 
+    final result = <JsonMap>[];
     for (final rawMessage in source) {
       final message = ValueReaders.mapValue(rawMessage);
       final role = ValueReaders.stringValue(message['role']);

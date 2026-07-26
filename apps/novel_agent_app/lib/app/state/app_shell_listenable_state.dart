@@ -155,8 +155,7 @@ class AppShellListenableState {
         !identical(_projectOpen.value, viewModel.projectOpen)) {
       _projectOpen.value = viewModel.projectOpen;
     }
-    if (nextDestination == AppDestination.taskCenter &&
-        !identical(_taskCenter.value, viewModel.taskCenter)) {
+    if (!identical(_taskCenter.value, viewModel.taskCenter)) {
       _taskCenter.value = viewModel.taskCenter;
     }
   }

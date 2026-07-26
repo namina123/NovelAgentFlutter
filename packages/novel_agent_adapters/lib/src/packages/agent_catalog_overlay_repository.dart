@@ -100,7 +100,9 @@ class AgentCatalogOverlayRepository {
 List<JsonMap> _listAgentOverlaysSync(String settingsRootPath) {
   final pathService = const CatalogOverlayPathService();
   final codecService = AgentCatalogOverlayDocumentCodecService();
-  final root = Directory(pathService.agentOverlayDirectoryPath(settingsRootPath));
+  final root = Directory(
+    pathService.agentOverlayDirectoryPath(settingsRootPath),
+  );
   if (!root.existsSync()) {
     return const <JsonMap>[];
   }

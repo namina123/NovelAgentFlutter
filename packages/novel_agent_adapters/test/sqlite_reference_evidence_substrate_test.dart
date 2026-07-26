@@ -70,7 +70,10 @@ void main() {
           firstLink.sourceAsset.resolverUri,
           'workspace-file://Harry%20Potter%20-%20Volume%201%20Raw.txt',
         );
-        expect(firstLink.sourceAsset.metadata['debug_local_absolute_path'], isNull);
+        expect(
+          firstLink.sourceAsset.metadata['debug_local_absolute_path'],
+          isNull,
+        );
       },
     );
 

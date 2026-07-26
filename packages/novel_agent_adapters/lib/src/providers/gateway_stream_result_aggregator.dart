@@ -59,9 +59,7 @@ class GatewayStreamResultAggregator {
     _rawResponse = value;
   }
 
-  GatewayStreamResultSnapshot snapshot({
-    required List<JsonMap> toolCalls,
-  }) {
+  GatewayStreamResultSnapshot snapshot({required List<JsonMap> toolCalls}) {
     return GatewayStreamResultSnapshot(
       content: _contentBuffer.toString(),
       reasoningContent: _reasoningBuffer.toString(),
@@ -85,9 +83,7 @@ class GatewayStreamResultAggregator {
     );
   }
 
-  LlmStreamUpdate buildStateOnlyUpdate({
-    required List<JsonMap> toolCalls,
-  }) {
+  LlmStreamUpdate buildStateOnlyUpdate({required List<JsonMap> toolCalls}) {
     final snapshot = this.snapshot(toolCalls: toolCalls);
     return LlmStreamUpdate(
       content: snapshot.content,

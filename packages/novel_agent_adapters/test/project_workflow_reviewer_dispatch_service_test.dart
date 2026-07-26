@@ -19,11 +19,7 @@ void main() {
           'primary_agent_id': 'writer',
         },
         availableAgents: const <JsonMap>[
-          <String, Object?>{
-            'id': 'writer',
-            'name': '作者',
-            'role': '负责正文',
-          },
+          <String, Object?>{'id': 'writer', 'name': '作者', 'role': '负责正文'},
         ],
         availableGroups: const <JsonMap>[],
       );

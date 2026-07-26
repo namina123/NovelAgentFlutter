@@ -116,10 +116,7 @@ void main() {
         expect(summaryMarkdown, contains('项目资料总览'));
         expect(summaryMarkdown, contains('项目私有草稿资产'));
         expect(summaryMarkdown, contains('待审核资产'));
-        expect(
-          summaryMarkdown,
-          contains('可提升到参考资产库的正式资产'),
-        );
+        expect(summaryMarkdown, contains('可提升到参考资产库的正式资产'));
         expect(summaryMarkdown, contains('项目资料挂载'));
         expect(summaryMarkdown, contains('参考资产库'));
 
@@ -133,14 +130,8 @@ void main() {
           '项目私有草稿资产',
         );
         expect(projectedCard.metadata['project_surface_label'], '项目资料');
-        expect(
-          projectedCard.metadata['project_mount_label'],
-          '项目资料挂载',
-        );
-        expect(
-          projectedCard.metadata['reference_library_label'],
-          '参考资产库',
-        );
+        expect(projectedCard.metadata['project_mount_label'], '项目资料挂载');
+        expect(projectedCard.metadata['reference_library_label'], '参考资产库');
       },
     );
   });

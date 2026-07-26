@@ -22,8 +22,15 @@ class BookDeconstructionViewDataService {
     required BookDeconstructionSnapshot snapshot,
     required String status,
     bool canCreateDerivedProject = true,
-    List<SelectorOptionViewData> splitModelOptions = const <SelectorOptionViewData>[],
-    List<SelectorOptionViewData> analysisModelOptions = const <SelectorOptionViewData>[],
+    List<SelectorOptionViewData> splitModelOptions =
+        const <SelectorOptionViewData>[],
+    List<SelectorOptionViewData> analysisModelOptions =
+        const <SelectorOptionViewData>[],
+    List<SelectorOptionViewData> targetWritingTypeOptions =
+        const <SelectorOptionViewData>[],
+    List<SelectorOptionViewData> targetRuntimeBaselineOptions =
+        const <SelectorOptionViewData>[],
+    bool canSelectTargetRuntimeBaseline = true,
   }) {
     final buildResult = snapshot.buildResult;
     final previewSections = buildResult == null
@@ -41,10 +48,22 @@ class BookDeconstructionViewDataService {
           );
     final totalItemCount = buildResult?.applicationPlan.items.length ?? 0;
     final hasSource = snapshot.sourceContent.trim().isNotEmpty;
+    final hasStagedAnalysis =
+        snapshot.analysisCompleted &&
+        snapshot.analysisStagingRunId.trim().isNotEmpty &&
+        snapshot.analysisStagingPackageId.trim().isNotEmpty &&
+        snapshot.analysisStagingPackageVersionId.trim().isNotEmpty;
     // 中文注释: 拆书"使用模型"仅在用户选了拆书模型时可勾；分析"使用模型"仅在用户选了分析模型时可勾。
     // 两步模型完全独立不继承。无模型则纯规则分章 / 不分析。
     final canUseSplitModel = splitModelOptions.isNotEmpty;
     final canAnalyze = analysisModelOptions.isNotEmpty;
+    final requiresLongNovelRuntimeBaseline =
+        snapshot.selectedTargetWritingTypeId.trim() == 'long_novel';
+    final hasSelectedLongNovelRuntimeBaseline = targetRuntimeBaselineOptions
+        .any(
+          (option) =>
+              option.id == snapshot.selectedTargetRuntimeBaselineId.trim(),
+        );
     return BookDeconstructionViewData(
       projectTitle: projectTitle,
       status: status,
@@ -60,12 +79,21 @@ class BookDeconstructionViewDataService {
       selectedItemCount: snapshot.selectedItemIds.length,
       totalItemCount: totalItemCount,
       selectedFollowupOptionId: snapshot.selectedFollowupOptionId,
+      selectedTargetWritingTypeId: snapshot.selectedTargetWritingTypeId,
+      targetWritingTypeOptions: targetWritingTypeOptions,
+      selectedTargetRuntimeBaselineId: snapshot.selectedTargetRuntimeBaselineId,
+      targetRuntimeBaselineOptions: targetRuntimeBaselineOptions,
+      canSelectTargetRuntimeBaseline: canSelectTargetRuntimeBaseline,
+      inheritAsLiveNarrative: snapshot.inheritAsLiveNarrative,
       confirmedPreviewPath: snapshot.confirmedPreviewPath,
       canConfirmSelection:
           !snapshot.isLoading &&
           buildResult != null &&
           snapshot.selectedItemIds.isNotEmpty &&
-          snapshot.selectedFollowupOptionId.trim().isNotEmpty,
+          snapshot.selectedTargetWritingTypeId.trim().isNotEmpty &&
+          (!snapshot.applyStagedAnalysisResults || hasStagedAnalysis) &&
+          (!requiresLongNovelRuntimeBaseline ||
+              hasSelectedLongNovelRuntimeBaseline),
       canCreateDerivedProject:
           !snapshot.isLoading &&
           buildResult != null &&
@@ -78,12 +106,21 @@ class BookDeconstructionViewDataService {
       splitModelOptionKey: snapshot.splitModelOptionKey,
       splitModelOptions: splitModelOptions,
       canUseSplitModel: canUseSplitModel,
-      canAnalyze: canAnalyze && !snapshot.isLoading && buildResult != null,
+      canAnalyze:
+          canAnalyze &&
+          !snapshot.isLoading &&
+          buildResult != null &&
+          snapshot.structuredSourceProjectionReady,
       analysisUseModel: snapshot.analysisUseModel && canAnalyze,
       analysisModelOptionKey: snapshot.analysisModelOptionKey,
       analysisModelOptions: analysisModelOptions,
       analysisStatusMessage: snapshot.analysisStatusMessage,
       analysisCompleted: snapshot.analysisCompleted,
+      analysisStagingRunId: snapshot.analysisStagingRunId,
+      analysisStagingPackageId: snapshot.analysisStagingPackageId,
+      analysisStagingPackageVersionId: snapshot.analysisStagingPackageVersionId,
+      applyStagedAnalysisResults: snapshot.applyStagedAnalysisResults,
+      hasStagedAnalysis: hasStagedAnalysis,
       continuity: continuity,
     );
   }
@@ -176,25 +213,6 @@ class BookDeconstructionViewDataService {
               summary: extraction.storyOutlineSummary.trim(),
             ),
           ],
-        ),
-      );
-    }
-    if (extraction.chapterOutlines.isNotEmpty) {
-      sections.add(
-        BookDeconstructionPreviewSectionViewData(
-          id: 'chapter_outlines',
-          title: '章节骨架',
-          description: '已识别出的章节级结构片段。',
-          items: extraction.chapterOutlines
-              .map(
-                (item) => BookDeconstructionPreviewItemViewData(
-                  id: item.id,
-                  title: item.title,
-                  summary: item.summary,
-                  caption: '章节 ${item.sequence}',
-                ),
-              )
-              .toList(growable: false),
         ),
       );
     }
@@ -383,7 +401,7 @@ class BookDeconstructionViewDataService {
       case BookDeconstructionArtifactKind.storyOutline:
         return '故事总纲';
       case BookDeconstructionArtifactKind.chapterOutline:
-        return '章纲';
+        return '分章结果';
       case BookDeconstructionArtifactKind.styleProfile:
         return '风格';
       case BookDeconstructionArtifactKind.worldRuleSet:

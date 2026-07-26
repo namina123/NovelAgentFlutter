@@ -55,13 +55,6 @@ void main() {
                       defaultBaseUrl: 'https://api.openai.com/v1',
                     ),
                   ],
-                  allModelOptions: const [
-                    SettingsSearchOptionViewData(
-                      value: 'gpt-5.5',
-                      label: 'gpt-5.5',
-                      note: 'OpenAI',
-                    ),
-                  ],
                   onProviderSelected: (value) {
                     setState(() {
                       selectedProviderId = value;
@@ -81,7 +74,6 @@ void main() {
                   },
                     onProviderSaved: (_) {},
                     onProviderDeleted: (_) {},
-                    onConnectionTestRequested: (_) {},
                   );
               },
             ),
@@ -106,15 +98,14 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('接口/厂商名称'), findsOneWidget);
-      expect(find.text('模型 ID'), findsOneWidget);
-      expect(find.text('测试连接'), findsOneWidget);
+      expect(find.text('模型 ID'), findsNothing);
+      expect(find.textContaining('常用厂商'), findsOneWidget);
+      // 中文注释: 接口页对"模型"零提及，也不再有连接测试按钮。
+      expect(find.textContaining('接口只保存地址与凭据'), findsOneWidget);
+      expect(find.text('测试连接'), findsNothing);
+      expect(find.text('保存接口'), findsOneWidget);
       expect(find.text('协议'), findsNothing);
       expect(find.text('Base URL'), findsNothing);
-
-      await tester.tap(find.text('测试连接'));
-      await tester.pumpAndSettle();
-
-      expect(find.byKey(const ValueKey('provider-connection-status')), findsOneWidget);
 
       await tester.scrollUntilVisible(
         find.text('展开高级设置'),
@@ -186,7 +177,6 @@ void main() {
                       defaultBaseUrl: 'https://api.deepseek.com',
                     ),
                   ],
-                  allModelOptions: const [],
                   onProviderSelected: (value) {
                     setState(() {
                       selectedProviderId = value;
@@ -200,7 +190,6 @@ void main() {
                   },
                   onProviderSaved: (_) {},
                   onProviderDeleted: (_) {},
-                  onConnectionTestRequested: (_) {},
                 );
               },
             ),

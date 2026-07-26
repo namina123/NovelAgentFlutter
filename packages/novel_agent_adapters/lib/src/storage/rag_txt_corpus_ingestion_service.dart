@@ -654,7 +654,8 @@ class RagTxtCorpusIngestionService {
   /// 用注入的 embedding provider 批量给 chunk 生成向量，写到 chunk.metadata 里，
   /// 随 chunk 一起在同一事务落库；没有 provider 或失败时如实回退到纯元数据。
   Future<RagTxtEmbeddingResult> _embedChunks(List<RagChunk> chunks) async {
-    final provider = _embeddingProvider ?? (await embeddingProviderResolver?.call());
+    final provider =
+        _embeddingProvider ?? (await embeddingProviderResolver?.call());
     if (provider == null || chunks.isEmpty) {
       return RagTxtEmbeddingResult(
         chunks: chunks,

@@ -7,9 +7,6 @@ import '../../../workbench/presentation/widgets/conversation_model_strip.dart';
 import '../../application/controllers/book_deconstruction_controller.dart';
 import '../../application/models/book_deconstruction_operation_kind.dart';
 import '../contracts/book_deconstruction_action_handler.dart';
-import '../models/book_deconstruction_continuity_view_data.dart';
-import '../models/book_deconstruction_followup_group_view_data.dart';
-import '../models/book_deconstruction_followup_option_view_data.dart';
 import '../models/book_deconstruction_view_data.dart';
 import '../widgets/book_deconstruction_import_panel.dart';
 import '../widgets/book_deconstruction_preview_panel.dart';
@@ -64,7 +61,7 @@ class BookDeconstructionPage extends StatelessWidget {
               _StepCard(
                 index: 4,
                 title: '确认进入创作',
-                description: '选择续写路线并确认，进入后续创作。',
+                description: '选择目标写作类型并确认，在当前项目内进入创作。',
                 child: _ConfirmStep(viewData: viewData, actionHandler: handler),
               ),
               const SizedBox(height: 24),
@@ -179,7 +176,8 @@ class _SplitStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isSplitting = viewData.operationKind ==
+    final isSplitting =
+        viewData.operationKind ==
         BookDeconstructionOperationKind.splittingChapters;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -189,10 +187,8 @@ class _SplitStep extends StatelessWidget {
           dense: true,
           value: viewData.splitUseModel,
           onChanged: viewData.canUseSplitModel
-              ? (value) =>
-                  actionHandler.onBookDeconstructionSplitUseModelChanged(
-                    value ?? false,
-                  )
+              ? (value) => actionHandler
+                    .onBookDeconstructionSplitUseModelChanged(value ?? false)
               : null,
           title: const Text('使用模型辅助拆书'),
           subtitle: Text(
@@ -210,7 +206,8 @@ class _SplitStep extends StatelessWidget {
               viewData.splitModelOptionKey,
             ),
             modelOptions: viewData.splitModelOptions,
-            onModelSelected: actionHandler.onBookDeconstructionSplitModelSelected,
+            onModelSelected:
+                actionHandler.onBookDeconstructionSplitModelSelected,
             showSurface: false,
           ),
           const SizedBox(height: 8),
@@ -246,9 +243,11 @@ class _AnalysisStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isAnalyzing = viewData.operationKind ==
+    final isAnalyzing =
+        viewData.operationKind ==
         BookDeconstructionOperationKind.analyzingAssets;
-    final canRun = viewData.analysisUseModel &&
+    final canRun =
+        viewData.analysisUseModel &&
         viewData.analysisModelOptionKey.trim().isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -258,10 +257,8 @@ class _AnalysisStep extends StatelessWidget {
           dense: true,
           value: viewData.analysisUseModel,
           onChanged: viewData.canAnalyze
-              ? (value) =>
-                  actionHandler.onBookDeconstructionAnalysisUseModelChanged(
-                    value ?? false,
-                  )
+              ? (value) => actionHandler
+                    .onBookDeconstructionAnalysisUseModelChanged(value ?? false)
               : null,
           title: const Text('使用模型分析'),
           subtitle: Text(
@@ -319,19 +316,112 @@ class _ConfirmStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final options = viewData.targetWritingTypeOptions;
+    final selectionLocked = viewData.isCommitInProgress;
+    final hasBuildResult =
+        viewData.planGroups.isNotEmpty || viewData.previewSections.isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (viewData.continuity != null) ...[
-          _ContinuitySummarySection(
-            continuity: viewData.continuity!,
-            actionHandler: actionHandler,
+        Text('目标写作项目类型', style: textTheme.titleSmall),
+        const SizedBox(height: 4),
+        if (!hasBuildResult)
+          Text('完成拆书后会在此选择要把项目复合成哪种写作类型。', style: textTheme.bodySmall)
+        else if (options.isEmpty)
+          Text('当前项目类型暂无可复合的写作类型。', style: textTheme.bodySmall)
+        else ...[
+          Text(
+            '拆完书后，把当前拆书项目复合成下列写作类型（保留拆书能力），即可在同项目内创作。',
+            style: textTheme.bodySmall,
           ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final option in options)
+                ChoiceChip(
+                  label: Text(option.label),
+                  selected: option.id == viewData.selectedTargetWritingTypeId,
+                  onSelected: selectionLocked
+                      ? null
+                      : (_) => actionHandler
+                            .onBookDeconstructionTargetWritingTypeSelected(
+                              option.id,
+                            ),
+                ),
+            ],
+          ),
+          if (viewData.selectedTargetWritingTypeId == 'long_novel') ...[
+            const SizedBox(height: 12),
+            Text('长篇运行基准', style: textTheme.titleSmall),
+            const SizedBox(height: 4),
+            Text('长篇长任务需要先确定运行方式，确认后才会写入项目类型。', style: textTheme.bodySmall),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              initialValue:
+                  viewData.targetRuntimeBaselineOptions.any(
+                    (option) =>
+                        option.id == viewData.selectedTargetRuntimeBaselineId,
+                  )
+                  ? viewData.selectedTargetRuntimeBaselineId
+                  : null,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: '运行基准',
+                border: OutlineInputBorder(),
+              ),
+              hint: const Text('请选择运行基准'),
+              items: viewData.targetRuntimeBaselineOptions
+                  .map(
+                    (option) => DropdownMenuItem<String>(
+                      value: option.id,
+                      child: Text(option.label),
+                    ),
+                  )
+                  .toList(growable: false),
+              onChanged:
+                  selectionLocked ||
+                      viewData.isLoading ||
+                      !viewData.canSelectTargetRuntimeBaseline ||
+                      viewData.targetRuntimeBaselineOptions.isEmpty
+                  ? null
+                  : (value) => actionHandler
+                        .onBookDeconstructionTargetRuntimeBaselineSelected(
+                          value ?? '',
+                        ),
+            ),
+          ],
           const SizedBox(height: 12),
-        ] else ...[
-          Text('完成拆书后会在此选择续写路线。', style: textTheme.bodySmall),
-          const SizedBox(height: 12),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            value: viewData.inheritAsLiveNarrative,
+            onChanged: selectionLocked || viewData.isLoading
+                ? null
+                : actionHandler
+                      .onBookDeconstructionInheritAsLiveNarrativeChanged,
+            title: const Text('将分章作为续写正文基础'),
+            subtitle: const Text(
+              '开启：分章写进正文 chapters/，续写在其后接写；关闭：分章只进资源目录 analysis/。',
+            ),
+          ),
+          if (viewData.hasStagedAnalysis) ...[
+            const SizedBox(height: 8),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              value: viewData.applyStagedAnalysisResults,
+              onChanged: selectionLocked || viewData.isLoading
+                  ? null
+                  : actionHandler
+                        .onBookDeconstructionApplyStagedAnalysisResultsChanged,
+              title: const Text('应用步骤③暂存分析结果'),
+              subtitle: const Text('默认不应用；开启后才会在本次确认中挂载并投影当前暂存的分析资料包。'),
+            ),
+          ],
         ],
+        const SizedBox(height: 12),
         FilledButton.icon(
           onPressed: viewData.canConfirmSelection
               ? actionHandler.onBookDeconstructionConfirmRequested
@@ -341,125 +431,9 @@ class _ConfirmStep extends StatelessWidget {
         ),
         if (viewData.confirmedPreviewPath.trim().isNotEmpty) ...[
           const SizedBox(height: 8),
-          Text(
-            '拆书结果已保存到当前项目。',
-            style: textTheme.bodySmall,
-          ),
+          Text('拆书结果已保存到当前项目。', style: textTheme.bodySmall),
         ],
       ],
-    );
-  }
-}
-
-class _ContinuitySummarySection extends StatelessWidget {
-  const _ContinuitySummarySection({
-    required this.continuity,
-    required this.actionHandler,
-  });
-
-  final BookDeconstructionContinuityViewData continuity;
-  final BookDeconstructionActionHandler actionHandler;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('续写路线', style: textTheme.titleSmall),
-        const SizedBox(height: 4),
-        Text(continuity.summary, style: textTheme.bodySmall),
-        const SizedBox(height: 8),
-        ...continuity.followupGroups.map((group) => _buildGroup(context, group)),
-      ],
-    );
-  }
-
-  Widget _buildGroup(
-    BuildContext context,
-    BookDeconstructionFollowupGroupViewData group,
-  ) {
-    final textTheme = Theme.of(context).textTheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(group.title, style: textTheme.titleSmall),
-          if (group.description.trim().isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(group.description, style: textTheme.bodySmall),
-          ],
-          const SizedBox(height: 8),
-          if (group.options.isEmpty)
-            Text('当前暂无可用路线。', style: textTheme.bodySmall)
-          else
-            ...group.options.map((option) => _buildOption(context, option)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOption(
-    BuildContext context,
-    BookDeconstructionFollowupOptionViewData option,
-  ) {
-    final textTheme = Theme.of(context).textTheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => actionHandler.onBookDeconstructionFollowupOptionSelected(
-            option.id,
-          ),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: option.isSelected || option.isHighlighted
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).dividerColor,
-              ),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(top: 2, right: 12),
-                  child: Icon(
-                    option.isSelected
-                        ? Icons.radio_button_checked
-                        : Icons.radio_button_unchecked,
-                    size: 20,
-                    color: option.isSelected || option.isHighlighted
-                        ? Theme.of(context).colorScheme.primary
-                        : Theme.of(context).disabledColor,
-                  ),
-                ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        option.isSelected
-                            ? '${option.title} · 已选择'
-                            : option.isHighlighted
-                            ? '${option.title} · 当前默认'
-                            : option.title,
-                        style: textTheme.bodyLarge,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(option.summary, style: textTheme.bodySmall),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

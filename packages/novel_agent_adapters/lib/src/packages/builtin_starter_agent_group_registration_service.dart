@@ -160,7 +160,14 @@ class BuiltinStarterAgentGroupRegistrationService {
       'display_label': '默认拆书整理',
       'recommended_by_default': true,
       'applicability_scope': <String, Object?>{
-        'allowed_project_type_ids': <String>['book_deconstruction'],
+        // The original type and transitioned writing projects share this
+        // group only when their durable deconstruction trait is present.
+        'allowed_project_type_ids': <String>[
+          'book_deconstruction',
+          'novel',
+          'long_novel',
+        ],
+        'required_trait_ids': <String>['book_deconstruction'],
       },
       'metadata': <String, Object?>{
         'starter_group': true,

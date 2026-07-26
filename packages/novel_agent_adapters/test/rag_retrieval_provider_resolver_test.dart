@@ -13,22 +13,22 @@ void main() {
         RagRetrievalProviderKinds.remotePlaceholder,
       );
 
-      expect(resolver.supportsProvider(RagRetrievalProviderKinds.localPlaceholder), isTrue);
-      expect(resolver.supportsProvider(RagRetrievalProviderKinds.remotePlaceholder), isTrue);
+      expect(
+        resolver.supportsProvider(RagRetrievalProviderKinds.localPlaceholder),
+        isTrue,
+      );
+      expect(
+        resolver.supportsProvider(RagRetrievalProviderKinds.remotePlaceholder),
+        isTrue,
+      );
       expect(localReport.isSupported, isTrue);
       expect(localReport.isAvailable, isTrue);
       expect(localReport.failureMessage, isEmpty);
-      expect(
-        localReport.capabilityProfile['supports_search'],
-        isFalse,
-      );
+      expect(localReport.capabilityProfile['supports_search'], isFalse);
       expect(remoteReport.isSupported, isTrue);
       expect(remoteReport.isAvailable, isFalse);
       expect(remoteReport.failureMessage, isNotEmpty);
-      expect(
-        remoteReport.capabilityProfile['backend_mode'],
-        'placeholder',
-      );
+      expect(remoteReport.capabilityProfile['backend_mode'], 'placeholder');
     });
 
     test('returns unsupported report for unknown provider ids', () {
@@ -51,10 +51,7 @@ void main() {
         ),
         isTrue,
       );
-      expect(
-        port.supportsRetrievalProvider('unknown-provider'),
-        isFalse,
-      );
+      expect(port.supportsRetrievalProvider('unknown-provider'), isFalse);
 
       final profiles = port.retrievalProviderProfiles();
       expect(profiles, hasLength(2));

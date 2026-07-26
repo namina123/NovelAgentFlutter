@@ -272,6 +272,39 @@ void main() {
     );
   });
 
+  test('复合写作项目会把持久化拆书 trait 传给开局组选型', () async {
+    final service = ProjectOpeningSessionProjectionService(
+      loadAgentPackages: (_) async => <JsonMap>[_generalistAgent()],
+      loadAgentGroups: (_) async => <JsonMap>[
+        _starterBookDeconstructionGroup(),
+      ],
+      loadProjectAgentGroupSelections: (_) async =>
+          const <ProjectAgentGroupSelection>[],
+    );
+    final projection = await service.build(
+      project: const ProjectDescriptor(
+        id: 'project-composite-book',
+        name: '复合续写项目',
+        rootPath: 'D:/Projects/composite_book_project',
+        projectType: 'novel',
+        additionalTraitIds: <String>['book_deconstruction'],
+      ),
+      runtimeProfile: const ProjectRuntimeProfile(
+        projectType: 'novel',
+        runtimeBaselineId: '',
+        runtimeMode: '',
+        initialRunOptions: <String, Object?>{},
+      ),
+      modeGuidanceState: null,
+    );
+
+    expect(projection.currentGroupId, 'starter_book_deconstruction_generalist');
+    expect(
+      projection.supportedGroups.single.groupId,
+      'starter_book_deconstruction_generalist',
+    );
+  });
+
   test('当前组会正式产出可用成员列表，且主成员排在可解析结果中', () async {
     final service = ProjectOpeningSessionProjectionService(
       loadAgentPackages: (_) async => <JsonMap>[
@@ -507,7 +540,12 @@ JsonMap _starterBookDeconstructionGroup() {
     'required_agent_ids': <String>['default_generalist'],
     'display_label': '默认拆书整理',
     'applicability_scope': <String, Object?>{
-      'allowed_project_type_ids': <String>['book_deconstruction'],
+      'allowed_project_type_ids': <String>[
+        'book_deconstruction',
+        'novel',
+        'long_novel',
+      ],
+      'required_trait_ids': <String>['book_deconstruction'],
     },
     'metadata': <String, Object?>{'starter_group': true},
   };

@@ -27,14 +27,18 @@ class ProjectInformationResearchCoordinatorService {
            ProjectResearchGatewayService(workspacePort: workspacePort),
        _importCollectionService =
            importCollectionService ??
-           ProjectInformationImportCollectionService(workspacePort: workspacePort),
+           ProjectInformationImportCollectionService(
+             workspacePort: workspacePort,
+           ),
        _pathService = pathService ?? ProjectInformationPathService(),
        _jsonDocumentService =
            jsonDocumentService ??
            ProjectJsonDocumentService(workspacePort: workspacePort),
        _recordDocumentService =
            recordDocumentService ??
-           OpenNarrativeStateRecordDocumentService(workspacePort: workspacePort),
+           OpenNarrativeStateRecordDocumentService(
+             workspacePort: workspacePort,
+           ),
        _collectionPolicyService =
            collectionPolicyService ??
            const InformationCollectionPolicyService(),
@@ -150,7 +154,9 @@ class ProjectInformationResearchCoordinatorService {
       );
       changedPaths.addAll(gatewayResult.changedPaths);
       if (gatewayResult.generatedResearchNote != null) {
-        generatedResearchNoteIds.add(gatewayResult.generatedResearchNote!.researchId);
+        generatedResearchNoteIds.add(
+          gatewayResult.generatedResearchNote!.researchId,
+        );
       }
     }
 
@@ -203,7 +209,8 @@ class ProjectInformationResearchCoordinatorService {
       summary: summary,
       changedPaths: changedPaths.toSet().toList(growable: false),
       blockedReason: blockedReason,
-      gatewaySummary: gatewayResult?.gatewaySummary ?? const <String, Object?>{},
+      gatewaySummary:
+          gatewayResult?.gatewaySummary ?? const <String, Object?>{},
       importSummary: _importSummary(importResult),
       executionDecision: decision.toJson(),
       generatedResearchNoteIds: generatedResearchNoteIds.toSet().toList(
@@ -258,7 +265,9 @@ class ProjectInformationResearchCoordinatorService {
 
   bool _isApprovedForExecution(JsonMap record) {
     final latestAction = ValueReaders.mapValue(
-      ValueReaders.mapValue(record['metadata'])['latest_pending_research_action'],
+      ValueReaders.mapValue(
+        record['metadata'],
+      )['latest_pending_research_action'],
     );
     return ValueReaders.stringValue(latestAction['command']).trim() ==
         ProjectPendingResearchActionCommands.approve;
@@ -503,7 +512,9 @@ class ProjectInformationResearchCoordinatorService {
     ProjectResearchGatewayRunResult? gatewayResult,
     bool awaitUserConfirmation,
   ) {
-    return importResult == null && gatewayResult == null && !awaitUserConfirmation;
+    return importResult == null &&
+        gatewayResult == null &&
+        !awaitUserConfirmation;
   }
 
   String _firstNonEmpty(List<String> values) {

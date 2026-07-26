@@ -169,9 +169,14 @@ void main() {
         final pathService = const ProjectReferenceAttachmentSqlitePathService();
 
         final report = await service.buildReport(project: deepProject);
+        final reopenedReport = await service.buildReport(project: deepProject);
 
         expect(
           ValueReaders.stringValue(report['summary']),
+          contains('没有已挂载的参考 continuity 资产'),
+        );
+        expect(
+          ValueReaders.stringValue(reopenedReport['summary']),
           contains('没有已挂载的参考 continuity 资产'),
         );
         expect(

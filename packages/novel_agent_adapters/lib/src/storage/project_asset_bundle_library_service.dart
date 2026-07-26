@@ -23,7 +23,8 @@ class ProjectAssetBundleLibraryService {
        _fileAccessService = fileAccessService,
        _applyService = applyService,
        _directoryLayoutService =
-           directoryLayoutService ?? const ProjectBundleDirectoryLayoutService(),
+           directoryLayoutService ??
+           const ProjectBundleDirectoryLayoutService(),
        _documentService =
            documentService ?? ProjectAssetBundleDocumentService(),
        _previewUseCase =
@@ -136,9 +137,11 @@ class ProjectAssetBundleLibraryService {
     );
     final files = <String, String>{
       'bundle.json': _documentService.encodeBundle(bundle),
-      for (final style in styles) 'assets/styles/${style.id}.style.md': _styleCodecService.encode(style),
+      for (final style in styles)
+        'assets/styles/${style.id}.style.md': _styleCodecService.encode(style),
       for (final foreshadow in foreshadows)
-        'assets/foreshadows/${foreshadow.id}.foreshadow.md': _foreshadowCodecService.encode(foreshadow),
+        'assets/foreshadows/${foreshadow.id}.foreshadow.md':
+            _foreshadowCodecService.encode(foreshadow),
     };
     final exportDirectoryPath = await _fileAccessService.writeExportDirectory(
       targetDirectoryPath: targetDirectoryPath,
@@ -163,7 +166,10 @@ class ProjectAssetBundleLibraryService {
   }) async {
     final source = await _fileAccessService.readBundleSource(sourcePath);
     if (source == null) {
-      return <String, Object?>{'ok': false, 'error': 'Bundle 源不存在或缺少 bundle.json。'};
+      return <String, Object?>{
+        'ok': false,
+        'error': 'Bundle 源不存在或缺少 bundle.json。',
+      };
     }
     final preview = _previewUseCase.execute(
       bundleContent: source.bundleContent,
@@ -238,8 +244,8 @@ class ProjectAssetBundleLibraryService {
   Map<String, String> _actionByTargetPath(JsonMap preview) {
     final result = <String, String>{};
     for (final item in ValueReaders.mapList(preview['items'])) {
-      result[ValueReaders.stringValue(item['relative_path'])] = ValueReaders
-          .stringValue(item['action']);
+      result[ValueReaders.stringValue(item['relative_path'])] =
+          ValueReaders.stringValue(item['action']);
     }
     return result;
   }

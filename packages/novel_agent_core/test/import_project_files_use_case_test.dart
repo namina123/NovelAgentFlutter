@@ -117,6 +117,93 @@ void main() {
         );
       },
     );
+
+    test(
+      'restores the prepared primary source for the failed item when projection copy fails',
+      () async {
+        final hostPort = _FakeProjectToolHostPort(failCopy: true);
+        final useCase = ImportProjectFilesUseCase(
+          projectToolHostPort: hostPort,
+        );
+        final preparedPaths = <String>[];
+        final rolledBackPaths = <String>[];
+        const project = ProjectDescriptor(
+          id: 'projection-failure-import',
+          name: '导入回滚项目',
+          rootPath: 'D:/Projects/projection_failure_import',
+          storageStrategy: ProjectStorageStrategy.sqliteProjectStore,
+        );
+
+        await expectLater(
+          useCase.execute(
+            project: project,
+            sourcePaths: const <String>['C:/imports/source.md'],
+            targetDirectory: 'imports',
+            prepareImportedFile: ({
+              required project,
+              required sourcePath,
+              required relativePath,
+            }) async {
+              preparedPaths.add(relativePath);
+            },
+            rollbackPreparedImportedFile: ({
+              required project,
+              required sourcePath,
+              required relativePath,
+            }) async {
+              rolledBackPaths.add(relativePath);
+            },
+          ),
+          throwsA(isA<StateError>()),
+        );
+
+        expect(preparedPaths, <String>['imports/source.md']);
+        expect(rolledBackPaths, <String>['imports/source.md']);
+        expect(hostPort.copiedFiles, isEmpty);
+      },
+    );
+
+    test(
+      'restores the prepared primary source when creating its file projection fails',
+      () async {
+        final hostPort = _FakeProjectToolHostPort(failWrite: true);
+        final useCase = CreateProjectEntryUseCase(projectToolHostPort: hostPort);
+        final preparedPaths = <String>[];
+        final rolledBackPaths = <String>[];
+        const project = ProjectDescriptor(
+          id: 'projection-failure-create',
+          name: '新建回滚项目',
+          rootPath: 'D:/Projects/projection_failure_create',
+          storageStrategy: ProjectStorageStrategy.sqliteProjectStore,
+        );
+
+        await expectLater(
+          useCase.execute(
+            project: project,
+            relativePath: 'chapters/chapter_01.md',
+            content: '第一章',
+            prepareFileWrite: ({
+              required project,
+              required relativePath,
+              required content,
+            }) async {
+              preparedPaths.add(relativePath);
+            },
+            rollbackPreparedFileWrite: ({
+              required project,
+              required relativePath,
+              required content,
+            }) async {
+              rolledBackPaths.add(relativePath);
+            },
+          ),
+          throwsA(isA<StateError>()),
+        );
+
+        expect(preparedPaths, <String>['chapters/chapter_01.md']);
+        expect(rolledBackPaths, <String>['chapters/chapter_01.md']);
+      },
+    );
   });
 }
 
@@ -139,9 +226,13 @@ class _FakeSourceImportDiscoveryPort implements SourceImportDiscoveryPort {
 class _FakeProjectToolHostPort implements ProjectToolHostPort {
   _FakeProjectToolHostPort({
     Map<String, String> externalFiles = const <String, String>{},
+    this.failCopy = false,
+    this.failWrite = false,
   }) : _externalFiles = Map<String, String>.from(externalFiles);
 
   final Map<String, String> _externalFiles;
+  final bool failCopy;
+  final bool failWrite;
   final List<
     ({String absolutePath, String rootPath, String targetRelativePath})
   >
@@ -155,6 +246,9 @@ class _FakeProjectToolHostPort implements ProjectToolHostPort {
     String rootPath,
     String targetRelativePath,
   ) async {
+    if (failCopy) {
+      throw StateError('模拟投影复制失败');
+    }
     copiedFiles.add((
       absolutePath: absolutePath,
       rootPath: rootPath,
@@ -223,6 +317,9 @@ class _FakeProjectToolHostPort implements ProjectToolHostPort {
     String relativePath,
     String content,
   ) async {
+    if (failWrite) {
+      throw StateError('模拟投影写入失败');
+    }
     _projectFiles[_projectKey(rootPath, relativePath)] = content;
   }
 

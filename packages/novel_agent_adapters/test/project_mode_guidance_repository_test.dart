@@ -89,10 +89,7 @@ void main() {
       );
 
       expect(loaded, isNotNull);
-      expect(
-        loaded!.answers.any((answer) => answer.label == '只有一句灵感'),
-        isTrue,
-      );
+      expect(loaded!.answers.any((answer) => answer.label == '只有一句灵感'), isTrue);
 
       final summaryPath = File(
         '${tempDirectory.path}${Platform.pathSeparator}tracking${Platform.pathSeparator}modes${Platform.pathSeparator}seed_autopilot_novel${Platform.pathSeparator}guidance.md',

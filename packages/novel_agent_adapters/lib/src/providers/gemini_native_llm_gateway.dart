@@ -33,7 +33,8 @@ class GeminiNativeLlmGateway extends LlmGateway {
          proxyPassword: proxyPassword,
          transportRetryEnabled: transportRetryEnabled,
          transportRetryAttempts: transportRetryAttempts.clamp(0, 5),
-         systemProxyResolver: systemProxyResolver ?? const SystemProxyResolver(),
+         systemProxyResolver:
+             systemProxyResolver ?? const SystemProxyResolver(),
        );
 
   factory GeminiNativeLlmGateway.fromProviderSettings(
@@ -55,12 +56,12 @@ class GeminiNativeLlmGateway extends LlmGateway {
       proxyPassword: '${networkSettings['proxy_password'] ?? ''}',
       transportRetryEnabled:
           GatewayNetworkSettings.transportRetryEnabledFromNetworkSettings(
-        networkSettings,
-      ),
+            networkSettings,
+          ),
       transportRetryAttempts:
           GatewayNetworkSettings.transportRetryAttemptsFromNetworkSettings(
-        networkSettings,
-      ),
+            networkSettings,
+          ),
     );
   }
 
@@ -72,8 +73,7 @@ class GeminiNativeLlmGateway extends LlmGateway {
       const GeminiNativeRouteResolver();
   final GeminiNativeRequestPayloadBuilder _payloadBuilder =
       const GeminiNativeRequestPayloadBuilder();
-  final GeminiNativeStreamAdapter _streamAdapter =
-      GeminiNativeStreamAdapter();
+  final GeminiNativeStreamAdapter _streamAdapter = GeminiNativeStreamAdapter();
   final GeminiNativeResponseParser _responseParser =
       const GeminiNativeResponseParser();
 
@@ -164,7 +164,10 @@ class GeminiNativeLlmGateway extends LlmGateway {
     final result = ValueReaders.deepCopyMap(options);
     result['api_mode'] = apiMode;
     result['protocol_kind'] = ProtocolKind.geminiNative.id;
-    result['route_family'] = _routeResolver.resolve(apiMode: apiMode).routeFamily.id;
+    result['route_family'] = _routeResolver
+        .resolve(apiMode: apiMode)
+        .routeFamily
+        .id;
     return result;
   }
 

@@ -17,6 +17,10 @@ void main() {
       expect(service.directoryForContentType('chapter'), 'chapters');
       expect(service.directoryForContentType('scene'), 'scenes');
       expect(service.directoryForContentType('character'), 'assets/characters');
+      expect(
+        service.directoryForContentType('foreshadow_record'),
+        'assets/foreshadows',
+      );
     });
 
     test('infer content type recognizes canonical chapter paths', () {
@@ -27,6 +31,12 @@ void main() {
         service.inferContentTypeFromPath('assets/characters/hero.md'),
         'character',
       );
+      expect(
+        service.inferContentTypeFromPath(
+          'assets/relationships/hero.relationship.md',
+        ),
+        'relationship_record',
+      );
     });
 
     test('analysis content stays rooted under analysis directory', () {
@@ -34,9 +44,63 @@ void main() {
       expect(service.normalizeContentType('分析'), 'analysis');
       expect(service.directoryForContentType('analysis'), 'analysis');
       expect(
-        service.inferContentTypeFromPath('analysis/ch01.continuity.analysis.json'),
+        service.inferContentTypeFromPath(
+          'analysis/ch01.continuity.analysis.json',
+        ),
         'analysis',
       );
     });
+
+    test(
+      'infers structured content kinds from SQLite readable projections',
+      () {
+        expect(
+          service.inferContentTypeFromPath(
+            'imports/analysis/outlines/story.md',
+          ),
+          'outline',
+        );
+        expect(
+          service.inferContentTypeFromPath(
+            'imports/analysis/assets/characters/hero.md',
+          ),
+          'character',
+        );
+        expect(
+          service.inferContentTypeFromPath(
+            'imports/analysis/assets/organizations/council.md',
+          ),
+          'organization_profile',
+        );
+        expect(
+          service.inferContentTypeFromPath(
+            'imports/analysis/assets/foreshadows/first_mark.foreshadow.md',
+          ),
+          'foreshadow_record',
+        );
+        expect(
+          service.inferContentTypeFromPath(
+            'imports/analysis/assets/timeline/origin.timeline.md',
+          ),
+          'timeline_record',
+        );
+        expect(
+          service.inferContentTypeFromPath(
+            'imports/analysis/assets/relationships/hero.relationship.md',
+          ),
+          'relationship_record',
+        );
+        expect(
+          service.inferContentTypeFromPath(
+            'imports/analysis/knowledge/card.md',
+          ),
+          'knowledge',
+        );
+        expect(
+          service.inferContentTypeFromPath('imports/source_original/source.md'),
+          'source_original',
+        );
+      },
+    );
   });
 }

@@ -46,20 +46,8 @@ class BookDeconstructionPreviewMarkdownService {
         ..writeln(extraction.storyOutlineSummary.trim())
         ..writeln();
     }
-    if (extraction.chapterOutlines.isNotEmpty) {
-      buffer
-        ..writeln('## 章节结构预览')
-        ..writeln();
-      for (final outline in extraction.chapterOutlines) {
-        buffer
-          ..writeln(
-            '- ${outline.sequence}. ${outline.title}: ${outline.summary}',
-          )
-          ..writeln();
-      }
-    }
     buffer
-      ..writeln('## 已选应用计划')
+      ..writeln('## 分章结果与资产应用')
       ..writeln();
     for (final item in selectedItems) {
       buffer.writeln(

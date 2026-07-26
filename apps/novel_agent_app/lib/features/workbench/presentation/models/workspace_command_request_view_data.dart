@@ -3,6 +3,7 @@ import 'selector_option_view_data.dart';
 enum WorkspaceCommandMode {
   editProjectInfo,
   transitionProjectType,
+  configureRuntimeBaseline,
   createFile,
   createFolder,
   importFiles,

@@ -40,14 +40,14 @@ class ProjectTaskToolExecutor {
     for (final task in tasks) {
       final enrichedTask =
           workflowTaskContext.isEmpty ||
-                  ValueReaders.mapValue(task['_workflow_task_context']).isNotEmpty
-              ? task
-              : <String, Object?>{
-                  ...ValueReaders.deepCopyMap(task),
-                  '_workflow_task_context': ValueReaders.deepCopyMap(
-                    workflowTaskContext,
-                  ),
-                };
+              ValueReaders.mapValue(task['_workflow_task_context']).isNotEmpty
+          ? task
+          : <String, Object?>{
+              ...ValueReaders.deepCopyMap(task),
+              '_workflow_task_context': ValueReaders.deepCopyMap(
+                workflowTaskContext,
+              ),
+            };
       final record = await _upsertAgentTaskRecord(project, goal, enrichedTask);
       final relativePath = ValueReaders.stringValue(record['relative_path']);
       if (relativePath.isNotEmpty) {
@@ -255,7 +255,9 @@ class ProjectTaskToolExecutor {
       workflowTaskContext['metadata'],
     );
     final inheritedMetadata = <String, Object?>{
-      if (ValueReaders.stringValue(workflowTaskMetadata['plan_id']).trim().isNotEmpty)
+      if (ValueReaders.stringValue(
+        workflowTaskMetadata['plan_id'],
+      ).trim().isNotEmpty)
         'plan_id': ValueReaders.stringValue(workflowTaskMetadata['plan_id']),
       if (ValueReaders.stringValue(
         workflowTaskMetadata['generated_by'],
@@ -275,7 +277,9 @@ class ProjectTaskToolExecutor {
         'workflow_mode': ValueReaders.stringValue(
           workflowTaskMetadata['workflow_mode'],
         ),
-      if (ValueReaders.stringValue(workflowTaskMetadata['stage']).trim().isNotEmpty)
+      if (ValueReaders.stringValue(
+        workflowTaskMetadata['stage'],
+      ).trim().isNotEmpty)
         'stage': ValueReaders.stringValue(workflowTaskMetadata['stage']),
     };
     if (inheritedMetadata.isNotEmpty) {

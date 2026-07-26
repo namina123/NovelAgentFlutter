@@ -33,7 +33,8 @@ class AnthropicLlmGateway extends LlmGateway {
          proxyPassword: proxyPassword,
          transportRetryEnabled: transportRetryEnabled,
          transportRetryAttempts: transportRetryAttempts.clamp(0, 5),
-         systemProxyResolver: systemProxyResolver ?? const SystemProxyResolver(),
+         systemProxyResolver:
+             systemProxyResolver ?? const SystemProxyResolver(),
        );
 
   factory AnthropicLlmGateway.fromProviderSettings(
@@ -55,12 +56,12 @@ class AnthropicLlmGateway extends LlmGateway {
       proxyPassword: '${networkSettings['proxy_password'] ?? ''}',
       transportRetryEnabled:
           GatewayNetworkSettings.transportRetryEnabledFromNetworkSettings(
-        networkSettings,
-      ),
+            networkSettings,
+          ),
       transportRetryAttempts:
           GatewayNetworkSettings.transportRetryAttemptsFromNetworkSettings(
-        networkSettings,
-      ),
+            networkSettings,
+          ),
     );
   }
 
@@ -89,9 +90,7 @@ class AnthropicLlmGateway extends LlmGateway {
       apiMode: ValueReaders.stringValue(request.options['api_mode']),
     );
     if (routeResolution.routeFamily != RequestRouteFamily.messages) {
-      throw UnsupportedError(
-        'Anthropic gateway 只接受 messages 路由族。',
-      );
+      throw UnsupportedError('Anthropic gateway 只接受 messages 路由族。');
     }
     final requestUri = _routeResolver.resolveRequestUri(_baseUrl);
     return _transport.execute<JsonMap>(

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../../app/layout/adaptive_page_frame.dart';
 import '../../../../../shared/theme/novel_theme_context.dart';
 import '../../../../../shared/widgets/action_button.dart';
+import '../../../../../shared/widgets/confirmation_dialog.dart';
 import '../../../../../shared/widgets/panel_surface.dart';
 import '../../../../../shared/widgets/section_heading.dart';
 import '../contracts/project_open_action_handler.dart';
@@ -151,15 +152,42 @@ class ProjectOpenPage extends StatelessWidget {
                       const Spacer(),
                       Align(
                         alignment: Alignment.bottomRight,
-                        child: ActionButton(
-                          label: '进入作品',
-                          icon: Icons.arrow_forward_rounded,
-                          compact: true,
-                          onPressed: () {
-                            actionHandler.onProjectOpenOpenRequested(
-                              selected.path,
-                            );
-                          },
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            ActionButton(
+                              label: '删除作品',
+                              icon: Icons.delete_outline_rounded,
+                              tone: ActionButtonTone.danger,
+                              compact: true,
+                              onPressed: () async {
+                                final confirmed = await showConfirmationDialog(
+                                  context,
+                                  title: '删除该作品？',
+                                  message:
+                                      '将永久删除目录：\n${selected.path}\n\n此操作不可恢复。',
+                                  confirmLabel: '删除',
+                                );
+                                if (!context.mounted || !confirmed) {
+                                  return;
+                                }
+                                actionHandler.onProjectOpenDeleteRequested(
+                                  selected.path,
+                                );
+                              },
+                            ),
+                            ActionButton(
+                              label: '进入作品',
+                              icon: Icons.arrow_forward_rounded,
+                              compact: true,
+                              onPressed: () {
+                                actionHandler.onProjectOpenOpenRequested(
+                                  selected.path,
+                                );
+                              },
+                            ),
+                          ],
                         ),
                       ),
                     ],

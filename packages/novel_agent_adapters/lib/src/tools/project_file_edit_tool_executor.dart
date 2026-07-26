@@ -1,5 +1,6 @@
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../storage/project_structured_content_bridge_service.dart';
 import 'project_tool_path_policy.dart';
 import 'project_tool_result_factory.dart';
 
@@ -10,17 +11,22 @@ class ProjectFileEditToolExecutor {
     LineEditPlanService? lineEditPlanService,
     ProjectToolPathPolicy? pathPolicy,
     ProjectToolResultFactory? resultFactory,
+    ProjectStructuredContentBridgeService? structuredContentBridgeService,
   }) : _hostPort = hostPort,
        _textEditPlanService = textEditPlanService ?? TextEditPlanService(),
        _lineEditPlanService = lineEditPlanService ?? LineEditPlanService(),
        _pathPolicy = pathPolicy ?? ProjectToolPathPolicy(),
-       _resultFactory = resultFactory ?? ProjectToolResultFactory();
+       _resultFactory = resultFactory ?? ProjectToolResultFactory(),
+       _structuredContentBridgeService =
+           structuredContentBridgeService ??
+           ProjectStructuredContentBridgeService();
 
   final ProjectToolHostPort _hostPort;
   final TextEditPlanService _textEditPlanService;
   final LineEditPlanService _lineEditPlanService;
   final ProjectToolPathPolicy _pathPolicy;
   final ProjectToolResultFactory _resultFactory;
+  final ProjectStructuredContentBridgeService _structuredContentBridgeService;
 
   Future<JsonMap> editProjectFile(
     ProjectDescriptor project,
@@ -36,10 +42,12 @@ class ProjectFileEditToolExecutor {
         data: <String, Object?>{'relative_path': relativePath},
       );
     }
-    final original = await _hostPort.readTextFile(
-      project.rootPath,
-      relativePath,
-    );
+    final original =
+        await _structuredContentBridgeService.readProjectedBodyText(
+          project,
+          relativePath,
+        ) ??
+        await _hostPort.readTextFile(project.rootPath, relativePath);
     if (original == null) {
       return _resultFactory.notExecuted(
         'edit_project_file 未找到目标文件。请先调用 list_project_files 确认英文 relative_path。',
@@ -54,6 +62,11 @@ class ProjectFileEditToolExecutor {
       );
     }
     if (ValueReaders.boolValue(plan['changed'])) {
+      await _persistStructuredProjection(
+        project: project,
+        relativePath: relativePath,
+        content: ValueReaders.stringValue(plan['content'], original),
+      );
       await _hostPort.writeTextFile(
         project.rootPath,
         relativePath,
@@ -90,10 +103,12 @@ class ProjectFileEditToolExecutor {
         data: <String, Object?>{'relative_path': source},
       );
     }
-    final sourceContent = await _hostPort.readTextFile(
-      project.rootPath,
-      source,
-    );
+    final sourceContent =
+        await _structuredContentBridgeService.readProjectedBodyText(
+          project,
+          source,
+        ) ??
+        await _hostPort.readTextFile(project.rootPath, source);
     if (sourceContent == null) {
       return _resultFactory.notExecuted(
         'manipulate_project_file_lines 未找到源文件。请先调用 list_project_files 确认英文 relative_path。',
@@ -112,7 +127,12 @@ class ProjectFileEditToolExecutor {
         );
       }
       targetContent =
-          await _hostPort.readTextFile(project.rootPath, target) ?? '';
+          await _structuredContentBridgeService.readProjectedBodyText(
+            project,
+            target,
+          ) ??
+          await _hostPort.readTextFile(project.rootPath, target) ??
+          '';
     }
     final plan = _lineEditPlanService.applyLineEdit(
       sourceContent,
@@ -129,6 +149,11 @@ class ProjectFileEditToolExecutor {
     }
     final changedPaths = <Object?>[];
     if (target.isNotEmpty && ValueReaders.boolValue(plan['target_changed'])) {
+      await _persistStructuredProjection(
+        project: project,
+        relativePath: target,
+        content: ValueReaders.stringValue(plan['target_content']),
+      );
       await _hostPort.writeTextFile(
         project.rootPath,
         target,
@@ -137,6 +162,11 @@ class ProjectFileEditToolExecutor {
       changedPaths.add(target);
     }
     if (ValueReaders.boolValue(plan['source_changed'])) {
+      await _persistStructuredProjection(
+        project: project,
+        relativePath: source,
+        content: ValueReaders.stringValue(plan['content'], sourceContent),
+      );
       await _hostPort.writeTextFile(
         project.rootPath,
         source,
@@ -155,6 +185,20 @@ class ProjectFileEditToolExecutor {
             }
             ..remove('content')
             ..remove('target_content'),
+    );
+  }
+
+  Future<void> _persistStructuredProjection({
+    required ProjectDescriptor project,
+    required String relativePath,
+    required String content,
+  }) {
+    return _structuredContentBridgeService.persistWorkspaceProjectionDocument(
+      project: project,
+      documentPath: relativePath,
+      inferredDocumentKind: _pathPolicy.inferContentTypeFromPath(relativePath),
+      title: relativePath.split('/').last,
+      content: content,
     );
   }
 }

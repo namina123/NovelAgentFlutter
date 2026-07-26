@@ -14,7 +14,8 @@ class ProjectAgentSkillLoadoutHistoryRepository {
            jsonDocumentService ??
            ProjectJsonDocumentService(workspacePort: workspacePort),
        _codecService =
-           codecService ?? ProjectAgentSkillLoadoutHistoryDocumentCodecService(),
+           codecService ??
+           ProjectAgentSkillLoadoutHistoryDocumentCodecService(),
        _pathService =
            pathService ?? const ProjectAgentSkillLoadoutHistoryPathService();
 

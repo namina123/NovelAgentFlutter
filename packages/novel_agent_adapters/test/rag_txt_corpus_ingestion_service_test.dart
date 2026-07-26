@@ -208,9 +208,7 @@ void main() {
         final sourceFile = File(
           '${tempDirectory.path}${Platform.pathSeparator}sample_fail.txt',
         );
-        await sourceFile.writeAsString(
-          '第一章 内容一。\n\n第二章 内容二，稍长用于 chunk 构建。',
-        );
+        await sourceFile.writeAsString('第一章 内容一。\n\n第二章 内容二，稍长用于 chunk 构建。');
         final failingService = RagTxtCorpusIngestionService(
           embeddingProvider: _ThrowingEmbeddingProvider(),
         );
@@ -231,7 +229,9 @@ void main() {
         // 中文注释: provider 抛错时不得静默报成功——元数据如实记 embedding_failed、
         // backend 退回 sqlite-meta，供上层给用户诚实提示（与检索侧 lexical_fallback 同源）。
         expect(
-          ValueReaders.stringValue(result.metadata['embedding_degraded_reason']),
+          ValueReaders.stringValue(
+            result.metadata['embedding_degraded_reason'],
+          ),
           'embedding_failed',
         );
         expect(

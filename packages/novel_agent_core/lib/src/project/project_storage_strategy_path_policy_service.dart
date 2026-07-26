@@ -15,7 +15,7 @@ class ProjectStorageStrategyPathPolicyService {
         return _contentPathPolicyService.defaultWorkspaceFileDirectory();
       case ProjectStorageStrategy.sqliteProjectStore:
         return 'imports';
-      }
+    }
   }
 
   String defaultWorkspaceFolderDirectory(
@@ -50,6 +50,8 @@ class ProjectStorageStrategyPathPolicyService {
         return _contentPathPolicyService.directoryForContentType(normalized);
       case ProjectStorageStrategy.sqliteProjectStore:
         switch (normalized) {
+          case 'premise':
+            return 'imports/analysis/premise';
           case 'source_original':
             return 'imports/source_original';
           case 'analysis':
@@ -68,6 +70,14 @@ class ProjectStorageStrategyPathPolicyService {
             return 'imports/analysis/assets/world';
           case 'character':
             return 'imports/analysis/assets/characters';
+          case 'organization_profile':
+            return 'imports/analysis/assets/organizations';
+          case 'foreshadow_record':
+            return 'imports/analysis/assets/foreshadows';
+          case 'timeline_record':
+            return 'imports/analysis/assets/timeline';
+          case 'relationship_record':
+            return 'imports/analysis/assets/relationships';
           case 'style':
             return 'imports/analysis/assets/styles';
           case 'summary':

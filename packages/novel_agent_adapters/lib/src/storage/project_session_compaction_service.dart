@@ -118,7 +118,9 @@ class ProjectSessionCompactionService {
     final lines = <String>[
       '来源 ${messages.length} 条消息，保留最近 ${plan.keepRecentMessageCount} 条工作消息。',
     ];
-    final clippedMessages = messages.take(maxBulletCount).toList(growable: false);
+    final clippedMessages = messages
+        .take(maxBulletCount)
+        .toList(growable: false);
     for (var index = 0; index < clippedMessages.length; index += 1) {
       final message = clippedMessages[index];
       final role = ValueReaders.stringValue(message['role'], 'user').trim();
@@ -153,4 +155,3 @@ class ProjectSessionCompactionService {
     return '${clean.substring(0, maxChars - 1)}…';
   }
 }
-

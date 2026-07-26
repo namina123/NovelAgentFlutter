@@ -5,21 +5,20 @@ import 'sqlite_rag_metadata_repository.dart';
 class RagProjectMountSummaryService {
   RagProjectMountSummaryService({
     SqliteRagMetadataRepository? metadataRepository,
-  }) : _metadataRepository = metadataRepository ?? SqliteRagMetadataRepository();
+  }) : _metadataRepository =
+           metadataRepository ?? SqliteRagMetadataRepository();
 
   final SqliteRagMetadataRepository _metadataRepository;
 
-  Future<RagProjectMountSummary> summarize(
-    ProjectDescriptor project,
-  ) async {
+  Future<RagProjectMountSummary> summarize(ProjectDescriptor project) async {
     // 中文注释: 这里仅做项目维度挂载摘要，给 GUI / CLI / probe 消费，不承担挂载策略决策。
     final bindings = await _metadataRepository.listProjectMounts(
       project,
       projectId: project.id,
     );
-    final corpusIds = bindings.map((entry) => entry.corpusId).toList(
-      growable: false,
-    );
+    final corpusIds = bindings
+        .map((entry) => entry.corpusId)
+        .toList(growable: false);
     final topBinding = bindings.isEmpty ? null : bindings.first;
     return RagProjectMountSummary(
       projectId: project.id,

@@ -8,6 +8,58 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test(
+    'HFVV app shell harness isolates concurrent default workspaces',
+    () async {
+      final harnesses = await Future.wait(<Future<HfvvAppShellHarness>>[
+        HfvvAppShellHarness.create(
+          generateDraftUseCase: _idleGenerateDraftUseCase(),
+        ),
+        HfvvAppShellHarness.create(
+          generateDraftUseCase: _idleGenerateDraftUseCase(),
+        ),
+      ]);
+      addTearDown(() {
+        for (final harness in harnesses) {
+          harness.controller.dispose();
+        }
+      });
+
+      expect(harnesses[0].workspaceId, isNot(harnesses[1].workspaceId));
+      expect(
+        harnesses[0].workspaceRoot.path,
+        isNot(harnesses[1].workspaceRoot.path),
+      );
+      expect(harnesses[0].workspaceRoot.existsSync(), isTrue);
+      expect(harnesses[1].workspaceRoot.existsSync(), isTrue);
+
+      const stableWorkspaceId = 'hfvv-workspace-isolation-regression';
+      final stableHarnesses = await Future.wait(<Future<HfvvAppShellHarness>>[
+        HfvvAppShellHarness.create(
+          generateDraftUseCase: _idleGenerateDraftUseCase(),
+          workspaceId: stableWorkspaceId,
+        ),
+        HfvvAppShellHarness.create(
+          generateDraftUseCase: _idleGenerateDraftUseCase(),
+          workspaceId: stableWorkspaceId,
+        ),
+      ]);
+      addTearDown(() {
+        for (final harness in stableHarnesses) {
+          harness.controller.dispose();
+        }
+      });
+      expect(
+        stableHarnesses.map((harness) => harness.workspaceId),
+        everyElement(stableWorkspaceId),
+      );
+      expect(
+        stableHarnesses[0].workspaceRoot.path,
+        isNot(stableHarnesses[1].workspaceRoot.path),
+      );
+    },
+  );
+
+  test(
     'HFVV-02 app shell harness captures pending tool and waiting-user states from a new project flow',
     () async {
       final useCase = ScriptedGenerateDraftUseCase(
@@ -265,5 +317,33 @@ void main() {
         ],
       });
     },
+  );
+}
+
+ScriptedGenerateDraftUseCase _idleGenerateDraftUseCase() {
+  return ScriptedGenerateDraftUseCase(
+    resultBuilder:
+        ({
+          required ProjectDescriptor project,
+          required String userPrompt,
+          required String modelId,
+        }) => DraftGenerationResult(
+          project: project,
+          projectInfo: const <String, Object?>{},
+          userPrompt: userPrompt,
+          prompt: userPrompt,
+          modelId: modelId,
+          draftMarkdown: '',
+          contextPack: const <String, Object?>{},
+          selectedPaths: const <String>[],
+          executedTools: const <Object?>[],
+          writtenPaths: const <String>[],
+          changedPaths: const <String>[],
+          transcriptMessages: const <JsonMap>[],
+          waitingForUserChoice: false,
+          reasoningContent: '',
+          stoppedByToolError: false,
+          toolErrorSummary: '',
+        ),
   );
 }

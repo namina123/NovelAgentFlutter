@@ -20,14 +20,17 @@ class SqliteRagIngestionBundlePersistenceRuntime {
     required RagIndexHandle indexHandle,
     required JsonMap ingestionRun,
     int chunkBatchSize = 32,
-    Future<void> Function(int completedChunks, int totalChunks)? onChunkBatchCommitted,
+    Future<void> Function(int completedChunks, int totalChunks)?
+    onChunkBatchCommitted,
   }) async {
     final receivePort = ReceivePort();
     final request = _SqliteRagIngestionBundleWriteRequest(
       projectRootPath: projectRootPath,
       corpusPackageJson: corpusPackage.toJson(),
       sourceDocumentJson: sourceDocument.toJson(),
-      chunkJsonList: chunks.map((entry) => entry.toJson()).toList(growable: false),
+      chunkJsonList: chunks
+          .map((entry) => entry.toJson())
+          .toList(growable: false),
       indexHandleJson: indexHandle.toJson(),
       ingestionRunJson: ingestionRun,
       chunkBatchSize: chunkBatchSize,
@@ -70,9 +73,7 @@ class SqliteRagIngestionBundlePersistenceRuntime {
   }
 }
 
-void _persistRagIngestionBundleInIsolate(
-  Map<String, Object?> invocation,
-) {
+void _persistRagIngestionBundleInIsolate(Map<String, Object?> invocation) {
   try {
     final sendPort = invocation['send_port'] as SendPort;
     final request = _SqliteRagIngestionBundleWriteRequest.fromJson(
@@ -136,9 +137,7 @@ void _persistRagIngestionBundleInIsolate(
       );
       var completed = 0;
       for (final chunk in chunks) {
-        final embedding = _embeddingBlob(
-          chunk.metadata['embedding'],
-        );
+        final embedding = _embeddingBlob(chunk.metadata['embedding']);
         _upsert(
           database,
           tableName: 'rag_chunk',
@@ -159,12 +158,14 @@ void _persistRagIngestionBundleInIsolate(
             // 中文注释: 向量随 chunk 一起在同一事务写入，避免二次开库与跨批次不一致。
             'embedding_blob': embedding.blob,
             'embedding_dim': embedding.dimension,
-            'embedding_model':
-                ValueReaders.stringValue(chunk.metadata['embedding_model']),
+            'embedding_model': ValueReaders.stringValue(
+              chunk.metadata['embedding_model'],
+            ),
           },
         );
         completed += 1;
-        if (completed % request.chunkBatchSize == 0 || completed == chunks.length) {
+        if (completed % request.chunkBatchSize == 0 ||
+            completed == chunks.length) {
           sendPort.send(<String, Object?>{
             'kind': 'progress',
             'completed': completed,
@@ -195,13 +196,16 @@ void _persistRagIngestionBundleInIsolate(
         values: <String, Object?>{
           'ingestion_run_id':
               request.ingestionRunJson['ingestion_run_id']?.toString() ?? '',
-          'project_id': request.ingestionRunJson['project_id']?.toString() ?? '',
+          'project_id':
+              request.ingestionRunJson['project_id']?.toString() ?? '',
           'corpus_id': request.ingestionRunJson['corpus_id']?.toString() ?? '',
           'source_document_id':
               request.ingestionRunJson['source_document_id']?.toString() ?? '',
           'status': request.ingestionRunJson['status']?.toString() ?? '',
-          'started_at': request.ingestionRunJson['started_at']?.toString() ?? '',
-          'updated_at': request.ingestionRunJson['updated_at']?.toString() ?? '',
+          'started_at':
+              request.ingestionRunJson['started_at']?.toString() ?? '',
+          'updated_at':
+              request.ingestionRunJson['updated_at']?.toString() ?? '',
           'payload_json': jsonEncode(request.ingestionRunJson),
         },
       );
@@ -234,14 +238,11 @@ void _upsert(
       .where((column) => !keyColumns.contains(column))
       .map((column) => '$column = excluded.$column')
       .join(', ');
-  database.execute(
-    '''
+  database.execute('''
     INSERT INTO $tableName (${columns.join(', ')})
     VALUES ($placeholders)
     ON CONFLICT(${keyColumns.join(', ')}) DO UPDATE SET $assignments
-    ''',
-    values.values.toList(growable: false),
-  );
+    ''', values.values.toList(growable: false));
 }
 
 int _intValue(Object? value) {

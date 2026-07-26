@@ -17,6 +17,7 @@ import '../deconstruction/book_deconstruction_source_text_metadata_service.dart'
 import '../deconstruction/book_deconstruction_source_text_outline_service.dart';
 import '../deconstruction/book_deconstruction_source_text_profile_service.dart';
 import '../inspiration/inspiration_premise.dart';
+import '../project/project_storage_strategy.dart';
 import 'build_book_deconstruction_application_plan_use_case.dart';
 
 class BuildBookDeconstructionDraftUseCase {
@@ -64,8 +65,11 @@ class BuildBookDeconstructionDraftUseCase {
     String worldRulesText = '',
     String characterLinesText = '',
     String organizationLinesText = '',
+    String extractionId = '',
     BookDeconstructionContinuationDirection preferredContinuationDirection =
         BookDeconstructionContinuationDirection.analysisFirst,
+    ProjectStorageStrategy storageStrategy =
+        ProjectStorageStrategy.markdownProjectStore,
     bool extractKnowledge = true,
   }) {
     // 中文注释: 这个 use case 是拆书预演的正式编排入口，负责把输入、抽取、计划、叙事桥和后续菜单串成单一结果。
@@ -126,17 +130,19 @@ class BuildBookDeconstructionDraftUseCase {
       final inferredWorldRuleSets = _sourceTextProfileService.worldRuleSetsOf(
         worldRulesText,
       );
-      final inferredCharacterProfiles =
-          _sourceTextProfileService.characterProfilesOf(characterLinesText);
-      final inferredOrganizationProfiles =
-          _sourceTextProfileService.organizationProfilesOf(
-            organizationLinesText,
-          );
+      final inferredCharacterProfiles = _sourceTextProfileService
+          .characterProfilesOf(characterLinesText);
+      final inferredOrganizationProfiles = _sourceTextProfileService
+          .organizationProfilesOf(organizationLinesText);
       sourceCharacterProfiles = inferredCharacterProfiles.isEmpty
-          ? _sourceTextProfileService.inferCharacterProfilesFromSource(cleanContent)
+          ? _sourceTextProfileService.inferCharacterProfilesFromSource(
+              cleanContent,
+            )
           : inferredCharacterProfiles;
       sourceOrganizationProfiles = inferredOrganizationProfiles.isEmpty
-          ? _sourceTextProfileService.inferOrganizationProfilesFromSource(cleanContent)
+          ? _sourceTextProfileService.inferOrganizationProfilesFromSource(
+              cleanContent,
+            )
           : inferredOrganizationProfiles;
       sourceWorldRuleSets = inferredWorldRuleSets.isEmpty
           ? _sourceTextProfileService.inferWorldRuleSetsFromSource(
@@ -144,8 +150,8 @@ class BuildBookDeconstructionDraftUseCase {
               chapterSummaries,
             )
           : inferredWorldRuleSets;
-      sourceStyleProfiles = inferredStyleProfiles.isEmpty &&
-              storyOutlineSummary.trim().isNotEmpty
+      sourceStyleProfiles =
+          inferredStyleProfiles.isEmpty && storyOutlineSummary.trim().isNotEmpty
           ? <StyleProfile>[
               StyleProfile(
                 id: 'deconstruction_style_inferred',
@@ -158,13 +164,10 @@ class BuildBookDeconstructionDraftUseCase {
               ),
             ]
           : inferredStyleProfiles;
-      timelineRecords = _sourceTextProfileService.inferTimelineRecordsFromChapters(
-        chapterSummaries,
-      );
-      foreshadowRecords =
-          _sourceTextProfileService.inferForeshadowRecordsFromChapters(
-            chapterSummaries,
-          );
+      timelineRecords = _sourceTextProfileService
+          .inferTimelineRecordsFromChapters(chapterSummaries);
+      foreshadowRecords = _sourceTextProfileService
+          .inferForeshadowRecordsFromChapters(chapterSummaries);
       relationshipRecords = _sourceTextProfileService.inferRelationshipRecords(
         sourceCharacterProfiles,
         chapterSummaries,
@@ -183,8 +186,11 @@ class BuildBookDeconstructionDraftUseCase {
       foreshadowRecords = const <ForeshadowRecord>[];
       relationshipRecords = const <RelationshipRecord>[];
     }
+    final resolvedExtractionId = extractionId.trim().isEmpty
+        ? 'extract_${DateTime.now().microsecondsSinceEpoch}'
+        : extractionId.trim();
     final extractionResult = BookDeconstructionExtractionResult(
-      extractionId: 'extract_${DateTime.now().microsecondsSinceEpoch}',
+      extractionId: resolvedExtractionId,
       sourceTitle: resolvedTitle,
       premises: premises,
       storyOutlineSummary: storyOutlineSummary,
@@ -212,6 +218,7 @@ class BuildBookDeconstructionDraftUseCase {
     final applicationPlan = _buildApplicationPlanUseCase.execute(
       input: input,
       extractionResult: extractionResult,
+      storageStrategy: storageStrategy,
     );
     final followupMenu = _followupMenuBuilderService.build(
       preferredDirection: preferredContinuationDirection,

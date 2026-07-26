@@ -10,7 +10,8 @@ class ProjectChapterLengthEvaluationService {
     ChapterLengthDistributionService? distributionService,
   }) : _taskRepository = taskRepository,
        _profileResolverService =
-           profileResolverService ?? const ChapterLengthProfileResolverService(),
+           profileResolverService ??
+           const ChapterLengthProfileResolverService(),
        _measurementService =
            measurementService ?? const ChapterLengthMeasurementService(),
        _distributionService =
@@ -75,24 +76,30 @@ class ProjectChapterLengthEvaluationService {
     final currentOrder = ValueReaders.intValue(
       ValueReaders.mapValue(currentTask['metadata'])['sort_order'],
     );
-    final chapterTasks = tasks
-        .where((task) => ValueReaders.stringValue(task['task_type']) == 'chapter')
-        .where(
-          (task) =>
-              ValueReaders.intValue(
-                ValueReaders.mapValue(task['metadata'])['sort_order'],
-              ) < currentOrder,
-        )
-        .toList(growable: false)
-      ..sort(
-        (left, right) => ValueReaders.intValue(
-          ValueReaders.mapValue(left['metadata'])['sort_order'],
-        ).compareTo(
-          ValueReaders.intValue(
-            ValueReaders.mapValue(right['metadata'])['sort_order'],
-          ),
-        ),
-      );
+    final chapterTasks =
+        tasks
+            .where(
+              (task) =>
+                  ValueReaders.stringValue(task['task_type']) == 'chapter',
+            )
+            .where(
+              (task) =>
+                  ValueReaders.intValue(
+                    ValueReaders.mapValue(task['metadata'])['sort_order'],
+                  ) <
+                  currentOrder,
+            )
+            .toList(growable: false)
+          ..sort(
+            (left, right) =>
+                ValueReaders.intValue(
+                  ValueReaders.mapValue(left['metadata'])['sort_order'],
+                ).compareTo(
+                  ValueReaders.intValue(
+                    ValueReaders.mapValue(right['metadata'])['sort_order'],
+                  ),
+                ),
+          );
     final result = <ChapterLengthRecord>[];
     for (final task in chapterTasks) {
       final taskId = ValueReaders.stringValue(task['id']);
@@ -103,7 +110,8 @@ class ProjectChapterLengthEvaluationService {
       if (path.isEmpty || path == currentPath) {
         continue;
       }
-      final text = (await _taskRepository.readTextFile(project, path) ?? '').trim();
+      final text = (await _taskRepository.readTextFile(project, path) ?? '')
+          .trim();
       if (text.isEmpty) {
         continue;
       }
@@ -165,6 +173,7 @@ class ProjectChapterLengthEvaluationService {
 
   bool _looksLikeChapterPath(String path) {
     final normalized = path.trim().toLowerCase();
-    return normalized.startsWith('chapters/') || normalized.startsWith('scenes/');
+    return normalized.startsWith('chapters/') ||
+        normalized.startsWith('scenes/');
   }
 }

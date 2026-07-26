@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:novel_agent_core/novel_agent_core.dart';
 import 'package:novel_agent_core/src/project/project_storage_aware_workspace_policy.dart';
 
+import '../storage/project_structured_content_bridge_service.dart';
+import '../storage/project_structured_content_synchronization_host_port.dart';
 import 'project_tool_path_policy.dart';
 import 'project_tool_result_factory.dart';
 
@@ -13,6 +15,7 @@ class ProjectFileWriteToolExecutor {
     ProjectToolResultFactory? resultFactory,
     ProjectStorageAwareWorkspacePolicy? workspacePolicy,
     ChapterOutputPathPolicyService? chapterOutputPathPolicyService,
+    ProjectStructuredContentBridgeService? structuredContentBridgeService,
   }) : _hostPort = hostPort,
        _pathPolicy = pathPolicy ?? ProjectToolPathPolicy(),
        _resultFactory = resultFactory ?? ProjectToolResultFactory(),
@@ -20,13 +23,17 @@ class ProjectFileWriteToolExecutor {
            workspacePolicy ?? const ProjectStorageAwareWorkspacePolicy(),
        _chapterOutputPathPolicyService =
            chapterOutputPathPolicyService ??
-           const ChapterOutputPathPolicyService();
+           const ChapterOutputPathPolicyService(),
+       _structuredContentBridgeService =
+           structuredContentBridgeService ??
+           ProjectStructuredContentBridgeService();
 
   final ProjectToolHostPort _hostPort;
   final ProjectToolPathPolicy _pathPolicy;
   final ProjectToolResultFactory _resultFactory;
   final ProjectStorageAwareWorkspacePolicy _workspacePolicy;
   final ChapterOutputPathPolicyService _chapterOutputPathPolicyService;
+  final ProjectStructuredContentBridgeService _structuredContentBridgeService;
 
   Future<JsonMap> writeProjectFile(
     ProjectDescriptor project,
@@ -83,7 +90,16 @@ class ProjectFileWriteToolExecutor {
             rootPath: project.rootPath,
             relativePath: relativePath,
           );
-    await _hostPort.writeTextFile(project.rootPath, targetPath, content);
+    await _persistStructuredProjection(
+      project: project,
+      relativePath: targetPath,
+      contentType: contentType,
+      title: title,
+      content: content,
+    );
+    await _runWithoutHostStructuredContentSynchronization(
+      () => _hostPort.writeTextFile(project.rootPath, targetPath, content),
+    );
     return _resultFactory.success(
       '已写入项目文件：$targetPath',
       data: <String, Object?>{
@@ -185,10 +201,16 @@ class ProjectFileWriteToolExecutor {
             rootPath: project.rootPath,
             relativePath: relativePath,
           );
-    await _hostPort.writeTextFile(
-      project.rootPath,
-      targetPath,
-      ValueReaders.stringValue(arguments['content']),
+    final content = ValueReaders.stringValue(arguments['content']);
+    await _persistStructuredProjection(
+      project: project,
+      relativePath: targetPath,
+      contentType: _pathPolicy.inferContentTypeFromPath(targetPath),
+      title: targetPath.split('/').last,
+      content: content,
+    );
+    await _runWithoutHostStructuredContentSynchronization(
+      () => _hostPort.writeTextFile(project.rootPath, targetPath, content),
     );
     return _resultFactory.success(
       '已创建项目条目：$targetPath',
@@ -226,6 +248,15 @@ class ProjectFileWriteToolExecutor {
         },
       );
     }
+    if (source == target) {
+      return _resultFactory.notExecuted(
+        'move_project_file 的源路径和目标路径不能相同。',
+        data: <String, Object?>{
+          'relative_path': source,
+          'target_relative_path': target,
+        },
+      );
+    }
     final storageRejection = _storageAwareProjectionRejection(
       project: project,
       relativePath: source,
@@ -249,16 +280,62 @@ class ProjectFileWriteToolExecutor {
       );
     }
     final overwrite = ValueReaders.boolValue(arguments['overwrite']);
-    if (await _hostPort.entryExists(project.rootPath, target)) {
+    final targetExisted = await _hostPort.entryExists(project.rootPath, target);
+    if (targetExisted) {
       if (!overwrite) {
         return _resultFactory.error(
           'Target file already exists.',
           data: <String, Object?>{'relative_path': target},
         );
       }
-      await _hostPort.deleteEntry(project.rootPath, target);
     }
-    await _hostPort.moveEntry(project.rootPath, source, target);
+    final sourceSnapshot = await _structuredContentBridgeService
+        .loadStructuredDocument(project: project, documentPath: source);
+    final targetSnapshot = await _structuredContentBridgeService
+        .loadStructuredDocument(project: project, documentPath: target);
+    final sourceContent = await _hostPort.readTextFile(
+      project.rootPath,
+      source,
+    );
+    final targetContent = targetExisted
+        ? await _hostPort.readTextFile(project.rootPath, target)
+        : null;
+    try {
+      // Move SQLite first, then mutate the readable projection. Either leg can
+      // fail, so the catch block restores both snapshots best-effort.
+      await _structuredContentBridgeService.moveStructuredDocument(
+        project: project,
+        sourcePath: source,
+        targetPath: target,
+        targetDocumentKind: _pathPolicy.inferContentTypeFromPath(target),
+      );
+      await _runWithoutHostStructuredContentSynchronization(() async {
+        if (targetExisted) {
+          await _hostPort.deleteEntry(project.rootPath, target);
+        }
+        await _hostPort.moveEntry(project.rootPath, source, target);
+      });
+    } catch (_) {
+      await _restoreMoveProjection(
+        project: project,
+        sourcePath: source,
+        sourceContent: sourceContent,
+        targetPath: target,
+        targetExisted: targetExisted,
+        targetContent: targetContent,
+      );
+      await _restoreStructuredDocument(
+        project: project,
+        documentPath: source,
+        snapshot: sourceSnapshot,
+      );
+      await _restoreStructuredDocument(
+        project: project,
+        documentPath: target,
+        snapshot: targetSnapshot,
+      );
+      rethrow;
+    }
     return _resultFactory.success(
       '已移动项目文件：$source -> $target',
       data: <String, Object?>{
@@ -346,7 +423,36 @@ class ProjectFileWriteToolExecutor {
       }
       backupPath = ValueReaders.stringValue(backup['backup_path']);
     }
-    await _hostPort.deleteEntry(project.rootPath, relativePath);
+    final contentSnapshot = await _hostPort.readTextFile(
+      project.rootPath,
+      relativePath,
+    );
+    final structuredSnapshot = await _structuredContentBridgeService
+        .loadStructuredDocument(project: project, documentPath: relativePath);
+    try {
+      // Delete the primary SQLite record first. If projection deletion fails,
+      // restore the document so reads cannot observe an orphaned projection.
+      await _structuredContentBridgeService.deleteStructuredDocument(
+        project: project,
+        documentPath: relativePath,
+        documentKind: _pathPolicy.inferContentTypeFromPath(relativePath),
+      );
+      await _runWithoutHostStructuredContentSynchronization(
+        () => _hostPort.deleteEntry(project.rootPath, relativePath),
+      );
+    } catch (_) {
+      await _restoreDeletedProjection(
+        project: project,
+        relativePath: relativePath,
+        content: contentSnapshot,
+      );
+      await _restoreStructuredDocument(
+        project: project,
+        documentPath: relativePath,
+        snapshot: structuredSnapshot,
+      );
+      rethrow;
+    }
     return _resultFactory.success(
       '已删除项目文件：$relativePath',
       data: <String, Object?>{
@@ -377,10 +483,12 @@ class ProjectFileWriteToolExecutor {
         data: <String, Object?>{'relative_path': relativePath},
       );
     }
-    final content = await _hostPort.readTextFile(
-      project.rootPath,
-      relativePath,
-    );
+    final content =
+        await _structuredContentBridgeService.readProjectedBodyText(
+          project,
+          relativePath,
+        ) ??
+        await _hostPort.readTextFile(project.rootPath, relativePath);
     if (content == null) {
       return _resultFactory.notExecuted(
         'create_backup 未找到目标文件。请先调用 list_project_files 确认英文 relative_path。',
@@ -486,6 +594,13 @@ class ProjectFileWriteToolExecutor {
         },
       );
     }
+    await _persistStructuredProjection(
+      project: project,
+      relativePath: targetPath,
+      contentType: _pathPolicy.inferContentTypeFromPath(targetPath),
+      title: targetPath.split('/').last,
+      content: backupContent,
+    );
     await _hostPort.writeTextFile(project.rootPath, targetPath, backupContent);
     return _resultFactory.success(
       '已恢复备份：$targetPath',
@@ -571,5 +686,97 @@ class ProjectFileWriteToolExecutor {
       return 'compatibility_projection';
     }
     return 'compatibility_mirror';
+  }
+
+  Future<void> _persistStructuredProjection({
+    required ProjectDescriptor project,
+    required String relativePath,
+    required String contentType,
+    required String title,
+    required String content,
+  }) {
+    return _structuredContentBridgeService.persistWorkspaceProjectionDocument(
+      project: project,
+      documentPath: relativePath,
+      inferredDocumentKind: contentType,
+      title: title,
+      content: content,
+    );
+  }
+
+  Future<void> _restoreMoveProjection({
+    required ProjectDescriptor project,
+    required String sourcePath,
+    required String? sourceContent,
+    required String targetPath,
+    required bool targetExisted,
+    required String? targetContent,
+  }) async {
+    // Projection repair is deliberately best-effort: arbitrary host ports may
+    // fail after a partial filesystem mutation, while SQLite is restored below.
+    try {
+      final sourceExists = await _hostPort.entryExists(
+        project.rootPath,
+        sourcePath,
+      );
+      if (!sourceExists && sourceContent != null) {
+        await _hostPort.writeTextFile(
+          project.rootPath,
+          sourcePath,
+          sourceContent,
+        );
+      }
+      if (targetExisted) {
+        if (targetContent != null) {
+          await _hostPort.writeTextFile(
+            project.rootPath,
+            targetPath,
+            targetContent,
+          );
+        }
+      } else if (await _hostPort.entryExists(project.rootPath, targetPath)) {
+        await _hostPort.deleteEntry(project.rootPath, targetPath);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _restoreDeletedProjection({
+    required ProjectDescriptor project,
+    required String relativePath,
+    required String? content,
+  }) async {
+    if (content == null) {
+      return;
+    }
+    try {
+      if (!await _hostPort.entryExists(project.rootPath, relativePath)) {
+        await _hostPort.writeTextFile(project.rootPath, relativePath, content);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _restoreStructuredDocument({
+    required ProjectDescriptor project,
+    required String documentPath,
+    required SqliteProjectBodyTextDocument? snapshot,
+  }) async {
+    try {
+      await _structuredContentBridgeService.restoreStructuredDocument(
+        project: project,
+        documentPath: documentPath,
+        snapshot: snapshot,
+      );
+    } catch (_) {}
+  }
+
+  Future<T> _runWithoutHostStructuredContentSynchronization<T>(
+    Future<T> Function() operation,
+  ) {
+    final hostPort = _hostPort;
+    if (hostPort is ProjectStructuredContentSynchronizationHostPort) {
+      return (hostPort as ProjectStructuredContentSynchronizationHostPort)
+          .runWithoutStructuredContentSynchronization(operation);
+    }
+    return operation();
   }
 }

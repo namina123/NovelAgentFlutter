@@ -41,7 +41,10 @@ void main() {
     );
 
     expect(ValueReaders.boolValue(created['ok']), isTrue);
-    expect(ValueReaders.stringValue(created['relative_path']), contains('tasks/'));
+    expect(
+      ValueReaders.stringValue(created['relative_path']),
+      contains('tasks/'),
+    );
     final task = ValueReaders.mapValue(created['task']);
     expect(ValueReaders.stringValue(task['task_type']), 'revision');
     expect(

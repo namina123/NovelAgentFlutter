@@ -134,6 +134,8 @@ void main() {
               onSaved: (payload) {
                 savedPayload = payload;
               },
+              onConnectionTestRequested: (_) async =>
+                  ProviderConnectionValidationResultViewData.initial,
             ),
           ),
         ),
@@ -142,7 +144,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('写作模型'), findsOneWidget);
-      expect(find.text('模型'), findsOneWidget);
+      expect(find.text('默认接口'), findsOneWidget);
+      expect(find.text('默认模型'), findsOneWidget);
       expect(find.text('模型 ID'), findsNothing);
       expect(find.text('启用深度思考'), findsOneWidget);
       expect(find.text('深度思考强度'), findsOneWidget);
@@ -303,6 +306,8 @@ void main() {
               onSaved: (payload) {
                 savedPayload = payload;
               },
+              onConnectionTestRequested: (_) async =>
+                  ProviderConnectionValidationResultViewData.initial,
             ),
           ),
         ),
@@ -429,6 +434,8 @@ void main() {
               onSaved: (payload) {
                 savedPayload = payload;
               },
+              onConnectionTestRequested: (_) async =>
+                  ProviderConnectionValidationResultViewData.initial,
             ),
           ),
         ),
@@ -640,6 +647,8 @@ void main() {
               onSaved: (payload) {
                 savedPayload = payload;
               },
+              onConnectionTestRequested: (_) async =>
+                  ProviderConnectionValidationResultViewData.initial,
             ),
           ),
         ),
@@ -790,6 +799,8 @@ void main() {
                 isMobileProjectRootLocked: false,
               ),
               onSaved: (_) {},
+              onConnectionTestRequested: (_) async =>
+                  ProviderConnectionValidationResultViewData.initial,
             ),
           ),
         ),
@@ -926,6 +937,8 @@ void main() {
               onSaved: (payload) {
                 savedPayload = payload;
               },
+              onConnectionTestRequested: (_) async =>
+                  ProviderConnectionValidationResultViewData.initial,
             ),
           ),
         ),
@@ -1069,6 +1082,8 @@ void main() {
                 isMobileProjectRootLocked: false,
               ),
               onSaved: (_) {},
+              onConnectionTestRequested: (_) async =>
+                  ProviderConnectionValidationResultViewData.initial,
             ),
           ),
         ),
@@ -1173,6 +1188,8 @@ void main() {
                 isMobileProjectRootLocked: false,
               ),
               onSaved: (_) {},
+              onConnectionTestRequested: (_) async =>
+                  ProviderConnectionValidationResultViewData.initial,
             ),
           ),
         ),
@@ -1280,6 +1297,8 @@ void main() {
                 isMobileProjectRootLocked: false,
               ),
               onSaved: (_) {},
+              onConnectionTestRequested: (_) async =>
+                  ProviderConnectionValidationResultViewData.initial,
             ),
           ),
         ),
@@ -1289,6 +1308,212 @@ void main() {
 
       expect(find.text('API 模式'), findsNothing);
       expect(find.text('Top K'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'model settings panel runs connection test with the selected provider+model pair',
+    (tester) async {
+      Map<String, Object?>? testPayload;
+      const testResult = ProviderConnectionValidationResultViewData(
+        isSuccess: true,
+        summary: '连接成功（测试）',
+        details: ['探测明细 A'],
+        errors: [],
+        templateId: '',
+        providerId: 'deepseek',
+        protocolId: '',
+        protocolMode: 'openai_compatible',
+        routeFamily: '',
+        selectedRouteFamily: '',
+        allowedRouteFamilies: [],
+        hideOptions: [],
+        fallbackNotAllowed: false,
+        warnings: [],
+        matchedTemplateId: '',
+        matchedTemplateLabel: '',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light(),
+          home: Scaffold(
+            body: ModelSettingsPanel(
+              viewData: SettingsViewData(
+                activeTabId: 'models',
+                tabs: const [],
+                providers: const [
+                  ProviderEndpointViewData(
+                    id: 'deepseek',
+                    title: 'DeepSeek',
+                    protocol: 'openai_compatible',
+                    baseUrl: 'https://api.deepseek.com',
+                    rawApiKey: 'sk-test',
+                    apiKeyState: '已配置密钥',
+                    description: '',
+                  ),
+                ],
+                providerDirectoryOptions: const [],
+                allModelOptions: const [
+                  SettingsSearchOptionViewData(
+                    value: 'deepseek-chat',
+                    label: 'deepseek-chat',
+                    note: 'DeepSeek',
+                  ),
+                ],
+                tabSections: const {},
+                defaultProviderId: 'deepseek',
+                defaultModelId: 'deepseek-chat',
+                modelSettings: const {
+                  'provider_id': 'deepseek',
+                  'model_id': 'deepseek-chat',
+                },
+                modelEditor: const ModelEditorViewData(
+                  providerId: 'deepseek',
+                  providerLabel: 'DeepSeek',
+                  protocolMode: 'openai_compatible',
+                  baseUrl: 'https://api.deepseek.com',
+                  modelId: 'deepseek-chat',
+                  supportsReasoning: false,
+                  reasoningCanToggle: false,
+                  reasoningDefaultEnabled: false,
+                  supportsTemperature: true,
+                  supportsTopP: true,
+                  supportsTopK: false,
+                  supportsStreaming: true,
+                  supportsTools: true,
+                  supportsToolChoice: false,
+                  supportsFileAttachments: false,
+                  supportsImageAttachments: false,
+                  supportsAttachmentUrlsOnly: false,
+                  supportsMultiAttachments: false,
+                  thinkingParameterFormat: 'none',
+                  thinkingParameterLabel: '深度思考',
+                  thinkingEnabled: false,
+                  thinkingEffortSupported: false,
+                  thinkingEffortParameterLabel: '深度思考强度',
+                  thinkingEffort: 'high',
+                  thinkingEffortOptions: [],
+                  temperature: 0.8,
+                  topP: 0.95,
+                  topK: 0,
+                  modelSuggestions: [],
+                  customParameters: [],
+                  supportedParameters: ['temperature', 'top_p'],
+                  unsupportedParameters: [],
+                  customReasoningOverride:
+                      CustomModelReasoningOverrideViewData.initial,
+                ),
+                defaultProjectPath: '',
+                permissionSettings: const {},
+                toolStrategySettings: const {},
+                projectCreationExpressionConstraintDefaults:
+                    ProjectCreationExpressionConstraintDefaultsViewData.initial(),
+                networkSettings: const {},
+                contextSettings: const {},
+                themeSettings: const {},
+                themeViewData: ThemeSettingsViewData.initial(),
+                settingsRootPath: '',
+                settingsSearchRoots: const [],
+                defaultProjectsRootPath: '',
+                isMobileProjectRootLocked: false,
+              ),
+              onSaved: (_) {},
+              onConnectionTestRequested: (payload) {
+                testPayload = payload;
+                return Future.value(testResult);
+              },
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // 中文注释: 已选接口+模型时测试按钮可用；点击后用真实配对发起探测并展示结果。
+      final testButton = find.text('测试连接');
+      expect(testButton, findsOneWidget);
+      await tester.ensureVisible(testButton);
+      await tester.pumpAndSettle();
+      await tester.tap(testButton);
+      await tester.pumpAndSettle();
+
+      expect(testPayload, isNotNull);
+      expect(testPayload!['source_id'], 'deepseek');
+      expect(testPayload!['provider_id'] ?? testPayload!['source_id'], 'deepseek');
+      expect(testPayload!['model_id'], 'deepseek-chat');
+      expect(find.text('连接成功（测试）'), findsOneWidget);
+      expect(find.text('• 探测明细 A'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'model settings panel disables connection test until both provider and model are chosen',
+    (tester) async {
+      Map<String, Object?>? testPayload;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light(),
+          home: Scaffold(
+            body: ModelSettingsPanel(
+              viewData: SettingsViewData(
+                activeTabId: 'models',
+                tabs: const [],
+                providers: const [
+                  ProviderEndpointViewData(
+                    id: 'deepseek',
+                    title: 'DeepSeek',
+                    protocol: 'openai_compatible',
+                    baseUrl: 'https://api.deepseek.com',
+                    rawApiKey: 'sk-test',
+                    apiKeyState: '已配置密钥',
+                    description: '',
+                  ),
+                ],
+                providerDirectoryOptions: const [],
+                allModelOptions: const [],
+                tabSections: const {},
+                defaultProviderId: '',
+                defaultModelId: '',
+                modelSettings: const {},
+                modelEditor: ModelEditorViewData.initial,
+                defaultProjectPath: '',
+                permissionSettings: const {},
+                toolStrategySettings: const {},
+                projectCreationExpressionConstraintDefaults:
+                    ProjectCreationExpressionConstraintDefaultsViewData.initial(),
+                networkSettings: const {},
+                contextSettings: const {},
+                themeSettings: const {},
+                themeViewData: ThemeSettingsViewData.initial(),
+                settingsRootPath: '',
+                settingsSearchRoots: const [],
+                defaultProjectsRootPath: '',
+                isMobileProjectRootLocked: false,
+              ),
+              onSaved: (_) {},
+              onConnectionTestRequested: (payload) {
+                testPayload = payload;
+                return Future.value(
+                  ProviderConnectionValidationResultViewData.initial,
+                );
+              },
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // 中文注释: 未选接口/模型时按钮禁用，点击不会触发探测。
+      final testButton = find.text('测试连接');
+      expect(testButton, findsOneWidget);
+      await tester.ensureVisible(testButton);
+      await tester.pumpAndSettle();
+      await tester.tap(testButton);
+      await tester.pumpAndSettle();
+
+      expect(testPayload, isNull);
     },
   );
 }

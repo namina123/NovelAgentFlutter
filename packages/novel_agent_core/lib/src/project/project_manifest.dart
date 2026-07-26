@@ -8,6 +8,7 @@ class ProjectManifest {
     this.projectBranchId = '',
     this.runtimeBaselineId = '',
     this.schemaVersion = 1,
+    this.additionalTraitIds = const <String>[],
   });
 
   final String title;
@@ -16,4 +17,5 @@ class ProjectManifest {
   final String projectBranchId;
   final String runtimeBaselineId;
   final int schemaVersion;
+  final List<String> additionalTraitIds;
 }

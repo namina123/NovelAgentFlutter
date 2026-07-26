@@ -201,6 +201,7 @@ class AdapterBundle {
       }
       return SqliteVectorRetrievalPort(embeddingProvider: embeddingProvider);
     }
+
     return AdapterBundle(
       settingsRootPath: resolvedSettingsRootPath,
       settingsSearchRoots: resolvedSettingsSearchRoots,

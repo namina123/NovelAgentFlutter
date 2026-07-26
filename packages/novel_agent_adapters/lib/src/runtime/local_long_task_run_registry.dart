@@ -40,7 +40,9 @@ class LocalLongTaskRunRegistry implements LongTaskRunRegistry {
       return null;
     }
     final document = jsonDecode(await file.readAsString());
-    return _restoredInstance(_codecService.decode(ValueReaders.mapValue(document)));
+    return _restoredInstance(
+      _codecService.decode(ValueReaders.mapValue(document)),
+    );
   }
 
   @override
@@ -126,7 +128,9 @@ class LocalLongTaskRunRegistry implements LongTaskRunRegistry {
       return '';
     }
     final absoluteProjectPath = Directory(cleanPath).absolute.path;
-    final absoluteBasePath = Directory(_pathService.settingsRootPath).absolute.path;
+    final absoluteBasePath = Directory(
+      _pathService.settingsRootPath,
+    ).absolute.path;
     final relative = _relativePathFromBase(
       absoluteTargetPath: absoluteProjectPath,
       absoluteBasePath: absoluteBasePath,
@@ -139,7 +143,8 @@ class LocalLongTaskRunRegistry implements LongTaskRunRegistry {
     if (cleanPath.isEmpty) {
       return '';
     }
-    if (cleanPath.startsWith('/') || RegExp(r'^[A-Za-z]:').hasMatch(cleanPath)) {
+    if (cleanPath.startsWith('/') ||
+        RegExp(r'^[A-Za-z]:').hasMatch(cleanPath)) {
       return _normalizedAbsolutePath(cleanPath);
     }
     return _normalizedAbsolutePath(

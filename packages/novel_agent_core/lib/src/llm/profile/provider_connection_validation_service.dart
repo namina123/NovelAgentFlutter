@@ -51,8 +51,9 @@ class ProviderConnectionValidationService {
     if (normalizedTitle.isEmpty) {
       errors.add('还没有选择接口/厂商名称。');
     }
+    // 中文注释: 接口页本身不存模型；连接探测可回退默认模型。模型为空时只警告，不阻断本地自检。
     if (normalizedModelId.isEmpty) {
-      errors.add('还没有填写模型 ID。');
+      warnings.add('尚未指定探测用模型，将尽量使用默认模型或占位模型名。');
     }
     if (normalizedProtocol.isEmpty) {
       errors.add('还没有选择协议。');

@@ -15,6 +15,56 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 void main() {
   group('WorkbenchWorkspaceController snapshot', () {
     test(
+      'loadProject keeps the active project when a candidate path is invalid',
+      () async {
+        const activeProjectPath = 'D:/Projects/open-project';
+        final activeProject = _project(activeProjectPath);
+        final harness = _ControllerHarness(
+          settings: _baseSettings(),
+          workbench: WorkbenchViewData.initial().copyWith(
+            projectName: activeProject.name,
+            projectPath: activeProject.rootPath,
+            generationStatus: '项目已打开。',
+            activeDocumentPath: 'chapters/chapter_01.md',
+            activeDocumentBody: '已打开的正文内容',
+          ),
+          projectState: WorkbenchProjectRuntimeState(
+            currentProject: activeProject,
+            resourceSnapshotEntries: const <JsonMap>[
+              <String, Object?>{
+                'relative_path': 'chapters/chapter_01.md',
+                'is_dir': false,
+              },
+            ],
+            openDocuments: const <OpenDocumentState>[
+              OpenDocumentState(
+                id: 'chapter-1',
+                title: '第一章',
+                relativePath: 'chapters/chapter_01.md',
+                content: '已打开的正文内容',
+              ),
+            ],
+            activeOpenDocumentId: 'chapter-1',
+          ),
+        );
+
+        final loaded = await harness.controller.loadProject(
+          'D:/Projects/not-a-project',
+        );
+
+        expect(loaded, isFalse);
+        expect(
+          harness.projectState.currentProject?.rootPath,
+          activeProjectPath,
+        );
+        expect(harness.projectState.openDocuments, hasLength(1));
+        expect(harness.workbench.projectPath, activeProjectPath);
+        expect(harness.workbench.activeDocumentPath, 'chapters/chapter_01.md');
+        expect(harness.workbench.generationStatus, '项目已打开。');
+      },
+    );
+
+    test(
       'restoreWorkbenchSnapshot restores selected conversation agent id',
       () async {
         final harness = _ControllerHarness(

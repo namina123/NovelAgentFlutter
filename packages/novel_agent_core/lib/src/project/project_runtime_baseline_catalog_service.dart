@@ -40,4 +40,11 @@ class ProjectRuntimeBaselineCatalogService {
       baselineId,
     );
   }
+
+  bool containsForProjectType(String projectTypeId, String baselineId) {
+    final cleanBaselineId = baselineId.trim();
+    return cleanBaselineId.isNotEmpty &&
+        normalizeForProjectType(projectTypeId, cleanBaselineId) ==
+            cleanBaselineId;
+  }
 }

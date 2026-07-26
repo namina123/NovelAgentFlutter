@@ -96,7 +96,10 @@ void main() {
       expect(projectMounts, hasLength(2));
       expect(hasProjectMounts, isTrue);
       expect(summary.bindingCount, 2);
-      expect(summary.corpusIds, containsAll(<String>['corpus-001', 'corpus-002']));
+      expect(
+        summary.corpusIds,
+        containsAll(<String>['corpus-001', 'corpus-002']),
+      );
       expect(summary.topCorpusId, 'corpus-001');
       expect(summary.topBindingId, 'binding-001');
       expect(summary.topUsagePolicy, 'reference_only');

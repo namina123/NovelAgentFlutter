@@ -86,15 +86,15 @@ void main() {
       expect(messages.first['role'], 'user');
       expect(messages.first['content'], isA<List<Object?>>());
       expect(messages[1]['role'], 'assistant');
-      final assistantContent = ValueReaders.objectList(messages[1]['content']).map(ValueReaders.mapValue).toList(
-        growable: false,
-      );
+      final assistantContent = ValueReaders.objectList(
+        messages[1]['content'],
+      ).map(ValueReaders.mapValue).toList(growable: false);
       expect(assistantContent, hasLength(2));
       expect(assistantContent.last['type'], 'tool_use');
       expect(assistantContent.last['name'], 'read_project_file');
-      final toolResult = ValueReaders.objectList(messages[2]['content']).map(ValueReaders.mapValue).toList(
-        growable: false,
-      );
+      final toolResult = ValueReaders.objectList(
+        messages[2]['content'],
+      ).map(ValueReaders.mapValue).toList(growable: false);
       expect(toolResult.first['type'], 'tool_result');
       expect(toolResult.first['tool_use_id'], 'toolu_1');
       expect(payload['stream'], isTrue);

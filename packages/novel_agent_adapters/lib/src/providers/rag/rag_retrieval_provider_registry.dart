@@ -1,8 +1,9 @@
 import 'rag_retrieval_provider_contracts.dart';
 
 class RagRetrievalProviderRegistry {
-  RagRetrievalProviderRegistry({Map<String, RagRetrievalProviderProfile>? profiles})
-      : _profiles = profiles ?? _defaultProfiles;
+  RagRetrievalProviderRegistry({
+    Map<String, RagRetrievalProviderProfile>? profiles,
+  }) : _profiles = profiles ?? _defaultProfiles;
 
   final Map<String, RagRetrievalProviderProfile> _profiles;
 
@@ -10,8 +11,7 @@ class RagRetrievalProviderRegistry {
     // 中文注释: 默认注册表先收录本轮允许的 placeholder provider，后续再由 adapter 扩展真实 backend。
     return RagRetrievalProviderRegistry(
       profiles: <String, RagRetrievalProviderProfile>{
-        RagRetrievalProviderKinds.localPlaceholder:
-            RagRetrievalProviderProfile(
+        RagRetrievalProviderKinds.localPlaceholder: RagRetrievalProviderProfile(
           providerId: RagRetrievalProviderKinds.localPlaceholder,
           providerKind: RagRetrievalProviderKinds.localPlaceholder,
           displayName: 'Local Placeholder Retrieval',
@@ -29,8 +29,8 @@ class RagRetrievalProviderRegistry {
             'supports_activation_package': false,
           },
         ),
-        RagRetrievalProviderKinds.remotePlaceholder:
-            RagRetrievalProviderProfile(
+        RagRetrievalProviderKinds
+            .remotePlaceholder: RagRetrievalProviderProfile(
           providerId: RagRetrievalProviderKinds.remotePlaceholder,
           providerKind: RagRetrievalProviderKinds.remotePlaceholder,
           displayName: 'Remote Placeholder Retrieval',
@@ -73,45 +73,43 @@ class RagRetrievalProviderRegistry {
     return list;
   }
 
-  static Map<String, RagRetrievalProviderProfile> get _defaultProfiles =>
-      <String, RagRetrievalProviderProfile>{
-        RagRetrievalProviderKinds.localPlaceholder:
-            RagRetrievalProviderProfile(
-          providerId: RagRetrievalProviderKinds.localPlaceholder,
-          providerKind: RagRetrievalProviderKinds.localPlaceholder,
-          displayName: 'Local Placeholder Retrieval',
-          hostCapabilityFlags: <String>['metadata_only', 'offline'],
-          isAvailable: true,
-          failureMessage: '',
-          capabilityProfile: <String, Object?>{
-            'provider_kind': RagRetrievalProviderKinds.localPlaceholder,
-            'backend_mode': 'placeholder',
-            'supports_embedding': false,
-            'supports_search': false,
-            'supports_mount_scoped_search': false,
-            'supports_health_check': true,
-            'supports_index_management': false,
-            'supports_activation_package': false,
-          },
-        ),
-        RagRetrievalProviderKinds.remotePlaceholder:
-            RagRetrievalProviderProfile(
-          providerId: RagRetrievalProviderKinds.remotePlaceholder,
-          providerKind: RagRetrievalProviderKinds.remotePlaceholder,
-          displayName: 'Remote Placeholder Retrieval',
-          hostCapabilityFlags: <String>['metadata_only', 'network_optional'],
-          isAvailable: false,
-          failureMessage: 'remote placeholder backend not wired yet',
-          capabilityProfile: <String, Object?>{
-            'provider_kind': RagRetrievalProviderKinds.remotePlaceholder,
-            'backend_mode': 'placeholder',
-            'supports_embedding': false,
-            'supports_search': false,
-            'supports_mount_scoped_search': false,
-            'supports_health_check': true,
-            'supports_index_management': false,
-            'supports_activation_package': false,
-          },
-        ),
-      };
+  static Map<String, RagRetrievalProviderProfile>
+  get _defaultProfiles => <String, RagRetrievalProviderProfile>{
+    RagRetrievalProviderKinds.localPlaceholder: RagRetrievalProviderProfile(
+      providerId: RagRetrievalProviderKinds.localPlaceholder,
+      providerKind: RagRetrievalProviderKinds.localPlaceholder,
+      displayName: 'Local Placeholder Retrieval',
+      hostCapabilityFlags: <String>['metadata_only', 'offline'],
+      isAvailable: true,
+      failureMessage: '',
+      capabilityProfile: <String, Object?>{
+        'provider_kind': RagRetrievalProviderKinds.localPlaceholder,
+        'backend_mode': 'placeholder',
+        'supports_embedding': false,
+        'supports_search': false,
+        'supports_mount_scoped_search': false,
+        'supports_health_check': true,
+        'supports_index_management': false,
+        'supports_activation_package': false,
+      },
+    ),
+    RagRetrievalProviderKinds.remotePlaceholder: RagRetrievalProviderProfile(
+      providerId: RagRetrievalProviderKinds.remotePlaceholder,
+      providerKind: RagRetrievalProviderKinds.remotePlaceholder,
+      displayName: 'Remote Placeholder Retrieval',
+      hostCapabilityFlags: <String>['metadata_only', 'network_optional'],
+      isAvailable: false,
+      failureMessage: 'remote placeholder backend not wired yet',
+      capabilityProfile: <String, Object?>{
+        'provider_kind': RagRetrievalProviderKinds.remotePlaceholder,
+        'backend_mode': 'placeholder',
+        'supports_embedding': false,
+        'supports_search': false,
+        'supports_mount_scoped_search': false,
+        'supports_health_check': true,
+        'supports_index_management': false,
+        'supports_activation_package': false,
+      },
+    ),
+  };
 }

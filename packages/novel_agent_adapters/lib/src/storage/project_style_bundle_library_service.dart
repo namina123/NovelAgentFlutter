@@ -25,7 +25,8 @@ class ProjectStyleBundleLibraryService {
        _previewMapperService =
            previewMapperService ?? const ProjectBundlePreviewMapperService(),
        _directoryLayoutService =
-           directoryLayoutService ?? const ProjectBundleDirectoryLayoutService(),
+           directoryLayoutService ??
+           const ProjectBundleDirectoryLayoutService(),
        _documentService = documentService ?? StyleBundleDocumentService(),
        _previewService = previewService ?? StyleBundleImportPreviewService(),
        _normalizerService =
@@ -126,7 +127,8 @@ class ProjectStyleBundleLibraryService {
     );
     final files = <String, String>{
       'bundle.json': _documentService.encodeBundle(bundle),
-      for (final style in styles) 'assets/styles/${style.id}.style.md': _codecService.encode(style),
+      for (final style in styles)
+        'assets/styles/${style.id}.style.md': _codecService.encode(style),
     };
     final exportDirectoryPath = await _fileAccessService.writeExportDirectory(
       targetDirectoryPath: targetDirectoryPath,
@@ -151,7 +153,10 @@ class ProjectStyleBundleLibraryService {
   }) async {
     final source = await _fileAccessService.readBundleSource(sourcePath);
     if (source == null) {
-      return <String, Object?>{'ok': false, 'error': 'Bundle 源不存在或缺少 bundle.json。'};
+      return <String, Object?>{
+        'ok': false,
+        'error': 'Bundle 源不存在或缺少 bundle.json。',
+      };
     }
     final existingStyles = await _assetLibraryService.listStyles(project);
     final preview = _previewService.previewBundle(
@@ -207,8 +212,8 @@ class ProjectStyleBundleLibraryService {
   Map<String, String> _actionByTargetPath(JsonMap preview) {
     final result = <String, String>{};
     for (final item in ValueReaders.mapList(preview['items'])) {
-      result[ValueReaders.stringValue(item['target_path'])] = ValueReaders
-          .stringValue(item['action']);
+      result[ValueReaders.stringValue(item['target_path'])] =
+          ValueReaders.stringValue(item['action']);
     }
     return result;
   }

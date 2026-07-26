@@ -1,82 +1,99 @@
 import '../project/project_descriptor.dart';
-import '../project/knowledge_base_branch_catalog_service.dart';
 import '../project/project_manifest_codec_service.dart';
-import '../project/project_storage_strategy.dart';
-import '../project/project_support_document_catalog.dart';
+import '../project/project_manifest_commit_service.dart';
+import 'read_project_file_use_case.dart';
 import 'write_project_text_file_use_case.dart';
 
 class UpdateProjectManifestUseCase {
   UpdateProjectManifestUseCase({
     required WriteProjectTextFileUseCase writeProjectTextFileUseCase,
     ProjectManifestCodecService? projectManifestCodecService,
-  }) : _writeProjectTextFileUseCase = writeProjectTextFileUseCase,
-       _projectManifestCodecService =
-           projectManifestCodecService ?? ProjectManifestCodecService();
+    ReadProjectFileUseCase? readProjectFileUseCase,
+  }) : _projectManifestCodecService =
+           projectManifestCodecService ?? ProjectManifestCodecService(),
+       _readProjectFileUseCase = readProjectFileUseCase,
+       _projectManifestCommitService = ProjectManifestCommitService(
+         writeProjectTextFileUseCase: writeProjectTextFileUseCase,
+         projectManifestCodecService: projectManifestCodecService,
+         readProjectFileUseCase: readProjectFileUseCase,
+       );
 
-  final WriteProjectTextFileUseCase _writeProjectTextFileUseCase;
   final ProjectManifestCodecService _projectManifestCodecService;
+  final ReadProjectFileUseCase? _readProjectFileUseCase;
+  final ProjectManifestCommitService _projectManifestCommitService;
 
   Future<void> execute({
     required ProjectDescriptor project,
     required String title,
-    required String projectType,
-    ProjectStorageStrategy? storageStrategy,
-    String? projectBranchId,
-    String? runtimeBaselineId,
     String genre = '',
     String premise = '',
     String notes = '',
   }) async {
-    // 中文注释: 项目信息更新统一同时刷新 manifest 与项目简介文档，保持工作区入口信息一致。
+    // 中文注释: 通用更新仅能改变展示元数据。类型、存储、知识库分支、运行基准和 trait
+    // 都是项目合同，分别由转换或运行基准专用流程负责，不能用普通编辑入口传入。
+    final currentTraitIds = _mergeTraitIds(
+      project.additionalTraitIds,
+      (await _readExistingAdditionalTraitIds(project)) ?? const <String>[],
+    );
     final manifest = _projectManifestCodecService.create(
       title: title,
-      projectType: projectType,
-      storageStrategy: storageStrategy ?? project.storageStrategy,
-      projectBranchId: projectBranchId ?? project.projectBranchId,
-      runtimeBaselineId: runtimeBaselineId ?? project.runtimeBaselineId,
+      projectType: project.projectType,
+      storageStrategy: project.storageStrategy,
+      projectBranchId: project.projectBranchId,
+      runtimeBaselineId: project.runtimeBaselineId,
+      additionalTraitIds: currentTraitIds,
     );
-    await _writeProjectTextFileUseCase.execute(
+    await _projectManifestCommitService.commit(
       project: project,
-      relativePath: ProjectManifestCodecService.manifestRelativePath,
-      content: _projectManifestCodecService.encode(manifest),
-    );
-    final typeLabel = _projectTypeLabel(
-      manifest.projectType,
-      projectBranchId: manifest.projectBranchId,
-    );
-    await _writeProjectTextFileUseCase.execute(
-      project: project,
-      relativePath: ProjectSupportDocumentCatalog.projectOverviewRelativePath,
-      content:
-          '# 项目概览\n\n'
-          '> 这是系统维护的快速概览，不是正式故事前提或长期创作宪章。\n'
-          '> 题材、正式前提、风格边界和世界规则应继续沉淀到 premise/、outlines/、assets/ 下的正式文档中。\n\n'
-          '- 项目标题：${manifest.title}\n'
-          '- 项目类型：$typeLabel\n'
-          '- 题材：${genre.trim()}\n'
-          '- 当前已知核心设定：${premise.trim()}\n'
-          '- 备注：${notes.trim()}\n',
+      manifest: manifest,
+      genre: genre,
+      premise: premise,
+      notes: notes,
     );
   }
 
-  String _projectTypeLabel(String projectType, {String projectBranchId = ''}) {
-    // 中文注释: 项目类型标签只在简介文档中使用，因此保留轻量级本地映射即可。
-    switch (projectType.trim()) {
-      case 'long_novel':
-        return '长任务长篇';
-      case 'knowledge_base':
-        return const KnowledgeBaseBranchCatalogService().isRagBranch(
-              projectBranchId,
-            )
-            ? '语料库'
-            : '结构化资料知识库';
-      case 'short_collection':
-        return '短文集';
-      case 'book_deconstruction':
-        return '拆书项目';
-      case 'novel':
-      default:
-        return '小说';
+  Future<List<String>?> _readExistingAdditionalTraitIds(
+    ProjectDescriptor project,
+  ) async {
+    // 中文注释: 没有 readProjectFileUseCase（如纯单元测试夹具）时返回 null，回退到空列表。
+    final reader = _readProjectFileUseCase;
+    if (reader == null) {
+      return null;
     }
+    final source = await reader.execute(
+      project,
+      ProjectManifestCodecService.manifestRelativePath,
+    );
+    if (source == null || source.trim().isEmpty) {
+      return null;
+    }
+    return _projectManifestCodecService
+        .parse(
+          source,
+          fallbackTitle: project.name,
+          fallbackProjectType: project.projectType,
+          fallbackStorageStrategy: project.storageStrategy,
+          fallbackProjectBranchId: project.projectBranchId,
+          fallbackRuntimeBaselineId: project.runtimeBaselineId,
+          fallbackAdditionalTraitIds: project.additionalTraitIds,
+        )
+        .additionalTraitIds;
+  }
+
+  List<String> _mergeTraitIds(
+    List<String> descriptorTraitIds,
+    List<String> manifestTraitIds,
+  ) {
+    final traitIds = <String>[];
+    for (final traitId in <String>[
+      ...descriptorTraitIds,
+      ...manifestTraitIds,
+    ]) {
+      final cleanTraitId = traitId.trim();
+      if (cleanTraitId.isNotEmpty && !traitIds.contains(cleanTraitId)) {
+        traitIds.add(cleanTraitId);
+      }
+    }
+    return traitIds;
   }
 }

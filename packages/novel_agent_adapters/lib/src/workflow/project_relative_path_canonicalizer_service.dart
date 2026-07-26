@@ -29,6 +29,7 @@ class ProjectRelativePathCanonicalizerService {
   }
 
   bool equalsCanonicalPath(String left, String right) {
-    return canonicalize(left).toLowerCase() == canonicalize(right).toLowerCase();
+    return canonicalize(left).toLowerCase() ==
+        canonicalize(right).toLowerCase();
   }
 }

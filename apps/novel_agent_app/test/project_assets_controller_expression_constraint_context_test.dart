@@ -547,6 +547,7 @@ class _FakeSuccessfulReferenceExtractionService
     String strategyProfileId = '',
     String overrideProviderId = '',
     String overrideModelId = '',
+    bool analysisOnly = false,
   }) async {
     lastStrategyProfileId = strategyProfileId;
     return const ProjectReferenceExtractionExecutionResult(

@@ -18,7 +18,7 @@ class KnowledgeBaseBranchCatalogService {
         KnowledgeBaseBranchDefinition(
           id: ragBranchId,
           title: '语料库',
-          description: '把资料切分、清洗并构建为可挂载的语料包，适合检索增强和证据型引用，不把它当作正式写作工作区主面板。',
+          description: '把资料切分、清洗并构建为可挂载的语料包，适合资料证据检索（默认关键词；配置向量化模型后可做向量召回），不把它当作正式写作工作区主面板。',
           opensProjectAssetsByDefault: true,
           preferredAssetsTabId: 'rag_extraction',
         ),
@@ -32,16 +32,22 @@ class KnowledgeBaseBranchCatalogService {
     return projectTypeId.trim() == 'knowledge_base';
   }
 
+  bool contains(String branchId) {
+    final cleanId = branchId.trim();
+    for (final definition in _definitions) {
+      if (definition.id == cleanId) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   String normalize(String projectTypeId, String branchId) {
     if (!usesBranchSelection(projectTypeId)) {
       return '';
     }
     final cleanId = branchId.trim();
-    for (final definition in _definitions) {
-      if (definition.id == cleanId) {
-        return cleanId;
-      }
-    }
+    if (contains(cleanId)) return cleanId;
     return structuredBranchId;
   }
 

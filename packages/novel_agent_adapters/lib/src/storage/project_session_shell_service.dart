@@ -114,7 +114,10 @@ class ProjectSessionShellService {
     String sessionId,
   ) async {
     // 中文注释: 详情面只返回单个 session 的正式记录和上下文投影，供 CLI/GUI 共享。
-    final record = await _sessionWorkspaceService.loadSession(project, sessionId);
+    final record = await _sessionWorkspaceService.loadSession(
+      project,
+      sessionId,
+    );
     if (record.isEmpty) {
       return <String, Object?>{
         'ok': false,
@@ -267,7 +270,10 @@ class ProjectSessionShellService {
     SessionTokenBudgetSettings? settings,
   }) async {
     // 中文注释: stats 只做压力与消息规模投影，不会偷偷改写会话记录。
-    final record = await _sessionWorkspaceService.loadSession(project, sessionId);
+    final record = await _sessionWorkspaceService.loadSession(
+      project,
+      sessionId,
+    );
     if (record.isEmpty) {
       return <String, Object?>{
         'ok': false,
@@ -298,7 +304,10 @@ class ProjectSessionShellService {
     String now = '',
   }) async {
     // 中文注释: compact 直接调用正式决策和压缩合同，不在 CLI 壳层重写压缩算法。
-    final record = await _sessionWorkspaceService.loadSession(project, sessionId);
+    final record = await _sessionWorkspaceService.loadSession(
+      project,
+      sessionId,
+    );
     if (record.isEmpty) {
       return <String, Object?>{
         'ok': false,
@@ -343,7 +352,10 @@ class ProjectSessionShellService {
     String now = '',
   }) async {
     // 中文注释: stop 只把会话收束为停止态，不删除历史消息，也不重建另一套结束语义。
-    final record = await _sessionWorkspaceService.loadSession(project, sessionId);
+    final record = await _sessionWorkspaceService.loadSession(
+      project,
+      sessionId,
+    );
     if (record.isEmpty) {
       return <String, Object?>{
         'ok': false,
@@ -377,7 +389,10 @@ class ProjectSessionShellService {
     String now = '',
   }) async {
     // 中文注释: setMode 复用正式的 sessionWithGoal mutation，保证 CLI 切模式与 GUI 走同一条语义。
-    final record = await _sessionWorkspaceService.loadSession(project, sessionId);
+    final record = await _sessionWorkspaceService.loadSession(
+      project,
+      sessionId,
+    );
     if (record.isEmpty) {
       return <String, Object?>{
         'ok': false,
@@ -388,7 +403,11 @@ class ProjectSessionShellService {
     final timestamp = now.trim().isEmpty
         ? DateTime.now().toIso8601String()
         : now.trim();
-    final updated = _mutationService.sessionWithGoal(record, mode, now: timestamp);
+    final updated = _mutationService.sessionWithGoal(
+      record,
+      mode,
+      now: timestamp,
+    );
     await _sessionWorkspaceService.saveSession(
       project,
       updated,
@@ -404,7 +423,10 @@ class ProjectSessionShellService {
     String now = '',
   }) async {
     // 中文注释: setGoalText 只写自由文本目标字段，不改模式与阶段，供 /goal <文字> 使用。
-    final record = await _sessionWorkspaceService.loadSession(project, sessionId);
+    final record = await _sessionWorkspaceService.loadSession(
+      project,
+      sessionId,
+    );
     if (record.isEmpty) {
       return <String, Object?>{
         'ok': false,
@@ -432,7 +454,10 @@ class ProjectSessionShellService {
     String now = '',
   }) async {
     // 中文注释: clear 只清空当前工作上下文（送入模型的窗口），保留 transcript 与压缩归档，不删除会话。
-    final record = await _sessionWorkspaceService.loadSession(project, sessionId);
+    final record = await _sessionWorkspaceService.loadSession(
+      project,
+      sessionId,
+    );
     if (record.isEmpty) {
       return <String, Object?>{
         'ok': false,
@@ -511,9 +536,18 @@ class ProjectSessionShellService {
     final payload = _sessionPayload(record);
     final payloadRecord = ValueReaders.mapValue(payload['session_record']);
     return <String, Object?>{
-      'id': ValueReaders.stringValue(base['id'], ValueReaders.stringValue(payload['session_id'])),
-      'title': ValueReaders.stringValue(base['title'], ValueReaders.stringValue(payload['title'], '未命名会话')),
-      'mode': ValueReaders.stringValue(base['mode'], ValueReaders.stringValue(payload['mode'])),
+      'id': ValueReaders.stringValue(
+        base['id'],
+        ValueReaders.stringValue(payload['session_id']),
+      ),
+      'title': ValueReaders.stringValue(
+        base['title'],
+        ValueReaders.stringValue(payload['title'], '未命名会话'),
+      ),
+      'mode': ValueReaders.stringValue(
+        base['mode'],
+        ValueReaders.stringValue(payload['mode']),
+      ),
       'workflow_stage': ValueReaders.stringValue(
         base['workflow_stage'],
         ValueReaders.stringValue(payload['workflow_stage']),
@@ -530,7 +564,9 @@ class ProjectSessionShellService {
         base['created_at'],
         ValueReaders.stringValue(payloadRecord['created_at']),
       ),
-      'message_count': ValueReaders.intValue(payload['transcript_message_count']),
+      'message_count': ValueReaders.intValue(
+        payload['transcript_message_count'],
+      ),
       'public_summary': ValueReaders.stringValue(payload['public_summary']),
     };
   }

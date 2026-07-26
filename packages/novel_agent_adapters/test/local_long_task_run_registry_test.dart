@@ -17,32 +17,33 @@ void main() {
           final registry = LocalLongTaskRunRegistry(
             settingsRootPath: tempRoot.path,
           );
-          final instance = _runInstance(
-            runId: 'Run_A',
-            projectId: 'project_a',
-            projectName: '项目 A',
-            projectRootPath: 'D:/projects/a',
-            status: LongTaskRunStatus.running,
-            now: DateTime.parse('2026-05-25T10:00:00.000Z'),
-          ).copyWith(
-            stopOutcome: const LongTaskStopOutcome(
-              present: true,
-              category: LongTaskStopOutcomeCategories.waitingUser,
-              reason: 'waiting_user_checkpoint',
-              legacyStopReason: 'waiting_user_checkpoint',
-              summary: '等待用户确认。',
-            ),
-            recoveryState: const LongTaskRecoveryState(
-              present: true,
-              state: LongTaskRecoveryStates.waitingUser,
-              runStatus: 'waiting_gate',
-              recommendedAction: 'resume_when_user_confirms',
-              reason: 'waiting_user_checkpoint',
-              note: '等待用户确认。',
-              waitingUser: true,
-              blocksProgress: true,
-            ),
-          );
+          final instance =
+              _runInstance(
+                runId: 'Run_A',
+                projectId: 'project_a',
+                projectName: '项目 A',
+                projectRootPath: 'D:/projects/a',
+                status: LongTaskRunStatus.running,
+                now: DateTime.parse('2026-05-25T10:00:00.000Z'),
+              ).copyWith(
+                stopOutcome: const LongTaskStopOutcome(
+                  present: true,
+                  category: LongTaskStopOutcomeCategories.waitingUser,
+                  reason: 'waiting_user_checkpoint',
+                  legacyStopReason: 'waiting_user_checkpoint',
+                  summary: '等待用户确认。',
+                ),
+                recoveryState: const LongTaskRecoveryState(
+                  present: true,
+                  state: LongTaskRecoveryStates.waitingUser,
+                  runStatus: 'waiting_gate',
+                  recommendedAction: 'resume_when_user_confirms',
+                  reason: 'waiting_user_checkpoint',
+                  note: '等待用户确认。',
+                  waitingUser: true,
+                  blocksProgress: true,
+                ),
+              );
 
           await registry.save(instance);
 
@@ -58,7 +59,10 @@ void main() {
             LongTaskStopOutcomeCategories.waitingUser,
           );
           expect(reloaded.stopOutcome.reason, 'waiting_user_checkpoint');
-          expect(reloaded.recoveryState.state, LongTaskRecoveryStates.waitingUser);
+          expect(
+            reloaded.recoveryState.state,
+            LongTaskRecoveryStates.waitingUser,
+          );
           expect(all, hasLength(1));
           expect(byProject, hasLength(1));
         } finally {

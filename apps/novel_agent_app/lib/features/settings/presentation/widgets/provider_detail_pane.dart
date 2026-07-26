@@ -4,9 +4,8 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 import '../../../../../shared/widgets/action_button.dart';
 import '../../../../../shared/widgets/confirmation_dialog.dart';
 import '../../../../../shared/widgets/section_heading.dart';
-import '../models/model_editor_view_data.dart';
-import '../models/settings_view_data.dart';
 import '../models/settings_search_option.dart';
+import '../models/settings_view_data.dart';
 import 'settings_form_section.dart';
 import 'settings_labeled_dropdown_field.dart';
 import 'settings_labeled_search_dropdown_field.dart';
@@ -18,19 +17,15 @@ class ProviderDetailPane extends StatefulWidget {
     super.key,
     this.provider,
     required this.providerDirectoryOptions,
-    required this.modelOptions,
     required this.onProviderSaved,
     required this.onProviderDeleted,
-    required this.onConnectionTestRequested,
     this.onBackRequested,
   });
 
   final ProviderEndpointViewData? provider;
   final List<ProviderDirectoryOptionViewData> providerDirectoryOptions;
-  final List<SettingsSearchOptionViewData> modelOptions;
   final ValueChanged<Map<String, Object?>> onProviderSaved;
   final ValueChanged<String> onProviderDeleted;
-  final ValueChanged<Map<String, Object?>> onConnectionTestRequested;
   final VoidCallback? onBackRequested;
 
   @override
@@ -47,6 +42,7 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
   String? _selectedDirectoryProviderId;
   bool _revealApiKey = false;
   String? _loadedProviderId;
+  String _formError = '';
 
   @override
   void initState() {
@@ -83,7 +79,8 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
 
   @override
   Widget build(BuildContext context) {
-    // 中文注释: 接口详情编辑区只负责当前接口的表单和提交，内部 ID 由控制器自动生成而不暴露给用户。
+    // 中文注释: 接口详情只负责"地址 + 凭据"的录入与保存；它不依赖、也不提及模型，
+    // 模型选择与连接测试统一在「模型」页完成。
     final provider = widget.provider;
     final protocolOptions = _protocolService
         .protocolOptions()
@@ -116,16 +113,19 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
           const SizedBox(height: 8),
         ],
         SectionHeading(
-          title: provider?.title.trim().isNotEmpty == true
-              ? provider!.title
-              : '新接口',
-          subtitle: '首次使用先补齐接口、模型与密钥；协议和地址默认收进高级设置。',
+          title: provider == null ||
+                  provider.id == '__new__' ||
+                  provider.title.trim().isEmpty
+              ? '添加接口'
+              : provider.title,
+          subtitle: '从厂商目录选一个模板，或直接输入名称；再填 API Key 与地址后保存。',
         ),
         const SizedBox(height: 18),
         SettingsFormSection(
           title: '基础信息',
-          description: '先完成作品常用的厂商和模型配置，协议细节按需展开。',
+          description: '点输入框或右侧箭头可展开厂商目录；选中后自动填协议与默认地址。',
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SettingsLabeledSearchDropdownField<String>(
                 key: const ValueKey('provider-directory-field'),
@@ -133,32 +133,79 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
                 controller: _titleController,
                 selectedValue: _selectedDirectoryProviderId,
                 options: providerOptions,
-                hintText: '输入厂商名称筛选，例如 OpenAI / DeepSeek',
+                hintText: '点此展开厂商列表，或输入名称筛选（OpenAI / DeepSeek / 硅基流动）',
+                openOnFocus: true,
                 onSelected: _onProviderDirectorySelected,
               ),
+              if (widget.providerDirectoryOptions.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  '常用厂商（点选即填模板）',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Theme.of(context).hintColor,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final option in _quickDirectoryOptions())
+                      ActionChip(
+                        label: Text(option.label),
+                        onPressed: () => _onProviderDirectorySelected(option.id),
+                      ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 8),
               Text(
-                '模型请在「模型」页选择：先在此保存接口，再到「模型」页选厂商后挑选模型。',
+                '接口只保存地址与凭据；模型在「模型」页绑定到接口。',
                 style: TextStyle(
                   fontSize: 12,
                   height: 1.5,
                   color: Theme.of(context).hintColor,
                 ),
               ),
+              if (_baseUrlController.text.trim().isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  '当前地址：${_baseUrlController.text.trim()} · 协议：$_protocol',
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.4,
+                    color: Theme.of(context).hintColor,
+                  ),
+                ),
+              ],
+              if (_formError.trim().isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _formError,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    height: 1.45,
+                    fontWeight: FontWeight.w700,
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
         const SizedBox(height: 16),
         SettingsFormSection(
-          title: '凭据与连接测试',
-          description: '先填写 API Key，再点一次测试连接，确认这组配置已经具备发送请求的基础条件。',
+          title: '凭据',
+          description: '云端接口必填 API Key；纯本地服务可留空。',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SettingsLabeledTextField(
                 label: 'API Key',
                 controller: _apiKeyController,
-                hintText: '留空则表示当前接口没有密钥',
+                hintText: '云端接口必填；纯本地服务可留空',
                 obscureText: !_revealApiKey,
               ),
               const SizedBox(height: 10),
@@ -170,20 +217,6 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
                     _revealApiKey = value;
                   });
                 },
-              ),
-              const SizedBox(height: 16),
-              ActionButton(
-                label: '测试连接',
-                icon: Icons.wifi_tethering_rounded,
-                tone: ActionButtonTone.neutral,
-                compact: true,
-                onPressed: _testConnection,
-              ),
-              const SizedBox(height: 12),
-              _ProviderConnectionStatusCard(
-                key: const ValueKey('provider-connection-status'),
-                result: widget.provider?.connectionValidationResult ??
-                    ProviderConnectionValidationResultViewData.initial,
               ),
             ],
           ),
@@ -253,9 +286,9 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
                 icon: Icons.delete_outline_rounded,
                 tone: ActionButtonTone.danger,
                 compact: true,
-                disabled: provider == null,
+                disabled: provider == null || provider.id == '__new__',
                 onPressed: () async {
-                  if (provider == null) {
+                  if (provider == null || provider.id == '__new__') {
                     return;
                   }
                   // 中文注释: 删除接口不可恢复，且若删的是当前默认接口会直接断掉生成，
@@ -296,18 +329,39 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
     _descriptionController.text = provider?.description ?? '';
     _selectedDirectoryProviderId = _directoryProviderIdFor(provider);
     _revealApiKey = false;
+    _formError = '';
   }
 
   void _save() {
     // 中文注释: provider 保存只上交结构化 payload，具体写盘与默认接口去重仍由控制器处理。
+    final title = _titleController.text.trim();
+    final baseUrl = _baseUrlController.text.trim();
+    final apiKey = _apiKeyController.text.trim();
+    final validationError = _localFormError(
+      title: title,
+      baseUrl: baseUrl,
+      apiKey: apiKey,
+    );
+    if (validationError != null) {
+      setState(() {
+        _formError = validationError;
+      });
+      return;
+    }
+    if (_formError.isNotEmpty) {
+      setState(() {
+        _formError = '';
+      });
+    }
+    final sourceId = widget.provider?.id ?? '';
     widget.onProviderSaved(<String, Object?>{
-      'source_id': widget.provider?.id ?? '',
-      'title': _titleController.text.trim(),
+      'source_id': sourceId == '__new__' ? '' : sourceId,
+      'title': title,
       'protocol': _protocol,
-      'base_url': _baseUrlController.text.trim(),
+      'base_url': baseUrl,
       'api_key': _apiKeyController.text,
       'description': _descriptionController.text.trim(),
-      'is_new': false,
+      'is_new': sourceId.isEmpty || sourceId == '__new__',
     });
   }
 
@@ -326,15 +380,45 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
       _selectedDirectoryProviderId = option.id;
       _titleController.text = option.label;
       _protocol = option.protocol;
-      if (_baseUrlController.text.trim().isEmpty ||
-          widget.provider?.baseUrl.trim() == _baseUrlController.text.trim()) {
+      // 中文注释: 用户明确点选厂商模板时，地址/协议以模板为准，避免还停在空白或旧值。
+      if (option.defaultBaseUrl.trim().isNotEmpty) {
         _baseUrlController.text = option.defaultBaseUrl;
       }
+      _formError = '';
     });
   }
 
+  List<ProviderDirectoryOptionViewData> _quickDirectoryOptions() {
+    // 中文注释: 快捷芯片只挑常见入口，完整列表仍走搜索下拉。
+    const preferredIds = <String>{
+      'openai_api',
+      'deepseek_openai',
+      'siliconflow_openai',
+      'anthropic_api',
+      'google_openai_compatible',
+      'moonshot_openai',
+      'zhipu_openai',
+      'qwen_openai',
+      'local_openai',
+    };
+    final preferred = <ProviderDirectoryOptionViewData>[];
+    final rest = <ProviderDirectoryOptionViewData>[];
+    for (final option in widget.providerDirectoryOptions) {
+      if (preferredIds.contains(option.id)) {
+        preferred.add(option);
+      } else {
+        rest.add(option);
+      }
+    }
+    final ordered = <ProviderDirectoryOptionViewData>[
+      ...preferred,
+      ...rest,
+    ];
+    return ordered.take(8).toList(growable: false);
+  }
+
   String? _directoryProviderIdFor(ProviderEndpointViewData? provider) {
-    if (provider == null) {
+    if (provider == null || provider.id == '__new__') {
       return null;
     }
     for (final option in widget.providerDirectoryOptions) {
@@ -349,126 +433,34 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
     return null;
   }
 
-  void _testConnection() {
-    widget.onConnectionTestRequested(<String, Object?>{
-      'source_id': widget.provider?.id ?? '',
-      'title': _titleController.text.trim(),
-      'protocol': _protocol,
-      'base_url': _baseUrlController.text.trim(),
-      'api_key': _apiKeyController.text,
-      'api_mode': widget.provider?.connectionValidationResult.selectedRouteFamily,
-    });
-  }
-}
-
-class _ProviderConnectionStatusCard extends StatelessWidget {
-  const _ProviderConnectionStatusCard({
-    super.key,
-    required this.result,
-  });
-
-  final ProviderConnectionValidationResultViewData result;
-
-  @override
-  Widget build(BuildContext context) {
-    final foregroundColor = result.isSuccess
-        ? const Color(0xFF23663A)
-        : const Color(0xFF8A5A12);
-    final backgroundColor = result.isSuccess
-        ? const Color(0xFFE8F5EC)
-        : const Color(0xFFFCF2DD);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        border: Border.all(color: foregroundColor.withValues(alpha: 0.28)),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                result.isSuccess
-                    ? Icons.check_circle_outline_rounded
-                    : Icons.error_outline_rounded,
-                size: 18,
-                color: foregroundColor,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  result.summary,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: foregroundColor,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          for (final detail in result.details) ...[
-            const SizedBox(height: 6),
-            Text(
-              '• $detail',
-              style: TextStyle(
-                fontSize: 12,
-                height: 1.45,
-                color: foregroundColor,
-              ),
-            ),
-          ],
-          if (result.errors.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              '错误：${result.errors.join('；')}',
-              style: TextStyle(
-                fontSize: 12,
-                height: 1.45,
-                color: foregroundColor,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-          if (result.hideOptions.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              '需要隐藏的选项：${result.hideOptions.join('、')}',
-              style: TextStyle(
-                fontSize: 12,
-                height: 1.45,
-                color: foregroundColor,
-              ),
-            ),
-          ],
-          if (result.fallbackNotAllowed) ...[
-            const SizedBox(height: 8),
-            Text(
-              '当前组合不允许 fallback。',
-              style: TextStyle(
-                fontSize: 12,
-                height: 1.45,
-                color: foregroundColor,
-              ),
-            ),
-          ],
-          if (result.warnings.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              '警告：${result.warnings.join('；')}',
-              style: TextStyle(
-                fontSize: 12,
-                height: 1.45,
-                color: foregroundColor,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
+  String? _localFormError({
+    required String title,
+    required String baseUrl,
+    required String apiKey,
+  }) {
+    if (title.isEmpty) {
+      return '请先填写或选择接口/厂商名称。';
+    }
+    if (baseUrl.isEmpty) {
+      return '请填写 Base URL（可在「高级设置」里补充）。';
+    }
+    final uri = Uri.tryParse(baseUrl);
+    final validScheme =
+        uri != null &&
+        uri.hasScheme &&
+        (uri.scheme == 'http' || uri.scheme == 'https') &&
+        uri.host.trim().isNotEmpty;
+    if (!validScheme) {
+      return 'Base URL 需要是完整的 http/https 地址。';
+    }
+    final isLocal =
+        uri.host == 'localhost' ||
+        uri.host == '127.0.0.1' ||
+        uri.host.startsWith('192.168.') ||
+        uri.host.startsWith('10.');
+    if (apiKey.isEmpty && !isLocal) {
+      return '云端接口需要填写 API Key；纯本地服务可留空。';
+    }
+    return null;
   }
 }

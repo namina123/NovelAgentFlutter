@@ -36,10 +36,7 @@ class ReferenceExtractionLivenessBridge {
     required ProjectDescriptor project,
     required ProjectReferenceExtractionResult result,
   }) {
-    return _syncService.syncExecutionResult(
-      project: project,
-      result: result,
-    );
+    return _syncService.syncExecutionResult(project: project, result: result);
   }
 
   Future<void> syncExecutionFailure({

@@ -128,6 +128,9 @@ class WorkbenchProjectPanel extends StatelessWidget {
       case WorkbenchProjectPanelActionIds.transitionProjectType:
         resourceHandler.onProjectTypeTransitionRequested();
         return;
+      case WorkbenchProjectPanelActionIds.configureRuntimeBaseline:
+        resourceHandler.onRuntimeBaselineConfigurationRequested();
+        return;
       case WorkbenchProjectPanelActionIds.refreshProject:
         resourceHandler.onRefreshFilesRequested();
         return;

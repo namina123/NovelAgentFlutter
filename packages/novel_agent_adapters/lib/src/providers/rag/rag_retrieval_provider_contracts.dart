@@ -83,4 +83,3 @@ abstract interface class RagRetrievalProvider {
 
   RagRetrievalCapabilityReport capabilityReport();
 }
-

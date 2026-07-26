@@ -1437,7 +1437,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
         _announce('请先在开局面板里选择当前项目要使用的智能体组。');
         return true;
       case 'opening.choose_runtime_baseline':
-        _announce('当前项目还没有确定运行基准，请先回到项目创建或运行配置入口补齐。');
+        _workspaceController.onRuntimeBaselineConfigurationRequested();
         return true;
       case 'opening.start_interactive_session':
         _announce('当前信息已足够，直接在输入框里继续描述需求即可。');

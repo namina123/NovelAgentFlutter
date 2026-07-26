@@ -30,19 +30,23 @@ class ProjectCharacterBundleLibraryService {
        _previewMapperService =
            previewMapperService ?? const ProjectBundlePreviewMapperService(),
        _directoryLayoutService =
-           directoryLayoutService ?? const ProjectBundleDirectoryLayoutService(),
-       _documentService = documentService ?? CharacterCardBundleDocumentService(),
+           directoryLayoutService ??
+           const ProjectBundleDirectoryLayoutService(),
+       _documentService =
+           documentService ?? CharacterCardBundleDocumentService(),
        _previewService =
            previewService ?? CharacterCardBundleImportPreviewService(),
        _characterNormalizerService =
-           characterNormalizerService ?? const CharacterProfileNormalizerService(),
+           characterNormalizerService ??
+           const CharacterProfileNormalizerService(),
        _organizationNormalizerService =
            organizationNormalizerService ??
            const OrganizationProfileNormalizerService(),
        _characterCodecService =
            characterCodecService ?? CharacterProfileMarkdownCodecService(),
        _organizationCodecService =
-           organizationCodecService ?? OrganizationProfileMarkdownCodecService();
+           organizationCodecService ??
+           OrganizationProfileMarkdownCodecService();
 
   final ProjectCharacterProfileRepository _characterRepository;
   final ProjectOrganizationProfileRepository _organizationRepository;
@@ -141,9 +145,12 @@ class ProjectCharacterBundleLibraryService {
     final files = <String, String>{
       'bundle.json': _documentService.encodeBundle(bundle),
       for (final character in characters)
-        'assets/characters/${character.id}.md': _characterCodecService.encode(character),
+        'assets/characters/${character.id}.md': _characterCodecService.encode(
+          character,
+        ),
       for (final organization in organizations)
-        'assets/organizations/${organization.id}.md': _organizationCodecService.encode(organization),
+        'assets/organizations/${organization.id}.md': _organizationCodecService
+            .encode(organization),
     };
     final exportDirectoryPath = await _fileAccessService.writeExportDirectory(
       targetDirectoryPath: targetDirectoryPath,
@@ -168,17 +175,19 @@ class ProjectCharacterBundleLibraryService {
   }) async {
     final source = await _fileAccessService.readBundleSource(sourcePath);
     if (source == null) {
-      return <String, Object?>{'ok': false, 'error': 'Bundle 源不存在或缺少 bundle.json。'};
+      return <String, Object?>{
+        'ok': false,
+        'error': 'Bundle 源不存在或缺少 bundle.json。',
+      };
     }
     final preview = _previewService.previewBundle(
       bundleContent: source.bundleContent,
-      existingCharacters: (await _characterRepository.listProfiles(project))
-          .map(_characterNormalizerService.toDocument)
-          .toList(growable: false),
-      existingOrganizations:
-          (await _organizationRepository.listProfiles(project))
-              .map(_organizationNormalizerService.toDocument)
-              .toList(growable: false),
+      existingCharacters: (await _characterRepository.listProfiles(
+        project,
+      )).map(_characterNormalizerService.toDocument).toList(growable: false),
+      existingOrganizations: (await _organizationRepository.listProfiles(
+        project,
+      )).map(_organizationNormalizerService.toDocument).toList(growable: false),
       overwrite: overwrite,
     );
     return <String, Object?>{
@@ -217,7 +226,9 @@ class ProjectCharacterBundleLibraryService {
         ),
       );
     }
-    for (final rawOrganization in ValueReaders.mapList(bundle['organizations'])) {
+    for (final rawOrganization in ValueReaders.mapList(
+      bundle['organizations'],
+    )) {
       final organization = _organizationNormalizerService.normalize(
         rawOrganization,
       );
@@ -250,8 +261,8 @@ class ProjectCharacterBundleLibraryService {
   Map<String, String> _actionByTargetPath(JsonMap preview) {
     final result = <String, String>{};
     for (final item in ValueReaders.mapList(preview['items'])) {
-      result[ValueReaders.stringValue(item['target_path'])] = ValueReaders
-          .stringValue(item['action']);
+      result[ValueReaders.stringValue(item['target_path'])] =
+          ValueReaders.stringValue(item['action']);
     }
     return result;
   }

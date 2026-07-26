@@ -39,6 +39,57 @@ class WorkbenchProjectActionFacade {
     );
   }
 
+  void onRuntimeBaselineConfigurationRequested() {
+    final project = _controller.currentProject;
+    if (project == null) {
+      _controller._announce('请先打开长篇长任务项目。');
+      return;
+    }
+    if (project.projectType.trim() != 'long_novel') {
+      _controller._announce('当前项目不需要配置长篇运行基准。');
+      return;
+    }
+    final baselineId = _runtimeBaselineCatalogService.normalizeForProjectType(
+      project.projectType,
+      project.runtimeBaselineId,
+    );
+    _controller._showWorkspaceCommand(
+      WorkspaceCommandViewData(
+        mode: WorkspaceCommandMode.configureRuntimeBaseline,
+        title: '配置运行基准',
+        description: '选择长篇长任务的运行方式。项目类型和存储策略保持不变。',
+        confirmLabel: '保存运行基准',
+        status: baselineId.isEmpty
+            ? '当前项目缺少有效运行基准，请选择后保存。'
+            : '当前运行基准可随时调整；存在活跃长任务时必须先归档。',
+        projectTitle: project.name,
+        projectType: project.projectType,
+        transitionRuntimeBaselineId: baselineId,
+        transitionRuntimeBaselineOptions:
+            _runtimeBaselineCatalogService
+                .definitionsForProjectType(project.projectType)
+                .where((definition) => definition.enabled)
+                .map(
+                  (definition) => SelectorOptionViewData(
+                    id: definition.id,
+                    label: definition.title,
+                    note: definition.description,
+                  ),
+                )
+                .toList(growable: false),
+        transitionRequiresRuntimeBaselineSelection: true,
+        genre: '',
+        premise: '',
+        notes: '',
+        relativePath: '',
+        entryName: '',
+        content: '',
+        sourcePathsText: '',
+        targetDirectory: '',
+      ),
+    );
+  }
+
   void onRefreshFilesRequested() {
     final project = _controller.currentProject;
     if (project == null) {
@@ -206,6 +257,11 @@ class WorkbenchProjectActionFacade {
         break;
       case WorkspaceCommandMode.transitionProjectType:
         unawaited(_controller._submitProjectTypeTransitionCommand(request));
+        break;
+      case WorkspaceCommandMode.configureRuntimeBaseline:
+        unawaited(
+          _controller._submitRuntimeBaselineConfigurationCommand(request),
+        );
         break;
       case WorkspaceCommandMode.createFile:
         unawaited(_controller._submitCreateFileCommand(request));

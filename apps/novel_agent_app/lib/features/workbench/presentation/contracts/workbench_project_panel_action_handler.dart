@@ -7,6 +7,8 @@ abstract class WorkbenchProjectPanelActionHandler {
 
   void onProjectTypeTransitionRequested() {}
 
+  void onRuntimeBaselineConfigurationRequested() {}
+
   void onRefreshFilesRequested();
 
   void onProjectAgentGroupRequested();

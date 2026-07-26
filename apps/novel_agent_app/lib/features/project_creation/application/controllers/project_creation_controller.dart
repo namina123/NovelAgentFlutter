@@ -13,7 +13,6 @@ import '../services/project_creation_expression_constraint_defaults_service.dart
 
 class ProjectCreationController {
   ProjectCreationController({
-    required LoadProjectWorkspaceUseCase loadProjectWorkspaceUseCase,
     required CreateProjectWorkspaceUseCase createProjectWorkspaceUseCase,
     required WriteProjectTextFileUseCase writeProjectTextFileUseCase,
     required DesktopProjectDirectoryPickerService
@@ -42,8 +41,7 @@ class ProjectCreationController {
     bookDeconstructionProjectSetupResolverService,
     required String defaultProjectsRootPath,
     required bool isMobileProjectRootLocked,
-  }) : _loadProjectWorkspaceUseCase = loadProjectWorkspaceUseCase,
-       _createProjectWorkspaceUseCase = createProjectWorkspaceUseCase,
+  }) : _createProjectWorkspaceUseCase = createProjectWorkspaceUseCase,
        _writeProjectTextFileUseCase = writeProjectTextFileUseCase,
        _desktopProjectDirectoryPickerService =
            desktopProjectDirectoryPickerService,
@@ -72,7 +70,6 @@ class ProjectCreationController {
        _defaultProjectsRootPath = defaultProjectsRootPath,
        _isMobileProjectRootLocked = isMobileProjectRootLocked;
 
-  final LoadProjectWorkspaceUseCase _loadProjectWorkspaceUseCase;
   final CreateProjectWorkspaceUseCase _createProjectWorkspaceUseCase;
   final WriteProjectTextFileUseCase _writeProjectTextFileUseCase;
   final DesktopProjectDirectoryPickerService
@@ -140,19 +137,6 @@ class ProjectCreationController {
       return;
     }
     final normalizedPath = selectedPath.trim();
-    final snapshot = await _loadProjectWorkspaceUseCase.execute(normalizedPath);
-    if (snapshot == null) {
-      if (_readCurrentProject() == null) {
-        await showLauncher(
-          ProjectLauncherMode.guard,
-          status: '所选目录不是有效项目。请选择项目根目录，或直接创建新项目。',
-          canDismiss: false,
-        );
-      } else {
-        _announce('所选目录不是有效项目。请选择包含项目配置的项目根目录。');
-      }
-      return;
-    }
     _mutateWorkbench(
       (current) => current.copyWith(
         projectLauncher: null,
@@ -160,18 +144,22 @@ class ProjectCreationController {
       ),
     );
     final result = await _projectLifecycleCoordinator.openProjectFromPath(
-      snapshot.project.rootPath,
+      normalizedPath,
       failureLauncherMode: _readCurrentProject() == null
           ? ProjectLauncherMode.guard
           : null,
       failureLauncherStatus: '所选目录不是有效项目。请选择项目根目录，或直接创建新项目。',
     );
-    if (!result.isLoaded && result.shouldShowLauncher) {
-      await showLauncher(
-        result.launcherMode ?? ProjectLauncherMode.guard,
-        status: result.launcherStatus,
-        canDismiss: result.canDismiss,
-      );
+    if (!result.isLoaded) {
+      if (result.shouldShowLauncher) {
+        await showLauncher(
+          result.launcherMode ?? ProjectLauncherMode.guard,
+          status: result.launcherStatus,
+          canDismiss: result.canDismiss,
+        );
+      } else {
+        _announce(result.statusMessage);
+      }
     }
   }
 
@@ -231,12 +219,16 @@ class ProjectCreationController {
           : null,
       failureLauncherStatus: '所选目录不是有效项目。请选择项目根目录，或直接创建新项目。',
     );
-    if (!result.isLoaded && result.shouldShowLauncher) {
-      await showLauncher(
-        result.launcherMode ?? ProjectLauncherMode.guard,
-        status: result.launcherStatus,
-        canDismiss: result.canDismiss,
-      );
+    if (!result.isLoaded) {
+      if (result.shouldShowLauncher) {
+        await showLauncher(
+          result.launcherMode ?? ProjectLauncherMode.guard,
+          status: result.launcherStatus,
+          canDismiss: result.canDismiss,
+        );
+      } else {
+        _announce(result.statusMessage);
+      }
     }
   }
 
@@ -252,9 +244,12 @@ class ProjectCreationController {
         ? 'novel'
         : request.projectTypeId.trim();
     final requiresRuntimeBaseline = _requiresRuntimeBaseline(projectTypeId);
-    final storageStrategy = ProjectStorageStrategy.fromId(
-      request.storageStrategyId,
-    );
+    // 中文注释: 默认跳过存储策略步时，若请求未显式带策略 id，则回落类型默认（通常 markdown；知识库 sqlite）。
+    final storageStrategy = request.storageStrategyId.trim().isEmpty
+        ? _projectCreationPhaseResolverService.defaultStorageStrategy(
+            projectTypeId,
+          )
+        : ProjectStorageStrategy.fromId(request.storageStrategyId);
     final creationPlan = _createProjectWorkspaceUseCase.prepare(
       ProjectCreateRequest(
         title: cleanTitle,
@@ -570,7 +565,7 @@ class ProjectCreationController {
               creationPlan.request.projectTypeId,
             ),
           ) ??
-          ProjectCreationPhase.storageStrategy;
+          ProjectCreationPhase.runtimeBaseline;
     }
     return currentPhase;
   }
@@ -586,7 +581,7 @@ class ProjectCreationController {
       case ProjectCreationPhase.bookDeconstructionFollowup:
         return '已选择拆书项目类型，继续确定默认承接路线。';
       case ProjectCreationPhase.runtimeBaseline:
-        return '已确认主存储策略，继续选择长任务运行基准。';
+        return '继续选择长任务运行基准。';
     }
   }
 

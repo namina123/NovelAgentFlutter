@@ -34,18 +34,17 @@ class TaskCenterCommandEnvironment {
   final Future<void> Function() syncWorkbenchResources;
   final Future<void> Function(JsonMap result)
   adoptTaskCenterRunSelectionsFromResult;
-  final Future<void> Function()
-  refreshLongTaskStationAfterTaskCenterMutation;
+  final Future<void> Function() refreshLongTaskStationAfterTaskCenterMutation;
 }
 
 class TaskCenterCommandOrchestrationService {
   const TaskCenterCommandOrchestrationService({
     TaskCenterActionExecutionOutcomeService? actionExecutionOutcomeService,
   }) : _actionExecutionOutcomeService =
-           actionExecutionOutcomeService ?? const TaskCenterActionExecutionOutcomeService();
+           actionExecutionOutcomeService ??
+           const TaskCenterActionExecutionOutcomeService();
 
-  final TaskCenterActionExecutionOutcomeService
-  _actionExecutionOutcomeService;
+  final TaskCenterActionExecutionOutcomeService _actionExecutionOutcomeService;
 
   Future<void> runSelectorCommand({
     required TaskCenterCommandEnvironment environment,
@@ -192,7 +191,16 @@ class TaskCenterCommandOrchestrationService {
       await environment.refreshTaskCenter(status: '设置尚未加载完成。');
       return;
     }
-    environment.setTaskCenterCommandInFlight(true);
+    var commandInFlight = true;
+    environment.setTaskCenterCommandInFlight(commandInFlight);
+    void settleCommandInFlight() {
+      if (!commandInFlight) {
+        return;
+      }
+      commandInFlight = false;
+      environment.setTaskCenterCommandInFlight(false);
+    }
+
     try {
       environment.setTaskCenterStatusMessage(pendingMessage);
       await environment.refreshTaskCenterView();
@@ -210,15 +218,20 @@ class TaskCenterCommandOrchestrationService {
       await environment.syncWorkbenchResources();
       await environment.adoptTaskCenterRunSelectionsFromResult(result);
       await environment.refreshLongTaskStationAfterTaskCenterMutation();
+      // Long-task pulse refreshes only run while a command is in flight. Clear it
+      // before publishing the terminal result so a stale pulse cannot win the
+      // task-center refresh generation race.
+      settleCommandInFlight();
       await environment.refreshTaskCenter(status: outcome.statusMessage);
     } catch (error) {
       // 中文注释: operation 抛错（坏 runtime profile / 文件权限 / malformed 选项等）不能任由它
       // 逃出 void async 到 zone——在状态栏给用户一句人话，并把 in-flight 标志复位（finally 已做）。
+      settleCommandInFlight();
       await environment.refreshTaskCenter(
         status: UserFacingErrorHumanizer.humanize(error, action: '任务操作'),
       );
     } finally {
-      environment.setTaskCenterCommandInFlight(false);
+      settleCommandInFlight();
     }
   }
 
@@ -316,7 +329,16 @@ class TaskCenterCommandOrchestrationService {
     Future<void> Function(JsonMap result)? afterOperation,
   }) async {
     // 中文注释: 所有 task center 命令共用同一执行壳，统一处理 in-flight 标记、脉冲刷新和结果后收口。
-    environment.setTaskCenterCommandInFlight(true);
+    var commandInFlight = true;
+    environment.setTaskCenterCommandInFlight(commandInFlight);
+    void settleCommandInFlight() {
+      if (!commandInFlight) {
+        return;
+      }
+      commandInFlight = false;
+      environment.setTaskCenterCommandInFlight(false);
+    }
+
     try {
       environment.setTaskCenterStatusMessage(pendingMessage);
       await environment.refreshTaskCenterView();
@@ -325,17 +347,21 @@ class TaskCenterCommandOrchestrationService {
       if (afterOperation != null) {
         await afterOperation(result);
       }
+      // Stop the background pulse before the terminal refresh. Otherwise a
+      // pending-state pulse can supersede this success/error view update.
+      settleCommandInFlight();
       await environment.refreshTaskCenter(
         status: _resultMessage(result, success: successMessage),
       );
     } catch (error) {
       // 中文注释: operation 抛错不能逃出 void async 到 zone（坏 runtime profile / 文件权限 / malformed 选项）。
       // 在状态栏给一句人话，in-flight 标志由 finally 复位。
+      settleCommandInFlight();
       await environment.refreshTaskCenter(
         status: UserFacingErrorHumanizer.humanize(error, action: '任务操作'),
       );
     } finally {
-      environment.setTaskCenterCommandInFlight(false);
+      settleCommandInFlight();
     }
   }
 

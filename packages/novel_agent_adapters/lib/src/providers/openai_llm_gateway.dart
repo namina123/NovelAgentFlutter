@@ -38,7 +38,8 @@ class OpenAiLlmGateway extends LlmGateway {
          proxyPassword: proxyPassword,
          transportRetryEnabled: transportRetryEnabled,
          transportRetryAttempts: transportRetryAttempts.clamp(0, 5),
-         systemProxyResolver: systemProxyResolver ?? const SystemProxyResolver(),
+         systemProxyResolver:
+             systemProxyResolver ?? const SystemProxyResolver(),
        );
 
   factory OpenAiLlmGateway.fromProviderSettings(
@@ -60,12 +61,12 @@ class OpenAiLlmGateway extends LlmGateway {
       proxyPassword: '${networkSettings['proxy_password'] ?? ''}',
       transportRetryEnabled:
           GatewayNetworkSettings.transportRetryEnabledFromNetworkSettings(
-        networkSettings,
-      ),
+            networkSettings,
+          ),
       transportRetryAttempts:
           GatewayNetworkSettings.transportRetryAttemptsFromNetworkSettings(
-        networkSettings,
-      ),
+            networkSettings,
+          ),
     );
   }
 

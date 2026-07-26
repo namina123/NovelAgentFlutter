@@ -1,4 +1,3 @@
-import '../project/project_content_path_policy_service.dart';
 import '../project/project_storage_strategy.dart';
 import '../project/project_storage_strategy_path_policy_service.dart';
 import '../inspiration/inspiration_premise.dart';
@@ -12,7 +11,8 @@ class BookDeconstructionTargetPathService {
            storageStrategyPathPolicyService ??
            const ProjectStorageStrategyPathPolicyService();
 
-  final ProjectStorageStrategyPathPolicyService _storageStrategyPathPolicyService;
+  final ProjectStorageStrategyPathPolicyService
+  _storageStrategyPathPolicyService;
 
   String sourceArchivePath(
     String sourceAbsolutePath, {
@@ -98,7 +98,9 @@ class BookDeconstructionTargetPathService {
     ).hasMatch(title);
     if (hasChapterMarker) {
       // 标题本身已含"第N章"（如"第一章 港口风暴"），直接用作文件名，可被优先级解析。
-      return safeTitle.isEmpty ? '$root/第$chapterNumber章.md' : '$root/$safeTitle.md';
+      return safeTitle.isEmpty
+          ? '$root/第$chapterNumber章.md'
+          : '$root/$safeTitle.md';
     }
     // 标题没有章节标记时，用序号合成可解析的"第N章"前缀。
     return safeTitle.isEmpty
@@ -106,7 +108,30 @@ class BookDeconstructionTargetPathService {
         : '$root/第${chapterNumber}章_$safeTitle.md';
   }
 
-  String premisePath(InspirationPremise premise, int index) {
+  String resourceChapterPath({
+    required int sequence,
+    required String title,
+    ProjectStorageStrategy storageStrategy =
+        ProjectStorageStrategy.markdownProjectStore,
+  }) {
+    // 中文注释: 非续写场景把分章作为参考资料写入 analysis/（与 preview/structured_source 同目录），
+    // 不进正文 chapters/、也不进 inherited/ 镜像——分章只是拆书分析产物，不该污染创作正文层。
+    final chapterNumber = sequence <= 0 ? 1 : sequence;
+    final root = _storageStrategyPathPolicyService.directoryForContentType(
+      storageStrategy: storageStrategy,
+      contentType: 'analysis',
+    );
+    final safeTitle = _safeId(title);
+    final titleSuffix = safeTitle.isEmpty ? '' : '_$safeTitle';
+    return '$root/book_deconstruction_chapter_${chapterNumber.toString().padLeft(3, '0')}$titleSuffix.md';
+  }
+
+  String premisePath(
+    InspirationPremise premise,
+    int index, {
+    ProjectStorageStrategy storageStrategy =
+        ProjectStorageStrategy.markdownProjectStore,
+  }) {
     // 中文注释: 拆书前提默认回到现有 premise/ 目录，后续 UI/adapter 只需消费稳定路径提示即可。
     final suffix = index <= 0 ? 1 : index;
     final sourceStem = _safeId(
@@ -114,8 +139,14 @@ class BookDeconstructionTargetPathService {
           ? premise.displayName.trim()
           : premise.sourcePath.trim().split('/').last,
     );
-    final cleanStem = sourceStem.isEmpty ? 'book_deconstruction_premise' : sourceStem;
-    return '${ProjectContentPathPolicyService.premiseRoot}/book_deconstruction_premise_${suffix}_$cleanStem.md';
+    final cleanStem = sourceStem.isEmpty
+        ? 'book_deconstruction_premise'
+        : sourceStem;
+    final root = _storageStrategyPathPolicyService.directoryForContentType(
+      storageStrategy: storageStrategy,
+      contentType: 'premise',
+    );
+    return '$root/book_deconstruction_premise_${suffix}_$cleanStem.md';
   }
 
   String storyOutlinePath({
@@ -128,12 +159,10 @@ class BookDeconstructionTargetPathService {
 
   String chapterOutlinePath(
     BookDeconstructionChapterOutline outline,
-    int index,
-    {
+    int index, {
     ProjectStorageStrategy storageStrategy =
         ProjectStorageStrategy.markdownProjectStore,
-    }
-  ) {
+  }) {
     // 中文注释: 章级骨架沿用 outlines/chapters/，让后续一般小说与长任务都能直接复用。
     final sequence = outline.sequence > 0 ? outline.sequence : index;
     return '${_storageStrategyPathPolicyService.directoryForContentType(storageStrategy: storageStrategy, contentType: 'chapter_outline')}/book_deconstruction_chapter_$sequence.md';

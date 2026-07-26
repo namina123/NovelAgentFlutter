@@ -1,6 +1,7 @@
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import 'local_project_file_mutation_adapter.dart';
+import 'project_structured_content_bridge_service.dart';
 
 class ProjectAssetLibraryService {
   ProjectAssetLibraryService({
@@ -17,6 +18,7 @@ class ProjectAssetLibraryService {
     PreviewProjectAssetBundleImportUseCase? previewImportUseCase,
     ImportProjectAssetBundleUseCase? importUseCase,
     SaveProjectAssetBundleUseCase? saveBundleUseCase,
+    ProjectStructuredContentBridgeService? structuredContentBridgeService,
   }) : _workspacePort = workspacePort,
        _projectToolHostPort = projectToolHostPort,
        _writeProjectTextFileUseCase =
@@ -52,7 +54,10 @@ class ProjectAssetLibraryService {
                  WriteProjectTextFileUseCase(
                    projectWorkspacePort: workspacePort,
                  ),
-           );
+           ),
+       _structuredContentBridgeService =
+           structuredContentBridgeService ??
+           ProjectStructuredContentBridgeService();
 
   final ProjectWorkspacePort _workspacePort;
   final ProjectToolHostPort _projectToolHostPort;
@@ -67,34 +72,54 @@ class ProjectAssetLibraryService {
   final PreviewProjectAssetBundleImportUseCase _previewImportUseCase;
   final ImportProjectAssetBundleUseCase _importUseCase;
   final SaveProjectAssetBundleUseCase _saveBundleUseCase;
+  final ProjectStructuredContentBridgeService _structuredContentBridgeService;
 
   Future<List<JsonMap>> listStyles(ProjectDescriptor project) async {
     // 中文注释: 风格列表只负责项目内 styles/ 资产，不混入其他普通 Markdown 文档。
     final entries = await _workspacePort.listEntries(project.rootPath);
     final result = <JsonMap>[];
+    final seenIds = <String>{};
+    void addStyle(String content, String relativePath) {
+      if (content.trim().isEmpty) {
+        return;
+      }
+      final parsed = _styleParserService.parseDocument(
+        content,
+        fallbackId: _fallbackIdFromPath(relativePath),
+        relativePath: relativePath,
+      );
+      final id = ValueReaders.stringValue(parsed['id']).trim();
+      if (id.isEmpty || seenIds.contains(id)) {
+        return;
+      }
+      seenIds.add(id);
+      result.add(parsed);
+    }
+
+    final structuredDocuments = await _structuredContentBridgeService
+        .listStructuredDocuments(project: project);
+    for (final document in structuredDocuments) {
+      final relativePath = document.markdownPath.trim().isEmpty
+          ? document.documentId
+          : document.markdownPath;
+      if (!_isStylePath(relativePath)) {
+        continue;
+      }
+      addStyle(document.combinedText(), relativePath);
+    }
     for (final entry in entries) {
       final relativePath = ValueReaders.stringValue(entry['relative_path']);
       final isDir = ValueReaders.boolValue(entry['is_dir']);
       if (isDir || !_isStylePath(relativePath)) {
         continue;
       }
-      final content = await _workspacePort.readTextFile(
-        project.rootPath,
-        relativePath,
-      );
-      if ((content ?? '').trim().isEmpty) {
-        continue;
-      }
-      final fallbackId = _fallbackIdFromPath(relativePath);
-      final parsed = _styleParserService.parseDocument(
-        content!,
-        fallbackId: fallbackId,
-        relativePath: relativePath,
-      );
-      if (ValueReaders.stringValue(parsed['id']).trim().isEmpty) {
-        continue;
-      }
-      result.add(parsed);
+      final content =
+          await _structuredContentBridgeService.readProjectedBodyText(
+            project,
+            relativePath,
+          ) ??
+          await _workspacePort.readTextFile(project.rootPath, relativePath);
+      addStyle(content ?? '', relativePath);
     }
     result.sort((left, right) {
       return ValueReaders.stringValue(
@@ -108,29 +133,48 @@ class ProjectAssetLibraryService {
     // 中文注释: 伏笔列表只读取 world/foreshadows/ 目录，给后续时间线和提醒留稳定入口。
     final entries = await _workspacePort.listEntries(project.rootPath);
     final result = <JsonMap>[];
+    final seenIds = <String>{};
+    void addForeshadow(String content, String relativePath) {
+      if (content.trim().isEmpty) {
+        return;
+      }
+      final parsed = _foreshadowParserService.parseDocument(
+        content,
+        fallbackId: _fallbackIdFromPath(relativePath),
+        relativePath: relativePath,
+      );
+      final id = ValueReaders.stringValue(parsed['id']).trim();
+      if (id.isEmpty || seenIds.contains(id)) {
+        return;
+      }
+      seenIds.add(id);
+      result.add(parsed);
+    }
+
+    final structuredDocuments = await _structuredContentBridgeService
+        .listStructuredDocuments(project: project);
+    for (final document in structuredDocuments) {
+      final relativePath = document.markdownPath.trim().isEmpty
+          ? document.documentId
+          : document.markdownPath;
+      if (!_isForeshadowPath(relativePath)) {
+        continue;
+      }
+      addForeshadow(document.combinedText(), relativePath);
+    }
     for (final entry in entries) {
       final relativePath = ValueReaders.stringValue(entry['relative_path']);
       final isDir = ValueReaders.boolValue(entry['is_dir']);
       if (isDir || !_isForeshadowPath(relativePath)) {
         continue;
       }
-      final content = await _workspacePort.readTextFile(
-        project.rootPath,
-        relativePath,
-      );
-      if ((content ?? '').trim().isEmpty) {
-        continue;
-      }
-      final fallbackId = _fallbackIdFromPath(relativePath);
-      final parsed = _foreshadowParserService.parseDocument(
-        content!,
-        fallbackId: fallbackId,
-        relativePath: relativePath,
-      );
-      if (ValueReaders.stringValue(parsed['id']).trim().isEmpty) {
-        continue;
-      }
-      result.add(parsed);
+      final content =
+          await _structuredContentBridgeService.readProjectedBodyText(
+            project,
+            relativePath,
+          ) ??
+          await _workspacePort.readTextFile(project.rootPath, relativePath);
+      addForeshadow(content ?? '', relativePath);
     }
     result.sort((left, right) {
       return ValueReaders.stringValue(
@@ -148,10 +192,13 @@ class ProjectAssetLibraryService {
       return <String, Object?>{'ok': false, 'error': '风格 ID 不能为空。'};
     }
     final relativePath = _stylePath(styleId);
-    await _writeProjectTextFileUseCase.execute(
+    final content = _styleCodecService.encode(normalized);
+    await _saveAssetWithCompensation(
       project: project,
       relativePath: relativePath,
-      content: _styleCodecService.encode(normalized),
+      documentKind: 'style',
+      title: normalized.displayName,
+      content: content,
     );
     return <String, Object?>{
       'ok': true,
@@ -174,10 +221,13 @@ class ProjectAssetLibraryService {
       return <String, Object?>{'ok': false, 'error': '伏笔 ID 不能为空。'};
     }
     final relativePath = _foreshadowPath(recordId);
-    await _writeProjectTextFileUseCase.execute(
+    final content = _foreshadowCodecService.encode(normalized);
+    await _saveAssetWithCompensation(
       project: project,
       relativePath: relativePath,
-      content: _foreshadowCodecService.encode(normalized),
+      documentKind: 'foreshadow_record',
+      title: normalized.title,
+      content: content,
     );
     return <String, Object?>{
       'ok': true,
@@ -191,14 +241,18 @@ class ProjectAssetLibraryService {
 
   Future<JsonMap> deleteStyle(ProjectDescriptor project, String styleId) async {
     final relativePath = await _resolveExistingAssetPath(
-      project.rootPath,
+      project,
       preferredPath: _stylePath(styleId),
       legacyPath: 'styles/$styleId.md',
     );
     if (relativePath.isEmpty) {
       return <String, Object?>{'ok': false, 'error': '未找到对应风格文件。'};
     }
-    await _fileMutationAdapter.deleteEntry(project.rootPath, relativePath);
+    await _deleteAssetWithCompensation(
+      project: project,
+      relativePath: relativePath,
+      documentKind: 'style',
+    );
     return <String, Object?>{'ok': true, 'relative_path': relativePath};
   }
 
@@ -207,14 +261,18 @@ class ProjectAssetLibraryService {
     String recordId,
   ) async {
     final relativePath = await _resolveExistingAssetPath(
-      project.rootPath,
+      project,
       preferredPath: _foreshadowPath(recordId),
       legacyPath: 'world/foreshadows/$recordId.md',
     );
     if (relativePath.isEmpty) {
       return <String, Object?>{'ok': false, 'error': '未找到对应伏笔文件。'};
     }
-    await _fileMutationAdapter.deleteEntry(project.rootPath, relativePath);
+    await _deleteAssetWithCompensation(
+      project: project,
+      relativePath: relativePath,
+      documentKind: 'foreshadow_record',
+    );
     return <String, Object?>{'ok': true, 'relative_path': relativePath};
   }
 
@@ -238,13 +296,49 @@ class ProjectAssetLibraryService {
     ProjectDescriptor project, {
     required String bundleContent,
     bool overwrite = true,
-  }) {
-    // 中文注释: 正式导入继续复用 core 用例，服务层只承担项目上下文注入。
-    return _importUseCase.execute(
-      project: project,
-      bundleContent: bundleContent,
-      overwrite: overwrite,
-    );
+  }) async {
+    // 中文注释: core 用例会先写 SQLite 主事实源再写 Markdown 投影；导入任一文件失败时，
+    // 必须把此前已处理的资产一起恢复，不能留下只存在于 SQLite 的半导入记录。
+    final snapshots = <String, _AssetDocumentSnapshot>{};
+    try {
+      return await _importUseCase.execute(
+        project: project,
+        bundleContent: bundleContent,
+        overwrite: overwrite,
+        prepareDocumentWrite:
+            ({
+              required ProjectDescriptor project,
+              required String relativePath,
+              required String documentKind,
+              required String title,
+              required String content,
+            }) async {
+              final documentPath = relativePath.trim();
+              if (!snapshots.containsKey(documentPath)) {
+                snapshots[documentPath] = await _captureAssetSnapshot(
+                  project: project,
+                  relativePath: documentPath,
+                );
+              }
+              await _structuredContentBridgeService.persistStructuredDocument(
+                project: project,
+                documentPath: documentPath,
+                documentKind: documentKind,
+                title: title,
+                content: content,
+              );
+            },
+      );
+    } catch (_) {
+      for (final entry in snapshots.entries.toList(growable: false).reversed) {
+        await _restoreAssetSnapshot(
+          project: project,
+          relativePath: entry.key,
+          snapshot: entry.value,
+        );
+      }
+      rethrow;
+    }
   }
 
   Future<JsonMap> exportBundle(
@@ -271,6 +365,152 @@ class ProjectAssetLibraryService {
   Future<String?> readExternalBundle(String absolutePath) {
     // 中文注释: 外部 bundle 文本读取集中到资产服务，CLI 和 GUI 不再直接碰宿主适配细节。
     return _projectToolHostPort.readExternalTextFile(absolutePath);
+  }
+
+  Future<void> _saveAssetWithCompensation({
+    required ProjectDescriptor project,
+    required String relativePath,
+    required String documentKind,
+    required String title,
+    required String content,
+  }) async {
+    final snapshot = await _captureAssetSnapshot(
+      project: project,
+      relativePath: relativePath,
+    );
+    try {
+      await _structuredContentBridgeService.persistStructuredDocument(
+        project: project,
+        documentPath: relativePath,
+        documentKind: documentKind,
+        title: title,
+        content: content,
+      );
+      await _writeProjectTextFileUseCase.execute(
+        project: project,
+        relativePath: relativePath,
+        content: content,
+      );
+    } catch (_) {
+      await _restoreAssetSnapshot(
+        project: project,
+        relativePath: relativePath,
+        snapshot: snapshot,
+      );
+      rethrow;
+    }
+  }
+
+  Future<_AssetDocumentSnapshot> _captureAssetSnapshot({
+    required ProjectDescriptor project,
+    required String relativePath,
+  }) async {
+    final projectionExisted = await _fileMutationAdapter.entryExists(
+      project.rootPath,
+      relativePath,
+    );
+    final projectionContent = await _workspacePort.readTextFile(
+      project.rootPath,
+      relativePath,
+    );
+    final structuredDocument = await _structuredContentBridgeService
+        .loadStructuredDocument(project: project, documentPath: relativePath);
+    return _AssetDocumentSnapshot(
+      structuredDocument: structuredDocument,
+      projectionContent: projectionContent,
+      projectionExisted: projectionExisted,
+    );
+  }
+
+  Future<void> _restoreAssetSnapshot({
+    required ProjectDescriptor project,
+    required String relativePath,
+    required _AssetDocumentSnapshot snapshot,
+  }) async {
+    await _restoreStructuredSnapshot(
+      project: project,
+      documentPath: relativePath,
+      snapshot: snapshot.structuredDocument,
+    );
+    await _restoreProjectionSnapshot(
+      project: project,
+      relativePath: relativePath,
+      content: snapshot.projectionContent,
+      existedBeforeOperation: snapshot.projectionExisted,
+    );
+  }
+
+  Future<void> _deleteAssetWithCompensation({
+    required ProjectDescriptor project,
+    required String relativePath,
+    required String documentKind,
+  }) async {
+    final snapshot = await _captureAssetSnapshot(
+      project: project,
+      relativePath: relativePath,
+    );
+    try {
+      await _structuredContentBridgeService.deleteStructuredDocument(
+        project: project,
+        documentPath: relativePath,
+        documentKind: documentKind,
+      );
+      await _fileMutationAdapter.deleteEntry(project.rootPath, relativePath);
+    } catch (_) {
+      await _restoreAssetSnapshot(
+        project: project,
+        relativePath: relativePath,
+        snapshot: snapshot,
+      );
+      rethrow;
+    }
+  }
+
+  Future<void> _restoreStructuredSnapshot({
+    required ProjectDescriptor project,
+    required String documentPath,
+    required SqliteProjectBodyTextDocument? snapshot,
+  }) async {
+    try {
+      await _structuredContentBridgeService.restoreStructuredDocument(
+        project: project,
+        documentPath: documentPath,
+        snapshot: snapshot,
+      );
+    } catch (_) {
+      // Preserve the original file operation failure for the caller.
+    }
+  }
+
+  Future<void> _restoreProjectionSnapshot({
+    required ProjectDescriptor project,
+    required String relativePath,
+    required String? content,
+    required bool existedBeforeOperation,
+  }) async {
+    try {
+      final exists = await _fileMutationAdapter.entryExists(
+        project.rootPath,
+        relativePath,
+      );
+      if (content == null) {
+        if (!existedBeforeOperation && exists) {
+          await _fileMutationAdapter.deleteEntry(
+            project.rootPath,
+            relativePath,
+          );
+        }
+        return;
+      }
+      await _workspacePort.writeTextFile(
+        project.rootPath,
+        relativePath,
+        content,
+      );
+    } catch (_) {
+      // Projection recovery is best-effort; the SQLite snapshot above remains
+      // authoritative when the filesystem itself is unavailable.
+    }
   }
 
   bool _isStylePath(String relativePath) {
@@ -308,16 +548,45 @@ class ProjectAssetLibraryService {
   }
 
   Future<String> _resolveExistingAssetPath(
-    String rootPath, {
+    ProjectDescriptor project, {
     required String preferredPath,
     required String legacyPath,
   }) async {
-    if (await _fileMutationAdapter.entryExists(rootPath, preferredPath)) {
+    if (await _fileMutationAdapter.entryExists(
+      project.rootPath,
+      preferredPath,
+    )) {
       return preferredPath;
     }
-    if (await _fileMutationAdapter.entryExists(rootPath, legacyPath)) {
+    if (await _fileMutationAdapter.entryExists(project.rootPath, legacyPath)) {
+      return legacyPath;
+    }
+    if (await _structuredContentBridgeService.loadStructuredDocument(
+          project: project,
+          documentPath: preferredPath,
+        ) !=
+        null) {
+      return preferredPath;
+    }
+    if (await _structuredContentBridgeService.loadStructuredDocument(
+          project: project,
+          documentPath: legacyPath,
+        ) !=
+        null) {
       return legacyPath;
     }
     return '';
   }
+}
+
+class _AssetDocumentSnapshot {
+  const _AssetDocumentSnapshot({
+    required this.structuredDocument,
+    required this.projectionContent,
+    required this.projectionExisted,
+  });
+
+  final SqliteProjectBodyTextDocument? structuredDocument;
+  final String? projectionContent;
+  final bool projectionExisted;
 }

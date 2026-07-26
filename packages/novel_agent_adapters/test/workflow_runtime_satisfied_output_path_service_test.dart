@@ -70,13 +70,10 @@ void main() {
         outputPaths: const <String>['specs/project_spec.md'],
       );
 
-      expect(
-        merged,
-        <String>[
-          'specs/project_spec.md',
-          'outlines/chapters/章节任务清单.md',
-        ],
-      );
+      expect(merged, <String>[
+        'specs/project_spec.md',
+        'outlines/chapters/章节任务清单.md',
+      ]);
     });
   });
 }

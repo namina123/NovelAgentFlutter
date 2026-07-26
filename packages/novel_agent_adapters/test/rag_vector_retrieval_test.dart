@@ -17,33 +17,40 @@ void main() {
         baseUrl: 'https://example.test/v1',
         apiKey: 'sk-test',
         modelId: 'embed-test',
-        post: ({
-          required Uri requestUri,
-          required String apiKey,
-          required JsonMap body,
-          required Duration timeout,
-        }) async {
-          expect(requestUri.toString(), 'https://example.test/v1/embeddings');
-          expect(apiKey, 'sk-test');
-          expect(body['model'], 'embed-test');
-          final input = ValueReaders.objectList(body['input']);
-          return <String, Object?>{
-            'data': input
-                .map(
-                  (text) => <String, Object?>{
-                    'embedding': <double>[1.0, 0.0, 0.5],
-                  },
-                )
-                .toList(),
-          };
-        },
+        post:
+            ({
+              required Uri requestUri,
+              required String apiKey,
+              required JsonMap body,
+              required Duration timeout,
+            }) async {
+              expect(
+                requestUri.toString(),
+                'https://example.test/v1/embeddings',
+              );
+              expect(apiKey, 'sk-test');
+              expect(body['model'], 'embed-test');
+              final input = ValueReaders.objectList(body['input']);
+              return <String, Object?>{
+                'data': input
+                    .map(
+                      (text) => <String, Object?>{
+                        'embedding': <double>[1.0, 0.0, 0.5],
+                      },
+                    )
+                    .toList(),
+              };
+            },
       );
 
       final vectors = await provider.embedTexts(<String>['a', 'b']);
 
       expect(vectors.length, 2);
       expect(vectors.first, <num>[1.0, 0.0, 0.5]);
-      expect(provider.providerKind, RagRetrievalProviderKinds.remoteOpenAiCompatible);
+      expect(
+        provider.providerKind,
+        RagRetrievalProviderKinds.remoteOpenAiCompatible,
+      );
       expect(provider.isRemote, isTrue);
     });
 
@@ -54,15 +61,16 @@ void main() {
         baseUrl: 'https://example.test',
         apiKey: 'sk-test',
         modelId: 'embed-test',
-        post: ({
-          required Uri requestUri,
-          required String apiKey,
-          required JsonMap body,
-          required Duration timeout,
-        }) async {
-          captured = requestUri;
-          return <String, Object?>{'data': <Object>[]};
-        },
+        post:
+            ({
+              required Uri requestUri,
+              required String apiKey,
+              required JsonMap body,
+              required Duration timeout,
+            }) async {
+              captured = requestUri;
+              return <String, Object?>{'data': <Object>[]};
+            },
       );
 
       await provider.embedTexts(<String>['a']);
@@ -121,28 +129,37 @@ void main() {
       } catch (_) {}
     });
 
-    test('recalls the cosine-nearest chunk instead of keyword matching', () async {
-      final port = SqliteVectorRetrievalPort(embeddingProvider: embeddingProvider);
-      final query = RetrievalQuery(
-        queryId: 'q1',
-        queryText: 'furry cat',
-        projectId: 'p1',
-        corpusFilters: const <String>['corpus_test'],
-        metadata: <String, Object?>{'project_root_path': tempDirectory.path},
-      );
+    test(
+      'recalls the cosine-nearest chunk instead of keyword matching',
+      () async {
+        final port = SqliteVectorRetrievalPort(
+          embeddingProvider: embeddingProvider,
+        );
+        final query = RetrievalQuery(
+          queryId: 'q1',
+          queryText: 'furry cat',
+          projectId: 'p1',
+          corpusFilters: const <String>['corpus_test'],
+          metadata: <String, Object?>{'project_root_path': tempDirectory.path},
+        );
 
-      final hits = await port.search(query);
+        final hits = await port.search(query);
 
-      expect(hits, isNotEmpty);
-      expect(hits.first.sourceDocumentId, isNotEmpty);
-      // 中文注释: query 的向量与 chunk_cat 同向（都命中 cat/furry 词），应排在 chunk_dog 之前。
-      expect(hits.first.score, greaterThan(0));
-      final topText = ValueReaders.stringValue(hits.first.metadata['text_value']);
-      expect(topText, contains('furry'));
-    });
+        expect(hits, isNotEmpty);
+        expect(hits.first.sourceDocumentId, isNotEmpty);
+        // 中文注释: query 的向量与 chunk_cat 同向（都命中 cat/furry 词），应排在 chunk_dog 之前。
+        expect(hits.first.score, greaterThan(0));
+        final topText = ValueReaders.stringValue(
+          hits.first.metadata['text_value'],
+        );
+        expect(topText, contains('furry'));
+      },
+    );
 
     test('searchByCorpus restricts to the requested corpus', () async {
-      final port = SqliteVectorRetrievalPort(embeddingProvider: embeddingProvider);
+      final port = SqliteVectorRetrievalPort(
+        embeddingProvider: embeddingProvider,
+      );
       final query = RetrievalQuery(
         queryId: 'q2',
         queryText: 'furry cat',
@@ -176,9 +193,9 @@ void _seedChunk(
     "INSERT OR IGNORE INTO rag_source_document (source_document_id, corpus_id, source_kind, display_name, origin_path, origin_format, language, content_hash, payload_json) VALUES (?, ?, 'txt', 'src', '', 'txt', 'zh', '', '{}')",
     <Object?>['src_test', corpusId],
   );
-  final bytes = Float32List.fromList(vector.map((e) => e.toDouble()).toList())
-      .buffer
-      .asUint8List();
+  final bytes = Float32List.fromList(
+    vector.map((e) => e.toDouble()).toList(),
+  ).buffer.asUint8List();
   db.execute(
     '''
     INSERT INTO rag_chunk (

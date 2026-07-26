@@ -84,38 +84,35 @@ class ProjectReferenceAlignmentSummaryService {
     ];
     for (final stateId in stateOrder) {
       final profile = stateProfiles[stateId]!;
-      final items = groupedByState[stateId] ?? const <_ReferenceAlignmentSummaryItem>[];
-      lines.addAll(
-        <String>[
-          '## ${profile.label}',
-          '',
-          '- 状态说明：${profile.detail}',
-          '- 条目数：${items.length}',
-          '',
-        ],
-      );
+      final items =
+          groupedByState[stateId] ?? const <_ReferenceAlignmentSummaryItem>[];
+      lines.addAll(<String>[
+        '## ${profile.label}',
+        '',
+        '- 状态说明：${profile.detail}',
+        '- 条目数：${items.length}',
+        '',
+      ]);
       if (items.isEmpty) {
         lines.add('- 暂无此层条目。');
         lines.add('');
         continue;
       }
       for (final item in items) {
-        lines.addAll(
-          <String>[
-            '### ${item.title}',
-            '',
-            '- 类型：${item.kindLabel}',
-            '- 生命周期：`${item.lifecycleStatus}`',
-            '- 对齐层：${item.stateLabel}',
-            '- 对齐层说明：${item.stateDetail}',
-            '- 项目资料：${item.projectSurfaceLabel}',
-            '- 项目资料挂载：${item.projectMountLabel}',
-            '- 参考资产库：${item.referenceLibraryLabel}',
-            '- 来源：${item.sourceDetails}',
-            '- 摘要：${item.summary.isEmpty ? '无' : item.summary}',
-            '',
-          ],
-        );
+        lines.addAll(<String>[
+          '### ${item.title}',
+          '',
+          '- 类型：${item.kindLabel}',
+          '- 生命周期：`${item.lifecycleStatus}`',
+          '- 对齐层：${item.stateLabel}',
+          '- 对齐层说明：${item.stateDetail}',
+          '- 项目资料：${item.projectSurfaceLabel}',
+          '- 项目资料挂载：${item.projectMountLabel}',
+          '- 参考资产库：${item.referenceLibraryLabel}',
+          '- 来源：${item.sourceDetails}',
+          '- 摘要：${item.summary.isEmpty ? '无' : item.summary}',
+          '',
+        ]);
       }
     }
     return lines.join('\n').trimRight() + '\n';
@@ -193,10 +190,12 @@ class _ReferenceAlignmentSummaryItem {
       stateId: state.id,
       stateLabel: state.label,
       stateDetail: state.detail,
-      projectSurfaceLabel:
-          ValueReaders.stringValue(card.metadata['project_surface_label']).trim(),
-      projectMountLabel:
-          ValueReaders.stringValue(card.metadata['project_mount_label']).trim(),
+      projectSurfaceLabel: ValueReaders.stringValue(
+        card.metadata['project_surface_label'],
+      ).trim(),
+      projectMountLabel: ValueReaders.stringValue(
+        card.metadata['project_mount_label'],
+      ).trim(),
       referenceLibraryLabel: ValueReaders.stringValue(
         card.metadata['reference_library_label'],
       ).trim(),
@@ -212,19 +211,21 @@ class _ReferenceAlignmentSummaryItem {
       card.metadata,
     );
     return _ReferenceAlignmentSummaryItem(
-      title:
-          card.designLabel.trim().isEmpty ? card.designId : card.designLabel
-              .trim(),
+      title: card.designLabel.trim().isEmpty
+          ? card.designId
+          : card.designLabel.trim(),
       kindLabel: '设计元素',
       summary: card.uncertainty.trim(),
       lifecycleStatus: card.lifecycleStatus,
       stateId: state.id,
       stateLabel: state.label,
       stateDetail: state.detail,
-      projectSurfaceLabel:
-          ValueReaders.stringValue(card.metadata['project_surface_label']).trim(),
-      projectMountLabel:
-          ValueReaders.stringValue(card.metadata['project_mount_label']).trim(),
+      projectSurfaceLabel: ValueReaders.stringValue(
+        card.metadata['project_surface_label'],
+      ).trim(),
+      projectMountLabel: ValueReaders.stringValue(
+        card.metadata['project_mount_label'],
+      ).trim(),
       referenceLibraryLabel: ValueReaders.stringValue(
         card.metadata['reference_library_label'],
       ).trim(),
@@ -245,10 +246,12 @@ class _ReferenceAlignmentSummaryItem {
       stateId: state.id,
       stateLabel: state.label,
       stateDetail: state.detail,
-      projectSurfaceLabel:
-          ValueReaders.stringValue(note.metadata['project_surface_label']).trim(),
-      projectMountLabel:
-          ValueReaders.stringValue(note.metadata['project_mount_label']).trim(),
+      projectSurfaceLabel: ValueReaders.stringValue(
+        note.metadata['project_surface_label'],
+      ).trim(),
+      projectMountLabel: ValueReaders.stringValue(
+        note.metadata['project_mount_label'],
+      ).trim(),
       referenceLibraryLabel: ValueReaders.stringValue(
         note.metadata['reference_library_label'],
       ).trim(),
@@ -274,10 +277,12 @@ class _ReferenceAlignmentSummaryItem {
       stateId: state.id,
       stateLabel: state.label,
       stateDetail: state.detail,
-      projectSurfaceLabel:
-          ValueReaders.stringValue(record.metadata['project_surface_label']).trim(),
-      projectMountLabel:
-          ValueReaders.stringValue(record.metadata['project_mount_label']).trim(),
+      projectSurfaceLabel: ValueReaders.stringValue(
+        record.metadata['project_surface_label'],
+      ).trim(),
+      projectMountLabel: ValueReaders.stringValue(
+        record.metadata['project_mount_label'],
+      ).trim(),
       referenceLibraryLabel: ValueReaders.stringValue(
         record.metadata['reference_library_label'],
       ).trim(),
@@ -373,7 +378,9 @@ enum _ReferenceAlignmentStateProfiles {
   }
 }
 
-String _sourceDetailsFromInformationRefs(List<InformationSourceRef> sourceRefs) {
+String _sourceDetailsFromInformationRefs(
+  List<InformationSourceRef> sourceRefs,
+) {
   // 中文注释: 来源详情只保留最小可理解标签，方便 summary 快速回跳，不把整条 source ref 结构摊开。
   if (sourceRefs.isEmpty) {
     return '无来源引用';

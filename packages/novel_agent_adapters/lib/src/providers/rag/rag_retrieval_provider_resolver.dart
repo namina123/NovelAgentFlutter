@@ -38,7 +38,7 @@ final class RagRetrievalProviderResolution {
 
 class RagRetrievalProviderResolver {
   RagRetrievalProviderResolver({RagRetrievalProviderRegistry? registry})
-      : _registry = registry ?? RagRetrievalProviderRegistry.standard();
+    : _registry = registry ?? RagRetrievalProviderRegistry.standard();
 
   final RagRetrievalProviderRegistry _registry;
 
@@ -88,4 +88,3 @@ class RagRetrievalProviderResolver {
     return _registry.supportsProvider(providerId);
   }
 }
-

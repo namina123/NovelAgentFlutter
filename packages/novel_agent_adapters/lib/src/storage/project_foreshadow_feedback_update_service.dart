@@ -44,7 +44,9 @@ class ProjectForeshadowFeedbackUpdateService {
     final changedPaths = <String>[];
     final grouped = <String, List<ForeshadowFeedbackSignal>>{};
     for (final signal in signals) {
-      grouped.putIfAbsent(signal.foreshadowId, () => <ForeshadowFeedbackSignal>[]).add(signal);
+      grouped
+          .putIfAbsent(signal.foreshadowId, () => <ForeshadowFeedbackSignal>[])
+          .add(signal);
     }
     for (final entry in grouped.entries) {
       final current = await _repository.readById(project, entry.key);

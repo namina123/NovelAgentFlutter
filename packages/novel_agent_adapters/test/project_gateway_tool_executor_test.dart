@@ -41,25 +41,21 @@ void main() {
         processService: ProjectGatewayProcessService(processRunner: fakeRunner),
       );
       final result = await executor.execute(
-        const ProjectDescriptor(
-          id: 'demo',
-          name: '示例项目',
-          rootPath: 'D:/demo',
-        ),
+        const ProjectDescriptor(id: 'demo', name: '示例项目', rootPath: 'D:/demo'),
         <String, Object?>{
           'gateway_tool': 'run_command',
           'command': 'echo hello',
         },
       );
-        expect(result['ok'], isTrue);
-        expect(ValueReaders.stringValue(result['stdout']), 'ok');
-        if (Platform.isWindows) {
-          expect(fakeRunner.lastExecutable, 'powershell');
-          expect(fakeRunner.lastArguments, contains('-Command'));
-        } else {
-          expect(fakeRunner.lastExecutable, '/bin/sh');
-          expect(fakeRunner.lastArguments, contains('-lc'));
-        }
+      expect(result['ok'], isTrue);
+      expect(ValueReaders.stringValue(result['stdout']), 'ok');
+      if (Platform.isWindows) {
+        expect(fakeRunner.lastExecutable, 'powershell');
+        expect(fakeRunner.lastArguments, contains('-Command'));
+      } else {
+        expect(fakeRunner.lastExecutable, '/bin/sh');
+        expect(fakeRunner.lastArguments, contains('-lc'));
+      }
     });
   });
 }

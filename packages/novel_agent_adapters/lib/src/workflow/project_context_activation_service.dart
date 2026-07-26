@@ -556,8 +556,7 @@ class ProjectContextActivationService {
           '# Continuity Bundle: $displayName',
           '- 默认主线帧：$defaultFrameId',
           '- 默认机制档：$defaultMechanicProfileId',
-          if (scopeIds.isNotEmpty)
-            '- 作用域：${scopeIds.join('、')}',
+          if (scopeIds.isNotEmpty) '- 作用域：${scopeIds.join('、')}',
           '- 这里只保留连续性主线摘要，详细 JSON 另有正式文件可回看。',
         ].join('\n');
       }

@@ -80,19 +80,21 @@ class ProjectLifecycleCoordinator {
         launcherStatus: '当前还没有有效项目。先创建一部新作品，或打开已有项目。',
       );
     }
-    final loaded = await _loadProject(
+    final loadAttempt = await _tryLoadProject(
       defaultPath,
       deferHydration: true,
       openDefaultDocument: false,
     );
-    if (!loaded) {
+    if (!loadAttempt.isLoaded) {
+      final failureMessage = loadAttempt.failureMessage ??
+          '上次打开的项目不可用：$defaultPath。请创建新作品，或重新打开已有项目。';
       return ProjectLifecycleResolution(
         kind: ProjectLifecycleResolutionKind.invalidDefaultProjectPath,
         projectPath: defaultPath,
-        statusMessage: '当前没有有效项目。请先创建项目，或打开已有项目。',
+        statusMessage: failureMessage,
         shouldShowLauncher: true,
         launcherMode: ProjectLauncherMode.create,
-        launcherStatus: '上次打开的项目不可用：$defaultPath。请创建新作品，或重新打开已有项目。',
+        launcherStatus: failureMessage,
       );
     }
     return ProjectLifecycleResolution(
@@ -119,19 +121,22 @@ class ProjectLifecycleCoordinator {
         canDismiss: _readCurrentProject() != null,
       );
     }
-    final loaded = await _loadProject(
+    final loadAttempt = await _tryLoadProject(
       normalizedPath,
       deferHydration: true,
       openDefaultDocument: true,
     );
-    if (!loaded) {
+    if (!loadAttempt.isLoaded) {
+      final failureMessage = loadAttempt.failureMessage ??
+          failureLauncherStatus ??
+          '打开项目失败：$normalizedPath';
       return ProjectLifecycleResolution(
         kind: ProjectLifecycleResolutionKind.invalidProjectPath,
         projectPath: normalizedPath,
-        statusMessage: '打开项目失败：$normalizedPath',
+        statusMessage: failureMessage,
         shouldShowLauncher: failureLauncherMode != null,
         launcherMode: failureLauncherMode,
-        launcherStatus: failureLauncherStatus ?? '打开项目失败：$normalizedPath',
+        launcherStatus: failureMessage,
         canDismiss: _readCurrentProject() != null,
       );
     }
@@ -143,4 +148,36 @@ class ProjectLifecycleCoordinator {
   }
 
   bool get isMobileProjectRootLocked => _isMobileProjectRootLocked();
+
+  Future<_ProjectLoadAttempt> _tryLoadProject(
+    String rootPath, {
+    required bool deferHydration,
+    required bool openDefaultDocument,
+  }) async {
+    try {
+      final loaded = await _loadProject(
+        rootPath,
+        deferHydration: deferHydration,
+        openDefaultDocument: openDefaultDocument,
+      );
+      return _ProjectLoadAttempt(isLoaded: loaded);
+    } on ProjectManifestCorruptionException catch (_) {
+      return _ProjectLoadAttempt(
+        isLoaded: false,
+        failureMessage:
+            '项目清单损坏或包含未知合同字段，系统未改写项目。请从备份恢复 .novel_agent/project_manifest.json 后重试。',
+      );
+    } catch (_) {
+      // A corrupt or unavailable project must return the normal recovery
+      // state instead of leaving an entry-point action without feedback.
+      return const _ProjectLoadAttempt(isLoaded: false);
+    }
+  }
+}
+
+class _ProjectLoadAttempt {
+  const _ProjectLoadAttempt({required this.isLoaded, this.failureMessage});
+
+  final bool isLoaded;
+  final String? failureMessage;
 }

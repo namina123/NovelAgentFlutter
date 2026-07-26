@@ -37,19 +37,74 @@ void main() {
     expect(handler.requestedDestinations, [AppDestination.agentEcosystem]);
   });
 
-  test('knowledge base primary workspace swaps workbench entry to project assets', () {
-    final sections = AppShellNavigationCatalog.sections(
-      projectAssetsPrimaryWorkspace: true,
-    );
-    final workspaceSection = sections.singleWhere(
-      (section) => section.id == 'workspace',
+  test(
+    'knowledge base primary workspace swaps workbench entry to project assets',
+    () {
+      final sections = AppShellNavigationCatalog.sections(
+        projectAssetsPrimaryWorkspace: true,
+      );
+      final workspaceSection = sections.singleWhere(
+        (section) => section.id == 'workspace',
+      );
+      expect(
+        workspaceSection.items.first.destination,
+        AppDestination.projectAssets,
+      );
+      expect(workspaceSection.items.first.label, '资料库');
+    },
+  );
+
+  test('book deconstruction navigation requires the project capability', () {
+    final unavailableItems = AppShellNavigationCatalog.sections()
+        .singleWhere((section) => section.id == 'workspace')
+        .items;
+    final availableItems = AppShellNavigationCatalog.sections(
+      hasBookDeconstructionCapability: true,
+    ).singleWhere((section) => section.id == 'workspace').items;
+
+    expect(
+      unavailableItems.any(
+        (item) => item.destination == AppDestination.bookDeconstruction,
+      ),
+      isFalse,
     );
     expect(
-      workspaceSection.items.first.destination,
-      AppDestination.projectAssets,
+      availableItems.any(
+        (item) => item.destination == AppDestination.bookDeconstruction,
+      ),
+      isTrue,
     );
-    expect(workspaceSection.items.first.label, '资料库');
   });
+
+  test(
+    'native book deconstruction uses analysis as its only primary workspace entry',
+    () {
+      final workspaceItems = AppShellNavigationCatalog.sections(
+        bookDeconstructionPrimaryWorkspace: true,
+        hasBookDeconstructionCapability: true,
+      ).singleWhere((section) => section.id == 'workspace').items;
+
+      expect(
+        workspaceItems.first.destination,
+        AppDestination.bookDeconstruction,
+      );
+      expect(workspaceItems.first.label, '拆书分析');
+      expect(
+        workspaceItems
+            .where(
+              (item) => item.destination == AppDestination.bookDeconstruction,
+            )
+            .length,
+        1,
+      );
+      expect(
+        workspaceItems.any(
+          (item) => item.destination == AppDestination.workbench,
+        ),
+        isFalse,
+      );
+    },
+  );
 }
 
 class _FakeNavigationActionHandler implements AppShellNavigationActionHandler {

@@ -7,8 +7,9 @@ void main() {
     test('does not execute for non long task project', () async {
       final executor = ProjectLongTaskToolExecutor(
         loadPlanInput: (_, {required modeId}) async => null,
-        createLongTaskWorkflow: (_, __, {options = const <String, Object?>{}}) async =>
-            const <String, Object?>{},
+        createLongTaskWorkflow:
+            (_, __, {options = const <String, Object?>{}}) async =>
+                const <String, Object?>{},
       );
       final result = await executor.startLongTaskRun(
         const ProjectDescriptor(
@@ -50,9 +51,7 @@ void main() {
               return const <String, Object?>{
                 'ok': true,
                 'created_tasks': <Object?>[
-                  <String, Object?>{
-                    'relative_path': 'tasks/task_01.json',
-                  },
+                  <String, Object?>{'relative_path': 'tasks/task_01.json'},
                 ],
                 'changed_paths': <Object?>['tasks/task_01.json'],
               };
@@ -76,7 +75,10 @@ void main() {
         ValueReaders.stringValue(capturedOptions['runtime_baseline_id']),
         'continuous_autonomous',
       );
-      expect(result['guidance_path'], 'tracking/modes/seed_autopilot_novel/guidance.md');
+      expect(
+        result['guidance_path'],
+        'tracking/modes/seed_autopilot_novel/guidance.md',
+      );
       expect(result['created_task_count'], 1);
     });
   });

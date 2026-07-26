@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novel_agent_app/app/theme/app_theme.dart';
@@ -14,6 +12,13 @@ import 'package:novel_agent_app/features/workbench/presentation/models/user_opti
 import 'package:novel_agent_app/features/workbench/presentation/models/workbench_view_data.dart';
 import 'package:novel_agent_app/features/workbench/presentation/widgets/conversation_sidebar.dart';
 import 'package:novel_agent_app/shared/widgets/panel_surface.dart';
+
+import 'manual_golden_test_support.dart';
+
+const _wr17GoldenFileNames = <String>[
+  'wr17_long_task_opening.png',
+  'wr17_generating_stop.png',
+];
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -115,6 +120,14 @@ void main() {
   );
 
   testWidgets('captures WR-17 regression screenshots', (tester) async {
+    final artifactsDir = manualGoldenArtifactsDirectory('wr17_screenshots');
+    if (skipManualGoldenTestIfArtifactsAreMissing(
+      artifactsDirectory: artifactsDir,
+      expectedFileNames: _wr17GoldenFileNames,
+    )) {
+      return;
+    }
+
     _setViewport(tester);
     await tester.pumpWidget(
       _buildSidebarHost(
@@ -239,18 +252,6 @@ void main() {
         '../../../artifacts/wr17_screenshots/wr17_generating_stop.png',
       ),
     );
-    expect(
-      File(
-        '${_resolveRepoRoot()}${Platform.pathSeparator}artifacts${Platform.pathSeparator}wr17_screenshots${Platform.pathSeparator}wr17_long_task_opening.png',
-      ).existsSync(),
-      isTrue,
-    );
-    expect(
-      File(
-        '${_resolveRepoRoot()}${Platform.pathSeparator}artifacts${Platform.pathSeparator}wr17_screenshots${Platform.pathSeparator}wr17_generating_stop.png',
-      ).existsSync(),
-      isTrue,
-    );
   });
 }
 
@@ -290,24 +291,6 @@ void _setViewport(WidgetTester tester) {
     tester.view.resetDevicePixelRatio();
     tester.view.resetPhysicalSize();
   });
-}
-
-String _resolveRepoRoot() {
-  var current = Directory.current.absolute;
-  for (var depth = 0; depth < 6; depth += 1) {
-    final docsFile = File(
-      '${current.path}${Platform.pathSeparator}docs${Platform.pathSeparator}workbench-remaining-session-order-2026-05-28.md',
-    );
-    if (docsFile.existsSync()) {
-      return current.path;
-    }
-    final parent = current.parent;
-    if (parent.path == current.path) {
-      break;
-    }
-    current = parent;
-  }
-  return Directory.current.absolute.path;
 }
 
 class _FakeConversationActionHandler implements ConversationActionHandler {

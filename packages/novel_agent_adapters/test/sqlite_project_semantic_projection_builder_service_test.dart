@@ -50,10 +50,7 @@ void main() {
 
       expect(
         projection.entryNodes.map((node) => node.relativePath),
-        containsAll(<String>[
-          'chapters/chapter_01.md',
-          'research/note_01.md',
-        ]),
+        containsAll(<String>['chapters/chapter_01.md', 'research/note_01.md']),
       );
       expect(
         projection.entryNodes.map((node) => node.relativePath),
@@ -70,15 +67,16 @@ void main() {
       expect(
         projection.rootNode.childNodeIds,
         orderedEquals(
-          projection.groupNodes.map((node) => node.nodeId).toList(
-            growable: false,
-          ),
+          projection.groupNodes
+              .map((node) => node.nodeId)
+              .toList(growable: false),
         ),
       );
       expect(
-        projection.entryNodes.firstWhere(
-          (node) => node.relativePath == 'chapters/chapter_01.md',
-        ).sourceIdentity.truthLabel,
+        projection.entryNodes
+            .firstWhere((node) => node.relativePath == 'chapters/chapter_01.md')
+            .sourceIdentity
+            .truthLabel,
         'sqlite_project_store',
       );
       expect(

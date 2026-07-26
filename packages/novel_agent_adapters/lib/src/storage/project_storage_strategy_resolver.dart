@@ -18,9 +18,12 @@ class ProjectStorageStrategyResolver {
     if (!await manifestFile.exists()) {
       return ProjectStorageStrategy.markdownProjectStore;
     }
-    final manifest = _projectManifestCodecService.parse(
+    final manifest = _projectManifestCodecService.tryParseStrict(
       await manifestFile.readAsString(),
     );
+    if (manifest == null) {
+      throw ProjectManifestCorruptionException(rootPath: rootPath);
+    }
     return manifest.storageStrategy;
   }
 

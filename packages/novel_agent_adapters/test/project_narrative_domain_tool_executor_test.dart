@@ -228,6 +228,61 @@ void main() {
     );
 
     test(
+      'submit_chapter_delivery restores SQLite body text when projection write fails',
+      () async {
+        final sqliteProject = ProjectDescriptor(
+          id: 'project_sqlite_rollback',
+          name: 'SQLite 回滚项目',
+          rootPath: tempDirectory.path,
+          projectType: 'novel',
+          storageStrategy: ProjectStorageStrategy.sqliteProjectStore,
+        );
+        final bridge = ProjectStructuredContentBridgeService();
+        final failingExecutor = ProjectNarrativeDomainToolExecutor(
+          workspacePort: workspacePort,
+          hostPort: _FailingChapterProjectionHostPort(
+            workspacePort: workspacePort,
+            fileMutationAdapter: LocalProjectFileMutationAdapter(),
+          ),
+          structuredContentBridgeService: bridge,
+        );
+        final request = DomainToolRequest(
+          callId: 'call-sqlite-rollback',
+          toolName: NarrativeDomainToolNames.submitChapterDelivery,
+          source: _source(NarrativeSourceTypes.writer),
+          requestPayload: <String, Object?>{
+            'chapter_path': 'chapters/chapter_rollback.md',
+            'chapter_content': '# 回滚章\n\n投影写入失败。',
+            'title': '回滚章',
+            'submission': <String, Object?>{
+              'submission_id': 'delivery-sqlite-rollback',
+              'chapter_ref': <String, Object?>{
+                'ref_type': NarrativeRefTypes.chapter,
+                'ref_id': 'chapters/chapter_rollback.md',
+                'relative_path': 'chapters/chapter_rollback.md',
+              },
+              'title': '回滚章',
+            },
+          },
+        );
+
+        final outcome = await failingExecutor.execute(sqliteProject, request);
+
+        expect(
+          outcome.outcomeStatus,
+          DomainToolOutcomeStatuses.executionFailed,
+        );
+        expect(
+          await bridge.loadStructuredDocument(
+            project: sqliteProject,
+            documentPath: 'chapters/chapter_rollback.md',
+          ),
+          isNull,
+        );
+      },
+    );
+
+    test(
       'submit_chapter_delivery persists resolved chapter path and normalized submission record',
       () async {
         final request = DomainToolRequest(
@@ -900,4 +955,23 @@ NarrativeSourceRef _source(String sourceType) {
     sourceId: 'source-$sourceType',
     label: sourceType,
   );
+}
+
+class _FailingChapterProjectionHostPort
+    extends ProjectWorkspaceToolHostAdapter {
+  _FailingChapterProjectionHostPort({
+    required super.workspacePort,
+    required super.fileMutationAdapter,
+  });
+
+  @override
+  Future<void> writeTextFile(
+    String rootPath,
+    String relativePath,
+    String content,
+  ) {
+    return Future<void>.error(
+      StateError('simulated chapter projection failure'),
+    );
+  }
 }

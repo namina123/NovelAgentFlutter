@@ -1,3 +1,4 @@
+import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import 'book_deconstruction_application_plan_materialization_service.dart';
@@ -20,6 +21,9 @@ class BookDeconstructionDerivedProjectCreationService {
     BookDeconstructionDerivedProjectStorageStrategyService?
     storageStrategyService,
     BookDeconstructionNarrativePromotionService? narrativePromotionService,
+    BookDeconstructionNarrativeArtifactSelectionService?
+    narrativeArtifactSelectionService,
+    ProjectStructuredContentBridgeService? structuredContentBridgeService,
   }) : _createProjectWorkspaceUseCase = createProjectWorkspaceUseCase,
        _writeProjectTextFileUseCase = writeProjectTextFileUseCase,
        _narrativePersistenceService = narrativePersistenceService,
@@ -41,7 +45,13 @@ class BookDeconstructionDerivedProjectCreationService {
            const BookDeconstructionDerivedProjectStorageStrategyService(),
        _narrativePromotionService =
            narrativePromotionService ??
-           const BookDeconstructionNarrativePromotionService();
+           const BookDeconstructionNarrativePromotionService(),
+       _narrativeArtifactSelectionService =
+           narrativeArtifactSelectionService ??
+           const BookDeconstructionNarrativeArtifactSelectionService(),
+       _structuredContentBridgeService =
+           structuredContentBridgeService ??
+           ProjectStructuredContentBridgeService();
 
   final CreateProjectWorkspaceUseCase _createProjectWorkspaceUseCase;
   final WriteProjectTextFileUseCase _writeProjectTextFileUseCase;
@@ -56,6 +66,9 @@ class BookDeconstructionDerivedProjectCreationService {
   final BookDeconstructionDerivedProjectStorageStrategyService
   _storageStrategyService;
   final BookDeconstructionNarrativePromotionService _narrativePromotionService;
+  final BookDeconstructionNarrativeArtifactSelectionService
+  _narrativeArtifactSelectionService;
+  final ProjectStructuredContentBridgeService _structuredContentBridgeService;
 
   Future<BookDeconstructionDerivedProjectCreationResult> execute({
     required String projectsRootPath,
@@ -64,12 +77,14 @@ class BookDeconstructionDerivedProjectCreationService {
     required Set<String> selectedItemIds,
     required String selectedFollowupOptionId,
   }) async {
+    final selectedNarrativeArtifacts = _narrativeArtifactSelectionService
+        .select(buildResult: buildResult, selectedItemIds: selectedItemIds);
     final derivedPlan =
         const BookDeconstructionDerivedProjectPlanBuilderService().build(
           input: buildResult.input,
           followupMenu: buildResult.followupMenu,
           followupOptionId: selectedFollowupOptionId,
-          narrativeArtifacts: buildResult.narrativeArtifacts,
+          narrativeArtifacts: selectedNarrativeArtifacts,
         );
     final runtimeBaselineId = _runtimeBaselineResolverService.resolve(
       targetProjectTypeId: derivedPlan.targetProjectTypeId,
@@ -100,7 +115,7 @@ class BookDeconstructionDerivedProjectCreationService {
       ),
     );
     final promotedNarrativeArtifacts = _narrativePromotionService.promote(
-      analysisBundle: buildResult.narrativeArtifacts,
+      analysisBundle: selectedNarrativeArtifacts,
       promotedBy: 'book_deconstruction_derived_project_creation',
     );
     changedPaths.addAll(
@@ -113,6 +128,7 @@ class BookDeconstructionDerivedProjectCreationService {
       project: derivedProject,
       buildResult: buildResult,
       followupOptionId: selectedFollowupOptionId,
+      selectedItemIds: selectedItemIds,
       // 中文注释: 派生的是创作项目（续写=小说项目），把分好的正文直接写进它的正文区域 chapters/，
       // 续写在其后接写；同人路线不继承正文，此标志对其无影响。
       writeBodyAsLiveNarrative: true,
@@ -150,7 +166,11 @@ class BookDeconstructionDerivedProjectCreationService {
       if (content.isEmpty) {
         continue;
       }
-      final relativePath = _sourceDocumentPath(document, index + 1);
+      final relativePath = _sourceDocumentPath(
+        document,
+        index + 1,
+        storageStrategy: project.storageStrategy,
+      );
       final title = document.title.trim().isEmpty
           ? '原作资料 ${index + 1}'
           : document.title.trim();
@@ -158,6 +178,12 @@ class BookDeconstructionDerivedProjectCreationService {
         ..writeln(title)
         ..writeln()
         ..write(content);
+      await _structuredContentBridgeService.persistSourceOriginalArchive(
+        project: project,
+        archivePath: relativePath,
+        archiveTitle: title,
+        sourceContent: content,
+      );
       await _writeProjectTextFileUseCase.execute(
         project: project,
         relativePath: relativePath,
@@ -170,11 +196,17 @@ class BookDeconstructionDerivedProjectCreationService {
 
   String _sourceDocumentPath(
     BookDeconstructionSourceDocument document,
-    int index,
-  ) {
+    int index, {
+    required ProjectStorageStrategy storageStrategy,
+  }) {
     final safeTitle = _safeId(document.title);
     final suffix = safeTitle.isEmpty ? 'source_$index' : '${index}_$safeTitle';
-    return 'sources/original/book_deconstruction_$suffix.md';
+    final root = const ProjectStorageStrategyPathPolicyService()
+        .directoryForContentType(
+          storageStrategy: storageStrategy,
+          contentType: 'source_original',
+        );
+    return '$root/book_deconstruction_$suffix.md';
   }
 
   String _safeId(String value) {

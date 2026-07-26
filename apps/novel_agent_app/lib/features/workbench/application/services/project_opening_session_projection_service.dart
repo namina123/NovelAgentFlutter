@@ -116,6 +116,7 @@ class ProjectOpeningSessionProjectionService {
       projectTypeId: normalizedProjectType,
       runtimeBaselineId: runtimeBaselineId,
       modeId: modeId,
+      additionalTraitIds: project.additionalTraitIds,
     );
     final availabilityContext = AgentAvailabilityContext(
       projectTypeId: normalizedProjectType,

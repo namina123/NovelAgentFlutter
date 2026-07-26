@@ -32,21 +32,19 @@ class GeminiNativeRequestPayloadBuilder {
         continue;
       }
       if (role == 'tool') {
-        result.add(
-          <String, Object?>{
-            'role': 'user',
-            'parts': <Object?>[
-              <String, Object?>{
-                'functionResponse': <String, Object?>{
-                  'name': ValueReaders.stringValue(message['tool_name']),
-                  'response': <String, Object?>{
-                    'content': ValueReaders.stringValue(message['content']),
-                  },
+        result.add(<String, Object?>{
+          'role': 'user',
+          'parts': <Object?>[
+            <String, Object?>{
+              'functionResponse': <String, Object?>{
+                'name': ValueReaders.stringValue(message['tool_name']),
+                'response': <String, Object?>{
+                  'content': ValueReaders.stringValue(message['content']),
                 },
               },
-            ],
-          },
-        );
+            },
+          ],
+        });
         continue;
       }
       if (role == 'assistant' &&
@@ -54,12 +52,10 @@ class GeminiNativeRequestPayloadBuilder {
         result.add(_assistantToolCallContent(message));
         continue;
       }
-      result.add(
-        <String, Object?>{
-          'role': role == 'assistant' ? 'model' : 'user',
-          'parts': _partsFromMessage(message),
-        },
-      );
+      result.add(<String, Object?>{
+        'role': role == 'assistant' ? 'model' : 'user',
+        'parts': _partsFromMessage(message),
+      });
     }
     return result;
   }
@@ -73,19 +69,14 @@ class GeminiNativeRequestPayloadBuilder {
     }
     for (final rawToolCall in ValueReaders.objectList(message['tool_calls'])) {
       final call = ValueReaders.mapValue(rawToolCall);
-      parts.add(
-        <String, Object?>{
-          'functionCall': <String, Object?>{
-            'name': ValueReaders.stringValue(call['name']),
-            'args': ValueReaders.mapValue(call['arguments']),
-          },
+      parts.add(<String, Object?>{
+        'functionCall': <String, Object?>{
+          'name': ValueReaders.stringValue(call['name']),
+          'args': ValueReaders.mapValue(call['arguments']),
         },
-      );
+      });
     }
-    return <String, Object?>{
-      'role': 'model',
-      'parts': parts,
-    };
+    return <String, Object?>{'role': 'model', 'parts': parts};
   }
 
   List<Object?> _partsFromMessage(JsonMap message) {
@@ -156,10 +147,14 @@ class GeminiNativeRequestPayloadBuilder {
         'thinkingBudget': ValueReaders.boolValue(thinkingEnabled) ? 1024 : 0,
       };
     }
-    final thinkingEffort = ValueReaders.stringValue(options['thinking_effort']).trim();
+    final thinkingEffort = ValueReaders.stringValue(
+      options['thinking_effort'],
+    ).trim();
     if (thinkingEffort.isNotEmpty) {
       final thinkingConfig = ValueReaders.mapValue(result['thinkingConfig']);
-      thinkingConfig['thinkingBudget'] = _thinkingBudgetForEffort(thinkingEffort);
+      thinkingConfig['thinkingBudget'] = _thinkingBudgetForEffort(
+        thinkingEffort,
+      );
       result['thinkingConfig'] = thinkingConfig;
     }
     return result;

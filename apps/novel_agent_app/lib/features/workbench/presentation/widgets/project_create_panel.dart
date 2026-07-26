@@ -4,6 +4,7 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 import '../../../../../app/theme/app_chrome.dart';
 import '../../../../../shared/theme/novel_theme_context.dart';
 import '../../../../../shared/widgets/action_button.dart';
+import '../../application/services/project_creation_phase_resolver_service.dart';
 import '../models/project_create_request_view_data.dart';
 import '../models/project_creation_phase.dart';
 import '../models/project_deconstruction_followup_option_view_data.dart';
@@ -379,7 +380,7 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
           ..._buildKnowledgeBaseBranchTiles(),
           const SizedBox(height: 10),
           Text(
-            '结构化资料库更偏向知识沉淀与复用，语料库更偏向切分、挂载与检索增强。',
+            '结构化资料库更偏向知识沉淀与复用，语料库更偏向切分、挂载与资料证据检索（默认关键词）。',
             style: TextStyle(
               color: context.novelThemeColors.mutedTextColor,
               fontSize: 12,
@@ -747,18 +748,13 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
   }
 
   String _submitButtonLabel() {
-    switch (widget.creationPhase) {
-      case ProjectCreationPhase.projectType:
-        return '下一步';
-      case ProjectCreationPhase.knowledgeBaseBranch:
-        return '下一步';
-      case ProjectCreationPhase.storageStrategy:
-        return _selectedTypeRequiresRuntimeBaseline() ? '下一步' : '创建并打开';
-      case ProjectCreationPhase.bookDeconstructionFollowup:
-        return '下一步';
-      case ProjectCreationPhase.runtimeBaseline:
-        return '创建并打开';
-    }
+    final phases = const ProjectCreationPhaseResolverService().phasesFor(
+      projectTypeId: _selectedProjectTypeId,
+      requiresRuntimeBaselineSelection: _selectedTypeRequiresRuntimeBaseline(),
+    );
+    final isFinal =
+        phases.isNotEmpty && phases.last == widget.creationPhase;
+    return isFinal ? '创建并打开' : '下一步';
   }
 
   bool _selectedTypeRequiresRuntimeBaseline() {
@@ -882,16 +878,11 @@ class _StepStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.novelThemeColors;
-    final phases = <ProjectCreationPhase>[
-      ProjectCreationPhase.projectType,
-      if (selectedProjectTypeId == 'knowledge_base')
-        ProjectCreationPhase.knowledgeBaseBranch,
-      if (selectedProjectTypeId == 'book_deconstruction')
-        ProjectCreationPhase.bookDeconstructionFollowup,
-      ProjectCreationPhase.storageStrategy,
-      if (projectTypeRequiresRuntimeBaseline)
-        ProjectCreationPhase.runtimeBaseline,
-    ];
+    // 中文注释: 步骤条与 ProjectCreationPhaseResolverService 共用阶段树，默认不再强制展示存储步。
+    final phases = const ProjectCreationPhaseResolverService().phasesFor(
+      projectTypeId: selectedProjectTypeId,
+      requiresRuntimeBaselineSelection: projectTypeRequiresRuntimeBaseline,
+    );
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),

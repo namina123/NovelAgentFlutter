@@ -10,6 +10,7 @@ import '../project/project_creation_next_step.dart';
 import '../project/project_creation_plan.dart';
 import '../project/knowledge_base_branch_catalog_service.dart';
 import '../project/project_manifest_codec_service.dart';
+import '../project/project_manifest_corruption_exception.dart';
 import '../project/project_readable_projection_service.dart';
 import '../project/project_runtime_baseline_catalog_service.dart';
 import '../project/project_runtime_profile_document_service.dart';
@@ -78,12 +79,23 @@ class CreateProjectWorkspaceUseCase {
 
   ProjectCreationPlan prepare(ProjectCreateRequest request) {
     // 中文注释: 创建前准备阶段只做领域归一化与下一步判断，不直接产生文件系统副作用。
-    final normalizedProjectType = _projectTypeCatalogService.normalize(
-      request.projectTypeId,
-    );
+    final requestedProjectType = request.projectTypeId.trim();
+    // 中文注释: 打开旧 manifest 可以宽容地回退到普通小说，但新建项目不能把拼写错误的
+    // 类型静默创建成另一个项目。空值仍保留为历史默认的普通小说入口。
+    if (requestedProjectType.isNotEmpty &&
+        !_projectTypeCatalogService.contains(requestedProjectType)) {
+      throw StateError('项目类型 $requestedProjectType 未登记，不能创建新项目。');
+    }
+    final normalizedProjectType = requestedProjectType.isEmpty
+        ? 'novel'
+        : requestedProjectType;
     final projectTypeDefinition = _projectTypeCatalogService.definitionOf(
       normalizedProjectType,
     );
+    if (!projectTypeDefinition.enabled) {
+      // 中文注释: 禁用态项目类型可以继续被旧项目识别和打开，但任何创建入口都不能绕过目录的启用状态。
+      throw StateError('项目类型 ${projectTypeDefinition.name} 当前处于禁用态，不能创建新项目。');
+    }
     final normalizedTitle = request.title.trim().isEmpty
         ? projectTypeDefinition.defaultTitle
         : request.title.trim();
@@ -146,13 +158,15 @@ class CreateProjectWorkspaceUseCase {
     required String projectsRootPath,
     required ProjectCreationPlan plan,
   }) async {
-    // 中文注释: 真正落盘前必须先确认三段式创建计划已收束到 readyToCreate，避免长任务项目跳过运行基准选择。
-    if (!plan.canCreate) {
+    // 中文注释: ProjectCreationPlan 是公开数据对象，不能把调用方传入的 nextStep 当成
+    // 授权凭据。重新准备一次可阻止伪造计划绕过禁用类型、存储策略或长篇运行基准校验。
+    final validatedPlan = prepare(plan.request);
+    if (!validatedPlan.canCreate) {
       throw StateError(
-        '项目类型 ${plan.projectTypeDefinition.name} 还需要先选择长任务运行基准。',
+        '项目类型 ${validatedPlan.projectTypeDefinition.name} 还需要先选择长任务运行基准。',
       );
     }
-    final normalizedTitle = plan.request.title.trim();
+    final normalizedTitle = validatedPlan.request.title.trim();
     final directoryName = _safeDirectoryName(normalizedTitle);
     final rootPath = await _uniqueProjectRootPath(
       projectsRootPath,
@@ -162,10 +176,10 @@ class CreateProjectWorkspaceUseCase {
     await _writeScaffold(
       rootPath,
       normalizedTitle,
-      plan.request.projectTypeId,
-      plan.request.storageStrategy,
-      plan.request.projectBranchId,
-      plan.request.runtimeBaselineId,
+      validatedPlan.request.projectTypeId,
+      validatedPlan.request.storageStrategy,
+      validatedPlan.request.projectBranchId,
+      validatedPlan.request.runtimeBaselineId,
     );
     final project = await _projectRepository.openByPath(rootPath);
     if (project == null) {
@@ -252,14 +266,32 @@ class CreateProjectWorkspaceUseCase {
     // 中文注释: 新项目目录名在这里统一做去重，避免 UI 层自己猜测文件系统冲突策略。
     var index = 1;
     var candidateName = directoryName;
-    while (await _projectRepository.openByPath(
-          _joinPath(projectsRootPath, candidateName),
-        ) !=
-        null) {
+    while (await _isProjectRootPathOccupied(
+      _joinPath(projectsRootPath, candidateName),
+    )) {
       index += 1;
       candidateName = '${directoryName}_$index';
     }
     return _joinPath(projectsRootPath, candidateName);
+  }
+
+  Future<bool> _isProjectRootPathOccupied(String rootPath) async {
+    // Project recognition is not an existence check: a non-project directory
+    // can contain user data and must never receive a new scaffold by title.
+    try {
+      if (await _projectRepository.openByPath(rootPath) != null) {
+        return true;
+      }
+    } on ProjectManifestCorruptionException {
+      // Keep a corrupt project intact for the recovery flow instead of
+      // overwriting it merely because a new project shares its title.
+      return true;
+    }
+    final directEntries = await _projectWorkspacePort.listEntries(
+      rootPath,
+      recursive: false,
+    );
+    return directEntries.isNotEmpty;
   }
 
   String _joinPath(String rootPath, String child) {

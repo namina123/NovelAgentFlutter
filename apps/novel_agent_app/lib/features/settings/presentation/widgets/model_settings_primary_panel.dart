@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../shared/widgets/action_button.dart';
 import '../models/model_editor_view_data.dart';
 import '../models/settings_search_option.dart';
+import 'connection_status_card.dart';
 import 'settings_form_section.dart';
 import 'settings_labeled_dropdown_field.dart';
 import 'settings_labeled_search_dropdown_field.dart';
@@ -25,6 +27,9 @@ class ModelSettingsPrimaryPanel extends StatelessWidget {
     required this.onModelSelected,
     required this.onThinkingChanged,
     required this.onThinkingEffortChanged,
+    required this.onTestConnection,
+    required this.connectionResult,
+    required this.connectionTesting,
   });
 
   final List<SettingsSearchOption<String>> providerOptions;
@@ -41,6 +46,9 @@ class ModelSettingsPrimaryPanel extends StatelessWidget {
   final ValueChanged<String?> onModelSelected;
   final ValueChanged<bool> onThinkingChanged;
   final ValueChanged<String?> onThinkingEffortChanged;
+  final VoidCallback onTestConnection;
+  final ProviderConnectionValidationResultViewData connectionResult;
+  final bool connectionTesting;
 
   @override
   Widget build(BuildContext context) {
@@ -52,29 +60,78 @@ class ModelSettingsPrimaryPanel extends StatelessWidget {
     final showsEffort = visibleAdvancedFields.isEmpty
         ? editor.supportsReasoning && editor.thinkingEffortSupported
         : visibleAdvancedFields.contains('thinking_effort');
+    // 中文注释: 必须同时选中接口与模型 ID 才允许探测——连接测试验证的是这对组合。
+    final modelIdTrimmed = modelController.text.trim();
+    final canTestConnection =
+        !connectionTesting && selectedProviderId.isNotEmpty && modelIdTrimmed.isNotEmpty;
     return SettingsFormSection(
       title: '写作模型',
-      description: '选择默认接口与写作模型，并设置写作时最常调整的默认参数。',
+      description: '先选接口，再选模型；模型必须绑定到一个接口。选好后可测试连接。',
       child: Column(
         children: [
           SettingsLabeledSearchDropdownField<String>(
-            label: '接口',
+            label: '默认接口',
             controller: providerController,
             selectedValue: selectedProviderId.isEmpty
                 ? null
                 : selectedProviderId,
             options: providerOptions,
-            hintText: '输入接口名称筛选',
+            hintText: providerOptions.isEmpty
+                ? '请先到「接口」页添加并保存接口'
+                : '点输入框展开接口列表，或输入名称筛选',
+            openOnFocus: true,
+            enabled: providerOptions.isNotEmpty,
             onSelected: onProviderSelected,
           ),
+          if (providerOptions.isEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              '当前还没有可用接口。请先到「接口」页添加厂商地址与 API Key 并保存。',
+              style: TextStyle(
+                fontSize: 12.5,
+                height: 1.45,
+                color: Theme.of(context).colorScheme.error,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           SettingsLabeledSearchDropdownField<String>(
-            label: '模型',
+            label: '默认模型',
             controller: modelController,
-            selectedValue: null,
+            selectedValue: modelIdTrimmed.isEmpty ? null : modelIdTrimmed,
             options: modelOptions,
-            hintText: '输入模型名称或型号筛选，也可以直接选择',
+            hintText: selectedProviderId.isEmpty
+                ? '先选择接口，再挑选或输入模型 ID'
+                : '点输入框展开模型列表，或直接输入任意模型 ID',
+            openOnFocus: true,
+            enabled: selectedProviderId.isNotEmpty || modelOptions.isNotEmpty,
             onSelected: onModelSelected,
+          ),
+          const SizedBox(height: 14),
+          ActionButton(
+            label: connectionTesting ? '正在测试连接…' : '测试连接',
+            icon: Icons.wifi_tethering_rounded,
+            tone: ActionButtonTone.neutral,
+            compact: true,
+            disabled: !canTestConnection,
+            onPressed: onTestConnection,
+          ),
+          if (selectedProviderId.isEmpty || modelIdTrimmed.isEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              '选择接口与模型后即可测试连接。',
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.45,
+                color: Theme.of(context).hintColor,
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          ConnectionStatusCard(
+            key: const ValueKey('model-connection-status'),
+            result: connectionResult,
           ),
           if (showsReasoning) ...[
             const SizedBox(height: 16),

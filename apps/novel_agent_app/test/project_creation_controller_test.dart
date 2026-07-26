@@ -397,10 +397,6 @@ class _ProjectCreationHarness {
       manifestCodecService: _manifestCodecService,
     );
     controller = ProjectCreationController(
-      loadProjectWorkspaceUseCase: LoadProjectWorkspaceUseCase(
-        projectRepository: projectRepository,
-        projectWorkspacePort: _workspacePort,
-      ),
       createProjectWorkspaceUseCase: CreateProjectWorkspaceUseCase(
         projectRepository: projectRepository,
         projectWorkspacePort: _workspacePort,

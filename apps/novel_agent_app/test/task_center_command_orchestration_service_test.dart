@@ -12,6 +12,8 @@ void main() {
         final service = TaskCenterCommandOrchestrationService();
         final commandInFlightStates = <bool>[];
         final statusMessages = <String>[];
+        var commandInFlight = false;
+        bool? commandWasSettledBeforeFinalRefresh;
         int refreshTaskCenterCallCount = 0;
         int refreshTaskCenterViewCallCount = 0;
         int longTaskPulseCount = 0;
@@ -32,6 +34,7 @@ void main() {
             selectedTaskId = value;
           },
           setTaskCenterCommandInFlight: (value) {
+            commandInFlight = value;
             commandInFlightStates.add(value);
           },
           setTaskCenterStatusMessage: (value) {
@@ -43,6 +46,7 @@ void main() {
           },
           refreshTaskCenter: ({String? status}) async {
             refreshTaskCenterCallCount += 1;
+            commandWasSettledBeforeFinalRefresh = !commandInFlight;
           },
           refreshTaskCenterView: () async {
             refreshTaskCenterViewCallCount += 1;
@@ -82,7 +86,7 @@ void main() {
           pendingMessage: '正在执行接受修复...',
           successMessage: '已接受修复结果。',
           operation: (project, settings) async {
-            expect(project?.id, 'project_task_center');
+            expect(project.id, 'project_task_center');
             expect(settings, isNull);
             return const <String, Object?>{
               'ok': true,
@@ -94,6 +98,7 @@ void main() {
         );
 
         expect(commandInFlightStates, equals(<bool>[true, false]));
+        expect(commandWasSettledBeforeFinalRefresh, isTrue);
         expect(statusMessages.first, '正在执行接受修复...');
         expect(refreshTaskCenterCallCount, 1);
         expect(refreshTaskCenterViewCallCount, 1);

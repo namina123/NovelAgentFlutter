@@ -97,7 +97,11 @@ class ProjectAgentSkillToolExecutor {
     // 中文注释: skillId 可能来自模型入参或路由策略，可能是 snake_case；与包的 kebab id 比较前统一归一。
     final normalizedSkillId = _skillIdNormalizer.normalize(skillId);
     final allowedIds = availableSkills
-        .map((skill) => _skillIdNormalizer.normalize(ValueReaders.stringValue(skill['id'])))
+        .map(
+          (skill) => _skillIdNormalizer.normalize(
+            ValueReaders.stringValue(skill['id']),
+          ),
+        )
         .where((id) => id.isNotEmpty)
         .toSet();
     if (!allowedIds.contains(normalizedSkillId)) {

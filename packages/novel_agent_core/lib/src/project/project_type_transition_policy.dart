@@ -73,7 +73,8 @@ class ProjectTypeTransitionPolicy {
       blockers.add(
         const ProjectTypeTransitionBlocker(
           code: ProjectTypeTransitionBlockerCodes.transitionNotInFirstPhase,
-          message: '当前阶段只开放 novel <-> long_novel 的项目类型转换。',
+          message:
+              '当前阶段开放 novel <-> long_novel，以及 book_deconstruction -> novel/long_novel 的项目类型转换。',
         ),
       );
     }
@@ -199,6 +200,11 @@ class ProjectTypeTransitionPolicy {
         return const <String>['long_novel'];
       case 'long_novel':
         return const <String>['novel'];
+      case 'book_deconstruction':
+        // 中文注释: 拆书项目拆完/分析完后可复合成写作类型（普通小说或长篇长任务），保留拆书能力
+        // （靠 manifest additionalTraitIds 持久化 book_deconstruction trait）。knowledge_base 因
+        // sqlite-only 存储冲突与"非写作"语义，第一期不开放。
+        return const <String>['novel', 'long_novel'];
       default:
         return const <String>[];
     }

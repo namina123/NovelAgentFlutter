@@ -259,8 +259,9 @@ class _TaskCenterPageState extends State<TaskCenterPage> {
                         child: TextField(
                           controller: _chapterWordTargetController,
                           keyboardType: TextInputType.number,
-                          decoration:
-                              const InputDecoration(labelText: '正文章节目标'),
+                          decoration: const InputDecoration(
+                            labelText: '正文章节目标',
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -268,8 +269,7 @@ class _TaskCenterPageState extends State<TaskCenterPage> {
                         child: TextField(
                           controller: _chapterWordMinController,
                           keyboardType: TextInputType.number,
-                          decoration:
-                              const InputDecoration(labelText: '正文最小值'),
+                          decoration: const InputDecoration(labelText: '正文最小值'),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -277,8 +277,7 @@ class _TaskCenterPageState extends State<TaskCenterPage> {
                         child: TextField(
                           controller: _chapterWordMaxController,
                           keyboardType: TextInputType.number,
-                          decoration:
-                              const InputDecoration(labelText: '正文最大值'),
+                          decoration: const InputDecoration(labelText: '正文最大值'),
                         ),
                       ),
                     ];
@@ -296,8 +295,7 @@ class _TaskCenterPageState extends State<TaskCenterPage> {
                         child: TextField(
                           controller: _sampleChapterWordTargetController,
                           keyboardType: TextInputType.number,
-                          decoration:
-                              const InputDecoration(labelText: '样章目标'),
+                          decoration: const InputDecoration(labelText: '样章目标'),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -305,8 +303,7 @@ class _TaskCenterPageState extends State<TaskCenterPage> {
                         child: TextField(
                           controller: _sampleChapterWordMinController,
                           keyboardType: TextInputType.number,
-                          decoration:
-                              const InputDecoration(labelText: '样章最小值'),
+                          decoration: const InputDecoration(labelText: '样章最小值'),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -314,8 +311,7 @@ class _TaskCenterPageState extends State<TaskCenterPage> {
                         child: TextField(
                           controller: _sampleChapterWordMaxController,
                           keyboardType: TextInputType.number,
-                          decoration:
-                              const InputDecoration(labelText: '样章最大值'),
+                          decoration: const InputDecoration(labelText: '样章最大值'),
                         ),
                       ),
                     ];
@@ -330,6 +326,7 @@ class _TaskCenterPageState extends State<TaskCenterPage> {
                   label: '生成队列',
                   icon: Icons.playlist_add_rounded,
                   expanded: true,
+                  disabled: !widget.viewData.longTaskCreationAvailable,
                   onPressed: _submitWorkflowCreate,
                 ),
                 const SizedBox(height: 16),

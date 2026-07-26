@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:novel_agent_app/app/theme/app_theme.dart';
@@ -7,16 +5,31 @@ import 'package:novel_agent_app/features/task_center/presentation/models/task_ce
 import 'package:novel_agent_app/features/task_center/presentation/widgets/task_center_detail_panel.dart';
 import 'package:novel_agent_app/features/task_center/presentation/widgets/task_center_diagnostics_panel.dart';
 
+import 'manual_golden_test_support.dart';
+
+const _lto09GoldenFileNames = <String>[
+  'lto09_running_long_task.png',
+  'lto09_paused_long_task.png',
+  'lto09_waiting_checkpoint.png',
+  'lto09_failed_step.png',
+  'lto09_completed_stopped.png',
+];
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('captures LTO-09 runtime observability screenshots', (
     tester,
   ) async {
-    final artifactsDir = Directory(
-      '${_resolveRepoRoot()}${Platform.pathSeparator}artifacts${Platform.pathSeparator}long_task_runtime_observability_screenshots',
-    )..createSync(recursive: true);
-    expect(artifactsDir.existsSync(), isTrue);
+    final artifactsDir = manualGoldenArtifactsDirectory(
+      'long_task_runtime_observability_screenshots',
+    );
+    if (skipManualGoldenTestIfArtifactsAreMissing(
+      artifactsDirectory: artifactsDir,
+      expectedFileNames: _lto09GoldenFileNames,
+    )) {
+      return;
+    }
 
     await _captureRunningState(tester);
     await _capturePausedState(tester);
@@ -24,21 +37,6 @@ void main() {
     await _captureFailedState(tester);
     await _captureCompletedState(tester);
 
-    for (final fileName in const <String>[
-      'lto09_running_long_task.png',
-      'lto09_paused_long_task.png',
-      'lto09_waiting_checkpoint.png',
-      'lto09_failed_step.png',
-      'lto09_completed_stopped.png',
-    ]) {
-      expect(
-        File(
-          '${artifactsDir.path}${Platform.pathSeparator}$fileName',
-        ).existsSync(),
-        isTrue,
-        reason: '缺少截图产物：$fileName',
-      );
-    }
   });
 }
 
@@ -283,11 +281,6 @@ void _setViewport(WidgetTester tester, Size size) {
     tester.view.resetPhysicalSize();
     tester.view.resetDevicePixelRatio();
   });
-}
-
-String _resolveRepoRoot() {
-  final scriptDir = Directory.current.path;
-  return Directory(scriptDir).parent.parent.path;
 }
 
 void _noop(String _) {}

@@ -275,22 +275,24 @@ void main() {
             workspacePort: workspacePort,
             fileMutationAdapter: LocalProjectFileMutationAdapter(),
           ),
-          hostInformationPermissionContext: const HostInformationPermissionContext(
-            allowNetwork: true,
-            allowImportCollection: true,
-            permissionMode: HostInformationPermissionModes.open,
-            confirmationMode: HostInformationConfirmationModes.automatic,
-            source: 'dispatcher.test',
-          ),
+          hostInformationPermissionContext:
+              const HostInformationPermissionContext(
+                allowNetwork: true,
+                allowImportCollection: true,
+                permissionMode: HostInformationPermissionModes.open,
+                confirmationMode: HostInformationConfirmationModes.automatic,
+                source: 'dispatcher.test',
+              ),
           informationDomainToolExecutor: ProjectInformationDomainToolExecutor(
             workspacePort: workspacePort,
-            researchCoordinatorService: ProjectInformationResearchCoordinatorService(
-              workspacePort: workspacePort,
-              gatewayService: ProjectResearchGatewayService(
-                workspacePort: workspacePort,
-                gatewayToolExecutor: fakeGateway,
-              ),
-            ),
+            researchCoordinatorService:
+                ProjectInformationResearchCoordinatorService(
+                  workspacePort: workspacePort,
+                  gatewayService: ProjectResearchGatewayService(
+                    workspacePort: workspacePort,
+                    gatewayToolExecutor: fakeGateway,
+                  ),
+                ),
           ),
         );
 
@@ -318,17 +320,23 @@ void main() {
           researchResult['domain_outcome'],
         );
         final researchRequest = ValueReaders.mapValue(
-          ValueReaders.mapValue(researchOutcome['outcome_payload'])['research_request'],
+          ValueReaders.mapValue(
+            researchOutcome['outcome_payload'],
+          )['research_request'],
         );
         final metadata = ValueReaders.mapValue(researchRequest['metadata']);
         final permissionDecision = ValueReaders.mapValue(
           researchOutcome['permission_decision'],
         );
         final researchExecution = ValueReaders.mapValue(
-          ValueReaders.mapValue(researchOutcome['outcome_payload'])['research_execution'],
+          ValueReaders.mapValue(
+            researchOutcome['outcome_payload'],
+          )['research_execution'],
         );
         expect(
-          ValueReaders.boolValue(researchRequest['user_granted_network_access']),
+          ValueReaders.boolValue(
+            researchRequest['user_granted_network_access'],
+          ),
           isTrue,
         );
         expect(
@@ -336,7 +344,9 @@ void main() {
           DomainToolPermissionDispositions.accepted,
         );
         expect(
-          ValueReaders.boolValue(metadata['raw_model_user_granted_network_access']),
+          ValueReaders.boolValue(
+            metadata['raw_model_user_granted_network_access'],
+          ),
           isFalse,
         );
         expect(
@@ -407,11 +417,13 @@ void main() {
           designResult['domain_outcome_status'],
           DomainToolOutcomeStatuses.proposed,
         );
-        final designOutcome = ValueReaders.mapValue(designResult['domain_outcome']);
+        final designOutcome = ValueReaders.mapValue(
+          designResult['domain_outcome'],
+        );
         expect(
-          ValueReaders.mapValue(designOutcome['metadata']).containsKey(
-            'raw_model_user_granted_network_access',
-          ),
+          ValueReaders.mapValue(
+            designOutcome['metadata'],
+          ).containsKey('raw_model_user_granted_network_access'),
           isFalse,
         );
       },

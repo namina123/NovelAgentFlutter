@@ -9,6 +9,20 @@ import '../imports/source_import_request.dart';
 import '../imports/source_import_selection.dart';
 import '../imports/source_import_selection_kind.dart';
 
+typedef PrepareProjectImportedFile =
+    Future<void> Function({
+      required ProjectDescriptor project,
+      required String sourcePath,
+      required String relativePath,
+    });
+
+typedef RollbackProjectImportedFile =
+    Future<void> Function({
+      required ProjectDescriptor project,
+      required String sourcePath,
+      required String relativePath,
+    });
+
 class ImportProjectFilesUseCase {
   ImportProjectFilesUseCase({
     required ProjectToolHostPort projectToolHostPort,
@@ -32,6 +46,8 @@ class ImportProjectFilesUseCase {
     required List<String> sourcePaths,
     SourceImportRequest? sourceImportRequest,
     String targetDirectory = '',
+    PrepareProjectImportedFile? prepareImportedFile,
+    RollbackProjectImportedFile? rollbackPreparedImportedFile,
   }) async {
     // 中文注释: 外部文件导入收口在这里，统一处理目标目录、重名去重和结果摘要。
     final cleanTargetDirectory = _pathService.cleanRelativePath(
@@ -84,11 +100,36 @@ class ImportProjectFilesUseCase {
         rootPath: project.rootPath,
         relativePath: targetRelativePath,
       );
-      await _projectToolHostPort.copyExternalFile(
-        cleanSourcePath,
-        project.rootPath,
-        uniqueTargetPath,
-      );
+      // 中文注释: 可解析文本导入可在复制投影前写入结构化主数据源；附件调用方可不提供该钩子。
+      var primarySourcePrepared = false;
+      try {
+        await prepareImportedFile?.call(
+          project: project,
+          sourcePath: cleanSourcePath,
+          relativePath: uniqueTargetPath,
+        );
+        primarySourcePrepared = prepareImportedFile != null;
+        await _projectToolHostPort.copyExternalFile(
+          cleanSourcePath,
+          project.rootPath,
+          uniqueTargetPath,
+        );
+      } catch (error, stackTrace) {
+        // 中文注释: 可解析文本的 SQLite 事实先行；文件投影复制失败时由宿主恢复
+        // 当前条目的主库快照，已经成功导入的前序文件则保持各自完整状态。
+        if (primarySourcePrepared) {
+          try {
+            await rollbackPreparedImportedFile?.call(
+              project: project,
+              sourcePath: cleanSourcePath,
+              relativePath: uniqueTargetPath,
+            );
+          } catch (_) {
+            // Preserve the original copy failure.
+          }
+        }
+        Error.throwWithStackTrace(error, stackTrace);
+      }
       importedPaths.add(uniqueTargetPath);
     }
     return <String, Object?>{

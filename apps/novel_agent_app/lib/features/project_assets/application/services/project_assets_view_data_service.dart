@@ -40,6 +40,8 @@ class ProjectAssetsViewDataService {
   final ProjectReferenceExtractionStrategyPickerViewDataService
   _referenceExtractionStrategyPickerViewDataService;
   final ProjectRagExtractionViewDataService _ragExtractionViewDataService;
+  final ProjectCapabilityService _projectCapabilityService =
+      const ProjectCapabilityService();
 
   ProjectAssetsViewData build({
     required ProjectAssetsSnapshot snapshot,
@@ -97,8 +99,7 @@ class ProjectAssetsViewDataService {
           _referenceExtractionStrategyPickerViewDataService.build(
             selectedProfileId: snapshot.selectedReferenceExtractionStrategyId,
             useDeconstructionProjection:
-                project?.projectType.trim() ==
-                BookDeconstructionConstants.projectTypeId,
+                project != null && _hasBookDeconstructionCapability(project),
           ),
       ragExtraction: _ragExtractionViewDataService.build(
         snapshot: snapshot.ragExtraction,
@@ -134,6 +135,14 @@ class ProjectAssetsViewDataService {
       return '表达限制是项目级写作约束系统，可统一管理内置与项目自定义规则方案，并决定它们如何参与当前项目。';
     }
     return ProjectAssetsViewData.initial().description;
+  }
+
+  bool _hasBookDeconstructionCapability(ProjectDescriptor project) {
+    return _projectCapabilityService.hasBookDeconstruction(
+      projectTypeId: project.projectType,
+      additionalTraitIds: project.additionalTraitIds,
+      runtimeBaselineId: project.runtimeBaselineId,
+    );
   }
 
   List<ProjectAssetEntryViewData> _entriesForTab(

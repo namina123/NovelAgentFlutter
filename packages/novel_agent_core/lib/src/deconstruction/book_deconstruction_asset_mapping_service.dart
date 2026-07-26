@@ -1,4 +1,5 @@
 import '../inspiration/inspiration_premise.dart';
+import '../project/project_storage_strategy.dart';
 import 'book_deconstruction_application_action.dart';
 import 'book_deconstruction_application_item.dart';
 import 'book_deconstruction_artifact_kind.dart';
@@ -14,21 +15,28 @@ class BookDeconstructionAssetMappingService {
   final BookDeconstructionTargetPathService _targetPathService;
 
   List<BookDeconstructionApplicationItem> map(
-    BookDeconstructionExtractionResult result,
-  ) {
+    BookDeconstructionExtractionResult result, {
+    ProjectStorageStrategy storageStrategy =
+        ProjectStorageStrategy.markdownProjectStore,
+  }) {
     // 中文注释: 这里只负责把提取结果映射为“可应用条目”，不直接决定写盘或覆盖策略。
     final items = <BookDeconstructionApplicationItem>[];
-    _addPremiseItems(items, result.premises);
-    _addStoryOutlineItem(items, result.storyOutlineSummary);
-    _addChapterOutlineItems(items, result);
-    _addAssetItems(items, result);
+    _addPremiseItems(items, result.premises, storageStrategy: storageStrategy);
+    _addStoryOutlineItem(
+      items,
+      result.storyOutlineSummary,
+      storageStrategy: storageStrategy,
+    );
+    _addChapterOutlineItems(items, result, storageStrategy: storageStrategy);
+    _addAssetItems(items, result, storageStrategy: storageStrategy);
     return items;
   }
 
   void _addPremiseItems(
     List<BookDeconstructionApplicationItem> items,
-    List<InspirationPremise> premises,
-  ) {
+    List<InspirationPremise> premises, {
+    required ProjectStorageStrategy storageStrategy,
+  }) {
     for (var index = 0; index < premises.length; index++) {
       final premise = premises[index];
       items.add(
@@ -40,7 +48,11 @@ class BookDeconstructionAssetMappingService {
           action: BookDeconstructionApplicationAction.createOrMergeDocument,
           displayName: premise.displayName,
           summary: premise.summary,
-          relativePathHint: _targetPathService.premisePath(premise, index + 1),
+          relativePathHint: _targetPathService.premisePath(
+            premise,
+            index + 1,
+            storageStrategy: storageStrategy,
+          ),
         ),
       );
     }
@@ -48,8 +60,9 @@ class BookDeconstructionAssetMappingService {
 
   void _addStoryOutlineItem(
     List<BookDeconstructionApplicationItem> items,
-    String storyOutlineSummary,
-  ) {
+    String storyOutlineSummary, {
+    required ProjectStorageStrategy storageStrategy,
+  }) {
     final cleanSummary = storyOutlineSummary.trim();
     if (cleanSummary.isEmpty) {
       return;
@@ -63,15 +76,18 @@ class BookDeconstructionAssetMappingService {
         action: BookDeconstructionApplicationAction.createOrMergeDocument,
         displayName: '拆书故事总纲',
         summary: cleanSummary,
-        relativePathHint: _targetPathService.storyOutlinePath(),
+        relativePathHint: _targetPathService.storyOutlinePath(
+          storageStrategy: storageStrategy,
+        ),
       ),
     );
   }
 
   void _addChapterOutlineItems(
     List<BookDeconstructionApplicationItem> items,
-    BookDeconstructionExtractionResult result,
-  ) {
+    BookDeconstructionExtractionResult result, {
+    required ProjectStorageStrategy storageStrategy,
+  }) {
     for (var index = 0; index < result.chapterOutlines.length; index++) {
       final outline = result.chapterOutlines[index];
       items.add(
@@ -86,6 +102,7 @@ class BookDeconstructionAssetMappingService {
           relativePathHint: _targetPathService.chapterOutlinePath(
             outline,
             index + 1,
+            storageStrategy: storageStrategy,
           ),
         ),
       );
@@ -94,11 +111,13 @@ class BookDeconstructionAssetMappingService {
 
   void _addAssetItems(
     List<BookDeconstructionApplicationItem> items,
-    BookDeconstructionExtractionResult result,
-  ) {
+    BookDeconstructionExtractionResult result, {
+    required ProjectStorageStrategy storageStrategy,
+  }) {
     _addGenericAssetItems(
       items,
       artifactKind: BookDeconstructionArtifactKind.styleProfile,
+      storageStrategy: storageStrategy,
       entries: result.styleProfiles
           .map(
             (item) => _AssetEntry(
@@ -112,6 +131,7 @@ class BookDeconstructionAssetMappingService {
     _addGenericAssetItems(
       items,
       artifactKind: BookDeconstructionArtifactKind.worldRuleSet,
+      storageStrategy: storageStrategy,
       entries: result.worldRuleSets
           .map(
             (item) => _AssetEntry(
@@ -125,6 +145,7 @@ class BookDeconstructionAssetMappingService {
     _addGenericAssetItems(
       items,
       artifactKind: BookDeconstructionArtifactKind.characterProfile,
+      storageStrategy: storageStrategy,
       entries: result.characterProfiles
           .map(
             (item) => _AssetEntry(
@@ -138,6 +159,7 @@ class BookDeconstructionAssetMappingService {
     _addGenericAssetItems(
       items,
       artifactKind: BookDeconstructionArtifactKind.organizationProfile,
+      storageStrategy: storageStrategy,
       entries: result.organizationProfiles
           .map(
             (item) => _AssetEntry(
@@ -151,6 +173,7 @@ class BookDeconstructionAssetMappingService {
     _addGenericAssetItems(
       items,
       artifactKind: BookDeconstructionArtifactKind.foreshadowRecord,
+      storageStrategy: storageStrategy,
       entries: result.foreshadowRecords
           .map(
             (item) => _AssetEntry(
@@ -164,6 +187,7 @@ class BookDeconstructionAssetMappingService {
     _addGenericAssetItems(
       items,
       artifactKind: BookDeconstructionArtifactKind.timelineRecord,
+      storageStrategy: storageStrategy,
       entries: result.timelineRecords
           .map(
             (item) => _AssetEntry(
@@ -177,6 +201,7 @@ class BookDeconstructionAssetMappingService {
     _addGenericAssetItems(
       items,
       artifactKind: BookDeconstructionArtifactKind.relationshipRecord,
+      storageStrategy: storageStrategy,
       entries: result.relationshipRecords
           .map(
             (item) => _AssetEntry(
@@ -192,6 +217,7 @@ class BookDeconstructionAssetMappingService {
   void _addGenericAssetItems(
     List<BookDeconstructionApplicationItem> items, {
     required String artifactKind,
+    required ProjectStorageStrategy storageStrategy,
     required List<_AssetEntry> entries,
   }) {
     for (final entry in entries) {
@@ -204,7 +230,11 @@ class BookDeconstructionAssetMappingService {
           action: BookDeconstructionApplicationAction.createOrMergeAsset,
           displayName: entry.displayName,
           summary: entry.summary,
-          relativePathHint: _targetPathService.assetPath(artifactKind, entry.id),
+          relativePathHint: _targetPathService.assetPath(
+            artifactKind,
+            entry.id,
+            storageStrategy: storageStrategy,
+          ),
         ),
       );
     }

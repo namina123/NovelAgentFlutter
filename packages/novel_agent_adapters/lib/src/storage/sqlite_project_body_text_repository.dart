@@ -142,8 +142,7 @@ class SqliteProjectBodyTextRepository implements ProjectBodyTextRepository {
       final existingCreatedAt = existingRows.isEmpty
           ? ''
           : _text(existingRows.first['created_at']);
-      final createdAt =
-          document.createdAt.trim().isNotEmpty
+      final createdAt = document.createdAt.trim().isNotEmpty
           ? document.createdAt.trim()
           : existingCreatedAt.isNotEmpty
           ? existingCreatedAt

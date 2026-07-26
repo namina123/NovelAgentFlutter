@@ -74,10 +74,7 @@ void main() {
         'id': 'session_a',
       });
       expect(outcome.persist, isFalse);
-      expect(
-        outcome.detail?['pressure_snapshot'],
-        isA<Map<String, Object?>>(),
-      );
+      expect(outcome.detail?['pressure_snapshot'], isA<Map<String, Object?>>());
       expect(
         ValueReaders.stringValue(outcome.detail?['public_summary']),
         contains('压力'),
@@ -96,10 +93,9 @@ void main() {
     });
 
     test('setMode persists mode change', () async {
-      final outcome = await backend().setMode(
-        const <String, Object?>{'id': 'session_a'},
-        SessionRecordConstants.modeContinueWriting,
-      );
+      final outcome = await backend().setMode(const <String, Object?>{
+        'id': 'session_a',
+      }, SessionRecordConstants.modeContinueWriting);
       expect(outcome.persist, isTrue);
       expect(
         ValueReaders.stringValue(outcome.updatedSessionRecord['mode']),
@@ -108,14 +104,14 @@ void main() {
     });
 
     test('setGoalText persists free-text goal', () async {
-      final outcome = await backend().setGoalText(
-        const <String, Object?>{'id': 'session_a'},
-        '收束第三章伏笔',
-      );
+      final outcome = await backend().setGoalText(const <String, Object?>{
+        'id': 'session_a',
+      }, '收束第三章伏笔');
       expect(outcome.persist, isTrue);
       expect(
         ValueReaders.stringValue(
-          outcome.updatedSessionRecord[SessionRecordConstants.conversationGoalField],
+          outcome.updatedSessionRecord[SessionRecordConstants
+              .conversationGoalField],
         ),
         '收束第三章伏笔',
       );
@@ -123,7 +119,9 @@ void main() {
       final reloaded = await shellService.loadSession(project, 'session_a');
       expect(
         ValueReaders.stringValue(
-          ValueReaders.mapValue(reloaded['session_record'])[SessionRecordConstants.conversationGoalField],
+          ValueReaders.mapValue(
+            reloaded['session_record'],
+          )[SessionRecordConstants.conversationGoalField],
         ),
         '收束第三章伏笔',
       );
@@ -136,7 +134,8 @@ void main() {
       expect(outcome.persist, isTrue);
       expect(
         ValueReaders.objectList(
-          outcome.updatedSessionRecord[SessionRecordConstants.workingContextMessagesField],
+          outcome.updatedSessionRecord[SessionRecordConstants
+              .workingContextMessagesField],
         ),
         isEmpty,
       );

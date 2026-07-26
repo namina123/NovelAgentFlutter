@@ -7,6 +7,42 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 
 void main() {
   group('ProjectOpenScanRuntime', () {
+    test('scan excludes projects whose manifest contract is invalid', () async {
+      final rootDirectory = await Directory.systemTemp.createTemp(
+        'project_open_scan_runtime_corrupt_test',
+      );
+      addTearDown(() async {
+        if (await rootDirectory.exists()) {
+          await rootDirectory.delete(recursive: true);
+        }
+      });
+      final corruptDirectory = Directory(
+        '${rootDirectory.path}${Platform.pathSeparator}corrupt_project',
+      );
+      await corruptDirectory.create(recursive: true);
+      final manifestFile = File(
+        '${corruptDirectory.path}${Platform.pathSeparator}'
+        '${ProjectManifestCodecService.manifestRelativePath.replaceAll('/', Platform.pathSeparator)}',
+      );
+      await manifestFile.parent.create(recursive: true);
+      await manifestFile.writeAsString('''
+{
+  "title": "不可安全打开的项目",
+  "project_type": "future_novel_type"
+}
+''');
+
+      final snapshot = await ProjectOpenScanRuntime().scan(
+        projectsRootPath: rootDirectory.path,
+        recentProjectPath: corruptDirectory.path,
+        currentProjectPath: corruptDirectory.path,
+        allowImportLocal: true,
+      );
+
+      expect(snapshot.records, isEmpty);
+      expect(snapshot.selectedEntryId, isEmpty);
+    });
+
     test('scan collects projects from default, current and recent paths', () async {
       final rootDirectory = await Directory.systemTemp.createTemp(
         'project_open_scan_runtime_test',

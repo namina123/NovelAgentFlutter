@@ -321,6 +321,75 @@ void main() {
       );
     },
   );
+  testWidgets('runtime baseline command submits the selected baseline', (
+    WidgetTester tester,
+  ) async {
+    final handler = _FakeResourceManagerActionHandler();
+    final viewData = const WorkspaceCommandViewData(
+      mode: WorkspaceCommandMode.configureRuntimeBaseline,
+      title: '配置运行基准',
+      description: '修复长篇运行配置。',
+      confirmLabel: '保存运行基准',
+      status: '',
+      projectTitle: '遗留长篇',
+      projectType: 'long_novel',
+      transitionRuntimeBaselineOptions: <SelectorOptionViewData>[
+        SelectorOptionViewData(
+          id: 'continuous_autonomous',
+          label: '连续托管式',
+          note: '连续推进。',
+        ),
+        SelectorOptionViewData(
+          id: 'chapter_collaboration_autorun',
+          label: '逐章协作式自动推进',
+          note: '逐章检查。',
+        ),
+      ],
+      transitionRequiresRuntimeBaselineSelection: true,
+      genre: '',
+      premise: '',
+      notes: '',
+      relativePath: '',
+      entryName: '',
+      content: '',
+      sourcePathsText: '',
+      targetDirectory: '',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: Stack(
+            children: [
+              WorkspaceCommandOverlay(
+                viewData: viewData,
+                actionHandler: handler,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('运行基准'), findsOneWidget);
+    await tester.tap(find.byTooltip('运行基准'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('逐章协作式自动推进').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('保存运行基准'));
+    await tester.pump();
+
+    expect(
+      handler.lastSubmittedRequest!.mode,
+      WorkspaceCommandMode.configureRuntimeBaseline,
+    );
+    expect(
+      handler.lastSubmittedRequest!.transitionRuntimeBaselineId,
+      'chapter_collaboration_autorun',
+    );
+  });
 }
 
 class _FakeResourceManagerActionHandler
@@ -355,6 +424,9 @@ class _FakeResourceManagerActionHandler
 
   @override
   void onProjectTypeTransitionRequested() {}
+
+  @override
+  void onRuntimeBaselineConfigurationRequested() {}
 
   @override
   void onImportRequested() {}

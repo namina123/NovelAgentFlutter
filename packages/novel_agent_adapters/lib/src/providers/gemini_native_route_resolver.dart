@@ -3,9 +3,7 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 class GeminiNativeRouteResolver {
   const GeminiNativeRouteResolver();
 
-  GatewayRouteResolution resolve({
-    String apiMode = '',
-  }) {
+  GatewayRouteResolution resolve({String apiMode = ''}) {
     // 中文注释: Gemini native 只承接 generateContent / streamGenerateContent，不与 OpenAI-compatible 路由混用。
     return GatewayRouteResolution.resolve(
       protocolKind: ProtocolKind.geminiNative,
@@ -29,7 +27,9 @@ class GeminiNativeRouteResolver {
     final method = routeFamily == RequestRouteFamily.streamGenerateContent
         ? 'streamGenerateContent'
         : 'generateContent';
-    final modelSegment = modelId.trim().isEmpty ? 'models/*' : 'models/$modelId';
+    final modelSegment = modelId.trim().isEmpty
+        ? 'models/*'
+        : 'models/$modelId';
     return Uri.parse('$normalizedBaseUrl/$modelSegment:$method');
   }
 

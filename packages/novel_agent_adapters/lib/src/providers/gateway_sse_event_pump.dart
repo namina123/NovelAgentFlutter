@@ -48,8 +48,7 @@ class GatewaySseEventPump {
     }
     final tail = _consumeEvents(parser.close(), onEventData);
     sawStreamEvent = sawStreamEvent || tail.sawStreamEvent;
-    reachedTerminalEvent =
-        reachedTerminalEvent || tail.reachedTerminalEvent;
+    reachedTerminalEvent = reachedTerminalEvent || tail.reachedTerminalEvent;
     return GatewaySsePumpResult(
       rawBody: rawBody.toString(),
       sawStreamEvent: sawStreamEvent,

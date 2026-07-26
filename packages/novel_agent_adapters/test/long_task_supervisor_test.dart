@@ -213,80 +213,80 @@ void main() {
       },
     );
 
-    test('applyRecoveryState persists formal recovery state onto run instance', () async {
-      final tempRoot = await Directory.systemTemp.createTemp(
-        'novel-agent-supervisor-recovery-state-',
-      );
-      try {
-        final registry = LocalLongTaskRunRegistry(
-          settingsRootPath: tempRoot.path,
+    test(
+      'applyRecoveryState persists formal recovery state onto run instance',
+      () async {
+        final tempRoot = await Directory.systemTemp.createTemp(
+          'novel-agent-supervisor-recovery-state-',
         );
-        final scheduler = LongTaskHeartbeatScheduler(
-          runRegistry: registry,
-          runtimeBaselineCatalogService:
-              const RuntimeBaselineCatalogService(),
-        );
-        final supervisor = LongTaskSupervisor(
-          runRegistry: registry,
-          watchdogDispatchPort: LongTaskWatchdog(
+        try {
+          final registry = LocalLongTaskRunRegistry(
+            settingsRootPath: tempRoot.path,
+          );
+          final scheduler = LongTaskHeartbeatScheduler(
             runRegistry: registry,
-            heartbeatScheduler: scheduler,
-          ),
-        );
-        final now = DateTime.parse('2026-05-25T18:00:00.000Z');
-        final instance = _runInstance(
-          runId: 'run_recovery_state',
-          projectId: 'project_recovery_state',
-          projectName: '项目 Recovery State',
-          projectRootPath: 'D:/projects/recovery-state',
-          status: LongTaskRunStatus.running,
-          now: now,
-        );
-        await supervisor.trackRun(instance);
+            runtimeBaselineCatalogService:
+                const RuntimeBaselineCatalogService(),
+          );
+          final supervisor = LongTaskSupervisor(
+            runRegistry: registry,
+            watchdogDispatchPort: LongTaskWatchdog(
+              runRegistry: registry,
+              heartbeatScheduler: scheduler,
+            ),
+          );
+          final now = DateTime.parse('2026-05-25T18:00:00.000Z');
+          final instance = _runInstance(
+            runId: 'run_recovery_state',
+            projectId: 'project_recovery_state',
+            projectName: '项目 Recovery State',
+            projectRootPath: 'D:/projects/recovery-state',
+            status: LongTaskRunStatus.running,
+            now: now,
+          );
+          await supervisor.trackRun(instance);
 
-        final updated = await supervisor.applyRecoveryState(
-          'run_recovery_state',
-          <String, Object?>{
-            'recovery_state': const LongTaskRecoveryState(
-              present: true,
-              state: LongTaskRecoveryStates.exhausted,
-              runStatus: 'failed_manual_attention',
-              recommendedAction: 'pause_for_manual_attention',
-              reason: 'recovery_exhausted',
-              note: '自动重试预算已耗尽，升级为人工处理。',
-              retryCount: 2,
-              retryBudget: 2,
-              retriesRemaining: 0,
-              autoRetryEligible: true,
-              blocksProgress: true,
-              manualAttentionRequired: true,
-              exhausted: true,
-              exhaustedDisposition: 'manual_attention',
-              stopOutcome: LongTaskStopOutcome(
-                present: true,
-                category: LongTaskStopOutcomeCategories.recoveryExhausted,
-                reason: 'recovery_exhausted',
-                legacyStopReason: 'recovery_exhausted',
-                summary: '自动重试预算已耗尽。',
-              ),
-            ).toJson(),
-          },
-          occurredAt: now.add(const Duration(minutes: 1)),
-        );
+          final updated = await supervisor
+              .applyRecoveryState('run_recovery_state', <String, Object?>{
+                'recovery_state': const LongTaskRecoveryState(
+                  present: true,
+                  state: LongTaskRecoveryStates.exhausted,
+                  runStatus: 'failed_manual_attention',
+                  recommendedAction: 'pause_for_manual_attention',
+                  reason: 'recovery_exhausted',
+                  note: '自动重试预算已耗尽，升级为人工处理。',
+                  retryCount: 2,
+                  retryBudget: 2,
+                  retriesRemaining: 0,
+                  autoRetryEligible: true,
+                  blocksProgress: true,
+                  manualAttentionRequired: true,
+                  exhausted: true,
+                  exhaustedDisposition: 'manual_attention',
+                  stopOutcome: LongTaskStopOutcome(
+                    present: true,
+                    category: LongTaskStopOutcomeCategories.recoveryExhausted,
+                    reason: 'recovery_exhausted',
+                    legacyStopReason: 'recovery_exhausted',
+                    summary: '自动重试预算已耗尽。',
+                  ),
+                ).toJson(),
+              }, occurredAt: now.add(const Duration(minutes: 1)));
 
-        expect(updated, isNotNull);
-        expect(updated!.status, LongTaskRunStatus.failedManualAttention);
-        expect(updated.recoveryState.state, LongTaskRecoveryStates.exhausted);
-        expect(
-          updated.stopOutcome.category,
-          LongTaskStopOutcomeCategories.recoveryExhausted,
-        );
-      } finally {
-        if (tempRoot.existsSync()) {
-          await tempRoot.delete(recursive: true);
+          expect(updated, isNotNull);
+          expect(updated!.status, LongTaskRunStatus.failedManualAttention);
+          expect(updated.recoveryState.state, LongTaskRecoveryStates.exhausted);
+          expect(
+            updated.stopOutcome.category,
+            LongTaskStopOutcomeCategories.recoveryExhausted,
+          );
+        } finally {
+          if (tempRoot.existsSync()) {
+            await tempRoot.delete(recursive: true);
+          }
         }
-      }
-    });
+      },
+    );
   });
 
   group('LongTaskWatchdog', () {

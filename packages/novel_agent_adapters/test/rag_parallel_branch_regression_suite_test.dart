@@ -11,13 +11,16 @@ void main() {
       () async {
         final report = await _runRagParallelBranchRegressionSuite();
         final summary = ValueReaders.mapValue(report['summary']);
-        final scenarios = ValueReaders.mapList(report['scenarios'])
-            .map(ValueReaders.mapValue)
-            .toList(growable: false);
+        final scenarios = ValueReaders.mapList(
+          report['scenarios'],
+        ).map(ValueReaders.mapValue).toList(growable: false);
 
         expect(ValueReaders.intValue(summary['total_scenarios']), 4);
         expect(ValueReaders.intValue(summary['passed_scenarios']), 4);
-        expect(ValueReaders.boolValue(summary['all_required_coverage_passed']), isTrue);
+        expect(
+          ValueReaders.boolValue(summary['all_required_coverage_passed']),
+          isTrue,
+        );
         expect(
           scenarios.map((scenario) => ValueReaders.stringValue(scenario['id'])),
           containsAll(const <String>[
@@ -110,11 +113,10 @@ Future<JsonMap> _runRagParallelBranchRegressionSuite() async {
     final scenarios = <JsonMap>[
       _scenario(
         id: 'txt_ingestion',
-        passed: corpus.corpusId == 'corpus-rag-regression-1' &&
+        passed:
+            corpus.corpusId == 'corpus-rag-regression-1' &&
             corpus.chunkCount > 0,
-        coveredRequirements: const <String>[
-          'txt_ingestion',
-        ],
+        coveredRequirements: const <String>['txt_ingestion'],
         details: <String, Object?>{
           'corpus_id': corpus.corpusId,
           'chunk_count': corpus.chunkCount,
@@ -122,34 +124,33 @@ Future<JsonMap> _runRagParallelBranchRegressionSuite() async {
       ),
       _scenario(
         id: 'mount_summary',
-        passed: mountSummary.bindingCount == 1 &&
+        passed:
+            mountSummary.bindingCount == 1 &&
             mountSummary.corpusIds.contains(corpus.corpusId),
-        coveredRequirements: const <String>[
-          'mount_summary',
-        ],
+        coveredRequirements: const <String>['mount_summary'],
         details: mountSummary.toJson(),
       ),
       _scenario(
         id: 'retrieval_hits',
-        passed: ValueReaders.boolValue(retrieval['ok']) &&
+        passed:
+            ValueReaders.boolValue(retrieval['ok']) &&
             ValueReaders.mapList(retrieval['retrieval_hits']).isNotEmpty,
-        coveredRequirements: const <String>[
-          'retrieval_hits',
-        ],
+        coveredRequirements: const <String>['retrieval_hits'],
         details: <String, Object?>{
           'retrieval_hits': ValueReaders.mapList(retrieval['retrieval_hits']),
-          'citation_paths': ValueReaders.stringList(retrieval['citation_paths']),
+          'citation_paths': ValueReaders.stringList(
+            retrieval['citation_paths'],
+          ),
         },
       ),
       _scenario(
         id: 'retrieval_activation_package',
-        passed: activationPackage.selectedHits.isNotEmpty &&
+        passed:
+            activationPackage.selectedHits.isNotEmpty &&
             activationPackage.activationPackageId ==
                 'rag_activation:project-rag-regression-1:query-rag-regression-1' &&
             activationPackage.citationPaths.isNotEmpty,
-        coveredRequirements: const <String>[
-          'retrieval_activation_package',
-        ],
+        coveredRequirements: const <String>['retrieval_activation_package'],
         details: activationPackage.toJson(),
       ),
     ];
@@ -176,9 +177,9 @@ Future<JsonMap> _runRagParallelBranchRegressionSuite() async {
     return <String, Object?>{
       'summary': <String, Object?>{
         'total_scenarios': scenarios.length,
-        'passed_scenarios': scenarios.where(
-          (scenario) => ValueReaders.boolValue(scenario['passed']),
-        ).length,
+        'passed_scenarios': scenarios
+            .where((scenario) => ValueReaders.boolValue(scenario['passed']))
+            .length,
         'all_required_coverage_passed': requirements.values.every(
           (value) => value,
         ),
