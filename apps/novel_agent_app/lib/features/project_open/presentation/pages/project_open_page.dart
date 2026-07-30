@@ -36,8 +36,10 @@ class ProjectOpenPage extends StatelessWidget {
                       // 中文注释: 区分"正在加载"（首次刷新还没回来）与"确实没有作品"，
                       // 避免冷启动瞬间闪"还没有作品"误导用户以为库是空的。
                       viewData.hasLoaded
-                          ? '还没有作品。先新建一部，或导入已有项目。'
-                          : '正在加载作品列表…',
+                          ? (viewData.allowImportLocal
+                              ? '还没有作品。先新建一部，或导入已有项目。'
+                              : '还没有作品。先新建一部开始。')
+                          : '正在加载作品列表...',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: panel.mutedForegroundColor,
@@ -111,6 +113,22 @@ class ProjectOpenPage extends StatelessWidget {
                           onTap: () {
                             actionHandler.onProjectOpenEntrySelected(entry.id);
                           },
+                          // 中文注释: 移动端(窄屏)详情面板被隐藏、没有"删除作品"按钮——
+                          // 给每个条目加长按删除，让手机用户也能在应用内清理作品库。
+                          onLongPress: () async {
+                            final confirmed = await showConfirmationDialog(
+                              context,
+                              title: '删除该作品？',
+                              message: '将永久删除目录：\n${entry.path}\n\n此操作不可恢复。'
+                                  '${entry.isCurrentProject ? '\n\n这是当前正在使用的作品，删除后将自动返回项目启动器。' : ''}',
+                              confirmLabel: '删除',
+                            );
+                            if (confirmed) {
+                              actionHandler.onProjectOpenDeleteRequested(
+                                entry.path,
+                              );
+                            }
+                          },
                         ),
                       );
                     },
@@ -165,8 +183,8 @@ class ProjectOpenPage extends StatelessWidget {
                                 final confirmed = await showConfirmationDialog(
                                   context,
                                   title: '删除该作品？',
-                                  message:
-                                      '将永久删除目录：\n${selected.path}\n\n此操作不可恢复。',
+                                  message: '将永久删除目录：\n${selected.path}\n\n此操作不可恢复。'
+                                      '${selected.isCurrentProject ? '\n\n这是当前正在使用的作品，删除后将自动返回项目启动器。' : ''}',
                                   confirmLabel: '删除',
                                 );
                                 if (!context.mounted || !confirmed) {
@@ -244,8 +262,10 @@ class ProjectOpenPage extends StatelessWidget {
                   ),
                 ],
               ),
-              if (!isNarrow && viewData.projectsRootPath.trim().isNotEmpty) ...[
+              if (viewData.projectsRootPath.trim().isNotEmpty) ...[
                 const SizedBox(height: 12),
+                // 中文注释: 作品库根目录在移动端同样可见——用户在删除前需要知道作品落盘位置，
+                // 窄屏不再隐藏这条信息（长路径会自然换行）。
                 Text(
                   '项目目录：${viewData.projectsRootPath}',
                   style: TextStyle(

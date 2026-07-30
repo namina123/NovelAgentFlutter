@@ -29,6 +29,7 @@ void main() {
           selectedDestination: AppDestination.workbench,
           actionHandler: handler,
           onSystemBackRequested: () async {},
+          onCommandPaletteRequested: () {},
           page: const ColoredBox(
             color: Color(0xFFF5F5F5),
             child: Center(child: Text('main-page')),
@@ -79,6 +80,7 @@ void main() {
           onSystemBackRequested: () async {
               backRequestCount += 1;
             },
+            onCommandPaletteRequested: () {},
             page: const ColoredBox(
               color: Color(0xFFF5F5F5),
               child: Center(child: Text('main-page')),
@@ -122,6 +124,7 @@ void main() {
           selectedDestination: AppDestination.workbench,
           actionHandler: _FakeNavigationActionHandler(),
           onSystemBackRequested: () async {},
+          onCommandPaletteRequested: () {},
           page: ColoredBox(
             color: const Color(0xFFF5F5F5),
             child: Align(
@@ -150,6 +153,39 @@ void main() {
   });
 
   testWidgets(
+    'compact bar surfaces a command palette entry that fires the callback',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(780, 1400);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      var paletteRequests = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light(),
+          home: AppShellCompactScaffold(
+            navigationSections: AppShellNavigationCatalog.sections(),
+            selectedDestination: AppDestination.workbench,
+            actionHandler: _FakeNavigationActionHandler(),
+            onSystemBackRequested: () async {},
+            onCommandPaletteRequested: () => paletteRequests += 1,
+            page: const ColoredBox(color: Color(0xFFF5F5F5)),
+          ),
+        ),
+      );
+
+      // 中文注释: 移动端无 Ctrl+K，顶部条命令面板按钮是其唯一常驻入口。
+      expect(find.byIcon(Icons.terminal), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.terminal));
+      await tester.pump();
+      expect(paletteRequests, 1);
+    },
+  );
+
+  testWidgets(
     'compact scaffold hides expanded drawer panel while keyboard is visible',
     (WidgetTester tester) async {
       tester.view.physicalSize = const Size(780, 1400);
@@ -172,6 +208,7 @@ void main() {
               selectedDestination: AppDestination.workbench,
               actionHandler: _FakeNavigationActionHandler(),
               onSystemBackRequested: () async {},
+              onCommandPaletteRequested: () {},
               page: const ColoredBox(color: Color(0xFFF5F5F5)),
             ),
           ),

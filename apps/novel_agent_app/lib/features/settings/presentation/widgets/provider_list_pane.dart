@@ -49,7 +49,7 @@ class ProviderListPane extends StatelessWidget {
               : provider.title;
           final subtitle = isDraft && provider.baseUrl.trim().isEmpty
               ? '填写厂商名称、密钥与地址后保存'
-              : '${provider.protocol} · ${provider.baseUrl.trim().isEmpty ? '未填写地址' : provider.baseUrl}';
+              : '${(provider.protocol == 'openai_compatible') ? 'OpenAI 兼容' : provider.protocol} · ${provider.baseUrl.trim().isEmpty ? '未填写地址' : provider.baseUrl}';
           return Material(
             color: provider.isSelected
                 ? optionTile.highlightBackgroundColor
@@ -95,7 +95,10 @@ class ProviderListPane extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: optionTile.mutedForegroundColor,
+                        // 中文注释: 未配置密钥用警示色突出，已配置保持弱化，便于扫一眼定位待补的接口。
+                        color: provider.apiKeyState.contains('未配置')
+                            ? Theme.of(context).colorScheme.error
+                            : optionTile.mutedForegroundColor,
                       ),
                     ),
                   ],

@@ -77,7 +77,7 @@ class ProjectLauncherOverlay extends StatelessWidget {
                                 Text(
                                   viewData.mode == ProjectLauncherMode.create
                                       ? '在工作台内完成项目初始化与入口选择。'
-                                      : '先创建一个新项目，或接回已有工作区。',
+                                      : '先创建一个新项目，或打开已有项目继续。',
                                   style: TextStyle(
                                     color: colors.mutedTextColor,
                                     fontSize: 10.5,

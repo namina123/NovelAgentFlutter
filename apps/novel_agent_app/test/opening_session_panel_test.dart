@@ -99,4 +99,7 @@ class _FakeConversationActionHandler implements ConversationActionHandler {
 
   @override
   void onUserOptionSelected(UserOptionViewData option) {}
+
+  @override
+  void setForegroundBackHandler(VoidCallback? handler) {}
 }

@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../../application/services/workbench_document_identity_service.dart';
 import '../models/workbench_canvas_view_data.dart';
 import '../renderers/document_resource_render_request.dart';
@@ -15,6 +17,7 @@ class DocumentResourceRenderRequestFactoryService {
     required WorkbenchCanvasViewData viewData,
     required DocumentWorkspaceDisplayMode selectedMode,
     required void Function(String value)? onChanged,
+    VoidCallback? onCreateFileRequested,
   }) {
     return DocumentResourceRenderRequest(
       title: viewData.activeDocumentTitle.trim().isEmpty
@@ -29,6 +32,7 @@ class DocumentResourceRenderRequestFactoryService {
       isBufferedDraft: viewData.activeDocumentBufferedDraft,
       hasDocument: viewData.documents.isNotEmpty,
       onChanged: onChanged,
+      onCreateFileRequested: onCreateFileRequested,
     );
   }
 

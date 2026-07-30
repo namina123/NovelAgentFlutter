@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../widgets/document_workspace_display_mode.dart';
 
 class DocumentResourceRenderRequest {
@@ -12,6 +14,7 @@ class DocumentResourceRenderRequest {
     required this.isBufferedDraft,
     required this.hasDocument,
     required this.onChanged,
+    this.onCreateFileRequested,
   });
 
   final String title;
@@ -24,6 +27,9 @@ class DocumentResourceRenderRequest {
   final bool isBufferedDraft;
   final bool hasDocument;
   final void Function(String value)? onChanged;
+
+  /// 空态「新建文档」入口；非空时空画布显示新建按钮。
+  final VoidCallback? onCreateFileRequested;
 
   String get normalizedPath => relativePath.trim().replaceAll('\\', '/');
 

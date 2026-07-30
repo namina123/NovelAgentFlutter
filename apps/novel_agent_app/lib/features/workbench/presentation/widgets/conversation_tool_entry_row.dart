@@ -77,11 +77,26 @@ class ConversationToolEntryRow extends StatelessWidget {
                             ),
                           ),
                           SizedBox(width: style.sectionGap),
-                          Icon(
-                            _statusIcon(lifecycleStatus),
-                            size: 12,
-                            color: statusColor,
-                          ),
+                          // 中文注释: 执行中用真实旋转指示器（与运行时状态条一致），避免长任务里静态图标
+                          // 让用户误以为卡死；其余状态沿用对应静态图标。
+                          if (lifecycleStatus ==
+                              ConversationToolLifecycleStatus.running)
+                            SizedBox(
+                              width: 12,
+                              height: 12,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  statusColor,
+                                ),
+                              ),
+                            )
+                          else
+                            Icon(
+                              _statusIcon(lifecycleStatus),
+                              size: 12,
+                              color: statusColor,
+                            ),
                           SizedBox(width: style.gap(-1.5, min: 2.5)),
                           Expanded(
                             child: Text(

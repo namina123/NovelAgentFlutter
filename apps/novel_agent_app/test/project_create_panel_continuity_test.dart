@@ -88,7 +88,8 @@ void main() {
     );
     await tester.enterText(find.widgetWithText(TextField, '补充说明'), '主角保留记忆。');
 
-    await tester.tap(find.text('下一步'));
+    // 中文注释: 普通小说为单相（projectType）向导，提交按钮文案是"创建并打开"而非"下一步"。
+    await tester.tap(find.text('创建并打开'));
     await tester.pump();
 
     expect(submitted, isNotNull);

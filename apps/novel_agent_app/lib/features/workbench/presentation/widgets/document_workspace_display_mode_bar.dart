@@ -38,7 +38,9 @@ class DocumentWorkspaceDisplayModeBar extends StatelessWidget {
           foregroundColor: optionSurface.foregroundColor,
         ),
         _DisplayModeChip(
-          label: '结构',
+          // 中文注释: 这一档展示的是资源元数据(路径/类型/字数等)，不是内容的结构大纲——
+          // 改名"信息"避免与编辑/渲染(内容视图)混淆成同类。
+          label: '信息',
           selected: selectedMode == DocumentWorkspaceDisplayMode.structure,
           enabled: hasDocument,
           onSelected: () =>

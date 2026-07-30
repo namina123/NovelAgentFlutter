@@ -12,11 +12,16 @@ class AppShellCompactBar extends StatelessWidget {
     required this.navigationSections,
     required this.selectedDestination,
     required this.onMenuRequested,
+    required this.onCommandPaletteRequested,
   });
 
   final List<AppShellNavigationSection> navigationSections;
   final AppDestination selectedDestination;
   final VoidCallback onMenuRequested;
+
+  /// 命令面板入口。移动端没有 Ctrl+K，因此顶部条放一个常驻放大镜按钮，
+  /// 与桌面端全局快捷键对等可达。
+  final VoidCallback onCommandPaletteRequested;
 
   @override
   Widget build(BuildContext context) {
@@ -65,6 +70,12 @@ class AppShellCompactBar extends StatelessWidget {
               ],
             ),
           ),
+          ToolbarIconButton(
+            icon: Icons.terminal,
+            tooltip: '命令面板',
+            onPressed: onCommandPaletteRequested,
+          ),
+          const SizedBox(width: 4),
           if (item != null)
             Container(
               padding: const EdgeInsets.all(8),

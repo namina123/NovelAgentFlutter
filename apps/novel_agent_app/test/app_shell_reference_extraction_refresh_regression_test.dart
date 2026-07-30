@@ -144,13 +144,8 @@ void main() {
             ProjectCreationPhase.bookDeconstructionFollowup,
         description: 'book deconstruction followup phase',
       );
-      harness.controller.onProjectCreationSubmitted(request);
-      await harness.waitUntil(
-        () =>
-            harness.workbench.projectLauncher?.creationPhase ==
-            ProjectCreationPhase.storageStrategy,
-        description: 'book storage strategy phase',
-      );
+      // 中文注释: 诚实化 pass 后存储策略步默认跳过——承接路线是拆书项目的末相，
+      // 第二次提交即创建并打开项目，不再经过 storageStrategy 相位。
       harness.controller.onProjectCreationSubmitted(request);
       await harness.waitUntil(
         () => harness.workbench.projectPath.trim().isNotEmpty,

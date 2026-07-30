@@ -193,6 +193,7 @@ class TaskCenterRefreshService {
       selectedTaskQueueRunPath: selectedTaskQueueRunPath,
       statusMessage: statusMessage,
       viewData: _taskCenterViewDataService.build(
+        commandInFlight: request.taskCenterCommandInFlight,
         tasks: tasks,
         modeDefinitions: _runtimeQueryPort.listTaskRuntimeModes(),
         selectedTaskId: resolvedSelectedTaskId,

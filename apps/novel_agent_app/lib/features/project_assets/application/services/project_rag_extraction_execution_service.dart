@@ -203,11 +203,11 @@ class ProjectRagExtractionExecutionService {
     );
     switch (reason) {
       case 'embedding_failed':
-        return '（向量化失败，已退回关键词检索；如已配置 embedding 模型，请检查其 Key 与可用性后重新入库。）';
+        return '（向量化失败，已退回关键词检索；如已配置向量化模型，请检查其密钥与可用性后重新入库。）';
       case 'embedding_empty':
-        return '（embedding 模型未返回有效向量，已退回关键词检索。）';
+        return '（向量化模型未返回有效向量，已退回关键词检索。）';
       case 'no_provider':
-        return '（未配置 embedding 模型，本次仅写入元数据，检索将走关键词匹配。）';
+        return '（未配置向量化模型，本次仅写入元数据，检索将走关键词匹配。）';
       default:
         return '';
     }
@@ -252,7 +252,7 @@ class ProjectRagExtractionExecutionService {
       return ProjectRagExtractionExecutionResult(
         ok: false,
         didMutateProject: false,
-        statusMessage: '语料挂载失败：$error',
+        statusMessage: UserFacingErrorHumanizer.humanize(error, action: '挂载语料'),
         corpusPackage: corpusPackage,
       );
     }

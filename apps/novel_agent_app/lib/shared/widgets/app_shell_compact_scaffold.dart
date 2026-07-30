@@ -17,6 +17,7 @@ class AppShellCompactScaffold extends StatefulWidget {
     required this.selectedDestination,
     required this.actionHandler,
     required this.onSystemBackRequested,
+    required this.onCommandPaletteRequested,
   });
 
   final Widget page;
@@ -24,6 +25,9 @@ class AppShellCompactScaffold extends StatefulWidget {
   final AppDestination selectedDestination;
   final AppShellNavigationActionHandler actionHandler;
   final Future<void> Function() onSystemBackRequested;
+
+  /// 命令面板入口回调，由顶部条放大镜按钮触发。
+  final VoidCallback onCommandPaletteRequested;
 
   @override
   State<AppShellCompactScaffold> createState() =>
@@ -72,6 +76,7 @@ class _AppShellCompactScaffoldState extends State<AppShellCompactScaffold> {
             navigationSections: widget.navigationSections,
             selectedDestination: widget.selectedDestination,
             onMenuRequested: _drawerController.toggle,
+            onCommandPaletteRequested: widget.onCommandPaletteRequested,
           ),
           Expanded(
             child: Stack(

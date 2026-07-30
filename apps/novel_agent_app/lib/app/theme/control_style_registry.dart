@@ -60,7 +60,7 @@ class ControlStyleRegistry {
         toolbar: const ToolbarChromeSpec(
           radius: 8,
           borderWidth: 1,
-          buttonSize: 34,
+          buttonSize: 40,
           padding: EdgeInsets.all(5),
           iconSize: 15,
         ),
@@ -108,7 +108,7 @@ class ControlStyleRegistry {
         toolbar: const ToolbarChromeSpec(
           radius: 0,
           borderWidth: 1,
-          buttonSize: 34,
+          buttonSize: 40,
           padding: EdgeInsets.all(6),
           iconSize: 16,
         ),
@@ -155,7 +155,7 @@ class ControlStyleRegistry {
         toolbar: const ToolbarChromeSpec(
           radius: 8,
           borderWidth: 1,
-          buttonSize: 34,
+          buttonSize: 40,
           padding: EdgeInsets.all(6),
           iconSize: 16,
         ),

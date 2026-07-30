@@ -152,6 +152,6 @@ class ConversationSessionCompactionService {
     if (maxChars <= 1) {
       return clean.substring(0, 1);
     }
-    return '${clean.substring(0, maxChars - 1)}…';
+    return '${clean.substring(0, maxChars - 1)}...';
   }
 }

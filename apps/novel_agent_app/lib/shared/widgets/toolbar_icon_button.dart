@@ -27,30 +27,37 @@ class ToolbarIconButton extends StatelessWidget {
     final isEnabled = onPressed != null;
     return Tooltip(
       message: tooltip,
-      child: IconButton(
-        onPressed: onPressed,
-        style: IconButton.styleFrom(
-          foregroundColor: isEnabled
-              ? _foregroundColor(colors)
-              : _foregroundColor(colors).withValues(alpha: 0.38),
-          backgroundColor: isEnabled
-              ? _backgroundColor(colors)
-              : _backgroundColor(colors).withValues(alpha: 0.55),
-          minimumSize: Size.square(chrome.buttonSize),
-          padding: chrome.padding,
-          visualDensity: dense ? VisualDensity.compact : null,
-          tapTargetSize: dense
-              ? MaterialTapTargetSize.shrinkWrap
-              : MaterialTapTargetSize.padded,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(chrome.radius),
-            side: BorderSide(
-              color: _borderColor(colors),
-              width: chrome.borderWidth,
+      child: Semantics(
+        // 中文注释: 工具栏图标按钮对屏幕阅读器只读「button」无文字——用 tooltip 作语义标签，
+        // 让 TalkBack/VoiceOver 读出「保存」「查找」等含义。覆盖全 app 工具栏。
+        button: true,
+        enabled: isEnabled,
+        label: tooltip,
+        child: IconButton(
+          onPressed: onPressed,
+          style: IconButton.styleFrom(
+            foregroundColor: isEnabled
+                ? _foregroundColor(colors)
+                : _foregroundColor(colors).withValues(alpha: 0.38),
+            backgroundColor: isEnabled
+                ? _backgroundColor(colors)
+                : _backgroundColor(colors).withValues(alpha: 0.55),
+            minimumSize: Size.square(chrome.buttonSize),
+            padding: chrome.padding,
+            visualDensity: dense ? VisualDensity.compact : null,
+            tapTargetSize: dense
+                ? MaterialTapTargetSize.shrinkWrap
+                : MaterialTapTargetSize.padded,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(chrome.radius),
+              side: BorderSide(
+                color: _borderColor(colors),
+                width: chrome.borderWidth,
+              ),
             ),
           ),
+          icon: Icon(icon, size: chrome.iconSize),
         ),
-        icon: Icon(icon, size: chrome.iconSize),
       ),
     );
   }

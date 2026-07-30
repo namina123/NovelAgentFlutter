@@ -11,6 +11,8 @@ class ConversationPanelBand extends StatelessWidget {
     this.trailing,
     this.emphasized = false,
     this.onTap,
+    this.foregroundColor,
+    this.backgroundColor,
   });
 
   final IconData leadingIcon;
@@ -18,18 +20,24 @@ class ConversationPanelBand extends StatelessWidget {
   final Widget? trailing;
   final bool emphasized;
   final VoidCallback? onTap;
+  /// 中文注释: 可选前景/背景色覆盖——不传则按 emphasized 走默认 accent/band 色。
+  /// 供上下文徽章按压力等级(warning/critical)切暖/警示色。
+  final Color? foregroundColor;
+  final Color? backgroundColor;
 
   @override
   Widget build(BuildContext context) {
     final style = ConversationPanelStyle.of(context);
-    final foreground = emphasized
-        ? style.accentBandForegroundColor
-        : style.foregroundColor;
+    final foreground = foregroundColor ??
+        (emphasized
+            ? style.accentBandForegroundColor
+            : style.foregroundColor);
     final content = DecoratedBox(
       decoration: BoxDecoration(
-        color: emphasized
-            ? style.accentBandBackgroundColor
-            : style.bandBackgroundColor,
+        color: backgroundColor ??
+            (emphasized
+                ? style.accentBandBackgroundColor
+                : style.bandBackgroundColor),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: style.bandBorderColor,

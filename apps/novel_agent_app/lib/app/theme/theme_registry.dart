@@ -44,7 +44,9 @@ class ThemeRegistry {
       dangerSoftColor: const Color(0xFFF9E0E4),
       dangerStrongColor: const Color(0xFFAF4758),
       textColor: const Color(0xFF172231),
-      mutedTextColor: const Color(0xFF617287),
+      // 中文注释: 由 #617287（对侧栏/画布底色约 4.1:1，小字号不达 WCAG AA）加深到
+      // #52606F（约 6:1+），让 10–11pt 的次级标签在低质屏幕上也可读。暗色主题不受影响。
+      mutedTextColor: const Color(0xFF52606F),
       inverseTextColor: Colors.white,
     );
     final darkColors = ThemeColorTokens(

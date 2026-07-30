@@ -72,6 +72,10 @@ class ResourceManagerPanel extends StatelessWidget {
                     projectTypeId: viewData.projectTypeId,
                     onEntrySelected: actionHandler.onResourceEntrySelected,
                     embeddedInScrollView: false,
+                    onDeleteEntry: (entry) => actionHandler
+                        .onDeleteResourceEntryRequested(entry.id),
+                    onRenameEntry: (entry, nextName) => actionHandler
+                        .onRenameResourceEntryRequested(entry.id, nextName),
                   ),
                 ),
               ),

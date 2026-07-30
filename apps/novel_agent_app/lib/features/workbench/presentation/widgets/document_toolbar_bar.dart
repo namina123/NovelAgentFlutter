@@ -27,26 +27,32 @@ class DocumentToolbarBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final surface = context.novelThemeSurfaces.panel;
     final visual = WorkbenchVisualStyle.of(context);
+    // 中文注释: 状态文案用人话：避免给小说作者看「Markdown/Text/空白」这类技术词。
     final statusLabel = !hasDocument
-        ? '空白'
+        ? '未打开'
         : canRender
-        ? 'Markdown'
-        : 'Text';
+        ? '可渲染'
+        : '纯文本';
     return LayoutBuilder(
       builder: (context, constraints) {
         final actions = [
           ToolbarIconButton(
             icon: Icons.save_outlined,
-            tooltip: '保存',
+            tooltip: '保存（Ctrl+S）',
             dense: true,
-            onPressed: () => onActionRequested(DocumentToolbarAction.save),
+            // 中文注释: 没有打开文档时禁用保存/审稿——状态条已显示"空白"，避免无效点击。
+            onPressed: hasDocument
+                ? () => onActionRequested(DocumentToolbarAction.save)
+                : null,
           ),
           ToolbarIconButton(
             icon: Icons.rate_review_outlined,
             tooltip: '审稿',
             tone: ToolbarIconTone.warm,
             dense: true,
-            onPressed: () => onActionRequested(DocumentToolbarAction.review),
+            onPressed: hasDocument
+                ? () => onActionRequested(DocumentToolbarAction.review)
+                : null,
           ),
         ];
         final compact = constraints.maxWidth < 520;

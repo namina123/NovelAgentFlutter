@@ -126,7 +126,7 @@ void main() {
       final buttonFinders = [
         find.byTooltip('新文件'),
         find.byTooltip('导入文件'),
-        find.byTooltip('新章节'),
+        find.byTooltip('如何创建章节'),
         find.byTooltip('保存当前文档'),
         find.byTooltip('更多文件操作'),
       ];
@@ -244,12 +244,75 @@ void main() {
       expect(find.text('浏览'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'resource tree entry manage menu deletes and renames via the handler',
+    (WidgetTester tester) async {
+      final handler = _FakeResourceManagerActionHandler();
+      const mapper = WorkbenchPaneViewDataMapperService();
+      final baseViewData = WorkbenchViewData.initial().copyWith(
+        projectName: '项目 A',
+        resourceEntries: <ResourceEntryViewData>[
+          ResourceEntryViewData(
+            id: 'chapters/one.md',
+            title: '第一章',
+            relativePath: 'chapters/one.md',
+            depth: 0,
+            isDirectory: false,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light(),
+          home: Scaffold(
+            body: SizedBox(
+              width: 320,
+              height: 720,
+              child: ResourceManagerPanel(
+                viewData: mapper.toResourceViewData(baseViewData),
+                actionHandler: handler,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('第一章'), findsOneWidget);
+      expect(find.byTooltip('资源操作'), findsOneWidget);
+
+      // 删除：菜单 -> 二次确认 -> 确认，应把资源相对路径交给 handler。
+      await tester.tap(find.byTooltip('资源操作'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('删除').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, '删除'));
+      await tester.pumpAndSettle();
+      expect(handler.deletedEntries, <String>['chapters/one.md']);
+
+      // 重命名：菜单 -> 输入弹窗 -> 确定，应把(相对路径, 新名)交给 handler。
+      await tester.tap(find.byTooltip('资源操作'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('重命名').last);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'chapter_one.md');
+      await tester.tap(find.widgetWithText(FilledButton, '确定'));
+      await tester.pumpAndSettle();
+      expect(handler.renameCalls.single.key, 'chapters/one.md');
+      expect(handler.renameCalls.single.value, 'chapter_one.md');
+    },
+  );
 }
 
 class _FakeResourceManagerActionHandler
     implements ResourceManagerActionHandler {
   int createFolderRequestedCount = 0;
   final List<String> selectedEntries = <String>[];
+  final List<String> deletedEntries = <String>[];
+  final List<MapEntry<String, String>> renameCalls =
+      <MapEntry<String, String>>[];
 
   @override
   void onAgentEcosystemRequested() {}
@@ -328,6 +391,16 @@ class _FakeResourceManagerActionHandler
   @override
   void onResourceEntrySelected(String entryId) {
     selectedEntries.add(entryId);
+  }
+
+  @override
+  void onDeleteResourceEntryRequested(String entryId) {
+    deletedEntries.add(entryId);
+  }
+
+  @override
+  void onRenameResourceEntryRequested(String entryId, String nextName) {
+    renameCalls.add(MapEntry(entryId, nextName));
   }
 
   @override

@@ -31,6 +31,8 @@ class _NetworkSettingsPanelState extends State<NetworkSettingsPanel> {
   late final TextEditingController _timeoutController;
   late final TextEditingController _transportRetryAttemptsController;
   late bool _transportRetryEnabled;
+  // 中文注释: 自定义代理保存前的本地校验错误（host 空 / port 越界），不再静默归一。
+  String _formError = '';
 
   @override
   void initState() {
@@ -148,6 +150,11 @@ class _NetworkSettingsPanelState extends State<NetworkSettingsPanel> {
                 label: 'AI 超时（秒）',
                 controller: _timeoutController,
                 keyboardType: TextInputType.number,
+                hintText: '建议 60-900',
+                inputFormatters: <TextInputFormatter>[
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(4),
+                ],
               ),
               const SizedBox(height: 12),
               SwitchListTile.adaptive(
@@ -170,7 +177,7 @@ class _NetworkSettingsPanelState extends State<NetworkSettingsPanel> {
                 keyboardType: TextInputType.number,
                 hintText: '0-5',
                 inputFormatters: <TextInputFormatter>[
-                  FilteringTextInputFormatter.digitsOnly,
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-5]')),
                   LengthLimitingTextInputFormatter(1),
                 ],
               ),
@@ -182,22 +189,20 @@ class _NetworkSettingsPanelState extends State<NetworkSettingsPanel> {
           label: '保存网络设置',
           expanded: true,
           icon: Icons.save_outlined,
-          onPressed: () {
-            final normalizedPort = _normalizedPortText(_portController.text);
-            widget.onSaved(<String, Object?>{
-              'proxy_mode': _proxyMode,
-              'proxy_protocol': _proxyProtocol,
-              'proxy_host': _hostController.text.trim(),
-              'proxy_port': normalizedPort,
-              'proxy_username': _usernameController.text.trim(),
-              'proxy_password': _passwordController.text,
-              'timeout_seconds': _timeoutController.text.trim(),
-              'transport_retry_enabled': _transportRetryEnabled,
-              'transport_retry_attempts': _transportRetryAttemptsController.text
-                  .trim(),
-            });
-          },
+          onPressed: _save,
         ),
+        if (_formError.trim().isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            _formError,
+            style: TextStyle(
+              fontSize: 12.5,
+              height: 1.45,
+              fontWeight: FontWeight.w700,
+              color: Theme.of(context).colorScheme.error,
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -222,5 +227,70 @@ class _NetworkSettingsPanelState extends State<NetworkSettingsPanel> {
   String _normalizedPortText(String rawValue) {
     // 中文注释: 端口规范统一复用 core 里的固定范围策略，避免 GUI 与 CLI 口径漂移。
     return NetworkProxyPortPolicy.normalizeText(rawValue);
+  }
+
+  void _save() {
+    // 中文注释: 保存前显式校验自定义代理(host/port)、超时、重试次数——不再让 core/网关层
+    // 默默归一或静默回落默认值，否则用户以为自己填的值生效了，实际被吞掉。
+    final errors = <String>[];
+    if (_proxyMode == 'custom') {
+      final host = _hostController.text.trim();
+      final portRaw = _portController.text.trim();
+      if (host.isEmpty) {
+        errors.add('自定义代理需要填写主机（host）。');
+      }
+      // 中文注释: 空端口必须报错——core 的 _normalizedNetworkDocument 在 custom+空端口时会
+      // 静默把 proxy_mode 改回 system 并清空所有代理字段，用户会看到"保存成功"后下拉跳回系统网络。
+      if (portRaw.isEmpty) {
+        errors.add('自定义代理需要填写端口。');
+      } else {
+        final port = int.tryParse(portRaw);
+        if (port == null ||
+            port < NetworkProxyPortPolicy.minPort ||
+            port > NetworkProxyPortPolicy.maxPort) {
+          errors.add(
+            '端口需是 ${NetworkProxyPortPolicy.minPort}-${NetworkProxyPortPolicy.maxPort} 之间的整数（当前 "$portRaw"）。',
+          );
+        }
+      }
+    }
+    final timeoutRaw = _timeoutController.text.trim();
+    // 中文注释: 超时字段无 inputFormatter 时桌面键盘可输入字母/负数；网关层对不可解析或 ≤0 的值
+    // 静默回落 90s，与表单默认 900 差 10 倍且用户看不到——保存前拦截。
+    if (timeoutRaw.isEmpty) {
+      errors.add('AI 超时需填写一个正整数秒数。');
+    } else {
+      final timeout = int.tryParse(timeoutRaw);
+      if (timeout == null || timeout <= 0) {
+        errors.add('AI 超时需是大于 0 的整数（当前 "$timeoutRaw"）。');
+      } else if (timeout > 3600) {
+        errors.add('AI 超时建议不超过 3600 秒（当前 "$timeoutRaw"）。');
+      }
+    }
+    if (_transportRetryEnabled) {
+      final retryRaw = _transportRetryAttemptsController.text.trim();
+      // 中文注释: 重试次数 core 会 clamp(0,5)，输入 6-9 会被默默改成 5——保存前拦截。
+      final retry = int.tryParse(retryRaw);
+      if (retry == null || retry < 0 || retry > 5) {
+        errors.add('自动重试次数需是 0-5 之间的整数（当前 "$retryRaw"）。');
+      }
+    }
+    if (errors.isNotEmpty) {
+      setState(() => _formError = errors.join('；'));
+      return;
+    }
+    setState(() => _formError = '');
+    final normalizedPort = _normalizedPortText(_portController.text);
+    widget.onSaved(<String, Object?>{
+      'proxy_mode': _proxyMode,
+      'proxy_protocol': _proxyProtocol,
+      'proxy_host': _hostController.text.trim(),
+      'proxy_port': normalizedPort,
+      'proxy_username': _usernameController.text.trim(),
+      'proxy_password': _passwordController.text,
+      'timeout_seconds': _timeoutController.text.trim(),
+      'transport_retry_enabled': _transportRetryEnabled,
+      'transport_retry_attempts': _transportRetryAttemptsController.text.trim(),
+    });
   }
 }

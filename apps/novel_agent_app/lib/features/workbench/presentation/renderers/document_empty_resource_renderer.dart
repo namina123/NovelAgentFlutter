@@ -15,6 +15,7 @@ class DocumentEmptyResourceRenderer implements DocumentResourceRenderer {
     return DocumentEmptyCanvas(
       headline: request.title.trim().isEmpty ? '打开或新建文档' : request.title,
       message: request.status,
+      onCreateNew: request.onCreateFileRequested,
     );
   }
 }

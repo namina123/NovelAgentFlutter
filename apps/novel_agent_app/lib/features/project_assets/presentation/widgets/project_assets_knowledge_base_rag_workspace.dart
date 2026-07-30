@@ -7,6 +7,7 @@ import '../../../../shared/widgets/workspace_page_scaffold.dart';
 import '../../application/controllers/project_assets_controller.dart';
 import '../models/project_assets_view_data.dart';
 import '../models/project_rag_extraction_view_data.dart';
+import 'rag_status_text.dart';
 
 class ProjectAssetsKnowledgeBaseRagWorkspace extends StatelessWidget {
   const ProjectAssetsKnowledgeBaseRagWorkspace({
@@ -32,20 +33,18 @@ class ProjectAssetsKnowledgeBaseRagWorkspace extends StatelessWidget {
             icon: Icons.file_upload_outlined,
             compact: true,
             emphasized: true,
-            onPressed: rag.isLoading
-                ? () {}
-                : () => controller.onProjectAssetsExtractRagRequested(
-                    modeId: rag.activeModeId,
-                  ),
+            disabled: rag.isLoading,
+            onPressed: () => controller.onProjectAssetsExtractRagRequested(
+              modeId: rag.activeModeId,
+            ),
           ),
           ActionButton(
             label: rag.isLoading ? '等待完成' : '挂载到当前项目',
             icon: Icons.link_rounded,
             compact: true,
             tone: ActionButtonTone.neutral,
-            onPressed: (!rag.canMountCorpus || rag.isLoading)
-                ? () {}
-                : controller.onProjectAssetsMountRagCorpusRequested,
+            disabled: !rag.canMountCorpus || rag.isLoading,
+            onPressed: controller.onProjectAssetsMountRagCorpusRequested,
           ),
           ActionButton(
             label: '刷新',
@@ -112,13 +111,23 @@ class _PrimaryPane extends StatelessWidget {
               runSpacing: 8,
               children: rag.modes
                   .map(
-                    (mode) => ChoiceChip(
-                      label: Text(mode.title),
-                      selected: mode.isSelected,
-                      onSelected: mode.isImplemented && !rag.isLoading
-                          ? (_) =>
+                    (mode) => Tooltip(
+                      message: mode.isImplemented
+                          ? mode.title
+                          : '「${mode.title}」暂未实现，敬请期待。',
+                      child: ChoiceChip(
+                        // 中文注释: 未实现的检索模式点明「暂未实现」，避免被当成坏了的按钮。
+                        label: Text(
+                          mode.isImplemented
+                              ? mode.title
+                              : '${mode.title}（暂未实现）',
+                        ),
+                        selected: mode.isSelected,
+                        onSelected: mode.isImplemented && !rag.isLoading
+                            ? (_) =>
                                 controller.onProjectAssetsEntrySelected(mode.id)
-                          : null,
+                            : null,
+                      ),
                     ),
                   )
                   .toList(growable: false),
@@ -300,9 +309,12 @@ class _ProgressStrip extends StatelessWidget {
               color: Theme.of(context).dividerColor.withValues(alpha: 0.6),
             ),
           const SizedBox(height: 8),
-          Text(
-            rag.status.trim().isEmpty ? '当前还没有进行中的提取任务。' : rag.status,
-            style: textTheme.bodySmall,
+          // 中文注释: 状态文案复用 RagStatusText——知识库项目的主目的就是 RAG，降级(向量化失败/退回关键词)
+          // 在这里更不能埋成普通正文。空态保留原有"当前还没有进行中的提取任务。"提示(非降级，按普通正文渲染)。
+          RagStatusText(
+            status: rag.status.trim().isEmpty
+                ? '当前还没有进行中的提取任务。'
+                : rag.status,
           ),
         ],
       ),

@@ -31,11 +31,17 @@ class ActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.novelThemeColors;
     final chrome = context.novelButtonChrome;
-    final foreground = _foregroundColor(colors);
-    final border = _borderColor(colors);
-    final background = _backgroundColor(colors);
     // 中文注释: disabled 时把 onPressed 置空，走 Material 标准禁用态（灰、无 hover/splash），
     // 不再用 IgnorePointer+Opacity 假装禁用——那种写法看着可点但点了没反应。
+    // 同时把背景/边框/文字统一降到中性弱化色，让"不可点"在视觉上一目了然，而非仅文字变灰。
+    final foreground =
+        disabled ? colors.mutedTextColor : _foregroundColor(colors);
+    final border = disabled
+        ? colors.lineColor.withValues(alpha: 0.4)
+        : _borderColor(colors);
+    final background = disabled
+        ? colors.panelBackground.withValues(alpha: 0.08)
+        : _backgroundColor(colors);
     final button = TextButton(
       onPressed: disabled ? null : onPressed,
       style: TextButton.styleFrom(

@@ -27,7 +27,9 @@ void main() {
     );
 
     expect(find.text('任务详情'), findsOneWidget);
-    expect(find.textContaining('## 恢复现场'), findsOneWidget);
+    // 中文注释: resumeBriefBody 现在按 Markdown 渲染——"## 恢复现场"被解析成标题，
+    // 断言找渲染后的标题文本"恢复现场"，而不是字面的 "## 恢复现场"。
+    expect(find.textContaining('恢复现场'), findsOneWidget);
     expect(find.textContaining('当前停在用户确认点'), findsOneWidget);
     expect(find.textContaining('建议下一步：处理检查点'), findsOneWidget);
   });

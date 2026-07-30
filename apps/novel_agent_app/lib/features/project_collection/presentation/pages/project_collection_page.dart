@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../app/layout/adaptive_page_frame.dart';
-import '../../../../../app/theme/app_palette.dart';
+import '../../../../../shared/theme/novel_theme_context.dart';
 import '../../../../../shared/widgets/action_button.dart';
+import '../../../../../shared/widgets/empty_state.dart';
 import '../../../../../shared/widgets/panel_surface.dart';
 import '../../../../../shared/widgets/section_heading.dart';
 import '../contracts/project_collection_action_handler.dart';
@@ -30,6 +31,7 @@ class ProjectCollectionPage extends StatelessWidget {
               IconButton(
                 onPressed: actionHandler.onProjectCollectionBackRequested,
                 icon: const Icon(Icons.arrow_back_rounded),
+                tooltip: '返回',
               ),
               Expanded(
                 child: SectionHeading(
@@ -74,23 +76,23 @@ class ProjectCollectionPage extends StatelessWidget {
                       final entry = viewData.entries[index];
                       return Material(
                         color: entry.isSelected
-                            ? AppPalette.accentSoft
-                            : AppPalette.panel,
+                            ? context.novelThemeColors.accentSoftColor
+                            : context.novelThemeColors.panelBackground,
                         child: ListTile(
                           title: Text(
                             entry.title,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w800,
-                              color: AppPalette.text,
+                              color: context.novelThemeColors.textColor,
                             ),
                           ),
                           subtitle: Text(
                             '[${entry.badge}] ${entry.subtitle}',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
-                              color: AppPalette.mutedText,
+                              color: context.novelThemeColors.mutedTextColor,
                             ),
                           ),
                           trailing: IconButton(
@@ -113,7 +115,11 @@ class ProjectCollectionPage extends StatelessWidget {
                 );
                 final detail = PanelSurface(
                   child: selected == null
-                      ? const Center(child: Text('暂无条目'))
+                      ? const EmptyState(
+                          icon: Icons.touch_app_outlined,
+                          message: '选择一个条目',
+                          hint: '从左侧列表选择以查看详情。',
+                        )
                       : Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -124,10 +130,10 @@ class ProjectCollectionPage extends StatelessWidget {
                             const SizedBox(height: 12),
                             Text(
                               selected.relativePath,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w700,
-                                color: AppPalette.mutedText,
+                                color: context.novelThemeColors.mutedTextColor,
                               ),
                             ),
                             const SizedBox(height: 12),
@@ -137,10 +143,10 @@ class ProjectCollectionPage extends StatelessWidget {
                                   viewData.detailBody.trim().isEmpty
                                       ? viewData.status
                                       : viewData.detailBody,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 14,
                                     height: 1.6,
-                                    color: AppPalette.text,
+                                    color: context.novelThemeColors.textColor,
                                   ),
                                 ),
                               ),

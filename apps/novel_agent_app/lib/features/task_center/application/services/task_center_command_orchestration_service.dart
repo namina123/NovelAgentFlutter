@@ -368,8 +368,24 @@ class TaskCenterCommandOrchestrationService {
   String _resultMessage(JsonMap result, {required String success}) {
     // 中文注释: 结果文案只做统一翻译，不把业务判断重新回流到控制器里。
     if (ValueReaders.boolValue(result['ok'])) {
+      final stopReason = ValueReaders.stringValue(result['stop_reason']).trim();
+      final rawStopNote = ValueReaders.stringValue(result['stop_note']).trim();
+      final stopNote = rawStopNote.isEmpty
+          ? ValueReaders.stringValue(result['message']).trim()
+          : rawStopNote;
+      // 中文注释: ok=true 但 stop_reason 表明"一行任务都没推进"时，不要报"已推进"——用 stop 文案如实说明。
+      const noProgressReasons = <String>{
+        'no_runnable_task',
+        'record_missing',
+      };
+      if (noProgressReasons.contains(stopReason)) {
+        return stopNote.isEmpty ? '没有可运行的任务，队列未推进。' : stopNote;
+      }
       final warning = ValueReaders.stringValue(result['warning']).trim();
-      return warning.isEmpty ? success : '$success $warning';
+      final note = stopNote.isEmpty
+          ? warning
+          : (warning.isEmpty ? stopNote : '$warning $stopNote');
+      return note.isEmpty ? success : '$success $note';
     }
     final error = ValueReaders.stringValue(result['error']).trim();
     return error.isEmpty ? '操作失败。' : '操作失败：$error';

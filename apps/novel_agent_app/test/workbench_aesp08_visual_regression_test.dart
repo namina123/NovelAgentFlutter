@@ -414,6 +414,9 @@ class _FakeConversationActionHandler implements ConversationActionHandler {
 
   @override
   void onUserOptionSelected(UserOptionViewData option) {}
+
+  @override
+  void setForegroundBackHandler(VoidCallback? handler) {}
 }
 
 class _FakeResourceManagerActionHandler
@@ -494,6 +497,12 @@ class _FakeResourceManagerActionHandler
 
   @override
   void onResourceEntrySelected(String entryId) {}
+
+  @override
+  void onDeleteResourceEntryRequested(String entryId) {}
+
+  @override
+  void onRenameResourceEntryRequested(String entryId, String nextName) {}
 
   @override
   void onReviewsRequested() {}

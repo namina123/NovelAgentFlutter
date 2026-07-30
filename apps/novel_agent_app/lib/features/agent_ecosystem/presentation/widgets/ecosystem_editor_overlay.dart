@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../app/theme/app_palette.dart';
+import '../../../../../shared/theme/novel_theme_context.dart';
 import '../../application/services/ecosystem_entry_editor_service.dart';
 import '../../../../../shared/widgets/action_button.dart';
+import '../../../../../shared/widgets/confirmation_dialog.dart';
 import '../../../../../shared/widgets/panel_surface.dart';
 import '../../../../../shared/widgets/section_heading.dart';
 import '../../../workbench/presentation/models/selector_option_view_data.dart';
@@ -153,7 +154,8 @@ class _EcosystemEditorOverlayState extends State<EcosystemEditorOverlay> {
                       IconButton(
                         onPressed:
                             widget.actionHandler.onEcosystemEditorDismissed,
-                        icon: const Icon(Icons.close_rounded),
+                        icon: Icon(Icons.close_rounded),
+                        tooltip: '关闭',
                       ),
                     ],
                   ),
@@ -161,10 +163,10 @@ class _EcosystemEditorOverlayState extends State<EcosystemEditorOverlay> {
                     const SizedBox(height: 8),
                     Text(
                       widget.viewData.statusMessage,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
-                        color: AppPalette.mutedText,
+                        color: context.novelThemeColors.mutedTextColor,
                       ),
                     ),
                   ],
@@ -341,7 +343,7 @@ class _EcosystemEditorOverlayState extends State<EcosystemEditorOverlay> {
                                       _enabled = value;
                                     });
                                   },
-                                  title: const Text('默认启用'),
+                                  title: Text('默认启用'),
                                 ),
                               ],
                             ],
@@ -410,9 +412,19 @@ class _EcosystemEditorOverlayState extends State<EcosystemEditorOverlay> {
                           label: widget.viewData.deleteActionLabel,
                           icon: Icons.delete_outline,
                           tone: ActionButtonTone.danger,
-                          onPressed: () {
-                            widget.actionHandler
-                                .onEcosystemEditorDeleteRequested(_request());
+                          onPressed: () async {
+                            // 中文注释: 删除项目级生态条目会直接删项目文件、不可逆，与
+                            // foreshadow/style 删除对称——二次确认避免误点。
+                            final confirmed = await showConfirmationDialog(
+                              context,
+                              title: '删除该生态条目？',
+                              message: '删除后将移除项目内的该条目源文件，不可恢复。',
+                              confirmLabel: '删除',
+                            );
+                            if (confirmed) {
+                              widget.actionHandler
+                                  .onEcosystemEditorDeleteRequested(_request());
+                            }
                           },
                         ),
                       ActionButton(
@@ -478,16 +490,16 @@ class _EcosystemEditorOverlayState extends State<EcosystemEditorOverlay> {
   }) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: AppPalette.panel.withValues(alpha: 0.68),
+        color: context.novelThemeColors.panelBackground.withValues(alpha: 0.68),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppPalette.line),
+        border: Border.all(color: context.novelThemeColors.lineColor),
       ),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, size: 18, color: AppPalette.mutedText),
+            Icon(icon, size: 18, color: context.novelThemeColors.mutedTextColor),
             const SizedBox(width: 8),
             Expanded(
               child: Column(
@@ -495,19 +507,19 @@ class _EcosystemEditorOverlayState extends State<EcosystemEditorOverlay> {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w800,
-                      color: AppPalette.text,
+                      color: context.novelThemeColors.textColor,
                     ),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     body,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
                       height: 1.45,
-                      color: AppPalette.mutedText,
+                      color: context.novelThemeColors.mutedTextColor,
                     ),
                   ),
                 ],
@@ -522,21 +534,21 @@ class _EcosystemEditorOverlayState extends State<EcosystemEditorOverlay> {
   Widget _issueBlock(List<String> issues) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: AppPalette.panel.withValues(alpha: 0.68),
+        color: context.novelThemeColors.panelBackground.withValues(alpha: 0.68),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppPalette.warmStrong),
+        border: Border.all(color: context.novelThemeColors.warmStrongColor),
       ),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               '配置提示',
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w800,
-                color: AppPalette.text,
+                color: context.novelThemeColors.textColor,
               ),
             ),
             const SizedBox(height: 8),
@@ -544,19 +556,19 @@ class _EcosystemEditorOverlayState extends State<EcosystemEditorOverlay> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.error_outline_rounded,
                     size: 16,
-                    color: AppPalette.warmStrong,
+                    color: context.novelThemeColors.warmStrongColor,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       issue,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         height: 1.45,
-                        color: AppPalette.mutedText,
+                        color: context.novelThemeColors.mutedTextColor,
                       ),
                     ),
                   ),
@@ -693,7 +705,7 @@ class _MemberSelectField extends StatelessWidget {
                       preview,
                       style: TextStyle(
                         fontSize: 13,
-                        color: ids.isEmpty ? AppPalette.mutedText : AppPalette.text,
+                        color: ids.isEmpty ? context.novelThemeColors.mutedTextColor : context.novelThemeColors.textColor,
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -703,7 +715,7 @@ class _MemberSelectField extends StatelessWidget {
                   Icon(
                     Icons.unfold_more_rounded,
                     size: 16,
-                    color: AppPalette.mutedText,
+                    color: context.novelThemeColors.mutedTextColor,
                   ),
                 ],
               ),
@@ -749,7 +761,7 @@ class _PrimaryAgentField extends StatelessWidget {
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               value: effective.isEmpty ? null : effective,
-              hint: const Text('从已选成员里指定一个'),
+              hint: Text('从已选成员里指定一个'),
               isExpanded: true,
               items: [
                 for (final id in members)

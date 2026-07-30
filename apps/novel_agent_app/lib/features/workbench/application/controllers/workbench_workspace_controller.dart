@@ -141,6 +141,7 @@ class WorkbenchWorkspaceController
              readProjectFileUseCase: readProjectFileUseCase,
              saveDraftUseCase: saveDraftUseCase,
            ),
+       _projectToolHostPort = projectToolHostPort,
        _createProjectEntryUseCase = createProjectEntryUseCase,
        _updateProjectManifestUseCase = updateProjectManifestUseCase,
        _executeProjectTypeTransitionUseCase =
@@ -234,6 +235,9 @@ class WorkbenchWorkspaceController
   }
 
   final LoadProjectWorkspaceUseCase _loadProjectWorkspaceUseCase;
+  // 中文注释: 资源条目删除/重命名需要直接调用 ProjectToolHostPort（已含 SQLite 结构化内容同步），
+  // 因此把构造注入的 port 存为字段，供 _deleteResourceEntry/_renameResourceEntry 使用。
+  final ProjectToolHostPort _projectToolHostPort;
   final ProjectWorkspaceDocumentStorageService
   _projectWorkspaceDocumentStorageService;
   final CreateProjectEntryUseCase _createProjectEntryUseCase;
@@ -826,7 +830,7 @@ class WorkbenchWorkspaceController
       sessionRestoreResult: null,
       conversationContextProjection: null,
       contextSummary: '项目已打开，会话面板已降级为安全视图。',
-      workflowDescription: '会话运行时恢复失败，请重新开始一个新会话或稍后再试。',
+      workflowDescription: '会话运行时恢复失败，请重新开始一个新会话或稍后重试。',
     );
   }
 
@@ -1365,6 +1369,18 @@ class WorkbenchWorkspaceController
   }
 
   @override
+  void onDeleteResourceEntryRequested(String entryId) {
+    // 中文注释: 资源条目删除委派给 facade，与其它资源动作收口在同一处。
+    _projectActionFacade.onDeleteResourceEntryRequested(entryId);
+  }
+
+  @override
+  void onRenameResourceEntryRequested(String entryId, String nextName) {
+    // 中文注释: 资源条目重命名同样委派给 facade，控制器只保留受控入口。
+    _projectActionFacade.onRenameResourceEntryRequested(entryId, nextName);
+  }
+
+  @override
   Future<void> onPendingResearchApproved(String requestId) async {
     await _projectActionFacade.onPendingResearchApproved(requestId);
   }
@@ -1469,6 +1485,165 @@ class WorkbenchWorkspaceController
       ),
     );
     _scheduleWorkbenchSnapshotPersistence(refreshDraftRecoveries: false);
+  }
+
+  Future<void> _deleteResourceEntry(String relativePath) async {
+    // 中文注释: 资源删除直接调用 ProjectToolHostPort（已含 SQLite 结构化内容同步与目录递归删除），
+    // 删除前先收尾所有路径落在其下的已打开标签，再重载资源树。二次确认在界面层完成。
+    final project = currentProject;
+    final cleanPath = _normalizeRelativePath(relativePath);
+    if (project == null) {
+      _announce('项目尚未加载完成，无法删除。');
+      return;
+    }
+    if (cleanPath.isEmpty) {
+      return;
+    }
+    _closeOpenDocumentsUnder(cleanPath);
+    try {
+      await _projectToolHostPort.deleteEntry(project.rootPath, cleanPath);
+      invalidateInformationViewCache();
+      final resourceEntries = await reloadResourceEntries(selectedId: '');
+      _mutateWorkbench(
+        (current) => applyWorkbenchState(
+          current.copyWith(
+            resourceEntries: resourceEntries,
+            informationViewData: _latestInformationViewData,
+            generationStatus: '已删除 ${_displayNameOf(cleanPath)}',
+          ),
+        ),
+      );
+      _scheduleWorkbenchSnapshotPersistence();
+    } catch (error) {
+      _announce(UserFacingErrorHumanizer.humanize(error, action: '删除'));
+    }
+  }
+
+  Future<void> _renameResourceEntry(String relativePath, String nextName) async {
+    // 中文注释: 资源重命名通过 moveEntry 实现；nextName 只是新的文件/目录名，
+    // 这里把它拼回原所在目录后整体移动，并把已打开标签的路径一并重新挂载，避免编辑内容看似丢失。
+    final project = currentProject;
+    final cleanPath = _normalizeRelativePath(relativePath);
+    final trimmedName = nextName.trim();
+    if (project == null) {
+      _announce('项目尚未加载完成，无法重命名。');
+      return;
+    }
+    if (cleanPath.isEmpty || trimmedName.isEmpty) {
+      _announce('新名称不能为空。');
+      return;
+    }
+    final lastSlash = cleanPath.lastIndexOf('/');
+    final parent = lastSlash >= 0 ? cleanPath.substring(0, lastSlash) : '';
+    final targetPath = parent.isEmpty ? trimmedName : '$parent/$trimmedName';
+    if (_normalizePathForCompare(targetPath) ==
+        _normalizePathForCompare(cleanPath)) {
+      return;
+    }
+    try {
+      await _projectToolHostPort.moveEntry(
+        project.rootPath,
+        cleanPath,
+        targetPath,
+      );
+      _rebaseOpenDocuments(oldPath: cleanPath, newPath: targetPath);
+      invalidateInformationViewCache();
+      final resourceEntries = await reloadResourceEntries(
+        selectedId: targetPath,
+      );
+      _mutateWorkbench(
+        (current) => applyWorkbenchState(
+          current.copyWith(
+            resourceEntries: resourceEntries,
+            informationViewData: _latestInformationViewData,
+            generationStatus: '已重命名为 $trimmedName',
+          ),
+        ),
+      );
+      _scheduleWorkbenchSnapshotPersistence();
+    } catch (error) {
+      _announce(UserFacingErrorHumanizer.humanize(error, action: '重命名'));
+    }
+  }
+
+  void _closeOpenDocumentsUnder(String relativePath) {
+    // 中文注释: 删除目录/文件时，把路径落在其下（含自身）的已打开标签一并关闭，
+    // 避免界面继续指向已不存在的文件；若活动标签被关，则退回到剩余的最后一个。
+    final state = _readProjectState();
+    final prefix =
+        relativePath.endsWith('/') ? relativePath : '$relativePath/';
+    bool underDeleted(OpenDocumentState doc) {
+      final path = _normalizeRelativePath(doc.relativePath);
+      return path == relativePath || path.startsWith(prefix);
+    }
+    final remaining = state.openDocuments
+        .where((doc) => !underDeleted(doc))
+        .toList(growable: false);
+    if (remaining.length == state.openDocuments.length) {
+      return;
+    }
+    final activeGotRemoved = state.openDocuments.any(
+      (doc) => doc.id == state.activeOpenDocumentId && underDeleted(doc),
+    );
+    final nextActive = activeGotRemoved
+        ? (remaining.isEmpty ? '' : remaining.last.id)
+        : state.activeOpenDocumentId;
+    _writeProjectState(
+      state.copyWith(
+        openDocuments: remaining,
+        activeOpenDocumentId: nextActive,
+      ),
+    );
+  }
+
+  void _rebaseOpenDocuments({
+    required String oldPath,
+    required String newPath,
+  }) {
+    // 中文注释: 重命名后把已打开标签迁移到新路径（文件整体替换；目录则按前缀逐项重挂），
+    // 保留正文/脏标记/渲染态，避免重命名导致已编辑内容"看似丢失"。id 与 relativePath 同步更新。
+    final state = _readProjectState();
+    final prefix = oldPath.endsWith('/') ? oldPath : '$oldPath/';
+    String rebased(String current) {
+      final path = _normalizeRelativePath(current);
+      if (path == oldPath) {
+        return newPath;
+      }
+      if (path.startsWith(prefix)) {
+        return '$newPath${path.substring(oldPath.length)}';
+      }
+      return current;
+    }
+    var changed = false;
+    final nextDocs = <OpenDocumentState>[];
+    String? nextActiveId;
+    for (final doc in state.openDocuments) {
+      final rebasedPath = rebased(doc.relativePath);
+      if (rebasedPath == doc.relativePath) {
+        nextDocs.add(doc);
+        continue;
+      }
+      changed = true;
+      nextDocs.add(
+        doc.copyWith(
+          id: rebasedPath,
+          relativePath: rebasedPath,
+          title: _displayNameOf(rebasedPath),
+        ),
+      );
+      if (doc.id == state.activeOpenDocumentId) {
+        nextActiveId = rebasedPath;
+      }
+    }
+    if (!changed) {
+      return;
+    }
+    _writeProjectState(
+      state.copyWith(
+        openDocuments: nextDocs,
+        activeOpenDocumentId: nextActiveId ?? state.activeOpenDocumentId,
+      ),
+    );
   }
 
   Future<void> _saveCurrentDocument() async {

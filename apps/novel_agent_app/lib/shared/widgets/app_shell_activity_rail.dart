@@ -12,11 +12,15 @@ class AppShellActivityRail extends StatelessWidget {
     required this.sections,
     required this.selectedDestination,
     required this.actionHandler,
+    this.onCommandPaletteRequested,
   });
 
   final List<AppShellNavigationSection> sections;
   final AppDestination selectedDestination;
   final AppShellNavigationActionHandler actionHandler;
+
+  /// 桌面端命令面板入口。点击侧栏底部「Ctrl+K」提示即唤起；为空时仅展示静态提示。
+  final VoidCallback? onCommandPaletteRequested;
 
   @override
   Widget build(BuildContext context) {
@@ -27,19 +31,83 @@ class AppShellActivityRail extends StatelessWidget {
         color: sidebarSurface.backgroundColor,
         border: Border(right: BorderSide(color: sidebarSurface.borderColor)),
       ),
-      child: ListView.separated(
-        primary: false,
-        padding: const EdgeInsets.fromLTRB(10, 16, 10, 14),
-        itemCount: sections.length,
-        separatorBuilder: (context, index) => const SizedBox(height: 10),
-        itemBuilder: (context, index) {
-          final section = sections[index];
-          return _SectionBlock(
-            section: section,
-            selectedDestination: selectedDestination,
-            actionHandler: actionHandler,
-          );
-        },
+      child: Column(
+        children: [
+          Expanded(
+            child: ListView.separated(
+              primary: false,
+              padding: const EdgeInsets.fromLTRB(10, 16, 10, 14),
+              itemCount: sections.length,
+              separatorBuilder: (context, index) => const SizedBox(height: 10),
+              itemBuilder: (context, index) {
+                final section = sections[index];
+                return _SectionBlock(
+                  section: section,
+                  selectedDestination: selectedDestination,
+                  actionHandler: actionHandler,
+                );
+              },
+            ),
+          ),
+          _CommandPaletteRailHint(onTap: onCommandPaletteRequested),
+        ],
+      ),
+    );
+  }
+}
+
+/// 活动栏底部的命令面板提示。桌面端用户在这里发现 Ctrl+K 快捷键；
+/// 提供回调时整块可点击，照顾「会点不会按快捷键」的用户。
+class _CommandPaletteRailHint extends StatelessWidget {
+  const _CommandPaletteRailHint({this.onTap});
+
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final sidebarSurface = context.novelThemeSurfaces.sidebar;
+    final muted = sidebarSurface.mutedForegroundColor;
+    return Tooltip(
+      message: '命令面板（Ctrl+K）',
+      waitDuration: const Duration(milliseconds: 350),
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+          decoration: BoxDecoration(
+            border: Border(
+              top: BorderSide(color: sidebarSurface.borderColor, width: 1),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                decoration: BoxDecoration(
+                  color: sidebarSurface.highlightBackgroundColor
+                      .withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: sidebarSurface.borderColor),
+                ),
+                child: Text(
+                  'Ctrl+K',
+                  style: TextStyle(
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w700,
+                    color: sidebarSurface.foregroundColor,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '命令面板',
+                style: TextStyle(fontSize: 9.5, color: muted),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

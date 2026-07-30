@@ -32,6 +32,7 @@ class TaskCenterViewData {
     required this.actionGroups,
     required this.guidanceRevisitBody,
     this.longTaskCreationAvailable = false,
+    this.commandInFlight = false,
   });
 
   final String title;
@@ -64,10 +65,12 @@ class TaskCenterViewData {
   final List<TaskCenterActionGroupViewData> actionGroups;
   final String guidanceRevisitBody;
   final bool longTaskCreationAvailable;
+  /// 中文注释: 是否有命令正在执行——为 true 时禁用运行动作按钮，避免重复点击堆叠命令。
+  final bool commandInFlight;
 
   factory TaskCenterViewData.initial() {
     return const TaskCenterViewData(
-      title: '长任务中心',
+      title: '任务中心',
       intro: '',
       help: '',
       status: '',

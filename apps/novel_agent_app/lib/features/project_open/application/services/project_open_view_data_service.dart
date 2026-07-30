@@ -39,11 +39,9 @@ class ProjectOpenViewDataService {
       allowImportLocal: snapshot.allowImportLocal,
       entries: entries,
       selectedEntryId: snapshot.selectedEntryId,
-      status: snapshot.status.trim().isNotEmpty
-          ? snapshot.status.trim()
-          : entries.isEmpty
-          ? '还没有可继续的作品。'
-          : '',
+      // 中文注释: 不再为空列表兜底"还没有可继续的作品"——页面空态已有引导文案，
+      // 两者同时显示会冗余。真实状态(如打开失败的原因)仍照常透出。
+      status: snapshot.status.trim(),
     );
   }
 

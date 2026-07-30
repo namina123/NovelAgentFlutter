@@ -90,6 +90,7 @@ class ProjectAgentGroupOverlay extends StatelessWidget {
                         IconButton(
                           onPressed: actionHandler.onProjectAgentGroupDismissed,
                           icon: const Icon(Icons.close_rounded),
+                          tooltip: '关闭',
                         ),
                       ],
                     ),

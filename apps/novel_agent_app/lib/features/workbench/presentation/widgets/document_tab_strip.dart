@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../shared/theme/novel_theme_context.dart';
+import '../../../../../shared/widgets/confirmation_dialog.dart';
 import '../../../../../shared/widgets/horizontal_overflow_scrollbar.dart';
 import '../models/workbench_view_data.dart';
 import 'workbench_visual_style.dart';
@@ -76,12 +77,12 @@ class DocumentTabStrip extends StatelessWidget {
                           ),
                           const SizedBox(width: 6),
                           Container(
-                            width: 5,
-                            height: 5,
+                            width: 7,
+                            height: 7,
                             margin: const EdgeInsets.only(right: 6),
                             decoration: BoxDecoration(
                               color: document.isDirty
-                                  ? colors.accentColor
+                                  ? colors.warmStrongColor
                                   : foreground.withValues(alpha: 0.16),
                               borderRadius: BorderRadius.circular(999),
                             ),
@@ -101,17 +102,30 @@ class DocumentTabStrip extends StatelessWidget {
                           ),
                           const SizedBox(width: 4),
                           IconButton(
-                            tooltip: '关闭',
-                            visualDensity: const VisualDensity(
-                              horizontal: -4,
-                              vertical: -4,
-                            ),
+                            tooltip: document.isDirty ? '关闭 · 有未保存修改' : '关闭',
+                            visualDensity: VisualDensity.compact,
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints.tightFor(
-                              width: 18,
-                              height: 18,
+                              width: 28,
+                              height: 28,
                             ),
-                            onPressed: () => onClosed(document.id),
+                            onPressed: () async {
+                              // 中文注释: 关闭有未保存修改的文档前必须确认——否则用户编辑半小时点个 X 就全丢了。
+                              // 想保存的用户取消后可手动保存(工具栏保存/Ctrl+S)再关闭。
+                              if (document.isDirty) {
+                                final confirmed = await showConfirmationDialog(
+                                  context,
+                                  title: '关闭该文档？',
+                                  message:
+                                      '该文档有未保存的修改，关闭后这些修改将丢失。如需保留，请先取消并保存。',
+                                  confirmLabel: '仍然关闭',
+                                );
+                                if (!confirmed) {
+                                  return;
+                                }
+                              }
+                              onClosed(document.id);
+                            },
                             icon: Icon(
                               Icons.close_rounded,
                               size: 11,

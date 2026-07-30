@@ -138,13 +138,7 @@ class HfvvAppShellHarness {
       );
       controller.onProjectCreationSubmitted(request);
     }
-    await waitUntil(
-      () =>
-          workbench.projectLauncher?.creationPhase ==
-          ProjectCreationPhase.storageStrategy,
-      description: 'storage strategy phase',
-    );
-    controller.onProjectCreationSubmitted(request);
+    // 中文注释: 创建向导默认跳过存储策略步（honesty pass），因此不再等待 storageStrategy 相位。
     await waitUntil(
       () => workbench.projectPath.trim().isNotEmpty,
       description: 'project path after creation',

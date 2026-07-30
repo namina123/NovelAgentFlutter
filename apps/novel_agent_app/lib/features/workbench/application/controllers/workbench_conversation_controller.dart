@@ -133,6 +133,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
     ConversationGroupSelectorViewDataService?
     conversationGroupSelectorViewDataService,
     required void Function(String message) announce,
+    void Function(void Function()?)? setForegroundBackHandler,
   }) : _generateDraftUseCaseFactory = generateDraftUseCaseFactory,
        _hostAwareGenerateDraftUseCaseFactory =
            hostAwareGenerateDraftUseCaseFactory,
@@ -216,9 +217,17 @@ class WorkbenchConversationController implements ConversationActionHandler {
        _conversationGroupSelectorViewDataService =
            conversationGroupSelectorViewDataService ??
            const ConversationGroupSelectorViewDataService(),
-       _announce = announce {
+       _announce = announce,
+       _setForegroundBackHandler = setForegroundBackHandler {
     _openingFlowController = ConversationOpeningFlowController(this);
     _attachmentFacade = ConversationAttachmentFacade(this);
+  }
+
+  @override
+  void setForegroundBackHandler(void Function()? handler) {
+    // 中文注释: 转发到壳层注入的注册回调（子智能体全屏等前台界面用它接管返回键）；
+    // 未注入（如单测）时为空操作。
+    _setForegroundBackHandler?.call(handler);
   }
 
   final GenerateDraftUseCaseFactory _generateDraftUseCaseFactory;
@@ -294,6 +303,8 @@ class WorkbenchConversationController implements ConversationActionHandler {
   final ConversationGroupSelectorViewDataService
   _conversationGroupSelectorViewDataService;
   final void Function(String message) _announce;
+  // 中文注释: 壳层注入的"前台返回键接管"注册回调；子智能体全屏打开时侧栏会注册关闭回调。
+  final void Function(void Function()?)? _setForegroundBackHandler;
   final ThemePreferenceResolver _themePreferenceResolver =
       ThemePreferenceResolver();
   late final ConversationOpeningFlowController _openingFlowController;
@@ -401,6 +412,19 @@ class WorkbenchConversationController implements ConversationActionHandler {
       modeGuidanceState: runtimeState.activeModeGuidanceState,
       openingProjection: runtimeState.openingProjection,
     );
+    // 中文注释: 没有打开项目时，不要把空态误导到「小说」工作台——改成明确的"尚未打开项目"引导，
+    // 并清空主动作，避免出现点了无效的 novel 入口。
+    final hasProject = _workspaceController.currentProject != null;
+    final effectiveGuide = hasProject
+        ? guide
+        : guide.copyWith(
+            workflowTitle: '尚未打开项目',
+            // 中文注释: "新建/打开项目"在左侧「项目」子面板(非默认的 Files 子面板)——文案要点明标签页，否则用户在 Files 里找不到。
+            workflowDescription: '请先点左侧顶部的「项目」标签，再选「新建项目」或「打开已有项目」，然后开始创作。',
+            composerHint: '打开项目后即可在此对话写作。',
+            primaryActions: const <PrimaryActionViewData>[],
+            openingState: null,
+          );
     final groupSelector = _groupSelectorViewData(
       openingProjection: runtimeState.openingProjection,
       fallback: base.groupSelector,
@@ -412,15 +436,17 @@ class WorkbenchConversationController implements ConversationActionHandler {
     return base.copyWith(
       groupSelector: groupSelector,
       agentSelector: agentSelector,
-      workflowTitle: guide.workflowTitle,
-      workflowDescription: guide.workflowDescription,
-      composerHint: guide.composerHint,
-      primaryActions: guide.primaryActions,
-      openingPanel: _conversationOpeningPanelViewDataService.build(
-        runtimeState.openingProjection,
-        openingMaturity,
-      ),
-      openingState: guide.openingState,
+      workflowTitle: effectiveGuide.workflowTitle,
+      workflowDescription: effectiveGuide.workflowDescription,
+      composerHint: effectiveGuide.composerHint,
+      primaryActions: effectiveGuide.primaryActions,
+      openingPanel: hasProject
+          ? _conversationOpeningPanelViewDataService.build(
+              runtimeState.openingProjection,
+              openingMaturity,
+            )
+          : null,
+      openingState: effectiveGuide.openingState,
       conversationEntries: activeState?.entries ?? const [],
       pendingOptions: activeState?.pendingOptions ?? const [],
       subAgentRuns: activeState?.subAgentRuns ?? const [],
@@ -739,7 +765,10 @@ class WorkbenchConversationController implements ConversationActionHandler {
 
   @override
   Future<void> onRetryLastFailedRequested() async {
-    // TODO: route through runtime controller in next slice.
+    // 中文注释: 重试复用统一发送链 _sendPrompt(retryLastFailure: true)，同样会
+    // 经 _conversationRequestRuntimeService.start 取得 requestHandle 并赋给
+    // _activeRequestHandle，因此重试触发的生成可被 onStopRequested 正常取消——
+    // 与普通发送完全同路径，不存在独立的"旧通道"。这里不做任何旁路。
     final retryRequest = _activeConversationState()?.retryRequest;
     if (retryRequest == null) {
       _announce('当前没有可重试的失败请求。');
@@ -914,12 +943,12 @@ class WorkbenchConversationController implements ConversationActionHandler {
     final settings = _readSettings();
     final project = _workspaceController.currentProject;
     if (settings == null || project == null) {
-      _announce('默认项目尚未加载完成，请稍后再试。');
+      _announce('默认项目尚未加载完成，请稍后重试。');
       return;
     }
     final provider = _selectedModelProvider(settings);
     if (provider == null) {
-      _announce('当前没有可用 provider 配置。');
+      _announce('当前没有可用的模型接口配置。');
       return;
     }
     final requestAgent = _resolveRequestAgent();
@@ -935,7 +964,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
       settings.defaultModelId,
     );
     if (provider.baseUrl.trim().isEmpty || resolvedModelId.trim().isEmpty) {
-      _announce('请先在 novel_agent_settings.json 或环境变量里配置真实的模型接口地址和模型名。');
+      _announce('请先到「设置 → 接口」填写接口地址与 API Key，再到「设置 → 模型」选择默认模型。');
       return;
     }
     final title = _titleFromPrompt(cleanText);
@@ -971,7 +1000,11 @@ class WorkbenchConversationController implements ConversationActionHandler {
       (current) => applyConversationState(
         current.copyWith(
           isGenerating: true,
-          generationStatus: '正在请求 ${provider.title} 生成内容...',
+          // 中文注释: preflight 静默压缩历史时，用户不知道模型本轮只看摘要、会以为模型"失忆"。
+          // 把压缩事实拼进生成状态条，让它在本轮请求期间可见（_announce 会被这行覆盖，故直接合并）。
+          generationStatus: preflight.didCompact
+              ? '正在请求 ${provider.title} 生成内容...（已自动压缩部分历史，模型本轮只看摘要）'
+              : '正在请求 ${provider.title} 生成内容...',
           toolCoreStatus: '',
         ),
         contextSummaryOverride: _conversationSummary(
@@ -1127,7 +1160,9 @@ class WorkbenchConversationController implements ConversationActionHandler {
       }
       _applyRequestFailure(
         error: error,
-        userPromptState: preflight.sessionState,
+        // 中文注释: 用 streamingBaseState(含已流式输出的部分正文)而非 preflight.sessionState(流式前)，
+        // 否则 stop/error 的 catch 会把用户刚看到的部分正文擦掉、只剩重试横幅。无进度时两者相同，安全。
+        userPromptState: streamingBaseState,
         cleanText: cleanText,
         visibleText: visibleText,
         contextStrategySettings: contextStrategySettings,
@@ -1522,6 +1557,15 @@ class WorkbenchConversationController implements ConversationActionHandler {
         _announce('尚未读取到应用设置，无法启动长任务。');
         return;
       }
+      // 中文注释: 启动前显式校验接口/模型——长任务是产品核心卖点，未配置时让其继续会在
+      // workflow runtime 内部抛错，用户看到的是原始异常。这里前置拦截并给出可达的设置指引。
+      final provider = _selectedModelProvider(settings);
+      if (provider == null ||
+          provider.baseUrl.trim().isEmpty ||
+          settings.defaultModelId.trim().isEmpty) {
+        _announce('请先到「设置 → 接口/模型」配置默认接口与模型，再启动长任务。');
+        return;
+      }
       // 中文注释: opening 正式启动走"先确保 workflow 就位再统一进入受控队列运行"的桥入口，
       // 这样开局即进入真正的队列执行，而不是只生成任务链就停下。
       final result = await _openingLaunchBridgeService.startLongTaskRun(
@@ -1537,7 +1581,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
       await _workspaceController.refreshProjectLongTaskSummary();
       _announce(_resultMessage(result, success: '已生成长任务链。'));
     } catch (error) {
-      _announce('启动长任务失败：$error');
+      _announce(UserFacingErrorHumanizer.humanize(error, action: '启动长任务'));
     } finally {
       await _refreshOpeningProjection(
         activeState: _activeConversationState(),
@@ -1700,7 +1744,7 @@ class WorkbenchConversationController implements ConversationActionHandler {
           ),
         )
         .catchError((error, _) {
-          _announce('会话历史保存失败：$error');
+          _announce(UserFacingErrorHumanizer.humanize(error, action: '保存会话历史'));
         });
   }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../application/services/document_workspace_display_mode_policy_service.dart';
 import '../contracts/document_workspace_action_handler.dart';
@@ -14,10 +15,14 @@ class WorkbenchPrimaryCanvasHost extends StatefulWidget {
     super.key,
     required this.viewData,
     required this.actionHandler,
+    this.onCreateFileRequested,
   });
 
   final WorkbenchCanvasViewData viewData;
   final DocumentWorkspaceActionHandler actionHandler;
+
+  /// 空态「新建文档」入口；透传到空画布。为空时（如非主壳路径）不显示该按钮。
+  final VoidCallback? onCreateFileRequested;
 
   @override
   State<WorkbenchPrimaryCanvasHost> createState() =>
@@ -32,7 +37,12 @@ class _WorkbenchPrimaryCanvasHostState
       DocumentWorkspaceDisplayModePolicyService();
 
   String _trackedDocumentId = '';
-  bool _prefersStructureMode = false;
+  // 中文注释: 结构(信息)模式偏好按文档记住——切到另一文档再切回，仍保留之前的选择，
+  // 与 isRendered(每文档持久)一致；此前用单个 bool 会在每次切文档时重置。
+  final Map<String, bool> _structureModeByDocument = <String, bool>{};
+
+  bool get _prefersStructureMode =>
+      _structureModeByDocument[_trackedDocumentId] ?? false;
 
   @override
   void initState() {
@@ -46,10 +56,10 @@ class _WorkbenchPrimaryCanvasHostState
     final nextDocumentId = _activeDocumentId(widget.viewData);
     if (nextDocumentId != _trackedDocumentId) {
       _trackedDocumentId = nextDocumentId;
-      _prefersStructureMode = false;
+      // 中文注释: 不重置偏好——per-doc map 保留每个文档的选择。
     }
-    if (widget.viewData.documents.isEmpty && _prefersStructureMode) {
-      _prefersStructureMode = false;
+    if (widget.viewData.documents.isEmpty && _structureModeByDocument.isNotEmpty) {
+      _structureModeByDocument.clear();
     }
   }
 
@@ -67,23 +77,35 @@ class _WorkbenchPrimaryCanvasHostState
       onChanged: selectedMode != DocumentWorkspaceDisplayMode.structure
           ? widget.actionHandler.onDocumentBodyChanged
           : null,
+      onCreateFileRequested: widget.onCreateFileRequested,
     );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        DocumentWorkspaceHeaderPanel(
-          documents: widget.viewData.documents,
-          onSelected: widget.actionHandler.onDocumentSelected,
-          onClosed: widget.actionHandler.onDocumentClosed,
-          onActionRequested: widget.actionHandler.onDocumentActionRequested,
-          onDisplayModeSelected: _handleDisplayModeSelected,
-          selectedMode: selectedMode,
-          canRender: modePolicy.canRender,
-          hasDocument: modePolicy.hasDocument,
-        ),
-        SizedBox(height: style.headerGap - 5.8),
-        Expanded(child: DocumentResourceCanvasHost(request: request)),
-      ],
+    return CallbackShortcuts(
+      // 中文注释: 写作面的基本快捷键：Ctrl+S 保存当前文档（文档工具栏的保存等价物）。
+      // 焦点在正文编辑区时生效；无文档时保存动作会自行给出"当前没有可保存内容"提示。
+      bindings: <ShortcutActivator, VoidCallback>{
+        const SingleActivator(LogicalKeyboardKey.keyS, control: true): () {
+          widget.actionHandler.onDocumentActionRequested(
+            DocumentToolbarAction.save,
+          );
+        },
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          DocumentWorkspaceHeaderPanel(
+            documents: widget.viewData.documents,
+            onSelected: widget.actionHandler.onDocumentSelected,
+            onClosed: widget.actionHandler.onDocumentClosed,
+            onActionRequested: widget.actionHandler.onDocumentActionRequested,
+            onDisplayModeSelected: _handleDisplayModeSelected,
+            selectedMode: selectedMode,
+            canRender: modePolicy.canRender,
+            hasDocument: modePolicy.hasDocument,
+          ),
+          SizedBox(height: style.headerGap - 5.8),
+          Expanded(child: DocumentResourceCanvasHost(request: request)),
+        ],
+      ),
     );
   }
 
@@ -91,7 +113,12 @@ class _WorkbenchPrimaryCanvasHostState
     final nextPrefersStructure = _modePolicyService
         .prefersStructureModeAfterSelection(mode);
     if (_prefersStructureMode != nextPrefersStructure) {
-      setState(() => _prefersStructureMode = nextPrefersStructure);
+      setState(() {
+        if (_trackedDocumentId.isEmpty) {
+          return;
+        }
+        _structureModeByDocument[_trackedDocumentId] = nextPrefersStructure;
+      });
     }
     if (_modePolicyService.shouldRequestRenderToggle(
       requestedMode: mode,

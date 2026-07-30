@@ -52,7 +52,7 @@ class BookDeconstructionSmartImportAgentService {
       return BookDeconstructionSmartImportResult(
         applied: false,
         normalizedSourceText: '',
-        note: '智能拆书未执行：未找到 provider `$providerId`。',
+        note: '智能拆书未执行：未找到对应的接口配置。',
         tempWorkspaceRootPath: workspace.rootPath,
       );
     }

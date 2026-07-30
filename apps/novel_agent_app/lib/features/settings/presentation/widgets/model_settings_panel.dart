@@ -24,12 +24,16 @@ class ModelSettingsPanel extends StatefulWidget {
     required this.viewData,
     required this.onSaved,
     required this.onConnectionTestRequested,
+    this.onOpenInterfacesTab,
   });
 
   final SettingsViewData viewData;
   final ValueChanged<Map<String, Object?>> onSaved;
   /// 中文注释: 连接测试由模型页发起，使用"当前选中接口 + 模型"真实配对；壳层负责联网探测并回传结果。
   final ModelConnectionTestCallback onConnectionTestRequested;
+
+  /// 模型页「无接口」警告中「前往「接口」页」按钮的回调，透传给 PrimaryPanel。
+  final VoidCallback? onOpenInterfacesTab;
 
   @override
   State<ModelSettingsPanel> createState() => _ModelSettingsPanelState();
@@ -177,12 +181,17 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
           thinkingEffort: _thinkingEffort,
           temperatureController: _temperatureController,
           topPController: _topPController,
+          onOpenInterfacesTab: widget.onOpenInterfacesTab,
           onProviderSelected: (value) {
             setState(() {
               final nextProviderId = value ?? '';
               if (nextProviderId != _providerId) {
-                // 中文注释: 切换接口后清空模型，避免把上一个厂商的模型 ID 误带到新接口。
+                // 中文注释: 切换接口后清空模型与旧探测结果，避免把上一个厂商的模型 ID 或
+                // "连接成功"绿卡误带到新接口（旧结果是上一个配对的，不再可信）。
                 _modelIdController.clear();
+                _connectionResult =
+                    ProviderConnectionValidationResultViewData.initial;
+                _connectionTesting = false;
               }
               _providerId = nextProviderId;
               _providerSearchController.text = _providerTitleOf(_providerId);
@@ -193,7 +202,10 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
               return;
             }
             setState(() {
+              // 中文注释: 换了模型，旧探测结果不再代表当前配对，清掉。
               _modelIdController.text = value;
+              _connectionResult =
+                  ProviderConnectionValidationResultViewData.initial;
             });
           },
           onThinkingChanged: (value) {
@@ -217,7 +229,16 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
         SettingsLabeledTextField(
           label: 'RAG 向量化模型 ID（可选）',
           controller: _embeddingModelIdController,
-          hintText: '留空则知识库检索走关键词匹配；填写则用默认接口的该模型做向量化召回',
+          hintText: '例如 text-embedding-3-small',
+        ),
+        const SizedBox(height: 6),
+        Text(
+          '留空则知识库检索走关键词匹配；填写则用默认接口的该模型做向量化召回。',
+          style: TextStyle(
+            fontSize: 12,
+            height: 1.45,
+            color: Theme.of(context).hintColor,
+          ),
         ),
         const SizedBox(height: 16),
         ModelSettingsAdvancedPanel(
@@ -303,6 +324,25 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
               _modelIdController.text.trim().isEmpty,
           onPressed: _save,
         ),
+        // 中文注释: 保存按钮置灰时给出就近原因，而不是让用户猜为何点不动。
+        if (widget.viewData.providers.isEmpty ||
+            _providerId.trim().isEmpty ||
+            _modelIdController.text.trim().isEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            widget.viewData.providers.isEmpty
+                ? '请先到「接口」页添加并保存一个接口。'
+                : _providerId.trim().isEmpty
+                ? '请先选择默认接口。'
+                : '请选择或填写默认模型 ID。',
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.45,
+              color: Theme.of(context).hintColor,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -320,7 +360,6 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
     if (provider == null) {
       return;
     }
-    final editor = widget.viewData.modelEditor;
     final payload = <String, Object?>{
       'source_id': provider.id,
       'title': provider.title,
@@ -328,13 +367,13 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
       'base_url': provider.baseUrl,
       'api_key': provider.rawApiKey,
       'model_id': modelId,
-      'api_mode': editor.capabilityExposure.apiMode,
+      'api_mode': _apiMode,
     };
     setState(() {
       _connectionTesting = true;
       _connectionResult = ProviderConnectionValidationResultViewData(
         isSuccess: false,
-        summary: '正在联网验证…',
+        summary: '正在联网验证...',
         details: const <String>[],
         errors: const <String>[],
         templateId: '',

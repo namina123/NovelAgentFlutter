@@ -214,6 +214,14 @@ class WorkbenchProjectActionFacade {
     unawaited(_controller._openResource(entryId));
   }
 
+  void onDeleteResourceEntryRequested(String entryId) {
+    unawaited(_controller._deleteResourceEntry(entryId));
+  }
+
+  void onRenameResourceEntryRequested(String entryId, String nextName) {
+    unawaited(_controller._renameResourceEntry(entryId, nextName));
+  }
+
   Future<void> onPendingResearchApproved(String requestId) async {
     await _controller._applyPendingResearchAction(
       requestId,

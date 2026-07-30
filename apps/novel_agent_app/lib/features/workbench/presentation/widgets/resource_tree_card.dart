@@ -17,6 +17,8 @@ class ResourceTreeCard extends StatelessWidget {
     this.embeddedInScrollView = false,
     this.resourceIdentityService = const WorkbenchResourceIdentityService(),
     this.semanticService = const ResourceTreeEntrySemanticService(),
+    this.onDeleteEntry,
+    this.onRenameEntry,
   });
 
   final List<ResourceEntryViewData> entries;
@@ -25,6 +27,10 @@ class ResourceTreeCard extends StatelessWidget {
   final bool embeddedInScrollView;
   final WorkbenchResourceIdentityService resourceIdentityService;
   final ResourceTreeEntrySemanticService semanticService;
+  // 中文注释: 删除/重命名可选回调——传入时每个条目尾部出现「⋯」菜单；不传则维持纯展示。
+  final ValueChanged<ResourceEntryViewData>? onDeleteEntry;
+  final void Function(ResourceEntryViewData entry, String nextName)?
+  onRenameEntry;
 
   @override
   Widget build(BuildContext context) {
@@ -36,6 +42,8 @@ class ResourceTreeCard extends StatelessWidget {
             projectTypeId: projectTypeId,
             onEntrySelected: onEntrySelected,
             semanticService: semanticService,
+            onDeleteEntry: onDeleteEntry,
+            onRenameEntry: onRenameEntry,
           );
   }
 
@@ -52,6 +60,8 @@ class ResourceTreeCard extends StatelessWidget {
           entry: entry,
           semantic: _semanticFor(entry),
           onPressed: () => onEntrySelected(entry.id),
+          onDeleteEntry: onDeleteEntry,
+          onRenameEntry: onRenameEntry,
         ),
       );
       if (index < entries.length - 1) {
@@ -76,12 +86,17 @@ class _ScrollableTreeBody extends StatelessWidget {
     required this.projectTypeId,
     required this.onEntrySelected,
     required this.semanticService,
+    this.onDeleteEntry,
+    this.onRenameEntry,
   });
 
   final List<ResourceEntryViewData> entries;
   final String projectTypeId;
   final ValueChanged<String> onEntrySelected;
   final ResourceTreeEntrySemanticService semanticService;
+  final ValueChanged<ResourceEntryViewData>? onDeleteEntry;
+  final void Function(ResourceEntryViewData entry, String nextName)?
+  onRenameEntry;
 
   @override
   Widget build(BuildContext context) {
@@ -110,6 +125,8 @@ class _ScrollableTreeBody extends StatelessWidget {
                       projectTypeId: projectTypeId,
                     ),
                     onPressed: () => onEntrySelected(entry.id),
+                    onDeleteEntry: onDeleteEntry,
+                    onRenameEntry: onRenameEntry,
                   ),
                 );
               },

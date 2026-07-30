@@ -202,6 +202,12 @@ class _FakeResourceHandler implements ResourceManagerActionHandler {
   void onResourceEntrySelected(String entryId) {}
 
   @override
+  void onDeleteResourceEntryRequested(String entryId) {}
+
+  @override
+  void onRenameResourceEntryRequested(String entryId, String nextName) {}
+
+  @override
   void onReviewsRequested() {}
 
   @override

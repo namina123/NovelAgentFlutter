@@ -290,27 +290,39 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
                     ],
                     if (widget.status.trim().isNotEmpty) ...[
                       const SizedBox(height: 12),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-                        decoration: BoxDecoration(
-                          color: colors.accentSoftColor.withValues(alpha: 0.18),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: colors.lineColor.withValues(alpha: 0.74),
-                            width: AppChrome.borderWidth,
+                      // 中文注释: 失败/错误 status 用 error 色突出，与"正在创建"进行中态区分，避免扫视漏掉失败。
+                      Builder(builder: (context) {
+                        final isFailure = widget.status.contains('失败') ||
+                            widget.status.contains('错误');
+                        final colorScheme = Theme.of(context).colorScheme;
+                        final fg =
+                            isFailure ? colorScheme.error : colors.lineStrongColor;
+                        return Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                          decoration: BoxDecoration(
+                            color: isFailure
+                                ? colorScheme.error.withValues(alpha: 0.12)
+                                : colors.accentSoftColor.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: isFailure
+                                  ? colorScheme.error.withValues(alpha: 0.4)
+                                  : colors.lineColor.withValues(alpha: 0.74),
+                              width: AppChrome.borderWidth,
+                            ),
                           ),
-                        ),
-                        child: Text(
-                          widget.status,
-                          style: TextStyle(
-                            color: colors.lineStrongColor,
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w700,
-                            height: 1.45,
+                          child: Text(
+                            widget.status,
+                            style: TextStyle(
+                              color: fg,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              height: 1.45,
+                            ),
                           ),
-                        ),
-                      ),
+                        );
+                      }),
                     ],
                   ],
                 ),
@@ -330,43 +342,55 @@ class _ProjectCreatePanelState extends State<ProjectCreatePanel> {
               ),
             ),
           ),
-          child: Row(
-            children: [
-              if (_showBackButton()) ...[
-                Expanded(
-                  child: ActionButton(
-                    label: '上一步',
-                    icon: Icons.arrow_back_rounded,
-                    expanded: true,
-                    tone: ActionButtonTone.neutral,
-                    onPressed: widget.onBackRequested,
-                  ),
-                ),
-                const SizedBox(width: 10),
-              ] else if (widget.allowOpenExisting) ...[
-                Expanded(
-                  child: ActionButton(
-                    label: '打开已有项目',
-                    icon: Icons.folder_open_outlined,
-                    expanded: true,
-                    tone: ActionButtonTone.neutral,
-                    onPressed: widget.onOpenExistingRequested,
-                  ),
-                ),
-                const SizedBox(width: 10),
-              ],
+          child: Builder(
+            builder: (context) {
+              // 中文注释: 创建进行中时整行动作都禁用（上一步/打开已有项目/提交），
+              // 避免在 executePrepared 异步窗口期触发返回或打开导致状态错位/目录残留。
+              final creating =
+                  widget.status.trim().startsWith('正在创建项目');
+              return Row(
+                children: [
+                  if (_showBackButton()) ...[
+                    Expanded(
+                      child: ActionButton(
+                        label: '上一步',
+                        icon: Icons.arrow_back_rounded,
+                        expanded: true,
+                        tone: ActionButtonTone.neutral,
+                        disabled: creating,
+                        onPressed: widget.onBackRequested,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                  ] else if (widget.allowOpenExisting) ...[
+                    Expanded(
+                      child: ActionButton(
+                        label: '打开已有项目',
+                        icon: Icons.folder_open_outlined,
+                        expanded: true,
+                        tone: ActionButtonTone.neutral,
+                        disabled: creating,
+                        onPressed: widget.onOpenExistingRequested,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                  ],
               Expanded(
                 child: ActionButton(
                   label: _submitButtonLabel(),
                   icon: Icons.add_business_outlined,
                   expanded: true,
                   tone: ActionButtonTone.warm,
+                  // 中文注释: 创建进行中(控制器把 status 置为"正在创建项目...")时禁用提交，
+                  // 避免重复触发 executePrepared 产出两个同名目录。
+                  disabled: widget.status.trim().startsWith('正在创建项目'),
                   onPressed: () => _submit(_controller.text),
                 ),
               ),
-            ],
+                ],
+              );
+            }),
           ),
-        ),
       ],
     );
   }

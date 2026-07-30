@@ -64,6 +64,8 @@ class _ResizableDocumentsWorkspaceLayoutState
                   );
                 });
               },
+              // 中文注释: 双击恢复默认导航栏宽（清空自定义值，build 会按总宽重算默认）。
+              onResetRequested: () => setState(() => _navigationWidth = null),
             ),
             Expanded(child: widget.documentPane),
           ],

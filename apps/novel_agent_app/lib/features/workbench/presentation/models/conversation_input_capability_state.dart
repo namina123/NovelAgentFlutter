@@ -27,7 +27,8 @@ class ConversationInputCapabilityState {
       showAttachmentEntry = false,
       supportsStopAction = false,
       showStopAction = false,
-      canSendAction = true,
+      // 中文注释: 默认保守：无项目信息时不可发送，与"无项目不可发"的产品语义一致。
+      canSendAction = false,
       submitLabel = '发送';
 
   final bool supportsReasoningToggle;
@@ -43,4 +44,22 @@ class ConversationInputCapabilityState {
   final bool showStopAction;
   final bool canSendAction;
   final String submitLabel;
+
+  ConversationInputCapabilityState copyWith({bool? canSendAction}) {
+    return ConversationInputCapabilityState(
+      supportsReasoningToggle: supportsReasoningToggle,
+      showReasoningToggle: showReasoningToggle,
+      reasoningEnabled: reasoningEnabled,
+      supportsOptimizeAction: supportsOptimizeAction,
+      showOptimizeAction: showOptimizeAction,
+      supportsToolOptionsAction: supportsToolOptionsAction,
+      showToolOptionsAction: showToolOptionsAction,
+      supportsAttachmentEntry: supportsAttachmentEntry,
+      showAttachmentEntry: showAttachmentEntry,
+      supportsStopAction: supportsStopAction,
+      showStopAction: showStopAction,
+      canSendAction: canSendAction ?? this.canSendAction,
+      submitLabel: submitLabel,
+    );
+  }
 }

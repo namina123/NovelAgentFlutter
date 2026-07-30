@@ -29,6 +29,7 @@ class SettingsViewData {
     required this.settingsSearchRoots,
     required this.defaultProjectsRootPath,
     required this.isMobileProjectRootLocked,
+    this.settingsAnnouncement = '',
   });
 
   final String activeTabId;
@@ -57,6 +58,8 @@ class SettingsViewData {
   final List<String> settingsSearchRoots;
   final String defaultProjectsRootPath;
   final bool isMobileProjectRootLocked;
+  /// 中文注释: 设置页瞬态反馈（保存成功/校验失败），由壳层在保存后写入、SettingsHeader 渲染并自动消失。
+  final String settingsAnnouncement;
 
   factory SettingsViewData.initial() {
     return SettingsViewData(
@@ -128,6 +131,7 @@ class SettingsViewData {
     List<String>? settingsSearchRoots,
     String? defaultProjectsRootPath,
     bool? isMobileProjectRootLocked,
+    String? settingsAnnouncement,
   }) {
     // 中文注释: 设置状态通过局部 copy 维持稳定引用边界，避免 tab 切换把整页对象全部推翻重建。
     return SettingsViewData(
@@ -163,6 +167,7 @@ class SettingsViewData {
           defaultProjectsRootPath ?? this.defaultProjectsRootPath,
       isMobileProjectRootLocked:
           isMobileProjectRootLocked ?? this.isMobileProjectRootLocked,
+      settingsAnnouncement: settingsAnnouncement ?? this.settingsAnnouncement,
     );
   }
 }
@@ -197,26 +202,6 @@ class ProviderEndpointViewData {
   final String description;
   final ProviderConnectionValidationResultViewData connectionValidationResult;
   final bool isSelected;
-}
-
-class ProviderDraftViewData {
-  const ProviderDraftViewData({
-    required this.title,
-    required this.protocol,
-    required this.baseUrl,
-    required this.apiKey,
-    required this.description,
-    required this.modelId,
-    this.selectedDirectoryProviderId,
-  });
-
-  final String title;
-  final String protocol;
-  final String baseUrl;
-  final String apiKey;
-  final String description;
-  final String modelId;
-  final String? selectedDirectoryProviderId;
 }
 
 class ProviderDirectoryOptionViewData {

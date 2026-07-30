@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../shared/theme/novel_theme_context.dart';
+import '../../../../../shared/widgets/confirmation_dialog.dart';
 import '../models/resource_tree_entry_semantic_view_data.dart';
 import '../models/workbench_view_data.dart';
 
@@ -13,17 +14,24 @@ class ResourceTreeEntryTile extends StatelessWidget {
       detailLabel: '',
       leadingIcon: Icons.description_outlined,
     ),
+    this.onDeleteEntry,
+    this.onRenameEntry,
   });
 
   final ResourceEntryViewData entry;
   final ResourceTreeEntrySemanticViewData semantic;
   final VoidCallback onPressed;
+  // 中文注释: 传入删除/重命名回调时，条目尾部出现「⋯」操作菜单；不传则维持纯展示。
+  final ValueChanged<ResourceEntryViewData>? onDeleteEntry;
+  final void Function(ResourceEntryViewData entry, String nextName)?
+  onRenameEntry;
 
   @override
   Widget build(BuildContext context) {
     final optionSurface = context.novelThemeSurfaces.optionTile;
     final panelSurface = context.novelThemeSurfaces.panel;
     final colors = context.novelThemeColors;
+    final canManage = onDeleteEntry != null || onRenameEntry != null;
     final hasSecondaryLabel = semantic.detailLabel.trim().isNotEmpty;
     final foreground = entry.isSelected
         ? optionSurface.highlightForegroundColor
@@ -170,6 +178,15 @@ class ResourceTreeEntryTile extends StatelessWidget {
                       ],
                     ),
                   ),
+                  if (canManage) ...[
+                    const SizedBox(width: 2),
+                    _EntryMenuTrigger(
+                      entry: entry,
+                      iconColor: mutedForeground,
+                      onDeleteEntry: onDeleteEntry,
+                      onRenameEntry: onRenameEntry,
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -279,6 +296,160 @@ class _DepthGuides extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+enum _ResourceEntryMenuAction { rename, delete }
+
+/// 中文注释: 资源条目尾部的「⋯」操作菜单——长出在传入删除/重命名回调时。
+/// 弹出 PopupMenu，再据选择走二次确认（删除）或输入框（重命名）；最终回调交给上层。
+class _EntryMenuTrigger extends StatelessWidget {
+  const _EntryMenuTrigger({
+    required this.entry,
+    required this.iconColor,
+    required this.onDeleteEntry,
+    required this.onRenameEntry,
+  });
+
+  final ResourceEntryViewData entry;
+  final Color iconColor;
+  final ValueChanged<ResourceEntryViewData>? onDeleteEntry;
+  final void Function(ResourceEntryViewData entry, String nextName)?
+  onRenameEntry;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<_ResourceEntryMenuAction>(
+      tooltip: '资源操作',
+      icon: Icon(Icons.more_horiz, size: 16, color: iconColor),
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      splashRadius: 16,
+      constraints: const BoxConstraints(minWidth: 128),
+      itemBuilder: (context) => [
+        if (onRenameEntry != null)
+          const PopupMenuItem(
+            value: _ResourceEntryMenuAction.rename,
+            child: Text('重命名'),
+          ),
+        if (onDeleteEntry != null)
+          const PopupMenuItem(
+            value: _ResourceEntryMenuAction.delete,
+            child: Text('删除'),
+          ),
+      ],
+      onSelected: (action) => _handleAction(context, action),
+    );
+  }
+
+  Future<void> _handleAction(
+    BuildContext context,
+    _ResourceEntryMenuAction action,
+  ) async {
+    switch (action) {
+      case _ResourceEntryMenuAction.rename:
+        final nextName = await showDialog<String>(
+          context: context,
+          builder: (_) => _RenameEntryDialog(
+            initialName: _baseNameOf(entry.relativePath),
+            title: entry.isDirectory ? '重命名文件夹' : '重命名文件',
+          ),
+        );
+        final clean = nextName?.trim() ?? '';
+        if (clean.isEmpty) {
+          return;
+        }
+        onRenameEntry?.call(entry, clean);
+        break;
+      case _ResourceEntryMenuAction.delete:
+        final confirmed = await showConfirmationDialog(
+          context,
+          title: entry.isDirectory ? '删除文件夹' : '删除文件',
+          message: _deleteConfirmMessage(entry),
+          confirmLabel: '删除',
+        );
+        if (confirmed) {
+          onDeleteEntry?.call(entry);
+        }
+        break;
+    }
+  }
+
+  String _deleteConfirmMessage(ResourceEntryViewData entry) {
+    if (entry.isDirectory) {
+      if (entry.childCount > 0) {
+        return '将删除文件夹「${entry.title}」及其中的 ${entry.childCount} 项内容，'
+            '并关闭对应的已打开标签。此操作不可撤销。';
+      }
+      return '将删除空文件夹「${entry.title}」。此操作不可撤销。';
+    }
+    return '将删除「${entry.title}」，并关闭对应标签'
+        '（未保存的草稿会一并丢失）。此操作不可撤销。';
+  }
+}
+
+String _baseNameOf(String relativePath) {
+  final clean = relativePath.replaceAll('\\', '/');
+  final slash = clean.lastIndexOf('/');
+  return slash >= 0 ? clean.substring(slash + 1) : clean;
+}
+
+/// 中文注释: 重命名输入弹窗——预填当前文件/目录名，默认选中主名部分（去掉扩展名）
+/// 以便整体替换；目录则全选。StatefulWidget 负责创建/释放 TextEditingController。
+class _RenameEntryDialog extends StatefulWidget {
+  const _RenameEntryDialog({required this.initialName, required this.title});
+
+  final String initialName;
+  final String title;
+
+  @override
+  State<_RenameEntryDialog> createState() => _RenameEntryDialogState();
+}
+
+class _RenameEntryDialogState extends State<_RenameEntryDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialName);
+    final dot = widget.initialName.lastIndexOf('.');
+    final selectionEnd = dot > 0 ? dot : widget.initialName.length;
+    _controller.selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: selectionEnd.clamp(0, widget.initialName.length),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        textInputAction: TextInputAction.done,
+        decoration: const InputDecoration(
+          hintText: '输入新的名称（可保留扩展名，如 .md）',
+        ),
+        onSubmitted: (value) => Navigator.of(context).pop(value),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(null),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text),
+          child: const Text('确定'),
+        ),
+      ],
     );
   }
 }

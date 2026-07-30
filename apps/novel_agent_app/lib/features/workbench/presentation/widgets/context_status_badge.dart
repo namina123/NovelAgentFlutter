@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../../../../../shared/theme/novel_theme_context.dart';
 import 'conversation_panel_band.dart';
 import 'conversation_panel_style.dart';
 import '../models/conversation_context_projection_view_data.dart';
@@ -13,33 +15,56 @@ class ContextStatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     // 中文注释: 上下文状态徽标独立后，后续压缩策略、token 预算等展示可单独演化。
     final style = ConversationPanelStyle.of(context);
+    final colors = context.novelThemeColors;
     final summary = _summaryText();
-    return ConversationPanelBand(
-      leadingIcon: Icons.analytics_outlined,
-      emphasized: true,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '上下文概览',
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              color: style.accentBandForegroundColor.withValues(alpha: 0.78),
+    // 中文注释: 按压力等级切色——预警(warning)用暖色、紧张/越界(critical/overLimit)用警示色，
+    // 让用户一眼看出"再发一条可能溢出/触发压缩"，而不是和安全态同色。safe/无则走默认 accent。
+    final level = projection?.pressureSnapshot.pressureLevel;
+    final Color foreground;
+    switch (level) {
+      case SessionContextPressureLevel.warning:
+        foreground = colors.warmStrongColor;
+        break;
+      case SessionContextPressureLevel.critical:
+      case SessionContextPressureLevel.overLimit:
+        foreground = colors.dangerStrongColor;
+        break;
+      default:
+        foreground = style.accentBandForegroundColor;
+    }
+    return Tooltip(
+      message: projection?.pressureSummary.trim().isNotEmpty == true
+          ? projection!.pressureSummary
+          : summary,
+      child: ConversationPanelBand(
+        leadingIcon: Icons.analytics_outlined,
+        emphasized: true,
+        foregroundColor: foreground,
+        backgroundColor: foreground.withValues(alpha: 0.12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '上下文概览',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: foreground.withValues(alpha: 0.78),
+              ),
             ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            summary,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: style.accentBandForegroundColor,
+            const SizedBox(height: 2),
+            Text(
+              summary,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: foreground,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

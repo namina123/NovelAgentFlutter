@@ -9,10 +9,14 @@ class DocumentEmptyCanvas extends StatelessWidget {
     super.key,
     this.headline = '打开或新建文档',
     this.message = '从资源区打开文件，或先在会话栏生成新内容后保存到项目目录。',
+    this.onCreateNew,
   });
 
   final String headline;
   final String message;
+
+  /// 空态「新建文档」入口；为空时不渲染按钮（仍可经左侧资料库「新建文件」触达）。
+  final VoidCallback? onCreateNew;
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +57,7 @@ class DocumentEmptyCanvas extends StatelessWidget {
                   ),
                   SizedBox(width: visual.compactGap + 1),
                   Text(
-                    'Document editor',
+                    '文档编辑区',
                     style: TextStyle(
                       fontSize: visual.compactLabelFontSize,
                       fontWeight: FontWeight.w800,
@@ -167,6 +171,19 @@ class DocumentEmptyCanvas extends StatelessWidget {
                             color: surface.mutedForegroundColor,
                           ),
                         ),
+                        if (onCreateNew != null) ...[
+                          SizedBox(height: visual.headerGap + 6),
+                          // 中文注释: 空态就近给一个「新建文档」入口，避免用户被告知"去资料库"
+                          // 却要自己找入口；与左侧资料库「新建文件」同源（onCreateFileRequested）。
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: FilledButton.icon(
+                              onPressed: onCreateNew,
+                              icon: const Icon(Icons.note_add_outlined, size: 18),
+                              label: const Text('新建文档'),
+                            ),
+                          ),
+                        ],
                         SizedBox(height: visual.headerGap + 10),
                         Container(
                           padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
@@ -182,7 +199,9 @@ class DocumentEmptyCanvas extends StatelessWidget {
                             ),
                           ),
                           child: Text(
-                            '从左侧资源区打开现有文档，或先在右侧会话区生成内容后再保存到项目目录。',
+                            // 中文注释: 这里不再重复上面的「从资源区打开」一句，改为补一条草稿→保存的提示，
+                            // 让用户知道生成的内容会先暂存为草稿、确认后再落盘。
+                            '提示：在会话区生成的内容会先暂存为当前文档草稿，确认满意后点工具栏「保存」（Ctrl+S）落盘到项目目录。',
                             style: TextStyle(
                               fontSize: 12.8,
                               height: 1.62,

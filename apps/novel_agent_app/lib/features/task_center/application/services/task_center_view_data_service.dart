@@ -55,6 +55,7 @@ class TaskCenterViewDataService {
     String status = '',
     List<TaskCenterActionGroupViewData> supplementalActionGroups =
         const <TaskCenterActionGroupViewData>[],
+    bool commandInFlight = false,
   }) {
     // 中文注释: 任务中心展示映射集中在这里，避免控制器继续堆积状态文案和枚举翻译。
     final selectedLongTaskRun = _runByPath(
@@ -93,7 +94,8 @@ class TaskCenterViewDataService {
       runtimeProfile,
     );
     return TaskCenterViewData(
-      title: '长篇自动化队列',
+      commandInFlight: commandInFlight,
+      title: '任务中心',
       intro:
           '这里不是全局任务箱，而是当前小说项目的可恢复写作队列。适合批量章节、长篇规划、审稿修订和检查点推进；默认只跑小步，遇到需要你确认的地方会停下。',
       help:

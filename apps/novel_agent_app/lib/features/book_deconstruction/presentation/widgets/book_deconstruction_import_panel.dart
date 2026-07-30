@@ -85,7 +85,7 @@ class _BookDeconstructionImportPanelState
           enabled: !widget.viewData.isLoading,
           decoration: const InputDecoration(
             labelText: '来源标题',
-            hintText: '例如：某部待拆解的作品名',
+            hintText: '例如：某部待拆书的作品名',
           ),
           onChanged:
               widget.actionHandler.onBookDeconstructionSourceTitleChanged,
@@ -134,7 +134,7 @@ class _ImportedSourcePreview extends StatelessWidget {
     const maxPreviewChars = 4000;
     final truncated = sourceContent.length <= maxPreviewChars
         ? sourceContent
-        : '${sourceContent.substring(0, maxPreviewChars)}\n\n…（仅显示前 $maxPreviewChars 字预览，完整正文已存盘，拆书将读取完整内容）';
+        : '${sourceContent.substring(0, maxPreviewChars)}\n\n...（仅显示前 $maxPreviewChars 字预览，完整正文已存盘，拆书将读取完整内容）';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),

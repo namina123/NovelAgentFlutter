@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../../../../shared/services/user_facing_error_humanizer.dart';
 import '../../presentation/contracts/project_assets_action_handler.dart';
 import '../../presentation/models/project_assets_view_data.dart';
 import '../models/project_rag_extraction_execution_result.dart';
@@ -136,7 +137,7 @@ class ProjectAssetsController extends ChangeNotifier
       _rebuildView();
     } catch (error) {
       _snapshot = _snapshot.copyWith(isLoading: false);
-      _statusMessage = '加载项目资产失败：$error';
+      _statusMessage = UserFacingErrorHumanizer.humanize(error, action: '加载项目资产');
       _rebuildView();
     }
   }
@@ -164,7 +165,7 @@ class ProjectAssetsController extends ChangeNotifier
       _rebuildView();
     } catch (error) {
       _snapshot = _snapshot.copyWith(isLoading: false);
-      _statusMessage = '加载项目资产目录失败：$error';
+      _statusMessage = UserFacingErrorHumanizer.humanize(error, action: '加载项目资产目录');
       _rebuildView();
     }
   }
@@ -192,7 +193,7 @@ class ProjectAssetsController extends ChangeNotifier
       _rebuildView();
     } catch (error) {
       _snapshot = _snapshot.copyWith(isLoading: false);
-      _statusMessage = '加载语料状态失败：$error';
+      _statusMessage = UserFacingErrorHumanizer.humanize(error, action: '加载语料状态');
       _rebuildView();
     }
   }
@@ -238,6 +239,11 @@ class ProjectAssetsController extends ChangeNotifier
       project: project,
       strategyProfileId: normalizedStrategyProfileId,
     );
+    // 中文注释: 提取期间用户可能已切换项目——结果只回写到发起提取的那个项目，
+    // 避免把旧项目的提取产物写进新项目的快照(对照拆书的 operation-context 校验)。
+    if (_readCurrentProject()?.rootPath != project.rootPath) {
+      return;
+    }
     await _handleReferenceExtractionResult(result);
   }
 
@@ -265,6 +271,11 @@ class ProjectAssetsController extends ChangeNotifier
       modeId: selectedModeId,
       onProgress: _handleRagExtractionProgress,
     );
+    // 中文注释: 提取期间用户可能已切换项目——结果只回写到发起提取的那个项目，
+    // 避免把旧项目的语料/挂载写进新项目的快照。
+    if (_readCurrentProject()?.rootPath != project.rootPath) {
+      return;
+    }
     await _handleRagExtractionResult(result);
   }
 

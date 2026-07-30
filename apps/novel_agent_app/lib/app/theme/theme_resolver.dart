@@ -24,6 +24,10 @@ class ThemeResolver {
         surface: colors.panelBackground,
         onSurface: colors.textColor,
       ),
+      // 中文注释: Material 3 默认不给 InkWell 画焦点环，键盘用户无法看出当前聚焦项。
+      // 在主题层注入 focusColor，所有未单独覆盖 focusColor 的 InkWell（导航栏、列表行、
+      // 命令面板等）在键盘聚焦时都会显出半透明强调色，补齐键盘可达性。
+      focusColor: colors.accentColor.withValues(alpha: 0.18),
     );
     final textTheme = AppTypography.applyCjkFallback(
       base.textTheme.apply(

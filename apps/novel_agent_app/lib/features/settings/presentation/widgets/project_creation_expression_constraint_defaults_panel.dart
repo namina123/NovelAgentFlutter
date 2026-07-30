@@ -47,7 +47,7 @@ class _ProjectCreationExpressionConstraintDefaultsPanelState
     return SettingsFormSection(
       title: '项目创建默认表达限制',
       description:
-          '这里只决定“新项目创建后，如果项目当前还没有表达限制 binding，要不要自动装载哪些 profile”。不会在这里编辑项目内 binding。',
+          '决定新项目创建后、尚未有表达限制 binding 时，要自动装载哪些 profile；项目内 binding 不在这里编辑。',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

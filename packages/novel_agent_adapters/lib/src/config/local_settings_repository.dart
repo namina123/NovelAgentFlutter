@@ -408,33 +408,37 @@ class LocalSettingsRepository implements SettingsRepository {
         continue;
       }
       final raw = await file.readAsString();
-      final decoded = jsonDecode(raw);
-      if (decoded is Map<String, Object?>) {
-        final document = Map<String, Object?>.from(decoded);
-        _rememberLoadedDocument(
-          filePath: file.absolute.path,
-          basePath: Directory(candidate.basePath).absolute.path,
-          document: document,
-        );
-        return (
-          document: document,
-          basePath: Directory(candidate.basePath).absolute.path,
-        );
+      // 中文注释: 设置文件可能因上次写入被中断等原因变成空文件或半截 JSON——
+      // 直接 jsonDecode 会抛 FormatException 让应用启动崩溃。空或解析失败时跳过该候选，
+      // 继续找下一个（或最终回退到空文档），保证启动稳健。
+      if (raw.trim().isEmpty) {
+        continue;
       }
-      if (decoded is Map) {
-        final document = decoded.map(
-          (key, value) => MapEntry(key.toString(), value),
-        );
-        _rememberLoadedDocument(
-          filePath: file.absolute.path,
-          basePath: Directory(candidate.basePath).absolute.path,
-          document: document,
-        );
-        return (
-          document: document,
-          basePath: Directory(candidate.basePath).absolute.path,
-        );
+      final Map<String, Object?> document;
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map<String, Object?>) {
+          document = Map<String, Object?>.from(decoded);
+        } else if (decoded is Map) {
+          document = decoded.map(
+            (key, value) => MapEntry(key.toString(), value),
+          );
+        } else {
+          continue;
+        }
+      } catch (_) {
+        // 中文注释: 损坏的设置文件不应阻止应用启动——跳过，回退到默认空设置。
+        continue;
       }
+      _rememberLoadedDocument(
+        filePath: file.absolute.path,
+        basePath: Directory(candidate.basePath).absolute.path,
+        document: document,
+      );
+      return (
+        document: document,
+        basePath: Directory(candidate.basePath).absolute.path,
+      );
     }
     final basePath = Directory(_defaultProjectRootPath).absolute.parent.path;
     _rememberLoadedDocument(

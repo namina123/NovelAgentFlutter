@@ -753,7 +753,7 @@ class ProjectImportExecutionService {
         '- 模型: ${smartAnalysisModelId.trim().isEmpty ? '未指定，已回退到规则分析' : smartAnalysisModelId.trim()}',
       )
       ..writeln(
-        '- Provider: ${smartAnalysisProviderId.trim().isEmpty ? '未指定' : smartAnalysisProviderId.trim()}',
+        '- 接口: ${smartAnalysisProviderId.trim().isEmpty ? '未指定' : smartAnalysisProviderId.trim()}',
       )
       ..writeln('- 分析文件数: ${analyses.length}')
       ..writeln();

@@ -44,7 +44,7 @@ void main() {
 
     expect(find.text('结构摘要'), findsNothing);
 
-    await tester.tap(find.text('结构'));
+    await tester.tap(find.text('信息'));
     await tester.pumpAndSettle();
 
     expect(find.text('结构摘要'), findsOneWidget);

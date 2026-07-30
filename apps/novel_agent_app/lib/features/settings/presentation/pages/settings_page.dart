@@ -33,6 +33,7 @@ class SettingsPage extends StatelessWidget {
         children: [
           SettingsHeader(
             onBackRequested: actionHandler.onSettingsBackRequested,
+            announcement: viewData.settingsAnnouncement,
           ),
           const SizedBox(height: 18),
           SettingsTabBar(
@@ -68,6 +69,9 @@ class SettingsPage extends StatelessWidget {
         viewData: viewData,
         onSaved: actionHandler.onModelSettingsSaved,
         onConnectionTestRequested: actionHandler.onModelConnectionTestRequested,
+        // 中文注释: 模型页"无接口"警告里的一键跳转——直接切到接口标签页，消除死路文案。
+        onOpenInterfacesTab: () =>
+            actionHandler.onSettingsTabSelected('interfaces'),
       );
     }
     if (viewData.activeTabId == 'permissions') {

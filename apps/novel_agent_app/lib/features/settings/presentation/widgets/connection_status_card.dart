@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../models/model_editor_view_data.dart';
 
-/// 连接探测结果卡片：接口页（已移除连接测试）与模型页共用同一呈现。
+/// 连接探测结果卡片：仅模型页使用，渲染"接口+模型"真实配对的
+/// 本地自检 + 联网探测合并结果。
 ///
 /// 中文注释: 这里只负责把 [ProviderConnectionValidationResultViewData] 渲染成
 /// 人话化的成功/失败卡片，不持有状态；调用方决定何时显示与隐藏。
@@ -22,12 +23,13 @@ class ConnectionStatusCard extends StatelessWidget {
     if (isEmpty) {
       return const SizedBox.shrink();
     }
-    final foregroundColor = result.isSuccess
-        ? const Color(0xFF23663A)
-        : const Color(0xFF8A5A12);
+    // 中文注释: 配色跟随 colorScheme，避免深色主题下浅黄/浅绿背景与品牌色板冲突。
+    final colorScheme = Theme.of(context).colorScheme;
+    final foregroundColor =
+        result.isSuccess ? colorScheme.primary : colorScheme.tertiary;
     final backgroundColor = result.isSuccess
-        ? const Color(0xFFE8F5EC)
-        : const Color(0xFFFCF2DD);
+        ? colorScheme.primary.withValues(alpha: 0.12)
+        : colorScheme.tertiary.withValues(alpha: 0.14);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
@@ -85,21 +87,13 @@ class ConnectionStatusCard extends StatelessWidget {
               ),
             ),
           ],
-          if (result.hideOptions.isNotEmpty) ...[
+          // 中文注释: hideOptions/fallbackNotAllowed 是内部 API 模式路由信号，原文案
+          // ("需要隐藏的选项：chat、responses" / "当前组合不允许 fallback。") 对普通用户是术语。
+          // 合并成一句人话提示，指明去高级设置切换 API 模式。
+          if (result.hideOptions.isNotEmpty || result.fallbackNotAllowed) ...[
             const SizedBox(height: 8),
             Text(
-              '需要隐藏的选项：${result.hideOptions.join('、')}',
-              style: TextStyle(
-                fontSize: 12,
-                height: 1.45,
-                color: foregroundColor,
-              ),
-            ),
-          ],
-          if (result.fallbackNotAllowed) ...[
-            const SizedBox(height: 8),
-            Text(
-              '当前组合不允许 fallback。',
+              '当前接口模板与所选 API 模式组合不完全兼容，建议到高级设置里切换 API 模式后再重试。',
               style: TextStyle(
                 fontSize: 12,
                 height: 1.45,

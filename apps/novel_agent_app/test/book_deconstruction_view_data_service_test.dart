@@ -70,10 +70,10 @@ void main() {
         sourceContent: '第一章 港口风暴',
         operationKind: BookDeconstructionOperationKind.splittingChapters,
       ),
-      status: '正在拆书…',
+      status: '正在拆书...',
     );
 
-    expect(importingViewData.importActionLabel, '正在导入…');
+    expect(importingViewData.importActionLabel, '正在导入...');
     expect(importingViewData.canSplit, isFalse);
     // 拆书进行中（isLoading）时 canSplit 为 false。
     expect(splittingViewData.canSplit, isFalse);

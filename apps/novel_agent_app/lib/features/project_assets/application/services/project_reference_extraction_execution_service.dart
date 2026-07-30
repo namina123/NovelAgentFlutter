@@ -150,7 +150,7 @@ class ProjectReferenceExtractionExecutionService {
       return const ProjectReferenceExtractionExecutionResult(
         ok: false,
         didMutateProject: false,
-        statusMessage: '当前没有可用的 provider 配置，请先补齐模型接口。',
+        statusMessage: '当前没有可用的接口配置，请先补齐模型接口。',
       );
     }
     final executionProfile = _modelExecutionProfileService.resolve(

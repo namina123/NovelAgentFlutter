@@ -18,13 +18,28 @@ void main() {
       expect(decision.shouldRefresh, isFalse);
     });
 
-    test('revisible initialized session refreshes only when auto refresh is on', () {
+    test('revisible initialized session refreshes when auto refresh is on', () {
       const service = LongTaskStationVisibilityRefreshService();
       final decision = service.decide(
         const LongTaskStationSession(
           isVisible: true,
           isInitialized: true,
           autoRefreshEnabled: true,
+        ),
+      );
+
+      expect(decision.shouldInitialize, isFalse);
+      expect(decision.shouldRefresh, isTrue);
+    });
+
+    test('re-entry into initialized station refreshes once even with auto refresh off', () {
+      // 中文注释: 即便没开自动刷新，重新进入总站也要至少刷一次，避免展示离开时的过时快照。
+      const service = LongTaskStationVisibilityRefreshService();
+      final decision = service.decide(
+        const LongTaskStationSession(
+          isVisible: true,
+          isInitialized: true,
+          autoRefreshEnabled: false,
         ),
       );
 

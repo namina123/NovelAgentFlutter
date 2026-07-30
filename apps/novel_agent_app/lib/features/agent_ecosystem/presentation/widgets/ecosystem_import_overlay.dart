@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
-import '../../../../../app/theme/app_palette.dart';
+import '../../../../../shared/services/desktop_text_file_picker_service.dart';
+import '../../../../../shared/theme/novel_theme_context.dart';
 import '../../../../../shared/widgets/panel_surface.dart';
 import '../contracts/agent_ecosystem_action_handler.dart';
 import '../models/ecosystem_import_command_view_data.dart';
@@ -43,6 +46,7 @@ class _EcosystemImportOverlayState extends State<EcosystemImportOverlay> {
   @override
   Widget build(BuildContext context) {
     // 中文注释: 生态导入弹层只收集路径和策略开关，不直接依赖具体导入实现。
+    final colors = context.novelThemeColors;
     return Positioned.fill(
       child: ColoredBox(
         color: Colors.black.withValues(alpha: 0.24),
@@ -59,7 +63,7 @@ class _EcosystemImportOverlayState extends State<EcosystemImportOverlay> {
                 children: [
                   Row(
                     children: [
-                      const Expanded(
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -68,16 +72,16 @@ class _EcosystemImportOverlayState extends State<EcosystemImportOverlay> {
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w800,
-                                color: AppPalette.text,
+                                color: colors.textColor,
                               ),
                             ),
-                            SizedBox(height: 4),
+                            const SizedBox(height: 4),
                             Text(
                               '输入一个 `.customization.json` 生态包的绝对路径。',
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
-                                color: AppPalette.mutedText,
+                                color: colors.mutedTextColor,
                               ),
                             ),
                           ],
@@ -87,6 +91,7 @@ class _EcosystemImportOverlayState extends State<EcosystemImportOverlay> {
                         onPressed:
                             widget.actionHandler.onEcosystemImportDismissed,
                         icon: const Icon(Icons.close_rounded),
+                        tooltip: '关闭',
                       ),
                     ],
                   ),
@@ -95,6 +100,9 @@ class _EcosystemImportOverlayState extends State<EcosystemImportOverlay> {
                     controller: _bundlePathController,
                     label: '生态包路径',
                     hint: '例如：D:\\exports\\novel_bundle.customization.json',
+                    // 中文注释: 桌面端给一个「浏览」按钮免去手粘绝对路径；选择器只有桌面实现
+                    // (PowerShell/osascript/zenity)，移动端不显示以免放一个死按钮。
+                    onBrowse: _canBrowseOnDesktop ? _browseBundle : null,
                   ),
                   const SizedBox(height: 6),
                   CheckboxListTile(
@@ -129,10 +137,10 @@ class _EcosystemImportOverlayState extends State<EcosystemImportOverlay> {
                     const SizedBox(height: 8),
                     Text(
                       widget.viewData.status,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: AppPalette.mutedText,
+                        height: 1.5,
+                        color: colors.mutedTextColor,
                       ),
                     ),
                   ],
@@ -140,8 +148,8 @@ class _EcosystemImportOverlayState extends State<EcosystemImportOverlay> {
                   Expanded(
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.72),
-                        border: Border.all(color: AppPalette.line),
+                        color: colors.panelBackground.withValues(alpha: 0.72),
+                        border: Border.all(color: colors.lineColor),
                       ),
                       child: SingleChildScrollView(
                         padding: const EdgeInsets.all(12),
@@ -149,10 +157,10 @@ class _EcosystemImportOverlayState extends State<EcosystemImportOverlay> {
                           widget.viewData.previewSummary.trim().isEmpty
                               ? '这里会显示导入预检摘要。'
                               : widget.viewData.previewSummary,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
                             height: 1.5,
-                            color: AppPalette.text,
+                            color: colors.textColor,
                           ),
                         ),
                       ),
@@ -170,8 +178,12 @@ class _EcosystemImportOverlayState extends State<EcosystemImportOverlay> {
                         child: const Text('取消'),
                       ),
                       FilledButton(
-                        onPressed: _submit,
-                        child: const Text('预检并导入'),
+                        // 中文注释: 导入进行中禁用提交并改文案，避免慢盘/网络下连点触发
+                        // 并行导入写同一批项目文件。状态由控制器经 isImporting 回传。
+                        onPressed: widget.viewData.isImporting ? null : _submit,
+                        child: Text(
+                          widget.viewData.isImporting ? '正在导入...' : '预检并导入',
+                        ),
                       ),
                     ],
                   ),
@@ -188,17 +200,19 @@ class _EcosystemImportOverlayState extends State<EcosystemImportOverlay> {
     required TextEditingController controller,
     required String label,
     required String hint,
+    VoidCallback? onBrowse,
   }) {
     // 中文注释: 表单字段统一封装，后续替换视觉样式时不影响导入请求结构。
+    final colors = context.novelThemeColors;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w700,
-            color: AppPalette.mutedText,
+            color: colors.mutedTextColor,
           ),
         ),
         const SizedBox(height: 6),
@@ -208,6 +222,13 @@ class _EcosystemImportOverlayState extends State<EcosystemImportOverlay> {
             hintText: hint,
             border: const OutlineInputBorder(),
             isDense: true,
+            suffixIcon: onBrowse == null
+                ? null
+                : IconButton(
+                    tooltip: '浏览…',
+                    icon: const Icon(Icons.folder_open_outlined, size: 20),
+                    onPressed: onBrowse,
+                  ),
           ),
         ),
       ],
@@ -222,5 +243,22 @@ class _EcosystemImportOverlayState extends State<EcosystemImportOverlay> {
         allowBuiltinShadow: _allowBuiltinShadow,
       ),
     );
+  }
+
+  bool get _canBrowseOnDesktop =>
+      Platform.isWindows || Platform.isMacOS || Platform.isLinux;
+
+  Future<void> _browseBundle() async {
+    final picked = await const DesktopTextFilePickerService().pickSingleFile(
+      dialogTitle: '选择生态包',
+    );
+    if (!mounted) {
+      return;
+    }
+    if (picked != null && picked.isNotEmpty) {
+      setState(() {
+        _bundlePathController.text = picked;
+      });
+    }
   }
 }

@@ -23,9 +23,15 @@ class ConversationModelStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.novelThemeColors;
     final surface = context.novelThemeSurfaces.inputDock;
+    // 中文注释: 未配置任何写作模型时，让芯片显式「灰下去」并提示去哪里配置，避免用户
+    // 以为芯片坏了（点了没反应）。_ModelConfigBanner 已给文字指引，这里补上视觉态。
+    final configured = modelOptions.isNotEmpty;
+    final chipForeground = configured
+        ? colors.textColor
+        : colors.mutedTextColor;
     final content = PopupMenuButton<String>(
-      enabled: modelOptions.isNotEmpty,
-      tooltip: '模型',
+      enabled: configured,
+      tooltip: configured ? '模型' : '未配置写作模型 — 前往「设置」配置',
       onSelected: onModelSelected,
       itemBuilder: (context) {
         return modelOptions
@@ -53,10 +59,14 @@ class ConversationModelStrip extends StatelessWidget {
       },
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: surface.backgroundColor.withValues(alpha: 0.24),
+          color: surface.backgroundColor.withValues(
+            alpha: configured ? 0.24 : 0.12,
+          ),
           borderRadius: BorderRadius.circular(9),
           border: Border.all(
-            color: surface.borderColor.withValues(alpha: 0.18),
+            color: surface.borderColor.withValues(
+              alpha: configured ? 0.18 : 0.1,
+            ),
             width: AppChrome.borderWidth,
           ),
         ),
@@ -68,7 +78,7 @@ class ConversationModelStrip extends StatelessWidget {
               Icon(
                 Icons.auto_awesome_outlined,
                 size: 13,
-                color: colors.mutedTextColor.withValues(alpha: 0.9),
+                color: chipForeground.withValues(alpha: configured ? 0.9 : 0.6),
               ),
               const SizedBox(width: 6),
               Flexible(
@@ -79,7 +89,7 @@ class ConversationModelStrip extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 11.6,
                     fontWeight: FontWeight.w700,
-                    color: colors.textColor,
+                    color: chipForeground,
                   ),
                 ),
               ),
@@ -87,7 +97,7 @@ class ConversationModelStrip extends StatelessWidget {
               Icon(
                 Icons.keyboard_arrow_down_rounded,
                 size: 15,
-                color: colors.mutedTextColor,
+                color: chipForeground.withValues(alpha: configured ? 1 : 0.6),
               ),
             ],
           ),

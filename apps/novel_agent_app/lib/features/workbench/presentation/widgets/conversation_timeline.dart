@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../app/theme/app_chrome.dart';
+import '../../../../../app/theme/theme_color_tokens.dart';
 import '../../../../../shared/theme/novel_theme_context.dart';
 import '../models/conversation_transcript_lane_view_data.dart';
 import '../models/conversation_timeline_snapshot.dart';
@@ -42,7 +43,8 @@ class _ConversationTimelineState extends State<ConversationTimeline> {
   @override
   void initState() {
     super.initState();
-    _anchoredToLatest = widget.restoreResult?.defaultScrollTarget !=
+    _anchoredToLatest =
+        widget.restoreResult?.defaultScrollTarget !=
         SessionRestoreScrollTarget.preserveCurrentPosition;
     _snapshot = _currentSnapshot();
     _scrollController.addListener(_handleScrollChanged);
@@ -53,7 +55,8 @@ class _ConversationTimelineState extends State<ConversationTimeline> {
   void didUpdateWidget(covariant ConversationTimeline oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.restoreResult != widget.restoreResult) {
-      _anchoredToLatest = widget.restoreResult?.defaultScrollTarget !=
+      _anchoredToLatest =
+          widget.restoreResult?.defaultScrollTarget !=
           SessionRestoreScrollTarget.preserveCurrentPosition;
       _scheduleInitialReveal();
     }
@@ -88,90 +91,104 @@ class _ConversationTimelineState extends State<ConversationTimeline> {
     final isLive =
         widget.lanes.currentRoundToolBlocks.isNotEmpty ||
         widget.lanes.streamingAppendixBlocks.isNotEmpty;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: panelStyle.timelineBackgroundColor.withValues(alpha: 0.42),
-        borderRadius: BorderRadius.circular(panelStyle.sectionRadius),
-        border: Border.all(
-          color: panelSurface.borderColor.withValues(alpha: 0.08),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: panelStyle.inset(bottom: -1),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.subject_rounded,
-                  size: 13,
-                  color: colors.mutedTextColor,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  '会话记录',
-                  style: TextStyle(
-                    color: panelSurface.foregroundColor,
-                    fontSize: panelStyle.compactLabelFontSize,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const Spacer(),
-                if (isLive)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
+    // 中文注释: 用户上滑离开底部、且底部还有未读内容时，露出「回到最新」浮标。
+    final canJumpToLatest =
+        !_anchoredToLatest &&
+        items.isNotEmpty &&
+        _scrollController.hasClients &&
+        _scrollController.position.maxScrollExtent -
+                _scrollController.position.pixels >
+            _bottomAnchorThreshold;
+    return Stack(
+      children: [
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: panelStyle.timelineBackgroundColor.withValues(alpha: 0.42),
+            borderRadius: BorderRadius.circular(panelStyle.sectionRadius),
+            border: Border.all(
+              color: panelSurface.borderColor.withValues(alpha: 0.08),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: panelStyle.inset(bottom: -1),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.subject_rounded,
+                      size: 13,
+                      color: colors.mutedTextColor,
                     ),
-                    decoration: BoxDecoration(
-                      color: colors.accentSoftColor.withValues(alpha: 0.62),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      '处理中',
+                    const SizedBox(width: 8),
+                    Text(
+                      '会话记录',
                       style: TextStyle(
-                        color: colors.lineStrongColor,
-                        fontSize: panelStyle.metaFontSize,
-                        fontWeight: FontWeight.w700,
+                        color: panelSurface.foregroundColor,
+                        fontSize: panelStyle.compactLabelFontSize,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                  ),
-              ],
-            ),
-          ),
-          Container(
-            height: AppChrome.borderWidth,
-            color: panelSurface.borderColor.withValues(alpha: 0.08),
-          ),
-          Expanded(
-            child: Scrollbar(
-              controller: _scrollController,
-              thumbVisibility: false,
-              child: ListView.separated(
-                controller: _scrollController,
-                primary: false,
-                padding: EdgeInsets.fromLTRB(
-                  panelStyle.bandPadding.left,
-                  panelStyle.bandPadding.top + 1,
-                  panelStyle.bandPadding.right,
-                  panelStyle.bandPadding.bottom + 10,
+                    const Spacer(),
+                    if (isLive)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colors.accentSoftColor.withValues(alpha: 0.62),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '处理中',
+                          style: TextStyle(
+                            color: colors.lineStrongColor,
+                            fontSize: panelStyle.metaFontSize,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
-                itemCount: items.length,
-                separatorBuilder: (_, _) =>
-                    SizedBox(height: panelStyle.bodyGap + 1),
-                itemBuilder: (context, index) {
-                  final item = items[index];
-                  return KeyedSubtree(
-                    key: ValueKey(item.key),
-                    child: item.child,
-                  );
-                },
               ),
-            ),
+              Container(
+                height: AppChrome.borderWidth,
+                color: panelSurface.borderColor.withValues(alpha: 0.08),
+              ),
+              Expanded(
+                child: Scrollbar(
+                  controller: _scrollController,
+                  thumbVisibility: false,
+                  child: ListView.separated(
+                    controller: _scrollController,
+                    primary: false,
+                    padding: EdgeInsets.fromLTRB(
+                      panelStyle.bandPadding.left,
+                      panelStyle.bandPadding.top + 1,
+                      panelStyle.bandPadding.right,
+                      panelStyle.bandPadding.bottom + 10,
+                    ),
+                    itemCount: items.length,
+                    separatorBuilder: (_, _) =>
+                        SizedBox(height: panelStyle.bodyGap + 1),
+                    itemBuilder: (context, index) {
+                      final item = items[index];
+                      return KeyedSubtree(
+                        key: ValueKey(item.key),
+                        child: item.child,
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+        if (canJumpToLatest)
+          Positioned(bottom: 12, right: 12, child: _jumpToLatestChip(colors)),
+      ],
     );
   }
 
@@ -233,7 +250,12 @@ class _ConversationTimelineState extends State<ConversationTimeline> {
   }
 
   void _handleScrollChanged() {
-    _anchoredToLatest = _isNearBottom();
+    final nearBottom = _isNearBottom();
+    if (nearBottom != _anchoredToLatest) {
+      // 中文注释: 仅在「是否贴底」状态翻转时重建，避免每滚动一帧都重建整条时间线。
+      // 翻转时同步显隐「回到最新」浮标。
+      setState(() => _anchoredToLatest = nearBottom);
+    }
   }
 
   void _scheduleInitialReveal() {
@@ -262,6 +284,47 @@ class _ConversationTimelineState extends State<ConversationTimeline> {
     }
     final target = _scrollController.position.maxScrollExtent;
     _scrollController.jumpTo(target);
+  }
+
+  /// 「回到最新」浮标：用户在长生成中上滑阅读时，给一颗常驻入口一键回到底部最新内容。
+  Widget _jumpToLatestChip(ThemeColorTokens colors) {
+    return Tooltip(
+      message: '回到最新内容',
+      child: Material(
+        color: colors.accentColor,
+        elevation: 6,
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
+          onTap: () {
+            _revealLatest();
+            setState(() => _anchoredToLatest = true);
+          },
+          borderRadius: BorderRadius.circular(999),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.keyboard_double_arrow_down_rounded,
+                  size: 16,
+                  color: colors.inverseTextColor,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '回到最新',
+                  style: TextStyle(
+                    color: colors.inverseTextColor,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

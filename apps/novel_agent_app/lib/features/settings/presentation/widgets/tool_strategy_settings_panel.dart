@@ -92,7 +92,7 @@ class _ToolStrategySettingsPanelState extends State<ToolStrategySettingsPanel> {
               ),
               const SizedBox(height: 10),
               SettingsSwitchRow(
-                label: '允许 fallback 工具 JSON',
+                label: '允许工具 JSON 兜底',
                 value: _allowInlineFallback,
                 onChanged: (value) => setState(() {
                   _allowInlineFallback = value;
@@ -222,7 +222,9 @@ class _ToolStrategySettingsPanelState extends State<ToolStrategySettingsPanel> {
     _toolPreviewMode = ToolPreviewMode.normalize(
       widget.settings['tool_preview_mode'],
     );
-    _applyMode(_mode);
+    // 中文注释: 这里不再调 _applyMode(_mode)——上面已按持久化的各开关回填，再套一次预设会把
+    // 用户手动改过的开关整体覆盖回预设，导致"改开关→保存→重进"后改动丢失。
+    // _applyMode 只服务于下拉选择预设的那一刻（onChanged 里调用）。
   }
 
   void _applyMode(String mode) {
@@ -240,12 +242,14 @@ class _ToolStrategySettingsPanelState extends State<ToolStrategySettingsPanel> {
         _requireReadBeforeEdit = true;
         return;
       case ToolStrategyMode.proactive:
+        // 中文注释: "主动"必须与"平衡"有可见差异——否则下拉切换看起来没反应。
+        // 主动模式在请求级强制模型走工具(force_tool_choice)，更积极地用工具而非内联作答。
         _enabled = true;
         _allowInlineFallback = true;
         _autoPresentOptions = true;
         _autoTaskPlan = true;
         _autoWriteArtifacts = true;
-        _forceToolChoice = false;
+        _forceToolChoice = true;
         _requireListBeforeRead = true;
         _requireReadBeforeEdit = true;
         return;

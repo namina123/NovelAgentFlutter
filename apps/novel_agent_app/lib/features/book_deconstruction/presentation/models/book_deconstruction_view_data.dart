@@ -74,7 +74,7 @@ class BookDeconstructionViewData {
       confirmedPreviewPath: '',
       canConfirmSelection: false,
       canCreateDerivedProject: false,
-      importActionLabel: '选择文件…',
+      importActionLabel: '选择文件...',
       canSplit: false,
       splitUseModel: false,
       splitModelOptionKey: '',

@@ -99,6 +99,15 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
           ),
         )
         .toList(growable: false);
+    // 中文注释: 协议显示复用下拉里的友好标签，避免把 anthropic/google_openai_compatible 等
+    // 原始 id 直接抛给用户。
+    var friendlyProtocol = _protocol;
+    for (final option in protocolOptions) {
+      if (option.value == _protocol) {
+        friendlyProtocol = option.label;
+        break;
+      }
+    }
     return ListView(
       children: [
         if (widget.onBackRequested != null) ...[
@@ -172,7 +181,7 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
               if (_baseUrlController.text.trim().isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text(
-                  '当前地址：${_baseUrlController.text.trim()} · 协议：$_protocol',
+                  '当前地址：${_baseUrlController.text.trim()} · 协议：$friendlyProtocol',
                   style: TextStyle(
                     fontSize: 12,
                     height: 1.4,
@@ -442,7 +451,8 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
       return '请先填写或选择接口/厂商名称。';
     }
     if (baseUrl.isEmpty) {
-      return '请填写 Base URL（可在「高级设置」里补充）。';
+      return '请填写 Base URL：可在上方下拉里点选一个厂商模板自动填入，'
+          '或展开「高级设置」手动填写。';
     }
     final uri = Uri.tryParse(baseUrl);
     final validScheme =

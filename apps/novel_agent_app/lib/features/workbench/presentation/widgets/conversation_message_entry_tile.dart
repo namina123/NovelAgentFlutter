@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../../app/theme/app_chrome.dart';
 import '../../../../../shared/theme/novel_theme_context.dart';
+import '../../../../../shared/widgets/app_feedback.dart';
 import '../models/conversation_entry_view_data.dart';
 import 'conversation_detail_section.dart';
 import 'conversation_entry_palette.dart';
@@ -16,6 +18,16 @@ class ConversationMessageEntryTile extends StatelessWidget {
 
   final ConversationEntryViewData entry;
   final ConversationEntryPalette palette;
+
+  /// 把整条消息正文复制到剪贴板并给出瞬时反馈。
+  void _copyBody(BuildContext context) {
+    final body = entry.body.trim();
+    if (body.isEmpty) {
+      return;
+    }
+    Clipboard.setData(ClipboardData(text: body));
+    AppFeedback.show(context, '已复制到剪贴板', severity: AppFeedbackSeverity.success);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -106,6 +118,27 @@ class ConversationMessageEntryTile extends StatelessWidget {
                       : colors.mutedTextColor.withValues(alpha: 0.72),
                 ),
               ),
+              if (entry.body.trim().isNotEmpty) ...[
+                SizedBox(width: style.gap(-0.75, min: 4)),
+                // 中文注释: 消息级「复制」常驻在卡片头部——不依赖悬停（移动端无 hover），
+                // 也不与正文 SelectableText 的长按选区手势冲突。
+                IconButton(
+                  tooltip: '复制全文',
+                  icon: Icon(
+                    Icons.content_copy,
+                    size: 13.5,
+                    color: colors.mutedTextColor.withValues(alpha: 0.85),
+                  ),
+                  onPressed: () => _copyBody(context),
+                  visualDensity: VisualDensity.compact,
+                  splashRadius: 12,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 22,
+                    minHeight: 22,
+                  ),
+                ),
+              ],
             ],
           ),
           if (entry.body.trim().isNotEmpty) ...[

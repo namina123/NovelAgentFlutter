@@ -178,7 +178,7 @@ class BookDeconstructionController extends ChangeNotifier
   String _splitExtractionId = '';
   String _splitContinuationDirectionId = '';
 
-  /// 长 LLM 操作（拆书去噪 / 分析）的超时兜底，避免模型挂起时 UI 永久卡在"正在…"。
+  /// 长 LLM 操作（拆书去噪 / 分析）的超时兜底，避免模型挂起时 UI 永久卡在"正在..."。
   static const Duration _longOperationTimeout = Duration(minutes: 8);
 
   static const ImportAssistantModelOptionsService _modelOptionsService =
@@ -457,7 +457,7 @@ class BookDeconstructionController extends ChangeNotifier
   @override
   void onBookDeconstructionCancelRequested() {
     // 中文注释: 软取消。LLM 调用本身无法真正中断，但自增代际让在途操作的结果被丢弃，
-    // 并立即把界面恢复到 idle——用户不再被"正在…"卡住（与超时兜底配合，最坏情况有界）。
+    // 并立即把界面恢复到 idle——用户不再被"正在..."卡住（与超时兜底配合，最坏情况有界）。
     if (_isCommitInProgress) {
       return;
     }
@@ -661,10 +661,10 @@ class BookDeconstructionController extends ChangeNotifier
       operationKind: BookDeconstructionOperationKind.splittingChapters,
     );
     _statusMessage = sourceAbsolutePath.trim().isEmpty
-        ? '正在归档粘贴源文并拆书…'
+        ? '正在归档粘贴源文并拆书...'
         : useModel
-        ? '正在用模型辅助拆书（分章 + 去噪）…'
-        : '正在拆书（分章 + 去噪）…';
+        ? '正在用模型辅助拆书（分章 + 去噪）...'
+        : '正在拆书（分章 + 去噪）...';
     _rebuildView();
     await _persistRecoveryStateNow(project, operation);
     if (!_isCurrentOperation(operation)) {
@@ -681,7 +681,7 @@ class BookDeconstructionController extends ChangeNotifier
       if (!_isCurrentOperation(operation)) {
         return;
       }
-      _statusMessage = useModel ? '正在用模型辅助拆书（分章 + 去噪）…' : '正在拆书（分章 + 去噪）…';
+      _statusMessage = useModel ? '正在用模型辅助拆书（分章 + 去噪）...' : '正在拆书（分章 + 去噪）...';
       _rebuildView();
       await Future<void>.delayed(const Duration(milliseconds: 16));
       if (!_isCurrentOperation(operation)) {
@@ -909,7 +909,7 @@ class BookDeconstructionController extends ChangeNotifier
       return;
     }
     if (!_snapshot.structuredSourceProjectionReady) {
-      _statusMessage = '拆书结构化源文尚未成功写入，不能执行模型分析；请重新拆书后再试。';
+      _statusMessage = '拆书结构化源文尚未成功写入，不能执行模型分析；请重新拆书后再重试。';
       _rebuildView();
       return;
     }
@@ -930,7 +930,7 @@ class BookDeconstructionController extends ChangeNotifier
       isLoading: true,
       operationKind: BookDeconstructionOperationKind.analyzingAssets,
     );
-    _statusMessage = '正在用内置智能体分析拆书产物（读取分章正文）…';
+    _statusMessage = '正在用内置智能体分析拆书产物（读取分章正文）...';
     _rebuildView();
     await Future<void>.delayed(const Duration(milliseconds: 16));
     if (!_isCurrentOperation(operation)) {
@@ -1625,7 +1625,10 @@ class BookDeconstructionController extends ChangeNotifier
       final errorHint = journal.error.trim().isEmpty
           ? ''
           : '：${journal.error.trim()}';
-      return '检测到上次确认失败$stepHint$errorHint，已恢复拆书结果，请检查后重新确认。';
+      // 中文注释: 如实告知"重新确认会重写各步文件"——章节路径由序号决定、可覆盖，
+      // 避免用户以为要先手动清理半成品而不敢重试。
+      return '检测到上次确认失败$stepHint$errorHint，已恢复拆书结果。'
+          '重新确认会重写各步文件（章节按序号覆盖，通常可安全重试）。';
     }
     return '检测到上次确认未完成$stepHint，已恢复拆书结果，请重新确认以完成写入。';
   }

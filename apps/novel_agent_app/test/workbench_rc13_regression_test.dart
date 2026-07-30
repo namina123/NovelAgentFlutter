@@ -291,6 +291,9 @@ class _FakeConversationHandler implements ConversationActionHandler {
 
   @override
   void onUserOptionSelected(option) {}
+
+  @override
+  void setForegroundBackHandler(VoidCallback? handler) {}
 }
 
 class _FakeDocumentHandler implements DocumentWorkspaceActionHandler {
@@ -386,6 +389,12 @@ class _FakeResourceHandler implements ResourceManagerActionHandler {
 
   @override
   void onResourceEntrySelected(String entryId) {}
+
+  @override
+  void onDeleteResourceEntryRequested(String entryId) {}
+
+  @override
+  void onRenameResourceEntryRequested(String entryId, String nextName) {}
 
   @override
   void onReviewsRequested() {}

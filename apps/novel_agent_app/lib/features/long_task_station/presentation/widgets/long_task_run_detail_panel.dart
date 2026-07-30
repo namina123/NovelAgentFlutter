@@ -70,10 +70,37 @@ class LongTaskRunDetailPanel extends StatelessWidget {
             padding: EdgeInsets.only(bottom: 12),
             child: LinearProgressIndicator(minHeight: 2),
           ),
-        Text(
-          run.detailStatusMessage,
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
+        // 中文注释: detail 加载失败时要与"干净空"区分开——用警示色放大显示，避免被弱化的元数据淹没。
+        Builder(builder: (context) {
+          final message = run.detailStatusMessage;
+          final isFailure = message.startsWith('读取运行详情失败');
+          if (message.trim().isEmpty) {
+            return const SizedBox.shrink();
+          }
+          if (isFailure) {
+            return Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.error.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.error.withValues(alpha: 0.4),
+                ),
+              ),
+              child: Text(
+                message,
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.45,
+                  fontWeight: FontWeight.w700,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+            );
+          }
+          return Text(message, style: Theme.of(context).textTheme.bodySmall);
+        }),
         const SizedBox(height: 8),
         _MetaLine(label: '链路标题', value: run.taskChainTitle),
         _MetaLine(label: '链路摘要', value: run.taskChainSubtitle),
@@ -236,9 +263,12 @@ class LongTaskRunDetailPanel extends StatelessWidget {
         ],
         if (run.diagnosticMetadata.isNotEmpty) ...[
           _SectionTitle(title: '高级信息'),
-          ...run.primaryMetadata.map(
-            (item) => _MetaLine(label: item.label, value: item.value),
-          ),
+          // 中文注释: 主元数据(项目路径)只在上方概览块非空、未走兜底展示时才在此列出，
+          // 避免与概览兜底分支(primaryMetadata 在 overviewBlocks 为空时已渲染一次)重复。
+          if (run.overviewBlocks.isNotEmpty)
+            ...run.primaryMetadata.map(
+              (item) => _MetaLine(label: item.label, value: item.value),
+            ),
           ExpansionTile(
             title: Text(run.diagnosticSectionTitle),
             tilePadding: EdgeInsets.zero,

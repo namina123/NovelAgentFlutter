@@ -834,7 +834,7 @@ void main() {
         expect(harness.workbench.contextSummary, '项目已打开，会话面板已降级为安全视图。');
         expect(
           harness.workbench.workflowDescription,
-          '会话运行时恢复失败，请重新开始一个新会话或稍后再试。',
+          '会话运行时恢复失败，请重新开始一个新会话或稍后重试。',
         );
         expect(harness.workbench.projectLauncher, isNull);
       },

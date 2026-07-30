@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../app/theme/app_palette.dart';
+import '../../../../../shared/theme/novel_theme_context.dart';
 import '../../../../../shared/widgets/action_button.dart';
 import 'settings_form_section.dart';
 import 'settings_labeled_dropdown_field.dart';
@@ -291,7 +291,7 @@ class _PermissionsSettingsPanelState extends State<PermissionsSettingsPanel> {
     required ValueChanged<bool> onChanged,
   }) {
     return DefaultTextStyle.merge(
-      style: const TextStyle(color: AppPalette.text),
+      style: TextStyle(color: context.novelThemeColors.textColor),
       child: SettingsSwitchRow(
         label: label,
         value: value,

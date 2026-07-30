@@ -121,7 +121,7 @@ class ProjectCreationController {
   Future<void> onOpenProjectRequested() async {
     // 中文注释: 打开已有项目由该控制器统一处理桌面选路径与项目有效性探测。
     if (_isMobileProjectRootLocked) {
-      _announce('移动端只允许在应用项目目录内创建项目。');
+      _announce('移动端暂不支持打开外部目录，请在应用项目目录内选择或新建项目。');
       return;
     }
     final selectedPath = await _desktopProjectDirectoryPickerService

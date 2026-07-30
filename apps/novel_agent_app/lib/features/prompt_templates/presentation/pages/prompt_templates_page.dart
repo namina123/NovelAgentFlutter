@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../../../app/theme/app_palette.dart';
+import '../../../../shared/theme/novel_theme_context.dart';
 import '../../../../shared/widgets/action_button.dart';
+import '../../../../shared/widgets/confirmation_dialog.dart';
 import '../../../../shared/widgets/panel_surface.dart';
 import '../../../../shared/widgets/section_heading.dart';
 import '../../../../shared/widgets/workspace_page_header.dart';
@@ -211,20 +212,38 @@ class _PromptTemplatesPageState extends State<PromptTemplatesPage> {
                       label: '恢复内置',
                       compact: true,
                       tone: ActionButtonTone.warm,
-                      onPressed: () {
-                        widget.actionHandler.onPromptTemplatesRestoreRequested(
-                          _idController.text.trim(),
+                      onPressed: () async {
+                        // 中文注释: 恢复内置会用内置模板覆盖用户已编辑的正文，不可撤销——二次确认。
+                        final confirmed = await showConfirmationDialog(
+                          context,
+                          title: '恢复为内置模板？',
+                          message: '当前对该模板正文的修改将被内置版本覆盖，不可恢复。',
+                          confirmLabel: '恢复内置',
                         );
+                        if (confirmed) {
+                          widget.actionHandler.onPromptTemplatesRestoreRequested(
+                            _idController.text.trim(),
+                          );
+                        }
                       },
                     ),
                     ActionButton(
                       label: '删除覆盖',
                       compact: true,
                       tone: ActionButtonTone.danger,
-                      onPressed: () {
-                        widget.actionHandler.onPromptTemplatesDeleteRequested(
-                          _idController.text.trim(),
+                      onPressed: () async {
+                        // 中文注释: 删除覆盖会移除项目内的模板文件，与删除接口/风格记录等对称——二次确认。
+                        final confirmed = await showConfirmationDialog(
+                          context,
+                          title: '删除该模板覆盖？',
+                          message: '删除后将移除项目内的该模板覆盖文件，回退到内置模板，不可恢复。',
+                          confirmLabel: '删除',
                         );
+                        if (confirmed) {
+                          widget.actionHandler.onPromptTemplatesDeleteRequested(
+                            _idController.text.trim(),
+                          );
+                        }
                       },
                     ),
                   ],
@@ -246,10 +265,10 @@ class _PromptTemplatesPageState extends State<PromptTemplatesPage> {
                     widget.viewData.previewText.trim().isEmpty
                         ? '这里会显示模板渲染结果。'
                         : widget.viewData.previewText,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
                       height: 1.55,
-                      color: AppPalette.text,
+                      color: context.novelThemeColors.textColor,
                     ),
                   ),
                 ),

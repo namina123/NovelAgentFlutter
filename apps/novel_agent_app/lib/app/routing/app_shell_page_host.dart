@@ -23,7 +23,8 @@ class _AppShellPageHostState extends State<AppShellPageHost> {
 
   @override
   Widget build(BuildContext context) {
-    // 中文注释: 页面宿主通过 offstage + ticker mode 保留已访问页面状态，同时只让当前目的地可见。
+    // 中文注释: 页面宿主通过 AnimatedOpacity + IgnorePointer + TickerMode 保留已访问页面状态，
+    // 只让当前目的地可见可交互，切换时新旧页交叉淡入。
     _ensureSelectedPageCached(context);
     final children = <Widget>[];
     for (var index = 0; index < widget.pageDescriptors.length; index += 1) {
@@ -36,11 +37,19 @@ class _AppShellPageHostState extends State<AppShellPageHost> {
       children.add(
         KeyedSubtree(
           key: ValueKey<AppDestination>(descriptor.destination),
-          child: Offstage(
-            offstage: !isVisible,
-            child: TickerMode(
-              enabled: isVisible,
-              child: page,
+          // 中文注释: 用 AnimatedOpacity + IgnorePointer 取代 Offstage：页面始终保持挂载
+          // （缓存状态不丢），但隐藏页透明且不响应交互，切换目的地时新旧页做一次短促交叉淡入，
+          // 消除原先"整页瞬切、看不出发生了什么"的突兀感。TickerMode 仍关闭隐藏页的动画时钟。
+          child: AnimatedOpacity(
+            opacity: isVisible ? 1.0 : 0.0,
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            child: IgnorePointer(
+              ignoring: !isVisible,
+              child: TickerMode(
+                enabled: isVisible,
+                child: page,
+              ),
             ),
           ),
         ),

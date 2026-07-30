@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../app/theme/app_palette.dart';
+import '../../../../../shared/theme/novel_theme_context.dart';
 import '../../../../../shared/widgets/panel_surface.dart';
 import '../contracts/resource_manager_action_handler.dart';
 import '../models/selector_option_view_data.dart';
@@ -186,19 +186,19 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
                           children: [
                             Text(
                               widget.viewData.title,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w800,
-                                color: AppPalette.text,
+                                color: context.novelThemeColors.textColor,
                               ),
                             ),
                             const SizedBox(height: 4),
                             Text(
                               widget.viewData.description,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
-                                color: AppPalette.mutedText,
+                                color: context.novelThemeColors.mutedTextColor,
                               ),
                             ),
                           ],
@@ -208,7 +208,8 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
                         onPressed: widget.viewData.isBusy
                             ? null
                             : widget.actionHandler.onWorkspaceCommandDismissed,
-                        icon: const Icon(Icons.close_rounded),
+                        icon: Icon(Icons.close_rounded),
+                        tooltip: '关闭',
                       ),
                     ],
                   ),
@@ -222,10 +223,10 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
                   if (widget.viewData.status.trim().isNotEmpty) ...[
                     Text(
                       widget.viewData.status,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
-                        color: AppPalette.mutedText,
+                        color: context.novelThemeColors.mutedTextColor,
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -236,7 +237,7 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
                         onPressed: widget.viewData.isBusy
                             ? null
                             : widget.actionHandler.onWorkspaceCommandDismissed,
-                        child: const Text('取消'),
+                        child: Text('取消'),
                       ),
                       const Spacer(),
                       FilledButton(
@@ -361,15 +362,15 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
               children: [
                 FilledButton.tonalIcon(
                   onPressed: widget.viewData.isBusy ? null : _pickImportFiles,
-                  icon: const Icon(Icons.upload_file_rounded),
-                  label: const Text('选择文件'),
+                  icon: Icon(Icons.upload_file_rounded),
+                  label: Text('选择文件'),
                 ),
                 FilledButton.tonalIcon(
                   onPressed: widget.viewData.isBusy
                       ? null
                       : _pickImportDirectory,
-                  icon: const Icon(Icons.folder_open_rounded),
-                  label: const Text('选择文件夹'),
+                  icon: Icon(Icons.folder_open_rounded),
+                  label: Text('选择文件夹'),
                 ),
               ],
             ),
@@ -378,10 +379,10 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
               widget.viewData.importFileSelectionHint,
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: AppPalette.mutedText,
+                color: context.novelThemeColors.mutedTextColor,
               ),
             ),
             const SizedBox(height: 12),
@@ -499,10 +500,10 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
         children: [
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
-              color: AppPalette.mutedText,
+              color: context.novelThemeColors.mutedTextColor,
             ),
           ),
           const SizedBox(height: 6),
@@ -542,10 +543,10 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
         children: [
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
-              color: AppPalette.mutedText,
+              color: context.novelThemeColors.mutedTextColor,
             ),
           ),
           const SizedBox(height: 6),
@@ -582,10 +583,10 @@ class _WorkspaceCommandOverlayState extends State<WorkspaceCommandOverlay> {
         children: [
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
-              color: AppPalette.mutedText,
+              color: context.novelThemeColors.mutedTextColor,
             ),
           ),
           const SizedBox(height: 6),
@@ -773,20 +774,20 @@ class _ImportOptionBlock extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
-                        color: AppPalette.text,
+                        color: context.novelThemeColors.textColor,
                       ),
                     ),
                     const SizedBox(height: 3),
                     Text(
                       description,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         height: 1.4,
                         fontWeight: FontWeight.w500,
-                        color: AppPalette.mutedText,
+                        color: context.novelThemeColors.mutedTextColor,
                       ),
                     ),
                   ],

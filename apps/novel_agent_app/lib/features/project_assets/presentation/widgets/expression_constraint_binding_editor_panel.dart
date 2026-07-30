@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../shared/widgets/confirmation_dialog.dart';
 import '../models/project_assets_view_data.dart';
 
 class ExpressionConstraintBindingEditorPanel extends StatefulWidget {
@@ -289,8 +290,19 @@ class _ExpressionConstraintBindingEditorPanelState
                 FilledButton(onPressed: _submit, child: const Text('保存设置')),
                 OutlinedButton(
                   onPressed: widget.viewData.hasBinding
-                      ? () =>
-                            widget.onRemoveRequested(widget.viewData.profileId)
+                      ? () async {
+                          // 中文注释: 移除绑定会改写项目绑定文件、即时落盘且无撤销——
+                          // 与同表面的风格/伏笔删除对称，二次确认。
+                          final confirmed = await showConfirmationDialog(
+                            context,
+                            title: '移除该表达限制绑定？',
+                            message: '移除后该项目将不再装载此表达限制方案，需重新绑定才能恢复。',
+                            confirmLabel: '移除',
+                          );
+                          if (confirmed) {
+                            widget.onRemoveRequested(widget.viewData.profileId);
+                          }
+                        }
                       : null,
                   child: const Text('移除绑定'),
                 ),

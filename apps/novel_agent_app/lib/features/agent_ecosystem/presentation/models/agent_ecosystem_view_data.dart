@@ -8,6 +8,7 @@ class AgentEcosystemViewData {
     required this.tabs,
     required this.entries,
     this.statusMessage = '',
+    this.isBusy = false,
     this.importCommand,
     this.editorViewData,
     this.projectSkillLoadoutViewData,
@@ -17,6 +18,9 @@ class AgentEcosystemViewData {
   final List<EcosystemTabViewData> tabs;
   final List<EcosystemEntryViewData> entries;
   final String statusMessage;
+  /// 中文注释: 生态页顶层异步(刷新列表/生成索引)进行中——为 true 时禁用顶部按钮，
+  /// 避免慢盘/网络下连点触发并行刷新或索引重建。(导入另有 importCommand.isImporting)
+  final bool isBusy;
   final EcosystemImportCommandViewData? importCommand;
   final EcosystemEditorViewData? editorViewData;
   final ProjectSkillLoadoutWorkspaceViewData? projectSkillLoadoutViewData;
@@ -48,6 +52,7 @@ class AgentEcosystemViewData {
     List<EcosystemTabViewData>? tabs,
     List<EcosystemEntryViewData>? entries,
     String? statusMessage,
+    bool? isBusy,
     Object? importCommand = _importCommandSentinel,
     Object? editorViewData = _editorViewDataSentinel,
     Object? projectSkillLoadoutViewData = _projectSkillLoadoutSentinel,
@@ -58,6 +63,7 @@ class AgentEcosystemViewData {
       tabs: tabs ?? this.tabs,
       entries: entries ?? this.entries,
       statusMessage: statusMessage ?? this.statusMessage,
+      isBusy: isBusy ?? this.isBusy,
       importCommand: identical(importCommand, _importCommandSentinel)
           ? this.importCommand
           : importCommand as EcosystemImportCommandViewData?,

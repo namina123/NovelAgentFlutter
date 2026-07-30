@@ -47,6 +47,7 @@ class AgentEcosystemPage extends StatelessWidget {
                               activeTabId: viewData.activeTabId,
                               entries: viewData.entries,
                               statusMessage: viewData.statusMessage,
+                              isBusy: viewData.isBusy,
                               onRefreshRequested:
                                   actionHandler.onEcosystemRefreshRequested,
                               onImportPackageRequested: actionHandler
@@ -75,6 +76,7 @@ class AgentEcosystemPage extends StatelessWidget {
                             activeTabId: viewData.activeTabId,
                             entries: viewData.entries,
                             statusMessage: viewData.statusMessage,
+                            isBusy: viewData.isBusy,
                             onRefreshRequested:
                                 actionHandler.onEcosystemRefreshRequested,
                             onImportPackageRequested:

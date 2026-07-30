@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../shared/widgets/empty_state.dart';
 import '../../../../../shared/widgets/panel_surface.dart';
 import '../../../../../shared/widgets/section_heading.dart';
 import '../models/task_center_view_data.dart';
@@ -27,15 +28,10 @@ class TaskCenterTaskListPanel extends StatelessWidget {
           const SizedBox(height: 8),
           Expanded(
             child: tasks.isEmpty
-                ? const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Text(
-                        '暂无任务。先创建一个工作流，任务会列在这里。',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 12, height: 1.5),
-                      ),
-                    ),
+                ? const EmptyState(
+                    icon: Icons.list_alt_outlined,
+                    message: '暂无任务',
+                    hint: '先创建一个工作流，任务会列在这里。',
                   )
                 : ListView.builder(
                     itemCount: tasks.length,
@@ -60,6 +56,7 @@ class TaskCenterTaskListPanel extends StatelessWidget {
                         trailing: IconButton(
                           onPressed: () => onTaskOpened(item.id),
                           icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                          tooltip: '进入任务',
                         ),
                       );
                     },

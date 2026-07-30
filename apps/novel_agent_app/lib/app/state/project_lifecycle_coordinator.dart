@@ -168,8 +168,10 @@ class ProjectLifecycleCoordinator {
             '项目清单损坏或包含未知合同字段，系统未改写项目。请从备份恢复 .novel_agent/project_manifest.json 后重试。',
       );
     } catch (_) {
-      // A corrupt or unavailable project must return the normal recovery
-      // state instead of leaving an entry-point action without feedback.
+      // 中文注释: 未知加载异常统一回退到调用方提供的失败文案（如「所选目录不是有效项目」），
+      // 而不是在这里猜测原因——猜测的「格式不兼容/不可读」可能与真实原因（权限/磁盘/…）不符、误导用户。
+      // 已知的可定位失败（清单损坏）由上面的专属分支给出具体原因；如需更多具体原因（缺 project.json 等），
+      // 应在 _loadProject 里抛专属异常类型，而非在此泛化。
       return const _ProjectLoadAttempt(isLoaded: false);
     }
   }

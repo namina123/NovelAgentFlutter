@@ -9,9 +9,13 @@ class ConversationPendingInputPreviewPanel extends StatelessWidget {
   const ConversationPendingInputPreviewPanel({
     super.key,
     required this.viewData,
+    this.onClear,
   });
 
   final ConversationPendingInputPreviewViewData viewData;
+
+  /// 清空待发送草稿。生成中文本框仍可编辑，这里补一个就近的「清空」让用户快速丢弃误排队的草稿。
+  final VoidCallback? onClear;
 
   @override
   Widget build(BuildContext context) {
@@ -59,6 +63,26 @@ class ConversationPendingInputPreviewPanel extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                 ),
               ),
+              if (onClear != null) ...[
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: onClear,
+                  style: TextButton.styleFrom(
+                    foregroundColor: panel.mutedForegroundColor,
+                    minimumSize: const Size(0, 0),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    textStyle: TextStyle(
+                      fontSize: style.metaFontSize - 1,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  child: const Text('清空'),
+                ),
+              ],
             ],
           ),
           const SizedBox(height: 8),

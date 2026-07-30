@@ -6,6 +6,7 @@ import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../../../../app/diagnostics/navigation_trace_service.dart';
 import '../../../../app/routing/app_destination.dart';
+import '../../../../shared/services/user_facing_error_humanizer.dart';
 import '../../../workbench/presentation/contracts/pending_research_action_handler.dart';
 import '../../presentation/contracts/long_task_station_action_handler.dart';
 import '../../presentation/models/long_task_station_view_data.dart';
@@ -222,7 +223,8 @@ class LongTaskStationController extends ChangeNotifier
         isLoading: false,
         isDetailLoading: false,
         isSupervisorRunning: _longTaskSupervisor.isRunning,
-        statusMessage: '加载全局长任务运行实例失败：$error',
+        statusMessage:
+            UserFacingErrorHumanizer.humanize(error, action: '加载长任务运行实例'),
       );
       _session = _session.copyWith(isInitialized: true);
       _rebuildView();
@@ -461,10 +463,12 @@ class LongTaskStationController extends ChangeNotifier
       );
       _rebuildView();
     } catch (error) {
+      // 中文注释: 兜底错误也走人话化，不把 Dart 类型名（TypeError/StateError...）漏给用户。
       _snapshot = _snapshot.copyWith(
         isLoading: false,
         isDetailLoading: false,
-        statusMessage: '$actionLabel运行实例失败：$error',
+        statusMessage:
+            UserFacingErrorHumanizer.humanize(error, action: '$actionLabel运行实例'),
       );
       _rebuildView();
     }
@@ -533,8 +537,10 @@ class LongTaskStationController extends ChangeNotifier
     } catch (error) {
       _snapshot = _snapshot.copyWith(
         isDetailLoading: false,
-        detailStatusMessage: '资料请求更新失败：$error',
-        statusMessage: '资料请求更新失败：$error',
+        detailStatusMessage:
+            UserFacingErrorHumanizer.humanize(error, action: '更新资料请求'),
+        statusMessage:
+            UserFacingErrorHumanizer.humanize(error, action: '更新资料请求'),
       );
       _rebuildView();
     }
@@ -569,7 +575,8 @@ class LongTaskStationController extends ChangeNotifier
       }
       _snapshot = _snapshot.copyWith(
         clearSelectedRunDetail: true,
-        detailStatusMessage: '读取运行详情失败：$error',
+        detailStatusMessage:
+            UserFacingErrorHumanizer.humanize(error, action: '读取运行详情'),
         isDetailLoading: false,
       );
       _rebuildView();

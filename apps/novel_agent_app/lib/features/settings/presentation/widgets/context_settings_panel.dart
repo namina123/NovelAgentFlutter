@@ -47,6 +47,8 @@ class _ContextSettingsPanelState extends State<ContextSettingsPanel> {
   bool _preferExactCount = false;
   bool _draftFallbackProtectionEnabled = true;
   bool _isCompatBridgeExpanded = false;
+  // 中文注释: 百分比字段解析失败时收集错误，不再让 _ratioFromPercentText 静默回退 0.8。
+  String _formError = '';
 
   @override
   void initState() {
@@ -112,6 +114,17 @@ class _ContextSettingsPanelState extends State<ContextSettingsPanel> {
                 controller: _projectPathController,
                 enabled: widget.allowProjectPathEdit,
               ),
+              if (!widget.allowProjectPathEdit) ...[
+                const SizedBox(height: 6),
+                Text(
+                  '移动端项目目录固定在应用文档目录内，不能更改。',
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.45,
+                    color: Theme.of(context).hintColor,
+                  ),
+                ),
+              ],
               const SizedBox(height: 12),
               SettingsLabeledTextField(
                 label: '模型上下文窗口（token）',
@@ -328,42 +341,20 @@ class _ContextSettingsPanelState extends State<ContextSettingsPanel> {
           label: '保存上下文设置',
           expanded: true,
           icon: Icons.save_outlined,
-          onPressed: () {
-            widget.onSaved(
-              _contractService.normalizeForStorage(<String, Object?>{
-                'default_project_path': _projectPathController.text.trim(),
-                ContextSettingsContractService.modelContextWindowTokensKey:
-                    _modelWindowController.text.trim(),
-                ContextSettingsContractService.contextWindowHintTokensKey:
-                    _windowHintController.text.trim(),
-                ContextSettingsContractService.warningThresholdRatioKey:
-                    _ratioFromPercentText(_warningThresholdController.text),
-                ContextSettingsContractService.criticalThresholdRatioKey:
-                    _ratioFromPercentText(_criticalThresholdController.text),
-                ContextSettingsContractService.reservedOutputTokensKey:
-                    _reservedOutputTokensController.text.trim(),
-                ContextSettingsContractService.autoCompactPolicyKey:
-                    _autoCompactPolicyController.text.trim(),
-                ContextSettingsContractService.preferExactCountKey:
-                    _preferExactCount,
-                ContextSettingsContractService.compactionOutputPolicyKey:
-                    _compactionOutputPolicyController.text.trim(),
-                AppSettings.draftFallbackProtectionConfigKey:
-                    _draftFallbackProtectionEnabled,
-                ContextSettingsContractService.compressionThresholdPercentKey:
-                    _compressionThresholdController.text.trim(),
-                ContextSettingsContractService.contextPackBudgetPercentKey:
-                    _budgetController.text.trim(),
-                ContextSettingsContractService.maxContextFileCharsKey:
-                    _maxCharsController.text.trim(),
-                ContextSettingsContractService.maxContextFilesPerKindKey:
-                    _maxFilesController.text.trim(),
-                ContextSettingsContractService.reservedOutputCharsKey:
-                    _reservedOutputCharsController.text.trim(),
-              }),
-            );
-          },
+          onPressed: _save,
         ),
+        if (_formError.trim().isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            _formError,
+            style: TextStyle(
+              fontSize: 12.5,
+              height: 1.45,
+              fontWeight: FontWeight.w700,
+              color: Theme.of(context).colorScheme.error,
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -438,6 +429,64 @@ class _ContextSettingsPanelState extends State<ContextSettingsPanel> {
         ? ratioValue.toDouble()
         : double.tryParse(ratioValue?.toString().trim() ?? '') ?? 0.8;
     return (ratio * 100).round().toString();
+  }
+
+  void _save() {
+    // 中文注释: 百分比字段非空但解析失败时如实报错并阻止保存，不再被 _ratioFromPercentText
+    // 静默改成 0.8(80%)——那会让用户以为自己填的值生效了。
+    final errors = <String>[];
+    void checkPercent(TextEditingController controller, String label) {
+      final text = controller.text.trim();
+      if (text.isEmpty) {
+        return;
+      }
+      final value = double.tryParse(text);
+      if (value == null || value < 0 || value > 100) {
+        errors.add('$label 需是 0-100 之间的数（当前 "$text"）');
+      }
+    }
+
+    checkPercent(_warningThresholdController, '预警阈值');
+    checkPercent(_criticalThresholdController, '临界阈值');
+    checkPercent(_compressionThresholdController, '压缩阈值');
+    checkPercent(_budgetController, '上下文预算');
+    if (errors.isNotEmpty) {
+      setState(() => _formError = errors.join('；'));
+      return;
+    }
+    setState(() => _formError = '');
+    widget.onSaved(
+      _contractService.normalizeForStorage(<String, Object?>{
+        'default_project_path': _projectPathController.text.trim(),
+        ContextSettingsContractService.modelContextWindowTokensKey:
+            _modelWindowController.text.trim(),
+        ContextSettingsContractService.contextWindowHintTokensKey:
+            _windowHintController.text.trim(),
+        ContextSettingsContractService.warningThresholdRatioKey:
+            _ratioFromPercentText(_warningThresholdController.text),
+        ContextSettingsContractService.criticalThresholdRatioKey:
+            _ratioFromPercentText(_criticalThresholdController.text),
+        ContextSettingsContractService.reservedOutputTokensKey:
+            _reservedOutputTokensController.text.trim(),
+        ContextSettingsContractService.autoCompactPolicyKey:
+            _autoCompactPolicyController.text.trim(),
+        ContextSettingsContractService.preferExactCountKey: _preferExactCount,
+        ContextSettingsContractService.compactionOutputPolicyKey:
+            _compactionOutputPolicyController.text.trim(),
+        AppSettings.draftFallbackProtectionConfigKey:
+            _draftFallbackProtectionEnabled,
+        ContextSettingsContractService.compressionThresholdPercentKey:
+            _compressionThresholdController.text.trim(),
+        ContextSettingsContractService.contextPackBudgetPercentKey:
+            _budgetController.text.trim(),
+        ContextSettingsContractService.maxContextFileCharsKey:
+            _maxCharsController.text.trim(),
+        ContextSettingsContractService.maxContextFilesPerKindKey:
+            _maxFilesController.text.trim(),
+        ContextSettingsContractService.reservedOutputCharsKey:
+            _reservedOutputCharsController.text.trim(),
+      }),
+    );
   }
 
   String _stringValue(Object? value, String fallback) {

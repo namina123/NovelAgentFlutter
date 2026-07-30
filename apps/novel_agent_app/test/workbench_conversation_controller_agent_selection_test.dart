@@ -350,7 +350,7 @@ void main() {
         expect(reviewerRun.adoptionSummary, contains('主链可以先复核这条建议'));
         expect(
           reviewerRun.diagnosticItems.join('\n'),
-          contains('agent_id: reviewer'),
+          contains('智能体 ID：reviewer'),
         );
 
         final degradedRun = harness.workbench.subAgentRuns.singleWhere(

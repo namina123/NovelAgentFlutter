@@ -168,24 +168,25 @@ class SubAgentRunProjectionService {
     JsonMap result,
     CollaborationResultPackage package,
   ) {
+    // 中文注释: 诊断项面向用户（在"运行诊断"折叠区），用中文标签而不是 snake_case 字段名。
     final diagnostics = <String>[
-      'run_id: ${ValueReaders.stringValue(result['sub_agent_run_id']).trim()}',
-      'sub_session_id: ${ValueReaders.stringValue(result['sub_session_id']).trim()}',
-      'agent_id: ${ValueReaders.stringValue(result['agent_id'], package.agentId).trim()}',
+      '运行号：${ValueReaders.stringValue(result['sub_agent_run_id']).trim()}',
+      '子会话号：${ValueReaders.stringValue(result['sub_session_id']).trim()}',
+      '智能体 ID：${ValueReaders.stringValue(result['agent_id'], package.agentId).trim()}',
     ];
     final selectedConflictId = package.arbitrationResult.selectedConflictId
         .trim();
     if (selectedConflictId.isNotEmpty) {
-      diagnostics.add('selected_conflict_id: $selectedConflictId');
+      diagnostics.add('选中的冲突：$selectedConflictId');
     }
     final acceptedConflictIds = package.arbitrationResult.acceptedConflictIds;
     if (acceptedConflictIds.isNotEmpty) {
       diagnostics.add(
-        'accepted_conflict_ids: ${acceptedConflictIds.join(', ')}',
+        '已采纳的冲突：${acceptedConflictIds.join('、')}',
       );
     }
     return diagnostics
-        .where((item) => !item.endsWith(': '))
+        .where((item) => !item.endsWith('：'))
         .toList(growable: false);
   }
 }

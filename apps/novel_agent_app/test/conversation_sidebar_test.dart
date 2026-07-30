@@ -237,6 +237,56 @@ void main() {
   });
 
   testWidgets(
+    'sub-agent fullscreen registers then clears the system back handler',
+    (tester) async {
+      _setLargeTestViewport(tester);
+      final handler = _RecordingConversationActionHandler();
+      await tester.pumpWidget(
+        _buildSidebarHost(
+          actionHandler: handler,
+          viewData: WorkbenchViewData.initial().copyWith(
+            subAgentRuns: const [
+              SubAgentRunViewData(
+                id: 'sub_1',
+                agentName: '资料考据员',
+                task: '补完第二章的时代背景与贸易细节',
+                status: '完成',
+                summary: '已返回可直接合并的设定建议。',
+                content: '这里是详细结果。',
+                reasoning: '先校验世界观，再补齐贸易逻辑。',
+                toolCount: 2,
+                events: ['接收主智能体任务。', '完成资料整理并返回。'],
+                expertOpinion: '建议把贸易摩擦提前到场景开头。',
+                evidenceItems: ['第二段才出现关键贸易背景。'],
+                adoptionSummary: '主链可以先复核这条建议，再决定是否吸收。',
+                diagnosticItems: ['run_id: sub_1', 'agent_id: evidence_reader'],
+              ),
+            ],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 中文注释: 未打开全屏时不应接管系统返回键。
+      expect(handler.lastForegroundBackHandler, isNull);
+
+      await tester.tap(find.text('资料考据员').first);
+      await tester.pumpAndSettle();
+
+      // 打开子智能体全屏后应注册返回键接管（Android 返回键会先关闭全屏而非退出应用）。
+      expect(find.byTooltip('返回主会话'), findsOneWidget);
+      expect(handler.lastForegroundBackHandler, isNotNull);
+
+      // 模拟系统返回键调用注册的回调——应关闭全屏并取消接管。
+      handler.lastForegroundBackHandler!();
+      await tester.pumpAndSettle();
+
+      expect(find.byTooltip('返回主会话'), findsNothing);
+      expect(handler.lastForegroundBackHandler, isNull);
+    },
+  );
+
+  testWidgets(
     'conversation sidebar keeps model strip above text field and send action below it',
     (tester) async {
       _setLargeTestViewport(tester);
@@ -819,6 +869,9 @@ class _FakeConversationActionHandler implements ConversationActionHandler {
 
   @override
   void onUserOptionSelected(UserOptionViewData option) {}
+
+  @override
+  void setForegroundBackHandler(VoidCallback? handler) {}
 }
 
 class _RecordingConversationActionHandler
@@ -826,6 +879,8 @@ class _RecordingConversationActionHandler
   String selectedGroupId = '';
   String selectedConversationAgentId = '';
   bool? lastReasoningEnabled;
+  // 中文注释: 记录侧栏注册的"系统返回键接管"回调——子智能体全屏打开时非空，关闭时为 null。
+  VoidCallback? lastForegroundBackHandler;
 
   @override
   void onAgentGroupSelected(String groupId) {
@@ -840,5 +895,10 @@ class _RecordingConversationActionHandler
   @override
   void onReasoningToggleChanged(bool enabled) {
     lastReasoningEnabled = enabled;
+  }
+
+  @override
+  void setForegroundBackHandler(VoidCallback? handler) {
+    lastForegroundBackHandler = handler;
   }
 }

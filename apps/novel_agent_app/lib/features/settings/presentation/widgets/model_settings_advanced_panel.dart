@@ -136,15 +136,16 @@ class ModelSettingsAdvancedPanel extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               if (showApiMode) ...[
-                SettingsLabeledDropdownField<String>(
-                  label: 'API 模式',
-                  value: apiMode,
-                  options:
-                      (editor.capabilityExposure.allowedApiModes.isNotEmpty
+                // 中文注释: 协议可能没有任何可选 API 模式——此时不再渲染空下拉，改成一行说明，
+                // 避免用户面对一个点不开的空「API 模式」选择器。
+                () {
+                  final apiModeOptions = (editor
+                                  .capabilityExposure.allowedApiModes
+                                  .isNotEmpty
                               ? editor.capabilityExposure.allowedApiModes
                               : editor
-                                    .connectionValidationResult
-                                    .allowedRouteFamilies)
+                                  .connectionValidationResult
+                                  .allowedRouteFamilies)
                           .map(
                             (mode) => SettingsDropdownOption<String>(
                               value: mode,
@@ -153,9 +154,26 @@ class ModelSettingsAdvancedPanel extends StatelessWidget {
                                   : '聊天 API',
                             ),
                           )
-                          .toList(growable: false),
-                  onChanged: onApiModeChanged,
-                ),
+                          .toList(growable: false);
+                  if (apiModeOptions.isEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Text(
+                        '当前协议仅支持默认 API 模式。',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: Theme.of(context).hintColor,
+                        ),
+                      ),
+                    );
+                  }
+                  return SettingsLabeledDropdownField<String>(
+                    label: 'API 模式',
+                    value: apiMode,
+                    options: apiModeOptions,
+                    onChanged: onApiModeChanged,
+                  );
+                }(),
                 const SizedBox(height: 12),
               ],
               if (showTopK) ...[

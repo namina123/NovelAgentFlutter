@@ -68,6 +68,8 @@ class _WorkbenchTwoPaneLayoutState extends State<WorkbenchTwoPaneLayout> {
                       );
                 });
               },
+              // 中文注释: 双击恢复默认会话栏宽（清空自定义值，policy 会按总宽重算默认）。
+              onResetRequested: () => setState(() => _conversationWidth = null),
             ),
             SizedBox(width: conversationWidth, child: widget.conversationPane),
           ],

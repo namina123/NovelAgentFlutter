@@ -59,40 +59,42 @@ class ProjectSkillLoadoutDetailPanel extends StatelessWidget {
             spacing: 10,
             runSpacing: 10,
             children: [
-              _availabilityGate(
-                ActionButton(
-                  label: '应用装载',
-                  icon: Icons.save_outlined,
-                  onPressed: () => actionHandler
-                      .onProjectSkillLoadoutApplyRequested(detail.agentId),
-                ),
+              // 中文注释: 无项目时用真正的 disabled(灰化、不可点)，不再用 IgnorePointer+Opacity 假禁用。
+              // 有未应用改动时把"应用装载"强调出来，引导用户保存。
+              ActionButton(
+                label: '应用装载',
+                icon: Icons.save_outlined,
+                disabled: !projectAvailable,
+                emphasized: projectAvailable && detail.hasPendingChanges,
+                tone: projectAvailable && detail.hasPendingChanges
+                    ? ActionButtonTone.accent
+                    : ActionButtonTone.neutral,
+                onPressed: () => actionHandler
+                    .onProjectSkillLoadoutApplyRequested(detail.agentId),
               ),
-              _availabilityGate(
-                ActionButton(
-                  label: '回到已保存',
-                  icon: Icons.undo_rounded,
-                  tone: ActionButtonTone.neutral,
-                  onPressed: () => actionHandler
-                      .onProjectSkillLoadoutResetRequested(detail.agentId),
-                ),
+              ActionButton(
+                label: '回到已保存',
+                icon: Icons.undo_rounded,
+                tone: ActionButtonTone.neutral,
+                disabled: !projectAvailable,
+                onPressed: () => actionHandler
+                    .onProjectSkillLoadoutResetRequested(detail.agentId),
               ),
-              _availabilityGate(
-                ActionButton(
-                  label: '表达限制',
-                  icon: Icons.rule_folder_outlined,
-                  tone: ActionButtonTone.neutral,
-                  onPressed:
-                      actionHandler.onProjectExpressionConstraintsRequested,
-                ),
+              ActionButton(
+                label: '表达限制',
+                icon: Icons.rule_folder_outlined,
+                tone: ActionButtonTone.neutral,
+                disabled: !projectAvailable,
+                onPressed:
+                    actionHandler.onProjectExpressionConstraintsRequested,
               ),
-              _availabilityGate(
-                ActionButton(
-                  label: '另存为技能组',
-                  icon: Icons.bookmark_add_outlined,
-                  tone: ActionButtonTone.warm,
-                  onPressed: () =>
-                      _showSaveAsGroupDialog(context, detail.agentId),
-                ),
+              ActionButton(
+                label: '另存为技能组',
+                icon: Icons.bookmark_add_outlined,
+                tone: ActionButtonTone.warm,
+                disabled: !projectAvailable,
+                onPressed: () =>
+                    _showSaveAsGroupDialog(context, detail.agentId),
               ),
             ],
           ),
@@ -356,15 +358,14 @@ class ProjectSkillLoadoutDetailPanel extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 10),
-                        _availabilityGate(
-                          ActionButton(
-                            label: '保存当前快照',
-                            icon: Icons.history_toggle_off_rounded,
-                            tone: ActionButtonTone.neutral,
-                            onPressed: () => _showHistoryCaptureDialog(
-                              context,
-                              detail.agentId,
-                            ),
+                        ActionButton(
+                          label: '保存当前快照',
+                          icon: Icons.history_toggle_off_rounded,
+                          tone: ActionButtonTone.neutral,
+                          disabled: !projectAvailable,
+                          onPressed: () => _showHistoryCaptureDialog(
+                            context,
+                            detail.agentId,
                           ),
                         ),
                         const SizedBox(height: 10),
@@ -514,16 +515,6 @@ class ProjectSkillLoadoutDetailPanel extends StatelessWidget {
           color: colors.textColor,
         ),
       ),
-    );
-  }
-
-  Widget _availabilityGate(Widget child) {
-    if (projectAvailable) {
-      return child;
-    }
-    return IgnorePointer(
-      ignoring: true,
-      child: Opacity(opacity: 0.45, child: child),
     );
   }
 

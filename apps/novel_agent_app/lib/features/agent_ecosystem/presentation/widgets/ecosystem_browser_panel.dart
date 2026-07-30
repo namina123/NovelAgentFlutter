@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../../shared/theme/novel_theme_context.dart';
 import '../../../../../shared/widgets/action_button.dart';
+import '../../../../../shared/widgets/empty_state.dart';
 import '../../../../../shared/widgets/horizontal_overflow_scrollbar.dart';
 import '../../../../../shared/widgets/panel_surface.dart';
 import '../models/agent_ecosystem_view_data.dart';
@@ -13,6 +14,7 @@ class EcosystemBrowserPanel extends StatelessWidget {
     required this.activeTabId,
     required this.entries,
     required this.statusMessage,
+    this.isBusy = false,
     required this.onRefreshRequested,
     required this.onImportPackageRequested,
     required this.onGenerateIndexRequested,
@@ -24,6 +26,7 @@ class EcosystemBrowserPanel extends StatelessWidget {
   final String activeTabId;
   final List<EcosystemEntryViewData> entries;
   final String statusMessage;
+  final bool isBusy;
   final VoidCallback onRefreshRequested;
   final VoidCallback onImportPackageRequested;
   final VoidCallback onGenerateIndexRequested;
@@ -47,17 +50,20 @@ class EcosystemBrowserPanel extends StatelessWidget {
                 label: '刷新列表',
                 icon: Icons.refresh_rounded,
                 tone: ActionButtonTone.neutral,
+                disabled: isBusy,
                 onPressed: onRefreshRequested,
               ),
               ActionButton(
                 label: '导入生态包',
                 icon: Icons.file_upload_outlined,
+                disabled: isBusy,
                 onPressed: onImportPackageRequested,
               ),
               ActionButton(
                 label: '生成索引',
                 icon: Icons.auto_awesome_motion_outlined,
                 tone: ActionButtonTone.warm,
+                disabled: isBusy,
                 onPressed: onGenerateIndexRequested,
               ),
             ],
@@ -104,53 +110,59 @@ class EcosystemBrowserPanel extends StatelessWidget {
                 borderRadius: BorderRadius.circular(surface.radius),
                 border: Border.all(color: surface.borderColor, width: 1),
               ),
-              child: ListView.separated(
-                padding: const EdgeInsets.all(12),
-                itemCount: entries.length,
-                separatorBuilder: (_, index) => const SizedBox(height: 10),
-                itemBuilder: (context, index) {
-                  final entry = entries[index];
-                  return Material(
-                    color: entry.isSelected
-                        ? colors.accentSoftColor.withValues(alpha: 0.72)
-                        : surface.backgroundColor.withValues(alpha: 0.72),
-                    borderRadius: BorderRadius.circular(14),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
+              child: entries.isEmpty
+                  ? const EmptyState(
+                      icon: Icons.smart_toy_outlined,
+                      message: '还没有智能体或技能',
+                      hint: '点上方"导入生态包"或"生成索引"以开始。',
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.all(12),
+                      itemCount: entries.length,
+                      separatorBuilder: (_, index) => const SizedBox(height: 10),
+                      itemBuilder: (context, index) {
+                        final entry = entries[index];
+                        return Material(
                           color: entry.isSelected
-                              ? colors.lineStrongColor
-                              : surface.borderColor,
-                          width: 1,
-                        ),
-                      ),
-                      child: ListTile(
-                        title: Text(
-                          entry.title,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            color: colors.textColor,
+                              ? colors.accentSoftColor.withValues(alpha: 0.72)
+                              : surface.backgroundColor.withValues(alpha: 0.72),
+                          borderRadius: BorderRadius.circular(14),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: entry.isSelected
+                                    ? colors.lineStrongColor
+                                    : surface.borderColor,
+                                width: 1,
+                              ),
+                            ),
+                            child: ListTile(
+                              title: Text(
+                                entry.title,
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
+                                  color: colors.textColor,
+                                ),
+                              ),
+                              subtitle: Text(
+                                '[${entry.badge}] ${entry.subtitle}',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: colors.mutedTextColor,
+                                ),
+                              ),
+                              onTap: () {
+                                // 中文注释: 条目点击只把 id 交给外层，详情面板不由列表内部直接操控。
+                                onEntrySelected(entry.id);
+                              },
+                            ),
                           ),
-                        ),
-                        subtitle: Text(
-                          '[${entry.badge}] ${entry.subtitle}',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: colors.mutedTextColor,
-                          ),
-                        ),
-                        onTap: () {
-                          // 中文注释: 条目点击只把 id 交给外层，详情面板不由列表内部直接操控。
-                          onEntrySelected(entry.id);
-                        },
-                      ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
             ),
           ),
         ],

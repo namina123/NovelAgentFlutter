@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../../../../shared/services/user_facing_error_humanizer.dart';
@@ -43,10 +42,14 @@ class ProviderConnectionProbeService {
   Future<ProviderConnectionProbeResult> probe({
     required ProviderEndpointSettings provider,
     required String modelId,
+    /// 中文注释: 必须传用户已保存的网络设置（含自定义代理）——否则探测走直连，
+    /// 与真实生成走的代理路径不一致：代理用户会得到"通过"却实战失败，或反之。
+    /// 为空时（无设置）才退回直连。
+    JsonMap networkSettings = const <String, Object?>{},
     String prompt = 'ping',
   }) async {
     try {
-      final gateway = _gatewayFactory(provider, const <String, Object?>{});
+      final gateway = _gatewayFactory(provider, networkSettings);
       await gateway
           .requestText(prompt: prompt, modelId: modelId)
           .timeout(_timeout);

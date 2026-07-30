@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../app/theme/app_palette.dart';
+import '../../../../../shared/theme/novel_theme_context.dart';
 import '../../../../../shared/widgets/action_button.dart';
 import '../../../../../shared/widgets/panel_surface.dart';
 import '../../../../../shared/widgets/section_heading.dart';
@@ -30,12 +30,12 @@ class TaskCenterSharedActionsPanel extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           if (groups.isEmpty)
-            const Text(
+            Text(
               '当前任务还没有可用的检查点或修订收口动作。',
               style: TextStyle(
                 fontSize: 12,
                 height: 1.5,
-                color: AppPalette.mutedText,
+                color: context.novelThemeColors.mutedTextColor,
               ),
             )
           else
@@ -66,6 +66,7 @@ class _ActionGroupSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.novelThemeColors;
     final disabledActions = group.actions
         .where((action) => !action.enabled)
         .toList(growable: false);
@@ -76,20 +77,20 @@ class _ActionGroupSection extends StatelessWidget {
         children: [
           Text(
             group.title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
-              color: AppPalette.text,
+              color: colors.textColor,
             ),
           ),
           if (group.summary.trim().isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(
               group.summary,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 height: 1.5,
-                color: AppPalette.mutedText,
+                color: colors.mutedTextColor,
               ),
             ),
           ],
@@ -118,10 +119,10 @@ class _ActionGroupSection extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 4),
                 child: Text(
                   '- ${action.label}：${action.disabledReason.trim().isEmpty ? action.note : action.disabledReason}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     height: 1.45,
-                    color: AppPalette.mutedText,
+                    color: colors.mutedTextColor,
                   ),
                 ),
               ),

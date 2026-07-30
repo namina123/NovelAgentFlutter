@@ -74,8 +74,8 @@ void main() {
         expect(run.evidenceItems.single, contains('chapter_01#p1'));
         expect(run.adoptionSummary, contains('主链可以先复核这条建议'));
         expect(run.degradationSummary, isEmpty);
-        expect(run.diagnosticItems.join('\n'), contains('run_id: sub_run_1'));
-        expect(run.diagnosticItems.join('\n'), contains('agent_id: reviewer'));
+        expect(run.diagnosticItems.join('\n'), contains('运行号：sub_run_1'));
+        expect(run.diagnosticItems.join('\n'), contains('智能体 ID：reviewer'));
       },
     );
 

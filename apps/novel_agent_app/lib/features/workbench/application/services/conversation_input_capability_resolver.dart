@@ -44,7 +44,7 @@ class ConversationInputCapabilityResolver {
       showAttachmentEntry: exposure.showAttachmentEntry,
       supportsStopAction: supportsStopAction,
       showStopAction: exposure.showStopAction,
-      canSendAction: !context.isGenerating,
+      canSendAction: context.hasActiveProject && !context.isGenerating,
       submitLabel: context.isGenerating ? '生成中' : '发送',
     );
   }

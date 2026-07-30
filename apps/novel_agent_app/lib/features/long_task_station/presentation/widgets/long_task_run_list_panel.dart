@@ -18,12 +18,19 @@ class LongTaskRunListPanel extends StatelessWidget {
     final optionSurface = context.novelThemeSurfaces.optionTile;
     final toolSurface = context.novelThemeSurfaces.toolRow;
     if (entries.isEmpty) {
+      // 中文注释: 空态给出"长任务从哪里来"的引导，而不是孤零零四个字。
       return Center(
-        child: Text(
-          '暂无运行实例',
-          style: TextStyle(
-            color: optionSurface.mutedForegroundColor,
-            fontWeight: FontWeight.w600,
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            // 中文注释: 任务中心不是导航栏一级入口，只能从本页右上工具栏进入——文案要点明位置，否则用户找不到。
+            '暂无运行实例。\n打开小说项目后，点本页右上「任务中心」图标 →「生成队列」即可启动长任务。',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: optionSurface.mutedForegroundColor,
+              fontWeight: FontWeight.w600,
+              height: 1.6,
+            ),
           ),
         ),
       );

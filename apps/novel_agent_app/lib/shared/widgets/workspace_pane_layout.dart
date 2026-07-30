@@ -35,11 +35,33 @@ class WorkspacePaneLayout extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isStacked = constraints.maxWidth < breakpoint;
+        // 中文注释: 短高度(Android 横屏/分屏)下固定 compact 高度之和可能超过 maxHeight，
+        // 导致 Expanded 主区拿到负空间、RenderFlex 黄黑溢出。这里按可用高度给两个边栏
+        // 分配预算、超出时同比缩放，保证主区 Expanded 永远拿到非负(至少 minMainExtent)空间。
+        final maxH = constraints.maxHeight;
+        const double minMainExtent = 120.0;
+        final gapCount = trailingPane == null ? 1 : 2;
+        final gapTotal = paneGap * gapCount;
+        final desiredPaneTotal = trailingPane == null
+            ? leadingCompactHeight
+            : leadingCompactHeight + trailingCompactHeight;
+        var budgetForPanes = (maxH.isFinite && maxH > 0)
+            ? (maxH - gapTotal - minMainExtent)
+            : desiredPaneTotal;
+        if (budgetForPanes < 0) {
+          budgetForPanes = 0;
+        }
+        // 中文注释: 当屏幕足够高时 scale=1，沿用调用方给的完整高度；屏幕短时同比缩放两个边栏。
+        final scale = (desiredPaneTotal > budgetForPanes && desiredPaneTotal > 0)
+            ? budgetForPanes / desiredPaneTotal
+            : 1.0;
+        final leadingH = leadingCompactHeight * scale;
+        final trailingH = (trailingPane == null ? 0.0 : trailingCompactHeight) * scale;
         if (trailingPane == null) {
           if (isStacked) {
             return Column(
               children: [
-                SizedBox(height: leadingCompactHeight, child: leadingPane),
+                SizedBox(height: leadingH, child: leadingPane),
                 SizedBox(height: paneGap),
                 Expanded(child: mainPane),
               ],
@@ -54,11 +76,11 @@ class WorkspacePaneLayout extends StatelessWidget {
         if (isStacked) {
           return Column(
             children: [
-              SizedBox(height: leadingCompactHeight, child: leadingPane),
+              SizedBox(height: leadingH, child: leadingPane),
               SizedBox(height: paneGap),
               Expanded(child: mainPane),
               SizedBox(height: paneGap),
-              SizedBox(height: trailingCompactHeight, child: trailingPane!),
+              SizedBox(height: trailingH, child: trailingPane!),
             ],
           );
         }

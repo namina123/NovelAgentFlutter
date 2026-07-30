@@ -55,7 +55,7 @@ class ProjectImportSmartAnalysisAgentService {
     if (provider == null) {
       return ProjectImportSmartAnalysisAgentResult(
         applied: false,
-        note: '智能分析未执行：未找到 provider `$providerId`。',
+        note: '智能分析未执行：未找到对应的接口配置。',
       );
     }
     final executionProfile = _modelExecutionProfileService.resolve(

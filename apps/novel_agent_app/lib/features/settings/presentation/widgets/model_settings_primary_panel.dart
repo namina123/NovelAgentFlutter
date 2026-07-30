@@ -30,7 +30,11 @@ class ModelSettingsPrimaryPanel extends StatelessWidget {
     required this.onTestConnection,
     required this.connectionResult,
     required this.connectionTesting,
+    this.onOpenInterfacesTab,
   });
+
+  /// 「当前没有接口」警告里「前往「接口」页」按钮的回调；为空（测试）时不渲染该按钮。
+  final VoidCallback? onOpenInterfacesTab;
 
   final List<SettingsSearchOption<String>> providerOptions;
   final TextEditingController providerController;
@@ -85,14 +89,41 @@ class ModelSettingsPrimaryPanel extends StatelessWidget {
           ),
           if (providerOptions.isEmpty) ...[
             const SizedBox(height: 8),
-            Text(
-              '当前还没有可用接口。请先到「接口」页添加厂商地址与 API Key 并保存。',
-              style: TextStyle(
-                fontSize: 12.5,
-                height: 1.45,
-                color: Theme.of(context).colorScheme.error,
-                fontWeight: FontWeight.w600,
-              ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    '当前还没有可用接口。请先到「接口」页添加厂商地址与 API Key 并保存。',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      height: 1.45,
+                      color: Theme.of(context).colorScheme.error,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                if (onOpenInterfacesTab != null) ...[
+                  const SizedBox(width: 8),
+                  TextButton(
+                    onPressed: onOpenInterfacesTab,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 0,
+                      ),
+                      minimumSize: const Size(0, 0),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      textStyle: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    // 中文注释: 把「请先到接口页」从死路变成一键可达——直接切到接口标签页。
+                    child: const Text('前往「接口」页'),
+                  ),
+                ],
+              ],
             ),
           ],
           const SizedBox(height: 12),
@@ -110,7 +141,7 @@ class ModelSettingsPrimaryPanel extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           ActionButton(
-            label: connectionTesting ? '正在测试连接…' : '测试连接',
+            label: connectionTesting ? '正在测试连接...' : '测试连接',
             icon: Icons.wifi_tethering_rounded,
             tone: ActionButtonTone.neutral,
             compact: true,

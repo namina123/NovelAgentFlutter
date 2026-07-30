@@ -48,9 +48,11 @@ class FileToolGroup extends StatelessWidget {
           rowChildren.addAll([
             const SizedBox(width: 6),
             ToolbarIconButton(
-              icon: Icons.library_add_outlined,
-              tooltip: '新章节',
-              tone: ToolbarIconTone.warm,
+              // 中文注释: 这个按钮不是"创建章节文件"动作——正式章节由工具链提交，点它只会给一句指引。
+              // 故用中性色(不像保存那样 accent/warm 主动作)并把 tooltip 写成求助式，避免误以为是创建按钮。
+              icon: Icons.help_outline,
+              tooltip: '如何创建章节',
+              tone: ToolbarIconTone.neutral,
               dense: true,
               onPressed: onCreateChapterRequested,
             ),

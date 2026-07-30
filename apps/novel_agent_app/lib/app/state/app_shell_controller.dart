@@ -483,6 +483,10 @@ class AppShellController extends ChangeNotifier
       resetConversationRuntimeState: () {
         _workbenchConversationRuntimeState =
             const WorkbenchConversationRuntimeState();
+        // 中文注释: 必须同时让会话控制器取消在飞请求并清空它自己的运行时状态——否则
+        // 切换项目时旧项目的流式响应仍会通过未被置空的 _activeRequestHandle 把
+        // onProgress/结果写进新项目的会话（跨项目串话）。resetRuntimeState 之前无人调用。
+        _workbenchConversationController.resetRuntimeState();
       },
       restoreConversationRuntimeState: (project) =>
           _workbenchConversationController.restoreProjectSessions(project),
@@ -587,6 +591,7 @@ class AppShellController extends ChangeNotifier
       contextStrategySettingsOf: _contextStrategySettingsOf,
       selectedModelProvider: _selectedModelProvider,
       announce: _announce,
+      setForegroundBackHandler: _setForegroundBackHandler,
     );
     _projectLifecycleCoordinator =
         projectLifecycleCoordinator ??
@@ -969,11 +974,17 @@ class AppShellController extends ChangeNotifier
   ProjectCollectionSnapshot _projectCollectionSnapshot =
       ProjectCollectionSnapshot.initial();
   String _agentEcosystemStatusMessage = '';
+  // 中文注释: 生态页顶层异步(刷新列表/生成索引)进行中标志，用于禁用顶部按钮防连点。
+  bool _agentEcosystemBusy = false;
   EcosystemImportCommandViewData? _ecosystemImportCommand;
   EcosystemEditorViewData? _ecosystemEditorViewData;
   final Map<String, ProviderConnectionValidationResultViewData>
   _providerConnectionValidationResults =
       <String, ProviderConnectionValidationResultViewData>{};
+  // 中文注释: 设置页瞬态反馈：保存成功/校验失败写这里，经 SettingsViewData 投到 SettingsHeader 显示。
+  String _settingsAnnouncement = '';
+  // 中文注释: 作品库"进入作品"在飞标志——防止连点触发并发 openProject 写同一份 _currentProject。
+  bool _isOpeningProject = false;
   List<JsonMap> _taskCenterTasks = const <JsonMap>[];
   String _selectedTaskId = '';
   String _selectedLongTaskRunPath = '';
@@ -1151,8 +1162,23 @@ class AppShellController extends ChangeNotifier
     _destinationController.showSettings();
   }
 
+  // 中文注释: 前台界面（子智能体全屏）经会话控制器注册的"接管返回键"回调。
+  // 非空时系统返回键先交给它（关闭全屏），避免直接弹"退出应用"。
+  void Function()? _foregroundBackHandler;
+
+  void _setForegroundBackHandler(void Function()? handler) {
+    _foregroundBackHandler = handler;
+  }
+
   Future<bool> handleSystemBackRequested() async {
     // 中文注释: 系统返回键只表达“退一步”，具体退到哪里由壳层状态统一判断。
+    final foregroundBackHandler = _foregroundBackHandler;
+    if (foregroundBackHandler != null) {
+      // 中文注释: 前台界面（子智能体全屏等）已注册接管——先交给它关闭全屏，
+      // 而不是直接弹"退出应用"。这一步优先于所有其它覆盖层。
+      foregroundBackHandler();
+      return false;
+    }
     final workbench = _viewModel.workbench;
     if (workbench.workspaceCommand != null) {
       onWorkspaceCommandDismissed();
@@ -1187,7 +1213,10 @@ class AppShellController extends ChangeNotifier
           _showPrimaryWorkspaceForCurrentProject();
           return false;
         }
-        return true;
+        // 中文注释: 没有当前项目时，作品库页的返回键应回到工作台(露出项目启动器)，
+        // 而不是弹"退出应用"——与其他 destination 的返回行为一致。
+        showWorkbench();
+        return false;
       case AppDestination.settings:
       case AppDestination.agentEcosystem:
       case AppDestination.longTaskStation:
@@ -1308,29 +1337,52 @@ class AppShellController extends ChangeNotifier
       await _refreshProjectOpenView(status: '未识别到有效项目目录。');
       return;
     }
-    _announce('正在打开项目...');
-    final result = await _projectLifecycleCoordinator.openProjectFromPath(
-      normalizedPath,
-      failureLauncherMode: _currentProject == null
-          ? ProjectLauncherMode.guard
-          : null,
-      failureLauncherStatus: '打开项目失败：$normalizedPath',
-    );
-    if (!result.isLoaded) {
-      await _refreshProjectOpenView(status: '打开项目失败：$normalizedPath');
+    // 中文注释: 防重入——连点"进入作品"会并发 open，竞写 _currentProject/设置。
+    if (_isOpeningProject) {
       return;
     }
-    if (_shouldOpenProjectAssetsByDefault(_currentProject)) {
-      await projectAssetsController.refresh();
-      showProjectAssets();
-      return;
+    _isOpeningProject = true;
+    try {
+      // 中文注释: 打开进度走 projectOpen 视图状态(作品库页可见)，不用 _announce(它只写工作台状态条，作品库页看不到)。
+      await _refreshProjectOpenView(status: '正在打开项目...');
+      final result = await _projectLifecycleCoordinator.openProjectFromPath(
+        normalizedPath,
+        failureLauncherMode: _currentProject == null
+            ? ProjectLauncherMode.guard
+            : null,
+        failureLauncherStatus: '打开项目失败：$normalizedPath',
+      );
+      if (!result.isLoaded) {
+        // 中文注释: 把协调器产出的具体失败原因(如"项目清单损坏...")带给用户，而不是写死一句 path；
+        // 协调器要求弹启动器时(无当前项目)就弹，并带上同样的原因与 canDismiss。
+        final reason = result.statusMessage.trim().isNotEmpty
+            ? result.statusMessage
+            : '打开项目失败：$normalizedPath';
+        await _refreshProjectOpenView(status: reason);
+        if (result.shouldShowLauncher) {
+          await _projectCreationController.showLauncher(
+            result.launcherMode ?? ProjectLauncherMode.guard,
+            status: result.launcherStatus,
+            canDismiss: result.canDismiss,
+          );
+        }
+        return;
+      }
+      await _refreshProjectOpenView(status: '');
+      if (_shouldOpenProjectAssetsByDefault(_currentProject)) {
+        await projectAssetsController.refresh();
+        showProjectAssets();
+        return;
+      }
+      if (_usesBookDeconstructionAsPrimaryWorkspace(_currentProject)) {
+        await bookDeconstructionController.refresh();
+        await _destinationController.showBookDeconstructionWorkbench();
+        return;
+      }
+      showWorkbench();
+    } finally {
+      _isOpeningProject = false;
     }
-    if (_usesBookDeconstructionAsPrimaryWorkspace(_currentProject)) {
-      await bookDeconstructionController.refresh();
-      await _destinationController.showBookDeconstructionWorkbench();
-      return;
-    }
-    showWorkbench();
   }
 
   Future<void> _importLocalProjectFromProjectOpen() async {
@@ -1383,15 +1435,25 @@ class AppShellController extends ChangeNotifier
       return;
     }
     try {
-      final currentRoot = _currentProject?.rootPath.trim() ?? '';
-      if (currentRoot.isNotEmpty &&
-          Directory(currentRoot).absolute.path == targetPath) {
+      // 中文注释: 先真正删除目录，成功后再清工作台/锁启动器——否则删除失败时会把用户
+      // 困在 guard launcher 里，而项目其实没被删掉。
+      final isCurrentProject = _currentProject != null &&
+          Directory(_currentProject!.rootPath.trim()).absolute.path ==
+              targetPath;
+      if (await target.exists()) {
+        await target.delete(recursive: true);
+      }
+      if (isCurrentProject) {
         _workbenchWorkspaceController.resetToProjectlessWorkbench(
           status: '当前作品已删除，请重新选择或新建。',
         );
-      }
-      if (await target.exists()) {
-        await target.delete(recursive: true);
+        // 中文注释: 删的是当前项目时，把启动器锁在工作台上(canDismiss:false)，
+        // 这样用户回到工作台不会看到死寂空台，而是被引导重新选择或新建。
+        await _projectCreationController.showLauncher(
+          ProjectLauncherMode.guard,
+          status: '当前作品已删除，请重新选择或新建。',
+          canDismiss: false,
+        );
       }
       final settings = _settings;
       if (settings != null) {
@@ -1560,9 +1622,13 @@ class AppShellController extends ChangeNotifier
       run.metadata['record_relative_path'],
     ).trim();
     if (relativePath.isEmpty) {
+      // 中文注释: 记录定位失败时给出可操作的指引（运行号 + 去哪找），而不是一句被踢走的提示。
+      final runShortId =
+          run.id.length > 8 ? run.id.substring(0, 8) : run.id;
       return <String, Object?>{
         'ok': false,
-        'error': '无法定位该运行的任务记录，请从任务中心$actionLabel，或重新启动长任务。',
+        'error': '无法定位该运行的任务记录（运行 $runShortId）。请到「任务中心 → 链路与运行记录」'
+            '找到该运行后再$actionLabel；若列表里也没有，请重新启动长任务。',
       };
     }
     final settings = _settings;
@@ -1682,12 +1748,12 @@ class AppShellController extends ChangeNotifier
     final sourceId = _stringValue(payload['source_id']);
     final nextTitle = _stringValue(payload['title']);
     if (nextTitle.trim().isEmpty) {
-      _announce('请先填写接口/厂商名称再保存。');
+      _announceSettings('请先填写接口/厂商名称再保存。');
       return;
     }
     final nextBaseUrl = _stringValue(payload['base_url']);
     if (nextBaseUrl.trim().isEmpty) {
-      _announce('请填写 Base URL 后再保存。');
+      _announceSettings('请填写 Base URL 后再保存。');
       return;
     }
     final nextId = sourceId.trim().isNotEmpty
@@ -1750,11 +1816,18 @@ class AppShellController extends ChangeNotifier
     if (draftProbe != null) {
       _providerConnectionValidationResults[nextProvider.id] = draftProbe;
     }
+    // 中文注释: API Key 空时不硬拦(本地/自建服务可能无需鉴权)，但在成功提示里追加提醒，
+    // 避免用户以为已配好、直到首次发送才撞"鉴权失败"。
+    final apiKeyEmpty = _stringValue(payload['api_key']).trim().isEmpty;
+    final baseSuccess = shouldBecomeDefault
+        ? '接口已保存，并设为当前默认接口。请到「模型」页选择默认模型。'
+        : '接口设置已保存。';
+    final successMessage = apiKeyEmpty
+        ? '$baseSuccess（注意：API Key 未填写，发送前需补上；本地/自建服务若无需鉴权可忽略。）'
+        : baseSuccess;
     _persistSettings(
       updated,
-      successMessage: shouldBecomeDefault
-          ? '接口已保存，并设为当前默认接口。请到「模型」页选择默认模型。'
-          : '接口设置已保存。',
+      successMessage: successMessage,
       selectedProviderId: nextProvider.id,
     );
   }
@@ -1770,27 +1843,28 @@ class AppShellController extends ChangeNotifier
         .where((provider) => provider.id != providerId)
         .toList(growable: false);
     final modelSettings = _modelSettingsOf(settings);
-    final nextModelProviderId =
-        _stringValue(
-              modelSettings['provider_id'],
-              settings.defaultProviderId,
-            ) ==
-            providerId
-        ? ''
-        : _stringValue(
-            modelSettings['provider_id'],
-            settings.defaultProviderId,
-          );
+    final modelProviderId = _stringValue(
+      modelSettings['provider_id'],
+      settings.defaultProviderId,
+    );
+    // 中文注释: 被删的接口若正是模型绑定的接口，模型的 provider 与 defaultModelId 都要清空，
+    // 否则 _modelSelectorOptions 仍会列出孤立的 defaultModelId，让"未配置模型"banner 不显示、用户盲发。
+    final modelProviderGone = modelProviderId == providerId;
+    final nextModelProviderId = modelProviderGone ? '' : modelProviderId;
+    final nextDefaultModelId =
+        modelProviderGone ? '' : settings.defaultModelId;
     final updated = settings.copyWith(
       providers: providers,
       defaultProviderId: settings.defaultProviderId == providerId
           ? ''
           : settings.defaultProviderId,
+      defaultModelId: nextDefaultModelId,
       extraSettings: <String, Object?>{
         ...settings.extraSettings,
         'model_settings': <String, Object?>{
           ...modelSettings,
           'provider_id': nextModelProviderId,
+          if (modelProviderGone) 'model_id': '',
         },
       },
     );
@@ -1837,6 +1911,9 @@ class AppShellController extends ChangeNotifier
     final probe = await _providerConnectionProbeService.probe(
       provider: provider,
       modelId: modelId,
+      // 中文注释: 把用户已保存的网络设置(含自定义代理)带给探测——此前传空 map 导致探测
+      // 走直连，与真实生成路径不一致，代理用户会得到与实战相反的通过/失败结果。
+      networkSettings: settings.networkSettings,
     );
     return _validationViewDataWith(
       base: lintView,
@@ -1889,15 +1966,15 @@ class AppShellController extends ChangeNotifier
       _stringValue(payload['model_id'], settings.defaultModelId),
     );
     if (settings.providers.isEmpty) {
-      _announce('请先到「接口」页添加并保存接口，再配置默认模型。');
+      _announceSettings('请先到「接口」页添加并保存接口，再配置默认模型。');
       return;
     }
     if (nextProviderId.trim().isEmpty) {
-      _announce('请选择默认接口后再保存模型设置。');
+      _announceSettings('请选择默认接口后再保存模型设置。');
       return;
     }
     if (nextModelId.trim().isEmpty) {
-      _announce('请填写或选择默认模型后再保存。');
+      _announceSettings('请填写或选择默认模型后再保存。');
       return;
     }
     final modelSettings = <String, Object?>{
@@ -2317,7 +2394,17 @@ class AppShellController extends ChangeNotifier
   @override
   void onEcosystemRefreshRequested() {
     // 中文注释: 生态刷新统一回到控制器，再由独立的目录加载与 view data 服务承接细节。
-    _refreshAgentEcosystem();
+    // 顶层刷新进行中置 busy，禁用顶部按钮防连点；刷新结束(成功或失败)复位。
+    _refreshAgentEcosystemWithBusy();
+  }
+
+  Future<void> _refreshAgentEcosystemWithBusy() async {
+    _setAgentEcosystemBusy(true);
+    try {
+      await _refreshAgentEcosystem();
+    } finally {
+      _setAgentEcosystemBusy(false);
+    }
   }
 
   @override
@@ -2368,6 +2455,7 @@ class AppShellController extends ChangeNotifier
         allowBuiltinShadow: request.allowBuiltinShadow,
         status: '正在读取生态包并进行预检...',
         previewSummary: '',
+        isImporting: true,
       ),
     );
     final bundleContent = await _projectToolHostPort.readExternalTextFile(
@@ -2375,7 +2463,10 @@ class AppShellController extends ChangeNotifier
     );
     if ((bundleContent ?? '').trim().isEmpty) {
       _updateEcosystemImportCommand(
-        _ecosystemImportCommand?.copyWith(status: '生态包文件不存在或不是可读文本。'),
+        _ecosystemImportCommand?.copyWith(
+          status: '生态包文件不存在或不是可读文本。',
+          isImporting: false,
+        ),
       );
       return;
     }
@@ -2410,6 +2501,7 @@ class AppShellController extends ChangeNotifier
             status:
                 '生态包预检失败：${ValueReaders.stringValue(preview["error"], "未知错误")}',
             previewSummary: previewText,
+            isImporting: false,
           ),
         );
         return;
@@ -2444,6 +2536,7 @@ class AppShellController extends ChangeNotifier
             status:
                 '生态包导入失败：${ValueReaders.stringValue(result["error"], "未知错误")}',
             previewSummary: previewText,
+            isImporting: false,
           ),
         );
         return;
@@ -2455,7 +2548,10 @@ class AppShellController extends ChangeNotifier
       );
     } catch (error) {
       _updateEcosystemImportCommand(
-        _ecosystemImportCommand?.copyWith(status: '生态包导入失败：$error'),
+        _ecosystemImportCommand?.copyWith(
+          status: UserFacingErrorHumanizer.humanize(error, action: '导入生态包'),
+          isImporting: false,
+        ),
       );
     }
   }
@@ -2468,6 +2564,7 @@ class AppShellController extends ChangeNotifier
       _setAgentEcosystemStatus('请先创建或打开项目，再生成生态索引。');
       return;
     }
+    _setAgentEcosystemBusy(true);
     try {
       final rootIndexPaths = await _generateCustomizationIndexesUseCase.execute(
         project,
@@ -2480,7 +2577,11 @@ class AppShellController extends ChangeNotifier
       ];
       _setAgentEcosystemStatus('已生成生态索引，共更新 ${changedPaths.length} 个文件。');
     } catch (error) {
-      _setAgentEcosystemStatus('生成生态索引失败：$error');
+      _setAgentEcosystemStatus(
+        UserFacingErrorHumanizer.humanize(error, action: '生成生态索引'),
+      );
+    } finally {
+      _setAgentEcosystemBusy(false);
     }
   }
 
@@ -2596,7 +2697,9 @@ class AppShellController extends ChangeNotifier
           );
       _setAgentEcosystemStatus('项目技能装载已应用。');
     } catch (error) {
-      _setAgentEcosystemStatus('应用项目技能装载失败：$error');
+      _setAgentEcosystemStatus(
+        UserFacingErrorHumanizer.humanize(error, action: '应用项目技能装载'),
+      );
     }
   }
 
@@ -2642,7 +2745,9 @@ class AppShellController extends ChangeNotifier
           );
       _setAgentEcosystemStatus('技能装载历史快照已保存。');
     } catch (error) {
-      _setAgentEcosystemStatus('保存技能装载历史失败：$error');
+      _setAgentEcosystemStatus(
+        UserFacingErrorHumanizer.humanize(error, action: '保存技能装载历史'),
+      );
     }
   }
 
@@ -2679,7 +2784,9 @@ class AppShellController extends ChangeNotifier
       );
       _setAgentEcosystemStatus('已另存为技能组：$savedGroupId');
     } catch (error) {
-      _setAgentEcosystemStatus('另存为技能组失败：$error');
+      _setAgentEcosystemStatus(
+        UserFacingErrorHumanizer.humanize(error, action: '另存为技能组'),
+      );
     }
   }
 
@@ -2805,6 +2912,7 @@ class AppShellController extends ChangeNotifier
         )
         .copyWith(
           statusMessage: _agentEcosystemStatusMessage,
+          isBusy: _agentEcosystemBusy,
           importCommand: _ecosystemImportCommand,
           editorViewData: _ecosystemEditorViewData,
         );
@@ -2825,6 +2933,12 @@ class AppShellController extends ChangeNotifier
   void _setAgentEcosystemStatus(String message) {
     // 中文注释: 生态页状态提示统一收口在这里，避免刷新、导入、索引生成各自改视图字段。
     _agentEcosystemStatusMessage = message;
+    _refreshAgentEcosystemView();
+  }
+
+  void _setAgentEcosystemBusy(bool value) {
+    // 中文注释: 顶层异步(刷新/生成索引)进行中标志——true 时顶部按钮禁用，防止连点触发并行刷新/重建。
+    _agentEcosystemBusy = value;
     _refreshAgentEcosystemView();
   }
 
@@ -2883,7 +2997,7 @@ class AppShellController extends ChangeNotifier
     // 中文注释: 生态条目创建统一走“生成计划 -> 写入项目 -> 刷新快照 -> 打开源文件”的闭环。
     final project = _currentProject;
     if (project == null) {
-      _announce('请先打开一个项目，再创建项目内生态条目。');
+      _setAgentEcosystemStatus('请先打开一个项目，再创建项目内生态条目。');
       return;
     }
     final plan = _ecosystemEntryCreationPlanService.createPlan(kind);
@@ -2920,9 +3034,12 @@ class AppShellController extends ChangeNotifier
           sourceContent: sourceContent,
         ),
       );
-      _announce('已创建 ${_ecosystemKindLabel(plan.kind)}：${plan.title}，请在表单里填写。');
+      _setAgentEcosystemStatus('已创建 ${_ecosystemKindLabel(plan.kind)}：${plan.title}，请在表单里填写。');
     } catch (error) {
-      _announce('创建生态条目失败：$error');
+      // 中文注释: 反馈必须走生态页状态通道(_setAgentEcosystemStatus)，_announce 只写工作台状态条，生态页看不到。
+      _setAgentEcosystemStatus(
+        UserFacingErrorHumanizer.humanize(error, action: '创建生态条目'),
+      );
     }
   }
 
@@ -2930,12 +3047,12 @@ class AppShellController extends ChangeNotifier
     // 中文注释: 生态源文件打开统一从当前快照反查，避免详情面板自己理解项目目录结构。
     final entry = _selectedEcosystemSnapshotEntry(entryId);
     if (entry == null) {
-      _announce('未找到要打开的生态条目。');
+      _setAgentEcosystemStatus('未找到要打开的生态条目。');
       return;
     }
     final projectRelativePath = _stringValue(entry['project_relative_path']);
     if (projectRelativePath.trim().isEmpty) {
-      _announce('当前条目没有项目内可编辑源文件。');
+      _setAgentEcosystemStatus('当前条目没有项目内可编辑源文件。');
       return;
     }
     showWorkbench();
@@ -3043,7 +3160,9 @@ class AppShellController extends ChangeNotifier
       );
     } catch (error) {
       _updateEcosystemEditorViewData(
-        _ecosystemEditorViewData?.copyWith(statusMessage: '保存失败：$error'),
+        _ecosystemEditorViewData?.copyWith(
+          statusMessage: UserFacingErrorHumanizer.humanize(error, action: '保存生态条目'),
+        ),
       );
     }
   }
@@ -3072,7 +3191,9 @@ class AppShellController extends ChangeNotifier
       );
     } catch (error) {
       _updateEcosystemEditorViewData(
-        _ecosystemEditorViewData?.copyWith(statusMessage: '删除失败：$error'),
+        _ecosystemEditorViewData?.copyWith(
+          statusMessage: UserFacingErrorHumanizer.humanize(error, action: '删除生态条目'),
+        ),
       );
     }
   }
@@ -4596,14 +4717,16 @@ class AppShellController extends ChangeNotifier
 
   void _createReviewTaskForCurrentDocument() async {
     // 中文注释: 当前文档一键审稿统一先创建 review 任务，再切到任务中心等待用户执行。
+    // 失败分支此前写到 _refreshReviewCenter——但 ReviewCenter 视图已废弃、无 widget 渲染，
+    // 用户点审稿失败会零反馈。失败现在改走 _announce（工作台状态条可见），与保存按钮一致。
     final project = _currentProject;
     if (project == null) {
-      await _refreshReviewCenter(status: '请先创建或打开项目。');
+      _announce('请先创建或打开项目，再审稿。');
       return;
     }
     final sourcePath = _viewModel.workbench.activeDocumentPath.trim();
     if (sourcePath.isEmpty) {
-      await _refreshReviewCenter(status: '请先打开一个需要审稿的正文或文档。');
+      _announce('请先打开一个需要审稿的正文或文档。');
       return;
     }
     final reviewType = _reviewTypeFilter.trim().isEmpty
@@ -4630,9 +4753,7 @@ class AppShellController extends ChangeNotifier
       _safeNotifyListeners();
       return;
     }
-    await _refreshReviewCenter(
-      status: _resultMessage(result, success: '已创建审稿任务。'),
-    );
+    _announce(_resultMessage(result, success: '已创建审稿任务。'));
   }
 
   JsonMap _selectedTaskSelector() {
@@ -5099,6 +5220,7 @@ class AppShellController extends ChangeNotifier
       settingsSearchRoots: _settingsSearchRoots,
       defaultProjectsRootPath: _defaultProjectsRootPath,
       isMobileProjectRootLocked: _isMobileProjectRootLocked,
+      settingsAnnouncement: _settingsAnnouncement,
     );
   }
 
@@ -5165,6 +5287,10 @@ class AppShellController extends ChangeNotifier
         selectedProviderId: selectedProviderId,
       ),
     );
+    // 中文注释: announcement 是一次性瞬态：投影进视图后立即清空，避免后续 tab/provider 切换触发的
+    // 重建把同一条消息当成新消息再次弹出（陈旧"已保存"横幅跟随用户到处跑）。
+    // 重复保存会重新写入字段，因此连击保存同一条消息仍能再次弹出。
+    _settingsAnnouncement = '';
   }
 
   String _selectedProviderId(AppSettings settings) {
@@ -5254,7 +5380,7 @@ class AppShellController extends ChangeNotifier
       'network': [
         SettingsSectionViewData(
           title: '网络与接口',
-          description: '模型网络入口来自 provider 配置；代理行为由网络设置统一控制。',
+          description: '模型网络入口来自接口配置；代理行为由网络设置统一控制。',
           items: [
             SettingsItemViewData(label: '默认接口地址', value: providerBaseUrl),
             SettingsItemViewData(
@@ -5320,6 +5446,8 @@ class AppShellController extends ChangeNotifier
       final savedSettings = await _settingsRepository.save(nextSettings);
       _settings = savedSettings;
       _activeThemeId = _themeIdFromSettings(savedSettings);
+      // 中文注释: 保存成功消息写入设置页瞬态反馈，使刷新后的 SettingsViewData 带上它供 SettingsHeader 显示。
+      _settingsAnnouncement = successMessage;
       _refreshSettingsViewData(selectedProviderId: selectedProviderId);
       _viewModel = _viewModel.copyWith(
         workbench: _viewModel.workbench.copyWith(
@@ -5334,6 +5462,9 @@ class AppShellController extends ChangeNotifier
       );
       _announce(successMessage);
     } catch (error) {
+      // 中文注释: 写盘失败同样要在设置页可见，而不是只写进工作台状态条。
+      _settingsAnnouncement = '保存设置失败：$error';
+      _refreshSettingsViewData();
       _announce('保存设置失败：$error');
     }
   }
@@ -5603,6 +5734,17 @@ class AppShellController extends ChangeNotifier
   void _announce(String message) {
     // 中文注释: 轻量提示只更新状态文案，不重新整套重算 opening / 会话投影，避免提示链路反向触发递归刷新。
     _updateWorkbench(_viewModel.workbench.copyWith(generationStatus: message));
+  }
+
+  void _announceSettings(String message) {
+    // 中文注释: 设置页反馈单独走这条通道：写入瞬态字段并刷新设置视图，让 SettingsHeader 能看到
+    // 保存成功/校验失败——_announce 写的是工作台状态条，设置页看不到。
+    final settings = _settings;
+    if (settings == null) {
+      return;
+    }
+    _settingsAnnouncement = message;
+    _refreshSettingsViewData();
   }
 
   JsonMap _contextStrategySettingsOf(AppSettings settings) {

@@ -76,6 +76,9 @@ class _WorkbenchCanvasWorkspaceShellState
                 Expanded(
                   child: WorkbenchPrimaryCanvasHost(
                     viewData: widget.canvasViewData,
+                    // 中文注释: 空画布的「新建文档」复用资料库的 onCreateFileRequested，
+                    // 不经 DocumentWorkspaceActionHandler，避免改契约/波及测试桩。
+                    onCreateFileRequested: widget.resourceHandler.onCreateFileRequested,
                     actionHandler: _DocumentWorkspaceAuxiliaryProxy(
                       delegate: widget.documentHandler,
                       onReviewRequested: () {

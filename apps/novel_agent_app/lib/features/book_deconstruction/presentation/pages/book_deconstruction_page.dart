@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../shared/widgets/confirmation_dialog.dart';
 import '../../../../shared/widgets/panel_surface.dart';
 import '../../../../shared/widgets/workspace_page_scaffold.dart';
 import '../../../workbench/presentation/models/selector_option_view_data.dart';
@@ -47,12 +48,20 @@ class BookDeconstructionPage extends StatelessWidget {
                 index: 2,
                 title: '拆书（纯净分章）',
                 description: '只产出纯净的分章正文；可选勾选模型做去噪/分章辅助。',
+                cancelVisible: viewData.isLoading &&
+                    viewData.operationKind ==
+                        BookDeconstructionOperationKind.splittingChapters,
+                onCancel: handler.onBookDeconstructionCancelRequested,
                 child: _SplitStep(viewData: viewData, actionHandler: handler),
               ),
               _StepCard(
                 index: 3,
                 title: '分析（可选）',
                 description: '可选：用模型读拆书产物提取知识资产；不选模型则跳过（本地分析质量过低）。',
+                cancelVisible: viewData.isLoading &&
+                    viewData.operationKind ==
+                        BookDeconstructionOperationKind.analyzingAssets,
+                onCancel: handler.onBookDeconstructionCancelRequested,
                 child: _AnalysisStep(
                   viewData: viewData,
                   actionHandler: handler,
@@ -80,12 +89,17 @@ class _StepCard extends StatelessWidget {
     required this.title,
     required this.description,
     required this.child,
+    this.cancelVisible = false,
+    this.onCancel,
   });
 
   final int index;
   final String title;
   final String description;
   final Widget child;
+  /// 中文注释: 长操作进行中时在卡片标题行露出"取消"，避免用户只能去顶栏找。
+  final bool cancelVisible;
+  final VoidCallback? onCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -113,6 +127,17 @@ class _StepCard extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (cancelVisible && onCancel != null)
+                  TextButton.icon(
+                    onPressed: onCancel,
+                    icon: const Icon(Icons.stop_circle_outlined, size: 18),
+                    label: const Text('取消'),
+                    style: TextButton.styleFrom(
+                      foregroundColor:
+                          Theme.of(context).colorScheme.error,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
               ],
             ),
             const SizedBox(height: 14),
@@ -194,7 +219,7 @@ class _SplitStep extends StatelessWidget {
           subtitle: Text(
             viewData.canUseSplitModel
                 ? '勾选后用所选模型做正文去噪与分章；不勾则纯规则分章。模型与分析步独立。'
-                : '尚未配置可用模型（需在设置里给 provider 配模型）。',
+                : '尚未配置可用模型（需在设置里给接口配模型）。',
           ),
           controlAffinity: ListTileControlAffinity.leading,
         ),
@@ -211,6 +236,17 @@ class _SplitStep extends StatelessWidget {
             showSurface: false,
           ),
           const SizedBox(height: 8),
+          // 中文注释: 粘贴内容(无源文件)时模型去噪会被跳过、走规则分章——显式提示，避免用户以为已用模型。
+          if (viewData.sourceAbsolutePath.trim().isEmpty)
+            Text(
+              '当前是粘贴内容，模型去噪会跳过、按规则分章。如需模型去噪请先在步骤①选择文件。',
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.45,
+                color: Theme.of(context).colorScheme.error,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
         ],
         FilledButton.icon(
           onPressed: viewData.canSplit
@@ -223,7 +259,7 @@ class _SplitStep extends StatelessWidget {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.auto_fix_high_outlined),
-          label: Text(isSplitting ? '正在拆书…' : '拆书'),
+          label: Text(isSplitting ? '正在拆书...' : '拆书'),
         ),
         const SizedBox(height: 12),
         BookDeconstructionPreviewPanel(
@@ -292,7 +328,7 @@ class _AnalysisStep extends StatelessWidget {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.psychology_outlined),
-            label: Text(isAnalyzing ? '正在分析…' : '分析'),
+            label: Text(isAnalyzing ? '正在分析...' : '分析'),
           ),
         ],
         if (viewData.analysisStatusMessage.trim().isNotEmpty) ...[
@@ -427,11 +463,36 @@ class _ConfirmStep extends StatelessWidget {
               ? actionHandler.onBookDeconstructionConfirmRequested
               : null,
           icon: const Icon(Icons.assignment_turned_in_outlined),
-          label: const Text('保存拆书结果'),
+          // 中文注释: 该按钮触发的是项目类型落定与进入创作（不可逆），而非单纯保存文件；
+          // 文案须如实反映，避免用户以为是无害保存。
+          label: const Text('确认并进入创作'),
         ),
         if (viewData.confirmedPreviewPath.trim().isNotEmpty) ...[
           const SizedBox(height: 8),
           Text('拆书结果已保存到当前项目。', style: textTheme.bodySmall),
+          if (viewData.canCreateDerivedProject) ...[
+            const SizedBox(height: 8),
+            // 中文注释: controller 早已实现派生项目流程，这里补上唯一缺失的 UI 入口，
+            // 让"确认后可多路派生"的承诺真正可达。派生会立即切换到新项目，故二次确认。
+            FilledButton.tonalIcon(
+              onPressed: viewData.isLoading
+                  ? null
+                  : () async {
+                      final confirmed = await showConfirmationDialog(
+                        context,
+                        title: '派生新写作项目？',
+                        message: '将基于当前拆书成果创建一个新的写作项目并立即切换过去；当前拆书项目会保留，可随时回到作品库打开。',
+                        confirmLabel: '派生并切换',
+                      );
+                      if (confirmed) {
+                        actionHandler
+                            .onBookDeconstructionCreateDerivedProjectRequested();
+                      }
+                    },
+              icon: const Icon(Icons.rocket_launch_outlined),
+              label: const Text('派生新写作项目'),
+            ),
+          ],
         ],
       ],
     );

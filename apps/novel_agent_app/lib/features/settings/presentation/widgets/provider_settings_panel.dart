@@ -41,7 +41,9 @@ class ProviderSettingsPanel extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth < 980) {
-          if (selected == null) {
+          // 中文注释: 首次运行(providers 为空)时直接进添加表单，省去"先点一次添加按钮"的多余跳转。
+          final showList = selected == null && providers.isNotEmpty;
+          if (showList) {
             return PanelSurface(
               child: ProviderListPane(
                 providers: providers,
@@ -58,7 +60,9 @@ class ProviderSettingsPanel extends StatelessWidget {
                     key: detailKey,
                     provider: selected,
                     providerDirectoryOptions: providerDirectoryOptions,
-                    onBackRequested: onProviderDetailBackRequested,
+                    onBackRequested: providers.isNotEmpty
+                        ? onProviderDetailBackRequested
+                        : null,
                     onProviderSaved: onProviderSaved,
                     onProviderDeleted: onProviderDeleted,
                   ),

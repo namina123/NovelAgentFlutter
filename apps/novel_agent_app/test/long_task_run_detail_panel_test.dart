@@ -323,24 +323,27 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.widgetWithText(OutlinedButton, '暂停'), findsOneWidget);
-      expect(find.widgetWithText(OutlinedButton, '恢复推进'), findsOneWidget);
+      expect(find.widgetWithText(TextButton, '暂停'), findsOneWidget);
+      expect(find.widgetWithText(TextButton, '恢复推进'), findsOneWidget);
       expect(find.widgetWithText(FilledButton, '恢复推进'), findsOneWidget);
-      expect(find.widgetWithText(OutlinedButton, '停止'), findsOneWidget);
-      expect(find.widgetWithText(OutlinedButton, '查看当前任务'), findsOneWidget);
+      expect(find.widgetWithText(TextButton, '停止'), findsOneWidget);
+      expect(find.widgetWithText(TextButton, '查看当前任务'), findsOneWidget);
       expect(find.widgetWithText(OutlinedButton, '等待确认'), findsOneWidget);
       expect(find.widgetWithText(OutlinedButton, '查看最近产物'), findsOneWidget);
       expect(find.widgetWithText(OutlinedButton, '查看审稿结果'), findsOneWidget);
 
-      await tester.tap(find.widgetWithText(OutlinedButton, '暂停'));
+      await tester.tap(find.widgetWithText(TextButton, '暂停'));
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(OutlinedButton, '恢复推进'));
+      await tester.tap(find.widgetWithText(TextButton, '恢复推进'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(FilledButton, '恢复推进'));
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(OutlinedButton, '停止'));
+      await tester.tap(find.widgetWithText(TextButton, '停止'));
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(OutlinedButton, '查看当前任务'));
+      // 中文注释: 停止运行实例有二次确认弹窗，需点弹窗里的确认(FilledButton '停止')才会触发 handler。
+      await tester.tap(find.widgetWithText(FilledButton, '停止'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, '查看当前任务'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(OutlinedButton, '等待确认'));
       await tester.pumpAndSettle();

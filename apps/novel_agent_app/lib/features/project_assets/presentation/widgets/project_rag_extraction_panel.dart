@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../contracts/project_assets_action_handler.dart';
 import '../models/project_rag_extraction_view_data.dart';
+import 'rag_status_text.dart';
 
 class ProjectRagExtractionPanel extends StatelessWidget {
   const ProjectRagExtractionPanel({
@@ -34,7 +35,9 @@ class ProjectRagExtractionPanel extends StatelessWidget {
         ),
         if (viewData.status.trim().isNotEmpty) ...[
           const SizedBox(height: 10),
-          Text(viewData.status, style: Theme.of(context).textTheme.bodySmall),
+          // 中文注释: 入库降级提示统一走 RagStatusText——与知识库 RAG 工作区共用同一组件，
+          // 避免降级标记(关键词检索/向量化失败)只在嵌入式面板显眼、知识库工作区却被埋成普通正文。
+          RagStatusText(status: viewData.status),
         ],
         if (viewData.isLoading) ...[
           const SizedBox(height: 10),
@@ -46,14 +49,24 @@ class ProjectRagExtractionPanel extends StatelessWidget {
           runSpacing: 8,
           children: viewData.modes
               .map(
-                (mode) => ChoiceChip(
-                  label: Text(mode.title),
-                  selected: mode.isSelected,
-                  onSelected: mode.isImplemented
-                      ? (_) => actionHandler.onProjectAssetsTabSelected(
-                          'rag_extraction',
-                        )
-                      : null,
+                (mode) => Tooltip(
+                  message: mode.isImplemented
+                      ? mode.title
+                      : '「${mode.title}」暂未实现，敬请期待。',
+                  child: ChoiceChip(
+                    // 中文注释: 未实现的检索模式原先是「灰了但没解释」，用户会以为是坏了；
+                    // 这里在文案上点明「暂未实现」，避免误判与无意义点击。
+                    label: Text(
+                      mode.isImplemented
+                          ? mode.title
+                          : '${mode.title}（暂未实现）',
+                    ),
+                    selected: mode.isSelected,
+                    onSelected: mode.isImplemented
+                        ? (_) =>
+                            actionHandler.onProjectAssetsEntrySelected(mode.id)
+                        : null,
+                  ),
                 ),
               )
               .toList(growable: false),

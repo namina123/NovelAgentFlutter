@@ -18,6 +18,7 @@ class TranscriptBlockRenderContext {
     required this.onUserOptionSelected,
     required this.onSubAgentSelected,
     this.activeSubAgentRunId,
+    this.onStopRequested,
   });
 
   final bool showToolDetails;
@@ -25,6 +26,9 @@ class TranscriptBlockRenderContext {
   final ValueChanged<UserOptionViewData> onUserOptionSelected;
   final ValueChanged<SubAgentRunViewData> onSubAgentSelected;
   final String? activeSubAgentRunId;
+
+  /// 生成占位卡上的「停止」入口；为空时占位卡不显示停止按钮（停止仍可经输入栏/命令面板触达）。
+  final VoidCallback? onStopRequested;
 }
 
 class TranscriptBlockRendererRegistry {
@@ -39,7 +43,10 @@ class TranscriptBlockRendererRegistry {
       case TranscriptBlockKind.messageUser:
       case TranscriptBlockKind.messageAssistantStreaming:
       case TranscriptBlockKind.messageAssistantFinal:
-        return _buildMessageBlock(block as TranscriptMessageBlockViewData);
+        return _buildMessageBlock(
+          block as TranscriptMessageBlockViewData,
+          renderContext,
+        );
       case TranscriptBlockKind.toolCompact:
         return ConversationEntryTile(
           entry: (block as TranscriptToolBlockViewData).entry,
@@ -73,9 +80,14 @@ class TranscriptBlockRendererRegistry {
     }
   }
 
-  Widget _buildMessageBlock(TranscriptMessageBlockViewData block) {
+  Widget _buildMessageBlock(
+    TranscriptMessageBlockViewData block,
+    TranscriptBlockRenderContext renderContext,
+  ) {
     if (block.isPlaceholder) {
-      return const ConversationGeneratingPlaceholder();
+      return ConversationGeneratingPlaceholder(
+        onStopRequested: renderContext.onStopRequested,
+      );
     }
     return ConversationEntryTile(entry: block.entry);
   }

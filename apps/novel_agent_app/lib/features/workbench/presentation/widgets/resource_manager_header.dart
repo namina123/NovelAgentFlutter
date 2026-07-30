@@ -114,7 +114,8 @@ class ResourceManagerHeader extends StatelessWidget {
                       ),
                     if (showStatChips)
                       _ExplorerStatChip(
-                        label: '文档',
+                        // 中文注释: 与资料库面板标题「文件」一致，避免「文档/文件」混用。
+                        label: '文件',
                         value: '$fileCount',
                         surface: surface,
                       ),

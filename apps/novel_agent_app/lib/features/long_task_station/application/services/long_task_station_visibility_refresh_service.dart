@@ -34,9 +34,11 @@ class LongTaskStationVisibilityRefreshService {
         shouldRefresh: true,
       );
     }
+    // 中文注释: 即使没开自动刷新，重新进入总站也至少刷一次——否则用户看到的是离开时的过时快照。
+    // onVisibilityRequested 只在导航进入时调用一次，不会每帧触发，因此这是"重入刷新一次"而非持续轮询。
     return const LongTaskStationVisibilityRefreshDecision(
       shouldInitialize: false,
-      shouldRefresh: false,
+      shouldRefresh: true,
     );
   }
 }

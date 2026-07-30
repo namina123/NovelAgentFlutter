@@ -44,17 +44,27 @@ class _ResizableWorkbenchLayoutState extends State<ResizableWorkbenchLayout> {
             PaneResizeDivider(
               cursor: SystemMouseCursors.resizeColumn,
               onDragUpdate: (delta) => _resizeLeft(delta, totalWidth),
+              onResetRequested: _resetWidths,
             ),
             Expanded(child: widget.documentPane),
             PaneResizeDivider(
               cursor: SystemMouseCursors.resizeColumn,
               onDragUpdate: (delta) => _resizeConversation(delta, totalWidth),
+              onResetRequested: _resetWidths,
             ),
             SizedBox(width: conversationWidth, child: widget.conversationPane),
           ],
         );
       },
     );
+  }
+
+  // 中文注释: 双击任一分隔条：清空两栏自定义宽度，_normalizedWidths 会按当前总宽重算默认值。
+  void _resetWidths() {
+    setState(() {
+      _leftWidth = null;
+      _conversationWidth = null;
+    });
   }
 
   void _resizeLeft(double delta, double totalWidth) {

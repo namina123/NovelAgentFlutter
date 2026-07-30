@@ -128,9 +128,9 @@ class BookDeconstructionViewDataService {
   String _importActionLabel(String operationKind) {
     switch (operationKind) {
       case BookDeconstructionOperationKind.importingSource:
-        return '正在导入…';
+        return '正在导入...';
       default:
-        return '选择文件…';
+        return '选择文件...';
     }
   }
 

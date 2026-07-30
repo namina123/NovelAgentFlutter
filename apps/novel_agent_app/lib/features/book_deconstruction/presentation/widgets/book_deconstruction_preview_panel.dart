@@ -39,7 +39,7 @@ class BookDeconstructionPreviewPanel extends StatelessWidget {
               child: CircularProgressIndicator(strokeWidth: 2),
             ),
             const SizedBox(width: 10),
-            Text('正在拆书（分章 + 去噪）…', style: textTheme.bodyMedium),
+            Text('正在拆书（分章 + 去噪）...', style: textTheme.bodyMedium),
           ],
         ),
       );

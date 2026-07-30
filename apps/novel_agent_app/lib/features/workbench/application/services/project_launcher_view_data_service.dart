@@ -153,15 +153,16 @@ class ProjectLauncherViewDataService {
       case ProjectLauncherMode.guard:
         return '先选择一个项目入口';
       case ProjectLauncherMode.create:
-        final stepIndex =
-            _projectCreationPhaseResolverService
-                .phasesFor(
-                  projectTypeId: projectTypeId,
-                  requiresRuntimeBaselineSelection:
-                      requiresRuntimeBaselineSelection,
-                )
-                .indexOf(creationPhase) +
-            1;
+        // 中文注释: 计算步号时，若当前已在存储策略相位，则把它计入相位列表——
+        // 否则诚实化 pass 默认跳过该相位会让 storageStrategy 的步号变成第0步。
+        // 默认向导仍不会到达该相位(控制器永不进入)，只是当它确实激活时步号正确。
+        final phases = _projectCreationPhaseResolverService.phasesFor(
+          projectTypeId: projectTypeId,
+          requiresRuntimeBaselineSelection: requiresRuntimeBaselineSelection,
+          includeStorageStrategyPhase:
+              creationPhase == ProjectCreationPhase.storageStrategy,
+        );
+        final stepIndex = phases.indexOf(creationPhase) + 1;
         switch (creationPhase) {
           case ProjectCreationPhase.projectType:
             return '第$stepIndex步：选择项目类型';

@@ -34,9 +34,9 @@ void main() {
 
     expect(find.text('编辑'), findsOneWidget);
     expect(find.text('渲染'), findsOneWidget);
-    expect(find.text('结构'), findsOneWidget);
+    expect(find.text('信息'), findsOneWidget);
 
-    await tester.tap(find.text('结构'));
+    await tester.tap(find.text('信息'));
     await tester.pumpAndSettle();
 
     expect(selectedMode, DocumentWorkspaceDisplayMode.structure);

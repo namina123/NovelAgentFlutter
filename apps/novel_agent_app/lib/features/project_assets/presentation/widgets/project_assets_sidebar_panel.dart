@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../shared/theme/novel_theme_context.dart';
 import '../../../../shared/widgets/horizontal_overflow_scrollbar.dart';
 import '../contracts/project_assets_action_handler.dart';
 import '../models/project_assets_view_data.dart';
@@ -50,10 +51,38 @@ class ProjectAssetsSidebarPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.novelThemeColors;
     return DefaultTabController(
       length: 3,
       child: Column(
         children: [
+          // 中文注释: 这三个标签是「关联资产概览」（只读统计），不是右侧列表的筛选器——
+          // 给一个明确的「概览」标题 + 信息提示，避免用户点了图谱以为列表会跟着过滤。
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 2),
+            child: Row(
+              children: [
+                Text(
+                  '概览',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.3,
+                    color: colors.mutedTextColor,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Tooltip(
+                  message: '此处为关联资产概览（图谱/时间线/语料统计），不会筛选右侧列表。',
+                  child: Icon(
+                    Icons.info_outline,
+                    size: 12,
+                    color: colors.mutedTextColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
           HorizontalOverflowScrollbar(
             builder: (context, controller) => TabBar(
               controller: DefaultTabController.of(context),
@@ -116,7 +145,7 @@ class _RagSummaryPane extends StatelessWidget {
         if (viewData.corpusSummary.corpusId.trim().isNotEmpty) ...[
           const SizedBox(height: 8),
           Text(
-            'chunk ${viewData.corpusSummary.chunkCountLabel} · 章 ${viewData.corpusSummary.chapterCountLabel}',
+            '分片 ${viewData.corpusSummary.chunkCountLabel} · 章 ${viewData.corpusSummary.chapterCountLabel}',
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],

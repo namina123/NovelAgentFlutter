@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 
-import '../../../../../app/theme/app_palette.dart';
+import '../../../../../shared/theme/novel_theme_context.dart';
 import '../../../../../shared/widgets/horizontal_overflow_scrollbar.dart';
 import '../../../../../shared/widgets/panel_surface.dart';
 import '../../../../../shared/widgets/section_heading.dart';
@@ -98,6 +99,9 @@ class _RunLogView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 中文注释: 颜色走主题 token(novelThemeColors)，亮色主题下不再用深色专用的 AppPalette
+    // 导致白字白底不可读。selected 用 accentSoft 强调，未选中用面板底色。
+    final colors = context.novelThemeColors;
     final runList = SizedBox(
       width: 220,
       child: ListView.builder(
@@ -112,12 +116,12 @@ class _RunLogView extends StatelessWidget {
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: item.isSelected
-                      ? AppPalette.accentSoft
-                      : AppPalette.white,
+                      ? colors.accentSoftColor
+                      : colors.panelBackground,
                   border: Border.all(
                     color: item.isSelected
-                        ? AppPalette.lineStrong
-                        : AppPalette.line,
+                        ? colors.lineStrongColor
+                        : colors.lineColor,
                   ),
                 ),
                 child: Column(
@@ -127,19 +131,19 @@ class _RunLogView extends StatelessWidget {
                       item.statusLabel.trim().isEmpty
                           ? item.title
                           : item.statusLabel,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w800,
-                        color: AppPalette.text,
+                        color: colors.textColor,
                       ),
                     ),
                     if (item.phaseLabel.trim().isNotEmpty) ...[
                       const SizedBox(height: 2),
                       Text(
                         item.phaseLabel,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
-                          color: AppPalette.mutedText,
+                          color: colors.mutedTextColor,
                         ),
                       ),
                     ],
@@ -166,9 +170,9 @@ class _RunLogView extends StatelessWidget {
                           if (item.controlSummary.trim().isNotEmpty)
                             item.controlSummary.trim(),
                         ].join('｜'),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 10.5,
-                          color: AppPalette.mutedText,
+                          color: colors.mutedTextColor,
                           height: 1.35,
                         ),
                       ),
@@ -231,6 +235,7 @@ class _RunSummaryStrip extends StatelessWidget {
     if (run == null) {
       return const SizedBox.shrink();
     }
+    final colors = context.novelThemeColors;
     final parts = <String>[
       if (run!.phaseLabel.trim().isNotEmpty) run!.phaseLabel.trim(),
       if (run!.progressPercent > 0) '${run!.progressPercent}%',
@@ -243,15 +248,15 @@ class _RunSummaryStrip extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        border: Border.all(color: AppPalette.line),
-        color: AppPalette.panel,
+        border: Border.all(color: colors.lineColor),
+        color: colors.panelBackground,
       ),
       child: Text(
         parts.isEmpty ? title : '$title｜${parts.join('｜')}',
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 12,
           height: 1.4,
-          color: AppPalette.text,
+          color: colors.textColor,
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -266,18 +271,19 @@ class _RunStatChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.novelThemeColors;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       decoration: BoxDecoration(
-        border: Border.all(color: AppPalette.line),
-        color: AppPalette.white,
+        border: Border.all(color: colors.lineColor),
+        color: colors.panelBackground,
       ),
       child: Text(
         label,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 10.5,
           fontWeight: FontWeight.w700,
-          color: AppPalette.text,
+          color: colors.textColor,
         ),
       ),
     );
@@ -291,15 +297,36 @@ class _MarkdownBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 中文注释: 链路/日志是模型与 runtime 生成的 Markdown——用真正的 Markdown 渲染，
+    // 不再把 ##、-、** 当字面文本展示。超长内容截断以防 flutter_markdown 卡顿。
+    // 文字颜色用主题 textColor，不再硬编码 AppPalette.text(近白)——否则亮色主题下整段不可读。
+    final colors = context.novelThemeColors;
     return SingleChildScrollView(
-      child: SelectableText(
-        content,
-        style: const TextStyle(
-          fontSize: 12.5,
-          height: 1.55,
-          color: AppPalette.text,
+      child: MarkdownBody(
+        data: _truncateForRender(content),
+        selectable: true,
+        styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+          p: TextStyle(fontSize: 12.5, height: 1.55, color: colors.textColor),
+          h2: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+            color: colors.textColor,
+          ),
+          h3: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: colors.textColor,
+          ),
+          listBullet: TextStyle(color: colors.textColor),
         ),
       ),
     );
   }
+}
+
+String _truncateForRender(String content, {int max = 8000}) {
+  if (content.length <= max) {
+    return content;
+  }
+  return '${content.substring(0, max)}\n\n...（内容过长，已截断 $max 字；完整内容请查看项目 tracking/ 下的原始文件。）';
 }

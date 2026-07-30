@@ -178,7 +178,7 @@ class ConversationToolPayloadCompactionService {
     return value;
   }
 
-  String _truncateText(String value, int maxChars, {String suffix = '…'}) {
+  String _truncateText(String value, int maxChars, {String suffix = '...'}) {
     if (value.length <= maxChars) {
       return value;
     }

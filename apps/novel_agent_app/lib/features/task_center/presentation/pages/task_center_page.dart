@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../../../app/theme/app_palette.dart';
+import '../../../../shared/theme/novel_theme_context.dart';
 import '../../../../shared/widgets/action_button.dart';
+import '../../../../shared/widgets/confirmation_dialog.dart';
 import '../../../../shared/widgets/panel_surface.dart';
 import '../../../../shared/widgets/section_heading.dart';
 import '../../../../shared/widgets/workspace_page_header.dart';
@@ -41,6 +42,8 @@ class _TaskCenterPageState extends State<TaskCenterPage> {
   late final TextEditingController _sampleChapterWordTargetController;
   late final TextEditingController _sampleChapterWordMinController;
   late final TextEditingController _sampleChapterWordMaxController;
+  // 中文注释: 工作流创建表单的本地校验错误（数字字段解析失败），提交时填入并展示。
+  String _formError = '';
 
   @override
   void initState() {
@@ -124,10 +127,10 @@ class _TaskCenterPageState extends State<TaskCenterPage> {
       ),
       headerBottom: Text(
         widget.viewData.help,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 12,
           height: 1.5,
-          color: AppPalette.mutedText,
+          color: context.novelThemeColors.mutedTextColor,
         ),
       ),
       statusText: widget.viewData.status,
@@ -244,7 +247,7 @@ class _TaskCenterPageState extends State<TaskCenterPage> {
                   contentPadding: EdgeInsets.zero,
                   value: _enableChapterWordConstraints,
                   title: const Text('启用章节字数约束'),
-                  subtitle: const Text('把字数目标作为长任务参数传入共享 runtime。'),
+                  subtitle: const Text('把字数目标作为长任务参数传入共享运行时。'),
                   onChanged: (value) {
                     setState(() {
                       _enableChapterWordConstraints = value;
@@ -329,6 +332,30 @@ class _TaskCenterPageState extends State<TaskCenterPage> {
                   disabled: !widget.viewData.longTaskCreationAvailable,
                   onPressed: _submitWorkflowCreate,
                 ),
+                if (!widget.viewData.longTaskCreationAvailable) ...[
+                  const SizedBox(height: 8),
+                  // 中文注释: 告诉用户为何"生成队列"置灰——只有长篇项目支持。
+                  Text(
+                    '仅长篇（long_novel）项目支持生成长篇自动化队列。',
+                    style: TextStyle(
+                      fontSize: 12,
+                      height: 1.45,
+                      color: Theme.of(context).hintColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+                if (_formError.trim().isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _formError,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      color: Theme.of(context).colorScheme.error,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 TaskCenterSharedActionsPanel(
                   groups: widget.viewData.actionGroups,
@@ -337,131 +364,226 @@ class _TaskCenterPageState extends State<TaskCenterPage> {
                 ),
                 const SizedBox(height: 16),
                 const SectionHeading(title: '运行动作'),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    ActionButton(
-                      label: '生成计划',
-                      compact: true,
-                      tone: ActionButtonTone.neutral,
-                      onPressed:
-                          widget.actionHandler.onTaskCenterSavePlanRequested,
-                    ),
-                    ActionButton(
-                      label: '链路快照',
-                      compact: true,
-                      tone: ActionButtonTone.neutral,
-                      onPressed: widget
-                          .actionHandler
-                          .onTaskCenterSaveChainSnapshotRequested,
-                    ),
-                    ActionButton(
-                      label: '准备执行',
-                      compact: true,
-                      onPressed: widget
-                          .actionHandler
-                          .onTaskCenterPrepareExecutionRequested,
-                    ),
-                    ActionButton(
-                      label: '执行一次',
-                      compact: true,
-                      onPressed: widget
-                          .actionHandler
-                          .onTaskCenterRunSelectedOnceRequested,
-                    ),
-                    ActionButton(
-                      label: '下一任务',
-                      compact: true,
-                      onPressed:
-                          widget.actionHandler.onTaskCenterRunNextOnceRequested,
-                    ),
-                    ActionButton(
-                      label: '连续运行',
-                      compact: true,
-                      tone: ActionButtonTone.warm,
-                      onPressed:
-                          widget.actionHandler.onTaskCenterRunQueueRequested,
-                    ),
-                    ActionButton(
-                      label: '后处理一次',
-                      compact: true,
-                      onPressed: widget
-                          .actionHandler
-                          .onTaskCenterPostprocessSelectedRequested,
-                    ),
-                    ActionButton(
-                      label: '后处理下一条',
-                      compact: true,
-                      onPressed: widget
-                          .actionHandler
-                          .onTaskCenterPostprocessNextRequested,
-                    ),
-                    ActionButton(
-                      label: '标记完成',
-                      compact: true,
-                      onPressed: widget
-                          .actionHandler
-                          .onTaskCenterMarkSucceededRequested,
-                    ),
-                    ActionButton(
-                      label: '完成并下一条',
-                      compact: true,
-                      onPressed: widget
-                          .actionHandler
-                          .onTaskCenterCompleteAndRunNextRequested,
-                    ),
-                    ActionButton(
-                      label: '接受修复',
-                      compact: true,
-                      onPressed: widget
-                          .actionHandler
-                          .onTaskCenterAcceptRevisionRequested,
-                    ),
-                    ActionButton(
-                      label: '回滚修复',
-                      compact: true,
-                      tone: ActionButtonTone.danger,
-                      onPressed: widget
-                          .actionHandler
-                          .onTaskCenterRollbackRevisionRequested,
-                    ),
-                    ActionButton(
-                      label: '暂停',
-                      compact: true,
-                      tone: ActionButtonTone.neutral,
-                      onPressed:
-                          widget.actionHandler.onTaskCenterPauseRequested,
-                    ),
-                    ActionButton(
-                      label: '恢复',
-                      compact: true,
-                      tone: ActionButtonTone.neutral,
-                      onPressed:
-                          widget.actionHandler.onTaskCenterResumeRequested,
-                    ),
-                    ActionButton(
-                      label: '重试',
-                      compact: true,
-                      tone: ActionButtonTone.neutral,
-                      onPressed:
-                          widget.actionHandler.onTaskCenterRetryRequested,
-                    ),
-                    ActionButton(
-                      label: '取消',
-                      compact: true,
-                      tone: ActionButtonTone.danger,
-                      onPressed:
-                          widget.actionHandler.onTaskCenterCancelRequested,
-                    ),
-                  ],
-                ),
+                const SizedBox(height: 10),
+                // 中文注释: 原 16 个动作挤在一个 Wrap，危险动作（回滚/取消）紧挨常规动作，
+                // 极易误点。按语义分四组并加小标题，撤销/终止单独成组远离常规动作。
+                _actionGroup('调度执行', <Widget>[
+                  ActionButton(
+                    label: '准备执行',
+                    compact: true,
+                    disabled:
+                        widget.viewData.commandInFlight ||
+                        widget.viewData.tasks.isEmpty,
+                    onPressed: widget
+                        .actionHandler
+                        .onTaskCenterPrepareExecutionRequested,
+                  ),
+                  ActionButton(
+                    label: '执行一次',
+                    compact: true,
+                    disabled:
+                        widget.viewData.commandInFlight ||
+                        widget.viewData.tasks.isEmpty,
+                    onPressed: widget
+                        .actionHandler
+                        .onTaskCenterRunSelectedOnceRequested,
+                  ),
+                  ActionButton(
+                    label: '下一任务',
+                    compact: true,
+                    disabled:
+                        widget.viewData.commandInFlight ||
+                        widget.viewData.tasks.isEmpty,
+                    onPressed:
+                        widget.actionHandler.onTaskCenterRunNextOnceRequested,
+                  ),
+                  ActionButton(
+                    label: '连续运行',
+                    compact: true,
+                    tone: ActionButtonTone.warm,
+                    disabled:
+                        widget.viewData.commandInFlight ||
+                        widget.viewData.tasks.isEmpty,
+                    onPressed:
+                        widget.actionHandler.onTaskCenterRunQueueRequested,
+                  ),
+                ]),
+                const SizedBox(height: 14),
+                _actionGroup('完成与后处理', <Widget>[
+                  ActionButton(
+                    label: '标记完成',
+                    compact: true,
+                    disabled:
+                        widget.viewData.commandInFlight ||
+                        widget.viewData.tasks.isEmpty,
+                    onPressed:
+                        widget.actionHandler.onTaskCenterMarkSucceededRequested,
+                  ),
+                  ActionButton(
+                    label: '完成并下一条',
+                    compact: true,
+                    disabled:
+                        widget.viewData.commandInFlight ||
+                        widget.viewData.tasks.isEmpty,
+                    onPressed: widget
+                        .actionHandler
+                        .onTaskCenterCompleteAndRunNextRequested,
+                  ),
+                  ActionButton(
+                    label: '后处理一次',
+                    compact: true,
+                    disabled:
+                        widget.viewData.commandInFlight ||
+                        widget.viewData.tasks.isEmpty,
+                    onPressed: widget
+                        .actionHandler
+                        .onTaskCenterPostprocessSelectedRequested,
+                  ),
+                  ActionButton(
+                    label: '后处理下一条',
+                    compact: true,
+                    disabled:
+                        widget.viewData.commandInFlight ||
+                        widget.viewData.tasks.isEmpty,
+                    onPressed: widget
+                        .actionHandler
+                        .onTaskCenterPostprocessNextRequested,
+                  ),
+                  ActionButton(
+                    label: '接受修复',
+                    compact: true,
+                    disabled:
+                        widget.viewData.commandInFlight ||
+                        widget.viewData.tasks.isEmpty,
+                    onPressed: widget
+                        .actionHandler
+                        .onTaskCenterAcceptRevisionRequested,
+                  ),
+                ]),
+                const SizedBox(height: 14),
+                _actionGroup('保存与流程控制', <Widget>[
+                  ActionButton(
+                    label: '生成计划',
+                    compact: true,
+                    tone: ActionButtonTone.neutral,
+                    disabled:
+                        widget.viewData.commandInFlight ||
+                        widget.viewData.tasks.isEmpty,
+                    onPressed:
+                        widget.actionHandler.onTaskCenterSavePlanRequested,
+                  ),
+                  ActionButton(
+                    label: '链路快照',
+                    compact: true,
+                    tone: ActionButtonTone.neutral,
+                    disabled:
+                        widget.viewData.commandInFlight ||
+                        widget.viewData.tasks.isEmpty,
+                    onPressed: widget
+                        .actionHandler
+                        .onTaskCenterSaveChainSnapshotRequested,
+                  ),
+                  ActionButton(
+                    label: '暂停',
+                    compact: true,
+                    tone: ActionButtonTone.neutral,
+                    disabled:
+                        widget.viewData.commandInFlight ||
+                        widget.viewData.tasks.isEmpty,
+                    onPressed: widget.actionHandler.onTaskCenterPauseRequested,
+                  ),
+                  ActionButton(
+                    label: '恢复',
+                    compact: true,
+                    tone: ActionButtonTone.neutral,
+                    disabled:
+                        widget.viewData.commandInFlight ||
+                        widget.viewData.tasks.isEmpty,
+                    onPressed: widget.actionHandler.onTaskCenterResumeRequested,
+                  ),
+                  ActionButton(
+                    label: '重试',
+                    compact: true,
+                    tone: ActionButtonTone.neutral,
+                    disabled:
+                        widget.viewData.commandInFlight ||
+                        widget.viewData.tasks.isEmpty,
+                    onPressed: widget.actionHandler.onTaskCenterRetryRequested,
+                  ),
+                ]),
+                const SizedBox(height: 14),
+                _actionGroup('撤销与终止', <Widget>[
+                  ActionButton(
+                    label: '回滚修复',
+                    compact: true,
+                    tone: ActionButtonTone.danger,
+                    disabled:
+                        widget.viewData.commandInFlight ||
+                        widget.viewData.tasks.isEmpty,
+                    onPressed: () async {
+                      // 中文注释: 回滚修订不可逆，二次确认避免密集按钮区误点。
+                      final confirmed = await showConfirmationDialog(
+                        context,
+                        title: '回滚该任务的修复？',
+                        message: '回滚后该任务的修订结果将被撤销，不可恢复。',
+                        confirmLabel: '回滚',
+                      );
+                      if (confirmed) {
+                        widget.actionHandler
+                            .onTaskCenterRollbackRevisionRequested();
+                      }
+                    },
+                  ),
+                  ActionButton(
+                    label: '取消',
+                    compact: true,
+                    tone: ActionButtonTone.danger,
+                    disabled:
+                        widget.viewData.commandInFlight ||
+                        widget.viewData.tasks.isEmpty,
+                    onPressed: () async {
+                      // 中文注释: 取消当前任务不可逆，二次确认避免误点。
+                      final confirmed = await showConfirmationDialog(
+                        context,
+                        title: '取消该任务？',
+                        message: '取消后该任务将终止并标记为已取消，不可恢复。',
+                        confirmLabel: '取消任务',
+                      );
+                      if (confirmed) {
+                        widget.actionHandler.onTaskCenterCancelRequested();
+                      }
+                    },
+                  ),
+                ]),
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+
+  /// 任务中心「运行动作」的分组容器：小标题 + 一排按钮。
+  ///
+  /// 原先 16 个动作挤在一个 Wrap 里，危险动作（回滚/取消）紧挨常规动作，极易误点。
+  /// 按语义分组、给小标题，并把撤销/终止单独成组，降低误触。
+  Widget _actionGroup(String label, List<Widget> children) {
+    final colors = context.novelThemeColors;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.3,
+            color: colors.mutedTextColor,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Wrap(spacing: 8, runSpacing: 8, children: children),
+      ],
     );
   }
 
@@ -475,29 +597,79 @@ class _TaskCenterPageState extends State<TaskCenterPage> {
   }
 
   void _submitWorkflowCreate() {
+    // 中文注释: 数字字段解析失败时如实报错并阻止提交，不再静默回落默认值（用户输入"2.000/两百"会被吞）。
+    final errors = <String>[];
+    int parseField(
+      TextEditingController controller,
+      String label,
+      int fallback,
+    ) {
+      final text = controller.text.trim();
+      if (text.isEmpty) {
+        return fallback;
+      }
+      final parsed = int.tryParse(text);
+      if (parsed == null) {
+        errors.add('$label 不是有效整数（当前 "$text"）');
+        return fallback;
+      }
+      return parsed;
+    }
+
+    final chapterCount = parseField(_chapterCountController, '正文章节目标', 6);
+    final checkpointInterval = parseField(_checkpointController, '检查点间隔', 3);
+    final chapterWordTarget = parseField(
+      _chapterWordTargetController,
+      '章节字数目标',
+      2000,
+    );
+    final chapterWordMin = parseField(
+      _chapterWordMinController,
+      '章节字数下限',
+      1600,
+    );
+    final chapterWordMax = parseField(
+      _chapterWordMaxController,
+      '章节字数上限',
+      2600,
+    );
+    final sampleChapterWordTarget = parseField(
+      _sampleChapterWordTargetController,
+      '样章字数目标',
+      1800,
+    );
+    final sampleChapterWordMin = parseField(
+      _sampleChapterWordMinController,
+      '样章字数下限',
+      1400,
+    );
+    final sampleChapterWordMax = parseField(
+      _sampleChapterWordMaxController,
+      '样章字数上限',
+      2400,
+    );
+    if (errors.isNotEmpty) {
+      setState(() => _formError = errors.join('；'));
+      return;
+    }
+    if (_formError.isNotEmpty) {
+      setState(() => _formError = '');
+    }
     widget.actionHandler.onTaskCenterWorkflowCreateSubmitted(
       TaskWorkflowCreateRequestViewData(
         mode: _mode,
         outlinePath: _outlineController.text,
         seedPrompt: _seedController.text,
-        chapterCount: int.tryParse(_chapterCountController.text.trim()) ?? 6,
-        checkpointInterval:
-            int.tryParse(_checkpointController.text.trim()) ?? 3,
+        chapterCount: chapterCount,
+        checkpointInterval: checkpointInterval,
         chapterLength: TaskCenterChapterLengthConfigViewData(
           enableChapterWordConstraints: _enableChapterWordConstraints,
-          chapterWordTarget:
-              int.tryParse(_chapterWordTargetController.text.trim()) ?? 2000,
-          chapterWordMin:
-              int.tryParse(_chapterWordMinController.text.trim()) ?? 1600,
-          chapterWordMax:
-              int.tryParse(_chapterWordMaxController.text.trim()) ?? 2600,
-          sampleChapterWordTarget:
-              int.tryParse(_sampleChapterWordTargetController.text.trim()) ??
-              1800,
-          sampleChapterWordMin:
-              int.tryParse(_sampleChapterWordMinController.text.trim()) ?? 1400,
-          sampleChapterWordMax:
-              int.tryParse(_sampleChapterWordMaxController.text.trim()) ?? 2400,
+          chapterWordTarget: chapterWordTarget,
+          chapterWordMin: chapterWordMin,
+          chapterWordMax: chapterWordMax,
+          sampleChapterWordTarget: sampleChapterWordTarget,
+          sampleChapterWordMin: sampleChapterWordMin,
+          sampleChapterWordMax: sampleChapterWordMax,
         ),
       ),
     );
@@ -517,26 +689,28 @@ class _RuntimePresetCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 中文注释: 颜色走主题 token——亮色主题下不再用深色专用 AppPalette 导致文字不可读。
+    final colors = context.novelThemeColors;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(border: Border.all(color: AppPalette.line)),
+      decoration: BoxDecoration(border: Border.all(color: colors.lineColor)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             baselineTitle,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w800,
-              color: AppPalette.text,
+              color: colors.textColor,
             ),
           ),
           if (runtimeModeLabel.trim().isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(
               runtimeModeLabel,
-              style: const TextStyle(fontSize: 12, color: AppPalette.mutedText),
+              style: TextStyle(fontSize: 12, color: colors.mutedTextColor),
             ),
           ],
           if (policyBadges.isNotEmpty) ...[
@@ -552,14 +726,14 @@ class _RuntimePresetCard extends StatelessWidget {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        border: Border.all(color: AppPalette.lineStrong),
+                        border: Border.all(color: colors.lineStrongColor),
                       ),
                       child: Text(
                         item,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
-                          color: AppPalette.text,
+                          color: colors.textColor,
                         ),
                       ),
                     ),

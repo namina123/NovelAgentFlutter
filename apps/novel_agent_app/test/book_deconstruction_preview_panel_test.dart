@@ -131,7 +131,7 @@ void main() {
           isLoading: true,
           operationKind: BookDeconstructionOperationKind.confirmingSelection,
         ),
-        status: '正在保存拆书结果…',
+        status: '正在保存拆书结果...',
       );
 
       await tester.pumpWidget(
@@ -185,7 +185,7 @@ void main() {
   ) async {
     const loadingViewData = BookDeconstructionViewData(
       projectTitle: '拆书测试项目',
-      status: '正在拆书…',
+      status: '正在拆书...',
       isLoading: true,
       operationKind: 'splitting_chapters',
       activeStepId: '',
@@ -193,7 +193,7 @@ void main() {
       sourceAbsolutePath: '',
       sourceTitle: '',
       sourceContent: '',
-      importActionLabel: '选择文件…',
+      importActionLabel: '选择文件...',
       canSplit: false,
       splitUseModel: false,
       splitModelOptionKey: '',
@@ -238,7 +238,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('正在拆书（分章 + 去噪）…'), findsOneWidget);
+    expect(find.text('正在拆书（分章 + 去噪）...'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
 

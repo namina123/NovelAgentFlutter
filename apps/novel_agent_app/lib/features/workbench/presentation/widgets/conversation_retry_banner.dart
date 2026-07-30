@@ -44,7 +44,8 @@ class ConversationRetryBanner extends StatelessWidget {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  '上一轮请求未完成',
+                  // 中文注释: 去掉「请求」这类技术词，用人话点明是上一次生成没跑完、可以重试。
+                  '上一次生成未完成，要重试吗？',
                   style: TextStyle(
                     color: surface.foregroundColor,
                     fontSize: 11.5,

@@ -38,74 +38,78 @@ class ConversationReasoningToggleChip extends StatelessWidget {
       button: true,
       toggled: enabled,
       label: '深度思考',
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          key: containerKey,
-          borderRadius: BorderRadius.circular(surface.radius),
-          onTap: () => onChanged(!enabled),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            curve: Curves.easeOut,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: backgroundColor,
-              borderRadius: BorderRadius.circular(surface.radius),
-              border: Border.all(
-                color: borderColor,
-                width: surface.borderWidth,
+      child: Tooltip(
+        message: '深度思考：更慢、更细致，但会耗用更多上下文与时间。',
+        waitDuration: const Duration(milliseconds: 400),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            key: containerKey,
+            borderRadius: BorderRadius.circular(surface.radius),
+            onTap: () => onChanged(!enabled),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              curve: Curves.easeOut,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: backgroundColor,
+                borderRadius: BorderRadius.circular(surface.radius),
+                border: Border.all(
+                  color: borderColor,
+                  width: surface.borderWidth,
+                ),
               ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 18,
-                  height: 18,
-                  decoration: BoxDecoration(
-                    color: iconBackgroundColor,
-                    borderRadius: BorderRadius.circular(5),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 18,
+                    height: 18,
+                    decoration: BoxDecoration(
+                      color: iconBackgroundColor,
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                    child: Icon(
+                      Icons.psychology_alt_rounded,
+                      size: 13,
+                      color: iconColor,
+                    ),
                   ),
-                  child: Icon(
-                    Icons.psychology_alt_rounded,
-                    size: 13,
-                    color: iconColor,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  '深度思考',
-                  style: TextStyle(
-                    fontSize: 10.8,
-                    fontWeight: FontWeight.w700,
-                    color: foregroundColor,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 160),
-                  curve: Curves.easeOut,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 5,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: enabled
-                        ? colors.accentColor.withValues(alpha: 0.1)
-                        : colors.panelBackground.withValues(alpha: 0.58),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    enabled ? 'ON' : 'OFF',
+                  const SizedBox(width: 6),
+                  Text(
+                    '深度思考',
                     style: TextStyle(
-                      fontSize: 9.2,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.22,
+                      fontSize: 10.8,
+                      fontWeight: FontWeight.w700,
                       color: foregroundColor,
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 6),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    curve: Curves.easeOut,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: enabled
+                          ? colors.accentColor.withValues(alpha: 0.1)
+                          : colors.panelBackground.withValues(alpha: 0.58),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      enabled ? '开' : '关',
+                      style: TextStyle(
+                        fontSize: 9.2,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.12,
+                        color: foregroundColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
