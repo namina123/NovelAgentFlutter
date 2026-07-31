@@ -13,6 +13,7 @@ class ProjectLongTaskSummaryViewDataService {
     ActivityTimeLabelService? activityTimeLabelService,
     LongTaskStopDiagnosisProjectionService? stopDiagnosisProjectionService,
     LongTaskStationItemHumanizerService? itemHumanizerService,
+    LongTaskRunStateMachine? longTaskRunStateMachine,
   }) : _runtimeBaselineCatalogService =
            runtimeBaselineCatalogService ??
            const RuntimeBaselineCatalogService(),
@@ -24,13 +25,16 @@ class ProjectLongTaskSummaryViewDataService {
            stopDiagnosisProjectionService ??
            const LongTaskStopDiagnosisProjectionService(),
        _itemHumanizerService =
-           itemHumanizerService ?? const LongTaskStationItemHumanizerService();
+           itemHumanizerService ?? const LongTaskStationItemHumanizerService(),
+       _longTaskRunStateMachine =
+           longTaskRunStateMachine ?? const LongTaskRunStateMachine();
 
   final RuntimeBaselineCatalogService _runtimeBaselineCatalogService;
   final RuntimeLabelService _runtimeLabelService;
   final ActivityTimeLabelService _activityTimeLabelService;
   final LongTaskStopDiagnosisProjectionService _stopDiagnosisProjectionService;
   final LongTaskStationItemHumanizerService _itemHumanizerService;
+  final LongTaskRunStateMachine _longTaskRunStateMachine;
 
   ProjectLongTaskSummaryViewData? build({
     required ProjectDescriptor? project,
@@ -110,6 +114,13 @@ class ProjectLongTaskSummaryViewDataService {
       pendingSummaryLine: pendingSummaryLine,
       requiresAttention: run.requiresManualAttention,
     );
+    final canResume = !run.isActive &&
+        _longTaskRunStateMachine.canTransition(
+          run.status,
+          LongTaskRunStatus.running,
+        );
+    final resumeActionLabel =
+        run.requiresManualAttention ? '重试当前步骤' : '恢复推进';
     return ProjectLongTaskRunSummaryViewData(
       id: run.id,
       title: baselineTitle,
@@ -123,6 +134,8 @@ class ProjectLongTaskSummaryViewDataService {
       ),
       requiresAttention: run.requiresManualAttention,
       isActive: run.isActive,
+      canResume: canResume,
+      resumeActionLabel: resumeActionLabel,
       attentionCalloutTitle: attentionCalloutTitle,
       attentionCalloutSummary: _attentionCalloutSummary(
         run: run,

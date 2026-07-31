@@ -461,6 +461,8 @@ class _FakeNavigationHandler implements AppShellNavigationActionHandler {
 
 class _FakeResourceManagerActionHandler
     implements ResourceManagerActionHandler {
+  @override
+  void onLongTaskRunResumeRequested(String runId) {}
   const _FakeResourceManagerActionHandler();
 
   @override

@@ -110,6 +110,8 @@ void main() {
 }
 
 class _FakeResourceHandler implements ResourceManagerActionHandler {
+  @override
+  void onLongTaskRunResumeRequested(String runId) {}
   int projectAgentGroupRequestedCount = 0;
   int projectAssetsRequestedCount = 0;
   int agentEcosystemRequestedCount = 0;

@@ -61,6 +61,7 @@ class WorkbenchProjectPanel extends StatelessWidget {
               child: ProjectLongTaskSummaryPanel(
                 summary: viewData.projectLongTaskSummary!,
                 onOpenStationRequested: onOpenLongTaskStationRequested,
+                onResumeRequested: resourceHandler.onLongTaskRunResumeRequested,
               ),
             ),
           ],

@@ -9,10 +9,12 @@ class ProjectLongTaskSummaryPanel extends StatelessWidget {
     super.key,
     required this.summary,
     this.onOpenStationRequested,
+    this.onResumeRequested,
   });
 
   final ProjectLongTaskSummaryViewData summary;
   final VoidCallback? onOpenStationRequested;
+  final void Function(String runId)? onResumeRequested;
 
   @override
   Widget build(BuildContext context) {
@@ -237,6 +239,16 @@ class ProjectLongTaskSummaryPanel extends StatelessWidget {
                           color: optionSurface.mutedForegroundColor,
                         ),
                       ),
+                      if (run.canResume && onResumeRequested != null) ...[
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: FilledButton.tonal(
+                            onPressed: () => onResumeRequested!(run.id),
+                            child: Text(run.resumeActionLabel),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

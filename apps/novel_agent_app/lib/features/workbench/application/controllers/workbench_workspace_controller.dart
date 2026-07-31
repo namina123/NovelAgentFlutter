@@ -72,6 +72,7 @@ class WorkbenchWorkspaceController
     narrativePersistenceService,
     required GenerateDraftUseCaseFactory generateDraftUseCaseFactory,
     required LongTaskSupervisor longTaskSupervisor,
+    Future<JsonMap> Function(RunInstance)? resumeLongTaskRun,
     required ProjectReviewReportService reviewReportService,
     required ProjectRuntimeProfileRepository projectRuntimeProfileRepository,
     required WorkbenchProjectRuntimeState Function() readProjectState,
@@ -157,6 +158,7 @@ class WorkbenchWorkspaceController
                  )).any((run) => run.isActive),
            ),
        _longTaskSupervisor = longTaskSupervisor,
+       _resumeLongTaskRun = resumeLongTaskRun,
        _reviewReportService = reviewReportService,
        _projectRuntimeProfileRepository = projectRuntimeProfileRepository,
        _readProjectState = readProjectState,
@@ -247,6 +249,7 @@ class WorkbenchWorkspaceController
   final ConfigureLongNovelRuntimeBaselineUseCase
   _configureLongNovelRuntimeBaselineUseCase;
   final LongTaskSupervisor _longTaskSupervisor;
+  final Future<JsonMap> Function(RunInstance)? _resumeLongTaskRun;
   final ProjectReviewReportService _reviewReportService;
   final ProjectRuntimeProfileRepository _projectRuntimeProfileRepository;
   final WorkbenchProjectRuntimeState Function() _readProjectState;
@@ -838,6 +841,31 @@ class WorkbenchWorkspaceController
     final details = warnings.take(2).join('；');
     final suffix = warnings.length > 2 ? ' 等 ${warnings.length} 项问题' : '';
     return '项目已打开，但部分界面状态未完全恢复：$details$suffix';
+  }
+
+  @override
+  void onLongTaskRunResumeRequested(String runId) {
+    // 中文注释: 工作台项目面板内联恢复：把 runId 在当前项目作用域内解析回 RunInstance，
+    // 再交给 app_shell 注入的 resume 回调（与总站同源，真重入队列），完成后刷新摘要。
+    final project = currentProject;
+    final resume = _resumeLongTaskRun;
+    if (project == null || resume == null) {
+      return;
+    }
+    unawaited(
+      () async {
+        final runs = await _longTaskSupervisor.listProjectRuns(
+          project.rootPath,
+        );
+        for (final candidate in runs) {
+          if (candidate.id == runId) {
+            await resume(candidate);
+            await refreshProjectLongTaskSummary();
+            return;
+          }
+        }
+      }(),
+    );
   }
 
   Future<void> refreshProjectLongTaskSummary() async {

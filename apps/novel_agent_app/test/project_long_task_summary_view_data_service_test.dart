@@ -63,6 +63,10 @@ void main() {
     expect(viewData.runs.first.diagnosisSummary, '第 9 章审稿要求人工复核。');
     expect(viewData.runs.first.nextStepSummary, contains('人工处理'));
     expect(viewData.runs.first.attentionCalloutSummary, '');
+    // canResume：failedManualAttention 可恢复（重试当前步骤），running 不可（已在跑）。
+    expect(viewData.runs.first.canResume, isTrue);
+    expect(viewData.runs.first.resumeActionLabel, '重试当前步骤');
+    expect(viewData.runs.last.canResume, isFalse);
   });
 
   test(
@@ -182,6 +186,10 @@ void main() {
         viewData.runs.single.pendingSummaryLine,
         '待确认事项：待确认问题，请先确认是否接受当前审稿建议。',
       );
+      // canResume：paused（等待用户确认）可恢复；这类 run requiresManualAttention=true，
+      // 故文案与总站同源为「重试当前步骤」。
+      expect(viewData.runs.single.canResume, isTrue);
+      expect(viewData.runs.single.resumeActionLabel, '重试当前步骤');
     },
   );
 

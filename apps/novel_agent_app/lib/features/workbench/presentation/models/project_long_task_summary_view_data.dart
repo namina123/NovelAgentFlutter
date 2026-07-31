@@ -30,6 +30,8 @@ class ProjectLongTaskRunSummaryViewData {
     required this.recentActivityLabel,
     required this.requiresAttention,
     required this.isActive,
+    this.canResume = false,
+    this.resumeActionLabel = '恢复推进',
     this.attentionCalloutTitle = '',
     this.attentionCalloutSummary = '',
     this.diagnosisLabel = '',
@@ -50,6 +52,8 @@ class ProjectLongTaskRunSummaryViewData {
   final String recentActivityLabel;
   final bool requiresAttention;
   final bool isActive;
+  final bool canResume;
+  final String resumeActionLabel;
   final String attentionCalloutTitle;
   final String attentionCalloutSummary;
   final String diagnosisLabel;

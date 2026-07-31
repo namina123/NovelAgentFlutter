@@ -421,6 +421,8 @@ class _FakeConversationActionHandler implements ConversationActionHandler {
 
 class _FakeResourceManagerActionHandler
     implements ResourceManagerActionHandler {
+  @override
+  void onLongTaskRunResumeRequested(String runId) {}
   const _FakeResourceManagerActionHandler();
 
   @override

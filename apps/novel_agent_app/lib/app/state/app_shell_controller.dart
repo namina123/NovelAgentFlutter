@@ -474,6 +474,7 @@ class AppShellController extends ChangeNotifier
           _bookDeconstructionNarrativePersistenceService,
       generateDraftUseCaseFactory: _generateDraftUseCaseFactory,
       longTaskSupervisor: longTaskSupervisor,
+      resumeLongTaskRun: _resumeLongTaskStationRun,
       reviewReportService: _reviewReportService,
       projectRuntimeProfileRepository: projectRuntimeProfileRepository,
       readProjectState: () => _workbenchProjectRuntimeState,

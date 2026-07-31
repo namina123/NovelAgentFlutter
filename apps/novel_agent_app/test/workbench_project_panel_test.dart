@@ -251,6 +251,8 @@ void main() {
 }
 
 class _FakeResourceHandler implements ResourceManagerActionHandler {
+  @override
+  void onLongTaskRunResumeRequested(String runId) {}
   int editProjectInfoRequestedCount = 0;
   int refreshFilesRequestedCount = 0;
   int projectAgentGroupRequestedCount = 0;
