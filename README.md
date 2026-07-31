@@ -111,13 +111,13 @@ NovelAgentFlutter 是一个本地优先的 AI 小说工作台。它希望把小�
 
 ### 6. 项目信息层
 
-目前已开始建立共享信息层，用于承载：
+已经建立共享信息层，用于承载：
 
 - 项目资产；
 - 风格与表达限制；
-- 参考提取输出；
-- 研究资料与可复用知识方向；
-- 未来知识卡 / 结构化资料体系的基础。
+- 参考提取输出（规则种子 + LLM 富化，端到端跑通）；
+- 研究资料与知识卡（sqlite + JSON 双后端，按项目作用域）；
+- 来源可追溯作为一等公民。
 
 它的重要性在于：系统不应该每次都依赖模型临场回忆，而应该尽可能沉淀和复用信息。
 
@@ -126,21 +126,23 @@ NovelAgentFlutter 是一个本地优先的 AI 小说工作台。它希望把小�
 ### 长任务稳定性
 
 这是目前最需要继续解决的问题。  
-虽然运行时、监督层、调控层已经建立，但仍需要继续验证和补足：
+运行时身份、状态机、监督决策、审核 / 修复 / 诊断、自动重试、步进队列这些“决策内核”已经真正落地并接入章节生产链路，所以这里的风险不再是“没有基础”，而是“连续性与存活”：
 
-- 多章连续推进的稳定性；
-- 自动重试 / 暂停 / 恢复行为；
-- 审核与约束在长链中的实际执行力；
-- 运行已经开启但没有正确继续推进的边界问题。
+- 没有常驻 worker：运行只在宿主进程内推进，进程退出后即停滞，需要显式恢复；
+- 默认项目（未配置连续自治基线）的运行在一小批步骤后会暂停、等待手动“恢复”——这是“看起来开了但没继续”的真实成因；
+- 暂停只改状态标记，不抢占正在进行的模型调用，最快在下一批边界生效；
+- 没有执行中途的快照：崩溃后会把卡住的 running 任务降级为人工审查，而非自动从中途续写；
+- 真实多章端到端探针默认关闭，默认测试套件里没有“真正跑完多章”的回归。
 
 ### CLI
 
-CLI 已经不再只是空壳，但仍未完全收口。还需要继续补：
+CLI 已经覆盖十个命令组（workflow / project / rag / session / review / asset / template / approval / config / doctor），不再只是空壳。真实缺口是若干 core 能力还没接到命令行：
 
-- 更完整的命令覆盖；
-- 更好的操作体验；
-- 与共享运行时能力的更完整对齐；
-- 自动化与诊断场景的明确化。
+- 拆书全链路（core 里的整套拆书服务目前从 CLI 完全不可达）；
+- `project` 新建 / 列举、项目类型转换；
+- 信息 / 知识 / 研究、智能体 / 技能 / 分组管理；
+- 叙事资产（角色 / 关系 / 时间线 / 世界规则）的 CRUD；
+- provider 的 add / edit / test、doctor 的子系统探针。
 
 ### TUI
 
@@ -157,24 +159,19 @@ Docker 支持在规划中，尤其适合长任务与提取类流程，但当前�
 
 ### 信息提取与可复用知识体系
 
-这一块仍在持续演化，尚未完全完成：
+参考提取（规则种子 + LLM 富化）、RAG（真实 embedding + 关键词回退）、知识卡（sqlite + JSON 双后端）、来源可追溯都已经端到端跑通。真正还没收口的是“可复用”那一半：
 
-- 从导入作品中稳定提取参考信息；
-- 让结构化知识可复用到后续项目；
-- 保留来源与追踪关系；
-- 平衡项目级知识与可复用知识；
-- 让研究型写作真正可持续工作。
+- 目前所有知识 / RAG 都按项目作用域隔离；
+- 没有跨项目的共享语料库或可复用知识卡库；
+- 要把一部旧作的分析用到新项目，仍需重新导入与提取。
 
 ### 其他高级写作模式
 
-以下方向目前仍属于未收口状态：
+这一块进展不均：
 
-- IF / 假设线 / 替代路线；
-- 配角或支线视角；
-- 写作风格提取与复用；
-- 同人 / 衍生信息体系；
-- 神话、星象、符号系统、命名体系等元素嵌入与提取；
-- 解说、总结、评书等面向既有文本的工作流。
+- 风格提取与复用：已有正式实现（样式画像 + 项目绑定 + bundle 导入导出）；
+- 同人：作为拆书派生的兄弟路线存在（不是独立 fanfic 引擎）；
+- 仍未开始：IF / 假设线 / 分支引擎、配角 / 支线视角、神话 / 星象 / 符号 / 命名体系、解说 / 总结 / 评书等面向既有文本的专门模式。
 
 ## 目前比较值得保留的设计方向
 
@@ -430,13 +427,13 @@ This is no longer only conceptual, but it is not yet at the level where complex 
 
 ### 6. Project information layer
 
-A shared information substrate is already being formed for:
+A shared information substrate is already in place for:
 
 - project assets;
 - style and expression constraints;
-- reference extraction outputs;
-- research materials and reusable knowledge directions;
-- future knowledge-card and structured reference systems.
+- reference extraction outputs (rule-based seed + LLM enrichment, running end-to-end);
+- research materials and knowledge cards (dual sqlite + JSON backend, project-scoped);
+- source traceability as a first-class field.
 
 Its importance is simple: the system should not rely on last-minute model recall every time if information can be preserved and reused.
 
@@ -445,21 +442,23 @@ Its importance is simple: the system should not rely on last-minute model recall
 ### Long-task stability
 
 This is still the main unfinished problem.  
-Even though runtime, supervision, and control layers exist, the project still needs more work on:
+The decision core — runtime identity, state machine, supervisor decisions, review/repair/diagnosis, automatic retry, and the stepping queue — is genuinely built and wired into the chapter production path. So the risk is no longer “no foundation” but “continuity and survival”:
 
-- stable multi-chapter continuation;
-- automatic retry / pause / resume behavior;
-- actual review and constraint enforcement in longer chains;
-- edge cases where a run appears started but does not continue correctly.
+- there is no always-on worker: a run only advances inside the host process, and if the process exits the run sits idle until something explicitly resumes it;
+- for default projects (no continuous-autonomous baseline configured), a run pauses after a small batch of steps and waits for a manual “resume” — this is the real cause of “it looked started but didn’t continue”;
+- pause only flips a status flag and does not preempt the in-flight model call; it takes effect at the next batch boundary at the earliest;
+- there is no mid-execution snapshot: after a crash, a stuck running task is downgraded to manual review instead of being auto-resumed mid-step;
+- the real multi-chapter end-to-end probes are off by default, so the default test suite has no regression that actually completes multiple chapters.
 
 ### CLI
 
-The CLI is no longer empty, but still unfinished. It still needs:
+The CLI already covers ten command groups (workflow / project / rag / session / review / asset / template / approval / config / doctor); it is no longer an empty shell. The real gap is that several core capabilities are not yet surfaced as commands:
 
-- broader command coverage;
-- better operator ergonomics;
-- more complete alignment with shared runtime capabilities;
-- clearer automation and diagnostic workflows.
+- the full book-deconstruction pipeline (the entire deconstruction service family in core is unreachable from the CLI today);
+- `project` create / list and project-type transition;
+- information / knowledge / research and agent / skill / group management;
+- CRUD for narrative assets (characters / relationships / timeline / world rules);
+- provider add / edit / test and subsystem-scoped doctor probes.
 
 ### TUI
 
@@ -476,24 +475,19 @@ Docker support is planned, especially for long-running and extraction-heavy work
 
 ### Information extraction and reusable knowledge
 
-This direction is still evolving and not complete:
+Reference extraction (rule-based seed + LLM enrichment), RAG (real embedding + keyword fallback), knowledge cards (dual sqlite + JSON backend), and source traceability all run end-to-end. What is still open is the “reusable” half:
 
-- stable extraction from imported source works;
-- reusable structured knowledge for future projects;
-- retained source traceability;
-- a better balance between project-local knowledge and reusable knowledge;
-- stronger research-oriented writing support.
+- all knowledge / RAG is currently scoped per project;
+- there is no cross-project shared corpus or reusable knowledge-card library;
+- reusing the analysis of a previous book in a new project still requires re-importing and re-extracting.
 
 ### Other advanced writing modes
 
-These directions are still not fully closed:
+Progress here is uneven:
 
-- IF branches / alternate lines;
-- supporting-character or side-route perspectives;
-- style extraction and reuse;
-- fanfiction / derivative information systems;
-- mythology, astrology, symbolic systems, naming systems, and other element embedding / extraction directions;
-- commentary, summary, or storyteller-style workflows for existing text.
+- style extraction and reuse: already has a real implementation (style profile + project binding + bundle import/export);
+- fanfiction: exists as a sibling route of deconstruction-derived projects (not a standalone fanfic engine);
+- not started yet: IF / branch / alternate-line engines, supporting-character / side-route perspectives, mythology / astrology / symbolism / naming systems, and dedicated commentary / summary / storyteller modes for existing text.
 
 ## Design Bets Worth Keeping
 
