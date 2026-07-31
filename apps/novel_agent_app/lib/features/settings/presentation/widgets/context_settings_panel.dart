@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../../../../../shared/theme/novel_theme_context.dart';
 import '../../application/services/context_settings_contract_service.dart';
 import '../../../../../shared/widgets/action_button.dart';
 import 'settings_labeled_dropdown_field.dart';
@@ -121,7 +122,7 @@ class _ContextSettingsPanelState extends State<ContextSettingsPanel> {
                   style: TextStyle(
                     fontSize: 12,
                     height: 1.45,
-                    color: Theme.of(context).hintColor,
+                    color: context.novelThemeColors.mutedTextColor,
                   ),
                 ),
               ],

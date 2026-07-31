@@ -40,7 +40,7 @@ class ConversationInputDock extends StatelessWidget {
     final content = DecoratedBox(
       decoration: BoxDecoration(
         color: surface.backgroundColor.withValues(alpha: 0.24),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: surface.borderColor.withValues(alpha: 0.12),
           width: AppChrome.borderWidth,

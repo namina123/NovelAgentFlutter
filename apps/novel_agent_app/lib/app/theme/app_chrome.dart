@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 class AppChrome {
-  static const double surfaceRadius = 10;
-  static const double controlRadius = 10;
+  // 中文注释: 圆角统一到 8，与 novelPanelChrome.radius（工作台主面板）一致——
+  // 消除原先 8/10 两套并存导致的边角不齐（设置页 10 vs 工作台 8）。
+  static const double surfaceRadius = 8;
+  static const double controlRadius = 8;
   static const double borderWidth = 1;
   static const BorderRadius surfaceBorderRadius = BorderRadius.all(
     Radius.circular(surfaceRadius),

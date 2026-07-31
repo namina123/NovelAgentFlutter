@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../shared/theme/novel_theme_context.dart';
 import '../models/custom_model_reasoning_effort_entry_view_data.dart';
 import '../models/custom_model_reasoning_override_view_data.dart';
 import '../models/model_editor_view_data.dart';
@@ -162,7 +163,7 @@ class ModelSettingsAdvancedPanel extends StatelessWidget {
                         '当前协议仅支持默认 API 模式。',
                         style: TextStyle(
                           fontSize: 12.5,
-                          color: Theme.of(context).hintColor,
+                          color: context.novelThemeColors.mutedTextColor,
                         ),
                       ),
                     );

@@ -98,7 +98,10 @@ class _ConversationGeneratingPlaceholderState
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '已用 $_elapsedLabel · 输出会随工具执行与推理进度持续写入当前会话。',
+                  // 中文注释: 第 0 秒显示"刚开始…"，避免一上来就"已用 0 秒"像坏了的计数器。
+                  _elapsedSeconds == 0
+                      ? '刚开始生成，输出会随工具执行与推理进度持续写入当前会话。'
+                      : '已用 $_elapsedLabel · 输出会随工具执行与推理进度持续写入当前会话。',
                   style: TextStyle(
                     color: colors.mutedTextColor,
                     fontSize: 10.5,

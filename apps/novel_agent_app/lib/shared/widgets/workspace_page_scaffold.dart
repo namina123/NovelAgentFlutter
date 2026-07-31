@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/layout/adaptive_page_frame.dart';
+import '../theme/novel_theme_context.dart';
 
 class WorkspacePageScaffold extends StatelessWidget {
   const WorkspacePageScaffold({
@@ -20,6 +21,7 @@ class WorkspacePageScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.novelThemeColors;
     return AdaptivePageFrame(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -31,7 +33,14 @@ class WorkspacePageScaffold extends StatelessWidget {
           ],
           if (statusText.trim().isNotEmpty) ...[
             const SizedBox(height: 12),
-            Text(statusText, style: Theme.of(context).textTheme.bodySmall),
+            Text(
+              statusText,
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.5,
+                color: colors.mutedTextColor,
+              ),
+            ),
           ],
           const SizedBox(height: 12),
           Expanded(child: body),

@@ -149,7 +149,7 @@ Future<void> _captureFileToolsAndLegacyDirectoryMapping(
   );
   await tester.pumpAndSettle();
 
-  expect(find.byTooltip('新文件'), findsOneWidget);
+  expect(find.byTooltip('新建文件'), findsOneWidget);
   expect(find.byTooltip('导入文件'), findsOneWidget);
   expect(find.byTooltip('新章节'), findsOneWidget);
   expect(find.byTooltip('保存当前文档'), findsOneWidget);

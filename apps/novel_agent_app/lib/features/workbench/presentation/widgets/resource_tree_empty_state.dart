@@ -20,7 +20,7 @@ class ResourceTreeEmptyState extends StatelessWidget {
               height: 36,
               decoration: BoxDecoration(
                 color: surface.backgroundColor.withValues(alpha: 0.42),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(8),
                 border: Border.all(
                   color: surface.borderColor.withValues(alpha: 0.34),
                 ),

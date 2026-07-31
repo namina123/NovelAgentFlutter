@@ -489,7 +489,7 @@ class _ConfirmStep extends StatelessWidget {
                             .onBookDeconstructionCreateDerivedProjectRequested();
                       }
                     },
-              icon: const Icon(Icons.rocket_launch_outlined),
+              icon: const Icon(Icons.call_split_outlined),
               label: const Text('派生新写作项目'),
             ),
           ],

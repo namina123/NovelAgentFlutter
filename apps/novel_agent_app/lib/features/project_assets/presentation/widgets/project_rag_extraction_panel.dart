@@ -30,7 +30,7 @@ class ProjectRagExtractionPanel extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          '使用顺序：先整理源文并提取语料，再点击“挂载语料”，挂载后当前项目才能实际使用这份语料。',
+          '使用顺序：先整理源文并提取语料，再点击「挂载语料」，挂载后当前项目才能实际使用这份语料。',
           style: Theme.of(context).textTheme.bodySmall,
         ),
         if (viewData.status.trim().isNotEmpty) ...[

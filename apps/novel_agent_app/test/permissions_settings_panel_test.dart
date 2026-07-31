@@ -32,7 +32,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('这里定义应用允许哪些能力真正进入执行链。工具策略决定“AI 倾向怎么用工具”，这里只决定“应用是否允许做”。'), findsOneWidget);
+    expect(find.text('这里定义应用允许哪些能力真正进入执行链。工具策略决定「AI 倾向怎么用工具」，这里只决定「应用是否允许做」。'), findsOneWidget);
     expect(find.text('允许调用本机程序'), findsOneWidget);
 
     await tester.tap(find.text('保存权限设置'));

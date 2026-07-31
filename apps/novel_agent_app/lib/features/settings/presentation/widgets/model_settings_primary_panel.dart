@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../shared/theme/novel_theme_context.dart';
 import '../../../../../shared/widgets/action_button.dart';
 import '../models/model_editor_view_data.dart';
 import '../models/settings_search_option.dart';
@@ -155,7 +156,7 @@ class ModelSettingsPrimaryPanel extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 height: 1.45,
-                color: Theme.of(context).hintColor,
+                color: context.novelThemeColors.mutedTextColor,
               ),
             ),
           ],

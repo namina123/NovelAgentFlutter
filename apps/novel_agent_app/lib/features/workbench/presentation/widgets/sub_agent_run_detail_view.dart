@@ -76,7 +76,7 @@ class _SubAgentRunDetailViewState extends State<SubAgentRunDetailView> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${run.status} · 工具 ${run.toolCount} 次',
+                          '${run.status} · 调用工具 ${run.toolCount} 次',
                           style: TextStyle(
                             color: colors.mutedTextColor,
                             fontSize: 12,

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../shared/theme/novel_theme_context.dart';
+
 /// 中文注释: RAG 入库状态文案的统一展示：含降级标记时用警示色卡片突出，否则按普通正文呈现。
 ///
 /// 降级标记覆盖上游真实文案——"关键词(检索)/向量化失败/仅写入元数据/未配置 embedding/退回"，
@@ -12,6 +14,7 @@ class RagStatusText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.novelThemeColors;
     final text = status;
     final isDegraded = text.contains('关键词') ||
         text.contains('仅写入元数据') ||
@@ -19,15 +22,16 @@ class RagStatusText extends StatelessWidget {
         text.contains('未配置向量化') ||
         text.contains('退回');
     if (isDegraded) {
+      // 中文注释: 降级警示色统一走主题 warmStrongColor（原 colorScheme.tertiary 不在品牌色板内，
+      // 亮暗主题下都与周围格格不入）。
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.tertiary.withValues(alpha: 0.14),
+          color: colors.warmStrongColor.withValues(alpha: 0.14),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color:
-                Theme.of(context).colorScheme.tertiary.withValues(alpha: 0.4),
+            color: colors.warmStrongColor.withValues(alpha: 0.4),
           ),
         ),
         child: Row(
@@ -36,7 +40,7 @@ class RagStatusText extends StatelessWidget {
             Icon(
               Icons.warning_amber_rounded,
               size: 16,
-              color: Theme.of(context).colorScheme.tertiary,
+              color: colors.warmStrongColor,
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -46,7 +50,7 @@ class RagStatusText extends StatelessWidget {
                   fontSize: 12.5,
                   height: 1.45,
                   fontWeight: FontWeight.w700,
-                  color: Theme.of(context).colorScheme.tertiary,
+                  color: colors.warmStrongColor,
                 ),
               ),
             ),
@@ -54,6 +58,9 @@ class RagStatusText extends StatelessWidget {
         ),
       );
     }
-    return Text(text, style: Theme.of(context).textTheme.bodySmall);
+    return Text(
+      text,
+      style: TextStyle(fontSize: 12.5, height: 1.45, color: colors.mutedTextColor),
+    );
   }
 }

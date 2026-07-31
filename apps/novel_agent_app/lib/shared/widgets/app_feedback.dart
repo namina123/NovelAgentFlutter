@@ -54,7 +54,7 @@ class AppFeedback {
           backgroundColor: background,
           elevation: 6,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(8),
           ),
           showCloseIcon: true,
           closeIconColor: foreground.withValues(alpha: 0.85),

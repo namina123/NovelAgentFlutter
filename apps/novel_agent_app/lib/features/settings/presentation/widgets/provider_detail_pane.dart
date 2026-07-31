@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../../../../../shared/theme/novel_theme_context.dart';
 import '../../../../../shared/widgets/action_button.dart';
 import '../../../../../shared/widgets/confirmation_dialog.dart';
 import '../../../../../shared/widgets/section_heading.dart';
@@ -82,6 +83,7 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
     // 中文注释: 接口详情只负责"地址 + 凭据"的录入与保存；它不依赖、也不提及模型，
     // 模型选择与连接测试统一在「模型」页完成。
     final provider = widget.provider;
+    final surface = context.novelThemeSurfaces.panel;
     final protocolOptions = _protocolService
         .protocolOptions()
         .map(
@@ -153,7 +155,7 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    color: Theme.of(context).hintColor,
+                    color: surface.mutedForegroundColor,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -175,7 +177,7 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
                 style: TextStyle(
                   fontSize: 12,
                   height: 1.5,
-                  color: Theme.of(context).hintColor,
+                  color: surface.mutedForegroundColor,
                 ),
               ),
               if (_baseUrlController.text.trim().isNotEmpty) ...[
@@ -185,7 +187,7 @@ class _ProviderDetailPaneState extends State<ProviderDetailPane> {
                   style: TextStyle(
                     fontSize: 12,
                     height: 1.4,
-                    color: Theme.of(context).hintColor,
+                    color: surface.mutedForegroundColor,
                   ),
                 ),
               ],

@@ -143,9 +143,9 @@ class _AnnouncementBanner extends StatelessWidget {
     final bg = fg.withValues(alpha: 0.12);
     return Material(
       color: bg,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(8),
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
         onTap: onDismiss,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

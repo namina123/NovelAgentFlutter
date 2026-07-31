@@ -87,10 +87,11 @@ class BookDeconstructionPreviewPanel extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        Text(
-          '已选 ${viewData.selectedItemCount}/${viewData.totalItemCount} 项',
-          style: textTheme.bodyMedium,
-        ),
+        if (viewData.totalItemCount > 0)
+          Text(
+            '已选 ${viewData.selectedItemCount}/${viewData.totalItemCount} 项',
+            style: textTheme.bodyMedium,
+          ),
       ],
     );
   }

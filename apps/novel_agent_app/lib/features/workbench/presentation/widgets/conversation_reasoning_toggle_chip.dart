@@ -101,9 +101,9 @@ class ConversationReasoningToggleChip extends StatelessWidget {
                     child: Text(
                       enabled ? '开' : '关',
                       style: TextStyle(
-                        fontSize: 9.2,
+                        fontSize: 10.5,
                         fontWeight: FontWeight.w800,
-                        letterSpacing: 0.12,
+                        letterSpacing: 0.08,
                         color: foregroundColor,
                       ),
                     ),

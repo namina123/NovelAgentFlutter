@@ -647,7 +647,13 @@ bool _validationSignalsInformationFailure(JsonMap validation) {
 }
 
 bool _validationSignalsContractConflict(JsonMap validation) {
-  final viewmodel = ValueReaders.mapValue(validation['viewmodel']);
+  // GUI probe writes its projection under gui_viewmodel, while older probes
+  // use viewmodel. Contract diagnosis must inspect the actual projection
+  // supplied by either runner before classifying a failed run.
+  final guiViewmodel = ValueReaders.mapValue(validation['gui_viewmodel']);
+  final viewmodel = guiViewmodel.isNotEmpty
+      ? guiViewmodel
+      : ValueReaders.mapValue(validation['viewmodel']);
   final workbenchVm = ValueReaders.mapValue(
     viewmodel['workbench_information_viewmodel'],
   );

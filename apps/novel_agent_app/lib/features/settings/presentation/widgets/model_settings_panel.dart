@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
+import '../../../../../shared/theme/novel_theme_context.dart';
 import '../../../../../shared/widgets/action_button.dart';
 import '../models/settings_view_data.dart';
 import '../models/custom_model_reasoning_effort_entry_view_data.dart';
@@ -237,7 +238,7 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
           style: TextStyle(
             fontSize: 12,
             height: 1.45,
-            color: Theme.of(context).hintColor,
+            color: context.novelThemeColors.mutedTextColor,
           ),
         ),
         const SizedBox(height: 16),
@@ -338,7 +339,7 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
             style: TextStyle(
               fontSize: 12,
               height: 1.45,
-              color: Theme.of(context).hintColor,
+              color: context.novelThemeColors.mutedTextColor,
               fontWeight: FontWeight.w600,
             ),
           ),

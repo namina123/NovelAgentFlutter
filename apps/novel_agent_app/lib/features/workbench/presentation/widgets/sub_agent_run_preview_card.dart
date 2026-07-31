@@ -58,7 +58,7 @@ class SubAgentRunPreviewCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: colors.textColor,
-                          fontSize: 12.8,
+                          fontSize: 13,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -68,7 +68,7 @@ class SubAgentRunPreviewCard extends StatelessWidget {
                       viewData.toolCountLabel,
                       style: TextStyle(
                         color: colors.mutedTextColor,
-                        fontSize: 10.6,
+                        fontSize: 10.5,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -88,7 +88,7 @@ class SubAgentRunPreviewCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: colors.textColor,
-                      fontSize: 11.9,
+                      fontSize: 11.5,
                       height: 1.42,
                       fontWeight: FontWeight.w600,
                     ),
@@ -102,7 +102,7 @@ class SubAgentRunPreviewCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: colors.mutedTextColor,
-                      fontSize: 11.7,
+                      fontSize: 11.5,
                       height: 1.42,
                     ),
                   ),

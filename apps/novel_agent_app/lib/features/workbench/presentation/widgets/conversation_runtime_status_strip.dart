@@ -99,7 +99,7 @@ class ConversationRuntimeStatusStrip extends StatelessWidget {
         Icons.check_circle_outline_rounded,
       ConversationToolLifecycleStatus.pendingConfirmation =>
         Icons.help_outline_rounded,
-      ConversationToolLifecycleStatus.failed => Icons.warning_amber_rounded,
+      ConversationToolLifecycleStatus.failed => Icons.error_outline_rounded,
     };
   }
 

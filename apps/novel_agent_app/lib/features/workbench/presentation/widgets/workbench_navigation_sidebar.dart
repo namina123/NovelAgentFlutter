@@ -174,7 +174,7 @@ class _WorkbenchSidebarHeader extends StatelessWidget {
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  '${panelContracts.length} 视图',
+                  '${panelContracts.length} 个视图',
                   style: TextStyle(
                     fontSize: visual.metaFontSize - 0.2,
                     fontWeight: FontWeight.w700,

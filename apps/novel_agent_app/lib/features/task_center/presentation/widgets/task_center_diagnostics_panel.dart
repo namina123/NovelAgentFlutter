@@ -328,5 +328,5 @@ String _truncateForRender(String content, {int max = 8000}) {
   if (content.length <= max) {
     return content;
   }
-  return '${content.substring(0, max)}\n\n...（内容过长，已截断 $max 字；完整内容请查看项目 tracking/ 下的原始文件。）';
+  return '${content.substring(0, max)}\n\n...（内容过长，已截断 $max 字；完整内容请到该任务的运行记录文件中查看。）';
 }

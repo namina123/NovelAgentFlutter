@@ -269,7 +269,7 @@ class _SettingsLabeledSearchDropdownFieldState<T>
               child: Material(
                 elevation: 10,
                 color: theme.colorScheme.surface,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(8),
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
                     minWidth: fieldSize.width,
@@ -278,7 +278,7 @@ class _SettingsLabeledSearchDropdownFieldState<T>
                   ),
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(8),
                       border: Border.all(
                         color: surface.borderColor.withValues(alpha: 0.8),
                       ),

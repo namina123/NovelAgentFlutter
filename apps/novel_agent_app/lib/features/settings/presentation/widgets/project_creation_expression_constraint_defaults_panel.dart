@@ -142,7 +142,7 @@ class _ProjectCreationExpressionConstraintDefaultsPanelState
             ? '当前未写入显式配置时，会沿用内置回落。'
             : '当前未写入显式配置时，会沿用内置回落：$fallback。';
       case ProjectCreationExpressionConstraintDefaultsMode.custom:
-        return '只有新建项目且项目当前还没有 binding 时，才会按下面勾选的 profile 自动种入。';
+        return '只有新建项目且尚未挂载写作规则时，才会按下面勾选的规则方案自动种入。';
       case ProjectCreationExpressionConstraintDefaultsMode.disabled:
         return '新建项目时不自动装载任何表达限制。';
     }

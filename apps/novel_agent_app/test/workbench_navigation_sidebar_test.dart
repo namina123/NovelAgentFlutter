@@ -73,7 +73,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('项目'), findsWidgets);
-    expect(find.text('3 视图'), findsOneWidget);
+    expect(find.text('3 个视图'), findsOneWidget);
     expect(find.text('协作设置'), findsWidgets);
     expect(find.text('项目智能体组'), findsNothing);
     expect(find.text('写作资料'), findsOneWidget);

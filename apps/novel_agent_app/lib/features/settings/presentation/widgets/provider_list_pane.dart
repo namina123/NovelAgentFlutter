@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../../../../../app/theme/app_chrome.dart';
 import '../../../../../shared/theme/novel_theme_context.dart';
@@ -21,6 +22,9 @@ class ProviderListPane extends StatelessWidget {
     // 中文注释: 接口列表独立成 pane，后续加入搜索、排序和筛选时不影响详情和页头。
     final panel = context.novelThemeSurfaces.panel;
     final optionTile = context.novelThemeSurfaces.optionTile;
+    // 中文注释: 协议友好标签复用 core 的 ProviderProtocolService，避免把 google_openai_compatible
+    // 等原始 id 直接拼进列表副标题。
+    final protocolService = ProviderProtocolService();
     return DecoratedBox(
       decoration: BoxDecoration(
         color: panel.backgroundColor.withValues(alpha: 0.8),
@@ -49,7 +53,7 @@ class ProviderListPane extends StatelessWidget {
               : provider.title;
           final subtitle = isDraft && provider.baseUrl.trim().isEmpty
               ? '填写厂商名称、密钥与地址后保存'
-              : '${(provider.protocol == 'openai_compatible') ? 'OpenAI 兼容' : provider.protocol} · ${provider.baseUrl.trim().isEmpty ? '未填写地址' : provider.baseUrl}';
+              : '${protocolService.protocolLabel(provider.protocol)} · ${provider.baseUrl.trim().isEmpty ? '未填写地址' : provider.baseUrl}';
           return Material(
             color: provider.isSelected
                 ? optionTile.highlightBackgroundColor

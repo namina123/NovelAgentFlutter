@@ -26,7 +26,7 @@ class DocumentEmptyCanvas extends StatelessWidget {
     return DocumentWorkspaceCanvasFrame(
       title: headline,
       relativePath: '',
-      status: '等待打开资源',
+      status: '未打开文档',
       body: DecoratedBox(
         decoration: BoxDecoration(
           color: surface.backgroundColor.withValues(alpha: 0.08),
@@ -72,7 +72,7 @@ class DocumentEmptyCanvas extends StatelessWidget {
                   ),
                   SizedBox(width: visual.sectionGap + 1),
                   Text(
-                    '无活动文档',
+                    '未打开文档',
                     style: TextStyle(
                       fontSize: visual.metaFontSize,
                       fontWeight: FontWeight.w700,
@@ -87,7 +87,7 @@ class DocumentEmptyCanvas extends StatelessWidget {
                   ),
                   SizedBox(width: visual.compactGap),
                   Text(
-                    '等待资源',
+                    '未打开文档',
                     style: TextStyle(
                       fontSize: visual.metaFontSize,
                       fontWeight: FontWeight.w700,

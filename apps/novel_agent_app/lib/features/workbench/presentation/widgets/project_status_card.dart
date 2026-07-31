@@ -41,7 +41,7 @@ class ProjectStatusCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           SelectableText(
-            projectPath.trim().isEmpty ? '默认项目目录尚未解析。' : projectPath,
+            projectPath.trim().isEmpty ? '默认项目目录尚未选择。' : projectPath,
             style: TextStyle(
               color: colors.textColor,
               fontSize: 12,

@@ -30,7 +30,7 @@ class FileToolGroup extends StatelessWidget {
         final rowChildren = <Widget>[
           ToolbarIconButton(
             icon: Icons.note_add_outlined,
-            tooltip: '新文件',
+            tooltip: '新建文件',
             dense: true,
             onPressed: onCreateFileRequested,
           ),
@@ -165,7 +165,7 @@ class _FileToolOverflowButton extends StatelessWidget {
               ),
             PopupMenuItem<_FileToolOverflowAction>(
               value: _FileToolOverflowAction.createFolder,
-              child: Text('新文件夹'),
+              child: Text('新建文件夹'),
             ),
           ];
         },

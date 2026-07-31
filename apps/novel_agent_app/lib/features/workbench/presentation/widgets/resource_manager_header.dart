@@ -88,24 +88,25 @@ class ResourceManagerHeader extends StatelessWidget {
                   alignment: WrapAlignment.end,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 7,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: surface.backgroundColor.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        '$itemCount 项',
-                        style: TextStyle(
-                          fontSize: visual.metaFontSize - 0.1,
-                          fontWeight: FontWeight.w700,
-                          color: surface.mutedForegroundColor,
+                    if (itemCount > 0)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: surface.backgroundColor.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '$itemCount 项',
+                          style: TextStyle(
+                            fontSize: visual.metaFontSize - 0.1,
+                            fontWeight: FontWeight.w700,
+                            color: surface.mutedForegroundColor,
+                          ),
                         ),
                       ),
-                    ),
                     if (showStatChips)
                       _ExplorerStatChip(
                         label: '目录',

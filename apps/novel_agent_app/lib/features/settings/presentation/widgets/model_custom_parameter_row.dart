@@ -25,7 +25,7 @@ class ModelCustomParameterRow extends StatelessWidget {
   Widget build(BuildContext context) {
     // 中文注释: 单条高级参数行只负责字段编辑，不承担列表增删和保存编解码职责。
     final typeOptions = const <SettingsDropdownOption<String>>[
-      SettingsDropdownOption(value: 'string', label: '字符'),
+      SettingsDropdownOption(value: 'string', label: '字符串'),
       SettingsDropdownOption(value: 'number', label: '数字'),
       SettingsDropdownOption(value: 'integer', label: '整数'),
       SettingsDropdownOption(value: 'boolean', label: '布尔'),

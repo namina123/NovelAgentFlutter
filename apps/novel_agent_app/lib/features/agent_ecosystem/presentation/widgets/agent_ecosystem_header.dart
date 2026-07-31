@@ -24,7 +24,8 @@ class AgentEcosystemHeader extends StatelessWidget {
         const Expanded(
           child: Text(
             '智能体生态',
-            style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800),
+            // 中文注释: 页头标题字号与 settings_header（「设置」=28）对齐，同极页面视觉一致。
+            style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
           ),
         ),
       ],

@@ -41,10 +41,10 @@ class ConversationMessageEntryTile extends StatelessWidget {
     final isLongFormBody = entry.body.trim().contains('\n\n');
     final isAssistant = entry.kind == ConversationEntryKind.assistant;
     final roleLabel = switch (entry.kind) {
-      ConversationEntryKind.user => 'YOU',
+      ConversationEntryKind.user => '我',
       ConversationEntryKind.assistant => 'AI',
-      ConversationEntryKind.system => 'SYSTEM',
-      ConversationEntryKind.tool => 'TOOL',
+      ConversationEntryKind.system => '系统',
+      ConversationEntryKind.tool => '工具',
     };
     final textLineCount = '\n'.allMatches(entry.body).length + 1;
     final headerColor = isUser

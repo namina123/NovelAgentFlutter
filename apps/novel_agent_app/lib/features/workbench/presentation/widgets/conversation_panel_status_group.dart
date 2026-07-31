@@ -95,7 +95,7 @@ class _ConversationStatusChip extends StatelessWidget {
                     TextSpan(
                       text: '${item.label} ',
                       style: TextStyle(
-                        fontSize: 9.9,
+                        fontSize: 10,
                         fontWeight: FontWeight.w700,
                         color: item.isHighlighted
                             ? foregroundColor.withValues(alpha: 0.82)
@@ -105,7 +105,7 @@ class _ConversationStatusChip extends StatelessWidget {
                     TextSpan(
                       text: item.summary,
                       style: TextStyle(
-                        fontSize: 10.6,
+                        fontSize: 10.5,
                         fontWeight: FontWeight.w800,
                         color: foregroundColor,
                       ),
@@ -180,7 +180,7 @@ class _ConversationStatusDetail extends StatelessWidget {
       child: Text(
         '${item.label}：${item.detail}',
         style: TextStyle(
-          fontSize: 10.2,
+          fontSize: 10,
           height: 1.45,
           color: style.mutedForegroundColor,
         ),

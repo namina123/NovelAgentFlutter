@@ -56,7 +56,7 @@ class TaskCenterDetailPanel extends StatelessWidget {
                   if (joined.length <= max) {
                     return joined;
                   }
-                  return '${joined.substring(0, max)}\n\n...（内容过长，已截断；完整内容请查看项目 tracking/ 下的原始文件。）';
+                  return '${joined.substring(0, max)}\n\n...（内容过长，已截断；完整内容请到该任务的运行记录文件中查看。）';
                 }(),
                 styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context))
                     .copyWith(

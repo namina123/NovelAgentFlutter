@@ -263,7 +263,7 @@ class _TaskCenterPageState extends State<TaskCenterPage> {
                           controller: _chapterWordTargetController,
                           keyboardType: TextInputType.number,
                           decoration: const InputDecoration(
-                            labelText: '正文章节目标',
+                            labelText: '正文章节目标（字）',
                           ),
                         ),
                       ),
@@ -272,7 +272,7 @@ class _TaskCenterPageState extends State<TaskCenterPage> {
                         child: TextField(
                           controller: _chapterWordMinController,
                           keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(labelText: '正文最小值'),
+                          decoration: const InputDecoration(labelText: '正文章节最小（字）'),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -280,7 +280,7 @@ class _TaskCenterPageState extends State<TaskCenterPage> {
                         child: TextField(
                           controller: _chapterWordMaxController,
                           keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(labelText: '正文最大值'),
+                          decoration: const InputDecoration(labelText: '正文章节最大（字）'),
                         ),
                       ),
                     ];
@@ -298,7 +298,7 @@ class _TaskCenterPageState extends State<TaskCenterPage> {
                         child: TextField(
                           controller: _sampleChapterWordTargetController,
                           keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(labelText: '样章目标'),
+                          decoration: const InputDecoration(labelText: '样章目标（字）'),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -306,7 +306,7 @@ class _TaskCenterPageState extends State<TaskCenterPage> {
                         child: TextField(
                           controller: _sampleChapterWordMinController,
                           keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(labelText: '样章最小值'),
+                          decoration: const InputDecoration(labelText: '样章最小（字）'),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -314,7 +314,7 @@ class _TaskCenterPageState extends State<TaskCenterPage> {
                         child: TextField(
                           controller: _sampleChapterWordMaxController,
                           keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(labelText: '样章最大值'),
+                          decoration: const InputDecoration(labelText: '样章最大（字）'),
                         ),
                       ),
                     ];
@@ -336,11 +336,11 @@ class _TaskCenterPageState extends State<TaskCenterPage> {
                   const SizedBox(height: 8),
                   // 中文注释: 告诉用户为何"生成队列"置灰——只有长篇项目支持。
                   Text(
-                    '仅长篇（long_novel）项目支持生成长篇自动化队列。',
+                    '仅长篇项目支持生成长篇自动化队列。',
                     style: TextStyle(
                       fontSize: 12,
                       height: 1.45,
-                      color: Theme.of(context).hintColor,
+                      color: context.novelThemeColors.mutedTextColor,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -620,32 +620,32 @@ class _TaskCenterPageState extends State<TaskCenterPage> {
     final checkpointInterval = parseField(_checkpointController, '检查点间隔', 3);
     final chapterWordTarget = parseField(
       _chapterWordTargetController,
-      '章节字数目标',
+      '正文章节目标（字）',
       2000,
     );
     final chapterWordMin = parseField(
       _chapterWordMinController,
-      '章节字数下限',
+      '正文章节最小（字）',
       1600,
     );
     final chapterWordMax = parseField(
       _chapterWordMaxController,
-      '章节字数上限',
+      '正文章节最大（字）',
       2600,
     );
     final sampleChapterWordTarget = parseField(
       _sampleChapterWordTargetController,
-      '样章字数目标',
+      '样章目标（字）',
       1800,
     );
     final sampleChapterWordMin = parseField(
       _sampleChapterWordMinController,
-      '样章字数下限',
+      '样章最小（字）',
       1400,
     );
     final sampleChapterWordMax = parseField(
       _sampleChapterWordMaxController,
-      '样章字数上限',
+      '样章最大（字）',
       2400,
     );
     if (errors.isNotEmpty) {

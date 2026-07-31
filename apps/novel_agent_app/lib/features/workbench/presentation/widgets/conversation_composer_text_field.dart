@@ -187,8 +187,8 @@ class _ConversationComposerTextFieldState
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
                 hintStyle: TextStyle(
-                  color: colors.mutedTextColor.withValues(alpha: 0.9),
-                  fontSize: 12.2,
+                  color: colors.mutedTextColor.withValues(alpha: 0.6),
+                  fontSize: 12,
                   fontWeight: FontWeight.w500,
                 ),
                 contentPadding: EdgeInsets.zero,

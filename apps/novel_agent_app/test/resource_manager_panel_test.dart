@@ -41,10 +41,10 @@ void main() {
       expect(find.text('浏览'), findsOneWidget);
       expect(find.text('工作区入口'), findsNothing);
       expect(find.byTooltip('导入文件'), findsOneWidget);
-      expect(find.byTooltip('新文件'), findsOneWidget);
+      expect(find.byTooltip('新建文件'), findsOneWidget);
       expect(find.byTooltip('保存当前文档'), findsOneWidget);
       expect(find.byTooltip('更多文件操作'), findsOneWidget);
-      expect(find.byTooltip('新文件夹'), findsNothing);
+      expect(find.byTooltip('新建文件夹'), findsNothing);
       expect(find.byTooltip('模型与接口设置'), findsNothing);
       expect(find.byType(CustomScrollView), findsNothing);
       expect(find.byType(SingleChildScrollView), findsOneWidget);
@@ -124,7 +124,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final buttonFinders = [
-        find.byTooltip('新文件'),
+        find.byTooltip('新建文件'),
         find.byTooltip('导入文件'),
         find.byTooltip('如何创建章节'),
         find.byTooltip('保存当前文档'),
@@ -146,9 +146,9 @@ void main() {
       await tester.tap(find.byTooltip('更多文件操作'));
       await tester.pumpAndSettle();
 
-      expect(find.text('新文件夹'), findsOneWidget);
+      expect(find.text('新建文件夹'), findsOneWidget);
 
-      await tester.tap(find.text('新文件夹'));
+      await tester.tap(find.text('新建文件夹'));
       await tester.pumpAndSettle();
 
       expect(handler.createFolderRequestedCount, 1);

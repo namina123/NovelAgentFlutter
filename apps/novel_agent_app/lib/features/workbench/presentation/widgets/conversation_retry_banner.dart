@@ -37,7 +37,7 @@ class ConversationRetryBanner extends StatelessWidget {
           Row(
             children: [
               Icon(
-                Icons.sync_problem_rounded,
+                Icons.error_outline_rounded,
                 size: 15,
                 color: colors.dangerStrongColor,
               ),

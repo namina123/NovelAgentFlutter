@@ -55,7 +55,7 @@ class _PermissionsSettingsPanelState extends State<PermissionsSettingsPanel> {
       children: [
         SettingsFormSection(
           title: '权限模式',
-          description: '这里定义应用允许哪些能力真正进入执行链。工具策略决定“AI 倾向怎么用工具”，这里只决定“应用是否允许做”。',
+          description: '这里定义应用允许哪些能力真正进入执行链。工具策略决定「AI 倾向怎么用工具」，这里只决定「应用是否允许做」。',
           child: Column(
             children: [
               SettingsLabeledDropdownField<String>(

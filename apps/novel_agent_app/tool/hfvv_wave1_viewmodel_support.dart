@@ -211,9 +211,8 @@ class HfvvWave1AppShellHarness {
               : (storageStrategyId.isEmpty
                     ? 'markdown_project_store'
                     : storageStrategyId));
-    final String resolvedKnowledgeBaseBranchId = knowledgeBaseBranchId
-        .trim()
-        .isEmpty
+    final String resolvedKnowledgeBaseBranchId =
+        knowledgeBaseBranchId.trim().isEmpty
         ? KnowledgeBaseBranchCatalogService.structuredBranchId
         : knowledgeBaseBranchId.trim();
 
@@ -237,7 +236,8 @@ class HfvvWave1AppShellHarness {
       if (phase == ProjectCreationPhase.runtimeBaseline) {
         // 中文注释: runtimeBaseline 是终止阶段，必须带有效基准 id 才会触发实际创建。
         final options = launcher.runtimeBaselineOptions;
-        final preferredValid = runtimeBaselineId.isNotEmpty &&
+        final preferredValid =
+            runtimeBaselineId.isNotEmpty &&
             options.any((option) => option.id == runtimeBaselineId);
         if (!preferredValid && options.isNotEmpty) {
           resolvedRuntimeBaselineId = options.first.id;
@@ -267,8 +267,7 @@ class HfvvWave1AppShellHarness {
         timeout: const Duration(seconds: 20),
       );
       final currentLauncher = workbench.projectLauncher;
-      if (currentLauncher == null ||
-          workbench.projectPath.trim().isNotEmpty) {
+      if (currentLauncher == null || workbench.projectPath.trim().isNotEmpty) {
         break;
       }
       if (currentLauncher.creationPhase == phase) {
@@ -1122,6 +1121,9 @@ class HfvvWave1AppShellHarness {
       ),
       updateProjectManifestUseCase: UpdateProjectManifestUseCase(
         writeProjectTextFileUseCase: writeProjectTextFileUseCase,
+        readProjectFileUseCase: ReadProjectFileUseCase(
+          bundle.projectWorkspacePort,
+        ),
       ),
       projectToolHostPort: bundle.projectToolHostPort,
       bookDeconstructionNarrativePersistenceService:
