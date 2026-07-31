@@ -8,10 +8,12 @@ class AppShellNavigationItem {
     required this.label,
     required this.tooltip,
     required this.icon,
+    this.badgeCount = 0,
   });
 
   final AppDestination destination;
   final String label;
   final String tooltip;
   final IconData icon;
+  final int badgeCount;
 }

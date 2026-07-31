@@ -1093,6 +1093,9 @@ class AppShellController extends ChangeNotifier
       hasBookDeconstructionCapability: _hasBookDeconstructionCapability(
         _currentProject,
       ),
+      longTaskResumableRunCount: _longTaskStationController
+          .viewData
+          .resumableCount,
     );
   }
 
@@ -1125,6 +1128,9 @@ class AppShellController extends ChangeNotifier
       );
       _safeNotifyListeners();
       await _projectCreationController.loadDefaultProject();
+      // 中文注释: 启动即刷新长任务总站，让「可恢复 run」计数徽标和总站数据在开机就绪，
+      // 而不是等用户首次进总站才懒加载——收口「进程退出后 dormant run 无发现」的连续性缺口。
+      await _longTaskStationController.refresh();
     } catch (error) {
       _updateWorkbench(
         _viewModel.workbench.copyWith(

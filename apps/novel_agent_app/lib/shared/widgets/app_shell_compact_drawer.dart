@@ -294,13 +294,24 @@ class _CompactDrawerEntry extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(
-              item.icon,
-              size: 18,
-              color: isSelected
-                  ? sidebarSurface.highlightForegroundColor
-                  : sidebarSurface.foregroundColor,
-            ),
+            item.badgeCount > 0
+                ? Badge.count(
+                    count: item.badgeCount,
+                    child: Icon(
+                      item.icon,
+                      size: 18,
+                      color: isSelected
+                          ? sidebarSurface.highlightForegroundColor
+                          : sidebarSurface.foregroundColor,
+                    ),
+                  )
+                : Icon(
+                    item.icon,
+                    size: 18,
+                    color: isSelected
+                        ? sidebarSurface.highlightForegroundColor
+                        : sidebarSurface.foregroundColor,
+                  ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(

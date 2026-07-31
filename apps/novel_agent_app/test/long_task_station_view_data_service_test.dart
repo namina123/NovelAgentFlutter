@@ -48,6 +48,8 @@ void main() {
       expect(viewData.selectedRun!.requiresManualAttention, isTrue);
       expect(viewData.scopeLabel, '全部项目');
       expect(viewData.canFilterToCurrentProject, isFalse);
+      // resumableCount（驱动导航徽标）：failedManualAttention 可恢复 → 计 1。
+      expect(viewData.resumableCount, 1);
     },
   );
 

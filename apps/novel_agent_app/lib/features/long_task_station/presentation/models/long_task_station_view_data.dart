@@ -13,6 +13,7 @@ class LongTaskStationViewData {
     required this.activeCount,
     required this.pausedCount,
     required this.attentionCount,
+    required this.resumableCount,
     required this.runs,
     required this.selectedRun,
   });
@@ -30,6 +31,7 @@ class LongTaskStationViewData {
   final int activeCount;
   final int pausedCount;
   final int attentionCount;
+  final int resumableCount;
   final List<LongTaskRunEntryViewData> runs;
   final LongTaskRunDetailViewData? selectedRun;
 
@@ -48,6 +50,7 @@ class LongTaskStationViewData {
       activeCount: 0,
       pausedCount: 0,
       attentionCount: 0,
+      resumableCount: 0,
       runs: <LongTaskRunEntryViewData>[],
       selectedRun: null,
     );

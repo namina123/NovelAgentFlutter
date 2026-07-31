@@ -11,6 +11,7 @@ class AppShellNavigationCatalog {
     bool projectAssetsPrimaryWorkspace = false,
     bool bookDeconstructionPrimaryWorkspace = false,
     bool hasBookDeconstructionCapability = false,
+    int longTaskResumableRunCount = 0,
   }) {
     final workspaceItems = <AppShellNavigationItem>[
       bookDeconstructionPrimaryWorkspace
@@ -69,12 +70,13 @@ class AppShellNavigationCatalog {
       AppShellNavigationSection(
         id: 'runtime',
         label: '运行',
-        items: const <AppShellNavigationItem>[
+        items: <AppShellNavigationItem>[
           AppShellNavigationItem(
             destination: AppDestination.longTaskStation,
             label: '长任务',
             tooltip: '长任务总站',
             icon: Icons.route_outlined,
+            badgeCount: longTaskResumableRunCount,
           ),
         ],
       ),

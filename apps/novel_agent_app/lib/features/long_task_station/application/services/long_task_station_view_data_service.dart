@@ -74,6 +74,16 @@ class LongTaskStationViewDataService {
         .where((run) => run.requiresManualAttention)
         .length;
     final activeCount = visibleRuns.where((run) => run.isActive).length;
+    final resumableCount = visibleRuns
+        .where(
+          (run) =>
+              !run.isActive &&
+              _runStateMachine.canTransition(
+                run.status,
+                LongTaskRunStatus.running,
+              ),
+        )
+        .length;
     final isProjectScoped =
         snapshot.isCurrentProjectFilterActive &&
         snapshot.hasCurrentProjectScope;
@@ -93,6 +103,7 @@ class LongTaskStationViewDataService {
       activeCount: activeCount,
       pausedCount: pausedCount,
       attentionCount: attentionCount,
+      resumableCount: resumableCount,
       runs: entries,
       selectedRun: _detail(
         snapshot.selectedRun,

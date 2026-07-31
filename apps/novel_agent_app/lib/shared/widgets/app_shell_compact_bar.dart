@@ -84,11 +84,20 @@ class AppShellCompactBar extends StatelessWidget {
                 border: Border.all(color: sidebarSurface.highlightBorderColor),
                 borderRadius: BorderRadius.circular(sidebarSurface.radius),
               ),
-              child: Icon(
-                item.icon,
-                size: 16,
-                color: sidebarSurface.highlightForegroundColor,
-              ),
+              child: item.badgeCount > 0
+                  ? Badge.count(
+                      count: item.badgeCount,
+                      child: Icon(
+                        item.icon,
+                        size: 16,
+                        color: sidebarSurface.highlightForegroundColor,
+                      ),
+                    )
+                  : Icon(
+                      item.icon,
+                      size: 16,
+                      color: sidebarSurface.highlightForegroundColor,
+                    ),
             ),
         ],
       ),

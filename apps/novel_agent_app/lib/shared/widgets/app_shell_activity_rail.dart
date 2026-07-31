@@ -202,7 +202,12 @@ class _NavigationButton extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(item.icon, size: 17, color: foreground),
+              item.badgeCount > 0
+                  ? Badge.count(
+                      count: item.badgeCount,
+                      child: Icon(item.icon, size: 17, color: foreground),
+                    )
+                  : Icon(item.icon, size: 17, color: foreground),
               const SizedBox(height: 4),
               Text(
                 item.label,
