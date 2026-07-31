@@ -197,6 +197,11 @@ void main() {
     );
 
     test('long task create rejects a caller baseline override', () async {
+      // 中文注释: 项目已被 setUp 预置样章 task_001，故这里用「前后相等」证明被拒的 create
+      // 没有副作用地新增任务，而不是断言全空。
+      final tasksBefore = await workflowRuntimeService.listWorkflowTasks(
+        project,
+      );
       final created = await workflowRuntimeService.createLongTaskWorkflow(
         project,
         TaskRuntimeConstants.modeSeedToFullNovel,
@@ -207,7 +212,10 @@ void main() {
 
       expect(created['ok'], isFalse);
       expect(created['error'], 'long_task_runtime_baseline_mismatch');
-      expect(await workflowRuntimeService.listWorkflowTasks(project), isEmpty);
+      expect(
+        await workflowRuntimeService.listWorkflowTasks(project),
+        tasksBefore,
+      );
     });
 
     test(
@@ -2791,7 +2799,11 @@ void main() {
         final result = await workflowService.runWorkflowTaskQueue(
           queueProject,
           _testSettings(),
-          options: const <String, Object?>{'max_steps': 1},
+          options: const <String, Object?>{
+            'max_steps': 1,
+            'unattended': false,
+            'auto_advance_chapters': false,
+          },
         );
 
         expect(ValueReaders.boolValue(result['ok']), isTrue);
@@ -2817,6 +2829,134 @@ void main() {
         expect(
           ValueReaders.stringValue(downstreamTask['status']),
           TaskRuntimeConstants.statusQueued,
+        );
+      },
+    );
+
+    test(
+      'runWorkflowTaskQueue self-continues across batch boundary on auto_advance_chapters even when unattended is false',
+      () async {
+        // 中文注释: auto_advance_chapters 此前是死标记——UI 显示「自动推进」徽标却无决策逻辑读取。
+        // 这里证明它现在经 OR 门驱动批次间自续：unattended 缺省 false 时，仅凭 auto_advance_chapters=true
+        // 也能跨批把依赖链跑完（对照：两者皆 false 时只跑一批停在 max_steps）。
+        final autoAdvanceProject = ProjectDescriptor(
+          id: 'queue_auto_advance_chapters_gate',
+          name: '队列 auto_advance_chapters 自续测试',
+          rootPath:
+              '${tempDirectory.path}${Platform.pathSeparator}queue_auto_advance_chapters_gate',
+          projectType: 'long_novel',
+          runtimeBaselineId: 'chapter_collaboration_autorun',
+        );
+        await workspacePort.writeTextFile(
+          autoAdvanceProject.rootPath,
+          'chapters/auto_a.md',
+          '# A\n\n测试正文。\n',
+        );
+        await workspacePort.writeTextFile(
+          autoAdvanceProject.rootPath,
+          'chapters/auto_b.md',
+          '# B\n\n测试正文。\n',
+        );
+        await taskRepository.saveTasks(autoAdvanceProject, <JsonMap>[
+          _autoAdvanceChainTask(
+            id: 'auto_advance_task_a',
+            title: 'A 章',
+            outputPath: 'chapters/auto_a.md',
+            dependsOn: const <Object?>[],
+            sortOrder: 1,
+          ),
+          _autoAdvanceChainTask(
+            id: 'auto_advance_task_b',
+            title: 'B 章',
+            outputPath: 'chapters/auto_b.md',
+            dependsOn: const <Object?>['auto_advance_task_a'],
+            sortOrder: 2,
+          ),
+        ]);
+        final autoAdvanceService = _QueueSelectionBoundaryWorkflowRuntimeService(
+          taskRepository: taskRepository,
+          promptTemplateService: promptTemplateService,
+        );
+
+        // 中文注释: max_steps:1 让 task_a 跑完即到批边界。项目挂了 chapter_collaboration_autorun 基线，
+        // 解析器会注入 unattended=true，故这里显式把 unattended 钉成 false 来隔离 auto_advance_chapters
+        // 这个唯一变量——只有它为真时才应跨批自续（OR 门）。
+        final autoAdvanceResult = await autoAdvanceService.runWorkflowTaskQueue(
+          autoAdvanceProject,
+          _testSettings(),
+          options: const <String, Object?>{
+            'max_steps': 1,
+            'unattended': false,
+            'auto_advance_chapters': true,
+          },
+        );
+
+        expect(ValueReaders.boolValue(autoAdvanceResult['ok']), isTrue);
+        expect(autoAdvanceService.executedTaskIds, <String>[
+          'auto_advance_task_a',
+          'auto_advance_task_b',
+        ]);
+        expect(ValueReaders.intValue(autoAdvanceResult['steps_run']), 2);
+
+        // 中文注释: 对照——同一链路、两者皆 false（缺省）时只跑一批，停在 max_steps。
+        final defaultProject = ProjectDescriptor(
+          id: 'queue_auto_advance_chapters_default_off',
+          name: '队列 auto_advance 默认关闭对照',
+          rootPath:
+              '${tempDirectory.path}${Platform.pathSeparator}queue_auto_advance_chapters_default_off',
+          projectType: 'long_novel',
+          runtimeBaselineId: 'chapter_collaboration_autorun',
+        );
+        await workspacePort.writeTextFile(
+          defaultProject.rootPath,
+          'chapters/default_a.md',
+          '# A\n\n测试正文。\n',
+        );
+        await workspacePort.writeTextFile(
+          defaultProject.rootPath,
+          'chapters/default_b.md',
+          '# B\n\n测试正文。\n',
+        );
+        await taskRepository.saveTasks(defaultProject, <JsonMap>[
+          _autoAdvanceChainTask(
+            id: 'default_advance_task_a',
+            title: 'A 章',
+            outputPath: 'chapters/default_a.md',
+            dependsOn: const <Object?>[],
+            sortOrder: 1,
+          ),
+          _autoAdvanceChainTask(
+            id: 'default_advance_task_b',
+            title: 'B 章',
+            outputPath: 'chapters/default_b.md',
+            dependsOn: const <Object?>['default_advance_task_a'],
+            sortOrder: 2,
+          ),
+        ]);
+        final defaultService = _QueueSelectionBoundaryWorkflowRuntimeService(
+          taskRepository: taskRepository,
+          promptTemplateService: promptTemplateService,
+        );
+
+        final defaultResult = await defaultService.runWorkflowTaskQueue(
+          defaultProject,
+          _testSettings(),
+          options: const <String, Object?>{
+            'max_steps': 1,
+            'unattended': false,
+            'auto_advance_chapters': false,
+          },
+        );
+
+        expect(ValueReaders.boolValue(defaultResult['ok']), isTrue);
+        expect(
+          defaultService.executedTaskIds,
+          <String>['default_advance_task_a'],
+        );
+        expect(ValueReaders.intValue(defaultResult['steps_run']), 1);
+        expect(
+          ValueReaders.stringValue(defaultResult['stop_reason']),
+          'max_steps',
         );
       },
     );
@@ -3010,7 +3150,11 @@ void main() {
         final result = await workflowService.runWorkflowTaskQueue(
           queueProject,
           _testSettings(),
-          options: const <String, Object?>{'max_steps': 1},
+          options: const <String, Object?>{
+            'max_steps': 1,
+            'unattended': false,
+            'auto_advance_chapters': false,
+          },
         );
 
         expect(ValueReaders.boolValue(result['ok']), isTrue);
@@ -7680,6 +7824,47 @@ class _QueueSelectionBoundaryWorkflowRuntimeService
       'checkpoint_review': const <String, Object?>{},
     };
   }
+}
+
+// 中文注释: auto_advance_chapters 自续测试用的最小章节链任务（a → b），字段对齐既有队列测试。
+JsonMap _autoAdvanceChainTask({
+  required String id,
+  required String title,
+  required String outputPath,
+  required List<Object?> dependsOn,
+  required int sortOrder,
+}) {
+  return <String, Object?>{
+    'schema_version': 1,
+    'id': id,
+    'title': title,
+    'task_type': 'chapter',
+    'mode': TaskRuntimeConstants.modeSeedToFullNovel,
+    'status': TaskRuntimeConstants.statusQueued,
+    'goal': '$title待写。',
+    'brief': 'auto_advance_chapters 链路任务。',
+    'depends_on': dependsOn,
+    'source_paths': const <Object?>['specs/project_spec.md'],
+    'output_paths': <Object?>[outputPath],
+    'metadata': <String, Object?>{
+      'plan_id': 'plan_auto_advance_chain',
+      'workflow_mode': TaskRuntimeConstants.modeSeedToFullNovel,
+      'sort_order': sortOrder,
+      'stage': 'draft',
+      'runtime_baseline_id': 'chapter_collaboration_autorun',
+      'generated_by': 'LongTaskRevision',
+    },
+    'created_at': '2026-06-12T00:00:00Z',
+    'updated_at': '2026-06-12T00:00:00Z',
+    'history': const <Object?>[
+      <String, Object?>{
+        'status': TaskRuntimeConstants.statusQueued,
+        'note': 'created',
+        'created_at': '2026-06-12T00:00:00Z',
+      },
+    ],
+    'relative_path': 'tasks/$id.json',
+  };
 }
 
 class _FakeProjectDraftExecutionConstraintRuntimeService

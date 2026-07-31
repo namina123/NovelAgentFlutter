@@ -195,8 +195,14 @@ Future<JsonMap> _runRagParallelBranchRegressionSuite() async {
       'scenarios': scenarios,
     };
   } finally {
+    // 中文注释: Windows 上 sqlite 句柄或防病毒扫描偶尔尚未释放，递归删除会抛
+    // PathAccessException(errno 32 共享占用)；属环境噪声，不应让整个回归套件失败——best-effort 清理。
     if (await tempDirectory.exists()) {
-      await tempDirectory.delete(recursive: true);
+      try {
+        await tempDirectory.delete(recursive: true);
+      } on PathAccessException {
+        // 忽略：残留临时目录交由系统清理。
+      }
     }
   }
 }

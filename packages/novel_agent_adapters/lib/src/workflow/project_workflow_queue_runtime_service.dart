@@ -655,6 +655,9 @@ class ProjectWorkflowQueueRuntimeService {
       -1,
     );
     final unattended = ValueReaders.boolValue(cleanOptions['unattended']);
+    final autoAdvanceChapters = ValueReaders.boolValue(
+      cleanOptions['auto_advance_chapters'],
+    );
     final maxBatches = ValueReaders.intValue(cleanOptions['max_batches'], 50);
     final maxTotalSeconds = ValueReaders.intValue(
       cleanOptions['max_total_seconds'],
@@ -803,8 +806,9 @@ class ProjectWorkflowQueueRuntimeService {
         stopReason = batchSteps >= maxStepsPerBatch ? 'max_steps' : 'completed';
         stopNote = stopReason == 'max_steps' ? '已达到本批最大步数。' : '队列已完成。';
       }
-      // 中文注释: unattended 模式下，仅因每批上限（max_steps / max_seconds）触发的暂停才自续，
+      // 中文注释: unattended 或 auto_advance_chapters 任一为真时，仅因每批上限（max_steps / max_seconds）触发的暂停才自续，
       // 且受总批数与总时长限制；任何需要人工 / repair 介入的停止原因都终止本次调用。
+      // auto_advance_chapters 在此与 unattended 等价：让 UI 的「自动推进」徽标如实反映自继行为（此前它是死标记）。
       final isBatchBoundary =
           stopReason == 'max_steps' || stopReason == 'max_seconds';
       final underTotalCap =
@@ -812,7 +816,7 @@ class ProjectWorkflowQueueRuntimeService {
           DateTime.now().difference(runStartedAt).inSeconds < maxTotalSeconds;
       final stillRunnable = (await _nextWorkflowQueueTask(project)).isNotEmpty;
       final shouldContinue =
-          unattended &&
+          (unattended || autoAdvanceChapters) &&
           isBatchBoundary &&
           underTotalCap &&
           stillRunnable &&

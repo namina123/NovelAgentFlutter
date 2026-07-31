@@ -60,6 +60,7 @@ void main() {
         name: '队列健壮性测试项目',
         rootPath: tempDirectory.path,
         projectType: 'long_novel',
+        runtimeBaselineId: 'chapter_collaboration_autorun',
       );
     });
 
