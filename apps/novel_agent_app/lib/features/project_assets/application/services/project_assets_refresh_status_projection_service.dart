@@ -1,5 +1,6 @@
 import '../models/project_assets_catalog.dart';
 import '../models/project_assets_refresh_scope.dart';
+import '../../../../shared/services/user_facing_error_humanizer.dart';
 
 class ProjectAssetsRefreshStatusProjectionService {
   const ProjectAssetsRefreshStatusProjectionService();
@@ -40,11 +41,11 @@ class ProjectAssetsRefreshStatusProjectionService {
   String failureMessage(ProjectAssetsRefreshScope scope, Object error) {
     switch (scope) {
       case ProjectAssetsRefreshScope.full:
-        return '加载项目资产失败：$error';
+        return UserFacingErrorHumanizer.humanize(error, action: '加载项目资产');
       case ProjectAssetsRefreshScope.catalog:
-        return '加载项目资产目录失败：$error';
+        return UserFacingErrorHumanizer.humanize(error, action: '加载项目资产目录');
       case ProjectAssetsRefreshScope.rag:
-        return '加载语料状态失败：$error';
+        return UserFacingErrorHumanizer.humanize(error, action: '加载语料状态');
     }
   }
 }

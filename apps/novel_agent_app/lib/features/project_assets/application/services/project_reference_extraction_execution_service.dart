@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
+import '../../../../shared/services/user_facing_error_humanizer.dart';
 
 import '../../../../shared/services/desktop_text_file_picker_service.dart';
 import '../models/project_reference_extraction_execution_result.dart';
@@ -282,7 +283,7 @@ class ProjectReferenceExtractionExecutionService {
       return ProjectReferenceExtractionExecutionResult(
         ok: false,
         didMutateProject: false,
-        statusMessage: '参考资料提取失败：$error',
+        statusMessage: UserFacingErrorHumanizer.humanize(error, action: '提取参考资料'),
       );
     }
   }

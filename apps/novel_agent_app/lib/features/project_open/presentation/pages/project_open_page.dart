@@ -32,20 +32,40 @@ class ProjectOpenPage extends StatelessWidget {
           final listPanel = PanelSurface(
             child: viewData.entries.isEmpty
                 ? Center(
-                    child: Text(
-                      // 中文注释: 区分"正在加载"（首次刷新还没回来）与"确实没有作品"，
-                      // 避免冷启动瞬间闪"还没有作品"误导用户以为库是空的。
-                      viewData.hasLoaded
-                          ? (viewData.allowImportLocal
-                              ? '还没有作品。先新建一部，或导入已有项目。'
-                              : '还没有作品。先新建一部开始。')
-                          : '正在加载作品列表...',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: panel.mutedForegroundColor,
-                        fontSize: 13,
-                      ),
-                    ),
+                    // 中文注释: 区分"正在加载"（首次刷新还没回来，给转圈）与"确实没有作品"，
+                    // 避免冷启动瞬间看起来像空库/坏库。
+                    child: viewData.hasLoaded
+                        ? Text(
+                            viewData.allowImportLocal
+                                ? '还没有作品。先新建一部，或导入已有项目。'
+                                : '还没有作品。先新建一部开始。',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: panel.mutedForegroundColor,
+                              fontSize: 13,
+                            ),
+                          )
+                        : Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: <Widget>[
+                              const SizedBox(
+                                height: 28,
+                                width: 28,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              Text(
+                                '正在加载作品列表...',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: panel.mutedForegroundColor,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
                   )
                 : ListView.separated(
                     itemCount: viewData.entries.length,

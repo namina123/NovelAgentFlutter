@@ -396,6 +396,9 @@ class _FakeResourceManagerActionHandler
     implements ResourceManagerActionHandler {
   @override
   void onLongTaskRunResumeRequested(String runId) {}
+
+  @override
+  void onLongTaskStationRequested() {}
   WorkspaceCommandRequestViewData? lastPickRequest;
   WorkspaceCommandRequestViewData? lastDirectoryPickRequest;
   WorkspaceCommandRequestViewData? lastSubmittedRequest;

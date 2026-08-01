@@ -463,6 +463,9 @@ class _FakeResourceManagerActionHandler
     implements ResourceManagerActionHandler {
   @override
   void onLongTaskRunResumeRequested(String runId) {}
+
+  @override
+  void onLongTaskStationRequested() {}
   const _FakeResourceManagerActionHandler();
 
   @override

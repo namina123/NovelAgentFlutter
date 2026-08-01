@@ -15,12 +15,10 @@ class WorkbenchProjectPanel extends StatelessWidget {
     super.key,
     required this.viewData,
     required this.resourceHandler,
-    this.onOpenLongTaskStationRequested,
   });
 
   final WorkbenchProjectPanelViewData viewData;
   final WorkbenchProjectPanelActionHandler resourceHandler;
-  final VoidCallback? onOpenLongTaskStationRequested;
 
   @override
   Widget build(BuildContext context) {
@@ -60,7 +58,7 @@ class WorkbenchProjectPanel extends StatelessWidget {
               title: '长任务现场',
               child: ProjectLongTaskSummaryPanel(
                 summary: viewData.projectLongTaskSummary!,
-                onOpenStationRequested: onOpenLongTaskStationRequested,
+                onOpenStationRequested: resourceHandler.onLongTaskStationRequested,
                 onResumeRequested: resourceHandler.onLongTaskRunResumeRequested,
               ),
             ),

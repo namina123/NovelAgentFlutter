@@ -1134,7 +1134,10 @@ class AppShellController extends ChangeNotifier
     } catch (error) {
       _updateWorkbench(
         _viewModel.workbench.copyWith(
-          generationStatus: '初始化失败：$error',
+          generationStatus: UserFacingErrorHumanizer.humanize(
+            error,
+            action: '初始化',
+          ),
           toolCoreStatus: '',
         ),
       );
@@ -1412,7 +1415,9 @@ class AppShellController extends ChangeNotifier
       await _openProjectFromProjectOpen(snapshot.project.rootPath);
     } catch (error) {
       // 中文注释: 导入/打开期间抛错要如实落到作品库状态，而不是被静默吞掉、用户看到"什么都没发生"。
-      await _refreshProjectOpenView(status: '导入项目失败：$error');
+      await _refreshProjectOpenView(
+        status: UserFacingErrorHumanizer.humanize(error, action: '导入项目'),
+      );
     }
   }
 
@@ -5470,9 +5475,13 @@ class AppShellController extends ChangeNotifier
       _announce(successMessage);
     } catch (error) {
       // 中文注释: 写盘失败同样要在设置页可见，而不是只写进工作台状态条。
-      _settingsAnnouncement = '保存设置失败：$error';
+      final settingsErrorMessage = UserFacingErrorHumanizer.humanize(
+        error,
+        action: '保存设置',
+      );
+      _settingsAnnouncement = settingsErrorMessage;
       _refreshSettingsViewData();
-      _announce('保存设置失败：$error');
+      _announce(settingsErrorMessage);
     }
   }
 

@@ -125,6 +125,9 @@ void main() {
 class _FakeResourceHandler implements ResourceManagerActionHandler {
   @override
   void onLongTaskRunResumeRequested(String runId) {}
+
+  @override
+  void onLongTaskStationRequested() {}
   String selectedGroupId = '';
 
   @override

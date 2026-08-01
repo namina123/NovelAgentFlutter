@@ -378,7 +378,9 @@ class WorkbenchProjectActionFacade {
         ),
       );
     } catch (error) {
-      _controller._announce('刷新项目文件失败：$error');
+      _controller._announce(
+        UserFacingErrorHumanizer.humanize(error, action: '刷新项目文件'),
+      );
     }
   }
 }

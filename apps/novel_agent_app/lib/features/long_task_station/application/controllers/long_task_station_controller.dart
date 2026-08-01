@@ -315,9 +315,12 @@ class LongTaskStationController extends ChangeNotifier
         if (callback == null) {
           return;
         }
-        final resolvedPath = relativePath.trim().isNotEmpty
-            ? relativePath.trim()
-            : detail?.activeTask?.relativePath ?? '';
+        final resolvedPath = relativePath.trim();
+        // 中文注释: 路径为空时不再悄悄回退到活动任务路径——那会打开错文件。
+        // 该资源本身没有可定位文件时如实不打开，而不是误导用户。
+        if (resolvedPath.isEmpty) {
+          return;
+        }
         await callback(run, resolvedPath);
       },
     );

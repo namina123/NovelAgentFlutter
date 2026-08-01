@@ -310,6 +310,9 @@ class _FakeResourceManagerActionHandler
     implements ResourceManagerActionHandler {
   @override
   void onLongTaskRunResumeRequested(String runId) {}
+
+  @override
+  void onLongTaskStationRequested() {}
   int createFolderRequestedCount = 0;
   final List<String> selectedEntries = <String>[];
   final List<String> deletedEntries = <String>[];

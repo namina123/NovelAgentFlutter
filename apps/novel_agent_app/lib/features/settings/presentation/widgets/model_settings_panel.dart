@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
+import '../../../../shared/services/user_facing_error_humanizer.dart';
 
 import '../../../../../shared/theme/novel_theme_context.dart';
 import '../../../../../shared/widgets/action_button.dart';
@@ -397,7 +398,7 @@ class _ModelSettingsPanelState extends State<ModelSettingsPanel> {
     } catch (error) {
       result = ProviderConnectionValidationResultViewData(
         isSuccess: false,
-        summary: '测试连接失败：$error',
+        summary: UserFacingErrorHumanizer.humanize(error, action: '测试连接'),
         details: const <String>[],
         errors: <String>[error.toString()],
         templateId: '',

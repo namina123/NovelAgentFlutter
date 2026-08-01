@@ -2,6 +2,7 @@ import 'package:novel_agent_adapters/novel_agent_adapters.dart';
 import 'package:novel_agent_core/novel_agent_core.dart';
 
 import '../../../../app/state/project_lifecycle_coordinator.dart';
+import '../../../../shared/services/user_facing_error_humanizer.dart';
 import '../../../workbench/application/services/desktop_project_directory_picker_service.dart';
 import '../../../workbench/application/services/project_creation_phase_resolver_service.dart';
 import '../../../workbench/application/services/project_launcher_view_data_service.dart';
@@ -393,15 +394,15 @@ class ProjectCreationController {
             projectLauncher: null,
             projectAgentGroupWorkspace: null,
             workspaceCommand: null,
-            generationStatus: '项目已创建并打开，但后续界面刷新失败：$error',
+            generationStatus: '项目已创建并打开，但${UserFacingErrorHumanizer.humanize(error, action: '刷新界面')}',
           ),
         );
-        _announce('项目已创建并打开，但后续界面刷新失败：$error');
+        _announce('项目已创建并打开，但${UserFacingErrorHumanizer.humanize(error, action: '刷新界面')}');
         return;
       }
       await showLauncher(
         ProjectLauncherMode.create,
-        status: '创建项目失败：$error',
+        status: UserFacingErrorHumanizer.humanize(error, action: '创建项目'),
         draftTitle: creationPlan.request.title,
         selectedProjectTypeId: creationPlan.request.projectTypeId,
         selectedStorageStrategy: creationPlan.request.storageStrategy,
@@ -610,7 +611,9 @@ class ProjectCreationController {
     try {
       await _projectGeneralContinuitySetupService.applyInput(project, input);
     } catch (error) {
-      _announce('项目已创建，但连续性默认设置写入失败：$error');
+      _announce(
+        '项目已创建，但${UserFacingErrorHumanizer.humanize(error, action: '写入连续性默认设置')}',
+      );
     }
   }
 
